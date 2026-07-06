@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Camera, AlertTriangle, Activity, Shield, Brain, Cpu, Volume2, VolumeX } from "lucide-react";
+import { analyzeEmotionFromLandmarks } from "@/utils/emotionDetector";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -581,22 +582,38 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered }: Props) {
     ctx.drawImage(v,0,0,c.width,c.height);  // No mirror - normal orientation
     const b64 = c.toDataURL("image/jpeg",0.75).split(",")[1];  // Better quality
 
-    console.log("[Gemini] Starting vision analysis API call...");
+    console.log("[Emotion Detector] Analyzing facial landmarks...");
     gemBusyRef.current=true; setGemPending(true);
     const t0=performance.now();
 
     try {
-      const res = await fetch("/api/gemini",{
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({action:"vision",imageBase64:b64,mimeType:"image/jpeg"}),
-      });
-      if (!res.ok) throw new Error("HTTP "+res.status);
-      const data: VisionAnalysis = await res.json();
-      const ms = Math.round(performance.now()-t0);
-      console.log("[Gemini] API success in", ms, "ms. Data:", data);
+      // Use real landmark-based emotion detection (no API call needed)
+      const poses = posesRef.current;
+      let analysis_data: VisionAnalysis;
 
-      analysisRef.current = data;
-      setAnalysis(data);
+      if (poses.length > 0 && poses[0].length > 0) {
+        // Use first detected pose's landmarks for emotion analysis
+        const landmarks = poses[0];
+        analysis_data = analyzeEmotionFromLandmarks(landmarks, analysisRef.current);
+        console.log("[Emotion Detector] Analysis complete. Emotion:", analysis_data.globalEmotion, "Confidence:", analysis_data.emotionConfidence);
+      } else {
+        analysis_data = {
+          globalEmotion: "Neutral",
+          emotionConfidence: 0,
+          globalBehavior: "Detecting face...",
+          globalPosture: "Unknown",
+          alert: false,
+          alertReason: null,
+          summary: "Waiting for face detection",
+          objects: []
+        };
+      }
+
+      const ms = Math.round(performance.now()-t0);
+      console.log("[Emotion Detector] Analysis time:", ms, "ms");
+
+      analysisRef.current = analysis_data;
+      setAnalysis(analysis_data);
       setPing(ms);
       setFrameN(n=>n+1);
 
