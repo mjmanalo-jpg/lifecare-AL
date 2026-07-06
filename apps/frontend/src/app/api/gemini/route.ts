@@ -59,35 +59,49 @@ export async function POST(req: NextRequest) {
       const { imageBase64, mimeType = "image/jpeg" } = body;
       if (!imageBase64) return NextResponse.json({ error: "No image provided" }, { status: 400 });
 
-      const model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
-      const result = await genai.models.generateContent({
-        model,
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { inlineData: { mimeType, data: imageBase64 } },
-              { text: VISION_PROMPT },
-            ],
-          },
-        ],
-        config: {
-          temperature: 0.2,
-          maxOutputTokens: 1024,
-          responseMimeType: "application/json",
-        },
-      });
-
-      const rawText = result.text?.trim() ?? "{}";
-
-      // Strip markdown code fences if Gemini wraps in ```json ... ```
-      const cleaned = rawText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-
       try {
-        const parsed = JSON.parse(cleaned);
-        return NextResponse.json(parsed);
-      } catch (err: any) {
-        console.error("Failed to parse Gemini vision response:", err?.message, "Raw response:", rawText);
+        const model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+        const result = await genai.models.generateContent({
+          model,
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { inlineData: { mimeType, data: imageBase64 } },
+                { text: VISION_PROMPT },
+              ],
+            },
+          ],
+          config: {
+            temperature: 0.2,
+            maxOutputTokens: 1024,
+            responseMimeType: "application/json",
+          },
+        });
+
+        const rawText = result.text?.trim() ?? "{}";
+
+        // Strip markdown code fences if Gemini wraps in ```json ... ```
+        const cleaned = rawText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+
+        try {
+          const parsed = JSON.parse(cleaned);
+          return NextResponse.json(parsed);
+        } catch (err: any) {
+          console.error("Failed to parse Gemini vision response:", err?.message, "Raw response:", rawText);
+          return NextResponse.json({
+            globalEmotion: "Neutral",
+            emotionConfidence: 50,
+            globalBehavior: "Still",
+            globalPosture: "Upright",
+            alert: false,
+            alertReason: null,
+            summary: "Analysis in progress...",
+            objects: [],
+          });
+        }
+      } catch (visionErr: any) {
+        console.error("[/api/gemini] Vision error:", visionErr?.message ?? visionErr);
         return NextResponse.json({
           globalEmotion: "Neutral",
           emotionConfidence: 50,
@@ -95,9 +109,9 @@ export async function POST(req: NextRequest) {
           globalPosture: "Upright",
           alert: false,
           alertReason: null,
-          summary: "Analysis in progress...",
+          summary: "Camera analysis unavailable",
           objects: [],
-        });
+        }, { status: 500 });
       }
     }
 

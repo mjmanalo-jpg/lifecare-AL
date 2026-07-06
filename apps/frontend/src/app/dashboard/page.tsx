@@ -4037,7 +4037,7 @@ function DashboardContent() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 15 }}
                 transition={{ type: "spring", duration: 0.4 }}
-                className="relative w-full max-w-sm rounded-2xl glass-panel p-6 bg-zinc-950 border border-white/10 text-center shadow-2xl z-10"
+                className="relative w-full max-w-sm rounded-2xl p-6 bg-zinc-950 border border-white/20 text-center shadow-2xl z-10"
               >
                 <div className="mx-auto w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20 mb-4 animate-pulse">
                   <AlertTriangle className="w-6 h-6 text-amber-500" />
@@ -4081,7 +4081,7 @@ function DashboardContent() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 15 }}
                 transition={{ type: "spring", duration: 0.4 }}
-                className="relative w-full max-w-sm rounded-2xl glass-panel p-6 bg-zinc-950 border border-white/10 text-left shadow-2xl z-10"
+                className="relative w-full max-w-sm rounded-2xl p-6 bg-zinc-950 border border-white/20 text-left shadow-2xl z-10"
               >
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">

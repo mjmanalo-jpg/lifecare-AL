@@ -37,6 +37,13 @@ model Resident {
   updatedAt    DateTime    @updatedAt
   vitals       VitalsLog[]
   incidents    Incident[]
+  medications  Medication[]
+  tasks        Task[]
+  medicalNotes MedicalNote[]
+  callBells    CallBell[]
+  visits       Visit[]
+  invoices     Invoice[]
+  notes        ResidentNote[]
 
   @@index([sponsorId])
   @@index([careLevel])
@@ -74,6 +81,197 @@ model Incident {
   @@index([residentId])
   @@index([triggeredAt])
   @@index([severity])
+  @@index([createdAt])
+}
+
+model Medication {
+  id        String   @id @default(uuid())
+  name      String
+  dosage    String
+  frequency String
+  resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  residentId String
+  prescribedAt DateTime @default(now())
+  verifiedAt DateTime?
+  verifiedBy String?
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([residentId])
+  @@index([status])
+  @@index([prescribedAt])
+}
+
+model Task {
+  id        String   @id @default(uuid())
+  resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  residentId String
+  title     String
+  description String?
+  status    String   @default("pending")
+  assignedTo String?
+  dueAt     DateTime?
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([residentId])
+  @@index([status])
+  @@index([dueAt])
+  @@index([completedAt])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  from      String
+  to        String
+  text      String
+  status    String   @default("pending")
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([from])
+  @@index([to])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Staff {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  role      String
+  department String?
+  phone     String?
+  hireDate  DateTime
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([role])
+  @@index([status])
+  @@index([email])
+}
+
+model TimeTracking {
+  id        String   @id @default(uuid())
+  staffId   String
+  clockIn   DateTime
+  clockOut  DateTime?
+  breakStart DateTime?
+  breakEnd  DateTime?
+  totalHours Float?
+  breakHours Float?
+  status    String   @default("clocked-in")
+  createdAt DateTime @default(now())
+
+  @@index([staffId])
+  @@index([clockIn])
+  @@index([status])
+}
+
+model MedicalNote {
+  id        String   @id @default(uuid())
+  resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  residentId String
+  note      String
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([residentId])
+  @@index([createdAt])
+}
+
+model CallBell {
+  id        String   @id @default(uuid())
+  resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  residentId String
+  status    String   @default("active")
+  acknowledgedBy String?
+  acknowledgedAt DateTime?
+  resolvedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([residentId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ShiftReport {
+  id        String   @id @default(uuid())
+  staffId   String
+  date      DateTime
+  tasksCompleted Int @default(0)
+  incidents Int @default(0)
+  callsResponded Int @default(0)
+  avgResponseTime Float?
+  engagementScore Int?
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([staffId])
+  @@index([date])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      String
+  read      Boolean  @default(false)
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+}
+
+model Visit {
+  id        String   @id @default(uuid())
+  resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  residentId String
+  visitorName String
+  visitDate DateTime
+  visitType String
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([residentId])
+  @@index([visitDate])
+}
+
+model Invoice {
+  id        String   @id @default(uuid())
+  resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  residentId String
+  amount    Float
+  period    String
+  status    String   @default("pending")
+  issuedAt  DateTime @default(now())
+  dueAt     DateTime
+  paidAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([residentId])
+  @@index([status])
+  @@index([issuedAt])
+}
+
+model ResidentNote {
+  id        String   @id @default(uuid())
+  resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  residentId String
+  note      String
+  createdBy String
+  category  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([residentId])
   @@index([createdAt])
 }
 
