@@ -72,7 +72,7 @@ model Incident {
   resident     Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
   type         String
   description  String
-  severity     String
+  severity     IncidentSeverity @default(NORMAL)
   triggeredAt  DateTime @default(now())
   resolvedAt   DateTime?
   createdAt    DateTime @default(now())
@@ -89,12 +89,19 @@ model Medication {
   name      String
   dosage    String
   frequency String
+  route     String   @default("oral")
   resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
   residentId String
   prescribedAt DateTime @default(now())
+  prescribedBy String?
   verifiedAt DateTime?
   verifiedBy String?
-  status    String   @default("pending")
+  startDate DateTime @default(now())
+  endDate   DateTime?
+  reason    String?
+  sideEffects String?
+  contraindications String?
+  status    MedicationStatus @default(PENDING)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -109,7 +116,7 @@ model Task {
   residentId String
   title     String
   description String?
-  status    String   @default("pending")
+  status    TaskStatus @default(PENDING)
   assignedTo String?
   dueAt     DateTime?
   completedAt DateTime?
@@ -127,7 +134,7 @@ model Message {
   from      String
   to        String
   text      String
-  status    String   @default("pending")
+  status    MessageStatus @default(PENDING)
   readAt    DateTime?
   createdAt DateTime @default(now())
 
@@ -163,7 +170,7 @@ model TimeTracking {
   breakEnd  DateTime?
   totalHours Float?
   breakHours Float?
-  status    String   @default("clocked-in")
+  status    TimeTrackingStatus @default(CLOCKED_IN)
   createdAt DateTime @default(now())
 
   @@index([staffId])
@@ -188,7 +195,7 @@ model CallBell {
   id        String   @id @default(uuid())
   resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
   residentId String
-  status    String   @default("active")
+  status    CallBellStatus @default(ACTIVE)
   acknowledgedBy String?
   acknowledgedAt DateTime?
   resolvedAt DateTime?
@@ -278,3 +285,10 @@ model ResidentNote {
 enum Role { SUPERADMIN, NURSE, CAREGIVER, FAMILY }
 enum CareLevel { INDEPENDENT, ASSISTED, MEMORY, SKILLED }
 enum VitalType { BLOOD_PRESSURE, HEART_RATE, TEMPERATURE, OXYGEN }
+enum MedicationStatus { ACTIVE, PENDING, VERIFIED, DISCONTINUED, HOLD }
+enum TaskStatus { PENDING, COMPLETED, CANCELLED }
+enum MessageStatus { PENDING, ACKNOWLEDGED, RESOLVED }
+enum CallBellStatus { ACTIVE, ACKNOWLEDGED, RESOLVED }
+enum IncidentSeverity { NORMAL, HIGH, CRITICAL }
+enum ShiftReportStatus { DRAFT, SUBMITTED, REVIEWED }
+enum TimeTrackingStatus { CLOCKED_IN, CLOCKED_OUT, ON_BREAK }
