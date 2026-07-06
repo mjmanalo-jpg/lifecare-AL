@@ -1,7 +1,7 @@
 {
   "name": "assisted-living-portal",
   "version": "1.0.0",
-  "description": "Assisted Living Facility Management Portal",
+  "description": "Complete Assisted Living Portal - Next.js Full-Stack (Frontend + Backend Combined)",
   "scripts": {
     "cli": "node cli.js",
     "start": "cd apps/frontend && npm run dev",
@@ -9,10 +9,23 @@
     "dev": "cd apps/frontend && npm run dev",
     "test": "cd apps/frontend && npm test"
   },
-  "keywords": ["assisted-living", "healthcare", "management"],
+  "keywords": [
+    "assisted-living",
+    "healthcare",
+    "management",
+    "nextjs",
+    "fullstack",
+    "portal",
+    "react",
+    "typeless"
+  ],
   "author": "Assisted Living Team",
   "license": "MIT",
   "workspaces": [
     "apps/frontend"
-  ]
+  ],
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
 }
