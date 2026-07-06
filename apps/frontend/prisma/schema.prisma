@@ -1,0 +1,82 @@
+// Prisma Schema - PostgreSQL via Supabase (NO MS SQL)
+// Uses asyncpg for async connections
+// Migrations via Prisma CLI
+
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  role      Role     @default(FAMILY)
+  email     String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  residents Resident[]
+
+  @@index([role])
+  @@index([createdAt])
+}
+
+model Resident {
+  id           String      @id @default(uuid())
+  name         String
+  careLevel    CareLevel
+  roomNumber   String      @unique
+  sponsorId    String
+  sponsor      User        @relation(fields: [sponsorId], references: [id], onDelete: Cascade)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  vitals       VitalsLog[]
+  incidents    Incident[]
+
+  @@index([sponsorId])
+  @@index([careLevel])
+  @@index([createdAt])
+}
+
+model VitalsLog {
+  id         String   @id @default(uuid())
+  residentId String
+  resident   Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  type       VitalType
+  value      String
+  recordedAt DateTime @default(now())
+  loggedById String
+  createdAt  DateTime @default(now())
+
+  @@index([residentId])
+  @@index([recordedAt])
+  @@index([type])
+  @@unique([residentId, recordedAt])
+}
+
+model Incident {
+  id           String   @id @default(uuid())
+  residentId   String
+  resident     Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  type         String
+  description  String
+  severity     String
+  triggeredAt  DateTime @default(now())
+  resolvedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([residentId])
+  @@index([triggeredAt])
+  @@index([severity])
+  @@index([createdAt])
+}
+
+enum Role { SUPERADMIN, NURSE, CAREGIVER, FAMILY }
+enum CareLevel { INDEPENDENT, ASSISTED, MEMORY, SKILLED }
+enum VitalType { BLOOD_PRESSURE, HEART_RATE, TEMPERATURE, OXYGEN }

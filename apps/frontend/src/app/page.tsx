@@ -1,0 +1,482 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
+import {
+  ShieldCheck,
+  Activity,
+  Users,
+  ChevronRight,
+  ChevronLeft,
+  Mic,
+  User,
+  Map,
+  Cpu,
+  AlertTriangle,
+  CheckCircle,
+  DollarSign,
+  MessageSquare,
+  Info,
+  Clock,
+  Check
+} from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import Navbar from "@/components/Navbar";
+
+const slides = [
+  {
+    src: "/sanctuary_exterior.png",
+    tag: "Architectural Render",
+    title: "Golden Hearth Wellness Residence",
+    desc: "A stunning, organic modern exterior set in lush, tranquil gardens designed for peace and recovery."
+  },
+  {
+    src: "/sanctuary_lounge.png",
+    tag: "Lobby & Lounge",
+    title: "The Fireplace Atrium",
+    desc: "A warm, double-height community lounge featuring floor-to-ceiling windows looking onto Japanese gardens."
+  },
+  {
+    src: "/sanctuary_garden.png",
+    tag: "Wellness Park",
+    title: "Tranquility Gardens",
+    desc: "Lush walking paths, serene ponds, and outdoor therapeutic areas promoting mobility and nature connection."
+  },
+  {
+    src: "/sanctuary_suite.png",
+    tag: "Private Living",
+    title: "Luxury Care Suite",
+    desc: "Elegant private apartments featuring subtle ambient monitoring technology and bespoke smart comfort systems."
+  },
+  {
+    src: "/sanctuary_dining.png",
+    tag: "Gourmet Dining",
+    title: "The Hearth Bistro",
+    desc: "Restaurant-grade dining spaces serving custom nutritional menu options crafted by professional chefs."
+  }
+];
+
+interface RoadmapStep {
+  title: string;
+  tag: string;
+  desc: string;
+  icon: any;
+  subTasks: string[];
+  kpis: { label: string; value: string }[];
+}
+
+const SYSTEM_FLOW_DATA: RoadmapStep[] = [
+  {
+    title: "Resident Welcome & Secure Setup",
+    tag: "Step 1: Onboarding",
+    desc: "We establish secure wellness records, room assignments, and customized comfort goals for the new resident.",
+    icon: User,
+    subTasks: ["Review welcome evaluation details", "Customize room and care settings", "Securely create care profile"],
+    kpis: [{ label: "Intake", value: "Complete" }, { label: "Records Status", value: "Secured" }]
+  },
+  {
+    title: "Suite Safety Sensor Calibration",
+    tag: "Step 2: Suite Protection",
+    desc: "Configure and test non-intrusive safety sensors inside the private suite to enable fall detection.",
+    icon: Cpu,
+    subTasks: ["Verify sensor placement", "Check fall detection sensitivity", "Test privacy-first security locks"],
+    kpis: [{ label: "Sensors Status", value: "Online" }, { label: "Privacy Shields", value: "Active" }]
+  },
+  {
+    title: "Daily Assisted Living Coordination",
+    tag: "Step 3: Daily Support",
+    desc: "Caregivers execute daily schedules including dining services, comfort check-ins, and mobility assistance.",
+    icon: Users,
+    subTasks: ["Coordinate morning meals", "Assist with daily walks and gardens", "Verify daily assistance list"],
+    kpis: [{ label: "Shift Coverage", value: "100%" }, { label: "Daily Comfort Index", value: "9.8/10" }]
+  },
+  {
+    title: "Continuous Health & Vitals Tracking",
+    tag: "Step 4: Continuous Care",
+    desc: "Track health trends (like oxygen levels, sleep quality, and heart rate) to notice health changes early.",
+    icon: Activity,
+    subTasks: ["Log automatic heart rate trends", "Record oxygen level averages", "Analyze daily sleep quality"],
+    kpis: [{ label: "Vitals Tracking", value: "Active" }, { label: "Device Power", value: "95%" }]
+  },
+  {
+    title: "Hands-Free Voice Care Notes",
+    tag: "Step 5: Documentation",
+    desc: "Care staff dictate progress updates naturally, which are typed instantly into charts using smart voice assistant technology.",
+    icon: Mic,
+    subTasks: ["Record spoken nurse feedback", "Instantly transcribe audio to notes", "Save update directly to records"],
+    kpis: [{ label: "Transcription", value: "Instant" }, { label: "Hands-Free Status", value: "Enabled" }]
+  },
+  {
+    title: "Immediate Warning Alert Dispatch",
+    tag: "Step 6: Quick Response",
+    desc: "If a fall or safety incident occurs, the system immediately sounds a notification at the nurse station.",
+    icon: AlertTriangle,
+    subTasks: ["Detect posture changes instantly", "Trigger nursing station alerts", "Create secure incident logs"],
+    kpis: [{ label: "Alert Dispatch", value: "<1 min" }, { label: "Alert Precision", value: "99.8%" }]
+  },
+  {
+    title: "Family Portal Sync & Collaboration",
+    tag: "Step 7: Transparency",
+    desc: "Family sponsors securely log in to review daily comfort updates, vital logs, and monthly invoices.",
+    icon: CheckCircle,
+    subTasks: ["Sync daily wellness summary", "Publish monthly billing breakdown", "Schedule visitation requests"],
+    kpis: [{ label: "Family Portal Sync", value: "Live" }, { label: "Invoices Status", value: "Delivered" }]
+  }
+];
+
+export default function Home() {
+  const fadeInUp = {
+    hidden: { opacity: 0, y: 40 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } }
+  } as const;
+
+  const [activeIndex, setActiveIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+
+
+
+  // Scroll hooks for cinematic parallax scroll effect
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ["start end", "end start"]
+  });
+
+  // Calculate parallax y-offset (shifts the image vertically inside the container as the user scrolls)
+  const parallaxY = useTransform(scrollYProgress, [0, 1], ["-10%", "10%"]);
+  // Calculate subtle cinematic zoom based on scroll position
+  const parallaxScale = useTransform(scrollYProgress, [0, 0.5, 1], [1.08, 1.02, 1.08]);
+
+  // Autoplay functionality
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % slides.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const nextSlide = () => {
+    setActiveIndex((prev) => (prev + 1) % slides.length);
+  };
+
+  const prevSlide = () => {
+    setActiveIndex((prev) => (prev - 1 + slides.length) % slides.length);
+  };
+
+  return (
+    <main className="min-h-screen relative overflow-hidden flex flex-col items-center pt-24">
+      <Navbar />
+      {/* Golden Hearth Background Element */}
+      <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[800px] h-[800px] opacity-30 pointer-events-none mix-blend-screen">
+        <Image 
+          src="/golden_hearth_glow.jpg" 
+          alt="Premium Background Accent" 
+          fill
+          className="object-cover blur-3xl rounded-full"
+          priority
+        />
+      </div>
+
+      {/* Hero Section */}
+      <section className="relative z-10 flex flex-col items-center justify-center min-h-[90vh] text-center px-6 max-w-5xl mx-auto">
+        <motion.div 
+          initial="hidden"
+          animate="visible"
+          variants={fadeInUp}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-panel text-sm font-medium text-muted-foreground mb-8"
+        >
+          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          Next-Gen Wellness Platform Live
+        </motion.div>
+
+        <motion.h1 
+          initial="hidden"
+          animate="visible"
+          variants={fadeInUp}
+          className="text-6xl md:text-8xl font-black tracking-tighter heading-gradient mb-6"
+        >
+          Care Redefined. <br />
+          <span className="text-muted-foreground font-light italic text-4xl md:text-6xl">For Peaceful Living.</span>
+        </motion.h1>
+
+        <motion.p 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4, duration: 1 }}
+          className="text-lg md:text-xl text-muted-foreground max-w-2xl font-light mb-10 leading-relaxed"
+        >
+          A cinematic, minimalist approach to elder care management. Equipped with Real-Time Optical Safety Matrices and friendly, responsive voice assistants. Engineered for deep empathy and supreme operational efficiency.
+        </motion.p>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="flex flex-col sm:flex-row gap-4"
+        >
+          <Link href="/login" className="px-8 py-4 rounded-xl bg-foreground text-background font-semibold tracking-wide hover:scale-105 transition-transform flex items-center gap-2 shadow-lg dark:shadow-[0_0_40px_rgba(255,255,255,0.15)] cursor-pointer">
+            Get Started <ChevronRight className="w-4 h-4" />
+          </Link>
+          <Link href="/login" className="px-8 py-4 rounded-xl glass-panel text-foreground hover:bg-foreground/5 transition-all flex items-center gap-2 cursor-pointer">
+            <User className="w-4 h-4 text-amber-500" /> Log In
+          </Link>
+        </motion.div>
+      </section>
+
+      {/* Showcase Section */}
+      <section id="showcase" className="relative z-10 w-full px-6 py-16 max-w-7xl mx-auto flex flex-col items-center">
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.8 }}
+          className="text-center mb-12"
+        >
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground mb-4">
+            The Sanctuary
+          </h2>
+          <p className="text-muted-foreground font-light max-w-2xl mx-auto">
+            A visual overview of the premium Golden Hearth Care facility, designed specifically for luxury living, wellness, and comfort for the aged.
+          </p>
+        </motion.div>
+
+        <motion.div
+          ref={containerRef}
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 1, ease: "easeOut" }}
+          className="relative w-full aspect-[16/9] md:aspect-[21/9] max-w-5xl rounded-3xl overflow-hidden glass-panel p-2 group shadow-[0_0_50px_rgba(234,179,8,0.1)] border-amber-500/20"
+        >
+          {/* Subtle Accent Glows */}
+          <div className="absolute -top-12 -left-12 w-64 h-64 bg-amber-500/10 blur-3xl rounded-full pointer-events-none group-hover:bg-amber-500/20 transition-all duration-700 z-20" />
+          <div className="absolute -bottom-12 -right-12 w-64 h-64 bg-yellow-500/10 blur-3xl rounded-full pointer-events-none group-hover:bg-yellow-500/20 transition-all duration-700 z-20" />
+
+          {/* Carousel Frame */}
+          <div className="relative w-full h-full rounded-2xl overflow-hidden bg-zinc-950">
+            <AnimatePresence initial={false}>
+              <motion.div
+                key={activeIndex}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.8, ease: "easeInOut" }}
+                className="absolute top-[-10%] left-0 w-full h-[120%]"
+                style={{ y: parallaxY, scale: parallaxScale }}
+              >
+                <Image
+                  src={slides[activeIndex].src}
+                  alt={slides[activeIndex].title}
+                  fill
+                  className="object-cover"
+                  priority
+                />
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Gradient Overlay for Text Readability */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-10 pointer-events-none" />
+
+            {/* Cinematic Slide Captions */}
+            <div className="absolute bottom-6 left-6 right-6 md:bottom-10 md:left-10 z-20 text-left max-w-xl pointer-events-none">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeIndex}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.4, ease: "easeOut" }}
+                >
+                  <p className="text-amber-400 text-xs md:text-sm font-semibold tracking-widest uppercase mb-2">
+                    {slides[activeIndex].tag}
+                  </p>
+                  <h3 className="text-white text-2xl md:text-4xl font-extrabold tracking-tight mb-2">
+                    {slides[activeIndex].title}
+                  </h3>
+                  <p className="text-gray-300 text-sm md:text-base font-light leading-relaxed">
+                    {slides[activeIndex].desc}
+                  </p>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            {/* Navigation Dots */}
+            <div className="absolute bottom-6 right-6 md:bottom-10 md:right-10 z-30 flex gap-2">
+              {slides.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setActiveIndex(idx)}
+                  className={`h-2.5 rounded-full transition-all duration-500 cursor-pointer ${
+                    idx === activeIndex
+                      ? "w-8 bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]"
+                      : "w-2.5 bg-white/40 hover:bg-white/70"
+                  }`}
+                  aria-label={`Go to slide ${idx + 1}`}
+                />
+              ))}
+            </div>
+
+            {/* Next/Prev Navigation Buttons */}
+            <button
+              onClick={prevSlide}
+              className="absolute left-6 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/40 border border-white/10 hover:bg-black/60 text-white transition-all duration-300 opacity-0 group-hover:opacity-100 hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-sm"
+              aria-label="Previous slide"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button
+              onClick={nextSlide}
+              className="absolute right-6 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/40 border border-white/10 hover:bg-black/60 text-white transition-all duration-300 opacity-0 group-hover:opacity-100 hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-sm"
+              aria-label="Next slide"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        </motion.div>
+      </section>
+
+      {/* Operational Process Roadmap Section */}
+      <section id="roadmap" className="relative z-10 w-full px-6 py-24 max-w-5xl mx-auto flex flex-col items-center border-t border-white/5">
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.8 }}
+          className="text-center mb-16"
+        >
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground mb-4">
+            Operational Process Roadmap
+          </h2>
+          <p className="text-muted-foreground font-light max-w-2xl mx-auto text-sm md:text-base leading-relaxed">
+            Follow our step-by-step care journey, showing the complete flow from resident onboarding to daily support and continuous wellness monitoring.
+          </p>
+        </motion.div>
+
+        {/* Roadmap Timeline */}
+        <div className="relative pl-6 md:pl-10 border-l border-amber-500/20 ml-3 md:ml-6 space-y-12 w-full text-left">
+          {SYSTEM_FLOW_DATA.map((step, stepIdx) => {
+            const StepIcon = step.icon;
+
+            return (
+              <motion.div
+                key={step.title}
+                initial={{ opacity: 0, x: -10 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: stepIdx * 0.1 }}
+                className="relative"
+              >
+                {/* Timeline Pin Indicator */}
+                <div className="absolute -left-[35px] md:-left-[51px] top-1.5 w-7 h-7 md:w-9 md:h-9 rounded-full flex items-center justify-center border border-amber-500/30 bg-amber-500/10 text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.15)] z-10">
+                  <StepIcon className="w-3.5 h-3.5 md:w-4 h-4" />
+                </div>
+
+                {/* Step Card */}
+                <div className="glass-panel p-6 rounded-2xl border border-white/5 hover:border-amber-500/20 hover:shadow-[0_0_30px_rgba(245,158,11,0.03)] transition-all duration-300">
+                  {/* Step Header */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
+                    <div>
+                      <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest block mb-1">
+                        {step.tag}
+                      </span>
+                      <h3 className="text-base md:text-lg font-bold tracking-tight text-foreground flex items-center gap-2">
+                        {step.title}
+                      </h3>
+                    </div>
+                    
+                    {/* KPIs badges */}
+                    <div className="flex flex-wrap gap-2">
+                      {step.kpis.map((kpi, kIdx) => (
+                        <div
+                          key={kIdx}
+                          className="px-2.5 py-1 rounded-lg bg-foreground/5 border border-border/50 text-[10px] font-medium text-muted-foreground flex gap-1.5"
+                        >
+                          <span className="opacity-70">{kpi.label}:</span>
+                          <span className="font-bold text-foreground">{kpi.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <p className="text-xs md:text-sm text-muted-foreground font-light leading-relaxed mb-4">
+                    {step.desc}
+                  </p>
+
+                  <hr className="border-border/50 my-4" />
+
+                  {/* Static Milestones Grid */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
+                      Operational Milestones
+                    </p>
+                    <ul className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2">
+                      {step.subTasks.map((sub, subIdx) => (
+                        <li
+                          key={subIdx}
+                          className="text-xs text-muted-foreground font-light flex items-center gap-2.5"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500/80 shrink-0" />
+                          <span>{sub}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Feature Section */}
+      <section id="features" className="relative z-10 w-full px-6 py-32 max-w-7xl mx-auto border-t border-white/5">
+        <motion.div 
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          variants={{
+            hidden: { opacity: 0 },
+            visible: { opacity: 1, transition: { staggerChildren: 0.2 } }
+          }}
+          className="grid grid-cols-1 md:grid-cols-3 gap-8"
+        >
+          {[
+            { icon: Activity, title: "Optical Matrix", desc: "Real-time edge-computed anomaly and fall detection ensuring absolute resident safety." },
+            { icon: Mic, title: "Voice Assistant", desc: "Low-latency conversational AI for hands-free charting and friendly companionship." },
+            { icon: ShieldCheck, title: "Secure Family Portal", desc: "Private health logs and vitals synced in real-time with family dashboards." }
+          ].map((feat, i) => (
+            <motion.div 
+              key={i}
+              variants={fadeInUp}
+              className="glass-panel p-8 rounded-2xl hover:-translate-y-2 transition-transform duration-500 group"
+            >
+              <div className="w-12 h-12 rounded-full bg-foreground/5 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-amber-500/20 transition-all">
+                <feat.icon className="w-6 h-6 text-muted-foreground group-hover:text-amber-500 transition-colors" />
+              </div>
+              <h3 className="text-xl font-semibold mb-3 text-foreground">{feat.title}</h3>
+              <p className="text-muted-foreground font-light leading-relaxed">{feat.desc}</p>
+            </motion.div>
+          ))}
+        </motion.div>
+      </section>
+      
+      {/* Decorative Blur */}
+      <div className="absolute bottom-0 left-0 w-full h-[500px] bg-gradient-to-t from-black to-transparent pointer-events-none" />
+
+      {/* Footer */}
+      <footer id="about" className="relative z-10 w-full px-6 py-12 max-w-7xl mx-auto border-t border-white/5 light:border-black/5 flex flex-col md:flex-row items-center justify-between gap-6 text-gray-500 text-sm">
+        <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
+          <span className="text-foreground font-bold tracking-tight">Golden Hearth</span>
+          <span>© 2026 AI Powered Assisted Living. All rights reserved.</span>
+        </div>
+        <div className="flex gap-6">
+          <a href="#" className="hover:text-foreground transition-colors">Privacy Policy</a>
+          <a href="#" className="hover:text-foreground transition-colors">Terms of Service</a>
+          <a href="#" className="hover:text-foreground transition-colors">Contact</a>
+        </div>
+      </footer>
+    </main>
+  );
+}
