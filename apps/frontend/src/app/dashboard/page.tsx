@@ -37,7 +37,8 @@ import {
   ChevronDown,
   Download,
   Home,
-  Volume2
+  Volume2,
+  Target
 } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -71,6 +72,13 @@ const ROUTE_TO_TAB: Record<string, string> = {
   reports: "Shift Reports",
   relative: "My Relative",
   timeline: "Health Timeline",
+  report: "Daily Report",
+  alerts: "Alerts",
+  messages: "Messages",
+  photos: "Photos",
+  appointments: "Appointments",
+  expenses: "Billing",
+  goals: "Care Goals",
   // dashboard is also the default for all role-level roots
   admin: "Admin Dashboard",
   shift: "Shift Dashboard",
@@ -140,9 +148,16 @@ const ROLES: Record<Role, RoleDetails> = {
     basePath: "/family",
     footerText: "Golden Hearth Family Space • Relative: Arthur Pendelton • Fully Secure & Private",
     sidebarLinks: [
-      { name: "Family Dashboard", icon: Grid,       route: "/family/dashboard" },
-      { name: "My Relative",      icon: User,       route: "/family/relative" },
-      { name: "Health Timeline",  icon: Activity,   route: "/family/timeline" },
+      { name: "Family Dashboard", icon: Grid,           route: "/family/dashboard" },
+      { name: "My Relative",      icon: User,           route: "/family/relative" },
+      { name: "Daily Report",     icon: CheckCircle,    route: "/family/report" },
+      { name: "Alerts",           icon: AlertTriangle,  route: "/family/alerts" },
+      { name: "Messages",         icon: MessageSquare,  route: "/family/messages" },
+      { name: "Photos",           icon: ShieldCheck,    route: "/family/photos" },
+      { name: "Appointments",     icon: Clock,          route: "/family/appointments" },
+      { name: "Billing",          icon: DollarSign,     route: "/family/expenses" },
+      { name: "Care Goals",       icon: Target,         route: "/family/goals" },
+      { name: "Health Timeline",  icon: Activity,       route: "/family/timeline" },
     ],
   },
 };
