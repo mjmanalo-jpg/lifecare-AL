@@ -1,6 +1,5 @@
-// Prisma Schema - PostgreSQL via Supabase (NO MS SQL)
-// Uses asyncpg for async connections
-// Migrations via Prisma CLI
+// Prisma Schema - PostgreSQL via Supabase
+// Complete assisted-living facility management system
 
 generator client {
   provider = "prisma-client-js"
@@ -13,6 +12,7 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// Core models
 model User {
   id        String   @id @default(uuid())
   role      Role     @default(FAMILY)
@@ -50,6 +50,7 @@ model Resident {
   @@index([createdAt])
 }
 
+// Health monitoring
 model VitalsLog {
   id         String   @id @default(uuid())
   residentId String
@@ -72,7 +73,7 @@ model Incident {
   resident     Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
   type         String
   description  String
-  severity     IncidentSeverity @default(NORMAL)
+  severity     String   @default("NORMAL")
   triggeredAt  DateTime @default(now())
   resolvedAt   DateTime?
   createdAt    DateTime @default(now())
@@ -101,7 +102,7 @@ model Medication {
   reason    String?
   sideEffects String?
   contraindications String?
-  status    MedicationStatus @default(PENDING)
+  status    String   @default("PENDING")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -110,13 +111,14 @@ model Medication {
   @@index([prescribedAt])
 }
 
+// Task management
 model Task {
   id        String   @id @default(uuid())
   resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
   residentId String
   title     String
   description String?
-  status    TaskStatus @default(PENDING)
+  status    String   @default("PENDING")
   assignedTo String?
   dueAt     DateTime?
   completedAt DateTime?
@@ -129,12 +131,13 @@ model Task {
   @@index([completedAt])
 }
 
+// Communication
 model Message {
   id        String   @id @default(uuid())
   from      String
   to        String
   text      String
-  status    MessageStatus @default(PENDING)
+  status    String   @default("PENDING")
   readAt    DateTime?
   createdAt DateTime @default(now())
 
@@ -161,6 +164,7 @@ model Staff {
   @@index([email])
 }
 
+// Time and attendance
 model TimeTracking {
   id        String   @id @default(uuid())
   staffId   String
@@ -170,7 +174,7 @@ model TimeTracking {
   breakEnd  DateTime?
   totalHours Float?
   breakHours Float?
-  status    TimeTrackingStatus @default(CLOCKED_IN)
+  status    String   @default("CLOCKED_IN")
   createdAt DateTime @default(now())
 
   @@index([staffId])
@@ -178,6 +182,7 @@ model TimeTracking {
   @@index([status])
 }
 
+// Medical notes
 model MedicalNote {
   id        String   @id @default(uuid())
   resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
@@ -191,11 +196,12 @@ model MedicalNote {
   @@index([createdAt])
 }
 
+// Emergency system
 model CallBell {
   id        String   @id @default(uuid())
   resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
   residentId String
-  status    CallBellStatus @default(ACTIVE)
+  status    String   @default("ACTIVE")
   acknowledgedBy String?
   acknowledgedAt DateTime?
   resolvedAt DateTime?
@@ -206,6 +212,7 @@ model CallBell {
   @@index([createdAt])
 }
 
+// Shift reports
 model ShiftReport {
   id        String   @id @default(uuid())
   staffId   String
@@ -222,6 +229,7 @@ model ShiftReport {
   @@index([date])
 }
 
+// Notifications
 model Notification {
   id        String   @id @default(uuid())
   userId    String
@@ -237,6 +245,7 @@ model Notification {
   @@index([createdAt])
 }
 
+// Visits
 model Visit {
   id        String   @id @default(uuid())
   resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
@@ -251,6 +260,7 @@ model Visit {
   @@index([visitDate])
 }
 
+// Billing
 model Invoice {
   id        String   @id @default(uuid())
   resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
@@ -268,6 +278,7 @@ model Invoice {
   @@index([issuedAt])
 }
 
+// Resident care notes
 model ResidentNote {
   id        String   @id @default(uuid())
   resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
@@ -282,13 +293,24 @@ model ResidentNote {
   @@index([createdAt])
 }
 
-enum Role { SUPERADMIN, NURSE, CAREGIVER, FAMILY }
-enum CareLevel { INDEPENDENT, ASSISTED, MEMORY, SKILLED }
-enum VitalType { BLOOD_PRESSURE, HEART_RATE, TEMPERATURE, OXYGEN }
-enum MedicationStatus { ACTIVE, PENDING, VERIFIED, DISCONTINUED, HOLD }
-enum TaskStatus { PENDING, COMPLETED, CANCELLED }
-enum MessageStatus { PENDING, ACKNOWLEDGED, RESOLVED }
-enum CallBellStatus { ACTIVE, ACKNOWLEDGED, RESOLVED }
-enum IncidentSeverity { NORMAL, HIGH, CRITICAL }
-enum ShiftReportStatus { DRAFT, SUBMITTED, REVIEWED }
-enum TimeTrackingStatus { CLOCKED_IN, CLOCKED_OUT, ON_BREAK }
+// Enums - Keep these for type safety in frontend
+enum Role {
+  SUPERADMIN
+  NURSE
+  CAREGIVER
+  FAMILY
+}
+
+enum CareLevel {
+  INDEPENDENT
+  ASSISTED
+  MEMORY
+  SKILLED
+}
+
+enum VitalType {
+  BLOOD_PRESSURE
+  HEART_RATE
+  TEMPERATURE
+  OXYGEN
+}

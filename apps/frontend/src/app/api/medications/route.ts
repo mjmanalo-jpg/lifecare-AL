@@ -1,5 +1,5 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient, MedicationStatus, Prisma } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -9,7 +9,7 @@ interface MedicationPayload {
   dosage: string;
   frequency: string;
   route: string;
-  status?: MedicationStatus;
+  status?: string;
   startDate: string | Date;
   endDate?: string | Date | null;
   prescribedBy?: string;
@@ -64,8 +64,9 @@ function validateMedicationPayload(data: any): { valid: boolean; errors: string[
     }
   }
 
-  if (data.status && !Object.values(MedicationStatus).includes(data.status)) {
-    errors.push(`status must be one of: ${Object.values(MedicationStatus).join(', ')}`);
+  const validStatuses = ['ACTIVE', 'PENDING', 'VERIFIED', 'DISCONTINUED', 'HOLD'];
+  if (data.status && !validStatuses.includes(data.status)) {
+    errors.push(`status must be one of: ${validStatuses.join(', ')}`);
   }
 
   return { valid: errors.length === 0, errors };
@@ -112,15 +113,16 @@ export async function GET(req: NextRequest): Promise<NextResponse<any>> {
     }
 
     if (status) {
-      if (!Object.values(MedicationStatus).includes(status as MedicationStatus)) {
+      const validStatuses = ['ACTIVE', 'PENDING', 'VERIFIED', 'DISCONTINUED', 'HOLD'];
+      if (!validStatuses.includes(status)) {
         return NextResponse.json(
           {
-            error: `Invalid status. Must be one of: ${Object.values(MedicationStatus).join(', ')}`,
+            error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
           } as ErrorResponse,
           { status: 400 }
         );
       }
-      whereCondition.status = status as MedicationStatus;
+      whereCondition.status = status;
     }
 
     const [medications, total] = await Promise.all([
@@ -185,7 +187,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<any>> {
         dosage: body.dosage.trim(),
         frequency: body.frequency.trim(),
         route: body.route.trim(),
-        status: body.status || MedicationStatus.ACTIVE,
+        status: body.status || 'PENDING',
         startDate: new Date(body.startDate),
         endDate: body.endDate ? new Date(body.endDate) : null,
         prescribedBy: body.prescribedBy?.trim() || null,
@@ -305,10 +307,11 @@ export async function PUT(req: NextRequest): Promise<NextResponse<any>> {
     }
 
     if (body.status !== undefined) {
-      if (!Object.values(MedicationStatus).includes(body.status)) {
+      const validStatuses = ['ACTIVE', 'PENDING', 'VERIFIED', 'DISCONTINUED', 'HOLD'];
+      if (!validStatuses.includes(body.status)) {
         return NextResponse.json(
           {
-            error: `status must be one of: ${Object.values(MedicationStatus).join(', ')}`,
+            error: `status must be one of: ${validStatuses.join(', ')}`,
           } as ErrorResponse,
           { status: 400 }
         );
