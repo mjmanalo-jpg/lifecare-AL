@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -16,6 +16,8 @@
     "@tensorflow-models/face-landmarks-detection": "^1.0.6",
     "@tensorflow-models/facemesh": "^0.0.4",
     "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-webgl": "^4.22.0",
+    "@vladmandic/face-api": "^1.7.15",
     "clsx": "^2.1.1",
     "framer-motion": "^12.42.2",
     "lenis": "^1.3.25",
@@ -23,6 +25,7 @@
     "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "recharts": "^3.9.2",
     "sass": "^1.101.0",
     "sweetalert2": "^11.26.25",
     "tailwind-merge": "^3.6.0"

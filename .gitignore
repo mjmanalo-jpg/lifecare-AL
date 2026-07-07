@@ -51,3 +51,11 @@ Thumbs.db
 # Temporary
 *.tmp
 temp/
+
+# Python (backend)
+__pycache__/
+*.py[cod]
+*.pyc
+.venv/
+venv/
+*.egg-info/

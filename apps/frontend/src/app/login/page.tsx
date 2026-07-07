@@ -2,56 +2,22 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  ShieldCheck, 
-  Activity, 
-  Users, 
-  Mic, 
-  ArrowLeft, 
-  ChevronDown, 
-  Play, 
-  Moon, 
-  Sun 
+import {
+  ShieldCheck,
+  Activity,
+  Users,
+  Mic,
+  ArrowLeft,
+  ChevronDown,
+  Play,
+  Moon,
+  Sun,
+  Loader
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-
-type Role = "SUPERADMIN" | "NURSE" | "CAREGIVER" | "FAMILY";
-
-interface RoleDetails {
-  name: string;
-  badge: string;
-  desc: string;
-  icon: any;
-}
-
-const ROLES: Record<Role, RoleDetails> = {
-  SUPERADMIN: {
-    name: "Super Admin",
-    badge: "System Operations",
-    desc: "Oversee entire facility operations, manage staff registries, and monitor system health telemetry.",
-    icon: Users,
-  },
-  NURSE: {
-    name: "Head Nurse",
-    badge: "Clinical Care",
-    desc: "Access real-time resident vitals, receive instant fall detection warnings, and log logs via Voice AI.",
-    icon: Activity,
-  },
-  CAREGIVER: {
-    name: "On-Duty Caregiver",
-    badge: "Daily Assistance",
-    desc: "View resident assist checklists, check off task logs, and alert clinical staff of incident reports.",
-    icon: Users,
-  },
-  FAMILY: {
-    name: "Family Sponsor",
-    badge: "Family Portal",
-    desc: "Monitor your relative's vitals timeline, check daily comfort summaries, and process billing invoices.",
-    icon: ShieldCheck,
-  },
-};
+import { ROLES, Role } from "@/constants/roleConfig";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -59,6 +25,8 @@ export default function LoginPage() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [mounted, setMounted] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -78,8 +46,27 @@ export default function LoginPage() {
     }
   };
 
-  const handleDemoLogin = () => {
-    router.push(`/dashboard?role=${selectedRole}`);
+  const handleDemoLogin = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: selectedRole }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create session");
+      }
+
+      const data = await response.json();
+      router.push(data.redirectUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -257,12 +244,29 @@ export default function LoginPage() {
               </AnimatePresence>
             </div>
 
+            {/* Error Message */}
+            {error && (
+              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm">
+                {error}
+              </div>
+            )}
+
             {/* Submit Bypass Action */}
             <button
               onClick={handleDemoLogin}
-              className="w-full py-4 rounded-xl font-bold bg-foreground text-background hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+              disabled={isLoading}
+              className="w-full py-4 rounded-xl font-bold bg-foreground text-background hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Demo Log In <Play className="w-4 h-4" />
+              {isLoading ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Logging in...
+                </>
+              ) : (
+                <>
+                  Demo Log In <Play className="w-4 h-4" />
+                </>
+              )}
             </button>
           </div>
         </div>

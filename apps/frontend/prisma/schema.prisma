@@ -1,5 +1,6 @@
 // Prisma Schema - PostgreSQL via Supabase
 // Complete assisted-living facility management system
+// Merged from frontend (canonical) + root schema (structure/enums)
 
 generator client {
   provider = "prisma-client-js"
@@ -12,288 +13,10 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// Core models
-model User {
-  id        String   @id @default(uuid())
-  role      Role     @default(FAMILY)
-  email     String   @unique
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  residents Resident[]
+// ============================================================================
+// ENUMS
+// ============================================================================
 
-  @@index([role])
-  @@index([createdAt])
-}
-
-model Resident {
-  id           String      @id @default(uuid())
-  name         String
-  careLevel    CareLevel
-  roomNumber   String      @unique
-  sponsorId    String
-  sponsor      User        @relation(fields: [sponsorId], references: [id], onDelete: Cascade)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  vitals       VitalsLog[]
-  incidents    Incident[]
-  medications  Medication[]
-  tasks        Task[]
-  medicalNotes MedicalNote[]
-  callBells    CallBell[]
-  visits       Visit[]
-  invoices     Invoice[]
-  notes        ResidentNote[]
-
-  @@index([sponsorId])
-  @@index([careLevel])
-  @@index([createdAt])
-}
-
-// Health monitoring
-model VitalsLog {
-  id         String   @id @default(uuid())
-  residentId String
-  resident   Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
-  type       VitalType
-  value      String
-  recordedAt DateTime @default(now())
-  loggedById String
-  createdAt  DateTime @default(now())
-
-  @@index([residentId])
-  @@index([recordedAt])
-  @@index([type])
-  @@unique([residentId, recordedAt])
-}
-
-model Incident {
-  id           String   @id @default(uuid())
-  residentId   String
-  resident     Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
-  type         String
-  description  String
-  severity     String   @default("NORMAL")
-  triggeredAt  DateTime @default(now())
-  resolvedAt   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@index([residentId])
-  @@index([triggeredAt])
-  @@index([severity])
-  @@index([createdAt])
-}
-
-model Medication {
-  id        String   @id @default(uuid())
-  name      String
-  dosage    String
-  frequency String
-  route     String   @default("oral")
-  resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
-  residentId String
-  prescribedAt DateTime @default(now())
-  prescribedBy String?
-  verifiedAt DateTime?
-  verifiedBy String?
-  startDate DateTime @default(now())
-  endDate   DateTime?
-  reason    String?
-  sideEffects String?
-  contraindications String?
-  status    String   @default("PENDING")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([residentId])
-  @@index([status])
-  @@index([prescribedAt])
-}
-
-// Task management
-model Task {
-  id        String   @id @default(uuid())
-  resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
-  residentId String
-  title     String
-  description String?
-  status    String   @default("PENDING")
-  assignedTo String?
-  dueAt     DateTime?
-  completedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([residentId])
-  @@index([status])
-  @@index([dueAt])
-  @@index([completedAt])
-}
-
-// Communication
-model Message {
-  id        String   @id @default(uuid())
-  from      String
-  to        String
-  text      String
-  status    String   @default("PENDING")
-  readAt    DateTime?
-  createdAt DateTime @default(now())
-
-  @@index([from])
-  @@index([to])
-  @@index([status])
-  @@index([createdAt])
-}
-
-model Staff {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  role      String
-  department String?
-  phone     String?
-  hireDate  DateTime
-  status    String   @default("active")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([role])
-  @@index([status])
-  @@index([email])
-}
-
-// Time and attendance
-model TimeTracking {
-  id        String   @id @default(uuid())
-  staffId   String
-  clockIn   DateTime
-  clockOut  DateTime?
-  breakStart DateTime?
-  breakEnd  DateTime?
-  totalHours Float?
-  breakHours Float?
-  status    String   @default("CLOCKED_IN")
-  createdAt DateTime @default(now())
-
-  @@index([staffId])
-  @@index([clockIn])
-  @@index([status])
-}
-
-// Medical notes
-model MedicalNote {
-  id        String   @id @default(uuid())
-  resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
-  residentId String
-  note      String
-  createdBy String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([residentId])
-  @@index([createdAt])
-}
-
-// Emergency system
-model CallBell {
-  id        String   @id @default(uuid())
-  resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
-  residentId String
-  status    String   @default("ACTIVE")
-  acknowledgedBy String?
-  acknowledgedAt DateTime?
-  resolvedAt DateTime?
-  createdAt DateTime @default(now())
-
-  @@index([residentId])
-  @@index([status])
-  @@index([createdAt])
-}
-
-// Shift reports
-model ShiftReport {
-  id        String   @id @default(uuid())
-  staffId   String
-  date      DateTime
-  tasksCompleted Int @default(0)
-  incidents Int @default(0)
-  callsResponded Int @default(0)
-  avgResponseTime Float?
-  engagementScore Int?
-  notes     String?
-  createdAt DateTime @default(now())
-
-  @@index([staffId])
-  @@index([date])
-}
-
-// Notifications
-model Notification {
-  id        String   @id @default(uuid())
-  userId    String
-  title     String
-  message   String
-  type      String
-  read      Boolean  @default(false)
-  readAt    DateTime?
-  createdAt DateTime @default(now())
-
-  @@index([userId])
-  @@index([read])
-  @@index([createdAt])
-}
-
-// Visits
-model Visit {
-  id        String   @id @default(uuid())
-  resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
-  residentId String
-  visitorName String
-  visitDate DateTime
-  visitType String
-  notes     String?
-  createdAt DateTime @default(now())
-
-  @@index([residentId])
-  @@index([visitDate])
-}
-
-// Billing
-model Invoice {
-  id        String   @id @default(uuid())
-  resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
-  residentId String
-  amount    Float
-  period    String
-  status    String   @default("pending")
-  issuedAt  DateTime @default(now())
-  dueAt     DateTime
-  paidAt    DateTime?
-  createdAt DateTime @default(now())
-
-  @@index([residentId])
-  @@index([status])
-  @@index([issuedAt])
-}
-
-// Resident care notes
-model ResidentNote {
-  id        String   @id @default(uuid())
-  resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
-  residentId String
-  note      String
-  createdBy String
-  category  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([residentId])
-  @@index([createdAt])
-}
-
-// Enums - Keep these for type safety in frontend
 enum Role {
   SUPERADMIN
   NURSE
@@ -313,4 +36,461 @@ enum VitalType {
   HEART_RATE
   TEMPERATURE
   OXYGEN
+  BLOOD_GLUCOSE
+  WEIGHT
+  RESPIRATORY_RATE
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum IncidentType {
+  FALL
+  MEDICATION_ERROR
+  BEHAVIORAL
+  MEDICAL_EMERGENCY
+  SAFETY_HAZARD
+  INFECTION
+  OTHER
+}
+
+enum IncidentSeverity {
+  MINOR
+  MODERATE
+  SEVERE
+  CRITICAL
+}
+
+enum MessageType {
+  GENERAL
+  ALERT
+  URGENT
+  NOTIFICATION
+}
+
+enum MedicationStatus {
+  ACTIVE
+  DISCONTINUED
+  PENDING
+  ON_HOLD
+}
+
+enum CallBellStatus {
+  PENDING
+  RESPONDED
+  CANCELLED
+  RESOLVED
+}
+
+enum ShiftType {
+  MORNING
+  AFTERNOON
+  NIGHT
+  OVERNIGHT
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum NotificationType {
+  TASK_ASSIGNMENT
+  VITAL_ALERT
+  INCIDENT_REPORT
+  MEDICATION_REMINDER
+  CALL_BELL
+  MESSAGE
+  SHIFT_REMINDER
+  SYSTEM_ALERT
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EARLY_LEAVE
+}
+
+// ============================================================================
+// MODELS
+// ============================================================================
+
+model User {
+  id        String   @id @default(uuid())
+  role      Role     @default(FAMILY)
+  email     String   @unique
+  name      String
+  firstName String?
+  lastName  String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  lastLogin DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  staff             Staff?
+  sentMessages      Message[] @relation("SentMessages")
+  receivedMessages  Message[] @relation("ReceivedMessages")
+  notifications     Notification[]
+  shiftReports      ShiftReport[]
+
+  @@index([role])
+  @@index([email])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+model Resident {
+  id                  String         @id @default(uuid())
+  firstName           String
+  lastName            String
+  dateOfBirth         DateTime?
+  gender              String?
+  phone               String?
+  email               String?
+  roomNumber          String         @unique
+  careLevel           CareLevel
+  admissionDate       DateTime
+  emergencyContact    String?
+  emergencyContactPhone String?
+  medicalHistory      String?
+  allergies           String?
+  notes               String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  // Relations
+  vitals              VitalsLog[]
+  incidents           Incident[]
+  medications         Medication[]
+  tasks               Task[]
+  medicalNotes        MedicalNote[]
+  callBells           CallBell[]
+  visits              Visit[]
+  invoices            Invoice[]
+  residentNotes       ResidentNote[]
+
+  @@index([careLevel])
+  @@index([roomNumber])
+  @@index([admissionDate])
+  @@index([createdAt])
+}
+
+model Staff {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  position      String
+  department    String?
+  hireDate      DateTime
+  license       String?
+  licenseExpiry DateTime?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedTasks     Task[]
+  timeTracking      TimeTracking[]
+  incidentsReported Incident[]        @relation("StaffReporter")
+  shiftReports      ShiftReport[]
+
+  @@index([userId])
+  @@index([position])
+  @@index([isActive])
+}
+
+// Health monitoring
+model VitalsLog {
+  id         String   @id @default(uuid())
+  residentId String
+  resident   Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  type       VitalType
+  value      String
+  unit       String?
+  recordedAt DateTime
+  recordedBy String?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([residentId])
+  @@index([recordedAt])
+  @@index([type])
+  @@index([residentId, type, recordedAt])
+}
+
+model Incident {
+  id                  String             @id @default(uuid())
+  residentId          String
+  resident            Resident           @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  incidentType        IncidentType
+  severity            IncidentSeverity
+  title               String?
+  description         String
+  location            String?
+  reportedById        String?
+  reportedBy          Staff?             @relation("StaffReporter", fields: [reportedById], references: [id], onDelete: SetNull)
+  witnesses           String?
+  immediateActions    String?
+  followUpRequired    Boolean            @default(false)
+  followUpNotes       String?
+  incidentDate        DateTime
+  resolvedAt          DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@index([residentId])
+  @@index([incidentType])
+  @@index([severity])
+  @@index([reportedById])
+  @@index([incidentDate])
+}
+
+model Medication {
+  id                String            @id @default(uuid())
+  residentId        String
+  resident          Resident          @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  name              String
+  dosage            String
+  frequency         String
+  route             String            @default("oral")
+  status            MedicationStatus  @default(ACTIVE)
+  startDate         DateTime
+  endDate           DateTime?
+  prescribedBy      String?
+  reason            String?
+  sideEffects       String?
+  contraindications String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([residentId])
+  @@index([status])
+  @@index([startDate])
+}
+
+// Task management
+model Task {
+  id            String       @id @default(uuid())
+  residentId    String
+  resident      Resident     @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  status        TaskStatus   @default(PENDING)
+  priority      TaskPriority @default(MEDIUM)
+  assignedToId  String?
+  assignedTo    Staff?       @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  dueDate       DateTime
+  completedAt   DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([residentId])
+  @@index([status])
+  @@index([priority])
+  @@index([assignedToId])
+  @@index([dueDate])
+}
+
+// Communication
+model Message {
+  id          String      @id @default(uuid())
+  senderId    String
+  sender      User        @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  recipientId String
+  recipient   User        @relation("ReceivedMessages", fields: [recipientId], references: [id], onDelete: Cascade)
+  subject     String?
+  content     String
+  messageType MessageType @default(GENERAL)
+  isRead      Boolean     @default(false)
+  readAt      DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// Time and attendance
+model TimeTracking {
+  id             String           @id @default(uuid())
+  staffId        String
+  staff          Staff            @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  shiftType      ShiftType
+  startTime      DateTime
+  endTime        DateTime?
+  breakDuration  Int?
+  status         AttendanceStatus @default(PRESENT)
+  notes          String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([staffId])
+  @@index([startTime])
+  @@index([shiftType])
+  @@index([status])
+}
+
+// Medical notes
+model MedicalNote {
+  id        String   @id @default(uuid())
+  residentId String
+  resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  title     String?
+  content   String
+  noteType  String?
+  authorName String?
+  isConfidential Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([residentId])
+  @@index([createdAt])
+}
+
+// Emergency system
+model CallBell {
+  id           String         @id @default(uuid())
+  residentId   String
+  resident     Resident       @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  status       CallBellStatus @default(PENDING)
+  reason       String?
+  respondedAt  DateTime?
+  resolvedAt   DateTime?
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([residentId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Shift reports
+model ShiftReport {
+  id                    String    @id @default(uuid())
+  staffId               String
+  staff                 Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  shiftType             ShiftType
+  date                  DateTime
+  summary               String?
+  residentUpdates       String?
+  incidentsOccurred     Boolean   @default(false)
+  incidentDetails       String?
+  medicationsAdministered String?
+  taskCompleted         String?
+  handoverNotes         String?
+  signedAt              DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([staffId])
+  @@index([userId])
+  @@index([date])
+  @@index([shiftType])
+}
+
+// Notifications
+model Notification {
+  id                String           @id @default(uuid())
+  userId            String
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type              NotificationType
+  title             String
+  message           String
+  relatedEntityId   String?
+  relatedEntityType String?
+  isRead            Boolean          @default(false)
+  readAt            DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([type])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// Visits
+model Visit {
+  id           String   @id @default(uuid())
+  residentId   String
+  resident     Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  visitorName  String
+  visitorPhone String?
+  relationship String?
+  checkInTime  DateTime
+  checkOutTime DateTime?
+  purpose      String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([residentId])
+  @@index([checkInTime])
+}
+
+// Billing
+model Invoice {
+  id                 String        @id @default(uuid())
+  residentId         String
+  resident           Resident      @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  invoiceNumber      String        @unique
+  billingPeriodStart DateTime
+  billingPeriodEnd   DateTime
+  totalAmount        Float
+  amountPaid         Float         @default(0)
+  dueDate            DateTime
+  status             InvoiceStatus @default(DRAFT)
+  description        String?
+  notes              String?
+  sentAt             DateTime?
+  paidAt             DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@index([residentId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([invoiceNumber])
+}
+
+// Resident care notes
+model ResidentNote {
+  id        String   @id @default(uuid())
+  residentId String
+  resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  title     String?
+  content   String
+  category  String?
+  authorName String?
+  isPinned  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([residentId])
+  @@index([category])
+  @@index([isPinned])
+  @@index([createdAt])
 }
