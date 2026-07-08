@@ -288,6 +288,15 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   );
   const [tapoStatus, setTapoStatus] = useState<"connecting" | "connected" | "error">("connecting");
 
+  // Reset all detection refs on camera switch to avoid stale overlay artifacts
+  useEffect(() => {
+    posesRef.current = [];
+    detsRef.current = [];
+    waveRef.current = false;
+    selfFallenRef.current = false;
+    setSelfFallen(false);
+  }, [activeCamera]);
+
   // DOM refs
   const videoRef   = useRef<HTMLVideoElement|null>(null);
   const imgRef     = useRef<HTMLImageElement|null>(null);
