@@ -288,15 +288,6 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   );
   const [tapoStatus, setTapoStatus] = useState<"connecting" | "connected" | "error">("connecting");
 
-  // Reset all detection refs on camera switch to avoid stale overlay artifacts
-  useEffect(() => {
-    posesRef.current = [];
-    detsRef.current = [];
-    waveRef.current = false;
-    selfFallenRef.current = false;
-    setSelfFallen(false);
-  }, [activeCamera]);
-
   // DOM refs
   const videoRef   = useRef<HTMLVideoElement|null>(null);
   const imgRef     = useRef<HTMLImageElement|null>(null);
@@ -1019,7 +1010,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       // Pose: throttled to ~30fps (for body movement & behavior analysis)
       if (poseRef.current && now-lastPoseRef.current>30) {
         try {
-          const r = isVideo ? poseRef.current.detectForVideo(source,now) : poseRef.current.detect(source);
+          const r=poseRef.current.detectForVideo(source,now);
           posesRef.current = r.landmarks??[];
           const pose0 = posesRef.current[0];
           if (pose0) {
@@ -1074,7 +1065,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       if (detectorRef.current && now-lastDetRef.current>95) {
         try {
           const vw=srcW, vh=srcH;
-          const r = isVideo ? detectorRef.current.detectForVideo(source,now) : detectorRef.current.detect(source);
+          const r=detectorRef.current.detectForVideo(source,now);
           const newDets: TrackedDet[] = (r.detections??[]).map((d:any)=>{
             const label=d.categories?.[0]?.categoryName??"unknown";
             const score=d.categories?.[0]?.score??0;

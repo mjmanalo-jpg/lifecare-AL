@@ -5,20 +5,18 @@ import StatCard from "@/components/portal/widgets/StatCard";
 import ChartContainer from "@/components/portal/widgets/ChartContainer";
 import AlertBanner from "@/components/portal/widgets/AlertBanner";
 import VitalsPanel, { VitalReading } from "@/components/portal/widgets/VitalsPanel";
-import ResidentCard from "@/components/portal/widgets/ResidentCard";
 import CameraVisionFeed from "@/components/CameraVisionFeed";
+import { useLiveQuery, useStats } from "@/lib/useLiveQuery";
+import { adaptResident, adaptIncident } from "@/lib/adapters";
+import { updateRecord, deleteRecord } from "@/lib/api";
 import {
-  Activity,
   AlertTriangle,
   Users,
   Heart,
-  Grid,
   Zap,
   X,
   Search,
   Eye,
-  Filter,
-  Clock,
   CheckCircle,
   Trash2,
 } from "lucide-react";
@@ -58,13 +56,44 @@ const MONITORING_ROOM = "302";
 
 import Swal from "sweetalert2";
 
+type AdaptedResident = ReturnType<typeof adaptResident>;
+
 export default function NursePortalContent({ tab }: NursePortalContentProps) {
+  // ---- Live data (hooks must run unconditionally, before any tab return) ----
+  const { stats } = useStats();
+
+  const {
+    data: residentRows,
+    loading: resLoading,
+    refetch: refetchResidents,
+  } = useLiveQuery("residents", {
+    query: "include=incidents&take=300",
+    tables: ["Resident", "Incident"],
+  });
+  const residents = useMemo<AdaptedResident[]>(
+    () => residentRows.map(adaptResident),
+    [residentRows]
+  );
+
+  const {
+    data: incidentRows,
+    loading: incLoading,
+    refetch: refetchIncidents,
+  } = useLiveQuery("incidents", {
+    query: "include=resident&take=300",
+    tables: ["Incident"],
+  });
+  const dbIncidents = useMemo<NurseIncident[]>(
+    () => incidentRows.map(adaptIncident) as NurseIncident[],
+    [incidentRows]
+  );
+
   const [showVitalsModal, setShowVitalsModal] = useState(false);
   const [monitoringFallAlert, setMonitoringFallAlert] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedResidents, setSelectedResidents] = useState<Set<string>>(new Set());
-  const [selectedResident, setSelectedResident] = useState<typeof mockResidents[0] | null>(null);
-  const [editingResident, setEditingResident] = useState<typeof mockResidents[0] | null>(null);
+  const [selectedResident, setSelectedResident] = useState<AdaptedResident | null>(null);
+  const [editingResident, setEditingResident] = useState<AdaptedResident | null>(null);
   const [editForm, setEditForm] = useState<{
     name: string;
     room: string;
@@ -88,14 +117,16 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
         name: selectedResident.name,
         room: selectedResident.room,
         careLevel: selectedResident.careLevel,
-        allergies: "Penicillin, Sulfa drugs",
+        allergies: selectedResident.allergies || "Penicillin, Sulfa drugs",
         medications: "Lisinopril 10mg, Metformin 500mg",
-        conditions: "Hypertension, Type 2 Diabetes",
+        conditions: selectedResident.medicalHistory || "Hypertension, Type 2 Diabetes",
       });
     }
   };
 
   const handleSaveEdit = async () => {
+    if (!editingResident) return;
+
     const result = await Swal.fire({
       title: "Save Changes?",
       text: `Update record for ${editForm.name}?`,
@@ -108,43 +139,63 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     });
 
     if (result.isConfirmed) {
-      Swal.fire({
-        title: "Saved",
-        text: `${editForm.name}'s record has been updated.`,
-        icon: "success",
-        timer: 1500,
-        showConfirmButton: false,
-      });
-      setEditingResident(null);
-      setSelectedResident(null);
+      const trimmed = editForm.name.trim();
+      const spaceIdx = trimmed.indexOf(" ");
+      const firstName = spaceIdx === -1 ? trimmed : trimmed.slice(0, spaceIdx);
+      const lastName = spaceIdx === -1 ? "" : trimmed.slice(spaceIdx + 1);
+
+      try {
+        await updateRecord("residents", editingResident.id, {
+          firstName,
+          lastName,
+          roomNumber: editForm.room,
+          careLevel: editForm.careLevel,
+          allergies: editForm.allergies,
+        });
+        await refetchResidents();
+        Swal.fire({
+          title: "Saved",
+          text: `${editForm.name}'s record has been updated.`,
+          icon: "success",
+          timer: 1500,
+          showConfirmButton: false,
+        });
+        setEditingResident(null);
+        setSelectedResident(null);
+      } catch (err) {
+        Swal.fire({
+          title: "Update Failed",
+          text: err instanceof Error ? err.message : "Could not update record.",
+          icon: "error",
+          confirmButtonColor: "#fbbf24",
+        });
+      }
     }
   };
 
   // Incidents Management
-  const mockIncidentsData: NurseIncident[] = [
-    { id: "1", type: "Fall", severity: "critical", resident: "Eleanor Fitzroy", room: "305", timestamp: new Date(Date.now() - 15 * 60000), status: "open", description: "Unsteady gait during ambulation. Resident nearly fell.", notes: "Assigned mobility assistance.", resolved: false },
-    { id: "2", type: "Medication Error", severity: "high", resident: "Arthur Pendelton", room: "302", timestamp: new Date(Date.now() - 45 * 60000), status: "in-progress", description: "Wrong dosage administered.", notes: "Physician notified. Monitoring vitals.", resolved: false },
-    { id: "3", type: "Behavioral Change", severity: "high", resident: "Eleanor Fitzroy", room: "305", timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), status: "closed", description: "Increased confusion and agitation.", notes: "Resolved with medication adjustment.", resolved: true },
-    { id: "4", type: "Vital Sign Alert", severity: "medium", resident: "Robert Chen", room: "310", timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000), status: "closed", description: "Blood pressure spike to 165/95.", notes: "Resolved with rest and monitoring.", resolved: true },
-    { id: "5", type: "Equipment Malfunction", severity: "medium", resident: "Margaret Wilson", room: "312", timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000), status: "closed", description: "Call bell not functioning.", notes: "Maintenance repaired unit.", resolved: true },
-    { id: "6", type: "Skin Breakdown", severity: "high", resident: "James Murphy", room: "308", timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000), status: "open", description: "Pressure ulcer detected on sacrum.", notes: "Wound care initiated. Monitor daily.", resolved: false },
-    { id: "7", type: "Dietary Issue", severity: "low", resident: "Arthur Pendelton", room: "302", timestamp: new Date(Date.now() - 8 * 60 * 60 * 1000), status: "closed", description: "Resident choking during meal.", notes: "Adjusted food consistency. No aspiration.", resolved: true },
-    { id: "8", type: "Infection Risk", severity: "critical", resident: "Margaret Wilson", room: "312", timestamp: new Date(Date.now() - 12 * 60 * 60 * 1000), status: "in-progress", description: "Signs of urinary tract infection.", notes: "Lab culture sent. Started antibiotics.", resolved: false },
-  ];
-
-  const [incidents, setIncidents] = useState<NurseIncident[]>(() => {
-    if (typeof window === "undefined") return mockIncidentsData;
+  // Local state holds ONLY monitoring/camera-sourced incidents; DB incidents
+  // come from useLiveQuery and are merged in below.
+  const [monitoringIncidents, setMonitoringIncidents] = useState<NurseIncident[]>(() => {
+    if (typeof window === "undefined") return [];
 
     try {
       const saved = window.localStorage.getItem(INCIDENT_STORAGE_KEY);
-      if (!saved) return mockIncidentsData;
+      if (!saved) return [];
 
       const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) ? parsed : mockIncidentsData;
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
-      return mockIncidentsData;
+      return [];
     }
   });
+
+  // Combined feed used by stats / filters / pagination (monitoring first).
+  const incidents = useMemo<NurseIncident[]>(
+    () => [...monitoringIncidents, ...dbIncidents],
+    [monitoringIncidents, dbIncidents]
+  );
+
   const [incidentSearch, setIncidentSearch] = useState("");
   const [incidentFilterSeverity, setIncidentFilterSeverity] = useState<string>("all");
   const [incidentFilterStatus, setIncidentFilterStatus] = useState<string>("all");
@@ -172,20 +223,21 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   const paginatedIncidents = filteredIncidents.slice(incidentStartIndex, incidentEndIndex);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset pagination on filter change
     setIncidentPage(1);
   }, [incidentSearch, incidentFilterSeverity, incidentFilterStatus]);
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(INCIDENT_STORAGE_KEY, JSON.stringify(incidents));
+      window.localStorage.setItem(INCIDENT_STORAGE_KEY, JSON.stringify(monitoringIncidents));
     } catch {
       // localStorage can be unavailable in private mode; keep in-memory incidents.
     }
-  }, [incidents]);
+  }, [monitoringIncidents]);
 
   const handleMonitoringFallTriggered = (analysis: MonitoringAnalysis) => {
     setMonitoringFallAlert(true);
-    setIncidents((prev) => {
+    setMonitoringIncidents((prev) => {
       const hasOpenMonitoringFall = prev.some(
         (incident) =>
           incident.source === "monitoring" &&
@@ -227,7 +279,22 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     });
 
     if (result.isConfirmed) {
-      setIncidents(incidents.filter((i) => i.id !== id));
+      if (String(id).startsWith("monitoring-")) {
+        setMonitoringIncidents((prev) => prev.filter((i) => i.id !== id));
+      } else {
+        try {
+          await deleteRecord("incidents", id);
+          await refetchIncidents();
+        } catch (err) {
+          Swal.fire({
+            title: "Delete Failed",
+            text: err instanceof Error ? err.message : "Could not delete incident.",
+            icon: "error",
+            confirmButtonColor: "#fbbf24",
+          });
+          return;
+        }
+      }
       Swal.fire({
         title: "Deleted",
         text: "Incident removed.",
@@ -251,11 +318,26 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     });
 
     if (result.isConfirmed) {
-      setIncidents(
-        incidents.map((i) =>
-          i.id === id ? { ...i, status: "closed", resolved: true } : i
-        )
-      );
+      if (String(id).startsWith("monitoring-")) {
+        setMonitoringIncidents((prev) =>
+          prev.map((i) =>
+            i.id === id ? { ...i, status: "closed", resolved: true } : i
+          )
+        );
+      } else {
+        try {
+          await updateRecord("incidents", id, { resolvedAt: new Date().toISOString() });
+          await refetchIncidents();
+        } catch (err) {
+          Swal.fire({
+            title: "Resolve Failed",
+            text: err instanceof Error ? err.message : "Could not resolve incident.",
+            icon: "error",
+            confirmButtonColor: "#fbbf24",
+          });
+          return;
+        }
+      }
       Swal.fire({
         title: "Resolved",
         text: "Incident marked as closed.",
@@ -305,42 +387,6 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     { name: "12 PM", value: 78 },
     { name: "4 PM", value: 80 },
     { name: "8 PM", value: 76 },
-  ];
-
-  type Resident = {
-    id: string;
-    name: string;
-    room: string;
-    careLevel: "INDEPENDENT" | "ASSISTED" | "MEMORY" | "SKILLED";
-    status: "ACTIVE" | "INACTIVE";
-    alertsCount: number;
-  };
-
-  const mockResidents: Resident[] = [
-    {
-      id: "1",
-      name: "Arthur Pendelton",
-      room: "302",
-      careLevel: "ASSISTED",
-      status: "ACTIVE",
-      alertsCount: 0,
-    },
-    {
-      id: "2",
-      name: "Eleanor Fitzroy",
-      room: "305",
-      careLevel: "MEMORY",
-      status: "ACTIVE",
-      alertsCount: 1,
-    },
-    {
-      id: "3",
-      name: "Robert Chen",
-      room: "308",
-      careLevel: "SKILLED",
-      status: "ACTIVE",
-      alertsCount: 0,
-    },
   ];
 
   if (tab === "monitoring") {
@@ -633,6 +679,10 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
                 </div>
               </div>
             ))
+          ) : incLoading && incidents.length === 0 ? (
+            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
+              Loading incidents…
+            </div>
           ) : (
             <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
               No incidents match your filters.
@@ -775,7 +825,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   }
 
   if (tab === "records") {
-    const filteredResidents = mockResidents.filter(
+    const filteredResidents = residents.filter(
       (r) =>
         r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         r.room.toLowerCase().includes(searchQuery.toLowerCase())
@@ -829,15 +879,29 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
       });
 
       if (result.isConfirmed) {
-        // Simulate deletion
-        setSelectedResidents(new Set());
-        Swal.fire({
-          title: "Deleted",
-          text: `${selectedResidents.size} resident(s) have been deleted.`,
-          icon: "success",
-          timer: 1500,
-          showConfirmButton: false,
-        });
+        const ids = Array.from(selectedResidents);
+        const count = ids.length;
+        try {
+          for (const id of ids) {
+            await deleteRecord("residents", id);
+          }
+          await refetchResidents();
+          setSelectedResidents(new Set());
+          Swal.fire({
+            title: "Deleted",
+            text: `${count} resident(s) have been deleted.`,
+            icon: "success",
+            timer: 1500,
+            showConfirmButton: false,
+          });
+        } catch (err) {
+          Swal.fire({
+            title: "Delete Failed",
+            text: err instanceof Error ? err.message : "Could not delete residents.",
+            icon: "error",
+            confirmButtonColor: "#fbbf24",
+          });
+        }
       }
     };
 
@@ -966,10 +1030,22 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
                     </td>
                   </tr>
                 ))
+              ) : resLoading ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                    Loading residents…
+                  </td>
+                </tr>
+              ) : residents.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                    No resident records found.
+                  </td>
+                </tr>
               ) : (
                 <tr>
                   <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
-                    No residents found matching "{searchQuery}"
+                    No residents found matching &quot;{searchQuery}&quot;
                   </td>
                 </tr>
               )}
@@ -979,7 +1055,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
 
         {/* Results Count */}
         <div className="text-sm text-gray-600">
-          Showing {filteredResidents.length} of {mockResidents.length} residents
+          Showing {filteredResidents.length} of {residents.length} residents
           {selectedResidents.size > 0 && ` • ${selectedResidents.size} selected`}
         </div>
 
@@ -1045,7 +1121,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
                   <div className="space-y-4">
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <p className="text-sm text-gray-600 mb-1">Allergies</p>
-                      <p className="font-semibold text-gray-900">Penicillin, Sulfa drugs</p>
+                      <p className="font-semibold text-gray-900">{selectedResident.allergies || "Penicillin, Sulfa drugs"}</p>
                     </div>
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <p className="text-sm text-gray-600 mb-1">Current Medications</p>
@@ -1053,7 +1129,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
                     </div>
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <p className="text-sm text-gray-600 mb-1">Chronic Conditions</p>
-                      <p className="font-semibold text-gray-900">Hypertension, Type 2 Diabetes</p>
+                      <p className="font-semibold text-gray-900">{selectedResident.medicalHistory || "Hypertension, Type 2 Diabetes"}</p>
                     </div>
                   </div>
                 </div>
@@ -1155,7 +1231,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
                       onChange={(e) =>
                         setEditForm({
                           ...editForm,
-                          careLevel: e.target.value as any,
+                          careLevel: e.target.value as "INDEPENDENT" | "ASSISTED" | "MEMORY" | "SKILLED",
                         })
                       }
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
@@ -1240,7 +1316,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard
           title="Active Residents"
-          value="12"
+          value={String(stats?.residents ?? 0)}
           icon={Users}
           trend={{ direction: "up", percent: 5 }}
           backgroundColor="bg-blue-50"
@@ -1249,7 +1325,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
         />
         <StatCard
           title="Pending Alerts"
-          value="3"
+          value={String(stats?.activeIncidents ?? 0)}
           icon={AlertTriangle}
           backgroundColor="bg-yellow-50"
           textColor="text-yellow-900"

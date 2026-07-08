@@ -6,10 +6,15 @@
     "dev": "next dev --hostname 0.0.0.0",
     "build": "npx prisma generate && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:setup": "prisma db push && prisma db seed",
+    "db:studio": "prisma studio"
   },
   "engines": {
     "node": ">=20.9.0"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",

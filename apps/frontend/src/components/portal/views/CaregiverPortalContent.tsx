@@ -1,32 +1,88 @@
 "use client";
 
 import StatCard from "@/components/portal/widgets/StatCard";
-import ResidentCard from "@/components/portal/widgets/ResidentCard";
-import { CheckCircle, Users, Clock, AlertTriangle, Search, Filter, X, Eye, Trash2, Heart, Droplets, Wind, Thermometer } from "lucide-react";
+import { CheckCircle, Users, Clock, AlertTriangle, Search, X, Eye, Trash2, Heart, Droplets, Wind, Thermometer } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import Swal from "sweetalert2";
+import { useLiveQuery, useStats } from "@/lib/useLiveQuery";
+import { adaptTask, adaptResident } from "@/lib/adapters";
+import { updateRecord, deleteRecord } from "@/lib/api";
 
 interface CaregiverPortalContentProps {
   tab: string;
 }
 
-const mockTasksData = [
-  { id: "1", title: "Assist Arthur with breakfast", resident: "Arthur Pendelton", room: "302", dueTime: "8:00 AM", priority: "high", category: "Meals", completed: true, notes: "Use soft foods, assist with utensils" },
-  { id: "2", title: "Medication distribution", resident: "Eleanor Fitzroy", room: "305", dueTime: "10:00 AM", priority: "critical", category: "Medication", completed: false, notes: "Blood pressure med + daily vitamin" },
-  { id: "3", title: "Physical therapy session", resident: "Robert Chen", room: "310", dueTime: "2:00 PM", priority: "high", category: "Therapy", completed: false, notes: "30-min session, track mobility" },
-  { id: "4", title: "Assist Eleanor with lunch", resident: "Eleanor Fitzroy", room: "305", dueTime: "12:00 PM", priority: "medium", category: "Meals", completed: false, notes: "Low sodium diet" },
-  { id: "5", title: "Room cleaning & laundry", resident: "Arthur Pendelton", room: "302", dueTime: "11:00 AM", priority: "medium", category: "Maintenance", completed: false, notes: "Change bedding" },
-  { id: "6", title: "Call bell check", resident: "Robert Chen", room: "310", dueTime: "3:00 PM", priority: "low", category: "Check-in", completed: false, notes: "Routine check-in" },
-  { id: "7", title: "Monitor vital signs", resident: "Eleanor Fitzroy", room: "305", dueTime: "9:00 AM", priority: "critical", category: "Vitals", completed: true, notes: "Record BP, HR, Temp" },
-  { id: "8", title: "Assist with bathing", resident: "Arthur Pendelton", room: "302", dueTime: "4:00 PM", priority: "high", category: "Personal Care", completed: false, notes: "Safety equipment ready" },
-];
+type CaregiverTask = ReturnType<typeof adaptTask>;
+
+/** Resident card view model: DB has no inline vitals, so degrade gracefully. */
+interface ResidentCardModel {
+  id: string;
+  name: string;
+  room: string;
+  age: number | string;
+  careLevel: "INDEPENDENT" | "ASSISTED" | "MEMORY" | "SKILLED";
+  status: string;
+  alertsCount: number;
+  vitals: { hr: string; bp: string; temp: string; o2: string };
+  medications: string[];
+  conditions: string[];
+  lastCheckIn: string;
+  notes: string;
+}
 
 export default function CaregiverPortalContent({ tab }: CaregiverPortalContentProps) {
-  const [tasks, setTasks] = useState(mockTasksData);
+  // ---- Live data (hooks must run unconditionally, before any early return) ----
+  const {
+    data: taskRows,
+    loading: tasksLoading,
+    error: tasksError,
+    refetch: refetchTasks,
+  } = useLiveQuery("tasks", { query: "include=resident&take=300", tables: ["Task", "Resident"] });
+  const tasks = useMemo<CaregiverTask[]>(() => taskRows.map(adaptTask), [taskRows]);
+
+  const {
+    data: residentRows,
+    loading: resLoading,
+  } = useLiveQuery("residents", { query: "include=incidents,medications&take=300", tables: ["Resident"] });
+  const residents = useMemo<ResidentCardModel[]>(
+    () =>
+      residentRows.map((row) => {
+        const r = adaptResident(row);
+        const rawMeds = (r.raw?.medications ?? []) as Array<{ name?: string }>;
+        const medications = Array.isArray(rawMeds)
+          ? rawMeds.map((m) => m?.name).filter((n): n is string => Boolean(n))
+          : [];
+        const conditions = r.medicalHistory
+          ? r.medicalHistory.split(",").map((c: string) => c.trim()).filter(Boolean)
+          : [];
+        return {
+          id: r.id,
+          name: r.name,
+          room: r.room,
+          age: r.age ?? "—",
+          careLevel: r.careLevel,
+          status: r.status,
+          alertsCount: r.alertsCount,
+          vitals: { hr: "—", bp: "—", temp: "—", o2: "—" },
+          medications,
+          conditions,
+          lastCheckIn: "—",
+          notes: r.notes,
+        };
+      }),
+    [residentRows]
+  );
+
+  const { stats } = useStats();
+
+  const { data: reportRows } = useLiveQuery<Record<string, unknown>>("shift-reports", {
+    tables: ["ShiftReport"],
+  });
+
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [viewingTask, setViewingTask] = useState<typeof mockTasksData[0] | null>(null);
+  const [viewingTask, setViewingTask] = useState<CaregiverTask | null>(null);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -53,18 +109,30 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
   const endIndex = startIndex + itemsPerPage;
   const paginatedTasks = allFilteredTasks.slice(startIndex, endIndex);
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 and clear selection when filters change.
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- intentional: sync pagination + selection to filter changes */
     setCurrentPage(1);
     setSelectedTasks(new Set());
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [searchQuery, filterPriority, filterStatus]);
 
-  const handleToggleTask = (id: string) => {
-    setTasks(
-      tasks.map((t) =>
-        t.id === id ? { ...t, completed: !t.completed } : t
-      )
-    );
+  const handleToggleTask = async (id: string) => {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+    try {
+      await updateRecord("tasks", id, {
+        status: task.completed ? "PENDING" : "COMPLETED",
+        completedAt: task.completed ? null : new Date().toISOString(),
+      });
+      await refetchTasks();
+    } catch (err) {
+      Swal.fire({
+        title: "Update Failed",
+        text: err instanceof Error ? err.message : "Could not update task.",
+        icon: "error",
+      });
+    }
   };
 
   const handleDeleteTask = async (id: string) => {
@@ -80,22 +148,23 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
     });
 
     if (result.isConfirmed) {
-      setTasks(tasks.filter((t) => t.id !== id));
-      Swal.fire({
-        title: "Deleted",
-        text: "Task removed.",
-        icon: "success",
-        timer: 1500,
-        showConfirmButton: false,
-      });
-    }
-  };
-
-  const handleSelectAll = () => {
-    if (selectedTasks.size === paginatedTasks.length) {
-      setSelectedTasks(new Set());
-    } else {
-      setSelectedTasks(new Set(paginatedTasks.map((t) => t.id)));
+      try {
+        await deleteRecord("tasks", id);
+        await refetchTasks();
+        Swal.fire({
+          title: "Deleted",
+          text: "Task removed.",
+          icon: "success",
+          timer: 1500,
+          showConfirmButton: false,
+        });
+      } catch (err) {
+        Swal.fire({
+          title: "Delete Failed",
+          text: err instanceof Error ? err.message : "Could not delete task.",
+          icon: "error",
+        });
+      }
     }
   };
 
@@ -124,15 +193,25 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
     });
 
     if (result.isConfirmed) {
-      setTasks(tasks.filter((t) => !selectedTasks.has(t.id)));
-      setSelectedTasks(new Set());
-      Swal.fire({
-        title: "Deleted",
-        text: `${selectedTasks.size} task(s) removed.`,
-        icon: "success",
-        timer: 1500,
-        showConfirmButton: false,
-      });
+      const ids = Array.from(selectedTasks);
+      try {
+        await Promise.all(ids.map((id) => deleteRecord("tasks", id)));
+        setSelectedTasks(new Set());
+        await refetchTasks();
+        Swal.fire({
+          title: "Deleted",
+          text: `${ids.length} task(s) removed.`,
+          icon: "success",
+          timer: 1500,
+          showConfirmButton: false,
+        });
+      } catch (err) {
+        Swal.fire({
+          title: "Delete Failed",
+          text: err instanceof Error ? err.message : "Could not delete tasks.",
+          icon: "error",
+        });
+      }
     }
   };
 
@@ -169,84 +248,10 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
     critical: tasks.filter((t) => t.priority === "critical" && !t.completed).length,
   };
 
-  const mockResidentsData = [
-    {
-      id: "1",
-      name: "Arthur Pendelton",
-      room: "302",
-      age: 78,
-      careLevel: "ASSISTED" as const,
-      status: "ACTIVE" as const,
-      alertsCount: 0,
-      vitals: { hr: 72, bp: "138/82", temp: 98.6, o2: 96 },
-      medications: ["Lisinopril 10mg", "Metformin 500mg"],
-      conditions: ["Hypertension", "Type 2 Diabetes"],
-      lastCheckIn: "2 hours ago",
-      notes: "Stable condition. Regular monitoring.",
-    },
-    {
-      id: "2",
-      name: "Eleanor Fitzroy",
-      room: "305",
-      age: 85,
-      careLevel: "MEMORY" as const,
-      status: "ACTIVE" as const,
-      alertsCount: 1,
-      vitals: { hr: 68, bp: "126/76", temp: 98.4, o2: 97 },
-      medications: ["Donepezil 5mg", "Aspirin 81mg"],
-      conditions: ["Alzheimer's", "Arthritis"],
-      lastCheckIn: "1 hour ago",
-      notes: "Alert: Memory decline noted. Increase supervision.",
-    },
-    {
-      id: "3",
-      name: "Robert Chen",
-      room: "310",
-      age: 72,
-      careLevel: "INDEPENDENT" as const,
-      status: "ACTIVE" as const,
-      alertsCount: 0,
-      vitals: { hr: 75, bp: "128/80", temp: 98.5, o2: 98 },
-      medications: ["Atorvastatin 20mg"],
-      conditions: ["High Cholesterol"],
-      lastCheckIn: "3 hours ago",
-      notes: "Excellent condition. Self-sufficient.",
-    },
-    {
-      id: "4",
-      name: "Margaret Wilson",
-      room: "312",
-      age: 80,
-      careLevel: "SKILLED" as const,
-      status: "ACTIVE" as const,
-      alertsCount: 2,
-      vitals: { hr: 82, bp: "142/88", temp: 99.2, o2: 94 },
-      medications: ["Warfarin", "Furosemide 40mg", "Lisinopril 10mg"],
-      conditions: ["Atrial Fibrillation", "Heart Failure"],
-      lastCheckIn: "30 minutes ago",
-      notes: "Alert: BP elevated. Monitor closely. Alert: O2 low.",
-    },
-    {
-      id: "5",
-      name: "James Murphy",
-      room: "308",
-      age: 76,
-      careLevel: "ASSISTED" as const,
-      status: "RECOVERING" as const,
-      alertsCount: 0,
-      vitals: { hr: 70, bp: "130/78", temp: 98.3, o2: 97 },
-      medications: ["Physical Therapy Protocol"],
-      conditions: ["Post-Surgery Recovery", "Mobility Limited"],
-      lastCheckIn: "4 hours ago",
-      notes: "Recovering well. PT sessions progressing.",
-    },
-  ];
-
-  const [residents, setResidents] = useState(mockResidentsData);
   const [residentSearch, setResidentSearch] = useState("");
   const [residentFilterStatus, setResidentFilterStatus] = useState<string>("all");
   const [residentFilterCare, setResidentFilterCare] = useState<string>("all");
-  const [viewingResident, setViewingResident] = useState<typeof mockResidentsData[0] | null>(null);
+  const [viewingResident, setViewingResident] = useState<ResidentCardModel | null>(null);
   const [residentPage, setResidentPage] = useState(1);
   const [residentItemsPerPage, setResidentItemsPerPage] = useState(10);
 
@@ -269,6 +274,7 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
   const paginatedResidents = filteredResidents.slice(residentStartIndex, residentEndIndex);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset pagination on filter change
     setResidentPage(1);
   }, [residentSearch, residentFilterStatus, residentFilterCare]);
 
@@ -381,7 +387,15 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
 
         {/* Tasks List */}
         <div className="space-y-3">
-          {paginatedTasks.length > 0 ? (
+          {tasksLoading && tasks.length === 0 ? (
+            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
+              Loading tasks…
+            </div>
+          ) : tasksError ? (
+            <div className="bg-white rounded-lg border border-red-200 p-8 text-center text-red-600">
+              Failed to load tasks: {tasksError}
+            </div>
+          ) : paginatedTasks.length > 0 ? (
             paginatedTasks.map((task) => (
               <div
                 key={task.id}
@@ -721,7 +735,11 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
 
         {/* Residents Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {paginatedResidents.length > 0 ? (
+          {resLoading && residents.length === 0 ? (
+            <div className="col-span-full bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
+              Loading residents…
+            </div>
+          ) : paginatedResidents.length > 0 ? (
             paginatedResidents.map((resident) => (
               <div
                 key={resident.id}
@@ -972,10 +990,42 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
   if (tab === "reports") {
     return (
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-gray-900">Shift Reports</h2>
-        <div className="bg-white rounded-lg p-6 border border-gray-200">
-          <p className="text-gray-600">Shift reports feature coming soon</p>
+        <div>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2">
+            Shift Reports
+          </h1>
+          <p className="text-gray-600">Recent shift handovers and summaries</p>
         </div>
+
+        {reportRows.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {reportRows.map((r) => (
+              <div
+                key={String(r.id)}
+                className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition"
+              >
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-semibold">
+                    {r.shiftType ? String(r.shiftType) : "Shift"}
+                  </span>
+                  <span className="text-sm text-gray-600">
+                    {r.date ? new Date(String(r.date)).toLocaleDateString() : "—"}
+                  </span>
+                </div>
+                <p className="text-gray-900 font-medium mb-2">{r.summary ? String(r.summary) : "No summary"}</p>
+                {r.handoverNotes ? (
+                  <p className="text-sm text-gray-600 p-2 bg-gray-50 rounded border-l-2 border-yellow-400">
+                    📝 {String(r.handoverNotes)}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg p-8 border border-gray-200 text-center text-gray-500">
+            No shift reports found.
+          </div>
+        )}
       </div>
     );
   }
@@ -989,7 +1039,7 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard
           title="Assigned Residents"
-          value="5"
+          value={String(stats?.residents ?? 0)}
           icon={Users}
           backgroundColor="bg-blue-50"
           textColor="text-blue-900"
@@ -997,7 +1047,7 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
         />
         <StatCard
           title="Tasks Today"
-          value="8"
+          value={String(stats?.openTasks ?? 0)}
           icon={CheckCircle}
           backgroundColor="bg-green-50"
           textColor="text-green-900"
@@ -1013,7 +1063,7 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
         />
         <StatCard
           title="Urgent Alerts"
-          value="1"
+          value={String(stats?.activeIncidents ?? 0)}
           icon={AlertTriangle}
           backgroundColor="bg-red-50"
           textColor="text-red-900"

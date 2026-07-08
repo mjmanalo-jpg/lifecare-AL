@@ -23,6 +23,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import LandingBackground from "@/components/LandingBackground";
 
 const slides = [
   {
@@ -166,6 +167,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen relative overflow-hidden flex flex-col items-center pt-24">
+      <LandingBackground />
       <Navbar />
       {/* Golden Hearth Background Element */}
       <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[800px] h-[800px] opacity-30 pointer-events-none mix-blend-screen">
@@ -186,7 +188,7 @@ export default function Home() {
           variants={fadeInUp}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-panel text-sm font-medium text-muted-foreground mb-8"
         >
-          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: "var(--lp-accent, #f59e0b)" }} />
           Next-Gen Wellness Platform Live
         </motion.div>
 

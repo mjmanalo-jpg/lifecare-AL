@@ -11,6 +11,7 @@ import {
   MessageSquare,
   DollarSign,
   Target,
+  Palette,
 } from "lucide-react";
 
 export type Role = "SUPERADMIN" | "NURSE" | "CAREGIVER" | "FAMILY";
@@ -53,6 +54,7 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   admin: "Admin Dashboard",
   shift: "Shift Dashboard",
   family: "Family Dashboard",
+  appearance: "Landing Studio",
 };
 
 export const PATH_TO_ROLE: Record<string, Role> = {
@@ -74,6 +76,7 @@ export const ROLES: Record<Role, RoleDetails> = {
     sidebarLinks: [
       { name: "Admin Dashboard", icon: Grid, route: "/superadmin/dashboard" },
       { name: "Staff Registry", icon: Users, route: "/superadmin/staff" },
+      { name: "Landing Studio", icon: Palette, route: "/superadmin/appearance" },
     ],
   },
   NURSE: {

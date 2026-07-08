@@ -2,28 +2,32 @@
 
 import StatCard from "@/components/portal/widgets/StatCard";
 import ChartContainer from "@/components/portal/widgets/ChartContainer";
-import { Users, AlertTriangle, Activity, Server, Zap, TrendingUp, Trash2, Search, Eye, Edit, X } from "lucide-react";
+import LandingCustomizerContent from "@/components/portal/views/LandingCustomizerContent";
+import { Users, AlertTriangle, Zap, Trash2, Search, Eye, Edit, X } from "lucide-react";
 import { useState, useMemo } from "react";
 import Swal from "sweetalert2";
+import { useLiveQuery, useStats } from "@/lib/useLiveQuery";
+import { adaptStaff } from "@/lib/adapters";
+import { updateRecord, deleteRecord } from "@/lib/api";
 
 interface SuperAdminPortalContentProps {
   tab: string;
 }
 
-const mockStaffMembers = [
-  { id: "1", name: "Sarah Jenkins", position: "Head Nurse", department: "Clinical Care", email: "sarah.jenkins@goldenhearth.com", phone: "555-0101", status: "Active", startDate: "2022-03-15" },
-  { id: "2", name: "Caleb Randall", position: "Caregiver", department: "Daily Assistance", email: "caleb.randall@goldenhearth.com", phone: "555-0102", status: "Active", startDate: "2023-06-20" },
-  { id: "3", name: "Maria Santos", position: "Nurse Aide", department: "Clinical Support", email: "maria.santos@goldenhearth.com", phone: "555-0103", status: "Inactive", startDate: "2021-01-10" },
-  { id: "4", name: "James Mitchell", position: "Caregiver", department: "Daily Assistance", email: "james.mitchell@goldenhearth.com", phone: "555-0104", status: "Active", startDate: "2023-09-01" },
-  { id: "5", name: "Rebecca Wilson", position: "RN - Supervisor", department: "Clinical Care", email: "rebecca.wilson@goldenhearth.com", phone: "555-0105", status: "Active", startDate: "2020-11-05" },
-  { id: "6", name: "David Chen", position: "Maintenance", department: "Facility", email: "david.chen@goldenhearth.com", phone: "555-0106", status: "Active", startDate: "2022-07-12" },
-];
+type StaffMember = ReturnType<typeof adaptStaff>;
 
 export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContentProps) {
+  const { stats } = useStats();
+  const { data: staffRows, loading, error, refetch } = useLiveQuery<Record<string, unknown>>("staff", {
+    query: "include=user",
+    tables: ["Staff", "User"],
+  });
+  const staff = useMemo(() => staffRows.map(adaptStaff), [staffRows]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStaff, setSelectedStaff] = useState<Set<string>>(new Set());
-  const [viewingStaff, setViewingStaff] = useState<typeof mockStaffMembers[0] | null>(null);
-  const [editingStaff, setEditingStaff] = useState<typeof mockStaffMembers[0] | null>(null);
+  const [viewingStaff, setViewingStaff] = useState<StaffMember | null>(null);
+  const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [editForm, setEditForm] = useState({
     name: "",
     position: "",
@@ -34,13 +38,13 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   });
 
   const filteredStaff = useMemo(() => {
-    return mockStaffMembers.filter((staff) =>
-      staff.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      staff.position.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      staff.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      staff.email.toLowerCase().includes(searchQuery.toLowerCase())
+    return staff.filter((s) =>
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.position.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.email.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [searchQuery]);
+  }, [staff, searchQuery]);
 
   const handleSelectAll = () => {
     if (selectedStaff.size === filteredStaff.length) {
@@ -75,26 +79,39 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     });
 
     if (result.isConfirmed) {
-      Swal.fire({
-        title: "Deleted",
-        text: `${selectedStaff.size} staff member(s) have been removed.`,
-        icon: "success",
-        timer: 1500,
-        showConfirmButton: false,
-      });
-      setSelectedStaff(new Set());
+      const count = selectedStaff.size;
+      try {
+        for (const id of selectedStaff) {
+          await deleteRecord("staff", id);
+        }
+        await refetch();
+        setSelectedStaff(new Set());
+        Swal.fire({
+          title: "Deleted",
+          text: `${count} staff member(s) have been removed.`,
+          icon: "success",
+          timer: 1500,
+          showConfirmButton: false,
+        });
+      } catch (err) {
+        Swal.fire({
+          title: "Delete Failed",
+          text: err instanceof Error ? err.message : "Could not delete staff member(s).",
+          icon: "error",
+        });
+      }
     }
   };
 
-  const startEditing = (staff: typeof mockStaffMembers[0]) => {
-    setEditingStaff(staff);
+  const startEditing = (member: StaffMember) => {
+    setEditingStaff(member);
     setEditForm({
-      name: staff.name,
-      position: staff.position,
-      department: staff.department,
-      email: staff.email,
-      phone: staff.phone,
-      status: staff.status as "Active" | "Inactive",
+      name: member.name,
+      position: member.position,
+      department: member.department,
+      email: member.email,
+      phone: member.phone,
+      status: member.status,
     });
   };
 
@@ -111,15 +128,38 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     });
 
     if (result.isConfirmed) {
-      Swal.fire({
-        title: "Saved",
-        text: `${editForm.name}'s record has been updated.`,
-        icon: "success",
-        timer: 1500,
-        showConfirmButton: false,
-      });
-      setEditingStaff(null);
-      setViewingStaff(null);
+      if (!editingStaff) return;
+      try {
+        await updateRecord("staff", editingStaff.id, {
+          position: editForm.position,
+          department: editForm.department,
+          isActive: editForm.status === "Active",
+        });
+        const userId = editingStaff.raw?.userId;
+        if (userId) {
+          await updateRecord("users", userId, {
+            name: editForm.name,
+            email: editForm.email,
+            phone: editForm.phone,
+          });
+        }
+        await refetch();
+        setEditingStaff(null);
+        setViewingStaff(null);
+        Swal.fire({
+          title: "Saved",
+          text: `${editForm.name}'s record has been updated.`,
+          icon: "success",
+          timer: 1500,
+          showConfirmButton: false,
+        });
+      } catch (err) {
+        Swal.fire({
+          title: "Save Failed",
+          text: err instanceof Error ? err.message : "Could not update staff record.",
+          icon: "error",
+        });
+      }
     }
   };
 
@@ -138,6 +178,10 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     { name: "Fri", value: 13 },
     { name: "Sat", value: 10 },
   ];
+
+  if (tab === "appearance") {
+    return <LandingCustomizerContent />;
+  }
 
   if (tab === "staff") {
     return (
@@ -172,6 +216,21 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
           />
         </div>
 
+        {/* Error Banner */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+            Failed to load staff: {error}
+          </div>
+        )}
+
+        {/* Loading State */}
+        {loading && staff.length === 0 ? (
+          <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
+            <div className="inline-block w-6 h-6 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin mb-3" />
+            <p>Loading staff…</p>
+          </div>
+        ) : (
+        <>
         {/* Desktop Table */}
         <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
@@ -310,9 +369,11 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
 
         {/* Results Summary */}
         <div className="text-sm text-gray-600">
-          Showing {filteredStaff.length} of {mockStaffMembers.length} staff members
+          Showing {filteredStaff.length} of {staff.length} staff members
           {selectedStaff.size > 0 && ` • ${selectedStaff.size} selected`}
         </div>
+        </>
+        )}
 
         {/* View Modal */}
         {viewingStaff && (
@@ -508,7 +569,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard
           title="Total Residents"
-          value="31"
+          value={String(stats?.residents ?? 0)}
           icon={Users}
           trend={{ direction: "up", percent: 3 }}
           backgroundColor="bg-blue-50"
@@ -517,7 +578,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
         />
         <StatCard
           title="Active Incidents"
-          value="2"
+          value={String(stats?.activeIncidents ?? 0)}
           icon={AlertTriangle}
           backgroundColor="bg-red-50"
           textColor="text-red-900"
@@ -525,7 +586,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
         />
         <StatCard
           title="Staff On Duty"
-          value="12"
+          value={String(stats?.activeStaff ?? 0)}
           icon={Users}
           backgroundColor="bg-green-50"
           textColor="text-green-900"
