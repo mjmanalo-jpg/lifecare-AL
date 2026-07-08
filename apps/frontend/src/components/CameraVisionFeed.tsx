@@ -916,7 +916,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     drawScanLine(ctx,W,H,t);
 
     // Skeleton (pose visualization)
-    // for (const lms of posesRef.current) drawSkeleton(ctx,lms,W,H);
+    for (const lms of posesRef.current) drawSkeleton(ctx,lms,W,H);
 
     // Bounding boxes + labels + thinking bubbles (object detection)
     for (const det of detsRef.current) {
@@ -1010,7 +1010,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       // Pose: throttled to ~30fps (for body movement & behavior analysis)
       if (poseRef.current && now-lastPoseRef.current>30) {
         try {
-          const r=poseRef.current.detectForVideo(source,now);
+          const r = isVideo ? poseRef.current.detectForVideo(source,now) : poseRef.current.detect(source);
           posesRef.current = r.landmarks??[];
           const pose0 = posesRef.current[0];
           if (pose0) {
@@ -1065,7 +1065,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       if (detectorRef.current && now-lastDetRef.current>95) {
         try {
           const vw=srcW, vh=srcH;
-          const r=detectorRef.current.detectForVideo(source,now);
+          const r = isVideo ? detectorRef.current.detectForVideo(source,now) : detectorRef.current.detect(source);
           const newDets: TrackedDet[] = (r.detections??[]).map((d:any)=>{
             const label=d.categories?.[0]?.categoryName??"unknown";
             const score=d.categories?.[0]?.score??0;
