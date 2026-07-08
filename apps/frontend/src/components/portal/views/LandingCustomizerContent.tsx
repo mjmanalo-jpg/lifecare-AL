@@ -16,6 +16,7 @@ import {
   Layers,
   Paintbrush,
   ExternalLink,
+  ChevronDown,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import {
@@ -81,8 +82,23 @@ export default function LandingCustomizerContent() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [dragOver, setDragOver] = useState(false);
+  const [activeTab, setActiveTab] = useState<"landing" | "login">("landing");
 
-  const bg = draft.background;
+  const patchLogin = (partial: Partial<import("@/lib/landingConfig").LoginConfig>) => {
+    patch({ login: { ...draft.login, ...partial } });
+  };
+
+  const patchLoginBackground = (partial: Partial<import("@/lib/landingConfig").LandingBackground>) => {
+    patch({
+      login: {
+        ...draft.login,
+        background: { ...draft.login.background, ...partial },
+      },
+    });
+  };
+
+  const bg = activeTab === "login" ? draft.login.background : draft.background;
+  const patchBg = activeTab === "login" ? patchLoginBackground : patchBackground;
 
   const handleFiles = async (files: FileList | null) => {
     setUploadError("");
@@ -103,7 +119,7 @@ export default function LandingCustomizerContent() {
         setUploadError("Compressed image is still too large to store. Try a simpler image.");
         return;
       }
-      patchBackground({ type: "image", imageUrl: dataUrl });
+      patchBg({ type: "image", imageUrl: dataUrl });
     } catch {
       setUploadError("Could not process that image.");
     } finally {
@@ -293,7 +309,7 @@ export default function LandingCustomizerContent() {
                 return (
                   <button
                     key={t.id}
-                    onClick={() => patchBackground({ type: t.id })}
+                    onClick={() => patchBg({ type: t.id })}
                     className={`flex flex-col items-center gap-1 py-3 rounded-lg border text-xs font-medium transition ${
                       active
                         ? "border-yellow-400 bg-yellow-50 text-yellow-700"
@@ -317,13 +333,13 @@ export default function LandingCustomizerContent() {
                 <input
                   type="color"
                   value={bg.color}
-                  onChange={(e) => patchBackground({ color: e.target.value })}
+                  onChange={(e) => patchBg({ color: e.target.value })}
                   className="w-12 h-12 rounded cursor-pointer border border-gray-200 bg-white p-0.5"
                 />
                 <input
                   type="text"
                   value={bg.color}
-                  onChange={(e) => patchBackground({ color: e.target.value })}
+                  onChange={(e) => patchBg({ color: e.target.value })}
                   className="w-36 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-yellow-400 outline-none"
                 />
               </div>
@@ -338,7 +354,7 @@ export default function LandingCustomizerContent() {
                       <input
                         type="color"
                         value={bg.gradientFrom}
-                        onChange={(e) => patchBackground({ gradientFrom: e.target.value })}
+                        onChange={(e) => patchBg({ gradientFrom: e.target.value })}
                         className="w-10 h-10 rounded cursor-pointer border border-gray-200 bg-white p-0.5"
                       />
                       <span className="text-xs font-mono text-gray-500">{bg.gradientFrom}</span>
@@ -350,7 +366,7 @@ export default function LandingCustomizerContent() {
                       <input
                         type="color"
                         value={bg.gradientTo}
-                        onChange={(e) => patchBackground({ gradientTo: e.target.value })}
+                        onChange={(e) => patchBg({ gradientTo: e.target.value })}
                         className="w-10 h-10 rounded cursor-pointer border border-gray-200 bg-white p-0.5"
                       />
                       <span className="text-xs font-mono text-gray-500">{bg.gradientTo}</span>
@@ -367,7 +383,7 @@ export default function LandingCustomizerContent() {
                     min={0}
                     max={360}
                     value={bg.gradientAngle}
-                    onChange={(e) => patchBackground({ gradientAngle: Number(e.target.value) })}
+                    onChange={(e) => patchBg({ gradientAngle: Number(e.target.value) })}
                     className="w-full accent-yellow-500"
                   />
                 </div>
@@ -435,7 +451,7 @@ export default function LandingCustomizerContent() {
                     <div className="flex items-center justify-between text-xs text-gray-500">
                       <span>Stored size ≈ {(dataUrlBytes(bg.imageUrl) / 1024).toFixed(0)} KB</span>
                       <button
-                        onClick={() => patchBackground({ imageUrl: "" })}
+                        onClick={() => patchBg({ imageUrl: "" })}
                         className="flex items-center gap-1 text-red-500 hover:text-red-600 font-medium"
                       >
                         <Trash2 className="w-3.5 h-3.5" /> Remove
@@ -452,7 +468,7 @@ export default function LandingCustomizerContent() {
                         min={0}
                         max={100}
                         value={Math.round(bg.overlay * 100)}
-                        onChange={(e) => patchBackground({ overlay: Number(e.target.value) / 100 })}
+                        onChange={(e) => patchBg({ overlay: Number(e.target.value) / 100 })}
                         className="w-full accent-yellow-500"
                       />
                     </div>
@@ -466,7 +482,7 @@ export default function LandingCustomizerContent() {
                         min={0}
                         max={24}
                         value={bg.blur}
-                        onChange={(e) => patchBackground({ blur: Number(e.target.value) })}
+                        onChange={(e) => patchBg({ blur: Number(e.target.value) })}
                         className="w-full accent-yellow-500"
                       />
                     </div>

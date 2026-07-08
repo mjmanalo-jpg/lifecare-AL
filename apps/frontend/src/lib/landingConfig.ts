@@ -15,6 +15,7 @@ import { useState, useCallback, useSyncExternalStore } from "react";
 
 export type BackgroundType = "default" | "solid" | "gradient" | "image";
 export type BaseTheme = "dark" | "light";
+export type LoginTemplateId = "split" | "centered" | "sidebar" | "frosted";
 
 export interface LandingBackground {
   type: BackgroundType;
@@ -27,10 +28,18 @@ export interface LandingBackground {
   blur: number; // px, softens busy photos behind text
 }
 
+export interface LoginConfig {
+  templateId: LoginTemplateId;
+  baseTheme: BaseTheme;
+  accent: string;
+  background: LandingBackground;
+}
+
 export interface LandingConfig {
   baseTheme: BaseTheme;
   accent: string; // hex, drives --lp-accent on the live site
   background: LandingBackground;
+  login: LoginConfig;
 }
 
 export interface LandingPreset {
@@ -42,6 +51,22 @@ export interface LandingPreset {
 
 const STORAGE_KEY = "gh_landing_config_v1";
 const EVENT_NAME = "gh-landing-config";
+
+export const DEFAULT_LOGIN_CONFIG: LoginConfig = {
+  templateId: "split",
+  baseTheme: "dark",
+  accent: "#f59e0b",
+  background: {
+    type: "default",
+    color: "#09090b",
+    gradientFrom: "#0b1120",
+    gradientTo: "#020617",
+    gradientAngle: 135,
+    imageUrl: "",
+    overlay: 0.35,
+    blur: 0,
+  },
+};
 
 export const DEFAULT_CONFIG: LandingConfig = {
   baseTheme: "dark",
@@ -56,6 +81,7 @@ export const DEFAULT_CONFIG: LandingConfig = {
     overlay: 0.5,
     blur: 0,
   },
+  login: DEFAULT_LOGIN_CONFIG,
 };
 
 export const PRESETS: LandingPreset[] = [
@@ -67,6 +93,7 @@ export const PRESETS: LandingPreset[] = [
       baseTheme: "dark",
       accent: "#f59e0b",
       background: { ...DEFAULT_CONFIG.background, type: "default" },
+      login: { ...DEFAULT_LOGIN_CONFIG, templateId: "split", accent: "#f59e0b" },
     },
   },
   {
@@ -82,6 +109,18 @@ export const PRESETS: LandingPreset[] = [
         gradientFrom: "#b45309",
         gradientTo: "#171310",
         gradientAngle: 160,
+      },
+      login: {
+        ...DEFAULT_LOGIN_CONFIG,
+        templateId: "centered",
+        accent: "#fbbf24",
+        background: {
+          ...DEFAULT_LOGIN_CONFIG.background,
+          type: "gradient",
+          gradientFrom: "#b45309",
+          gradientTo: "#171310",
+          gradientAngle: 160,
+        },
       },
     },
   },
@@ -99,6 +138,18 @@ export const PRESETS: LandingPreset[] = [
         gradientTo: "#08131f",
         gradientAngle: 135,
       },
+      login: {
+        ...DEFAULT_LOGIN_CONFIG,
+        templateId: "sidebar",
+        accent: "#38bdf8",
+        background: {
+          ...DEFAULT_LOGIN_CONFIG.background,
+          type: "gradient",
+          gradientFrom: "#0369a1",
+          gradientTo: "#08131f",
+          gradientAngle: 135,
+        },
+      },
     },
   },
   {
@@ -114,6 +165,18 @@ export const PRESETS: LandingPreset[] = [
         gradientFrom: "#047857",
         gradientTo: "#08130f",
         gradientAngle: 145,
+      },
+      login: {
+        ...DEFAULT_LOGIN_CONFIG,
+        templateId: "frosted",
+        accent: "#34d399",
+        background: {
+          ...DEFAULT_LOGIN_CONFIG.background,
+          type: "gradient",
+          gradientFrom: "#047857",
+          gradientTo: "#08130f",
+          gradientAngle: 145,
+        },
       },
     },
   },
@@ -132,6 +195,20 @@ export const PRESETS: LandingPreset[] = [
         gradientAngle: 135,
         overlay: 0,
       },
+      login: {
+        ...DEFAULT_LOGIN_CONFIG,
+        templateId: "split",
+        baseTheme: "light",
+        accent: "#d97706",
+        background: {
+          ...DEFAULT_LOGIN_CONFIG.background,
+          type: "gradient",
+          gradientFrom: "#fef3c7",
+          gradientTo: "#e7e5e4",
+          gradientAngle: 135,
+          overlay: 0,
+        },
+      },
     },
   },
   {
@@ -147,6 +224,18 @@ export const PRESETS: LandingPreset[] = [
         gradientFrom: "#6d28d9",
         gradientTo: "#140f26",
         gradientAngle: 150,
+      },
+      login: {
+        ...DEFAULT_LOGIN_CONFIG,
+        templateId: "centered",
+        accent: "#a78bfa",
+        background: {
+          ...DEFAULT_LOGIN_CONFIG.background,
+          type: "gradient",
+          gradientFrom: "#6d28d9",
+          gradientTo: "#140f26",
+          gradientAngle: 150,
+        },
       },
     },
   },
@@ -164,6 +253,18 @@ export const PRESETS: LandingPreset[] = [
         gradientTo: "#1a0e12",
         gradientAngle: 150,
       },
+      login: {
+        ...DEFAULT_LOGIN_CONFIG,
+        templateId: "sidebar",
+        accent: "#fb7185",
+        background: {
+          ...DEFAULT_LOGIN_CONFIG.background,
+          type: "gradient",
+          gradientFrom: "#be123c",
+          gradientTo: "#1a0e12",
+          gradientAngle: 150,
+        },
+      },
     },
   },
 ];
@@ -171,10 +272,34 @@ export const PRESETS: LandingPreset[] = [
 /** Deep-merge stored config over defaults so new fields never break old data. */
 function normalize(raw: Partial<LandingConfig> | null): LandingConfig {
   if (!raw) return DEFAULT_CONFIG;
+
+  const rawLogin: Partial<LoginConfig> = raw.login || {};
+  const loginBg: Partial<LandingBackground> = rawLogin.background || {};
+  const normalizedLogin: LoginConfig = {
+    templateId: (["split", "centered", "sidebar", "frosted"].includes(rawLogin.templateId as any))
+      ? (rawLogin.templateId as LoginTemplateId)
+      : DEFAULT_LOGIN_CONFIG.templateId,
+    baseTheme: rawLogin.baseTheme === "light" ? "light" : "dark",
+    accent: typeof rawLogin.accent === "string" ? rawLogin.accent : DEFAULT_LOGIN_CONFIG.accent,
+    background: {
+      type: (["default", "solid", "gradient", "image"].includes(loginBg.type as any))
+        ? (loginBg.type as BackgroundType)
+        : DEFAULT_LOGIN_CONFIG.background.type,
+      color: typeof loginBg.color === "string" ? loginBg.color : DEFAULT_LOGIN_CONFIG.background.color,
+      gradientFrom: typeof loginBg.gradientFrom === "string" ? loginBg.gradientFrom : DEFAULT_LOGIN_CONFIG.background.gradientFrom,
+      gradientTo: typeof loginBg.gradientTo === "string" ? loginBg.gradientTo : DEFAULT_LOGIN_CONFIG.background.gradientTo,
+      gradientAngle: typeof loginBg.gradientAngle === "number" ? loginBg.gradientAngle : DEFAULT_LOGIN_CONFIG.background.gradientAngle,
+      imageUrl: typeof loginBg.imageUrl === "string" ? loginBg.imageUrl : DEFAULT_LOGIN_CONFIG.background.imageUrl,
+      overlay: typeof loginBg.overlay === "number" ? loginBg.overlay : DEFAULT_LOGIN_CONFIG.background.overlay,
+      blur: typeof loginBg.blur === "number" ? loginBg.blur : DEFAULT_LOGIN_CONFIG.background.blur,
+    },
+  };
+
   return {
     baseTheme: raw.baseTheme === "light" ? "light" : "dark",
     accent: typeof raw.accent === "string" ? raw.accent : DEFAULT_CONFIG.accent,
     background: { ...DEFAULT_CONFIG.background, ...(raw.background || {}) },
+    login: normalizedLogin,
   };
 }
 
