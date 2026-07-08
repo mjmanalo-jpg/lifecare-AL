@@ -925,7 +925,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     drawScanLine(ctx,W,H,t);
 
     // Skeleton (pose visualization)
-    for (const lms of posesRef.current) drawSkeleton(ctx,lms,W,H);
+    // for (const lms of posesRef.current) drawSkeleton(ctx,lms,W,H);
 
     // Bounding boxes + labels + thinking bubbles (object detection)
     for (const det of detsRef.current) {
