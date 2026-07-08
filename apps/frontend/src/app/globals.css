@@ -84,21 +84,33 @@ html.has-custom-bg body {
   background: transparent !important;
 }
 
-/* Customizer theme overrides to keep text readable on custom backgrounds */
-html.has-custom-bg.theme-dark {
-  --background: #09090b;
-  --foreground: #fafafa;
-  --muted-foreground: #a1a1aa;
-  --border: rgba(255, 255, 255, 0.1);
-  --surface: rgba(255, 255, 255, 0.03);
-  --surface-hover: rgba(255, 255, 255, 0.08);
+/* Customizer theme-aware light/dark mode scrims */
+.custom-bg-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, backdrop-filter 0.3s ease;
+  z-index: 1;
 }
 
-html.has-custom-bg.theme-light {
-  --background: #fafafa;
-  --foreground: #18181b;
-  --muted-foreground: #52525b;
-  --border: rgba(0, 0, 0, 0.08);
-  --surface: rgba(0, 0, 0, 0.02);
-  --surface-hover: rgba(0, 0, 0, 0.05);
+/* If background is dark, and user selects light mode, wash it out with a light scrim */
+html.theme-dark .custom-bg-scrim {
+  background-color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+}
+html.theme-dark.light .custom-bg-scrim {
+  opacity: 1;
+}
+
+/* If background is light, and user selects dark mode, darken it with a dark scrim */
+html.theme-light .custom-bg-scrim {
+  background-color: rgba(9, 9, 11, 0.85);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+}
+html.theme-light:not(.light) .custom-bg-scrim {
+  opacity: 1;
 }

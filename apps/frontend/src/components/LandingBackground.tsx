@@ -78,6 +78,8 @@ export default function LandingBackground() {
           style={{ background: `rgba(0,0,0,${bg.overlay})` }}
         />
       )}
+      {/* Light/Dark mode transition scrim */}
+      <div className="custom-bg-scrim" />
     </div>,
     document.body
   );
