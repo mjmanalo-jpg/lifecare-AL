@@ -100,7 +100,7 @@ export default function Navbar() {
         {/* Theme Toggle Button */}
         <button
           onClick={toggleTheme}
-          className="p-2 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 dark:hover:bg-white/10 light:border-black/5 light:bg-black/5 light:hover:bg-black/10 transition-all text-muted-foreground hover:text-foreground cursor-pointer"
+          className="w-9 h-9 flex items-center justify-center rounded-xl transition-all text-muted-foreground hover:text-foreground glass-panel hover:bg-foreground/5 cursor-pointer"
           aria-label="Toggle Theme"
         >
           {mounted && theme === "light" ? (
@@ -112,7 +112,7 @@ export default function Navbar() {
 
         <Link 
           href="/login" 
-          className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 border border-white/5 transition-all flex items-center gap-1.5 glass-panel"
+          className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground transition-all flex items-center gap-1.5 glass-panel hover:bg-foreground/5"
         >
           <User className="w-4 h-4 text-[var(--lp-accent,#f59e0b)]" /> Log In
         </Link>
@@ -129,7 +129,7 @@ export default function Navbar() {
         {/* Mobile Theme Toggle */}
         <button
           onClick={toggleTheme}
-          className="p-2 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 light:border-black/5 light:bg-black/5 light:hover:bg-black/10 transition-all text-muted-foreground hover:text-foreground cursor-pointer"
+          className="w-9 h-9 flex items-center justify-center rounded-xl transition-all text-muted-foreground hover:text-foreground glass-panel hover:bg-foreground/5 cursor-pointer"
           aria-label="Toggle Theme"
         >
           {mounted && theme === "light" ? (
@@ -142,7 +142,7 @@ export default function Navbar() {
         {/* Hamburger Toggle */}
         <button
           onClick={toggleMenu}
-          className="p-2 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 light:border-black/5 light:bg-black/5 light:hover:bg-black/10 transition-all text-muted-foreground hover:text-foreground z-50 cursor-pointer"
+          className="w-9 h-9 flex items-center justify-center rounded-xl transition-all text-muted-foreground hover:text-foreground z-50 glass-panel hover:bg-foreground/5 cursor-pointer"
           aria-label="Toggle Menu"
         >
           {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -157,7 +157,7 @@ export default function Navbar() {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3 }}
-            className="absolute top-full left-0 w-full bg-background/95 border-b border-white/5 light:border-black/5 flex flex-col px-6 py-6 gap-6 md:hidden z-40 overflow-hidden shadow-2xl backdrop-blur-lg"
+            className="absolute top-full left-0 w-full bg-background/95 border-b border-border flex flex-col px-6 py-6 gap-6 md:hidden z-40 overflow-hidden shadow-2xl backdrop-blur-lg"
           >
             <div className="flex flex-col gap-4">
               {[
@@ -177,11 +177,11 @@ export default function Navbar() {
               ))}
             </div>
 
-            <div className="w-full border-t border-white/5 light:border-black/5 pt-4 flex flex-col gap-3">
+            <div className="w-full border-t border-border pt-4 flex flex-col gap-3">
               <Link 
                 href="/login" 
                 onClick={() => setIsOpen(false)}
-                className="w-full py-3 rounded-xl text-center text-sm font-medium text-muted-foreground hover:text-foreground border border-white/5 light:border-black/5 flex items-center justify-center gap-1.5 glass-panel"
+                className="w-full py-3 rounded-xl text-center text-sm font-medium text-muted-foreground hover:text-foreground flex items-center justify-center gap-1.5 glass-panel hover:bg-foreground/5"
               >
                 <User className="w-4 h-4 text-[var(--lp-accent,#f59e0b)]" /> Log In
               </Link>

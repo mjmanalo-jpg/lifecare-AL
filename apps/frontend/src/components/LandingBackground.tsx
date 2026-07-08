@@ -50,13 +50,20 @@ export default function LandingBackground() {
   useEffect(() => {
     if (bg.type !== "default") {
       document.documentElement.classList.add("has-custom-bg");
+      if (baseTheme === "light") {
+        document.documentElement.classList.add("theme-light");
+        document.documentElement.classList.remove("theme-dark");
+      } else {
+        document.documentElement.classList.add("theme-dark");
+        document.documentElement.classList.remove("theme-light");
+      }
     } else {
-      document.documentElement.classList.remove("has-custom-bg");
+      document.documentElement.classList.remove("has-custom-bg", "theme-light", "theme-dark");
     }
     return () => {
-      document.documentElement.classList.remove("has-custom-bg");
+      document.documentElement.classList.remove("has-custom-bg", "theme-light", "theme-dark");
     };
-  }, [bg.type]);
+  }, [bg.type, baseTheme]);
 
   if (!mounted || bg.type === "default") return null;
 

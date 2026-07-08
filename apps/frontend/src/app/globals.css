@@ -83,3 +83,22 @@ html.has-custom-bg,
 html.has-custom-bg body {
   background: transparent !important;
 }
+
+/* Customizer theme overrides to keep text readable on custom backgrounds */
+html.has-custom-bg.theme-dark {
+  --background: #09090b;
+  --foreground: #fafafa;
+  --muted-foreground: #a1a1aa;
+  --border: rgba(255, 255, 255, 0.1);
+  --surface: rgba(255, 255, 255, 0.03);
+  --surface-hover: rgba(255, 255, 255, 0.08);
+}
+
+html.has-custom-bg.theme-light {
+  --background: #fafafa;
+  --foreground: #18181b;
+  --muted-foreground: #52525b;
+  --border: rgba(0, 0, 0, 0.08);
+  --surface: rgba(0, 0, 0, 0.02);
+  --surface-hover: rgba(0, 0, 0, 0.05);
+}
