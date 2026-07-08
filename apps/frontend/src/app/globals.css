@@ -77,3 +77,9 @@ html.lenis, html.lenis body {
 .lenis.lenis-smooth {
   scroll-behavior: auto !important;
 }
+
+/* Allow custom portaled background layer to paint through the body and html */
+html.has-custom-bg,
+html.has-custom-bg body {
+  background: transparent !important;
+}

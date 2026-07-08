@@ -271,9 +271,7 @@ const getBackendUrl = () => {
   if (process.env.NEXT_PUBLIC_BACKEND_API_URL) {
     return process.env.NEXT_PUBLIC_BACKEND_API_URL;
   }
-  if (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
-    return "https://assisted-living-eyd6.onrender.com";
-  }
+  // Fall back to local backend so Vercel can stream the local Tapo RTSP feed
   return "http://localhost:8000";
 };
 
