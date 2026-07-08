@@ -264,6 +264,20 @@ function drawScanLine(ctx: CanvasRenderingContext2D, W: number, H: number, t: nu
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+const getBackendUrl = () => {
+  if (process.env.NEXT_PUBLIC_BACKEND_API_URL) {
+    return process.env.NEXT_PUBLIC_BACKEND_API_URL;
+  }
+  if (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+    return "https://assisted-living-eyd6.onrender.com";
+  }
+  return "http://localhost:8000";
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -480,7 +494,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     const streamQuality = process.env.NEXT_PUBLIC_TAPO_STREAM || "stream1";
 
     // Backend MJPEG endpoint that transcodes Tapo RTSP stream
-    const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || "http://localhost:8000";
+    const backendBaseUrl = getBackendUrl();
     const mjpegUrl = `${backendBaseUrl}/api/v1/camera/tapo?ip=${tapoIp}&port=${tapoPort}&user=${encodeURIComponent(tapoUser)}&pass=${encodeURIComponent(tapoPass)}&stream=${streamQuality}`;
 
     console.log("[Tapo] Connecting to Tapo camera:", tapoIp, "via backend MJPEG...");
@@ -619,7 +633,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         if (v) { v.srcObject = stream; v.onloadedmetadata = () => setCamActive(true); }
       } catch (e: any) {
         console.warn("Local camera blocked or insecure context. Falling back to FastAPI backend feed:", e);
-        const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || "http://localhost:8000";
+        const backendBaseUrl = getBackendUrl();
         setBackendFeedUrl(`${backendBaseUrl}/api/v1/camera/feed`);
         setUseBackendFeed(true);
         setCamActive(true);
@@ -1243,7 +1257,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       {/* Tapo IP Camera Stream */}
       <img
         ref={tapoImgRef}
-        src={`${process.env.NEXT_PUBLIC_BACKEND_API_URL || "http://localhost:8000"}/api/v1/camera/tapo_feed`}
+        src={`${getBackendUrl()}/api/v1/camera/tapo_feed`}
         alt="Tapo IP Camera Stream"
         crossOrigin="anonymous"
         onLoad={() => setTapoStatus("connected")}
