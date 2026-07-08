@@ -31,6 +31,12 @@ export default function LandingBackground() {
   // Publish accent + base theme to the document so the whole page reacts.
   useEffect(() => {
     document.documentElement.style.setProperty("--lp-accent", accent);
+    // Translucent variations (hex with opacity suffix)
+    document.documentElement.style.setProperty("--lp-accent-10", `${accent}1a`); // 10% opacity
+    document.documentElement.style.setProperty("--lp-accent-20", `${accent}33`); // 20% opacity
+    document.documentElement.style.setProperty("--lp-accent-30", `${accent}4d`); // 30% opacity
+    document.documentElement.style.setProperty("--lp-accent-80", `${accent}cc`); // 80% opacity
+    
     if (baseTheme === "light") {
       document.documentElement.classList.add("light");
       document.documentElement.style.colorScheme = "light";

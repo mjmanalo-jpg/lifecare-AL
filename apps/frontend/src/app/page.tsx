@@ -221,7 +221,7 @@ export default function Home() {
             Get Started <ChevronRight className="w-4 h-4" />
           </Link>
           <Link href="/login" className="px-8 py-4 rounded-xl glass-panel text-foreground hover:bg-foreground/5 transition-all flex items-center gap-2 cursor-pointer">
-            <User className="w-4 h-4 text-amber-500" /> Log In
+            <User className="w-4 h-4 text-[var(--lp-accent,#f59e0b)]" /> Log In
           </Link>
         </motion.div>
       </section>
@@ -311,7 +311,7 @@ export default function Home() {
                   onClick={() => setActiveIndex(idx)}
                   className={`h-2.5 rounded-full transition-all duration-500 cursor-pointer ${
                     idx === activeIndex
-                      ? "w-8 bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]"
+                      ? "w-8 bg-[var(--lp-accent,#f59e0b)] shadow-[0_0_10px_var(--lp-accent-30,rgba(245,158,11,0.3))]"
                       : "w-2.5 bg-white/40 hover:bg-white/70"
                   }`}
                   aria-label={`Go to slide ${idx + 1}`}
@@ -356,7 +356,7 @@ export default function Home() {
         </motion.div>
 
         {/* Roadmap Timeline */}
-        <div className="relative pl-6 md:pl-10 border-l border-amber-500/20 ml-3 md:ml-6 space-y-12 w-full text-left">
+        <div className="relative pl-6 md:pl-10 border-l border-[var(--lp-accent,#f59e0b)]/20 ml-3 md:ml-6 space-y-12 w-full text-left">
           {SYSTEM_FLOW_DATA.map((step, stepIdx) => {
             const StepIcon = step.icon;
 
@@ -370,16 +370,16 @@ export default function Home() {
                 className="relative"
               >
                 {/* Timeline Pin Indicator */}
-                <div className="absolute -left-[35px] md:-left-[51px] top-1.5 w-7 h-7 md:w-9 md:h-9 rounded-full flex items-center justify-center border border-amber-500/30 bg-amber-500/10 text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.15)] z-10">
+                <div className="absolute -left-[35px] md:-left-[51px] top-1.5 w-7 h-7 md:w-9 md:h-9 rounded-full flex items-center justify-center border border-[var(--lp-accent,#f59e0b)]/30 bg-[var(--lp-accent,#f59e0b)]/10 text-[var(--lp-accent,#f59e0b)] shadow-[0_0_15px_var(--lp-accent-20,rgba(245,158,11,0.15))] z-10">
                   <StepIcon className="w-3.5 h-3.5 md:w-4 h-4" />
                 </div>
 
                 {/* Step Card */}
-                <div className="glass-panel p-6 rounded-2xl border border-white/5 hover:border-amber-500/20 hover:shadow-[0_0_30px_rgba(245,158,11,0.03)] transition-all duration-300">
+                <div className="glass-panel p-6 rounded-2xl border border-white/5 hover:border-[var(--lp-accent,#f59e0b)]/20 hover:shadow-[0_0_30px_var(--lp-accent-10,rgba(245,158,11,0.03))] transition-all duration-300">
                   {/* Step Header */}
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
                     <div>
-                      <span className="text-[10px] font-bold text-amber-500 uppercase tracking-widest block mb-1">
+                      <span className="text-[10px] font-bold text-[var(--lp-accent,#f59e0b)] uppercase tracking-widest block mb-1">
                         {step.tag}
                       </span>
                       <h3 className="text-base md:text-lg font-bold tracking-tight text-foreground flex items-center gap-2">
@@ -419,7 +419,7 @@ export default function Home() {
                           key={subIdx}
                           className="text-xs text-muted-foreground font-light flex items-center gap-2.5"
                         >
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500/80 shrink-0" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--lp-accent,#f59e0b)]/80 shrink-0" />
                           <span>{sub}</span>
                         </li>
                       ))}
@@ -454,8 +454,8 @@ export default function Home() {
               variants={fadeInUp}
               className="glass-panel p-8 rounded-2xl hover:-translate-y-2 transition-transform duration-500 group"
             >
-              <div className="w-12 h-12 rounded-full bg-foreground/5 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-amber-500/20 transition-all">
-                <feat.icon className="w-6 h-6 text-muted-foreground group-hover:text-amber-500 transition-colors" />
+              <div className="w-12 h-12 rounded-full bg-foreground/5 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-[var(--lp-accent,#f59e0b)]/20 transition-all">
+                <feat.icon className="w-6 h-6 text-muted-foreground group-hover:text-[var(--lp-accent,#f59e0b)] transition-colors" />
               </div>
               <h3 className="text-xl font-semibold mb-3 text-foreground">{feat.title}</h3>
               <p className="text-muted-foreground font-light leading-relaxed">{feat.desc}</p>

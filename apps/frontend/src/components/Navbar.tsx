@@ -44,20 +44,31 @@ export default function Navbar() {
     >
       {/* Brand Logo */}
       <Link href="/" className="flex items-center gap-3 group z-55">
-        <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-tr from-yellow-500/20 to-amber-400/20 border border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.2)] group-hover:scale-105 transition-transform duration-300">
+        <div 
+          className="relative flex items-center justify-center w-10 h-10 rounded-xl border transition-transform duration-300"
+          style={{
+            background: "linear-gradient(to top right, var(--lp-accent-20, rgba(245,158,11,0.2)), var(--lp-accent-10, rgba(245,158,11,0.1)))",
+            borderColor: "var(--lp-accent-30, rgba(245,158,11,0.3))",
+            boxShadow: "0 0 15px var(--lp-accent-20, rgba(245,158,11,0.2))"
+          }}
+        >
           {/* Custom SVG logo representing AI synapse and caring curves */}
-          <svg className="w-6 h-6 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="3" className="fill-amber-500/10" />
+          <svg 
+            className="w-6 h-6" 
+            style={{ color: "var(--lp-accent, #f59e0b)" }}
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          >
+            <circle cx="12" cy="12" r="3" style={{ fill: "var(--lp-accent-10, rgba(245,158,11,0.1))" }} />
             <path d="M12 5V9M12 15V19M5 12H9M15 12H19" strokeLinecap="round" />
-            <circle cx="12" cy="5" r="1.2" className="fill-amber-400" />
-            <circle cx="12" cy="19" r="1.2" className="fill-amber-400" />
-            <circle cx="5" cy="12" r="1.2" className="fill-amber-400" />
-            <circle cx="19" cy="12" r="1.2" className="fill-amber-400" />
+            <circle cx="12" cy="5" r="1.2" style={{ fill: "var(--lp-accent, #f59e0b)" }} />
+            <circle cx="12" cy="19" r="1.2" style={{ fill: "var(--lp-accent, #f59e0b)" }} />
+            <circle cx="5" cy="12" r="1.2" style={{ fill: "var(--lp-accent, #f59e0b)" }} />
+            <circle cx="19" cy="12" r="1.2" style={{ fill: "var(--lp-accent, #f59e0b)" }} />
             <path d="M4 16C4 16 8 20 12 20C16 20 20 16 20 16M4 8C4 8 8 4 12 4C16 4 20 8 20 8" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
         <div className="flex flex-col">
-          <span className="text-lg font-bold tracking-tight text-foreground leading-none group-hover:text-amber-500 transition-colors">
+          <span className="text-lg font-bold tracking-tight text-foreground leading-none group-hover:text-[var(--lp-accent,#f59e0b)] transition-colors">
             Golden Hearth
           </span>
           <span className="text-[9px] text-muted-foreground font-semibold tracking-wide uppercase mt-1">
@@ -93,9 +104,9 @@ export default function Navbar() {
           aria-label="Toggle Theme"
         >
           {mounted && theme === "light" ? (
-            <Moon className="w-4 h-4 text-amber-500" />
+            <Moon className="w-4 h-4 text-[var(--lp-accent,#f59e0b)]" />
           ) : (
-            <Sun className="w-4 h-4 text-amber-400" />
+            <Sun className="w-4 h-4 text-[var(--lp-accent,#f59e0b)]" />
           )}
         </button>
 
@@ -103,7 +114,7 @@ export default function Navbar() {
           href="/login" 
           className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 border border-white/5 transition-all flex items-center gap-1.5 glass-panel"
         >
-          <User className="w-4 h-4 text-amber-500" /> Log In
+          <User className="w-4 h-4 text-[var(--lp-accent,#f59e0b)]" /> Log In
         </Link>
         <Link 
           href="/login" 
@@ -122,9 +133,9 @@ export default function Navbar() {
           aria-label="Toggle Theme"
         >
           {mounted && theme === "light" ? (
-            <Moon className="w-4 h-4 text-amber-500" />
+            <Moon className="w-4 h-4 text-[var(--lp-accent,#f59e0b)]" />
           ) : (
-            <Sun className="w-4 h-4 text-amber-400" />
+            <Sun className="w-4 h-4 text-[var(--lp-accent,#f59e0b)]" />
           )}
         </button>
 
@@ -172,7 +183,7 @@ export default function Navbar() {
                 onClick={() => setIsOpen(false)}
                 className="w-full py-3 rounded-xl text-center text-sm font-medium text-muted-foreground hover:text-foreground border border-white/5 light:border-black/5 flex items-center justify-center gap-1.5 glass-panel"
               >
-                <User className="w-4 h-4 text-amber-500" /> Log In
+                <User className="w-4 h-4 text-[var(--lp-accent,#f59e0b)]" /> Log In
               </Link>
               <Link 
                 href="/login" 
