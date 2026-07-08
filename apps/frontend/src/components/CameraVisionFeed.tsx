@@ -619,7 +619,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         if (v) { v.srcObject = stream; v.onloadedmetadata = () => setCamActive(true); }
       } catch (e: any) {
         console.warn("Local camera blocked or insecure context. Falling back to FastAPI backend feed:", e);
-        const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || `http://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:8000`;
+        const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || "http://localhost:8000";
         setBackendFeedUrl(`${backendBaseUrl}/api/v1/camera/feed`);
         setUseBackendFeed(true);
         setCamActive(true);
@@ -1243,7 +1243,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       {/* Tapo IP Camera Stream */}
       <img
         ref={tapoImgRef}
-        src={`${process.env.NEXT_PUBLIC_BACKEND_API_URL || `http://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:8000`}/api/v1/camera/tapo_feed`}
+        src={`${process.env.NEXT_PUBLIC_BACKEND_API_URL || "http://localhost:8000"}/api/v1/camera/tapo_feed`}
         alt="Tapo IP Camera Stream"
         crossOrigin="anonymous"
         onLoad={() => setTapoStatus("connected")}
