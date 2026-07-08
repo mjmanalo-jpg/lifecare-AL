@@ -4,7 +4,8 @@ FROM python:3.11-slim
 # Prevent Python from writing .pyc files and buffer stdout/stderr
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PORT=10000
+    PORT=10000 \
+    CAMERA_IP=rtsp://pj.pitogo%40resoluteaiph.com:123123%40Paul@111.235.88.23:554/stream1
 
 # Set working directory
 WORKDIR /app
