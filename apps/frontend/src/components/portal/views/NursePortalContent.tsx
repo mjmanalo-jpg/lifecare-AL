@@ -403,44 +403,53 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
             Vital Signs • Arthur Pendelton
           </button>
         </div>
-
-        {/* Full Width Camera Feed — Hybrid Mode (Local + Tapo IP) */}
-        <div className="w-full bg-black rounded-lg overflow-hidden shadow-xl border-2 border-yellow-300">
-          <CameraVisionFeed
-            cameraMode="hybrid"
-            isFallen={monitoringFallAlert}
-            onFallTriggered={handleMonitoringFallTriggered}
-            onFallCleared={() => setMonitoringFallAlert(false)}
-          />
-        </div>
-
-        {/* Heart Rate Trend Chart */}
-        <ChartContainer
-          title="Heart Rate Trend (24h)"
-          type="area"
-          data={mockVitalsData}
-          dataKey="value"
-          xAxisKey="name"
-          colors={["#ef4444"]}
-          height={250}
-        />
-
-        {/* Alerts Section */}
-        <div>
-          <h3 className="text-lg font-semibold text-foreground mb-4">Active Alerts</h3>
-          {monitoringFallAlert ? (
-            <AlertBanner
-              type="error"
-              title="Emergency: Fall Detected"
-              message="Fall detection confirmed from the monitoring camera"
-              resident={`${MONITORING_RESIDENT} (Room ${MONITORING_ROOM})`}
-              timestamp={new Date()}
-            />
-          ) : (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-              No emergency alerts. Fall detection is monitoring normally.
+        {/* 2-Column Grid Layout: Left: Camera Feed; Right: Alerts & Vitals Chart */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          {/* Left Column: Camera Feed (aspect-video for maximum vertical height and details) */}
+          <div className="lg:col-span-2">
+            <div className="relative w-full aspect-[4/3] md:aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border-2 border-yellow-300">
+              <CameraVisionFeed
+                cameraMode="hybrid"
+                isFallen={monitoringFallAlert}
+                onFallTriggered={handleMonitoringFallTriggered}
+                onFallCleared={() => setMonitoringFallAlert(false)}
+              />
             </div>
-          )}
+          </div>
+
+          {/* Right Column: Alerts & Analytics */}
+          <div className="space-y-6">
+            {/* Active Alerts panel */}
+            <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-gray-200 dark:border-white/5 shadow-md">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-3">Active Alerts</h3>
+              {monitoringFallAlert ? (
+                <AlertBanner
+                  type="error"
+                  title="Emergency: Fall Detected"
+                  message="Fall detection confirmed from the monitoring camera"
+                  resident={`${MONITORING_RESIDENT} (Room ${MONITORING_ROOM})`}
+                  timestamp={new Date()}
+                />
+              ) : (
+                <div className="rounded-xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 px-4 py-3.5 text-xs font-semibold text-emerald-800 dark:text-emerald-400">
+                  ✔ Fall detection is monitoring normally.
+                </div>
+              )}
+            </div>
+
+            {/* Heart Rate Chart */}
+            <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-gray-200 dark:border-white/5 shadow-md">
+              <ChartContainer
+                title="Heart Rate Trend (24h)"
+                type="area"
+                data={mockVitalsData}
+                dataKey="value"
+                xAxisKey="name"
+                colors={["#ef4444"]}
+                height={200}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Vitals Modal */}

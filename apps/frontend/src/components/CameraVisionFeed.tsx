@@ -617,28 +617,46 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     return () => { dead = true; };
   }, []);
 
-  // ── Camera setup ──────────────────────────────────────────────────────────
+  const localStreamRef = useRef<MediaStream | null>(null);
+
+  const startLocalCamera = useCallback(async () => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
+    }
+    try {
+      setCamError("");
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: "user" },
+      });
+      localStreamRef.current = stream;
+      const v = videoRef.current;
+      if (v) {
+        v.srcObject = stream;
+        v.onloadedmetadata = () => {
+          setCamActive(true);
+          setUseBackendFeed(false);
+        };
+      }
+    } catch (e: any) {
+      console.warn("Local camera blocked or insecure context. Falling back to FastAPI backend feed:", e);
+      setCamError(e?.message ?? "Device in use");
+      const backendBaseUrl = getBackendUrl();
+      setBackendFeedUrl(`${backendBaseUrl}/api/v1/camera/feed`);
+      setUseBackendFeed(true);
+      setCamActive(true);
+    }
+  }, []);
+
   useEffect(() => {
     loadFaceAPI();
-    let stream: MediaStream|null = null;
-    (async () => {
-      try {
-        // Try local media capture first
-        stream = await navigator.mediaDevices.getUserMedia({
-          video:{ width:640, height:480, facingMode:"user" },
-        });
-        const v = videoRef.current;
-        if (v) { v.srcObject = stream; v.onloadedmetadata = () => setCamActive(true); }
-      } catch (e: any) {
-        console.warn("Local camera blocked or insecure context. Falling back to FastAPI backend feed:", e);
-        const backendBaseUrl = getBackendUrl();
-        setBackendFeedUrl(`${backendBaseUrl}/api/v1/camera/feed`);
-        setUseBackendFeed(true);
-        setCamActive(true);
+    startLocalCamera();
+    return () => {
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((t) => t.stop());
       }
-    })();
-    return () => { stream?.getTracks().forEach(t => t.stop()); };
-  }, []);
+    };
+  }, [startLocalCamera]);
 
   // Local facial emotion detection removed to rely purely on Gemini Vision
 
@@ -1207,33 +1225,47 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-zinc-950 border border-white/5 shadow-inner select-none">
+    <div className="relative w-full h-full rounded-2xl overflow-hidden bg-zinc-950 border border-white/5 shadow-inner select-none">
 
       {/* Camera Mode Selector (Hybrid Support) */}
-      {cameraMode === "hybrid" && (
-        <div className="absolute top-3 right-3 z-50 flex gap-2 pointer-events-auto">
+      <div className="absolute top-3 right-3 z-50 flex gap-2 pointer-events-auto">
+        {activeCamera === "local" && useBackendFeed && (
           <button
-            onClick={() => setActiveCamera("local")}
-            className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-wider transition ${
-              activeCamera === "local"
-                ? "bg-emerald-500/80 text-white"
-                : "bg-black/60 text-zinc-400 hover:bg-black/80"
-            }`}
+            onClick={startLocalCamera}
+            className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-amber-500/90 text-black hover:bg-amber-400 active:scale-95 transition flex items-center gap-1 shadow-md cursor-pointer select-none"
+            title="Try connecting directly to browser webcam again"
           >
-            Local
+            <Camera className="w-3.5 h-3.5" /> Retry Local Camera
           </button>
-          <button
-            onClick={() => setActiveCamera("tapo")}
-            className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-wider transition ${
-              activeCamera === "tapo"
-                ? "bg-blue-500/80 text-white"
-                : "bg-black/60 text-zinc-400 hover:bg-black/80"
-            }`}
-          >
-            Tapo IP
-          </button>
-        </div>
-      )}
+        )}
+        {cameraMode === "hybrid" && (
+          <>
+            <button
+              onClick={() => {
+                setActiveCamera("local");
+                if (useBackendFeed) startLocalCamera();
+              }}
+              className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-wider transition ${
+                activeCamera === "local"
+                  ? "bg-emerald-500/80 text-white"
+                  : "bg-black/60 text-zinc-400 hover:bg-black/80"
+              }`}
+            >
+              Local
+            </button>
+            <button
+              onClick={() => setActiveCamera("tapo")}
+              className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-wider transition ${
+                activeCamera === "tapo"
+                  ? "bg-blue-500/80 text-white"
+                  : "bg-black/60 text-zinc-400 hover:bg-black/80"
+              }`}
+            >
+              Tapo IP
+            </button>
+          </>
+        )}
+      </div>
 
       {/* Live Local Webcam (no mirror - normal orientation) */}
       <video

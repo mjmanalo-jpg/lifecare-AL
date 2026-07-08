@@ -17,6 +17,8 @@ import {
   Paintbrush,
   ExternalLink,
   ChevronDown,
+  LogIn,
+  LayoutDashboard,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import {
@@ -38,6 +40,8 @@ const BG_TABS: { id: BackgroundType; label: string; icon: typeof Droplet }[] = [
   { id: "gradient", label: "Gradient", icon: Layers },
   { id: "image", label: "Image", icon: ImageIcon },
 ];
+
+
 
 /** Rough byte size of a base64 data URL. */
 function dataUrlBytes(url: string): number {
@@ -200,10 +204,33 @@ export default function LandingCustomizerContent() {
         </div>
       </div>
 
+      {/* Landing / Login tab switcher */}
+      <div className="inline-flex p-1 bg-gray-100 rounded-xl">
+        {(["landing", "login"] as const).map((tab) => {
+          const active = activeTab === tab;
+          const Icon = tab === "landing" ? LayoutDashboard : LogIn;
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold capitalize transition ${
+                active
+                  ? "bg-white shadow text-gray-900"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {tab === "landing" ? "Landing Page" : "Login Page"}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         {/* ---------------- Controls ---------------- */}
         <div className="xl:col-span-3 space-y-6">
-          {/* Presets */}
+          {/* Presets — only shown on Landing tab */}
+          {activeTab === "landing" && (
           <Card>
             <SectionTitle icon={Sparkles} title="Theme Presets" hint="One click applies a full look." />
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -239,8 +266,73 @@ export default function LandingCustomizerContent() {
               })}
             </div>
           </Card>
+          )}
 
-          {/* Base theme + accent */}
+          {/* Login Page customization — only shown on Login tab */}
+          {activeTab === "login" && (
+          <>
+          {/* Login Color Theme */}
+          <Card>
+            <SectionTitle icon={Palette} title="Login Theme" hint="Base mode and accent for the login page." />
+            {/* Login base theme */}
+            <div className="mb-5">
+              <label className="block text-xs font-semibold text-gray-600 mb-2">Base Mode</label>
+              <div className="inline-flex p-1 bg-gray-100 rounded-lg">
+                {(["dark", "light"] as const).map((mode) => {
+                  const active = draft.login.baseTheme === mode;
+                  const Icon = mode === "dark" ? Moon : Sun;
+                  return (
+                    <button
+                      key={mode}
+                      onClick={() => patchLogin({ baseTheme: mode })}
+                      className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium capitalize transition ${
+                        active ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" /> {mode}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Login accent */}
+            <label className="block text-xs font-semibold text-gray-600 mb-2">Accent Color</label>
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              {ACCENT_SWATCHES.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => patchLogin({ accent: c })}
+                  className={`w-8 h-8 rounded-full transition hover:scale-110 ${
+                    draft.login.accent.toLowerCase() === c.toLowerCase()
+                      ? "ring-2 ring-offset-2 ring-gray-900"
+                      : ""
+                  }`}
+                  style={{ background: c }}
+                  aria-label={`Login accent ${c}`}
+                />
+              ))}
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={draft.login.accent}
+                onChange={(e) => patchLogin({ accent: e.target.value })}
+                className="w-10 h-10 rounded cursor-pointer border border-gray-200 bg-white p-0.5"
+              />
+              <input
+                type="text"
+                value={draft.login.accent}
+                onChange={(e) => patchLogin({ accent: e.target.value })}
+                className="w-32 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-yellow-400 outline-none"
+              />
+            </div>
+          </Card>
+          </>
+          )}
+
+          {/* Base theme + accent — only shown on Landing tab */}
+          {activeTab === "landing" && (
           <Card>
             <SectionTitle icon={Palette} title="Color Theme" hint="Base mode and accent color." />
             {/* Base theme toggle */}
@@ -297,6 +389,7 @@ export default function LandingCustomizerContent() {
               />
             </div>
           </Card>
+          )}
 
           {/* Background */}
           <Card>
@@ -498,7 +591,9 @@ export default function LandingCustomizerContent() {
           <div className="xl:sticky xl:top-6 space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-gray-900">Live Preview</h2>
-              <span className="text-xs text-gray-400">Landing hero</span>
+              <span className="text-xs text-gray-400">
+                {activeTab === "login" ? "Login page" : "Landing hero"}
+              </span>
             </div>
             <div className="relative rounded-2xl overflow-hidden border border-gray-200 shadow-lg aspect-[4/5] sm:aspect-video xl:aspect-[3/4]">
               {/* Background layers mirror LandingBackground */}
@@ -513,46 +608,199 @@ export default function LandingCustomizerContent() {
                 </>
               )}
 
-              {/* Hero content */}
-              <div className="relative h-full flex flex-col items-center justify-center text-center px-6">
-                <span
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium mb-5 backdrop-blur-md"
-                  style={{
-                    color: previewText,
-                    background: previewDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-                    border: `1px solid ${previewDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"}`,
-                  }}
-                >
-                  <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: draft.accent }} />
-                  Next-Gen Wellness Platform
-                </span>
-                <h3 className="text-3xl md:text-4xl font-black tracking-tighter mb-3" style={{ color: previewText }}>
-                  Care Redefined.
-                </h3>
-                <p className="text-sm max-w-xs mb-6" style={{ color: previewMuted }}>
-                  A cinematic, minimalist approach to elder care management.
-                </p>
-                <div className="flex gap-3">
+              {/* Preview content — changes based on active tab */}
+              {activeTab === "login" ? (() => {
+                const isDk = draft.login.baseTheme === "dark";
+                const acnt = draft.login.accent;
+                const fg = isDk ? "#fafafa" : "#18181b";
+                const muted = isDk ? "#a1a1aa" : "#71717a";
+
+                return (
+                <div className="relative h-full w-full">
+                  {/* BG image overlay — matches actual login page gradient */}
+                  <div className="absolute inset-0" style={{
+                    background: isDk
+                      ? "linear-gradient(to top right, rgba(9,9,11,0.95), rgba(9,9,11,0.80), rgba(120,53,15,0.40))"
+                      : "linear-gradient(to top right, rgba(255,255,255,0.95), rgba(255,255,255,0.80), rgba(255,251,235,0.40))",
+                  }} />
+
+                  {/* Top-left: ← Back Home */}
+                  <div className="absolute top-2.5 left-3 z-20 flex items-center gap-0.5">
+                    <span className="text-[5px]" style={{ color: muted }}>← Back Home</span>
+                  </div>
+                  {/* Top-right: Theme toggle */}
+                  <div className="absolute top-2.5 right-3 z-20">
+                    <div className="w-4 h-4 rounded-lg flex items-center justify-center" style={{
+                      background: isDk ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
+                      border: `1px solid ${isDk ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"}`,
+                    }}>
+                      <div className="w-2 h-2 rounded-sm" style={{ background: acnt }} />
+                    </div>
+                  </div>
+
+                  {/* ═══ Centered glass-panel card ═══ */}
+                  <div className="absolute inset-0 flex items-center justify-center px-3 py-8">
+                    <div className="w-full rounded-2xl overflow-hidden grid grid-cols-2 p-0.5" style={{
+                      background: isDk ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.65)",
+                      border: `1px solid ${isDk ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"}`,
+                      backdropFilter: "blur(16px)",
+                      boxShadow: isDk
+                        ? "0 16px 48px rgba(0,0,0,0.6)"
+                        : "0 16px 48px rgba(0,0,0,0.08)",
+                    }}>
+
+                      {/* ── LEFT: Branding ── */}
+                      <div className="rounded-xl relative overflow-hidden p-4 flex flex-col justify-between" style={{
+                        background: "linear-gradient(to bottom right, #18181b, #1c1917, rgba(120,53,15,0.20))",
+                      }}>
+                        {/* Glow orbs */}
+                        <div className="absolute -top-6 -left-6 w-20 h-20 rounded-full blur-3xl pointer-events-none" style={{ background: `${acnt}12` }} />
+                        <div className="absolute -bottom-6 -right-6 w-20 h-20 rounded-full blur-3xl pointer-events-none" style={{ background: `${acnt}08` }} />
+
+                        {/* Content top */}
+                        <div className="relative z-10">
+                          {/* Logo row */}
+                          <div className="flex items-center gap-1 mb-4">
+                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke={acnt} strokeWidth="2">
+                              <circle cx="12" cy="12" r="3" fill={`${acnt}20`} />
+                              <path d="M12 5V9M12 15V19M5 12H9M15 12H19" strokeLinecap="round" />
+                            </svg>
+                            <span className="text-[7px] font-bold text-white tracking-tight">Golden Hearth</span>
+                          </div>
+
+                          {/* Heading */}
+                          <p className="text-[13px] font-extrabold text-white leading-[1.15] tracking-tight">Empathetic Care,</p>
+                          <p className="text-[13px] font-light leading-[1.15] tracking-tight" style={{ color: acnt }}>AI Assisted Efficiency.</p>
+                          <p className="text-[5px] text-zinc-400 font-light mt-2 leading-relaxed max-w-[95%]">
+                            Bypass email and password checks. Golden Hearth enables direct preview access to dashboards for nurses, caregivers, admins, and family members.
+                          </p>
+
+                          {/* Feature cards — matching actual page spacing */}
+                          <div className="space-y-3 mt-4">
+                            {[
+                              { name: "Optical Matrix Fall Detection", sub: "Real-time edge computer vision logs alerts." },
+                              { name: "AI Voice Charting Assistant", sub: "Parse telemetry values and log records." },
+                              { name: "Secure Family Dashboards", sub: "Transparent real-time updates and invoices." },
+                            ].map((feat) => (
+                              <div key={feat.name} className="flex items-start gap-2">
+                                <div className="w-4 h-4 rounded shrink-0 mt-0.5 flex items-center justify-center" style={{
+                                  background: "rgba(255,255,255,0.05)",
+                                  border: "1px solid rgba(255,255,255,0.10)",
+                                }}>
+                                  <div className="w-1.5 h-1.5 rounded-sm" style={{ background: acnt }} />
+                                </div>
+                                <div>
+                                  <p className="text-[5.5px] font-semibold text-white leading-tight">{feat.name}</p>
+                                  <p className="text-[4.5px] text-zinc-500 font-light leading-tight mt-0.5">{feat.sub}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Copyright */}
+                        <div className="relative z-10 text-[4.5px] text-zinc-600 border-t border-white/5 pt-2 mt-3">
+                          © 2026 Golden Hearth AI. Simulated Walkthrough Mode Active.
+                        </div>
+                      </div>
+
+                      {/* ── RIGHT: Gate Entry form ── */}
+                      <div className="flex flex-col justify-center px-4 py-3">
+                        <div className="max-w-full">
+                          {/* Section heading */}
+                          <div className="mb-4">
+                            <p className="text-[13px] font-bold tracking-tight leading-tight" style={{ color: fg }}>Gate Entry</p>
+                            <p className="text-[5.5px] font-light mt-1" style={{ color: muted }}>
+                              Select a role below to access the workspace sandbox.
+                            </p>
+                          </div>
+
+                          {/* Label */}
+                          <p className="text-[4px] font-semibold uppercase tracking-widest mb-1" style={{ color: muted }}>User Role Bypass</p>
+
+                          {/* Dropdown button */}
+                          <div className="rounded-xl px-2 py-2 mb-4 flex items-center justify-between cursor-pointer" style={{
+                            background: isDk ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
+                            border: `1px solid ${isDk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                          }}>
+                            <div className="flex items-center gap-1.5">
+                              <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke={acnt} strokeWidth="2.5">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
+                              </svg>
+                              <div>
+                                <p className="text-[6px] font-semibold leading-none" style={{ color: fg }}>Nurse</p>
+                                <p className="text-[4.5px] mt-0.5" style={{ color: muted }}>Floor Operations · Primary Care</p>
+                              </div>
+                            </div>
+                            <svg className="w-2 h-2" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2.5">
+                              <path d="M6 9l6 6 6-6" />
+                            </svg>
+                          </div>
+
+                          {/* CTA */}
+                          <div className="w-full py-2 rounded-xl flex items-center justify-center gap-1 text-[7px] font-bold cursor-pointer" style={{
+                            background: fg,
+                            color: isDk ? "#09090b" : "#ffffff",
+                            boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+                          }}>
+                            Demo Log In
+                            <svg className="w-2 h-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                              <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" />
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                </div>
+                );
+              })() : (
+                /* Landing hero preview */
+                <div className="relative h-full flex flex-col items-center justify-center text-center px-6">
                   <span
-                    className="px-5 py-2.5 rounded-xl text-sm font-semibold shadow-lg"
-                    style={{ background: draft.accent, color: previewDark ? "#0b0b0f" : "#ffffff" }}
-                  >
-                    Get Started
-                  </span>
-                  <span
-                    className="px-5 py-2.5 rounded-xl text-sm font-medium backdrop-blur-md"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium mb-5 backdrop-blur-md"
                     style={{
                       color: previewText,
-                      border: `1px solid ${previewDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)"}`,
+                      background: previewDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                      border: `1px solid ${previewDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)"}`,
                     }}
                   >
-                    Log In
+                    <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: draft.accent }} />
+                    Next-Gen Wellness Platform
                   </span>
+                  <h3 className="text-3xl md:text-4xl font-black tracking-tighter mb-3" style={{ color: previewText }}>
+                    Care Redefined.
+                  </h3>
+                  <p className="text-sm max-w-xs mb-6" style={{ color: previewMuted }}>
+                    A cinematic, minimalist approach to elder care management.
+                  </p>
+                  <div className="flex gap-3">
+                    <span
+                      className="px-5 py-2.5 rounded-xl text-sm font-semibold shadow-lg"
+                      style={{ background: draft.accent, color: previewDark ? "#0b0b0f" : "#ffffff" }}
+                    >
+                      Get Started
+                    </span>
+                    <span
+                      className="px-5 py-2.5 rounded-xl text-sm font-medium backdrop-blur-md"
+                      style={{
+                        color: previewText,
+                        border: `1px solid ${previewDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)"}`,
+                      }}
+                    >
+                      Log In
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
             <p className="text-xs text-gray-400 text-center">
-              Accent, base mode, and background update in real time.
+              {activeTab === "login"
+                ? "Template, accent, and background update in real time."
+                : "Accent, base mode, and background update in real time."
+              }
             </p>
           </div>
         </div>
