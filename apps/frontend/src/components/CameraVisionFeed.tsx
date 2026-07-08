@@ -32,7 +32,8 @@ interface VisionAnalysis {
 
 interface Props {
   isFallen?: boolean;
-  onFallTriggered?: () => void;
+  onFallTriggered?: (analysis: VisionAnalysis) => void;
+  onFallCleared?: () => void;
   cameraMode?: "local" | "tapo" | "hybrid";
 }
 
@@ -113,7 +114,8 @@ const RAPID_DROP_WINDOW_MS = 2000; // a drop counts toward a fall if it was this
 // A person lying horizontal on the floor IS a fall — fire the alert once that posture
 // holds this briefly (long enough to reject a single-frame flicker, short enough to be
 // "active"). No rapid drop required.
-const LYING_CONFIRM_MS = 600;
+const LYING_CONFIRM_MS = 1000;
+const CLEAR_CONFIRM_MS = 1500;
 
 const INIT: VisionAnalysis = {
   globalEmotion:"Neutral", emotionConfidence:0, globalBehavior:"Initializing",
@@ -265,7 +267,7 @@ function drawScanLine(ctx: CanvasRenderingContext2D, W: number, H: number, t: nu
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode = "hybrid" }: Props) {
+export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallCleared, cameraMode = "hybrid" }: Props) {
   // Camera Mode State (Local | Tapo IP | Hybrid)
   const [activeCamera, setActiveCamera] = useState<"local" | "tapo">(
     cameraMode === "tapo" ? "tapo" : "local"
@@ -294,6 +296,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode
   const lastGeminiRef = useRef(0);
   const lastUiRef     = useRef(0);   // throttles React UI state updates (~4/sec) to keep the main thread free
   const fallStartRef  = useRef<number | null>(null); // when the horizontal (fallen) posture first began — for auto-fall persistence
+  const fallClearStartRef = useRef<number | null>(null); // when the non-fallen posture first began — for auto-fall clearing
   const selfFallenRef = useRef(false);               // internal latch so the component fires its own EMERGENCY even when no parent controls `isFallen`
   const startRef      = useRef(Date.now());
 
@@ -686,8 +689,6 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode
   // bending over or lying down briefly, the posture must PERSIST ~1.2s before we
   // raise the alert.
   const checkFall = useCallback((lms: LM[], now: number) => {
-    if (isFallen || selfFallenRef.current) return false;
-
     // ── Center-of-mass velocity (Ambianic) ──────────────────────────────────
     // Mean Y of all confidently-visible landmarks is the body's vertical center.
     // A fast increase in Y (downward) is a rapid drop — stamp the moment it happens.
@@ -708,8 +709,8 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode
 
     const lh=lms[23], rh=lms[24], ls=lms[11], rs=lms[12];
     
-    const hipVisible = (lh && (lh.visibility??0) > 0.4) || (rh && (rh.visibility??0) > 0.4);
-    const shlVisible = (ls && (ls.visibility??0) > 0.4) || (rs && (rs.visibility??0) > 0.4);
+    const hipVisible = (lh && (lh.visibility??0) > 0.45) || (rh && (rh.visibility??0) > 0.45);
+    const shlVisible = (ls && (ls.visibility??0) > 0.45) || (rs && (rs.visibility??0) > 0.45);
     
     // If hips are missing but shoulders are visible, check upper-body geometry for a fall.
     // Everything here also requires the upper body to be LOW in the frame (on the floor),
@@ -719,20 +720,21 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode
       //    and low in the frame (on the ground).
       const shlDx = Math.abs(ls.x - rs.x);
       const shlDy = Math.abs(ls.y - rs.y);
-      const isSideways = shlDy > shlDx * 1.2 && (ls.y > 0.5 || rs.y > 0.5);
+      const isSideways = shlDy > shlDx * 1.5 && (ls.y > 0.60 || rs.y > 0.60);
 
       // 2. Horizontal layout check: compute bounding box of all visible upper-body points
       let visibleXs: number[] = [], visibleYs: number[] = [];
       lms.slice(0, 15).forEach(lm => {
-        if ((lm.visibility ?? 0) > 0.4) { visibleXs.push(lm.x); visibleYs.push(lm.y); }
+        if ((lm.visibility ?? 0) > 0.45) { visibleXs.push(lm.x); visibleYs.push(lm.y); }
       });
 
       let isHorizontalShape = false;
       if (visibleXs.length > 5) {
         const minX = Math.min(...visibleXs), maxX = Math.max(...visibleXs);
         const minY = Math.min(...visibleYs), maxY = Math.max(...visibleYs);
-        // Cluster clearly wider than tall AND lying low in the frame (bottom past mid).
-        if ((maxX - minX) > (maxY - minY) * 1.5 && maxY > 0.5) {
+        // Cluster clearly wider than tall AND lying low in the frame (entire head/shoulders past mid).
+        // Require minY > 0.50 so that if they are close to the camera, the top of the head is not high up.
+        if ((maxX - minX) > (maxY - minY) * 2.0 && maxY > 0.75 && minY > 0.50) {
           isHorizontalShape = true;
         }
       }
@@ -743,20 +745,20 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode
     
     if (!hipVisible || !shlVisible) return false;
     
-    const hipY = (lh && (lh.visibility??0) > 0.4 && rh && (rh.visibility??0) > 0.4) 
+    const hipY = (lh && (lh.visibility??0) > 0.45 && rh && (rh.visibility??0) > 0.45) 
       ? (lh.y+rh.y)/2 
-      : ((lh && (lh.visibility??0) > 0.4) ? lh.y : rh.y);
+      : ((lh && (lh.visibility??0) > 0.45) ? lh.y : rh.y);
       
-    const shlY = (ls && (ls.visibility??0) > 0.4 && rs && (rs.visibility??0) > 0.4)
+    const shlY = (ls && (ls.visibility??0) > 0.45 && rs && (rs.visibility??0) > 0.45)
       ? (ls.y+rs.y)/2
-      : ((ls && (ls.visibility??0) > 0.4) ? ls.y : rs.y);
+      : ((ls && (ls.visibility??0) > 0.45) ? ls.y : rs.y);
 
-    const hipX = (lh && (lh.visibility??0) > 0.4 && rh && (rh.visibility??0) > 0.4)
+    const hipX = (lh && (lh.visibility??0) > 0.45 && rh && (rh.visibility??0) > 0.45)
       ? (lh.x+rh.x)/2
-      : ((lh && (lh.visibility??0) > 0.4) ? lh.x : rh.x);
-    const shlX = (ls && (ls.visibility??0) > 0.4 && rs && (rs.visibility??0) > 0.4)
+      : ((lh && (lh.visibility??0) > 0.45) ? lh.x : rh.x);
+    const shlX = (ls && (ls.visibility??0) > 0.45 && rs && (rs.visibility??0) > 0.45)
       ? (ls.x+rs.x)/2
-      : ((ls && (ls.visibility??0) > 0.4) ? ls.x : rs.x);
+      : ((ls && (ls.visibility??0) > 0.45) ? ls.x : rs.x);
 
     // LYING vs STANDING — compare the torso vector (shoulders → hips):
     //   Standing / on foot → hips sit BELOW shoulders: vertical torso (dy >> dx) → NOT a fall.
@@ -764,10 +766,15 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode
     // This is what makes ONLY a horizontal body on the floor count as a fall.
     const dx = Math.abs(shlX - hipX);
     const dy = Math.abs(shlY - hipY);
-    const torsoHorizontal = dx > dy * 1.2;         // body clearly horizontal (lying), not upright
-    const onFloor = hipY > 0.30 && shlY > 0.30;    // body is low in the frame (on the ground)
-    return torsoHorizontal && onFloor;
-  }, [isFallen]);
+    const torsoHorizontal = dx > dy * 1.5;         // body clearly horizontal (lying), not upright
+    const onFloor = hipY > 0.55 && shlY > 0.55;    // body is low in the frame (on the ground)
+    
+    // Also guard head position if nose is visible
+    const nose = lms[0];
+    const noseLow = (nose && (nose.visibility ?? 0) > 0.45) ? nose.y > 0.50 : true;
+
+    return torsoHorizontal && onFloor && noseLow;
+  }, []);
 
   // ── Gemini vision (called every ~2000ms from inference loop) ───────────────
   const runGemini = useCallback(async () => {
@@ -850,6 +857,10 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode
       const ms = Math.round(performance.now() - t0);
       console.log("[Gemini Vision] Cycle time:", ms, "ms");
 
+      if (analysis_data.alert) {
+        analysis_data = { ...analysis_data, alert: false, alertReason: null };
+      }
+
       analysisRef.current = analysis_data;
       setAnalysis(analysis_data);
       setPing(ms);
@@ -867,7 +878,6 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode
         });
       }
 
-      if (analysis_data.alert && !isFallen) onFallTriggered?.();
     } catch (e) {
       console.error("[Gemini] API error:", e);
     }
@@ -876,7 +886,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode
       setGemPending(false);
       console.log("[Gemini] Reset busy flag.");
     }
-  }, [isFallen, onFallTriggered]);
+  }, [activeCamera, useBackendFeed]);
 
   // ── Canvas draw (called every RAF) ────────────────────────────────────────
   const drawFrame = useCallback(() => {
@@ -909,7 +919,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode
     if (waveRef.current) drawWaveBanner(ctx,W,t);
 
     // Alert overlay
-    if (isFallen || selfFallenRef.current || analysisRef.current.alert) {
+    if (isFallen || selfFallenRef.current) {
       const a=0.10+0.07*Math.sin(t/210);
       ctx.fillStyle=`rgba(239,68,68,${a})`; ctx.fillRect(0,0,W,H);
       ctx.strokeStyle=`rgba(239,68,68,${0.55+0.3*Math.sin(t/210)})`;
@@ -1056,16 +1066,14 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode
           //   height = y2-y1, width = x2-x1, threshold = height - width
           //   threshold < 0  (box wider than tall = person horizontal) AND conf > 80% => Fall.
           // The confidence gate mirrors the repo's `conf > 80` and stops low-confidence
-          // detections from firing. `y > 0.15` is our added guard so a wide box at the very
-          // top of frame (never a floor fall) can't trip it.
+          // detections from firing. `y > 0.35` and box bottom > 0.75 is our added guard
+          // so only a person flat on the floor can trigger a fall alert.
           const personBox = newDets.find(d => d.label.toLowerCase() === "person" || d.label.toLowerCase() === "human");
           if (personBox && personBox.score > 0.65) {
             // Tech-Watt: person horizontal when the box is CLEARLY wider than tall (lying).
-            // A standing person's box is taller than wide, and a crouch is near-square — both
-            // fail the 1.2x margin, so only a body flat on the floor counts as a fall.
-            const horizontal = personBox.w > personBox.h * 1.2;
-            // On the floor: the body sits in the lower half of the frame (box bottom past mid).
-            const onFloor = (personBox.y + personBox.h) > 0.5;
+            const horizontal = personBox.w > personBox.h * 1.4;
+            // On the floor: the body sits low in the frame (box top past 0.35 and box bottom past 0.75).
+            const onFloor = personBox.y > 0.35 && (personBox.y + personBox.h) > 0.75;
             objFallenRef.current = horizontal && onFloor;
           } else {
             objFallenRef.current = false;
@@ -1080,28 +1088,49 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode
       }
 
       // Centralized Fall Detection — a person horizontal on the floor IS a fall.
-      // Latches an internal EMERGENCY state so it works even when no parent controls `isFallen`.
-      const fireFall = () => {
-        fallStartRef.current = null;
-        rapidDropTimeRef.current = 0;
-        if (!selfFallenRef.current) { selfFallenRef.current = true; setSelfFallen(true); }
-        onFallTriggered?.();
-      };
-      if (!isFallen && !selfFallenRef.current) {
-        if (poseFallenRef.current || objFallenRef.current) {
-          // Fast fall: horizontal pose right after a rapid drop → fire instantly.
+      const currentlyFallen = poseFallenRef.current || objFallenRef.current;
+
+      if (currentlyFallen) {
+        // Fall condition active: reset the clear timer
+        fallClearStartRef.current = null;
+
+        if (!selfFallenRef.current) {
           const rapidRecent = now - rapidDropTimeRef.current < RAPID_DROP_WINDOW_MS;
           if (poseFallenRef.current && rapidRecent) {
-            fireFall();
-          }
-          // On the floor / lying down: no rapid drop needed. Confirm briefly to reject a
-          // single-frame flicker, then trigger the alert actively.
-          else if (fallStartRef.current == null) fallStartRef.current = now;
-          else if (now - fallStartRef.current > LYING_CONFIRM_MS) {
-            fireFall();
+            // Fast fall: horizontal pose right after a rapid drop → fire instantly.
+            fallStartRef.current = null;
+            selfFallenRef.current = true;
+            setSelfFallen(true);
+            onFallTriggered?.(analysisRef.current);
+          } else if (fallStartRef.current == null) {
+            fallStartRef.current = now;
+          } else if (now - fallStartRef.current > LYING_CONFIRM_MS) {
+            // Confirmed lying on the floor
+            fallStartRef.current = null;
+            selfFallenRef.current = true;
+            setSelfFallen(true);
+            onFallTriggered?.(analysisRef.current);
           }
         } else {
+          // If we are already in selfFallen state, reset the fall start timer
           fallStartRef.current = null;
+        }
+      } else {
+        // No fall detected: reset the fall start timer
+        fallStartRef.current = null;
+
+        if (selfFallenRef.current) {
+          if (fallClearStartRef.current == null) {
+            fallClearStartRef.current = now;
+          } else if (now - fallClearStartRef.current > CLEAR_CONFIRM_MS) {
+            // Confirmed stood up / no longer on floor
+            fallClearStartRef.current = null;
+            selfFallenRef.current = false;
+            setSelfFallen(false);
+            onFallCleared?.();
+          }
+        } else {
+          fallClearStartRef.current = null;
         }
       }
     }
@@ -1141,7 +1170,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode
       globalEmotion:"EMERGENCY", emotionConfidence:100,
       globalBehavior:"EMERGENCY", globalPosture:"EMERGENCY", alert:true,
       alertReason:"Fall incident triggered.",
-      summary:"⚠ Resident requires immediate assistance!",
+      summary:"Fall detected. Resident requires immediate assistance.",
     };
     analysisRef.current=override; setAnalysis(override);
   }, [fallen]);
@@ -1194,41 +1223,38 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode
       )}
 
       {/* Live Local Webcam (no mirror - normal orientation) */}
-      {activeCamera === "local" && (
-        <>
-          {!useBackendFeed ? (
-            <video
-              ref={videoRef} autoPlay playsInline muted
-              className={`absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-500 ${camActive?"opacity-100":"opacity-0"}`}
-            />
-          ) : (
-            <img
-              ref={imgRef}
-              src={backendFeedUrl}
-              alt="Backend Video Stream"
-              crossOrigin="anonymous"
-              className={`absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-500 ${camActive?"opacity-100":"opacity-0"}`}
-            />
-          )}
-        </>
-      )}
+      <video
+        ref={videoRef} autoPlay playsInline muted
+        className={`absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-500 ${
+          activeCamera === "local" && !useBackendFeed && camActive ? "opacity-100 z-0" : "opacity-0 -z-10"
+        }`}
+      />
+      <img
+        ref={imgRef}
+        src={backendFeedUrl || undefined}
+        alt="Backend Video Stream"
+        crossOrigin="anonymous"
+        className={`absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-500 ${
+          activeCamera === "local" && useBackendFeed && camActive ? "opacity-100 z-0" : "opacity-0 -z-10"
+        }`}
+      />
 
       {/* Tapo IP Camera Stream */}
-      {activeCamera === "tapo" && (
-        <img
-          ref={tapoImgRef}
-          src={`http://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:8000/api/v1/camera/tapo_feed`}
-          alt="Tapo IP Camera Stream"
-          crossOrigin="anonymous"
-          onLoad={() => setTapoStatus("connected")}
-          onError={() => {
-            console.warn("[Tapo] Connection failed, attempting fallback...");
-            setTapoStatus("error");
-            setActiveCamera("local");
-          }}
-          className={`absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-500 ${tapoStatus === "connected" ? "opacity-100" : "opacity-0"}`}
-        />
-      )}
+      <img
+        ref={tapoImgRef}
+        src={`http://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:8000/api/v1/camera/tapo_feed`}
+        alt="Tapo IP Camera Stream"
+        crossOrigin="anonymous"
+        onLoad={() => setTapoStatus("connected")}
+        onError={() => {
+          console.warn("[Tapo] Connection failed, attempting fallback...");
+          setTapoStatus("error");
+          setActiveCamera("local");
+        }}
+        className={`absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-500 ${
+          activeCamera === "tapo" && tapoStatus === "connected" ? "opacity-100 z-0" : "opacity-0 -z-10"
+        }`}
+      />
 
       {/* Overlay canvas (normal orientation, matching video) */}
       <canvas
@@ -1272,7 +1298,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode
       )}
 
       {/* Alert border */}
-      {(fallen || analysis.alert) && (
+      {fallen && (
         <div className="absolute inset-0 z-40 pointer-events-none border-4 border-red-500 rounded-2xl animate-pulse"/>
       )}
 
@@ -1363,9 +1389,6 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, cameraMode
           <p className="text-white text-[10px] font-semibold mt-1 leading-snug">
             {fallen ? "⚠ Incident Alert: Resident requires immediate assistance." : analysis.summary}
           </p>
-          {analysis.alertReason && !fallen && (
-            <p className="text-red-400 text-[9px] mt-0.5 font-bold">⚠ {analysis.alertReason}</p>
-          )}
         </div>
 
         {!fallen ? (

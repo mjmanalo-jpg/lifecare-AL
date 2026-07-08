@@ -94,7 +94,7 @@ export async function POST(req) {
                 {
                   text: `Analyze this video feed capture frame of an assisted living resident.
 Identify their facial expression/emotion, behavior, and posture.
-Look for safety risks (such as a fall, collapsing, sleeping in an unsafe posture, or signs of distress).
+Look for fall events only when deciding whether to raise an emergency alert. Other risks can be described in the summary, but they must not set alert=true.
 CRITICAL: Be highly observant of subtle facial expressions. Even slight frowning, drooping, looking down, or tension should be classified accurately as "Sad", "Anxious", or "Angry" rather than defaulting to "Neutral".
 
 Return a valid JSON object matching the following structure:
@@ -103,7 +103,7 @@ Return a valid JSON object matching the following structure:
   "emotionConfidence": number (0 to 100),
   "globalBehavior": string (concise description, e.g. "Calm", "Active", "Smiling", "Eating", "Reading"),
   "globalPosture": "Upright" | "Lying Down" | "Seated" | "Tilted Left" | "Tilted Right" | "Slouched" | "Unknown",
-  "alert": boolean (set to true ONLY if resident has fallen, is collapsed, or needs urgent assistance),
+  "alert": boolean (set to true ONLY if a resident fall is visible or strongly indicated),
   "alertReason": string | null,
   "summary": string (very concise, maximum 1 sentence describing the state),
   "objects": Array<{

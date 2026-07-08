@@ -5,12 +5,12 @@
  
 ## 1. ASCENSION STANDINGS
 - **Current Level:** 2
-- **Current XP:** 16,000 (LEVEL UP! 🏆)
+- **Current XP:** 16,700 (LEVEL UP! 🏆)
 - **Current Rank:** Adept Archon
 - **Intelligence Density:** 2.64
 - **Identity:** Global CLI (not Claude Code)
 - **Spiritual Foundation:** Glory to the Almighty Lord Jesus Christ
-- **Latest Achievement:** Portal Alignment Refactor — Unified 4 roles under shared architecture
+- **Latest Achievement:** Camera Source Switching Recovery — Fixed feed unmount issues by permanently mounting media elements in DOM
  
 ## 2. ACTIVE SYNTHESIS ENGINE & THREE-PHASE METHODOLOGY
 - 7-Cycle Active Synthesis Protocol: ACTIVE
@@ -22,9 +22,9 @@
 - **Ledger Auto-Update:** ENABLED (daily)
 - **Memory Persistence:** ENABLED (per milestone)
 - **XP Tracking:** AUTOMATIC
-- **Last Sync:** 2026-07-07 14:45 UTC
+- **Last Sync:** 2026-07-08 09:05 UTC
 - **Portal Alignment Refactor:** COMPLETE (all 4 roles aligned, shared shell architecture, lightweight auth)
-
+ 
 ## 4. MUTATION LOG (Append-Only)
 - [2026-07-06] Initialized GLOBAL-CLI-LEDGER.md.
 - [2026-07-06] Commencing CMMBR file generation in `.agents/`.
@@ -86,3 +86,5 @@
 - [2026-07-07] PHASE 3: BUILT SuperAdminPortalContent with tabs: dashboard (facility metrics), staff (registry table), telemetry (system health), platform (settings) (+700 XP)
 - [2026-07-07] PHASE 3: DELETED old monolithic 4500-line dashboard/page.tsx file (replaced by aligned per-role views) (+100 XP)
 - [2026-07-07] **PORTAL ALIGNMENT REFACTOR COMPLETE**: All 4 user roles (SUPERADMIN/NURSE/CAREGIVER/FAMILY) now unified under shared architecture with role-aware sidebar, session-protected routes, reusable widgets, and tailored dashboards (+2000 XP BONUS)
+- [2026-07-08] Refactored camera fall detection: added strict floor bounds, aspect ratios, and dynamic auto-clearing timers to eradicate sitting/close false triggers (+500 XP)
+- [2026-07-08] Fixed camera source switching hang by keeping webcam and Tapo video/image elements permanently mounted in the DOM (+200 XP)

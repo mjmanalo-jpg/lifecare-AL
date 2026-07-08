@@ -28,10 +28,39 @@ interface NursePortalContentProps {
   tab: string;
 }
 
+type IncidentSeverity = "critical" | "high" | "medium" | "low";
+type IncidentStatus = "open" | "in-progress" | "closed";
+
+type NurseIncident = {
+  id: string;
+  type: string;
+  severity: IncidentSeverity;
+  resident: string;
+  room: string;
+  timestamp: Date | string;
+  status: IncidentStatus;
+  description: string;
+  notes: string;
+  resolved: boolean;
+  source?: "monitoring" | "manual";
+};
+
+type MonitoringAnalysis = {
+  summary?: string;
+  globalEmotion?: string;
+  globalBehavior?: string;
+  globalPosture?: string;
+};
+
+const INCIDENT_STORAGE_KEY = "nurseIncidents";
+const MONITORING_RESIDENT = "Arthur Pendelton";
+const MONITORING_ROOM = "302";
+
 import Swal from "sweetalert2";
 
 export default function NursePortalContent({ tab }: NursePortalContentProps) {
   const [showVitalsModal, setShowVitalsModal] = useState(false);
+  const [monitoringFallAlert, setMonitoringFallAlert] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedResidents, setSelectedResidents] = useState<Set<string>>(new Set());
   const [selectedResident, setSelectedResident] = useState<typeof mockResidents[0] | null>(null);
@@ -92,7 +121,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   };
 
   // Incidents Management
-  const mockIncidentsData = [
+  const mockIncidentsData: NurseIncident[] = [
     { id: "1", type: "Fall", severity: "critical", resident: "Eleanor Fitzroy", room: "305", timestamp: new Date(Date.now() - 15 * 60000), status: "open", description: "Unsteady gait during ambulation. Resident nearly fell.", notes: "Assigned mobility assistance.", resolved: false },
     { id: "2", type: "Medication Error", severity: "high", resident: "Arthur Pendelton", room: "302", timestamp: new Date(Date.now() - 45 * 60000), status: "in-progress", description: "Wrong dosage administered.", notes: "Physician notified. Monitoring vitals.", resolved: false },
     { id: "3", type: "Behavioral Change", severity: "high", resident: "Eleanor Fitzroy", room: "305", timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), status: "closed", description: "Increased confusion and agitation.", notes: "Resolved with medication adjustment.", resolved: true },
@@ -103,11 +132,23 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     { id: "8", type: "Infection Risk", severity: "critical", resident: "Margaret Wilson", room: "312", timestamp: new Date(Date.now() - 12 * 60 * 60 * 1000), status: "in-progress", description: "Signs of urinary tract infection.", notes: "Lab culture sent. Started antibiotics.", resolved: false },
   ];
 
-  const [incidents, setIncidents] = useState(mockIncidentsData);
+  const [incidents, setIncidents] = useState<NurseIncident[]>(() => {
+    if (typeof window === "undefined") return mockIncidentsData;
+
+    try {
+      const saved = window.localStorage.getItem(INCIDENT_STORAGE_KEY);
+      if (!saved) return mockIncidentsData;
+
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : mockIncidentsData;
+    } catch {
+      return mockIncidentsData;
+    }
+  });
   const [incidentSearch, setIncidentSearch] = useState("");
   const [incidentFilterSeverity, setIncidentFilterSeverity] = useState<string>("all");
   const [incidentFilterStatus, setIncidentFilterStatus] = useState<string>("all");
-  const [viewingIncident, setViewingIncident] = useState<typeof mockIncidentsData[0] | null>(null);
+  const [viewingIncident, setViewingIncident] = useState<NurseIncident | null>(null);
   const [incidentPage, setIncidentPage] = useState(1);
   const [incidentItemsPerPage, setIncidentItemsPerPage] = useState(10);
 
@@ -133,6 +174,45 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   useEffect(() => {
     setIncidentPage(1);
   }, [incidentSearch, incidentFilterSeverity, incidentFilterStatus]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(INCIDENT_STORAGE_KEY, JSON.stringify(incidents));
+    } catch {
+      // localStorage can be unavailable in private mode; keep in-memory incidents.
+    }
+  }, [incidents]);
+
+  const handleMonitoringFallTriggered = (analysis: MonitoringAnalysis) => {
+    setMonitoringFallAlert(true);
+    setIncidents((prev) => {
+      const hasOpenMonitoringFall = prev.some(
+        (incident) =>
+          incident.source === "monitoring" &&
+          incident.type === "Fall Detection" &&
+          incident.status !== "closed"
+      );
+
+      if (hasOpenMonitoringFall) return prev;
+
+      const analysisSummary = analysis.summary || "Fall detection triggered from monitoring camera.";
+      const incident: NurseIncident = {
+        id: `monitoring-fall-${Date.now()}`,
+        type: "Fall Detection",
+        severity: "critical",
+        resident: MONITORING_RESIDENT,
+        room: MONITORING_ROOM,
+        timestamp: new Date(),
+        status: "open",
+        description: analysisSummary,
+        notes: `Saved from /nurse/monitoring. Emotion: ${analysis.globalEmotion || "Unknown"}; behavior: ${analysis.globalBehavior || "Unknown"}; posture: ${analysis.globalPosture || "Unknown"}.`,
+        resolved: false,
+        source: "monitoring",
+      };
+
+      return [incident, ...prev];
+    });
+  };
 
   const handleDeleteIncident = async (id: string) => {
     const result = await Swal.fire({
@@ -280,7 +360,12 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
 
         {/* Full Width Camera Feed — Hybrid Mode (Local + Tapo IP) */}
         <div className="w-full bg-black rounded-lg overflow-hidden shadow-xl border-2 border-yellow-300">
-          <CameraVisionFeed cameraMode="hybrid" />
+          <CameraVisionFeed
+            cameraMode="hybrid"
+            isFallen={monitoringFallAlert}
+            onFallTriggered={handleMonitoringFallTriggered}
+            onFallCleared={() => setMonitoringFallAlert(false)}
+          />
         </div>
 
         {/* Heart Rate Trend Chart */}
@@ -297,17 +382,19 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
         {/* Alerts Section */}
         <div>
           <h3 className="text-lg font-semibold text-foreground mb-4">Active Alerts</h3>
-          <AlertBanner
-            type="warning"
-            title="Fall Risk Detected"
-            message="Resident showing unsteady gait pattern"
-            resident="Arthur Pendelton (Room 302)"
-            timestamp={new Date()}
-            action={{
-              label: "Review Footage",
-              onClick: () => console.log("Reviewing..."),
-            }}
-          />
+          {monitoringFallAlert ? (
+            <AlertBanner
+              type="error"
+              title="Emergency: Fall Detected"
+              message="Fall detection confirmed from the monitoring camera"
+              resident={`${MONITORING_RESIDENT} (Room ${MONITORING_ROOM})`}
+              timestamp={new Date()}
+            />
+          ) : (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+              No emergency alerts. Fall detection is monitoring normally.
+            </div>
+          )}
         </div>
 
         {/* Vitals Modal */}
