@@ -480,7 +480,8 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     const streamQuality = process.env.NEXT_PUBLIC_TAPO_STREAM || "stream1";
 
     // Backend MJPEG endpoint that transcodes Tapo RTSP stream
-    const mjpegUrl = `http://localhost:8000/api/v1/camera/tapo?ip=${tapoIp}&port=${tapoPort}&user=${encodeURIComponent(tapoUser)}&pass=${encodeURIComponent(tapoPass)}&stream=${streamQuality}`;
+    const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || "http://localhost:8000";
+    const mjpegUrl = `${backendBaseUrl}/api/v1/camera/tapo?ip=${tapoIp}&port=${tapoPort}&user=${encodeURIComponent(tapoUser)}&pass=${encodeURIComponent(tapoPass)}&stream=${streamQuality}`;
 
     console.log("[Tapo] Connecting to Tapo camera:", tapoIp, "via backend MJPEG...");
     setTapoStatus("connecting");
@@ -618,8 +619,8 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         if (v) { v.srcObject = stream; v.onloadedmetadata = () => setCamActive(true); }
       } catch (e: any) {
         console.warn("Local camera blocked or insecure context. Falling back to FastAPI backend feed:", e);
-        const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
-        setBackendFeedUrl(`http://${host}:8000/api/v1/camera/feed`);
+        const backendBaseUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || `http://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:8000`;
+        setBackendFeedUrl(`${backendBaseUrl}/api/v1/camera/feed`);
         setUseBackendFeed(true);
         setCamActive(true);
       }
@@ -1242,7 +1243,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       {/* Tapo IP Camera Stream */}
       <img
         ref={tapoImgRef}
-        src={`http://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:8000/api/v1/camera/tapo_feed`}
+        src={`${process.env.NEXT_PUBLIC_BACKEND_API_URL || `http://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:8000`}/api/v1/camera/tapo_feed`}
         alt="Tapo IP Camera Stream"
         crossOrigin="anonymous"
         onLoad={() => setTapoStatus("connected")}
