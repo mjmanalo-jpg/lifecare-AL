@@ -17,11 +17,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy dependencies manifest and install
-COPY requirements.txt .
+COPY apps/backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application source code
-COPY . .
+COPY apps/backend/ .
 
 # Expose port and bind to the dynamic port Render provides
 EXPOSE 10000
