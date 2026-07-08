@@ -94,6 +94,8 @@ def _tapo_rtsp_url():
     """
     from urllib.parse import quote
     ip = os.getenv("NEXT_PUBLIC_TAPO_CAMERA_IP") or os.getenv("CAMERA_IP", "192.168.1.36")
+    if ip.startswith(("rtsp://", "rtsps://", "http://", "https://")):
+        return ip
     port = os.getenv("NEXT_PUBLIC_TAPO_CAMERA_PORT") or os.getenv("CAMERA_PORT", "554")
     user = os.getenv("NEXT_PUBLIC_TAPO_CAMERA_USERNAME") or os.getenv("CAMERA_USER", "admin")
     pwd = os.getenv("NEXT_PUBLIC_TAPO_CAMERA_PASSWORD") or os.getenv("CAMERA_PASS", "admin")
