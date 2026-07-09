@@ -120,7 +120,7 @@ const CLEAR_CONFIRM_MS = 1500;
 const INIT: VisionAnalysis = {
   globalEmotion:"Neutral", emotionConfidence:0, globalBehavior:"Initializing",
   globalPosture:"Detecting", alert:false, alertReason:null,
-  summary:"Gemini Vision AI loading models...", objects:[],
+  summary:"AI Vision loading models...", objects:[],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -305,7 +305,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   const lastPoseRef   = useRef(0);
   const lastHandRef   = useRef(0);
   const lastDetRef    = useRef(0);
-  const lastGeminiRef = useRef(0);
+  const lastVisionRef = useRef(0);
   const lastUiRef     = useRef(0);   // throttles React UI state updates (~4/sec) to keep the main thread free
   const fallStartRef  = useRef<number | null>(null); // when the horizontal (fallen) posture first began — for auto-fall persistence
   const fallClearStartRef = useRef<number | null>(null); // when the non-fallen posture first began — for auto-fall clearing
@@ -396,8 +396,8 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     isSpeakingRef.current = true;
 
     try {
-      // Try Gemini TTS first with natural, friendly voice
-      const res = await fetch("/api/gemini", {
+      // Try AI Vision TTS first with natural, friendly voice
+      const res = await fetch("/api/ai-vision", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -435,7 +435,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         return;
       }
     } catch (err) {
-      console.warn("Gemini TTS failed, falling back to browser TTS:", err);
+      console.warn("AI Vision TTS failed, falling back to browser TTS:", err);
     }
 
     // Fallback: browser Web Speech API
@@ -546,10 +546,10 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
 
     // Ignore initial placeholder summaries
     const ignoreList = [
-      "gemini vision ai loading models",
+      "ai vision loading models",
       "analysis in progress",
       "initializing",
-      "gemini vision ai loading models..."
+      "ai vision loading models..."
     ];
     if (ignoreList.includes(summaryText.toLowerCase().trim())) {
       return;
@@ -658,7 +658,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     };
   }, [startLocalCamera]);
 
-  // Local facial emotion detection removed to rely purely on Gemini Vision
+  // Local facial emotion detection removed to rely purely on AI Vision
 
   // ── Real-time body movement & behavior analysis ────────────────────────────
   const analyzeBodyMovement = useCallback((lms: LM[]) => {
@@ -807,14 +807,14 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     return torsoHorizontal && onFloor && noseLow;
   }, []);
 
-  // ── Gemini vision (called every ~2000ms from inference loop) ───────────────
-  const runGemini = useCallback(async () => {
+  // ── AI Vision vision (called every ~2000ms from inference loop) ───────────────
+  const runVision = useCallback(async () => {
     // Cloud key is dead/absent — skip the network call AND the per-frame canvas
     // encode entirely. Local on-device detection (running every frame in the loop)
     // fully covers emotion/behavior/posture, so this just removes periodic hitches.
     if (gemDeadRef.current) return;
     if (gemBusyRef.current) {
-      console.log("[Gemini] API busy, skipping call.");
+      console.log("[AI Vision] API busy, skipping call.");
       return;
     }
     const v = videoRef.current;
@@ -835,8 +835,8 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       let analysis_data: VisionAnalysis | null = null;
 
       try {
-        console.log("[Gemini Vision] Requesting analysis...");
-        const res = await fetch("/api/gemini", {
+        console.log("[AI Vision] Requesting analysis...");
+        const res = await fetch("/api/ai-vision", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -855,13 +855,13 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
             analysis_data = null;
           } else {
             analysis_data = j;
-            console.log("[Gemini Vision] API success. Emotion:", analysis_data?.globalEmotion, "Confidence:", analysis_data?.emotionConfidence);
+            console.log("[AI Vision] API success. Emotion:", analysis_data?.globalEmotion, "Confidence:", analysis_data?.emotionConfidence);
           }
         } else {
-          console.warn("[Gemini Vision] API returned error status:", res.status);
+          console.warn("[AI Vision] API returned error status:", res.status);
         }
       } catch (e) {
-        console.warn("[Gemini Vision] API fetch failed, using local fallback:", e);
+        console.warn("[AI Vision] API fetch failed, using local fallback:", e);
       }
 
       // If API failed or is offline, fallback to local landmark detection
@@ -886,7 +886,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       }
 
       const ms = Math.round(performance.now() - t0);
-      console.log("[Gemini Vision] Cycle time:", ms, "ms");
+      console.log("[AI Vision] Cycle time:", ms, "ms");
 
       if (analysis_data.alert) {
         analysis_data = { ...analysis_data, alert: false, alertReason: null };
@@ -910,12 +910,12 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       }
 
     } catch (e) {
-      console.error("[Gemini] API error:", e);
+      console.error("[AI Vision] API error:", e);
     }
     finally {
       gemBusyRef.current=false;
       setGemPending(false);
-      console.log("[Gemini] Reset busy flag.");
+      console.log("[AI Vision] Reset busy flag.");
     }
   }, [activeCamera, useBackendFeed]);
 
@@ -1044,7 +1044,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
           const localAnalysis = analyzeEmotionFromLandmarks(pose0 ?? [], analysisRef.current, faceSrc) as VisionAnalysis;
 
           // Merge real-time telemetry into the ref at FULL rate (drives the canvas)
-          // WITHOUT wiping out Gemini's dynamic summary. The React state is pushed
+          // WITHOUT wiping out AI Vision's dynamic summary. The React state is pushed
           // separately, throttled, below — so we don't re-render 30x/sec.
           const prevA = analysisRef.current;
           const merged: VisionAnalysis = {
@@ -1113,9 +1113,9 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         lastDetRef.current=now;
       }
 
-      // Gemini Vision: every 2000ms for real-time safety & emotion analysis
-      if (now-lastGeminiRef.current>2000) {
-        lastGeminiRef.current=now; runGemini();
+      // AI Vision: every 2000ms for real-time safety & emotion analysis
+      if (now-lastVisionRef.current>2000) {
+        lastVisionRef.current=now; runVision();
       }
 
       // Centralized Fall Detection — a person horizontal on the floor IS a fall.
@@ -1184,7 +1184,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     }
 
     rafRef.current=requestAnimationFrame(loop);
-  }, [modelsOk, activeCamera, useBackendFeed, analyzeBodyMovement, checkFall, runGemini, drawFrame, buildFaceCrop]);
+  }, [modelsOk, activeCamera, useBackendFeed, analyzeBodyMovement, checkFall, runVision, drawFrame, buildFaceCrop]);
 
   // Start loop once camera is active
   useEffect(() => {
@@ -1307,7 +1307,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         className="absolute inset-0 w-full h-full object-cover pointer-events-none z-10"
       />
 
-      {/* Hidden capture canvas for Gemini */}
+      {/* Hidden capture canvas for AI Vision */}
       <canvas ref={captureRef} className="hidden" />
 
       {/* No-camera placeholder */}
@@ -1351,7 +1351,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       <div className="absolute top-3 left-3 z-20 flex flex-col gap-1.5 pointer-events-none">
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-black/78 text-[9px] font-bold text-white uppercase tracking-wider backdrop-blur-sm border border-white/10">
           <span className={`w-1.5 h-1.5 rounded-full ${gemPending?"bg-amber-400 animate-pulse":modelsOk?"bg-emerald-500 animate-pulse":"bg-zinc-600"}`}/>
-          {gemPending?"Gemini Thinking...":modelsOk?"AI Systems Live":"Initializing..."}
+          {gemPending?"AI Vision Analyzing...":modelsOk?"AI Systems Live":"Initializing..."}
         </span>
 
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-black/72 text-[9px] font-mono text-amber-400 uppercase tracking-wider backdrop-blur-sm border border-white/10">
@@ -1368,7 +1368,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         {ping !== null && (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-black/72 text-[9px] font-mono text-violet-400 uppercase tracking-wider backdrop-blur-sm border border-white/10">
             <Activity className="w-3 h-3"/>
-            Gemini {ping}ms
+            AI Vision {ping}ms
           </span>
         )}
       </div>
@@ -1421,7 +1421,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         <div className="flex-1 bg-black/68 backdrop-blur-md rounded-xl p-2.5 border border-white/10">
           <div className="flex justify-between items-center w-full">
             <p className="text-[9px] text-amber-400 font-bold uppercase tracking-wider flex items-center gap-1">
-              <Brain className="w-2.5 h-2.5"/> Gemini AI Vision
+              <Brain className="w-2.5 h-2.5"/> AI Vision
             </p>
             <button
               onClick={() => setIsMuted(prev => !prev)}
