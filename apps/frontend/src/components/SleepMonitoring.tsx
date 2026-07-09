@@ -1,37 +1,80 @@
-import { useState, useEffect } from "react";
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { AlertCircle, Eye, EyeOff, Moon, Activity } from "lucide-react";
 
+/* ── Data contracts (mirror of /api/monitoring) ─────────────────────── */
+
+interface SleepResident {
+  id: string;
+  name: string;
+  room: string;
+  sleeping: boolean;
+  /** 0..1 sleep confidence score. */
+  sleepScore: number;
+  position: string;
+  lastUpdate: string;
+  alerts: number;
+}
+
+interface MonitoringResponse {
+  residents: SleepResident[];
+  summary?: {
+    total: number;
+    sleeping: number;
+    awake: number;
+    alerts: number;
+  };
+}
+
+const POLL_INTERVAL_MS = 5000;
+
+/* ── Component ───────────────────────────────────────────────────────── */
+
 export default function SleepMonitoring() {
-  const [residents, setResidents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [residents, setResidents] = useState<SleepResident[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  const fetchResidents = useCallback(async (): Promise<void> => {
+    try {
+      const res = await fetch("/api/monitoring");
+      if (!res.ok) throw new Error(`Monitoring API error: ${res.status}`);
+      const data: MonitoringResponse = await res.json();
+      setResidents(data.residents ?? []);
+    } catch (err) {
+      console.error("Failed to load monitoring data:", err);
+    }
+  }, []);
 
   useEffect(() => {
-    // Fetch monitoring data
-    fetch("/api/monitoring")
-      .then(res => res.json())
-      .then(data => {
-        setResidents(data.residents || []);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Error:", err);
-        setLoading(false);
-      });
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/monitoring");
+        if (!res.ok) throw new Error(`Monitoring API error: ${res.status}`);
+        const data: MonitoringResponse = await res.json();
+        if (active) setResidents(data.residents ?? []);
+      } catch (err) {
+        console.error("Failed to load monitoring data:", err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
 
-    // Poll every 5 seconds
-    const interval = setInterval(() => {
-      fetch("/api/monitoring")
-        .then(res => res.json())
-        .then(data => setResidents(data.residents || []));
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
+    const interval = setInterval(() => void fetchResidents(), POLL_INTERVAL_MS);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [fetchResidents]);
 
   if (loading) {
     return <div className="p-4 text-center">Loading monitoring data...</div>;
   }
+
+  const sleepingCount = residents.filter((r) => r.sleeping).length;
+  const totalAlerts = residents.reduce((sum, r) => sum + r.alerts, 0);
 
   return (
     <div className="p-6 space-y-4">
@@ -58,9 +101,7 @@ export default function SleepMonitoring() {
           className="glass-panel p-4 rounded-xl"
         >
           <p className="text-sm text-muted-foreground">Currently Sleeping</p>
-          <p className="text-3xl font-bold text-purple-400">
-            {residents.filter(r => r.sleeping).length}
-          </p>
+          <p className="text-3xl font-bold text-purple-400">{sleepingCount}</p>
         </motion.div>
 
         <motion.div
@@ -70,9 +111,7 @@ export default function SleepMonitoring() {
           className="glass-panel p-4 rounded-xl"
         >
           <p className="text-sm text-muted-foreground">Alerts</p>
-          <p className="text-3xl font-bold text-red-400">
-            {residents.reduce((sum, r) => sum + r.alerts, 0)}
-          </p>
+          <p className="text-3xl font-bold text-red-400">{totalAlerts}</p>
         </motion.div>
       </div>
 
@@ -92,9 +131,7 @@ export default function SleepMonitoring() {
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <h3 className="font-semibold text-foreground">
-                  {resident.name}
-                </h3>
+                <h3 className="font-semibold text-foreground">{resident.name}</h3>
                 <p className="text-sm text-muted-foreground">
                   Room {resident.room} • {resident.position}
                 </p>
@@ -106,16 +143,12 @@ export default function SleepMonitoring() {
                   {resident.sleeping ? (
                     <>
                       <EyeOff className="w-4 h-4 text-purple-400" />
-                      <span className="text-sm font-bold text-purple-400">
-                        Sleeping
-                      </span>
+                      <span className="text-sm font-bold text-purple-400">Sleeping</span>
                     </>
                   ) : (
                     <>
                       <Eye className="w-4 h-4 text-green-400" />
-                      <span className="text-sm font-bold text-green-400">
-                        Awake
-                      </span>
+                      <span className="text-sm font-bold text-green-400">Awake</span>
                     </>
                   )}
                 </div>

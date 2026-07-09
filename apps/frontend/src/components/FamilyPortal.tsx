@@ -1,37 +1,208 @@
-import { useState, useEffect } from "react";
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   AlertTriangle, Bell, MessageSquare, Calendar,
-  Image, DollarSign, Target, Heart, Activity, Pill,
-  Send, Check, Clock, User, MapPin, Phone
+  Image as ImageIcon, DollarSign, Target, Heart, Activity,
+  Send, Check, Clock, User,
+  type LucideIcon,
 } from "lucide-react";
 
+/* ── Data contracts (mirror of /api/family) ─────────────────────────── */
+
+interface Resident {
+  id: string;
+  name: string;
+  room: string;
+  age: number;
+  careLevel: string;
+}
+
+interface DailyReport {
+  date: string;
+  mood: string;
+  mealsEaten: number;
+  activityLevel: string;
+  sleepQuality: number;
+  medicationTaken: boolean;
+  incidents: number;
+  notes: string;
+  caregiver: string;
+}
+
+type AlertStatus = "PENDING" | "RESOLVED";
+
+interface Alert {
+  id: string;
+  type: string;
+  severity: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  status: AlertStatus;
+  response?: string;
+}
+
+interface Message {
+  id: string;
+  from: string;
+  text: string;
+  timestamp: string;
+  read: boolean;
+}
+
+interface Photo {
+  id: string;
+  title: string;
+  timestamp: string;
+  caption: string;
+}
+
+/** Discriminated union so `type` narrows to the right shape. */
+type Appointment =
+  | {
+      id: string;
+      type: "Doctor";
+      doctor: string;
+      date: string;
+      time: string;
+      reason: string;
+      confirmed: boolean;
+    }
+  | {
+      id: string;
+      type: "Visitor";
+      visitor: string;
+      date: string;
+      time: string;
+      confirmed: boolean;
+    };
+
+interface ExpenseLine {
+  item: string;
+  amount: number;
+}
+
+interface Expenses {
+  month: string;
+  total: number;
+  breakdown: ExpenseLine[];
+}
+
+interface CareGoal {
+  id: string;
+  goal: string;
+  progress: number;
+  startDate: string;
+  notes: string;
+}
+
+interface FamilyData {
+  resident: Resident;
+  dailyReport: DailyReport;
+  alerts: Alert[];
+  messages: Message[];
+  photos: Photo[];
+  appointments: Appointment[];
+  expenses: Expenses;
+  careGoals: CareGoal[];
+}
+
+type TabId =
+  | "overview"
+  | "alerts"
+  | "messages"
+  | "photos"
+  | "appointments"
+  | "expenses"
+  | "goals";
+
+interface TabDef {
+  id: TabId;
+  label: string;
+  icon: LucideIcon;
+}
+
+const TABS: readonly TabDef[] = [
+  { id: "overview", label: "Daily Report", icon: Activity },
+  { id: "alerts", label: "Alerts", icon: Bell },
+  { id: "messages", label: "Messages", icon: MessageSquare },
+  { id: "photos", label: "Photos", icon: ImageIcon },
+  { id: "appointments", label: "Appointments", icon: Calendar },
+  { id: "expenses", label: "Expenses", icon: DollarSign },
+  { id: "goals", label: "Care Goals", icon: Target },
+];
+
+/* ── Component ───────────────────────────────────────────────────────── */
+
 export default function FamilyPortal() {
-  const [data, setData] = useState(null);
-  const [activeTab, setActiveTab] = useState("overview");
-  const [newMessage, setNewMessage] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<FamilyData | null>(null);
+  const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [newMessage, setNewMessage] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(true);
+
+  const loadData = useCallback(async (): Promise<void> => {
+    try {
+      const res = await fetch("/api/family");
+      if (!res.ok) throw new Error(`Family API error: ${res.status}`);
+      const payload: FamilyData = await res.json();
+      setData(payload);
+    } catch (err) {
+      console.error("Failed to load family portal:", err);
+    }
+  }, []);
 
   useEffect(() => {
-    fetch("/api/family")
-      .then(res => res.json())
-      .then(data => {
-        setData(data);
-        setLoading(false);
-      });
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/family");
+        if (!res.ok) throw new Error(`Family API error: ${res.status}`);
+        const payload: FamilyData = await res.json();
+        if (active) setData(payload);
+      } catch (err) {
+        console.error("Failed to load family portal:", err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
+
+  const sendMessage = async (): Promise<void> => {
+    if (!newMessage.trim()) return;
+    try {
+      await fetch("/api/family", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sendMessage", message: newMessage }),
+      });
+      setNewMessage("");
+      await loadData();
+    } catch (err) {
+      console.error("Failed to send message:", err);
+    }
+  };
+
+  const confirmAppointment = async (appointmentId: string): Promise<void> => {
+    try {
+      await fetch("/api/family", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "confirmAppointment", appointmentId }),
+      });
+      await loadData();
+    } catch (err) {
+      console.error("Failed to confirm appointment:", err);
+    }
+  };
 
   if (loading || !data) return <div className="p-4">Loading family portal...</div>;
 
-  const sendMessage = async () => {
-    if (!newMessage.trim()) return;
-    await fetch("/api/family", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "sendMessage", message: newMessage })
-    });
-    setNewMessage("");
-  };
+  const pendingAlerts = data.alerts.filter((a) => a.status === "PENDING");
 
   return (
     <div className="p-6 space-y-6">
@@ -41,7 +212,7 @@ export default function FamilyPortal() {
       </h1>
 
       {/* Emergency Alerts */}
-      {data.alerts.some(a => a.status === "PENDING") && (
+      {pendingAlerts.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -49,7 +220,7 @@ export default function FamilyPortal() {
         >
           <AlertTriangle className="w-6 h-6 text-red-400 flex-shrink-0 mt-1" />
           <div className="flex-1">
-            {data.alerts.filter(a => a.status === "PENDING").map(alert => (
+            {pendingAlerts.map((alert) => (
               <div key={alert.id}>
                 <h3 className="font-bold text-red-300">{alert.title}</h3>
                 <p className="text-sm text-red-200">{alert.message}</p>
@@ -61,15 +232,7 @@ export default function FamilyPortal() {
 
       {/* Tabs */}
       <div className="flex gap-2 flex-wrap">
-        {[
-          { id: "overview", label: "Daily Report", icon: Activity },
-          { id: "alerts", label: "Alerts", icon: Bell },
-          { id: "messages", label: "Messages", icon: MessageSquare },
-          { id: "photos", label: "Photos", icon: Image },
-          { id: "appointments", label: "Appointments", icon: Calendar },
-          { id: "expenses", label: "Expenses", icon: DollarSign },
-          { id: "goals", label: "Care Goals", icon: Target }
-        ].map(tab => {
+        {TABS.map((tab) => {
           const Icon = tab.icon;
           return (
             <button
@@ -130,7 +293,7 @@ export default function FamilyPortal() {
       {activeTab === "alerts" && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
           <h2 className="text-2xl font-bold">Alert History</h2>
-          {data.alerts.map(alert => (
+          {data.alerts.map((alert) => (
             <div key={alert.id} className={`p-4 rounded-lg border ${
               alert.status === "RESOLVED" ? "bg-green-500/10 border-green-500/30" : "bg-red-500/10 border-red-500/30"
             }`}>
@@ -159,7 +322,7 @@ export default function FamilyPortal() {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
           <h2 className="text-2xl font-bold">Messages with Care Team</h2>
           <div className="space-y-3 max-h-96 overflow-y-auto">
-            {data.messages.map(msg => (
+            {data.messages.map((msg) => (
               <div key={msg.id} className="p-4 rounded-lg bg-foreground/5 border border-border">
                 <p className="font-semibold text-sm flex items-center gap-2">
                   <User className="w-4 h-4" />
@@ -174,12 +337,15 @@ export default function FamilyPortal() {
             <input
               type="text"
               value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewMessage(e.target.value)}
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                if (e.key === "Enter") void sendMessage();
+              }}
               placeholder="Send message to care team..."
               className="flex-1 px-4 py-2 rounded-lg bg-foreground/5 border border-border focus:border-blue-500 outline-none"
             />
             <button
-              onClick={sendMessage}
+              onClick={() => void sendMessage()}
               className="px-4 py-2 bg-blue-500/20 text-blue-300 rounded-lg hover:bg-blue-500/30 flex items-center gap-2"
             >
               <Send className="w-4 h-4" />
@@ -194,9 +360,9 @@ export default function FamilyPortal() {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
           <h2 className="text-2xl font-bold">Photo Gallery</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {data.photos.map(photo => (
+            {data.photos.map((photo) => (
               <div key={photo.id} className="p-4 rounded-lg bg-foreground/5 border border-border">
-                <Image className="w-16 h-16 mx-auto opacity-50 mb-2" />
+                <ImageIcon className="w-16 h-16 mx-auto opacity-50 mb-2" />
                 <h3 className="font-semibold text-sm">{photo.title}</h3>
                 <p className="text-xs text-muted-foreground mt-1">{photo.caption}</p>
                 <p className="text-xs text-muted-foreground mt-2">{new Date(photo.timestamp).toLocaleDateString()}</p>
@@ -210,7 +376,7 @@ export default function FamilyPortal() {
       {activeTab === "appointments" && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
           <h2 className="text-2xl font-bold">Upcoming Appointments</h2>
-          {data.appointments.map(apt => (
+          {data.appointments.map((apt) => (
             <div key={apt.id} className="p-4 rounded-lg bg-foreground/5 border border-border">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -228,13 +394,7 @@ export default function FamilyPortal() {
                 </div>
                 <button
                   onClick={() => {
-                    if (!apt.confirmed) {
-                      fetch("/api/family", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ action: "confirmAppointment", appointmentId: apt.id })
-                      });
-                    }
+                    if (!apt.confirmed) void confirmAppointment(apt.id);
                   }}
                   className={`px-3 py-2 rounded text-sm flex items-center gap-1 ${
                     apt.confirmed
@@ -273,7 +433,7 @@ export default function FamilyPortal() {
       {activeTab === "goals" && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
           <h2 className="text-2xl font-bold">Care Goals</h2>
-          {data.careGoals.map(goal => (
+          {data.careGoals.map((goal) => (
             <div key={goal.id} className="p-4 rounded-lg bg-foreground/5 border border-border">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-bold flex items-center gap-2">
