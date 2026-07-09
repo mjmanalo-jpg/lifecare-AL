@@ -7,6 +7,7 @@ import Swal from "sweetalert2";
 import { useLiveQuery, useStats } from "@/lib/useLiveQuery";
 import { adaptTask, adaptResident } from "@/lib/adapters";
 import { updateRecord, deleteRecord } from "@/lib/api";
+import CaregiverReports from "@/components/portal/views/CaregiverReports";
 
 interface CaregiverPortalContentProps {
   tab: string;
@@ -74,10 +75,6 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
   );
 
   const { stats } = useStats();
-
-  const { data: reportRows } = useLiveQuery<Record<string, unknown>>("shift-reports", {
-    tables: ["ShiftReport"],
-  });
 
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPriority, setFilterPriority] = useState<string>("all");
@@ -988,46 +985,7 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
   }
 
   if (tab === "reports") {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2">
-            Shift Reports
-          </h1>
-          <p className="text-gray-600">Recent shift handovers and summaries</p>
-        </div>
-
-        {reportRows.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {reportRows.map((r) => (
-              <div
-                key={String(r.id)}
-                className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition"
-              >
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-semibold">
-                    {r.shiftType ? String(r.shiftType) : "Shift"}
-                  </span>
-                  <span className="text-sm text-gray-600">
-                    {r.date ? new Date(String(r.date)).toLocaleDateString() : "—"}
-                  </span>
-                </div>
-                <p className="text-gray-900 font-medium mb-2">{r.summary ? String(r.summary) : "No summary"}</p>
-                {r.handoverNotes ? (
-                  <p className="text-sm text-gray-600 p-2 bg-gray-50 rounded border-l-2 border-yellow-400">
-                    📝 {String(r.handoverNotes)}
-                  </p>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg p-8 border border-gray-200 text-center text-gray-500">
-            No shift reports found.
-          </div>
-        )}
-      </div>
-    );
+    return <CaregiverReports />;
   }
 
   // Default: Dashboard tab
