@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSupabase } from "./supabaseClient";
 
+// Monotonic counter so every hook instance gets a UNIQUE realtime channel
+// topic. Supabase throws if two channels share a topic and `.on()` is called
+// after `.subscribe()`, which happens whenever two components watch the same
+// model at once (e.g. a portal shell + a child module both reading "tasks").
+let channelSeq = 0;
+
 interface LiveQueryOptions {
   /** Query string appended to /api/db/:model, e.g. "include=resident&take=50". */
   query?: string;
@@ -70,7 +76,9 @@ export function useLiveQuery<T = Record<string, unknown>>(
     const supabase = getSupabase();
     const watch = tablesKey ? tablesKey.split(",") : [];
     const channel =
-      supabase && watch.length ? supabase.channel(`live:${model}`) : null;
+      supabase && watch.length
+        ? supabase.channel(`live:${model}:${(channelSeq += 1)}`)
+        : null;
     if (channel) {
       watch.forEach((table) =>
         channel.on(

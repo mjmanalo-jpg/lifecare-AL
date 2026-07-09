@@ -4,9 +4,14 @@ import { useMemo, useState, useEffect } from "react";
 import {
   FileText, Plus, Download, Search, X, Eye, Trash2, PenLine,
   AlertTriangle, CheckCircle2, Clock, Sun, Sunset, Moon, RefreshCw,
+  ListChecks, BarChart3, TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import Swal from "sweetalert2";
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
+  PieChart, Pie, Cell, Legend,
+} from "recharts";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 
@@ -130,6 +135,7 @@ export default function CaregiverReports() {
   );
   const reports = useMemo<ShiftReport[]>(() => rows.map(toReport), [rows]);
 
+  const [view, setView] = useState<"list" | "analytics">("list");
   const [search, setSearch] = useState("");
   const [shiftFilter, setShiftFilter] = useState<"all" | ShiftType>("all");
   const [range, setRange] = useState<RangeKey>("all");
@@ -285,6 +291,24 @@ export default function CaregiverReports() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+            <button
+              onClick={() => setView("list")}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition ${
+                view === "list" ? "bg-yellow-400 text-black" : "bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              <ListChecks className="w-4 h-4" /> Reports
+            </button>
+            <button
+              onClick={() => setView("analytics")}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition border-l border-gray-300 ${
+                view === "analytics" ? "bg-yellow-400 text-black" : "bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" /> Analytics
+            </button>
+          </div>
           <button
             onClick={() => void refetch()}
             className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium"
@@ -316,6 +340,10 @@ export default function CaregiverReports() {
         <SummaryCard label="Awaiting Sign-off" value={summary.unsigned} icon={PenLine} tone="amber" />
       </div>
 
+      {view === "analytics" && <ReportsAnalytics reports={reports} nowTs={nowTs} />}
+
+      {view === "list" && (
+        <>
       {/* Filters */}
       <div className="space-y-3">
         <div className="relative">
@@ -478,6 +506,8 @@ export default function CaregiverReports() {
           </div>
         </div>
       )}
+        </>
+      )}
 
       {/* View modal */}
       {viewing && (
@@ -602,6 +632,123 @@ export default function CaregiverReports() {
   );
 }
 
+/* ── Analytics module ────────────────────────────────────────────────── */
+
+const SHIFT_ORDER: ShiftType[] = ["MORNING", "AFTERNOON", "NIGHT", "OVERNIGHT"];
+const SHIFT_COLORS = ["#f59e0b", "#f97316", "#6366f1", "#a855f7"];
+const SIGN_COLORS = ["#22c55e", "#f59e0b"];
+
+function ReportsAnalytics({ reports, nowTs }: { reports: ShiftReport[]; nowTs: number }) {
+  const a = useMemo(() => {
+    const total = reports.length;
+    const signed = reports.filter((r) => r.signedAt).length;
+    const incidents = reports.filter((r) => r.incidentsOccurred).length;
+
+    // Last 7 calendar days, oldest → newest.
+    const anchor = new Date(nowTs);
+    const daily: { day: string; Reports: number; Incidents: number }[] = [];
+    const idx = new Map<string, number>();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(anchor);
+      d.setDate(anchor.getDate() - i);
+      idx.set(d.toISOString().slice(0, 10), daily.length);
+      daily.push({ day: d.toLocaleDateString(undefined, { weekday: "short" }), Reports: 0, Incidents: 0 });
+    }
+    let last7 = 0;
+    reports.forEach((r) => {
+      if (!r.date) return;
+      const i = idx.get(new Date(r.date).toISOString().slice(0, 10));
+      if (i != null) {
+        daily[i].Reports += 1;
+        if (r.incidentsOccurred) daily[i].Incidents += 1;
+        last7 += 1;
+      }
+    });
+
+    const byShift = SHIFT_ORDER
+      .map((s) => ({ name: SHIFTS[s].label, value: reports.filter((r) => r.shiftType === s).length }))
+      .filter((d) => d.value > 0);
+
+    return {
+      total, signed, incidents,
+      signedRate: total ? Math.round((signed / total) * 100) : 0,
+      incidentRate: total ? Math.round((incidents / total) * 100) : 0,
+      avgPerDay: Math.round((last7 / 7) * 10) / 10,
+      daily, byShift,
+      signSplit: [
+        { name: "Signed", value: signed },
+        { name: "Unsigned", value: total - signed },
+      ],
+    };
+  }, [reports, nowTs]);
+
+  if (a.total === 0) {
+    return <div className="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-500">No report data to analyze yet.</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <SummaryCard label="Sign-off Rate" value={a.signedRate} suffix="%" icon={CheckCircle2} tone="gray" />
+        <SummaryCard label="Incident Rate" value={a.incidentRate} suffix="%" icon={AlertTriangle} tone="red" />
+        <SummaryCard label="Avg Reports / Day" value={a.avgPerDay} icon={TrendingUp} tone="blue" />
+        <SummaryCard label="Total Reports" value={a.total} icon={FileText} tone="amber" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ChartCard title="Reports & Incidents — Last 7 Days" className="lg:col-span-2">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={a.daily} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="day" fontSize={12} tickLine={false} axisLine={false} />
+              <YAxis allowDecimals={false} fontSize={12} tickLine={false} axisLine={false} width={28} />
+              <Tooltip cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+              <Legend />
+              <Bar dataKey="Reports" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Incidents" fill="#ef4444" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title="Distribution by Shift">
+          <ResponsiveContainer width="100%" height={240}>
+            <PieChart>
+              <Pie data={a.byShift} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                {a.byShift.map((_, i) => <Cell key={i} fill={SHIFT_COLORS[i % SHIFT_COLORS.length]} />)}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title="Sign-off Status">
+          <ResponsiveContainer width="100%" height={240}>
+            <PieChart>
+              <Pie data={a.signSplit} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={48} outerRadius={80} label>
+                {a.signSplit.map((_, i) => <Cell key={i} fill={SIGN_COLORS[i]} />)}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      </div>
+    </div>
+  );
+}
+
+function ChartCard({ title, className, children }: { title: string; className?: string; children: React.ReactNode }) {
+  return (
+    <div className={`bg-white rounded-lg border border-gray-200 p-4 ${className ?? ""}`}>
+      <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+        <BarChart3 className="w-4 h-4 text-yellow-500" /> {title}
+      </h3>
+      {children}
+    </div>
+  );
+}
+
 /* ── Presentational sub-components ───────────────────────────────────── */
 
 const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
@@ -611,7 +758,7 @@ const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
   amber: { wrap: "bg-amber-50 border-amber-200", icon: "text-amber-500", value: "text-amber-600" },
 };
 
-function SummaryCard({ label, value, icon: Icon, tone }: { label: string; value: number; icon: LucideIcon; tone: keyof typeof TONES }) {
+function SummaryCard({ label, value, icon: Icon, tone, suffix = "" }: { label: string; value: number; icon: LucideIcon; tone: keyof typeof TONES; suffix?: string }) {
   const t = TONES[tone];
   return (
     <div className={`p-4 rounded-lg border ${t.wrap}`}>
@@ -619,7 +766,7 @@ function SummaryCard({ label, value, icon: Icon, tone }: { label: string; value:
         <p className="text-xs sm:text-sm text-gray-600 font-semibold">{label}</p>
         <Icon className={`w-4 h-4 ${t.icon}`} />
       </div>
-      <p className={`text-2xl sm:text-3xl font-bold mt-1 ${t.value}`}>{value}</p>
+      <p className={`text-2xl sm:text-3xl font-bold mt-1 ${t.value}`}>{value}{suffix}</p>
     </div>
   );
 }

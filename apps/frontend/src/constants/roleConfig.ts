@@ -10,7 +10,6 @@ import {
   User,
   MessageSquare,
   DollarSign,
-  Target,
   Palette,
 } from "lucide-react";
 
@@ -123,11 +122,8 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Daily Report", icon: CheckCircle, route: "/family/report" },
       { name: "Alerts", icon: AlertTriangle, route: "/family/alerts" },
       { name: "Messages", icon: MessageSquare, route: "/family/messages" },
-      { name: "Photos", icon: ShieldCheck, route: "/family/photos" },
       { name: "Appointments", icon: Clock, route: "/family/appointments" },
       { name: "Billing", icon: DollarSign, route: "/family/expenses" },
-      { name: "Care Goals", icon: Target, route: "/family/goals" },
-      { name: "Health Timeline", icon: Activity, route: "/family/timeline" },
     ],
   },
 };

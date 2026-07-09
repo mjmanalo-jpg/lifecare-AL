@@ -1,0 +1,602 @@
+"use client";
+
+import { useMemo, useState, useEffect } from "react";
+import {
+  Users, Search, X, AlertTriangle, Pill, HeartPulse, Activity, RefreshCw,
+  ListChecks, BarChart3, Trash2, Pencil, Heart, Droplets, Wind, Thermometer,
+  type LucideIcon,
+} from "lucide-react";
+import Swal from "sweetalert2";
+import {
+  ResponsiveContainer, PieChart, Pie, Cell, Legend, Tooltip, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid,
+} from "recharts";
+import { useLiveQuery } from "@/lib/useLiveQuery";
+import { adaptResident, humanize } from "@/lib/adapters";
+import { updateRecord, deleteRecord } from "@/lib/api";
+
+/* ── Types ───────────────────────────────────────────────────────────── */
+
+type CareLevel = "INDEPENDENT" | "ASSISTED" | "MEMORY" | "SKILLED";
+
+interface VitalRow { id: string; type: string; value: string; unit: string; recordedAt: string | null; residentId: string | null; room: string | null }
+interface MedVM { name: string; dosage: string; frequency: string; status: string }
+interface IncidentVM { type: string; severity: string; date: string | null; resolved: boolean; description: string }
+interface RecordVM {
+  id: string;
+  name: string;
+  room: string;
+  age: number | string;
+  careLevel: CareLevel;
+  alertsCount: number;
+  allergies: string;
+  medicalHistory: string;
+  conditions: string[];
+  notes: string;
+  meds: MedVM[];
+  incidents: IncidentVM[];
+  vitalsLatest: Record<string, { value: string; unit: string; recordedAt: string | null }>;
+  lastCheckIn: string | null;
+}
+interface EditForm { name: string; room: string; careLevel: CareLevel; allergies: string; medicalHistory: string; notes: string }
+
+/* ── Static metadata ─────────────────────────────────────────────────── */
+
+const CARE_ORDER: CareLevel[] = ["INDEPENDENT", "ASSISTED", "MEMORY", "SKILLED"];
+const CARE_BADGE: Record<CareLevel, string> = {
+  INDEPENDENT: "bg-green-100 text-green-800",
+  ASSISTED: "bg-blue-100 text-blue-800",
+  MEMORY: "bg-purple-100 text-purple-800",
+  SKILLED: "bg-red-100 text-red-800",
+};
+const CARE_COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#ef4444"];
+const CARD_VITALS: { key: string; label: string; icon: LucideIcon; color: string }[] = [
+  { key: "HEART_RATE", label: "HR", icon: Heart, color: "text-red-500" },
+  { key: "BLOOD_PRESSURE", label: "BP", icon: Droplets, color: "text-blue-500" },
+  { key: "TEMPERATURE", label: "Temp", icon: Thermometer, color: "text-orange-500" },
+  { key: "OXYGEN", label: "O₂", icon: Wind, color: "text-green-500" },
+];
+const SEVERITY_BADGE: Record<string, string> = {
+  critical: "bg-red-100 text-red-700", high: "bg-orange-100 text-orange-700",
+  medium: "bg-yellow-100 text-yellow-700", low: "bg-blue-100 text-blue-700",
+};
+
+/* ── Helpers ─────────────────────────────────────────────────────────── */
+
+const asStr = (v: unknown): string => (v == null ? "" : String(v));
+const severityTier = (s: string): "critical" | "high" | "medium" | "low" =>
+  s === "CRITICAL" ? "critical" : s === "SEVERE" ? "high" : s === "MODERATE" ? "medium" : "low";
+const newer = (a: string | null, b: string | null) => (!b ? true : !a ? false : new Date(a).getTime() > new Date(b).getTime());
+
+function relTime(iso: string | null, nowTs: number): string {
+  if (!iso || !nowTs) return "—";
+  const m = Math.round((nowTs - new Date(iso).getTime()) / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
+/* ── Component ───────────────────────────────────────────────────────── */
+
+export default function NurseRecords() {
+  const { data: residentRows, loading, error, refetch } = useLiveQuery<Record<string, unknown>>(
+    "residents", { query: "include=incidents,medications&take=300", tables: ["Resident", "Incident", "Medication"] }
+  );
+  const { data: vitalRows, refetch: refetchVitals } = useLiveQuery<Record<string, unknown>>(
+    "vitals", { query: "include=resident&take=500", tables: ["VitalsLog"] }
+  );
+
+  const [nowTs, setNowTs] = useState(0);
+  useEffect(() => {
+    const tick = () => setNowTs(Date.now());
+    tick();
+    const t = setInterval(tick, 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const [view, setView] = useState<"list" | "analytics">("list");
+  const [search, setSearch] = useState("");
+  const [careFilter, setCareFilter] = useState<"all" | CareLevel>("all");
+  const [sort, setSort] = useState<"name" | "room" | "alerts">("name");
+  const [perPage, setPerPage] = useState(10);
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [viewing, setViewing] = useState<RecordVM | null>(null);
+  const [editing, setEditing] = useState<RecordVM | null>(null);
+  const [form, setForm] = useState<EditForm>({ name: "", room: "", careLevel: "INDEPENDENT", allergies: "", medicalHistory: "", notes: "" });
+  const [saving, setSaving] = useState(false);
+
+  const vitalIndex = useMemo(() => {
+    const byId = new Map<string, VitalRow[]>();
+    const byRoom = new Map<string, VitalRow[]>();
+    const push = (m: Map<string, VitalRow[]>, k: string, v: VitalRow) => { const a = m.get(k); if (a) a.push(v); else m.set(k, [v]); };
+    vitalRows.forEach((row) => {
+      const res = row.resident as { roomNumber?: string } | undefined;
+      const v: VitalRow = {
+        id: String(row.id), type: asStr(row.type), value: asStr(row.value), unit: asStr(row.unit),
+        recordedAt: row.recordedAt ? String(row.recordedAt) : null,
+        residentId: row.residentId ? String(row.residentId) : null, room: res?.roomNumber ?? null,
+      };
+      if (v.residentId) push(byId, v.residentId, v);
+      if (v.room) push(byRoom, v.room, v);
+    });
+    return { byId, byRoom };
+  }, [vitalRows]);
+
+  const records = useMemo<RecordVM[]>(() => residentRows.map((row) => {
+    const r = adaptResident(row);
+    const rawMeds = (r.raw?.medications ?? []) as Array<Record<string, unknown>>;
+    const rawIncidents = (r.raw?.incidents ?? []) as Array<Record<string, unknown>>;
+    const merged = new Map<string, VitalRow>();
+    [...(vitalIndex.byId.get(r.id) ?? []), ...(vitalIndex.byRoom.get(r.room) ?? [])].forEach((v) => merged.set(v.id, v));
+    const vitalsLatest: RecordVM["vitalsLatest"] = {};
+    let lastCheckIn: string | null = null;
+    merged.forEach((v) => {
+      const cur = vitalsLatest[v.type];
+      if (!cur || newer(v.recordedAt, cur.recordedAt)) vitalsLatest[v.type] = { value: v.value, unit: v.unit, recordedAt: v.recordedAt };
+      if (newer(v.recordedAt, lastCheckIn)) lastCheckIn = v.recordedAt;
+    });
+    return {
+      id: r.id, name: r.name, room: r.room, age: r.age ?? "—", careLevel: r.careLevel, alertsCount: r.alertsCount,
+      allergies: r.allergies || "", medicalHistory: r.medicalHistory || "",
+      conditions: r.medicalHistory ? r.medicalHistory.split(",").map((c) => c.trim()).filter(Boolean) : [],
+      notes: r.notes || "",
+      meds: rawMeds.map((m) => ({ name: asStr(m.name), dosage: asStr(m.dosage), frequency: asStr(m.frequency), status: asStr(m.status) || "ACTIVE" })),
+      incidents: rawIncidents.map((i) => ({
+        type: humanize(asStr(i.incidentType)) || "Incident", severity: severityTier(asStr(i.severity)),
+        date: i.incidentDate ? String(i.incidentDate) : null, resolved: Boolean(i.resolvedAt), description: asStr(i.description),
+      })),
+      vitalsLatest, lastCheckIn,
+    };
+  }), [residentRows, vitalIndex]);
+
+  const stats = useMemo(() => ({
+    total: records.length,
+    withAlerts: records.filter((r) => r.alertsCount > 0).length,
+    onMeds: records.filter((r) => r.meds.some((m) => m.status === "ACTIVE")).length,
+    skilled: records.filter((r) => r.careLevel === "SKILLED" || r.careLevel === "MEMORY").length,
+    checked: records.filter((r) => r.lastCheckIn && nowTs && nowTs - new Date(r.lastCheckIn).getTime() < 86_400_000).length,
+  }), [records, nowTs]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return records.filter((r) => {
+      if (q && !r.name.toLowerCase().includes(q) && !r.room.toLowerCase().includes(q)) return false;
+      if (careFilter !== "all" && r.careLevel !== careFilter) return false;
+      return true;
+    }).sort((a, b) =>
+      sort === "alerts" ? b.alertsCount - a.alertsCount
+        : sort === "room" ? a.room.localeCompare(b.room, undefined, { numeric: true })
+          : a.name.localeCompare(b.name)
+    );
+  }, [records, search, careFilter, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const start = (page - 1) * perPage;
+  const paginated = filtered.slice(start, start + perPage);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset paging on filter change
+    setPage(1);
+  }, [search, careFilter, sort, perPage]);
+
+  const pageAllSelected = paginated.length > 0 && paginated.every((r) => selected.has(r.id));
+  const toggleAll = () => {
+    const next = new Set(selected);
+    if (pageAllSelected) paginated.forEach((r) => next.delete(r.id));
+    else paginated.forEach((r) => next.add(r.id));
+    setSelected(next);
+  };
+  const toggleOne = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  };
+
+  const bulkDelete = async () => {
+    if (selected.size === 0) return;
+    const res = await Swal.fire({
+      title: "Delete Selected Records?", text: `Permanently delete ${selected.size} resident record(s)?`,
+      icon: "warning", showCancelButton: true, confirmButtonColor: "#dc2626", cancelButtonColor: "#6b7280", confirmButtonText: "Delete",
+    });
+    if (!res.isConfirmed) return;
+    const ids = Array.from(selected);
+    try {
+      await Promise.all(ids.map((id) => deleteRecord("residents", id)));
+      setSelected(new Set());
+      await refetch();
+      Swal.fire({ title: "Deleted", text: `${ids.length} record(s) removed.`, icon: "success", timer: 1400, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: "Delete Failed", text: err instanceof Error ? err.message : "Could not delete records.", icon: "error" });
+    }
+  };
+
+  const openEdit = (r: RecordVM) => {
+    setForm({ name: r.name, room: r.room, careLevel: r.careLevel, allergies: r.allergies, medicalHistory: r.medicalHistory, notes: r.notes });
+    setEditing(r);
+    setViewing(null);
+  };
+  const saveEdit = async () => {
+    if (!editing) return;
+    setSaving(true);
+    const trimmed = form.name.trim();
+    const sp = trimmed.indexOf(" ");
+    try {
+      await updateRecord("residents", editing.id, {
+        firstName: sp === -1 ? trimmed : trimmed.slice(0, sp),
+        lastName: sp === -1 ? "" : trimmed.slice(sp + 1),
+        roomNumber: form.room,
+        careLevel: form.careLevel,
+        allergies: form.allergies,
+        medicalHistory: form.medicalHistory,
+        notes: form.notes,
+      });
+      await refetch();
+      setEditing(null);
+      Swal.fire({ title: "Saved", icon: "success", timer: 1300, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: "Update Failed", text: err instanceof Error ? err.message : "Could not update record.", icon: "error" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const refreshAll = () => { void refetch(); void refetchVitals(); };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+            <Users className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Resident Records
+          </h1>
+          <p className="text-gray-600 flex items-center gap-2 text-sm">
+            <span className="inline-flex items-center gap-1 text-green-600"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Live</span>
+            Full clinical records &amp; management
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {selected.size > 0 && (
+            <button onClick={() => void bulkDelete()} className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition text-sm font-medium">
+              <Trash2 className="w-4 h-4" /> Delete ({selected.size})
+            </button>
+          )}
+          <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden bg-white">
+            <button onClick={() => setView("list")} className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition ${view === "list" ? "bg-yellow-400 text-black" : "text-gray-700 hover:bg-gray-50"}`}><ListChecks className="w-4 h-4" /> Records</button>
+            <button onClick={() => setView("analytics")} className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition border-l border-gray-300 ${view === "analytics" ? "bg-yellow-400 text-black" : "text-gray-700 hover:bg-gray-50"}`}><BarChart3 className="w-4 h-4" /> Analytics</button>
+          </div>
+          <button onClick={refreshAll} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
+            <RefreshCw className="w-4 h-4" /> Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+        <Stat label="Total Records" value={stats.total} icon={Users} tone="gray" />
+        <Stat label="With Alerts" value={stats.withAlerts} icon={AlertTriangle} tone="red" />
+        <Stat label="On Medications" value={stats.onMeds} icon={Pill} tone="blue" />
+        <Stat label="Skilled / Memory" value={stats.skilled} icon={Activity} tone="purple" />
+        <Stat label="Checked (24h)" value={stats.checked} icon={HeartPulse} tone="green" />
+      </div>
+
+      {view === "analytics" && <RecordsAnalytics records={records} />}
+
+      {view === "list" && (
+        <>
+          {/* Filters */}
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+              <input type="text" placeholder="Search by name or room…" value={search} onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none bg-white text-gray-900" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <select value={careFilter} onChange={(e) => setCareFilter(e.target.value as "all" | CareLevel)} className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-yellow-400 outline-none">
+                <option value="all">All Care Levels</option>
+                {CARE_ORDER.map((c) => <option key={c} value={c}>{humanize(c)}</option>)}
+              </select>
+              <select value={sort} onChange={(e) => setSort(e.target.value as "name" | "room" | "alerts")} className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-yellow-400 outline-none">
+                <option value="name">Sort: Name</option>
+                <option value="room">Sort: Room</option>
+                <option value="alerts">Sort: Most Alerts</option>
+              </select>
+              <select value={perPage} onChange={(e) => setPerPage(parseInt(e.target.value))} className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-yellow-400 outline-none">
+                <option value={10}>10 per page</option>
+                <option value={25}>25 per page</option>
+                <option value={50}>50 per page</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
+            <table className="w-full min-w-[720px]">
+              <thead className="bg-gradient-to-r from-gray-900 to-black text-white">
+                <tr>
+                  <th className="px-4 py-3 text-left"><input type="checkbox" checked={pageAllSelected} onChange={toggleAll} className="w-4 h-4 rounded cursor-pointer" /></th>
+                  <th className="px-4 py-3 text-left font-semibold">Name</th>
+                  <th className="px-4 py-3 text-left font-semibold">Room</th>
+                  <th className="px-4 py-3 text-left font-semibold">Age</th>
+                  <th className="px-4 py-3 text-left font-semibold">Care Level</th>
+                  <th className="px-4 py-3 text-left font-semibold">Meds</th>
+                  <th className="px-4 py-3 text-left font-semibold">Alerts</th>
+                  <th className="px-4 py-3 text-left font-semibold">Last Vitals</th>
+                  <th className="px-4 py-3 text-left font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && records.length === 0 ? (
+                  <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-500">Loading records…</td></tr>
+                ) : error ? (
+                  <tr><td colSpan={9} className="px-4 py-8 text-center text-red-600">Failed to load: {error}</td></tr>
+                ) : paginated.length > 0 ? (
+                  paginated.map((r, idx) => (
+                    <tr key={r.id} className={`border-t border-gray-200 hover:bg-yellow-50 transition ${idx % 2 ? "bg-gray-50" : "bg-white"}`}>
+                      <td className="px-4 py-3"><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleOne(r.id)} className="w-4 h-4 rounded cursor-pointer" /></td>
+                      <td className="px-4 py-3 font-semibold text-gray-900">{r.name}</td>
+                      <td className="px-4 py-3 text-gray-700">{r.room}</td>
+                      <td className="px-4 py-3 text-gray-700">{r.age}</td>
+                      <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-semibold ${CARE_BADGE[r.careLevel]}`}>{humanize(r.careLevel)}</span></td>
+                      <td className="px-4 py-3 text-gray-700">{r.meds.length}</td>
+                      <td className="px-4 py-3">{r.alertsCount > 0 ? <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-bold">{r.alertsCount}</span> : <span className="text-gray-400">—</span>}</td>
+                      <td className="px-4 py-3 text-gray-600 text-sm whitespace-nowrap">{r.lastCheckIn ? relTime(r.lastCheckIn, nowTs) : "—"}</td>
+                      <td className="px-4 py-3">
+                        <button onClick={() => setViewing(r)} className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm">View</button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-500">No records match your filters.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="text-sm text-gray-600">
+              Showing {filtered.length ? start + 1 : 0}-{Math.min(start + perPage, filtered.length)} of {filtered.length}
+              {selected.size > 0 && ` • ${selected.size} selected`}
+            </div>
+            {filtered.length > perPage && (
+              <div className="flex items-center gap-2">
+                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium">Previous</button>
+                <span className="px-3 py-2 text-sm font-medium text-gray-700">Page {page} / {totalPages}</span>
+                <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium">Next</button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* View modal */}
+      {viewing && <RecordModal r={viewing} nowTs={nowTs} onClose={() => setViewing(null)} onEdit={() => openEdit(viewing)} />}
+
+      {/* Edit modal */}
+      {editing && (
+        <Modal title="Edit Record" onClose={() => setEditing(null)}>
+          <div className="p-6 sm:p-8 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input label="Full Name" value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} />
+              <Input label="Room Number" value={form.room} onChange={(v) => setForm((f) => ({ ...f, room: v }))} />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Care Level</label>
+              <select value={form.careLevel} onChange={(e) => setForm((f) => ({ ...f, careLevel: e.target.value as CareLevel }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-yellow-400 outline-none">
+                {CARE_ORDER.map((c) => <option key={c} value={c}>{humanize(c)}</option>)}
+              </select>
+            </div>
+            <Textarea label="Allergies" value={form.allergies} onChange={(v) => setForm((f) => ({ ...f, allergies: v }))} />
+            <Textarea label="Chronic Conditions (comma-separated)" value={form.medicalHistory} onChange={(v) => setForm((f) => ({ ...f, medicalHistory: v }))} />
+            <Textarea label="Care Notes" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} />
+            <p className="text-xs text-gray-500">Medications are managed as separate clinical records and are not edited here.</p>
+          </div>
+          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex items-center justify-between">
+            <button onClick={() => setEditing(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
+            <button onClick={() => void saveEdit()} disabled={saving} className="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-60">{saving ? "Saving…" : "Save Changes"}</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/* ── Detail modal ────────────────────────────────────────────────────── */
+
+function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number; onClose: () => void; onEdit: () => void }) {
+  return (
+    <Modal title={r.name} subtitle={`Room ${r.room} • Age ${r.age} • ${humanize(r.careLevel)}`} onClose={onClose}>
+      <div className="p-6 sm:p-8 space-y-6">
+        {r.allergies && (
+          <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
+            <p className="text-sm font-semibold text-red-700 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Allergies</p>
+            <p className="text-gray-900 text-sm mt-1">{r.allergies}</p>
+          </div>
+        )}
+        <div>
+          <h3 className="font-bold text-gray-900 mb-3">Latest Vital Signs</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {CARD_VITALS.map(({ key, label, icon: Icon, color }) => {
+              const v = r.vitalsLatest[key];
+              return (
+                <div key={key} className="bg-gray-50 p-3 rounded border border-gray-200">
+                  <p className="text-xs text-gray-600 font-semibold flex items-center gap-1"><Icon className={`w-3 h-3 ${color}`} />{label}</p>
+                  <p className="text-xl font-bold text-gray-900 mt-1">{v ? v.value : "—"}</p>
+                  <p className="text-xs text-gray-500">{v?.unit || ""} {v?.recordedAt ? `• ${relTime(v.recordedAt, nowTs)}` : ""}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h3 className="font-bold text-gray-900 mb-3">Medications ({r.meds.length})</h3>
+            <div className="space-y-2">
+              {r.meds.length ? r.meds.map((m, i) => (
+                <div key={i} className="flex items-center justify-between gap-2 p-2 bg-blue-50 rounded border border-blue-200">
+                  <span className="text-gray-900 text-sm">💊 {m.name} <span className="text-gray-500">{m.dosage}</span></span>
+                  <span className="text-xs text-gray-600">{m.frequency}</span>
+                </div>
+              )) : <p className="text-sm text-gray-500">No active medications.</p>}
+            </div>
+          </div>
+          <div>
+            <h3 className="font-bold text-gray-900 mb-3">Conditions</h3>
+            <div className="space-y-2">
+              {r.conditions.length ? r.conditions.map((c, i) => (
+                <div key={i} className="flex items-center gap-2 p-2 bg-purple-50 rounded border border-purple-200"><span className="text-purple-600">📋</span><span className="text-gray-900 text-sm">{c}</span></div>
+              )) : <p className="text-sm text-gray-500">None recorded.</p>}
+            </div>
+          </div>
+        </div>
+        {r.incidents.length > 0 && (
+          <div>
+            <h3 className="font-bold text-gray-900 mb-3">Recent Incidents</h3>
+            <div className="space-y-2">
+              {r.incidents.slice(0, 5).map((i, idx) => (
+                <div key={idx} className={`p-3 rounded-lg border ${i.resolved ? "bg-gray-50 border-gray-200" : "bg-red-50 border-red-200"}`}>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="font-medium text-gray-900 text-sm">{i.type}</span>
+                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${SEVERITY_BADGE[i.severity]}`}>{i.severity.toUpperCase()}</span>
+                  </div>
+                  <p className="text-xs text-gray-600">{i.description}</p>
+                  <p className="text-xs text-gray-400 mt-1">{i.date ? new Date(i.date).toLocaleString() : "—"} • {i.resolved ? "Resolved" : "Open"}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {r.notes && (
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+            <h3 className="font-bold text-gray-900 mb-1">Care Notes</h3>
+            <p className="text-gray-900 text-sm">{r.notes}</p>
+          </div>
+        )}
+      </div>
+      <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex items-center justify-between">
+        <button onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
+        <button onClick={onEdit} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition"><Pencil className="w-4 h-4" /> Edit Record</button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ── Analytics ───────────────────────────────────────────────────────── */
+
+function RecordsAnalytics({ records }: { records: RecordVM[] }) {
+  const a = useMemo(() => ({
+    byCare: CARE_ORDER.map((c) => ({ name: humanize(c), value: records.filter((r) => r.careLevel === c).length })).filter((d) => d.value > 0),
+    alertsByCare: CARE_ORDER.map((c) => ({ name: humanize(c), Alerts: records.filter((r) => r.careLevel === c).reduce((s, r) => s + r.alertsCount, 0) })),
+    medsByCare: CARE_ORDER.map((c) => ({ name: humanize(c), Meds: records.filter((r) => r.careLevel === c).reduce((s, r) => s + r.meds.length, 0) })),
+  }), [records]);
+
+  if (records.length === 0) return <div className="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-500">No record data to analyze.</div>;
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <ChartCard title="Care Level Distribution">
+        <ResponsiveContainer width="100%" height={260}>
+          <PieChart>
+            <Pie data={a.byCare} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label>
+              {a.byCare.map((_, i) => <Cell key={i} fill={CARE_COLORS[i % CARE_COLORS.length]} />)}
+            </Pie>
+            <Tooltip /><Legend />
+          </PieChart>
+        </ResponsiveContainer>
+      </ChartCard>
+      <ChartCard title="Open Alerts by Care Level">
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={a.alertsByCare} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+            <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
+            <YAxis allowDecimals={false} fontSize={12} tickLine={false} axisLine={false} width={28} />
+            <Tooltip cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+            <Bar dataKey="Alerts" fill="#ef4444" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartCard>
+      <ChartCard title="Medications by Care Level" className="lg:col-span-2">
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={a.medsByCare} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+            <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
+            <YAxis allowDecimals={false} fontSize={12} tickLine={false} axisLine={false} width={28} />
+            <Tooltip cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+            <Bar dataKey="Meds" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </ChartCard>
+    </div>
+  );
+}
+
+/* ── Sub-components ──────────────────────────────────────────────────── */
+
+const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
+  gray: { wrap: "bg-white border-gray-200", icon: "text-gray-500", value: "text-gray-900" },
+  blue: { wrap: "bg-blue-50 border-blue-200", icon: "text-blue-500", value: "text-blue-600" },
+  red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
+  green: { wrap: "bg-green-50 border-green-200", icon: "text-green-500", value: "text-green-600" },
+  purple: { wrap: "bg-purple-50 border-purple-200", icon: "text-purple-500", value: "text-purple-600" },
+};
+
+function Stat({ label, value, icon: Icon, tone }: { label: string; value: number; icon: LucideIcon; tone: keyof typeof TONES }) {
+  const t = TONES[tone];
+  return (
+    <div className={`p-4 rounded-lg border ${t.wrap}`}>
+      <div className="flex items-center justify-between">
+        <p className="text-xs sm:text-sm text-gray-600 font-semibold">{label}</p>
+        <Icon className={`w-4 h-4 ${t.icon}`} />
+      </div>
+      <p className={`text-2xl sm:text-3xl font-bold mt-1 ${t.value}`}>{value}</p>
+    </div>
+  );
+}
+
+function ChartCard({ title, className, children }: { title: string; className?: string; children: React.ReactNode }) {
+  return (
+    <div className={`bg-white rounded-lg border border-gray-200 p-4 ${className ?? ""}`}>
+      <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><BarChart3 className="w-4 h-4 text-yellow-500" /> {title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function Modal({ title, subtitle, onClose, children }: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto">
+        <div className="sticky top-0 bg-gradient-to-r from-gray-900 to-black text-white p-5 sm:p-6 flex items-center justify-between z-10 border-b border-yellow-300">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold">{title}</h2>
+            {subtitle && <p className="text-gray-300 text-sm">{subtitle}</p>}
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg transition"><X className="w-6 h-6" /></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Input({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label className="block text-sm font-semibold text-gray-700 mb-1">{label}</label>
+      <input type="text" value={value} onChange={(e) => onChange(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none" />
+    </div>
+  );
+}
+
+function Textarea({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label className="block text-sm font-semibold text-gray-700 mb-1">{label}</label>
+      <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none resize-y" />
+    </div>
+  );
+}
