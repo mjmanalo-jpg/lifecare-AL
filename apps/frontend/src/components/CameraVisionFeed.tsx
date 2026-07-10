@@ -383,27 +383,26 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const isSpeakingRef = useRef<boolean>(false);
   const lastSpokenRef = useRef<string>("");
+  const panTiltRef = useRef({ pan: 0, tilt: 0 });
 
   // Tapo PTZ Control Handler
-  const moveTapoCamera = useCallback(async (pan: number, tilt: number) => {
-    // Clamp to valid range
+  const moveTapoCamera = useCallback((pan: number, tilt: number) => {
     const clampedPan = Math.max(-100, Math.min(100, pan));
     const clampedTilt = Math.max(-100, Math.min(100, tilt));
 
+    panTiltRef.current = { pan: clampedPan, tilt: clampedTilt };
     setTapoPan(clampedPan);
     setTapoTilt(clampedTilt);
 
-    // Send to Tapo PTZ endpoint
-    try {
-      await fetch("/api/tapo-ptz", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pan: clampedPan,
-          tilt: clampedTilt,
-        }),
-      }).catch(() => {}); // Demo mode: just updates state, ignore any errors
-    } catch (_) {}
+    // Send to Tapo PTZ endpoint (non-blocking)
+    fetch("/api/tapo-ptz", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pan: clampedPan,
+        tilt: clampedTilt,
+      }),
+    }).catch(() => {});
   }, []);
 
   // Keyboard controls for ASWD
@@ -437,31 +436,35 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
 
   // Process continuous movement from held keys
   useEffect(() => {
-    let newPan = tapoPan;
-    let newTilt = tapoTilt;
+    if (keysPressed.size === 0) return;
 
-    const interval = setInterval(async () => {
-      if (keysPressed.size === 0) return;
+    const interval = setInterval(() => {
+      let { pan, tilt } = panTiltRef.current;
 
-      if (keysPressed.has("a")) newPan -= 5;  // Pan left
-      if (keysPressed.has("d")) newPan += 5;  // Pan right
-      if (keysPressed.has("w")) newTilt -= 5; // Tilt up
-      if (keysPressed.has("s")) newTilt += 5; // Tilt down
+      if (keysPressed.has("a")) pan -= 5;  // Pan left
+      if (keysPressed.has("d")) pan += 5;  // Pan right
+      if (keysPressed.has("w")) tilt -= 5; // Tilt up
+      if (keysPressed.has("s")) tilt += 5; // Tilt down
 
-      newPan = Math.max(-100, Math.min(100, newPan));
-      newTilt = Math.max(-100, Math.min(100, newTilt));
+      pan = Math.max(-100, Math.min(100, pan));
+      tilt = Math.max(-100, Math.min(100, tilt));
 
-      setTapoPan(newPan);
-      setTapoTilt(newTilt);
+      panTiltRef.current = { pan, tilt };
+      setTapoPan(pan);
+      setTapoTilt(tilt);
 
       // Send PTZ command to API
       if (activeCamera === "tapo") {
-        await moveTapoCamera(newPan, newTilt);
+        fetch("/api/tapo-ptz", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pan, tilt }),
+        }).catch(() => {});
       }
-    }, 50); // 50ms = smooth 20fps movement
+    }, 100); // 100ms = 10fps smooth movement
 
     return () => clearInterval(interval);
-  }, [keysPressed, activeCamera, moveTapoCamera, tapoPan, tapoTilt]);
+  }, [keysPressed, activeCamera]);
 
   const stopSpeaking = useCallback(() => {
     if (audioRef.current) {
