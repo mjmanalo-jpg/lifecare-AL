@@ -918,13 +918,13 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
 
       // RPPG Blood Pressure Extraction: Extract facial color variation for BP estimation
       if (canvasRef.current && captureRef.current) {
-        const ctx = captureRef.current.getContext("2d");
+        const ctx = captureRef.current.getContext("2d", { willReadFrequently: true });
         if (ctx) {
           // Get the current video frame (capture latest)
           const src = activeCamera === "tapo" ? tapoImgRef.current : imgRef.current;
           if (src && src.complete && src.naturalHeight > 0) {
             try {
-              const tempCtx = captureRef.current.getContext("2d");
+              const tempCtx = captureRef.current.getContext("2d", { willReadFrequently: true });
               if (tempCtx) {
                 tempCtx.drawImage(src, 0, 0, captureRef.current.width, captureRef.current.height);
 
