@@ -621,7 +621,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   }
 
   if (tab === "records") {
-    return <NurseRecordsWithCallBells />;
+    return <NurseRecords />;
   }
 
   // Default: Dashboard tab
