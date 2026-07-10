@@ -60,7 +60,7 @@ export async function GET(
   // No real database yet → serve demo data so the UI is fully populated.
   // Self-service roles are still scoped to the demo relative so the boundary shows.
   if (!isDbConfigured()) {
-    const rows = scopeDemoRows(model, DEMO[model] ?? [], session.role);
+    const rows = scopeDemoRows(model, DEMO[model] ?? [], session.role, session.userId);
     return NextResponse.json({ data: rows, demo: true });
   }
 

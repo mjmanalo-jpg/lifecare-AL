@@ -92,8 +92,12 @@ const shiftReports = [
 ];
 
 const notifications = [
-  { id: "n1", type: "VITAL_ALERT", title: "Vitals recorded", message: "New vitals logged for Arthur Pendelton.", isRead: false, createdAt: iso(1 * H) },
-  { id: "n2", type: "MESSAGE", title: "New message", message: "You have a new message from the care team.", isRead: false, createdAt: iso(3 * H) },
+  { id: "n1", userId: "u1", type: "VITAL_ALERT", title: "Arthur's Vitals Alert", message: "Heart rate elevated to 104 bpm during therapy. Now stable.", isRead: false, createdAt: iso(1 * H) },
+  { id: "n2", userId: "u1", type: "MEDICATION_REMINDER", title: "Medication Due", message: "Blood pressure medication due in 15 minutes.", isRead: false, createdAt: iso(0.5 * H) },
+  { id: "n3", userId: "u2", type: "CALL_BELL", title: "Room 302 Call Bell", message: "Arthur Pendelton triggered the room call bell. Assistance needed.", isRead: false, createdAt: iso(0.15 * H) },
+  { id: "n4", userId: "u2", type: "TASK_ASSIGNMENT", title: "Morning Wellness Check", message: "3 residents awaiting morning vitals assessment.", isRead: false, createdAt: iso(2 * H) },
+  { id: "n5", userId: "u3", type: "INCIDENT_REPORT", title: "Incident Logged", message: "Caregiver logged a call bell response event in Room 305.", isRead: false, createdAt: iso(1.5 * H) },
+  { id: "n6", userId: "u3", type: "SHIFT_REMINDER", title: "Clock-In Reminder", message: "Afternoon shift starts in 30 minutes.", isRead: true, createdAt: iso(3 * H) },
 ];
 
 const callBells = [

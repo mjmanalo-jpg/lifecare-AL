@@ -157,8 +157,12 @@ function getDemoNotificationsForRole(role: string): Row[] {
   }
 }
 
-export function scopeDemoRows(modelKey: string, rows: Row[], role: string): Row[] {
-  if (modelKey === "notifications") return getDemoNotificationsForRole(role);
+export function scopeDemoRows(modelKey: string, rows: Row[], role: string, userId?: string): Row[] {
+  if (modelKey === "notifications") {
+    // Use actual demo notifications filtered by userId for staff, or role-based for self-service
+    if (role === "FAMILY" || role === "RESIDENT") return getDemoNotificationsForRole(role);
+    return userId ? rows.filter((n) => (n as { userId?: string }).userId === userId) : rows;
+  }
   if (role !== "FAMILY" && role !== "RESIDENT") return rows;
   if (modelKey === "residents") return rows.filter((r) => r.id === DEMO_RESIDENT_ID);
   if (RESIDENT_SCOPED.has(modelKey) || modelKey === "payments") return rows.filter(belongsToDemoResident);
