@@ -7,6 +7,7 @@ import { PATH_TO_ROLE, ROUTE_TO_TAB, Role } from "@/constants/roleConfig";
 import NursePortalContent from "@/components/portal/views/NursePortalContent";
 import CaregiverPortalContent from "@/components/portal/views/CaregiverPortalContent";
 import FamilyPortalContent from "@/components/portal/views/FamilyPortalContent";
+import ResidentPortalContent from "@/components/portal/views/ResidentPortalContent";
 import SuperAdminPortalContent from "@/components/portal/views/SuperAdminPortalContent";
 import FacilityAdminPortalContent from "@/components/portal/views/FacilityAdminPortalContent";
 import { useEffect, useState } from "react";
@@ -52,8 +53,9 @@ export default function RolePortalPage() {
       {/* Clinical roles share the nurse portal content. */}
       {(userRole === "NURSE" || userRole === "PHYSICIAN") && <NursePortalContent tab={tabParam || "dashboard"} />}
       {userRole === "CAREGIVER" && <CaregiverPortalContent tab={tabParam || "dashboard"} />}
-      {/* Resident/Patient sees the self-care (family) portal, scoped to their own record. */}
-      {(userRole === "FAMILY" || userRole === "RESIDENT") && <FamilyPortalContent tab={tabParam || "dashboard"} />}
+      {/* Resident/Patient sees the customized resident dashboard, family sees family view */}
+      {userRole === "FAMILY" && <FamilyPortalContent tab={tabParam || "dashboard"} />}
+      {userRole === "RESIDENT" && <ResidentPortalContent tab={tabParam || "dashboard"} />}
       {/* Super Admin sees the full operations portal. */}
       {userRole === "SUPERADMIN" && (
         <SuperAdminPortalContent tab={tabParam || "dashboard"} />

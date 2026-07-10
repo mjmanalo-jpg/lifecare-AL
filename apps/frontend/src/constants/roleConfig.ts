@@ -214,7 +214,6 @@ export const ROLES: Record<Role, RoleDetails> = {
     sidebarLinks: [
       { name: "My Dashboard", icon: Grid, route: "/resident/dashboard" },
       { name: "Daily Report", icon: CheckCircle, route: "/resident/report" },
-      { name: "Health Timeline", icon: Activity, route: "/resident/timeline" },
       { name: "Messages", icon: MessageSquare, route: "/resident/messages" },
       { name: "Appointments", icon: Clock, route: "/resident/appointments" },
     ],

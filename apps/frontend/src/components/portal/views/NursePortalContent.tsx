@@ -4,6 +4,7 @@ import VitalsPanel, { VitalReading } from "@/components/portal/widgets/VitalsPan
 import CameraVisionFeed from "@/components/CameraVisionFeed";
 import NurseDashboard from "@/components/portal/views/NurseDashboard";
 import NurseRecords from "@/components/portal/views/NurseRecords";
+import NurseRecordsWithCallBells from "@/components/portal/views/NurseRecordsWithCallBells";
 import NurseMedications from "@/components/portal/views/NurseMedications";
 import CaregiverReports from "@/components/portal/views/CaregiverReports";
 import CaregiverCallBells from "@/components/portal/views/CaregiverCallBells";
@@ -620,7 +621,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   }
 
   if (tab === "records") {
-    return <NurseRecords />;
+    return <NurseRecordsWithCallBells />;
   }
 
   // Default: Dashboard tab
