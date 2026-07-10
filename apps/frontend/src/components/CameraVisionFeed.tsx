@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Camera, AlertTriangle, Activity, Shield, Brain, Cpu, Volume2, VolumeX } from "lucide-react";
+import { Camera, AlertTriangle, Activity, Shield, Brain, Cpu, Volume2, VolumeX, Heart } from "lucide-react";
 import { analyzeEmotionFromLandmarks, loadFaceAPI } from "@/utils/emotionDetector";
+import { rppgProcessor, type VitalEstimate } from "@/utils/rppgProcessor";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -296,6 +297,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     temperature: 36.8,
     oxygen: 98,
   });
+  const [bpEstimate, setBpEstimate] = useState<VitalEstimate | null>(null);
 
   // DOM refs
   const videoRef   = useRef<HTMLVideoElement|null>(null);
@@ -975,6 +977,48 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
             summary: "Waiting for face detection",
             objects: []
           };
+        }
+      }
+
+      // RPPG Blood Pressure Extraction: Extract facial color variation for BP estimation
+      if (canvasRef.current && captureRef.current) {
+        const ctx = captureRef.current.getContext("2d");
+        if (ctx) {
+          // Get the current video frame (capture latest)
+          const src = activeCamera === "tapo" ? tapoImgRef.current : imgRef.current;
+          if (src && src.complete && src.naturalHeight > 0) {
+            try {
+              const tempCtx = captureRef.current.getContext("2d");
+              if (tempCtx) {
+                tempCtx.drawImage(src, 0, 0, captureRef.current.width, captureRef.current.height);
+
+                // Estimate face ROI from person detection (use center of frame as approximation)
+                const faceBox = {
+                  x: captureRef.current.width * 0.25,
+                  y: captureRef.current.height * 0.15,
+                  width: captureRef.current.width * 0.5,
+                  height: captureRef.current.height * 0.6,
+                };
+
+                // Extract PPG signal from facial region
+                const ppgSignal = rppgProcessor.extractFacialROI(
+                  captureRef.current,
+                  tempCtx,
+                  faceBox
+                );
+
+                if (ppgSignal) {
+                  rppgProcessor.addPPGValue(ppgSignal.signal[0]);
+                  const vitalEstimate = rppgProcessor.processSignal();
+                  if (vitalEstimate) {
+                    setBpEstimate(vitalEstimate);
+                  }
+                }
+              }
+            } catch (error) {
+              // Silent fail - RPPG is auxiliary to main vision system
+            }
+          }
         }
       }
 
@@ -1683,6 +1727,24 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
                 <span className="text-zinc-500">SpO₂:</span>
                 <span className="font-bold text-emerald-400">{aiVitals.oxygen}%</span>
               </div>
+              {bpEstimate && (
+                <>
+                  <div className="border-t border-zinc-700 pt-1.5 mt-1.5">
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500 flex items-center gap-1">
+                        <Heart className="w-3 h-3 text-red-500" /> BP:
+                      </span>
+                      <span className="font-bold text-red-400">
+                        {bpEstimate.systolicBP}/{bpEstimate.diastolicBP}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[8px]">
+                      <span className="text-zinc-600">Confidence:</span>
+                      <span className="text-zinc-400">{bpEstimate.confidence}%</span>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

@@ -52,13 +52,35 @@ const staff = [
   { id: "s5", position: "Nurse Aide", department: "Clinical Support", isActive: false, hireDate: iso(1500 * D), userId: "u6", user: { name: "Maria Santos", email: "maria.santos@goldenhearth.com", phone: "555-0103" } },
 ];
 
+// Realistic vitals with accurate BP simulation based on age, medical history, and medications
 const vitals = [
+  // Arthur Pendelton (r1): 78yo, Hypertension, Type 2 Diabetes - baseline ~145/85, medicated
   { id: "v1", type: "HEART_RATE", value: "78", unit: "bpm", recordedAt: iso(1 * H), resident: residentRef(residentsBase[0]) },
-  { id: "v2", type: "BLOOD_PRESSURE", value: "138/82", unit: "mmHg", recordedAt: iso(1 * H), resident: residentRef(residentsBase[0]) },
+  { id: "v2", type: "BLOOD_PRESSURE", value: "138/82", unit: "mmHg", recordedAt: iso(1 * H), resident: residentRef(residentsBase[0]) }, // Lisinopril + Metformin effect
+  { id: "v2b", type: "BLOOD_PRESSURE", value: "142/85", unit: "mmHg", recordedAt: iso(4 * H), resident: residentRef(residentsBase[0]) },
+  { id: "v2c", type: "BLOOD_PRESSURE", value: "135/80", unit: "mmHg", recordedAt: iso(8 * H), resident: residentRef(residentsBase[0]) },
   { id: "v3", type: "OXYGEN", value: "96", unit: "%", recordedAt: iso(1 * H), resident: residentRef(residentsBase[0]) },
   { id: "v4", type: "TEMPERATURE", value: "37.0", unit: "°C", recordedAt: iso(1 * H), resident: residentRef(residentsBase[0]) },
+
+  // Eleanor Fitzroy (r2): 85yo, Alzheimer's, Arthritis - baseline ~140/85
   { id: "v5", type: "HEART_RATE", value: "68", unit: "bpm", recordedAt: iso(2 * H), resident: residentRef(residentsBase[1]) },
+  { id: "v5b", type: "BLOOD_PRESSURE", value: "138/84", unit: "mmHg", recordedAt: iso(2 * H), resident: residentRef(residentsBase[1]) },
+  { id: "v5c", type: "BLOOD_PRESSURE", value: "142/87", unit: "mmHg", recordedAt: iso(6 * H), resident: residentRef(residentsBase[1]) },
+
+  // Robert Chen (r3): 72yo, High Cholesterol - baseline ~130/78
+  { id: "v7", type: "BLOOD_PRESSURE", value: "128/76", unit: "mmHg", recordedAt: iso(3 * H), resident: residentRef(residentsBase[2]) }, // Atorvastatin effect
+  { id: "v7b", type: "BLOOD_PRESSURE", value: "132/80", unit: "mmHg", recordedAt: iso(7 * H), resident: residentRef(residentsBase[2]) },
+
+  // Margaret Wilson (r4): 80yo, Atrial Fibrillation, Heart Failure - ELEVATED, baseline ~155/92
   { id: "v6", type: "OXYGEN", value: "94", unit: "%", recordedAt: iso(1 * H), resident: residentRef(residentsBase[3]) },
+  { id: "v6b", type: "BLOOD_PRESSURE", value: "148/90", unit: "mmHg", recordedAt: iso(1 * H), resident: residentRef(residentsBase[3]) }, // Warfarin (anticoagulant, not BP-lowering)
+  { id: "v6c", type: "BLOOD_PRESSURE", value: "152/94", unit: "mmHg", recordedAt: iso(5 * H), resident: residentRef(residentsBase[3]) }, // Alert: Stage 2 elevation
+  { id: "v6d", type: "HEART_RATE", value: "84", unit: "bpm", recordedAt: iso(1 * H), resident: residentRef(residentsBase[3]) }, // Elevated HR due to AFib
+
+  // James Murphy (r5): 76yo, Post-Surgery Recovery - recovery phase, lower BP ~125/75
+  { id: "v8", type: "BLOOD_PRESSURE", value: "122/72", unit: "mmHg", recordedAt: iso(12 * H), resident: residentRef(residentsBase[4]) },
+  { id: "v8b", type: "BLOOD_PRESSURE", value: "128/76", unit: "mmHg", recordedAt: iso(18 * H), resident: residentRef(residentsBase[4]) },
+  { id: "v9", type: "HEART_RATE", value: "72", unit: "bpm", recordedAt: iso(12 * H), resident: residentRef(residentsBase[4]) },
 ];
 
 const tasks = [
