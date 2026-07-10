@@ -393,17 +393,16 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     setTapoPan(clampedPan);
     setTapoTilt(clampedTilt);
 
-    // In demo mode, just update state; in real mode, send to Tapo IP cam API
+    // Send to Tapo PTZ endpoint
     try {
-      await fetch("/api/vitals", {
+      await fetch("/api/tapo-ptz", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "tapo_ptz",
           pan: clampedPan,
           tilt: clampedTilt,
         }),
-      }).catch(() => {}); // Demo mode: endpoint doesn't exist, ignore
+      }).catch(() => {}); // Demo mode: just updates state, ignore any errors
     } catch (_) {}
   }, []);
 
@@ -438,26 +437,31 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
 
   // Process continuous movement from held keys
   useEffect(() => {
-    const interval = setInterval(() => {
+    let newPan = tapoPan;
+    let newTilt = tapoTilt;
+
+    const interval = setInterval(async () => {
       if (keysPressed.size === 0) return;
 
-      setTapoPan((prev) => {
-        let next = prev;
-        if (keysPressed.has("a")) next -= 5;  // Pan left
-        if (keysPressed.has("d")) next += 5;  // Pan right
-        return Math.max(-100, Math.min(100, next));
-      });
+      if (keysPressed.has("a")) newPan -= 5;  // Pan left
+      if (keysPressed.has("d")) newPan += 5;  // Pan right
+      if (keysPressed.has("w")) newTilt -= 5; // Tilt up
+      if (keysPressed.has("s")) newTilt += 5; // Tilt down
 
-      setTapoTilt((prev) => {
-        let next = prev;
-        if (keysPressed.has("w")) next -= 5;  // Tilt up
-        if (keysPressed.has("s")) next += 5;  // Tilt down
-        return Math.max(-100, Math.min(100, next));
-      });
+      newPan = Math.max(-100, Math.min(100, newPan));
+      newTilt = Math.max(-100, Math.min(100, newTilt));
+
+      setTapoPan(newPan);
+      setTapoTilt(newTilt);
+
+      // Send PTZ command to API
+      if (activeCamera === "tapo") {
+        await moveTapoCamera(newPan, newTilt);
+      }
     }, 50); // 50ms = smooth 20fps movement
 
     return () => clearInterval(interval);
-  }, [keysPressed]);
+  }, [keysPressed, activeCamera, moveTapoCamera, tapoPan, tapoTilt]);
 
   const stopSpeaking = useCallback(() => {
     if (audioRef.current) {
