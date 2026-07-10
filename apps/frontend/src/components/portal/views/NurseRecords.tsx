@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Users, Search, X, AlertTriangle, Pill, HeartPulse, Activity, RefreshCw,
   ListChecks, BarChart3, Trash2, Pencil, Heart, Droplets, Wind, Thermometer,
-  Camera, Clock, type LucideIcon,
+  Camera, Clock, Phone, CheckCircle2, type LucideIcon,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import {
@@ -23,6 +23,7 @@ type CareLevel = "INDEPENDENT" | "ASSISTED" | "MEMORY" | "SKILLED";
 interface VitalRow { id: string; type: string; value: string; unit: string; recordedAt: string | null; residentId: string | null; room: string | null }
 interface MedVM { name: string; dosage: string; frequency: string; status: string }
 interface IncidentVM { type: string; severity: string; date: string | null; resolved: boolean; description: string }
+interface CallBellVM { id: string; status: "PENDING" | "RESPONDED" | "RESOLVED" | "CANCELLED"; reason: string; createdAt: string; respondedAt?: string; resolvedAt?: string; notes?: string }
 interface RecordVM {
   id: string;
   name: string;
@@ -36,6 +37,7 @@ interface RecordVM {
   notes: string;
   meds: MedVM[];
   incidents: IncidentVM[];
+  callBells: CallBellVM[];
   vitalsLatest: Record<string, { value: string; unit: string; recordedAt: string | null }>;
   lastCheckIn: string | null;
 }
@@ -87,6 +89,9 @@ export default function NurseRecords() {
   );
   const { data: vitalRows, refetch: refetchVitals } = useLiveQuery<Record<string, unknown>>(
     "vitals", { query: "include=resident&take=500", tables: ["VitalsLog"] }
+  );
+  const { data: callBellRows, refetch: refetchCallBells } = useLiveQuery<Record<string, unknown>>(
+    "call-bells", { query: "take=300", tables: ["CallBell"] }
   );
 
   const [nowTs, setNowTs] = useState(0);
@@ -140,6 +145,16 @@ export default function NurseRecords() {
       if (!cur || newer(v.recordedAt, cur.recordedAt)) vitalsLatest[v.type] = { value: v.value, unit: v.unit, recordedAt: v.recordedAt };
       if (newer(v.recordedAt, lastCheckIn)) lastCheckIn = v.recordedAt;
     });
+    const residentCallBells = callBellRows.filter((cb: Record<string, unknown>) => cb.residentId === r.id);
+    const callBells: CallBellVM[] = residentCallBells.map((cb) => ({
+      id: String(cb.id),
+      status: String(cb.status) as CallBellVM["status"],
+      reason: String(cb.reason || ""),
+      createdAt: String(cb.createdAt || ""),
+      respondedAt: cb.respondedAt ? String(cb.respondedAt) : undefined,
+      resolvedAt: cb.resolvedAt ? String(cb.resolvedAt) : undefined,
+      notes: cb.notes ? String(cb.notes) : undefined,
+    }));
     return {
       id: r.id, name: r.name, room: r.room, age: r.age ?? "—", careLevel: r.careLevel, alertsCount: r.alertsCount,
       allergies: r.allergies || "", medicalHistory: r.medicalHistory || "",
@@ -150,9 +165,10 @@ export default function NurseRecords() {
         type: humanize(asStr(i.incidentType)) || "Incident", severity: severityTier(asStr(i.severity)),
         date: i.incidentDate ? String(i.incidentDate) : null, resolved: Boolean(i.resolvedAt), description: asStr(i.description),
       })),
+      callBells,
       vitalsLatest, lastCheckIn,
     };
-  }), [residentRows, vitalIndex]);
+  }), [residentRows, vitalIndex, callBellRows]);
 
   const stats = useMemo(() => ({
     total: records.length,
@@ -251,7 +267,7 @@ export default function NurseRecords() {
     }
   };
 
-  const refreshAll = () => { void refetch(); void refetchVitals(); };
+  const refreshAll = () => { void refetch(); void refetchVitals(); void refetchCallBells(); };
 
   return (
     <div className="space-y-6">
@@ -344,7 +360,7 @@ export default function NurseRecords() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {paginated.map((r) => (
                 <div key={r.id} className="bg-white rounded-lg border border-gray-200 hover:border-yellow-300 hover:shadow-lg transition overflow-hidden flex flex-col">
-                  <div className={`p-4 ${r.alertsCount > 0 ? "bg-red-50 border-b-2 border-red-300" : "bg-gray-50 border-b border-gray-200"}`}>
+                  <div className={`p-4 ${r.alertsCount > 0 || r.callBells.some(cb => cb.status === "PENDING") ? "bg-red-50 border-b-2 border-red-300" : "bg-gray-50 border-b border-gray-200"}`}>
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex items-center gap-3.5 min-w-0">
                         <input
@@ -358,7 +374,10 @@ export default function NurseRecords() {
                           <p className="text-sm text-gray-600">Room {r.room} • Age {r.age}</p>
                         </div>
                       </div>
-                      {r.alertsCount > 0 && <span className="px-2 py-1 bg-red-500 text-white rounded-full text-xs font-bold flex-shrink-0">🚨 {r.alertsCount}</span>}
+                      <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
+                        {r.callBells.some(cb => cb.status === "PENDING") && <span className="px-2 py-1 bg-orange-500 text-white rounded-full text-xs font-bold">☎️ {r.callBells.filter(cb => cb.status === "PENDING").length}</span>}
+                        {r.alertsCount > 0 && <span className="px-2 py-1 bg-red-500 text-white rounded-full text-xs font-bold">🚨 {r.alertsCount}</span>}
+                      </div>
                     </div>
                     <span className={`ml-8 px-2 py-1 rounded text-xs font-semibold ${CARE_BADGE[r.careLevel]}`}>{humanize(r.careLevel)}</span>
                   </div>
@@ -386,7 +405,18 @@ export default function NurseRecords() {
                       <Pill className="w-3 h-3" /> {r.meds.length} meds
                     </p>
                   </div>
-                  
+
+                  {r.callBells.length > 0 && (
+                    <div className={`px-4 py-3 border-b flex items-center justify-between ${r.callBells.some(cb => cb.status === "PENDING") ? "bg-orange-50 border-orange-200" : "bg-yellow-50 border-yellow-200"}`}>
+                      <p className={`text-xs font-semibold flex items-center gap-1 ${r.callBells.some(cb => cb.status === "PENDING") ? "text-orange-700" : "text-yellow-700"}`}>
+                        <Phone className="w-3 h-3" /> {r.callBells.length} active
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        {r.callBells.filter(cb => cb.status === "PENDING").length} pending
+                      </p>
+                    </div>
+                  )}
+
                   <div className="p-4 mt-auto">
                     <button onClick={() => setViewing(r)} className="w-full px-4 py-2 bg-gradient-to-r from-blue-400 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
                       View Details
@@ -498,6 +528,23 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
             </div>
           </div>
         </div>
+        {r.callBells.length > 0 && (
+          <div>
+            <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2"><Phone className="w-4 h-4 text-orange-600" /> Call Bells ({r.callBells.length})</h3>
+            <div className="space-y-2">
+              {r.callBells.map((cb, idx) => (
+                <div key={idx} className={`p-3 rounded-lg border ${cb.status === "PENDING" ? "bg-red-50 border-red-200" : cb.status === "RESPONDED" ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200"}`}>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="font-medium text-gray-900 text-sm">{cb.reason}</span>
+                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${cb.status === "PENDING" ? "bg-red-200 text-red-800" : cb.status === "RESPONDED" ? "bg-yellow-200 text-yellow-800" : "bg-green-200 text-green-800"}`}>{cb.status}</span>
+                  </div>
+                  <p className="text-xs text-gray-600">{Math.round((Date.now() - new Date(cb.createdAt).getTime()) / 60000)} min ago</p>
+                  {cb.notes && <p className="text-xs text-gray-700 mt-1">📝 {cb.notes}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {r.incidents.length > 0 && (
           <div>
             <h3 className="font-bold text-gray-900 mb-3">Recent Incidents</h3>
