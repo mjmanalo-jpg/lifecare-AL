@@ -254,7 +254,6 @@ export const GLOBAL_FEATURES: Record<string, FeatureInfo> = {
   "Residents": { name: "Residents", icon: UserRound, routeSegment: "residents" },
   "Resident Status": { name: "Resident Status", icon: Users, routeSegment: "residents" },
   "Medication Rounds": { name: "Medication Rounds", icon: Pill, routeSegment: "medications" },
-  "Call Bells": { name: "Call Bells", icon: BellRing, routeSegment: "callbells" },
   "Incident Log": { name: "Incident Log", icon: AlertTriangle, routeSegment: "incidents" },
   "Incidents": { name: "Incidents", icon: AlertTriangle, routeSegment: "incidents" },
   "Shift Reports": { name: "Shift Reports", icon: FileText, routeSegment: "reports" },

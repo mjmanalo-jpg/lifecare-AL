@@ -127,6 +127,75 @@ export default function PortalShell({
     }
   };
 
+  const handleSimulateAlert = async (type: "call-bells" | "incidents" | "vitals") => {
+    try {
+      const { createRecord } = await import("@/lib/api");
+      
+      // Fetch the first resident dynamically
+      const resResidents = await fetch("/api/db/residents?take=1");
+      const jsonResidents = await resResidents.json();
+      const resident = jsonResidents.data?.[0];
+      if (!resident) {
+        Swal.fire({
+          title: "No Residents Found",
+          text: "Please add a resident first to simulate alerts.",
+          icon: "warning",
+          background: theme === "dark" ? "#1f2937" : "#ffffff",
+          color: theme === "dark" ? "#ffffff" : "#000000",
+        });
+        return;
+      }
+
+      let payload = {};
+      if (type === "call-bells") {
+        payload = {
+          residentId: resident.id,
+          status: "PENDING",
+          reason: "Emergency Assistance Request via Notification Panel Simulator",
+        };
+      } else if (type === "incidents") {
+        payload = {
+          residentId: resident.id,
+          incidentType: "FALL",
+          severity: "CRITICAL",
+          description: "Simulated computer-vision anomaly: Resident balance loss detected in Room " + resident.roomNumber,
+          incidentDate: new Date().toISOString(),
+        };
+      } else if (type === "vitals") {
+        payload = {
+          residentId: resident.id,
+          type: "HEART_RATE",
+          value: "114",
+          unit: "bpm",
+          recordedAt: new Date().toISOString(),
+          notes: "Simulated abnormal high heart rate (>100 bpm) detected during activity.",
+        };
+      }
+
+      await createRecord(type, payload);
+      
+      Swal.fire({
+        title: "Simulation Dispatched",
+        text: `Successfully triggered real-time ${type.slice(0, -1)} event for ${resident.firstName} ${resident.lastName}.`,
+        icon: "success",
+        timer: 1500,
+        showConfirmButton: false,
+        background: theme === "dark" ? "#1f2937" : "#ffffff",
+        color: theme === "dark" ? "#ffffff" : "#000000",
+      });
+    } catch (err) {
+      console.error("Simulation failed:", err);
+      Swal.fire({
+        title: "Simulation Failed",
+        text: err instanceof Error ? err.message : "Request failed",
+        icon: "error",
+        background: theme === "dark" ? "#1f2937" : "#ffffff",
+        color: theme === "dark" ? "#ffffff" : "#000000",
+      });
+    }
+  };
+
+
   const roleDetails: RoleDetails = ROLES[userRole];
 
   const { data: appSettings } = useLiveQuery<{ id: string; value: string }>("app-settings", {
@@ -406,7 +475,7 @@ export default function PortalShell({
 
               {/* Notification dropdown card */}
               {bellDropdownOpen && (
-                <div className={`absolute right-0 mt-3 w-80 sm:w-96 rounded-2xl shadow-2xl border z-50 overflow-hidden ${
+                <div className={`fixed inset-x-4 top-16 sm:absolute sm:inset-auto sm:right-0 sm:mt-3 sm:w-96 rounded-2xl shadow-2xl border z-50 overflow-hidden transition-all duration-200 ${
                   theme === "dark"
                     ? "bg-gray-900 border-gray-700 text-white"
                     : "bg-white border-yellow-100 text-gray-900"
@@ -430,10 +499,9 @@ export default function PortalShell({
                   </div>
 
                   {/* Dropdown List */}
-                  <div className="max-h-[350px] overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
+                  <div className="max-h-[380px] overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
                     {notificationsData && notificationsData.length > 0 ? (
                       notificationsData.map((n) => {
-                        // Helper styling per notification type
                         const getNotificationIcon = (type: string) => {
                           switch (type) {
                             case "VITAL_ALERT":
@@ -520,12 +588,43 @@ export default function PortalShell({
                         );
                       })
                     ) : (
-                      <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-                        <p className="text-xl">🎉</p>
-                        <p className="text-sm font-medium mt-2">All caught up!</p>
-                        <p className="text-xs mt-1">No notifications right now.</p>
+                      <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                        <p className="text-2xl">🎉</p>
+                        <p className="text-sm font-semibold mt-2">All caught up!</p>
+                        <p className="text-xs text-gray-400 mt-1 mb-4">No notifications right now.</p>
                       </div>
                     )}
+
+                    {/* Developer Real-time Simulator Panel */}
+                    <div className={`p-4 border-t ${theme === "dark" ? "border-gray-800 bg-gray-950/20" : "border-gray-100 bg-gray-50/30"}`}>
+                      <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                        <Zap className="w-3 h-3 text-yellow-500 animate-pulse" />
+                        Real-time Alert Simulator
+                      </p>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                          onClick={() => handleSimulateAlert("call-bells")}
+                          className="flex flex-col items-center justify-center p-2 rounded-lg bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-100/50 dark:border-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 transition"
+                        >
+                          <BellRing className="w-4 h-4 mb-1" />
+                          <span className="text-[9px] font-semibold text-center leading-none">Call Bell</span>
+                        </button>
+                        <button
+                          onClick={() => handleSimulateAlert("incidents")}
+                          className="flex flex-col items-center justify-center p-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-100/50 dark:border-red-900/20 hover:bg-red-100 dark:hover:bg-red-950/40 text-red-700 dark:text-red-400 transition"
+                        >
+                          <AlertTriangle className="w-4 h-4 mb-1" />
+                          <span className="text-[9px] font-semibold text-center leading-none">Fall Alert</span>
+                        </button>
+                        <button
+                          onClick={() => handleSimulateAlert("vitals")}
+                          className="flex flex-col items-center justify-center p-2 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-100/50 dark:border-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-950/40 text-purple-700 dark:text-purple-400 transition"
+                        >
+                          <Activity className="w-4 h-4 mb-1" />
+                          <span className="text-[9px] font-semibold text-center leading-none">Vital HR</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

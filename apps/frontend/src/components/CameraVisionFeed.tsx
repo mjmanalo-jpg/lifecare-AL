@@ -1689,7 +1689,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       </div>
 
       {/* ── BOTTOM HUD ── */}
-      <div className="absolute bottom-3 left-3 right-3 z-20 flex justify-between items-end gap-2">
+      <div className={`absolute bottom-3 ${activeCamera === "tapo" ? "left-48" : "left-3"} right-3 z-20 flex justify-between items-end gap-2 transition-all duration-300`}>
         <div className="flex-1 bg-black/68 backdrop-blur-md rounded-xl p-2.5 border border-white/10">
           <div className="flex justify-between items-center w-full">
             <p className="text-[9px] text-amber-400 font-bold uppercase tracking-wider flex items-center gap-1">

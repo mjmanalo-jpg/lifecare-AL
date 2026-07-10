@@ -16,6 +16,8 @@ router = APIRouter()
 
 # Global state to trigger simulated fall alert from external endpoint
 is_fallen_alert = False
+sim_pan = 0.0
+sim_tilt = 0.0
 
 @router.post("/trigger_fall")
 def trigger_fall(status: bool):
@@ -24,30 +26,37 @@ def trigger_fall(status: bool):
     return {"status": "ok", "is_fallen": is_fallen_alert}
 
 def generate_simulated_frame():
+    global sim_pan, sim_tilt
     # Create a black image of 640x480
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
     
-    # Draw dark blue gridlines
+    # Calculate screen offsets based on camera pan/tilt rotation simulation
+    dx = -int(sim_pan * 1.5)
+    dy = -int(sim_tilt * 1.2)
+    
+    # Draw dark blue gridlines shifted by camera movements
     for y in range(0, 480, 40):
-        cv2.line(frame, (0, y), (640, y), (30, 20, 10), 1)
+        shifted_y = (y - dy) % 480
+        cv2.line(frame, (0, shifted_y), (640, shifted_y), (30, 20, 10), 1)
     for x in range(0, 640, 40):
-        cv2.line(frame, (x, 0), (x, 480), (30, 20, 10), 1)
+        shifted_x = (x - dx) % 640
+        cv2.line(frame, (shifted_x, 0), (shifted_x, 480), (30, 20, 10), 1)
         
     # Draw Simulated Person ONLY (No bounding boxes or labels)
     if is_fallen_alert:
         # Draw horizontal stick figure representing fallen resident
-        cv2.circle(frame, (320, 310), 20, (150, 150, 150), -1)
-        cv2.line(frame, (320, 310), (200, 310), (150, 150, 150), 3)
-        cv2.line(frame, (200, 310), (140, 370), (150, 150, 150), 2)
-        cv2.line(frame, (200, 310), (140, 250), (150, 150, 150), 2)
+        cv2.circle(frame, (320 + dx, 310 + dy), 20, (150, 150, 150), -1)
+        cv2.line(frame, (320 + dx, 310 + dy), (200 + dx, 310 + dy), (150, 150, 150), 3)
+        cv2.line(frame, (200 + dx, 310 + dy), (140 + dx, 370 + dy), (150, 150, 150), 2)
+        cv2.line(frame, (200 + dx, 310 + dy), (140 + dx, 250 + dy), (150, 150, 150), 2)
     else:
         # Draw standing stick figure representing resident
-        cv2.circle(frame, (320, 140), 25, (150, 150, 150), -1) # Head
-        cv2.line(frame, (320, 165), (320, 280), (150, 150, 150), 3) # Spine
-        cv2.line(frame, (320, 200), (260, 240), (150, 150, 150), 2) # Left arm
-        cv2.line(frame, (320, 200), (380, 240), (150, 150, 150), 2) # Right arm
-        cv2.line(frame, (320, 280), (280, 370), (150, 150, 150), 2) # Left leg
-        cv2.line(frame, (320, 280), (360, 370), (150, 150, 150), 2) # Right leg
+        cv2.circle(frame, (320 + dx, 140 + dy), 25, (150, 150, 150), -1) # Head
+        cv2.line(frame, (320 + dx, 165 + dy), (320 + dx, 280 + dy), (150, 150, 150), 3) # Spine
+        cv2.line(frame, (320 + dx, 200 + dy), (260 + dx, 240 + dy), (150, 150, 150), 2) # Left arm
+        cv2.line(frame, (320 + dx, 200 + dy), (380 + dx, 240 + dy), (150, 150, 150), 2) # Right arm
+        cv2.line(frame, (320 + dx, 280 + dy), (280 + dx, 370 + dy), (150, 150, 150), 2) # Left leg
+        cv2.line(frame, (320 + dx, 280 + dy), (360 + dx, 370 + dy), (150, 150, 150), 2) # Right leg
 
     # Encode as JPEG
     _, jpeg = cv2.imencode('.jpg', frame)
@@ -181,3 +190,50 @@ def gen_tapo_frames():
 @router.get("/tapo_feed")
 def tapo_feed():
     return StreamingResponse(gen_tapo_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+from pydantic import BaseModel
+
+class PTZRequest(BaseModel):
+    pan: float
+    tilt: float
+
+@router.post("/move_position")
+def move_position(payload: PTZRequest):
+    # Trigger uvicorn reload to pick up updated .env.local variables
+    global sim_pan, sim_tilt
+    sim_pan = payload.pan
+    sim_tilt = payload.tilt
+    try:
+        from pytapo import Tapo
+        import os
+        import socket
+        from urllib.parse import urlparse, unquote
+
+        # Set connection timeout to prevent socket hangs
+        socket.setdefaulttimeout(2.5)
+
+        ip = os.getenv("NEXT_PUBLIC_TAPO_CAMERA_IP")
+        user = os.getenv("NEXT_PUBLIC_TAPO_CAMERA_USERNAME")
+        password = os.getenv("NEXT_PUBLIC_TAPO_CAMERA_PASSWORD")
+
+        if not ip or not user or not password:
+            cam_url = os.getenv("CAMERA_IP")
+            if cam_url and cam_url.startswith("rtsp://"):
+                parsed = urlparse(cam_url)
+                ip = parsed.hostname
+                user = parsed.username
+                password = parsed.password
+                if user:
+                    user = unquote(user)
+                if password:
+                    password = unquote(password)
+
+        if not ip:
+            return {"error": "Camera IP not configured", "status": "error"}
+
+        tapo = Tapo(ip, user or "admin", password or "admin", cloudPassword=password or "")
+        tapo.moveMotor(int(payload.pan), int(payload.tilt))
+        return {"status": "success", "pan": payload.pan, "tilt": payload.tilt}
+    except Exception as e:
+        print(f"[Tapo PTZ Backend Error] {e}")
+        return {"error": str(e), "status": "error"}

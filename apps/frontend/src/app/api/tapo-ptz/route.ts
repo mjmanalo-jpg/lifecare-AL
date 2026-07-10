@@ -34,41 +34,28 @@ export async function POST(request: NextRequest) {
     const clampedPan = Math.max(-100, Math.min(100, Number(pan)));
     const clampedTilt = Math.max(-100, Math.min(100, Number(tilt)));
 
-    // Demo mode: just return success
-    if (!process.env.TAPO_IP || process.env.TAPO_IP.includes("<")) {
-      return NextResponse.json(
-        { success: true, pan: clampedPan, tilt: clampedTilt, demo: true },
-        { status: 200 }
-      );
-    }
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || "http://localhost:8000";
 
-    // Production: send to actual Tapo IP camera
     try {
-      const tapoIp = process.env.TAPO_IP;
-      const tapoPassword = process.env.TAPO_PASSWORD || "admin";
-
-      // Normalize pan/tilt from (-100, 100) to (0, 255) for Tapo API
-      // Pan: -100 = 0°, 0 = 127.5°, 100 = 255°
-      // Tilt: -100 = 0°, 0 = 127.5°, 100 = 255°
-      const panValue = Math.round(((clampedPan + 100) / 200) * 255);
-      const tiltValue = Math.round(((clampedTilt + 100) / 200) * 255);
-
-      // Tapo API call (adjust based on your camera model)
-      const response = await fetch(`http://${tapoIp}/api/v1/camera/move_position`, {
+      const response = await fetch(`${backendUrl}/api/v1/camera/move_position`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          x: panValue,   // horizontal
-          y: tiltValue,  // vertical
+          pan: clampedPan,
+          tilt: clampedTilt,
         }),
       });
 
       if (!response.ok) {
-        console.warn(`[Tapo] PTZ command failed: ${response.statusText}`);
+        console.warn(`[Tapo] Proxy PTZ command failed: ${response.statusText}`);
+      } else {
+        const result = await response.json();
+        if (result.status === "error") {
+          console.warn(`[Tapo] Proxy PTZ error response: ${result.error}`);
+        }
       }
     } catch (tapoError) {
-      console.warn("[Tapo] PTZ error (camera may not be configured):", tapoError);
-      // Don't fail the request - just log the warning
+      console.warn("[Tapo] Proxy PTZ network error:", tapoError);
     }
 
     return NextResponse.json(

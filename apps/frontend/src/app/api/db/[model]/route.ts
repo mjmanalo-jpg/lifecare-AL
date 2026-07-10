@@ -3,6 +3,7 @@ import { getModel, isDbConfigured } from "@/lib/models";
 import { getSession } from "@/lib/auth";
 import { scopeWhere, scopeDemoRows } from "@/lib/scope";
 import { DEMO } from "@/lib/demoData";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -72,12 +73,30 @@ export async function GET(
     const scope = await scopeWhere(model, session);
     const scopedWhere = scope ? { AND: [where, scope] } : where;
 
-    const data = await def.delegate.findMany({
+    let data = await def.delegate.findMany({
       where: scopedWhere,
       orderBy,
       take,
       ...(include ? { include } : {}),
     });
+
+    // Auto-seed notifications for new/empty users to show active, dynamic interface
+    if (model === "notifications" && data.length === 0 && session.userId) {
+      const seeds = getSeedsForRole(session.role, session.userId);
+      if (seeds.length > 0) {
+        await prisma.notification.createMany({
+          data: seeds,
+        });
+        // Refetch to get the newly created notifications
+        data = await def.delegate.findMany({
+          where: scopedWhere,
+          orderBy,
+          take,
+          ...(include ? { include } : {}),
+        });
+      }
+    }
+
     return NextResponse.json({ data, count: data.length });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Query failed";
@@ -100,7 +119,7 @@ export async function POST(
   // Self-service roles (FAMILY/RESIDENT) may only create the records their portal
   // legitimately produces (messages to staff, visit requests). Rest is staff-only.
   const SELF_SERVICE = role === "FAMILY" || role === "RESIDENT";
-  const SELF_WRITABLE = new Set(["messages", "visits"]);
+  const SELF_WRITABLE = new Set(["messages", "visits", "call-bells", "tasks"]);
   if (SELF_SERVICE && !SELF_WRITABLE.has(model)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -113,9 +132,406 @@ export async function POST(
 
   try {
     const data = await def.delegate.create({ data: body });
+    // Process auto-notifications asynchronously so it doesn't block the API response
+    handleAutoNotification(model, data).catch((e) =>
+      console.error("[route.ts:autoNotifyError]", e)
+    );
     return NextResponse.json({ data }, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Create failed";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
+
+// ── Seed Helpers ─────────────────────────────────────────────────────────────
+
+function getSeedsForRole(role: string, userId: string) {
+  const baseDate = new Date();
+  const getPastTime = (msAgo: number) => new Date(baseDate.getTime() - msAgo);
+
+  const H = 60 * 60 * 1000;
+  const D = 24 * H;
+
+  // Exact type strings matching NotificationType enum in schema
+  switch (role) {
+    case "SUPERADMIN":
+      return [
+        {
+          userId,
+          type: "SYSTEM_ALERT" as const,
+          title: "System Health Optimal",
+          message: "All microservices and database engines responding at optimal speed (45ms).",
+          isRead: false,
+          createdAt: getPastTime(10 * 1000),
+          updatedAt: getPastTime(10 * 1000),
+        },
+        {
+          userId,
+          type: "SYSTEM_ALERT" as const,
+          title: "Supabase Connection Healthy",
+          message: "Realtime subscription pool contains 8 active channels.",
+          isRead: false,
+          createdAt: getPastTime(12 * H),
+          updatedAt: getPastTime(12 * H),
+        },
+        {
+          userId,
+          type: "CALL_BELL" as const,
+          title: "Emergency System Checked",
+          message: "Successfully verified emergency call bell route and response protocols.",
+          isRead: true,
+          createdAt: getPastTime(1 * D),
+          updatedAt: getPastTime(1 * D),
+        },
+      ];
+    case "FACILITY_ADMIN":
+      return [
+        {
+          userId,
+          type: "SYSTEM_ALERT" as const,
+          title: "Admissions Verification Pending",
+          message: "Dorothy Hale is waiting for room allocation to complete step 8.",
+          isRead: false,
+          createdAt: getPastTime(15 * 1000),
+          updatedAt: getPastTime(15 * 1000),
+        },
+        {
+          userId,
+          type: "INCIDENT_REPORT" as const,
+          title: "Incident Logged",
+          message: "Caregiver Caleb Randall logged a call bell response event in Room 305.",
+          isRead: false,
+          createdAt: getPastTime(2 * H),
+          updatedAt: getPastTime(2 * H),
+        },
+        {
+          userId,
+          type: "TASK_ASSIGNMENT" as const,
+          title: "Staff Shift Roster",
+          message: "12 active care professionals have successfully clocked in for today's shifts.",
+          isRead: true,
+          createdAt: getPastTime(18 * H),
+          updatedAt: getPastTime(18 * H),
+        },
+      ];
+    case "PHYSICIAN":
+      return [
+        {
+          userId,
+          type: "VITAL_ALERT" as const,
+          title: "Arthur Pendelton Vitals Alert",
+          message: "Arthur's Heart Rate spiked to 104 bpm during therapy. Vitals now stable.",
+          isRead: false,
+          createdAt: getPastTime(20 * 1000),
+          updatedAt: getPastTime(20 * 1000),
+        },
+        {
+          userId,
+          type: "MEDICATION_REMINDER" as const,
+          title: "Medication Warning",
+          message: "Frank Osei (Room 312) medication overdue by 2 hours.",
+          isRead: false,
+          createdAt: getPastTime(3 * H),
+          updatedAt: getPastTime(3 * H),
+        },
+        {
+          userId,
+          type: "MESSAGE" as const,
+          title: "New Handover Note",
+          message: "Sarah Jenkins, RN submitted clinical handover reports.",
+          isRead: true,
+          createdAt: getPastTime(6 * H),
+          updatedAt: getPastTime(6 * H),
+        },
+      ];
+    case "NURSE":
+      return [
+        {
+          userId,
+          type: "CALL_BELL" as const,
+          title: "Emergency Call Bell: Room 302",
+          message: "Arthur Pendelton triggered the room call bell. Assistance needed.",
+          isRead: false,
+          createdAt: getPastTime(8 * 1000),
+          updatedAt: getPastTime(8 * 1000),
+        },
+        {
+          userId,
+          type: "VITAL_ALERT" as const,
+          title: "Arthur SpO2 Dropped",
+          message: "Oxygen saturation level dipped below 95% temporarily.",
+          isRead: false,
+          createdAt: getPastTime(1.5 * H),
+          updatedAt: getPastTime(1.5 * H),
+        },
+        {
+          userId,
+          type: "INCIDENT_REPORT" as const,
+          title: "Fall Heuristics Alert",
+          message: "Room 305 vision feed triggered a potential balance loss warning.",
+          isRead: true,
+          createdAt: getPastTime(4 * H),
+          updatedAt: getPastTime(4 * H),
+        },
+      ];
+    case "CAREGIVER":
+      return [
+        {
+          userId,
+          type: "CALL_BELL" as const,
+          title: "Call Bell: Room 302 Assistance",
+          message: "Help requested with repositioning and physical comfort checks.",
+          isRead: false,
+          createdAt: getPastTime(12 * 1000),
+          updatedAt: getPastTime(12 * 1000),
+        },
+        {
+          userId,
+          type: "TASK_ASSIGNMENT" as const,
+          title: "Checklist Pending",
+          message: "3 morning wellness and dietary tasks remain incomplete.",
+          isRead: false,
+          createdAt: getPastTime(1 * H),
+          updatedAt: getPastTime(1 * H),
+        },
+        {
+          userId,
+          type: "SHIFT_REMINDER" as const,
+          title: "Clock-In Reminder",
+          message: "Afternoon shift starts in 30 minutes. Please prepare for shift handover.",
+          isRead: true,
+          createdAt: getPastTime(3 * H),
+          updatedAt: getPastTime(3 * H),
+        },
+      ];
+    case "FAMILY":
+      return [
+        {
+          userId,
+          type: "VITAL_ALERT" as const,
+          title: "Relative Vitals Stable",
+          message: "Arthur Pendelton's morning vitals registered healthy (BP 120/80).",
+          isRead: false,
+          createdAt: getPastTime(25 * 1000),
+          updatedAt: getPastTime(25 * 1000),
+        },
+        {
+          userId,
+          type: "MEDICATION_REMINDER" as const,
+          title: "Medications Administered",
+          message: "Head Nurse Sarah Jenkins successfully administered daily blood pressure pills.",
+          isRead: false,
+          createdAt: getPastTime(2 * H),
+          updatedAt: getPastTime(2 * H),
+        },
+        {
+          userId,
+          type: "MESSAGE" as const,
+          title: "Daily Comfort Report",
+          message: "Caleb Randall reports Arthur slept comfortably and participated in social games.",
+          isRead: true,
+          createdAt: getPastTime(5 * H),
+          updatedAt: getPastTime(5 * H),
+        },
+      ];
+    case "RESIDENT":
+      return [
+        {
+          userId,
+          type: "TASK_ASSIGNMENT" as const,
+          title: "Physical Therapy Scheduled",
+          message: "Your PT session with Caleb is scheduled for 2:00 PM today.",
+          isRead: false,
+          createdAt: getPastTime(35 * 1000),
+          updatedAt: getPastTime(35 * 1000),
+        },
+        {
+          userId,
+          type: "MEDICATION_REMINDER" as const,
+          title: "Medications Reminder",
+          message: "Afternoon pills are scheduled in 15 minutes.",
+          isRead: false,
+          createdAt: getPastTime(50 * 1000),
+          updatedAt: getPastTime(50 * 1000),
+        },
+        {
+          userId,
+          type: "MESSAGE" as const,
+          title: "New Message from Sponsor",
+          message: "John Pendelton shared a photo and message with your care dashboard.",
+          isRead: true,
+          createdAt: getPastTime(8 * H),
+          updatedAt: getPastTime(8 * H),
+        },
+      ];
+    default:
+      return [];
+  }
+}
+
+// ── Auto Notification Triggers ───────────────────────────────────────────────
+
+async function handleAutoNotification(model: string, data: any) {
+  try {
+    // 1. Call Bells Trigger
+    if (model === "call-bells") {
+      const staffUsers = await prisma.user.findMany({
+        where: {
+          role: { in: ["FACILITY_ADMIN", "NURSE", "CAREGIVER"] },
+          isActive: true,
+        },
+        select: { id: true },
+      });
+
+      const resident = await prisma.resident.findUnique({
+        where: { id: data.residentId },
+        select: { firstName: true, lastName: true, roomNumber: true },
+      });
+      const name = resident ? `${resident.firstName} ${resident.lastName}` : "A resident";
+      const room = resident ? `Room ${resident.roomNumber}` : "their room";
+
+      await prisma.notification.createMany({
+        data: staffUsers.map((u) => ({
+          userId: u.id,
+          type: "CALL_BELL",
+          title: `Call Bell: ${name}`,
+          message: `${name} in ${room} triggered the call bell: "${data.reason || "Assistance requested"}".`,
+          relatedEntityId: data.id,
+          relatedEntityType: "CallBell",
+        })),
+      });
+    }
+
+    // 2. Incidents Trigger
+    if (model === "incidents") {
+      const staffUsers = await prisma.user.findMany({
+        where: {
+          role: { in: ["SUPERADMIN", "FACILITY_ADMIN", "PHYSICIAN", "NURSE"] },
+          isActive: true,
+        },
+        select: { id: true },
+      });
+
+      const resident = await prisma.resident.findUnique({
+        where: { id: data.residentId },
+        select: { firstName: true, lastName: true, roomNumber: true },
+      });
+      const name = resident ? `${resident.firstName} ${resident.lastName}` : "A resident";
+      const room = resident ? `Room ${resident.roomNumber}` : "their room";
+
+      await prisma.notification.createMany({
+        data: staffUsers.map((u) => ({
+          userId: u.id,
+          type: "INCIDENT_REPORT",
+          title: `Incident: ${data.incidentType} (${data.severity})`,
+          message: `An incident was logged for ${name} in ${room}: "${data.description}".`,
+          relatedEntityId: data.id,
+          relatedEntityType: "Incident",
+        })),
+      });
+    }
+
+    // 3. Tasks Trigger
+    if (model === "tasks" && data.assignedToId) {
+      const staffMember = await prisma.staff.findUnique({
+        where: { id: data.assignedToId },
+        select: { userId: true },
+      });
+
+      if (staffMember?.userId) {
+        const resident = await prisma.resident.findUnique({
+          where: { id: data.residentId },
+          select: { firstName: true, lastName: true },
+        });
+        const residentName = resident ? ` for ${resident.firstName} ${resident.lastName}` : "";
+
+        await prisma.notification.create({
+          data: {
+            userId: staffMember.userId,
+            type: "TASK_ASSIGNMENT",
+            title: `New Task Assigned`,
+            message: `You have been assigned a task: "${data.title}"${residentName}.`,
+            relatedEntityId: data.id,
+            relatedEntityType: "Task",
+          },
+        });
+      }
+    }
+
+    // 4. Messages Trigger
+    if (model === "messages") {
+      const sender = await prisma.user.findUnique({
+        where: { id: data.senderId },
+        select: { name: true },
+      });
+      const senderName = sender?.name || "Someone";
+
+      await prisma.notification.create({
+        data: {
+          userId: data.recipientId,
+          type: "MESSAGE",
+          title: `New Message from ${senderName}`,
+          message: data.content.length > 80 ? `${data.content.substring(0, 80)}...` : data.content,
+          relatedEntityId: data.id,
+          relatedEntityType: "Message",
+        },
+      });
+    }
+
+    // 5. Vitals Trigger
+    if (model === "vitals") {
+      const staffUsers = await prisma.user.findMany({
+        where: {
+          role: { in: ["PHYSICIAN", "NURSE"] },
+          isActive: true,
+        },
+        select: { id: true },
+      });
+
+      const resident = await prisma.resident.findUnique({
+        where: { id: data.residentId },
+        select: { firstName: true, lastName: true },
+      });
+      const name = resident ? `${resident.firstName} ${resident.lastName}` : "A resident";
+
+      let isAbnormal = false;
+      let alertMsg = "";
+      if (data.type === "HEART_RATE") {
+        const hr = parseInt(data.value);
+        if (!isNaN(hr) && (hr > 100 || hr < 60)) {
+          isAbnormal = true;
+          alertMsg = `${name}'s heart rate is abnormal: ${data.value} bpm.`;
+        }
+      } else if (data.type === "OXYGEN") {
+        const ox = parseInt(data.value);
+        if (!isNaN(ox) && ox < 95) {
+          isAbnormal = true;
+          alertMsg = `${name}'s oxygen saturation is low: ${data.value}%.`;
+        }
+      } else if (data.type === "BLOOD_PRESSURE") {
+        const parts = data.value.split("/");
+        const sys = parseInt(parts[0]);
+        if (!isNaN(sys) && (sys > 140 || sys < 90)) {
+          isAbnormal = true;
+          alertMsg = `${name}'s blood pressure is out of normal range: ${data.value}.`;
+        }
+      }
+
+      if (isAbnormal) {
+        await prisma.notification.createMany({
+          data: staffUsers.map((u) => ({
+            userId: u.id,
+            type: "VITAL_ALERT",
+            title: `Vitals Alert: ${name}`,
+            message: alertMsg,
+            relatedEntityId: data.id,
+            relatedEntityType: "VitalsLog",
+          })),
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Auto-notification error:", err);
+  }
+}
+
