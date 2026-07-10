@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import {
   Palette,
   Sparkles,
@@ -19,6 +19,18 @@ import {
   ChevronDown,
   LogIn,
   LayoutDashboard,
+  FileText,
+  Newspaper,
+  FilePlus,
+  Plus,
+  Pencil,
+  X,
+  Eye,
+  EyeOff,
+  GripVertical,
+  Calendar,
+  User,
+  type LucideIcon,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import {
@@ -28,6 +40,8 @@ import {
   PRESETS,
   type BackgroundType,
 } from "@/lib/landingConfig";
+import { useLiveQuery } from "@/lib/useLiveQuery";
+import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 
 const ACCENT_SWATCHES = [
   "#f59e0b", "#fbbf24", "#f97316", "#ef4444", "#ec4899",
@@ -39,6 +53,58 @@ const BG_TABS: { id: BackgroundType; label: string; icon: typeof Droplet }[] = [
   { id: "solid", label: "Solid", icon: Droplet },
   { id: "gradient", label: "Gradient", icon: Layers },
   { id: "image", label: "Image", icon: ImageIcon },
+];
+
+type StudioTab = "landing" | "login" | "content" | "blog" | "pages";
+
+const STUDIO_TABS: { id: StudioTab; label: string; icon: LucideIcon }[] = [
+  { id: "landing", label: "Landing", icon: LayoutDashboard },
+  { id: "login", label: "Login", icon: LogIn },
+  { id: "content", label: "Content", icon: FileText },
+  { id: "blog", label: "Blog", icon: Newspaper },
+  { id: "pages", label: "Pages", icon: FilePlus },
+];
+
+interface BlogPost {
+  id: string;
+  title: string;
+  description: string;
+  content?: string;
+  imageUrl?: string;
+  author: string;
+  publishedAt: string;
+  published: boolean;
+}
+
+interface SiteContentRow {
+  id: string;
+  value: string;
+}
+
+interface CustomPageRow {
+  id: string;
+  title: string;
+  slug: string;
+  content: string;
+  published: boolean;
+  sortOrder: number;
+}
+
+const CONTENT_FIELDS: { id: string; label: string; multiline?: boolean }[] = [
+  { id: "hero_title", label: "Hero Title" },
+  { id: "hero_subtitle", label: "Hero Subtitle" },
+  { id: "hero_description", label: "Hero Description", multiline: true },
+  { id: "feature_1_title", label: "Feature 1 — Title" },
+  { id: "feature_1_desc", label: "Feature 1 — Description", multiline: true },
+  { id: "feature_2_title", label: "Feature 2 — Title" },
+  { id: "feature_2_desc", label: "Feature 2 — Description", multiline: true },
+  { id: "feature_3_title", label: "Feature 3 — Title" },
+  { id: "feature_3_desc", label: "Feature 3 — Description", multiline: true },
+  { id: "contact_address", label: "Contact Address", multiline: true },
+  { id: "contact_phone", label: "Contact Phone Number" },
+  { id: "contact_email", label: "Contact Email Address" },
+  { id: "contact_map_url", label: "Google Maps Embed URL", multiline: true },
+  { id: "footer_text", label: "Footer Text" },
 ];
 
 
@@ -86,7 +152,7 @@ export default function LandingCustomizerContent() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [dragOver, setDragOver] = useState(false);
-  const [activeTab, setActiveTab] = useState<"landing" | "login">("landing");
+  const [activeTab, setActiveTab] = useState<StudioTab>("landing");
 
   const patchLogin = (partial: Partial<import("@/lib/landingConfig").LoginConfig>) => {
     patch({ login: { ...draft.login, ...partial } });
@@ -204,28 +270,28 @@ export default function LandingCustomizerContent() {
         </div>
       </div>
 
-      {/* Landing / Login tab switcher */}
-      <div className="inline-flex p-1 bg-gray-100 rounded-xl">
-        {(["landing", "login"] as const).map((tab) => {
-          const active = activeTab === tab;
-          const Icon = tab === "landing" ? LayoutDashboard : LogIn;
+      {/* Studio tab switcher */}
+      <div className="inline-flex p-1 bg-gray-100 rounded-xl flex-wrap gap-1">
+        {STUDIO_TABS.map(({ id, label, icon: Icon }) => {
+          const active = activeTab === id;
           return (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold capitalize transition ${
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition ${
                 active
                   ? "bg-white shadow text-gray-900"
                   : "text-gray-500 hover:text-gray-700"
               }`}
             >
               <Icon className="w-4 h-4" />
-              {tab === "landing" ? "Landing Page" : "Login Page"}
+              {label}
             </button>
           );
         })}
       </div>
 
+      {(activeTab === "landing" || activeTab === "login") && (
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         {/* ---------------- Controls ---------------- */}
         <div className="xl:col-span-3 space-y-6">
@@ -805,6 +871,593 @@ export default function LandingCustomizerContent() {
           </div>
         </div>
       </div>
+      )}
+
+      {/* ═══ Content Tab ═══ */}
+      {activeTab === "content" && <SiteContentEditor />}
+
+      {/* ═══ Blog Tab ═══ */}
+      {activeTab === "blog" && <BlogManager />}
+
+      {/* ═══ Pages Tab ═══ */}
+      {activeTab === "pages" && <PagesManager />}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * SITE CONTENT EDITOR — Editable jargon / copy for the landing page
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+const FALLBACKS: Record<string, string> = {
+  hero_title: "Care Redefined.",
+  hero_subtitle: "For Peaceful Living.",
+  hero_description: "A cinematic, minimalist approach to elder care management. Equipped with Real-Time Optical Safety Matrices and friendly, responsive voice assistants. Engineered for deep empathy and supreme operational efficiency.",
+  feature_1_title: "Optical Matrix",
+  feature_1_desc: "Real-time edge-computed anomaly and fall detection ensuring absolute resident safety.",
+  feature_2_title: "Voice Assistant",
+  feature_2_desc: "Low-latency conversational AI for hands-free charting and friendly companionship.",
+  feature_3_title: "Secure Family Portal",
+  feature_3_desc: "Private health logs and vitals synced in real-time with family dashboards.",
+  contact_address: "123 Golden Hearth Lane,\nBonifacio Global City, Taguig,\nMetro Manila, Philippines",
+  contact_phone: "+63 (2) 8888-7777",
+  contact_email: "concierge@goldenhearth.com",
+  contact_map_url: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3861.9701041113264!2d121.0494499!3d14.5484443!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3397c8eb3c7849bd%3A0xc34b3e83b8a3e746!2sBonifacio%20Global%20City!5e0!3m2!1sen!2sph!4v1720610000000!5m2!1sen!2sph",
+  footer_text: "© 2026 AI Powered Assisted Living. All rights reserved.",
+};
+
+function SiteContentEditor() {
+  const { data: rows, refetch } = useLiveQuery<SiteContentRow>("site-content", {
+    tables: ["SiteContent"],
+  });
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<Set<string>>(new Set());
+
+  // Populate edit state from loaded rows
+  useEffect(() => {
+    const map: Record<string, string> = {};
+    for (const r of rows) map[r.id] = r.value;
+    setEdits((prev) => {
+      const merged = { ...prev };
+      for (const [k, v] of Object.entries(map)) {
+        if (!(k in merged)) merged[k] = v;
+      }
+      return merged;
+    });
+  }, [rows]);
+
+  const handleSave = async (fieldId: string) => {
+    setSaving((s) => new Set(s).add(fieldId));
+    try {
+      const val = edits[fieldId] ?? rows.find((r) => r.id === fieldId)?.value ?? FALLBACKS[fieldId] ?? "";
+      const existing = rows.find((r) => r.id === fieldId);
+      if (existing) {
+        await updateRecord("site-content", fieldId, { value: val });
+      } else {
+        await createRecord("site-content", { id: fieldId, value: val });
+      }
+      await refetch();
+      Swal.fire({ title: "Saved", icon: "success", timer: 1000, showConfirmButton: false });
+    } catch {
+      Swal.fire({ title: "Error", text: "Failed to save content", icon: "error" });
+    } finally {
+      setSaving((s) => { const n = new Set(s); n.delete(fieldId); return n; });
+    }
+  };
+
+  const handleSaveAll = async () => {
+    setSaving(new Set(CONTENT_FIELDS.map((f) => f.id)));
+    try {
+      for (const field of CONTENT_FIELDS) {
+        const val = edits[field.id] ?? rows.find((r) => r.id === field.id)?.value ?? FALLBACKS[field.id] ?? "";
+        const existing = rows.find((r) => r.id === field.id);
+        if (existing) {
+          await updateRecord("site-content", field.id, { value: val });
+        } else {
+          await createRecord("site-content", { id: field.id, value: val });
+        }
+      }
+      await refetch();
+      Swal.fire({ title: "All content saved!", icon: "success", timer: 1200, showConfirmButton: false });
+    } catch {
+      Swal.fire({ title: "Error", text: "Failed to save some content", icon: "error" });
+    } finally {
+      setSaving(new Set());
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">Site Content Editor</h2>
+          <p className="text-sm text-gray-500">Edit all text content displayed on the public landing page.</p>
+        </div>
+        <button onClick={handleSaveAll} className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+          <Save className="w-4 h-4" /> Save All
+        </button>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {CONTENT_FIELDS.map((field) => {
+          const currentVal = edits[field.id] ?? rows.find((r) => r.id === field.id)?.value ?? FALLBACKS[field.id] ?? "";
+          const isSaving = saving.has(field.id);
+          return (
+            <div key={field.id} className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
+              <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">{field.label}</label>
+              {field.multiline ? (
+                <textarea
+                  value={currentVal}
+                  onChange={(e) => setEdits((p) => ({ ...p, [field.id]: e.target.value }))}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none resize-y bg-gray-50 text-gray-900"
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={currentVal}
+                  onChange={(e) => setEdits((p) => ({ ...p, [field.id]: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none bg-gray-50 text-gray-900"
+                />
+              )}
+              <button
+                onClick={() => handleSave(field.id)}
+                disabled={isSaving}
+                className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold hover:bg-blue-100 transition disabled:opacity-50"
+              >
+                {isSaving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * BLOG MANAGER — Full CRUD for blog posts with image upload
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+const emptyBlog = (): Omit<BlogPost, "id"> => ({
+  title: "",
+  description: "",
+  content: "",
+  imageUrl: "",
+  author: "System Admin",
+  publishedAt: new Date().toISOString().split("T")[0],
+  published: true,
+});
+
+function BlogManager() {
+  const { data: posts, refetch } = useLiveQuery<BlogPost>("blog-posts", {
+    tables: ["BlogPost"],
+  });
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyBlog());
+  const [imgUploading, setImgUploading] = useState(false);
+  const blogFileRef = useRef<HTMLInputElement>(null);
+
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyBlog());
+    setModalOpen(true);
+  };
+
+  const openEdit = (p: BlogPost) => {
+    setEditingId(p.id);
+    setForm({
+      title: p.title,
+      description: p.description,
+      content: p.content || "",
+      imageUrl: p.imageUrl || "",
+      author: p.author,
+      publishedAt: p.publishedAt ? p.publishedAt.split("T")[0] : new Date().toISOString().split("T")[0],
+      published: p.published,
+    });
+    setModalOpen(true);
+  };
+
+  const handleImageUpload = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    setImgUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("folder", "blog");
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      setForm((f) => ({ ...f, imageUrl: json.url }));
+    } catch {
+      Swal.fire({ title: "Upload Failed", icon: "error" });
+    } finally {
+      setImgUploading(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!form.title.trim()) {
+      Swal.fire({ title: "Title required", icon: "warning" });
+      return;
+    }
+    try {
+      const payload = {
+        ...form,
+        publishedAt: new Date(form.publishedAt).toISOString(),
+      };
+      if (editingId) {
+        await updateRecord("blog-posts", editingId, payload);
+      } else {
+        await createRecord("blog-posts", payload);
+      }
+      await refetch();
+      setModalOpen(false);
+      Swal.fire({ title: editingId ? "Post updated" : "Post created", icon: "success", timer: 1200, showConfirmButton: false });
+    } catch {
+      Swal.fire({ title: "Error", text: "Failed to save blog post", icon: "error" });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    const r = await Swal.fire({
+      title: "Delete post?",
+      text: "This cannot be undone.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      confirmButtonText: "Delete",
+    });
+    if (r.isConfirmed) {
+      await deleteRecord("blog-posts", id);
+      await refetch();
+      Swal.fire({ title: "Deleted", icon: "success", timer: 1000, showConfirmButton: false });
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">Blog Posts</h2>
+          <p className="text-sm text-gray-500">Create and manage blog posts displayed on the landing page.</p>
+        </div>
+        <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+          <Plus className="w-4 h-4" /> New Post
+        </button>
+      </div>
+
+      {/* Posts grid */}
+      {posts.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <Newspaper className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500 font-medium">No blog posts yet</p>
+          <p className="text-sm text-gray-400">Click "New Post" to create your first article.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {posts.map((p) => (
+            <div key={p.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg hover:border-yellow-300 transition flex flex-col">
+              {p.imageUrl && (
+                <div className="h-40 bg-gray-100 relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.imageUrl} alt={p.title} className="w-full h-full object-cover" />
+                  {!p.published && (
+                    <span className="absolute top-2 right-2 px-2 py-1 bg-gray-900/80 text-white text-xs rounded-full font-semibold">Draft</span>
+                  )}
+                </div>
+              )}
+              <div className="p-4 flex-1 flex flex-col">
+                <h3 className="font-bold text-gray-900 mb-1 line-clamp-2">{p.title}</h3>
+                <p className="text-sm text-gray-600 mb-3 line-clamp-2 flex-1">{p.description}</p>
+                <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
+                  <User className="w-3 h-3" /> {p.author}
+                  <span className="text-gray-300">•</span>
+                  <Calendar className="w-3 h-3" /> {new Date(p.publishedAt).toLocaleDateString()}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => openEdit(p)} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold hover:bg-blue-100 transition">
+                    <Pencil className="w-3 h-3" /> Edit
+                  </button>
+                  <button onClick={() => handleDelete(p.id)} className="flex items-center justify-center gap-1 px-3 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-semibold hover:bg-red-100 transition">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Blog modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+              <h3 className="text-lg font-bold text-gray-900">{editingId ? "Edit Post" : "New Blog Post"}</h3>
+              <button onClick={() => setModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-lg transition">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              {/* Image upload */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Cover Image</label>
+                <div
+                  onClick={() => blogFileRef.current?.click()}
+                  className="border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-yellow-400 transition overflow-hidden"
+                >
+                  {form.imageUrl ? (
+                    <div className="relative h-48">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={form.imageUrl} alt="Cover" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 transition flex items-center justify-center text-white text-sm font-medium">
+                        <Upload className="w-4 h-4 mr-2" /> Replace
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                      <Upload className="w-8 h-8 mb-2" />
+                      <p className="text-sm">{imgUploading ? "Uploading…" : "Click to upload cover image"}</p>
+                    </div>
+                  )}
+                </div>
+                <input ref={blogFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e.target.files)} />
+              </div>
+
+              {/* Title */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Title *</label>
+                <input type="text" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Blog post title…" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none text-gray-900" />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Description / Excerpt</label>
+                <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={3} placeholder="Short summary shown on cards…" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none resize-y text-gray-900" />
+              </div>
+
+              {/* Content */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Full Content (Markdown)</label>
+                <textarea value={form.content} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))} rows={8} placeholder="Write your article content here…\n\n## Supports Markdown" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none resize-y font-mono text-sm text-gray-900" />
+              </div>
+
+              {/* Author + Date row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Author</label>
+                  <input type="text" value={form.author} onChange={(e) => setForm((f) => ({ ...f, author: e.target.value }))} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none text-gray-900" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Publish Date</label>
+                  <input type="date" value={typeof form.publishedAt === 'string' ? form.publishedAt.split('T')[0] : ''} onChange={(e) => setForm((f) => ({ ...f, publishedAt: e.target.value }))} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none text-gray-900" />
+                </div>
+              </div>
+
+              {/* Published toggle */}
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input type="checkbox" checked={form.published} onChange={(e) => setForm((f) => ({ ...f, published: e.target.checked }))} className="w-5 h-5 rounded" />
+                <span className="font-semibold text-gray-700">Published</span>
+                <span className="text-xs text-gray-400">{form.published ? "Visible on landing page" : "Draft — hidden from public"}</span>
+              </label>
+            </div>
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
+              <button onClick={() => setModalOpen(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Cancel</button>
+              <button onClick={handleSubmit} className="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+                {editingId ? "Update Post" : "Publish Post"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * PAGES MANAGER — Custom navigation pages for the landing site
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+const emptyPage = (): Omit<CustomPageRow, "id"> => ({
+  title: "",
+  slug: "",
+  content: "",
+  published: true,
+  sortOrder: 0,
+});
+
+function PagesManager() {
+  const { data: pages, refetch } = useLiveQuery<CustomPageRow>("custom-pages", {
+    tables: ["CustomPage"],
+  });
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyPage());
+
+  const slugify = (text: string) =>
+    text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyPage());
+    setModalOpen(true);
+  };
+
+  const openEdit = (p: CustomPageRow) => {
+    setEditingId(p.id);
+    setForm({
+      title: p.title,
+      slug: p.slug,
+      content: p.content,
+      published: p.published,
+      sortOrder: p.sortOrder,
+    });
+    setModalOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!form.title.trim()) {
+      Swal.fire({ title: "Title required", icon: "warning" });
+      return;
+    }
+    const slug = form.slug || slugify(form.title);
+    try {
+      const payload = { ...form, slug };
+      if (editingId) {
+        await updateRecord("custom-pages", editingId, payload);
+      } else {
+        await createRecord("custom-pages", payload);
+      }
+      await refetch();
+      setModalOpen(false);
+      Swal.fire({ title: editingId ? "Page updated" : "Page created", icon: "success", timer: 1200, showConfirmButton: false });
+    } catch {
+      Swal.fire({ title: "Error", text: "Failed to save page", icon: "error" });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    const r = await Swal.fire({
+      title: "Delete page?",
+      text: "This removes it from the navigation.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      confirmButtonText: "Delete",
+    });
+    if (r.isConfirmed) {
+      await deleteRecord("custom-pages", id);
+      await refetch();
+      Swal.fire({ title: "Deleted", icon: "success", timer: 1000, showConfirmButton: false });
+    }
+  };
+
+  const togglePublished = async (p: CustomPageRow) => {
+    await updateRecord("custom-pages", p.id, { published: !p.published });
+    await refetch();
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">Custom Pages</h2>
+          <p className="text-sm text-gray-500">Add pages to the landing page navigation. Published pages appear in the navbar.</p>
+        </div>
+        <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+          <Plus className="w-4 h-4" /> Add Page
+        </button>
+      </div>
+
+      {pages.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <FilePlus className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500 font-medium">No custom pages yet</p>
+          <p className="text-sm text-gray-400">Click "Add Page" to create a new navigation page.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {pages.map((p) => (
+            <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4 hover:shadow-md hover:border-yellow-300 transition">
+              <GripVertical className="w-5 h-5 text-gray-300 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-gray-900 truncate">{p.title}</h3>
+                <p className="text-sm text-gray-500">/page/{p.slug}</p>
+              </div>
+              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                p.published ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+              }`}>
+                {p.published ? "Published" : "Draft"}
+              </span>
+              <button onClick={() => togglePublished(p)} className="p-2 hover:bg-gray-100 rounded-lg transition" title={p.published ? "Unpublish" : "Publish"}>
+                {p.published ? <Eye className="w-4 h-4 text-green-600" /> : <EyeOff className="w-4 h-4 text-gray-400" />}
+              </button>
+              <button onClick={() => openEdit(p)} className="p-2 hover:bg-blue-50 rounded-lg transition">
+                <Pencil className="w-4 h-4 text-blue-600" />
+              </button>
+              <button onClick={() => handleDelete(p.id)} className="p-2 hover:bg-red-50 rounded-lg transition">
+                <Trash2 className="w-4 h-4 text-red-500" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Page modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+              <h3 className="text-lg font-bold text-gray-900">{editingId ? "Edit Page" : "New Page"}</h3>
+              <button onClick={() => setModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-lg transition">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Page Title *</label>
+                <input
+                  type="text"
+                  value={form.title}
+                  onChange={(e) => {
+                    const title = e.target.value;
+                    setForm((f) => ({ ...f, title, slug: editingId ? f.slug : slugify(title) }));
+                  }}
+                  placeholder="e.g. About Us, Careers, FAQ…"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">URL Slug</label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-400">/page/</span>
+                  <input
+                    type="text"
+                    value={form.slug}
+                    onChange={(e) => setForm((f) => ({ ...f, slug: slugify(e.target.value) }))}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none font-mono text-gray-900"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Content (Markdown)</label>
+                <textarea
+                  value={form.content}
+                  onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+                  rows={12}
+                  placeholder="# Page Title\n\nYour page content here…\n\n## Section Heading"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none resize-y font-mono text-sm text-gray-900"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Sort Order</label>
+                  <input
+                    type="number"
+                    value={form.sortOrder}
+                    onChange={(e) => setForm((f) => ({ ...f, sortOrder: parseInt(e.target.value) || 0 }))}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none text-gray-900"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-3 cursor-pointer select-none pb-3">
+                    <input type="checkbox" checked={form.published} onChange={(e) => setForm((f) => ({ ...f, published: e.target.checked }))} className="w-5 h-5 rounded" />
+                    <span className="font-semibold text-gray-700">Published</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
+              <button onClick={() => setModalOpen(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Cancel</button>
+              <button onClick={handleSubmit} className="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+                {editingId ? "Update Page" : "Create Page"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

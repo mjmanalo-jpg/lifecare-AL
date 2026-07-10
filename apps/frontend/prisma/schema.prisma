@@ -19,9 +19,12 @@ datasource db {
 
 enum Role {
   SUPERADMIN
+  FACILITY_ADMIN
+  PHYSICIAN
   NURSE
   CAREGIVER
   FAMILY
+  RESIDENT
 }
 
 enum CareLevel {
@@ -126,6 +129,12 @@ enum AttendanceStatus {
   EARLY_LEAVE
 }
 
+enum AdmissionStatus {
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
 // ============================================================================
 // MODELS
 // ============================================================================
@@ -149,6 +158,10 @@ model User {
   receivedMessages  Message[] @relation("ReceivedMessages")
   notifications     Notification[]
   shiftReports      ShiftReport[]
+  // A FAMILY user sponsors one or more residents; used to scope the Family portal.
+  sponsoredResidents Resident[] @relation("Sponsor")
+  // A RESIDENT user is linked 1-1 to their own resident record.
+  residentProfile    Resident?  @relation("ResidentSelf")
 
   @@index([role])
   @@index([email])
@@ -172,6 +185,12 @@ model Resident {
   medicalHistory      String?
   allergies           String?
   notes               String?
+  // FAMILY sponsor (nullable — set at move-in). Scopes what a family login can read.
+  sponsorId           String?
+  sponsor             User?          @relation("Sponsor", fields: [sponsorId], references: [id], onDelete: SetNull)
+  // Optional self-login account (RESIDENT role). Scopes a resident to their own record.
+  userId              String?        @unique
+  residentUser        User?          @relation("ResidentSelf", fields: [userId], references: [id], onDelete: SetNull)
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 
@@ -185,10 +204,14 @@ model Resident {
   visits              Visit[]
   invoices            Invoice[]
   residentNotes       ResidentNote[]
+  admission           Admission?     @relation("AdmissionResident")
+  serviceCharges      ServiceCharge[]
+  insuranceValidations InsuranceValidation[]
 
   @@index([careLevel])
   @@index([roomNumber])
   @@index([admissionDate])
+  @@index([sponsorId])
   @@index([createdAt])
 }
 
@@ -201,6 +224,10 @@ model Staff {
   license       String?
   licenseExpiry DateTime?
   isActive      Boolean  @default(true)
+  isApproved    Boolean  @default(false)
+  avatarUrl     String?
+  experience    String?
+  documents     Json?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -469,6 +496,8 @@ model Invoice {
   paidAt             DateTime?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
+  serviceCharges     ServiceCharge[]
+  payments           Payment[]
 
   @@index([residentId])
   @@index([status])
@@ -493,4 +522,280 @@ model ResidentNote {
   @@index([category])
   @@index([isPinned])
   @@index([createdAt])
+}
+
+// ============================================================================
+// AI ASSISTANT
+// ============================================================================
+
+// Knowledge-base documents for the Super Admin AI Assistant. Uploaded files are
+// text-extracted (client-side for text formats, Gemini for binaries) and the
+// plain text is stored here for retrieval-augmented chat. Realtime-enabled.
+model KnowledgeDoc {
+  id        String   @id @default(uuid())
+  name      String
+  type      String   @default("unknown")
+  size      Int      @default(0)
+  chars     Int      @default(0)
+  text      String   @db.Text
+  source    String   @default("client")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// Generic key/value application settings (e.g. the assistant's default voice).
+// `id` holds the setting key, e.g. "assistantVoice". Realtime-enabled.
+model AppSetting {
+  id        String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================================================
+// ROOM MANAGEMENT
+// ============================================================================
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  RESERVED
+}
+
+enum RoomType {
+  PRIVATE
+  SEMI_PRIVATE
+  WARD
+  SUITE
+}
+
+model Room {
+  id          String     @id @default(uuid())
+  roomNumber  String     @unique
+  floor       Int?
+  wing        String?
+  roomType    RoomType   @default(SEMI_PRIVATE)
+  capacity    Int        @default(1)
+  status      RoomStatus @default(AVAILABLE)
+  features    String?
+  rateMonthly Float?
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([status])
+  @@index([floor])
+  @@index([wing])
+  @@index([roomType])
+}
+
+// ============================================================================
+// INVENTORY MANAGEMENT
+// ============================================================================
+
+enum InventoryCategory {
+  MEDICAL_SUPPLIES
+  PERSONAL_CARE
+  LINEN
+  FOOD
+  CLEANING
+  OFFICE
+  FURNITURE
+  EQUIPMENT
+  PPE
+  OTHER
+}
+
+model InventoryItem {
+  id           String             @id @default(uuid())
+  itemName     String
+  category     InventoryCategory  @default(OTHER)
+  quantity     Int                @default(0)
+  unit         String             @default("pcs")
+  minimumStock Int                @default(5)
+  location     String?
+  supplier     String?
+  expiryDate   DateTime?
+  notes        String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([category])
+  @@index([itemName])
+  @@index([expiryDate])
+}
+
+// ============================================================================
+// ADMISSION & ONBOARDING WORKFLOW
+// ============================================================================
+// Tracks a prospective resident through the 8-step onboarding pipeline:
+//   1 Registration · 2 Medical Assessment · 3 Care Assessment · 4 Insurance
+//   Verify · 5 Room Assignment · 6 QR Code Gen · 7 Assign Care Team · 8 Care Plan
+// On completion the captured data is used to create the real Resident record.
+model Admission {
+  id                    String          @id @default(uuid())
+
+  // Step 1 — Registration
+  firstName             String
+  lastName              String
+  dateOfBirth           DateTime?
+  gender                String?
+  phone                 String?
+  email                 String?
+  emergencyContact      String?
+  emergencyContactPhone String?
+
+  // Step 2 — Medical Assessment
+  medicalAssessment     String?         @db.Text
+  allergies             String?
+  medicalHistory        String?
+
+  // Step 3 — Care Assessment
+  careAssessment        String?         @db.Text
+  careLevel             CareLevel?
+  mobility              String?
+
+  // Step 4 — Insurance Verification
+  insuranceProvider     String?
+  insurancePolicyNumber String?
+  insuranceVerified     Boolean         @default(false)
+  insuranceVerifiedAt   DateTime?
+
+  // Step 5 — Room Assignment
+  roomNumber            String?
+
+  // Step 6 — QR Code
+  qrPayload             String?         // stable identifier encoded in the QR (e.g. GH-RES-xxxx)
+
+  // Step 7 — Care Team (JSON array of { id, name, role })
+  careTeam              String?         @db.Text
+
+  // Step 8 — Individual Care Plan
+  carePlan              String?         @db.Text
+  carePlanGoals         String?         @db.Text
+
+  // Workflow state
+  currentStep           Int             @default(1) // 1..8, the active/next step
+  completedSteps        String          @default("[]") // JSON array of completed step numbers
+  status                AdmissionStatus @default(IN_PROGRESS)
+
+  // Family sponsor — captured at registration, linked to a User on completion.
+  sponsorName           String?
+  sponsorEmail          String?
+
+  // Linkage
+  sponsorId             String?         // family User.id, when known
+  residentId            String?         @unique
+  resident              Resident?       @relation("AdmissionResident", fields: [residentId], references: [id], onDelete: SetNull)
+
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  @@index([status])
+  @@index([currentStep])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// NEW BILLING & FINANCE MODELS
+// ============================================================================
+
+model ServiceCharge {
+  id           String    @id @default(uuid())
+  residentId   String
+  resident     Resident  @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  description  String
+  amount       Float
+  serviceDate  DateTime
+  category     String    @default("Care Services") // e.g. Room Rate, Medical, Dining, Therapy, Custom
+  invoiceId    String?
+  invoice      Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([residentId])
+  @@index([invoiceId])
+  @@index([serviceDate])
+}
+
+model InsuranceValidation {
+  id               String    @id @default(uuid())
+  residentId       String
+  resident         Resident  @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  provider         String
+  policyNumber     String
+  groupNumber      String?
+  status           String    @default("PENDING") // PENDING, VALIDATED, FAILED
+  verifiedAt       DateTime?
+  verifiedBy       String?
+  coverageDetails  String?   @db.Text
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([residentId])
+  @@index([status])
+}
+
+model Payment {
+  id             String    @id @default(uuid())
+  invoiceId      String
+  invoice        Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount         Float
+  paymentDate    DateTime  @default(now())
+  paymentMethod  String    // CARD, ACH, CHECK, CASH, OTHER
+  transactionId  String?   @unique
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([invoiceId])
+  @@index([paymentDate])
+}
+
+// ============================================================================
+// CMS — BLOG, SITE CONTENT & CUSTOM PAGES
+// ============================================================================
+
+// Blog posts managed by the Super Admin and displayed on the public landing page.
+model BlogPost {
+  id          String   @id @default(uuid())
+  title       String
+  description String   @db.Text
+  content     String?  @db.Text
+  imageUrl    String?
+  author      String
+  publishedAt DateTime @default(now())
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([publishedAt])
+  @@index([published])
+}
+
+// Editable key/value text content for the public landing page (hero title,
+// subtitle, descriptions, feature copy, etc.). The `id` field is the content
+// key, e.g. "hero_title". Realtime-enabled.
+model SiteContent {
+  id        String   @id           // e.g. "hero_title", "hero_subtitle"
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+}
+
+// Custom navigation pages created by the Super Admin. Published pages appear
+// in the landing-page navbar and are routed to /page/:slug.
+model CustomPage {
+  id        String   @id @default(uuid())
+  title     String
+  slug      String   @unique
+  content   String   @db.Text
+  published Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+  @@index([published])
 }

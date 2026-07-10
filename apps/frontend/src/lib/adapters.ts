@@ -103,6 +103,64 @@ export function adaptTask(t: any) {
   };
 }
 
+/** Room row -> Room view model. */
+export function adaptRoom(r: any) {
+  return {
+    id: r.id,
+    roomNumber: r.roomNumber ?? "—",
+    floor: r.floor ?? "—",
+    wing: r.wing ?? "—",
+    roomType: (r.roomType ?? "SEMI_PRIVATE") as "PRIVATE" | "SEMI_PRIVATE" | "WARD" | "SUITE",
+    capacity: r.capacity ?? 1,
+    status: (r.status ?? "AVAILABLE") as "AVAILABLE" | "OCCUPIED" | "MAINTENANCE" | "RESERVED",
+    features: r.features ?? "",
+    rateMonthly: r.rateMonthly,
+    notes: r.notes ?? "",
+    raw: r,
+  };
+}
+
+/** Inventory item row -> Inventory view model. */
+export function adaptInventoryItem(i: any) {
+  return {
+    id: i.id,
+    itemName: i.itemName ?? "—",
+    category: humanize(i.category) || "Other",
+    quantity: i.quantity ?? 0,
+    unit: i.unit ?? "pcs",
+    minimumStock: i.minimumStock ?? 5,
+    location: i.location ?? "—",
+    supplier: i.supplier ?? "—",
+    expiryDate: i.expiryDate ?? null,
+    notes: i.notes ?? "",
+    lowStock: (i.quantity ?? 0) <= (i.minimumStock ?? 5),
+    raw: i,
+  };
+}
+
+/** Invoice row (with `resident` included) -> Billing view model. */
+export function adaptInvoice(inv: any) {
+  return {
+    id: inv.id,
+    invoiceNumber: inv.invoiceNumber ?? "—",
+    residentName: inv.resident ? residentName(inv.resident) : "—",
+    room: inv.resident?.roomNumber ?? "—",
+    totalAmount: inv.totalAmount ?? 0,
+    amountPaid: inv.amountPaid ?? 0,
+    balance: (inv.totalAmount ?? 0) - (inv.amountPaid ?? 0),
+    dueDate: inv.dueDate ?? null,
+    status: (inv.status ?? "DRAFT") as "DRAFT" | "SENT" | "PAID" | "OVERDUE" | "CANCELLED",
+    description: inv.description ?? "",
+    billingPeriodStart: inv.billingPeriodStart ?? null,
+    billingPeriodEnd: inv.billingPeriodEnd ?? null,
+    sentAt: inv.sentAt ?? null,
+    paidAt: inv.paidAt ?? null,
+    serviceCharges: Array.isArray(inv.serviceCharges) ? inv.serviceCharges.map(adaptServiceCharge) : [],
+    payments: Array.isArray(inv.payments) ? inv.payments.map(adaptPayment) : [],
+    raw: inv,
+  };
+}
+
 /** Staff row (with `user` included) -> SuperAdmin registry model. */
 export function adaptStaff(s: any) {
   return {
@@ -112,8 +170,62 @@ export function adaptStaff(s: any) {
     department: s.department ?? "—",
     email: s.user?.email ?? "—",
     phone: s.user?.phone ?? "—",
-    status: (s.isActive ? "Active" : "Inactive") as "Active" | "Inactive",
+    active: (s.isActive ? "Active" : "Inactive") as "Active" | "Inactive",
+    approved: (s.isApproved ? "Approved" : "Disapproved") as "Approved" | "Disapproved",
+    avatarUrl: s.avatarUrl ?? null,
+    experience: s.experience ?? "",
+    documents: Array.isArray(s.documents) ? s.documents : [],
     startDate: s.hireDate ? new Date(s.hireDate).toISOString().slice(0, 10) : "—",
     raw: s,
+  };
+}
+
+/** ServiceCharge row -> View model. */
+export function adaptServiceCharge(sc: any) {
+  return {
+    id: sc.id,
+    residentId: sc.residentId,
+    residentName: sc.resident ? residentName(sc.resident) : "—",
+    description: sc.description ?? "",
+    amount: sc.amount ?? 0,
+    serviceDate: sc.serviceDate ?? null,
+    category: sc.category ?? "Care Services",
+    invoiceId: sc.invoiceId ?? null,
+    invoiceNumber: sc.invoice?.invoiceNumber ?? null,
+    raw: sc,
+  };
+}
+
+/** InsuranceValidation row -> View model. */
+export function adaptInsuranceValidation(iv: any) {
+  return {
+    id: iv.id,
+    residentId: iv.residentId,
+    residentName: iv.resident ? residentName(iv.resident) : "—",
+    provider: iv.provider ?? "",
+    policyNumber: iv.policyNumber ?? "",
+    groupNumber: iv.groupNumber ?? "",
+    status: iv.status ?? "PENDING",
+    verifiedAt: iv.verifiedAt ?? null,
+    verifiedBy: iv.verifiedBy ?? null,
+    coverageDetails: iv.coverageDetails ?? "",
+    notes: iv.notes ?? "",
+    raw: iv,
+  };
+}
+
+/** Payment row -> View model. */
+export function adaptPayment(p: any) {
+  return {
+    id: p.id,
+    invoiceId: p.invoiceId,
+    invoiceNumber: p.invoice?.invoiceNumber ?? "—",
+    residentName: p.invoice?.resident ? residentName(p.invoice.resident) : "—",
+    amount: p.amount ?? 0,
+    paymentDate: p.paymentDate ?? null,
+    paymentMethod: p.paymentMethod ?? "",
+    transactionId: p.transactionId ?? "",
+    notes: p.notes ?? "",
+    raw: p,
   };
 }

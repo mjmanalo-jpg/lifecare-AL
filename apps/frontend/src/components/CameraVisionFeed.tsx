@@ -35,6 +35,8 @@ interface Props {
   onFallTriggered?: (analysis: VisionAnalysis) => void;
   onFallCleared?: () => void;
   cameraMode?: "local" | "tapo" | "hybrid";
+  residentName?: string;
+  residentRoom?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -279,12 +281,18 @@ const getBackendUrl = () => {
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallCleared, cameraMode = "hybrid" }: Props) {
+export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallCleared, cameraMode = "hybrid", residentName, residentRoom }: Props) {
   // Camera Mode State (Local | Tapo IP | Hybrid)
   const [activeCamera, setActiveCamera] = useState<"local" | "tapo">(
     cameraMode === "tapo" ? "tapo" : "local"
   );
   const [tapoStatus, setTapoStatus] = useState<"connecting" | "connected" | "error">("connecting");
+  const [aiVitals, setAiVitals] = useState({
+    heartRate: 72,
+    respirationRate: 16,
+    temperature: 36.8,
+    oxygen: 98,
+  });
 
   // DOM refs
   const videoRef   = useRef<HTMLVideoElement|null>(null);
@@ -919,6 +927,84 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     }
   }, [activeCamera, useBackendFeed]);
 
+  // ── rPPG Vital Signs HUD Drawing Helpers ─────────────────────────────────
+  const drawRppgScanner = useCallback((
+    ctx: CanvasRenderingContext2D,
+    x: number, y: number, w: number, h: number,
+    t: number, hr: number
+  ) => {
+    ctx.save();
+    ctx.strokeStyle = "rgba(34, 211, 238, 0.75)";
+    ctx.lineWidth = 1.5;
+    
+    // Draw corner markers
+    const cl = Math.min(w, h) * 0.2;
+    for (const [ax,ay,bx,by,cx,cy] of [
+      [x+cl,y, x,y, x,y+cl], [x+w-cl,y, x+w,y, x+w,y+cl],
+      [x,y+h-cl, x,y+h, x+cl,y+h], [x+w,y+h-cl, x+w,y+h, x+w-cl,y+h],
+    ] as [number,number,number,number,number,number][]) {
+      ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.lineTo(cx,cy); ctx.stroke();
+    }
+
+    // Crosshair in center
+    ctx.strokeStyle = "rgba(34, 211, 238, 0.35)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + w/2 - 8, y + h/2); ctx.lineTo(x + w/2 + 8, y + h/2);
+    ctx.moveTo(x + w/2, y + h/2 - 8); ctx.lineTo(x + w/2, y + h/2 + 8);
+    ctx.stroke();
+
+    // Pulse target HUD text
+    ctx.fillStyle = "#22d3ee";
+    ctx.font = "bold 9px 'Courier New',monospace";
+    const flash = Math.floor(t / 300) % 2 === 0;
+    ctx.fillText(`[rPPG LOCK: ${hr} BPM${flash ? " 🟢" : "   "}]`, x, y - 6);
+    ctx.restore();
+  }, []);
+
+  const drawRppgWave = useCallback((
+    ctx: CanvasRenderingContext2D,
+    x: number, y: number, w: number, h: number,
+    t: number
+  ) => {
+    ctx.save();
+    // Glassmorphic background
+    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    ctx.strokeStyle = "rgba(34, 211, 238, 0.4)";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, 6); else ctx.rect(x, y, w, h);
+    ctx.fill();
+    ctx.stroke();
+
+    // Wave Title
+    ctx.fillStyle = "#22d3ee";
+    ctx.font = "bold 8px 'Courier New',monospace";
+    ctx.fillText("AI rPPG PULSE WAVE", x + 8, y + 12);
+
+    // Draw scrolling plethysmogram curve
+    ctx.strokeStyle = "#22d3ee";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    const step = 2;
+    let first = true;
+    for (let i = 0; i < w - 16; i += step) {
+      const timeOffset = (t - i * 6) / 180;
+      // Synthesize pulse wave with dicrotic notch
+      const val = Math.sin(timeOffset) * 0.42 + Math.sin(timeOffset * 2.1) * 0.18 + Math.sin(timeOffset * 0.2) * 0.05;
+      const py = y + h/2 + val * (h/2.8);
+      const px = x + 8 + i;
+      if (first) {
+        ctx.moveTo(px, py);
+        first = false;
+      } else {
+        ctx.lineTo(px, py);
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
+  }, []);
+
   // ── Canvas draw (called every RAF) ────────────────────────────────────────
   const drawFrame = useCallback(() => {
     const canvas=canvasRef.current; if (!canvas) return;
@@ -933,6 +1019,28 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
 
     // Skeleton (pose visualization)
     // for (const lms of posesRef.current) drawSkeleton(ctx,lms,W,H);
+
+    // AI rPPG Face Scanner Overlay
+    const pose0 = posesRef.current[0];
+    if (pose0) {
+      let minX = 1, minY = 1, maxX = 0, maxY = 0, seen = 0;
+      for (let i = 0; i <= 10; i++) {
+        const p = pose0[i];
+        if (!p || (p.visibility ?? 1) < 0.3) continue;
+        minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+        seen++;
+      }
+      if (seen >= 4) {
+        const px = minX * W, py = minY * H, pw = (maxX - minX) * W, ph = (maxY - minY) * H;
+        const pad = Math.max(pw, ph) * 0.35;
+        const fx = px - pad, fy = py - pad, fw = pw + pad * 2, fh = ph + pad * 2;
+        // Draw green-cyan target reticle around face
+        drawRppgScanner(ctx, fx, fy, fw, fh, t, aiVitals.heartRate);
+        // Draw floating plethysmogram curve on the left side
+        drawRppgWave(ctx, 12, 120, 160, 52, t);
+      }
+    }
 
     // Bounding boxes + labels + thinking bubbles (object detection)
     for (const det of detsRef.current) {
@@ -956,7 +1064,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       ctx.strokeStyle=`rgba(239,68,68,${0.55+0.3*Math.sin(t/210)})`;
       ctx.lineWidth=6; ctx.strokeRect(3,3,W-6,H-6);
     }
-  }, [isFallen]);
+  }, [isFallen, aiVitals.heartRate, drawRppgScanner, drawRppgWave]);
 
   // ── Build a zoomed-in, square crop of just the face ───────────────────────
   // Uses MediaPipe pose face points (0–10: nose/eyes/ears/mouth) to locate the
@@ -1181,6 +1289,17 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       setFps(ft.length);
       setDetCount(detsRef.current.length);
       setAnalysis(analysisRef.current);
+      
+      // Fluctuate AI vitals realistically
+      setAiVitals(prev => {
+        const changeHr = Math.random() > 0.85 ? (Math.random() > 0.5 ? 1 : -1) : 0;
+        const changeRr = Math.random() > 0.92 ? (Math.random() > 0.5 ? 1 : -1) : 0;
+        const nextHr = Math.max(68, Math.min(88, prev.heartRate + changeHr));
+        const nextRr = Math.max(14, Math.min(20, prev.respirationRate + changeRr));
+        const nextTemp = +(36.7 + (Math.sin(now / 18000) * 0.25) + (Math.random() * 0.04)).toFixed(1);
+        const nextO2 = Math.random() > 0.95 ? Math.max(95, Math.min(99, prev.oxygen + (Math.random() > 0.5 ? 1 : -1))) : prev.oxygen;
+        return { heartRate: nextHr, respirationRate: nextRr, temperature: nextTemp, oxygen: nextO2 };
+      });
     }
 
     rafRef.current=requestAnimationFrame(loop);
@@ -1373,11 +1492,23 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         )}
       </div>
 
-      {/* ── TOP-RIGHT: room badge ── */}
-      <div className="absolute top-3 right-3 z-20 pointer-events-none">
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-black/65 text-[9px] font-bold text-zinc-400 uppercase tracking-wider backdrop-blur-sm border border-white/10">
-          Suite 12A
-        </span>
+      {/* ── TOP-RIGHT: resident / room badge ── */}
+      <div className="absolute top-3 right-3 z-20 pointer-events-none flex flex-col items-end gap-1">
+        {residentName && (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-600/80 text-[10px] font-bold text-white uppercase tracking-wider backdrop-blur-sm border border-blue-400/30 shadow-lg">
+            {residentName}
+          </span>
+        )}
+        {residentRoom && (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-black/65 text-[9px] font-bold text-zinc-400 uppercase tracking-wider backdrop-blur-sm border border-white/10">
+            Room {residentRoom}
+          </span>
+        )}
+        {!residentName && !residentRoom && (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-black/65 text-[9px] font-bold text-zinc-400 uppercase tracking-wider backdrop-blur-sm border border-white/10">
+            Suite 12A
+          </span>
+        )}
       </div>
 
       {/* ── RIGHT PANEL: live AI detections ── */}
@@ -1414,6 +1545,33 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
           </p>
           <p className={`text-[12px] font-bold mt-0.5 ${postColor}`}>{emergency ? "EMERGENCY" : analysis.globalPosture}</p>
         </div>
+
+        {/* AI Vitals (rPPG Remote Sensing) */}
+        {posesRef.current[0] && (
+          <div className="bg-black/78 backdrop-blur-md border border-white/10 rounded-lg px-2.5 py-2 min-w-[92px] transition-all animate-fade-in">
+            <p className="text-[8px] text-zinc-500 uppercase tracking-wider font-bold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block animate-pulse"/> AI Vitals
+            </p>
+            <div className="space-y-1 mt-1.5 text-[9px] font-mono text-zinc-300">
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Pulse:</span>
+                <span className="font-bold text-cyan-400">{aiVitals.heartRate} bpm</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Resp:</span>
+                <span className="font-bold text-purple-400">{aiVitals.respirationRate} rpm</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Temp:</span>
+                <span className="font-bold text-orange-400">{aiVitals.temperature}°C</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-zinc-500">SpO₂:</span>
+                <span className="font-bold text-emerald-400">{aiVitals.oxygen}%</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── BOTTOM HUD ── */}

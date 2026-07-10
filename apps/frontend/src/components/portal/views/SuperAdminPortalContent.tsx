@@ -1,14 +1,16 @@
 "use client";
 
-import StatCard from "@/components/portal/widgets/StatCard";
-import ChartContainer from "@/components/portal/widgets/ChartContainer";
 import LandingCustomizerContent from "@/components/portal/views/LandingCustomizerContent";
-import { Users, AlertTriangle, Zap, Trash2, Search, Eye, Edit, X } from "lucide-react";
-import { useState, useMemo } from "react";
+import SuperAdminDashboard from "@/components/portal/views/SuperAdminDashboard";
+import AIAssistantContent from "@/components/portal/ai/AIAssistantContent";
+import AdmissionsContent from "@/components/portal/views/AdmissionsContent";
+import { Trash2, Search, Eye, Edit, X, ShieldCheck, ToggleLeft, ToggleRight, CheckSquare, Square } from "lucide-react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import Swal from "sweetalert2";
-import { useLiveQuery, useStats } from "@/lib/useLiveQuery";
+import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptStaff } from "@/lib/adapters";
 import { updateRecord, deleteRecord } from "@/lib/api";
+import { ROLES, type Role, GLOBAL_FEATURES } from "@/constants/roleConfig";
 
 interface SuperAdminPortalContentProps {
   tab: string;
@@ -17,7 +19,6 @@ interface SuperAdminPortalContentProps {
 type StaffMember = ReturnType<typeof adaptStaff>;
 
 export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContentProps) {
-  const { stats } = useStats();
   const { data: staffRows, loading, error, refetch } = useLiveQuery<Record<string, unknown>>("staff", {
     query: "include=user",
     tables: ["Staff", "User"],
@@ -34,8 +35,13 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     department: "",
     email: "",
     phone: "",
-    status: "Active" as "Active" | "Inactive",
+    active: "Active" as "Active" | "Inactive",
+    approved: "Approved" as "Approved" | "Disapproved",
+    avatarUrl: "",
+    experience: "",
+    documents: [] as { name: string; url: string; type: string }[],
   });
+  const [uploading, setUploading] = useState(false);
 
   const filteredStaff = useMemo(() => {
     return staff.filter((s) =>
@@ -111,7 +117,11 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
       department: member.department,
       email: member.email,
       phone: member.phone,
-      status: member.status,
+      active: member.active,
+      approved: member.approved,
+      avatarUrl: member.avatarUrl ?? "",
+      experience: member.experience ?? "",
+      documents: Array.isArray(member.documents) ? member.documents : [],
     });
   };
 
@@ -133,7 +143,11 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
         await updateRecord("staff", editingStaff.id, {
           position: editForm.position,
           department: editForm.department,
-          isActive: editForm.status === "Active",
+          isActive: editForm.active === "Active",
+          isApproved: editForm.approved === "Approved",
+          avatarUrl: editForm.avatarUrl || null,
+          experience: editForm.experience || null,
+          documents: editForm.documents.length > 0 ? editForm.documents : null,
         });
         const userId = editingStaff.raw?.userId;
         if (userId) {
@@ -163,24 +177,20 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     }
   };
 
-  const mockOccupancyData = [
-    { name: "Week 1", value: 28 },
-    { name: "Week 2", value: 29 },
-    { name: "Week 3", value: 30 },
-    { name: "Week 4", value: 31 },
-  ];
-
-  const mockStaffData = [
-    { name: "Mon", value: 12 },
-    { name: "Tue", value: 12 },
-    { name: "Wed", value: 11 },
-    { name: "Thu", value: 12 },
-    { name: "Fri", value: 13 },
-    { name: "Sat", value: 10 },
-  ];
+  if (tab === "admissions") {
+    return <AdmissionsContent />;
+  }
 
   if (tab === "appearance") {
     return <LandingCustomizerContent />;
+  }
+
+  if (tab === "assistant") {
+    return <AIAssistantContent />;
+  }
+
+  if (tab === "matrix") {
+    return <PortalMatrixEditor />;
   }
 
   if (tab === "staff") {
@@ -250,6 +260,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                   <th className="px-6 py-4">Department</th>
                   <th className="px-6 py-4">Email</th>
                   <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Approval</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -265,19 +276,41 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                           className="rounded cursor-pointer"
                         />
                       </td>
-                      <td className="px-6 py-4 font-medium text-gray-900">{staff.name}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          {staff.avatarUrl ? (
+                            <img src={staff.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-500 flex items-center justify-center text-black font-bold text-sm">
+                              {staff.name.charAt(0)}
+                            </div>
+                          )}
+                          <span className="font-medium text-gray-900">{staff.name}</span>
+                        </div>
+                      </td>
                       <td className="px-6 py-4 text-gray-700">{staff.position}</td>
                       <td className="px-6 py-4 text-gray-700">{staff.department}</td>
                       <td className="px-6 py-4 text-gray-600 text-xs">{staff.email}</td>
                       <td className="px-6 py-4">
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            staff.status === "Active"
+                            staff.active === "Active"
                               ? "bg-green-100 text-green-800"
                               : "bg-gray-100 text-gray-800"
                           }`}
                         >
-                          {staff.status}
+                          {staff.active}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            staff.approved === "Approved"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-red-100 text-red-800"
+                          }`}
+                        >
+                          {staff.approved}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -302,7 +335,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                       No staff members found matching your search.
                     </td>
                   </tr>
@@ -317,24 +350,40 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
           {filteredStaff.length > 0 ? (
             filteredStaff.map((staff) => (
               <div key={staff.id} className="bg-white rounded-lg border border-gray-200 p-4">
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedStaff.has(staff.id)}
-                    onChange={() => handleSelectStaff(staff.id)}
-                    className="rounded cursor-pointer mt-1"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <h3 className="font-semibold text-gray-900 truncate">{staff.name}</h3>
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedStaff.has(staff.id)}
+                      onChange={() => handleSelectStaff(staff.id)}
+                      className="rounded cursor-pointer mt-1"
+                    />
+                    {staff.avatarUrl ? (
+                      <img src={staff.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover mt-0.5" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-500 flex items-center justify-center text-black font-bold text-sm mt-0.5">
+                        {staff.name.charAt(0)}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <h3 className="font-semibold text-gray-900 truncate">{staff.name}</h3>
                       <span
                         className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
-                          staff.status === "Active"
+                          staff.active === "Active"
                             ? "bg-green-100 text-green-800"
                             : "bg-gray-100 text-gray-800"
                         }`}
                       >
-                        {staff.status}
+                        {staff.active}
+                      </span>
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
+                          staff.approved === "Approved"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {staff.approved}
                       </span>
                     </div>
                     <p className="text-sm text-gray-600 truncate">{staff.position}</p>
@@ -392,45 +441,87 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
 
               {/* View Modal Content */}
               <div className="p-8 space-y-6">
-                <div className="grid grid-cols-2 gap-6">
+                <div className="flex items-center gap-6 mb-6">
+                  {viewingStaff.avatarUrl ? (
+                    <img src={viewingStaff.avatarUrl} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-gray-200" />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-500 flex items-center justify-center text-black font-bold text-2xl">
+                      {viewingStaff.name.charAt(0)}
+                    </div>
+                  )}
                   <div>
-                    <label className="block text-sm font-semibold text-gray-600 mb-2">Full Name</label>
-                    <p className="text-lg font-medium text-gray-900">{viewingStaff.name}</p>
+                    <p className="text-xl font-bold text-gray-900">{viewingStaff.name}</p>
+                    <p className="text-sm text-gray-500">{viewingStaff.position} &middot; {viewingStaff.department}</p>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-semibold text-gray-600 mb-2">Email</label>
                     <p className="text-lg text-gray-900">{viewingStaff.email}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-600 mb-2">Position</label>
-                    <p className="text-lg text-gray-900">{viewingStaff.position}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-600 mb-2">Phone</label>
                     <p className="text-lg text-gray-900">{viewingStaff.phone}</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-600 mb-2">Department</label>
-                    <p className="text-lg text-gray-900">{viewingStaff.department}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-600 mb-2">Status</label>
+                    <label className="block text-sm font-semibold text-gray-600 mb-2">Employment Status</label>
                     <span
                       className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        viewingStaff.status === "Active"
+                        viewingStaff.active === "Active"
                           ? "bg-green-100 text-green-800"
                           : "bg-gray-100 text-gray-800"
                       }`}
                     >
-                      {viewingStaff.status}
+                      {viewingStaff.active}
+                    </span>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-600 mb-2">Approval Status</label>
+                    <span
+                      className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        viewingStaff.approved === "Approved"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {viewingStaff.approved}
                     </span>
                   </div>
                 </div>
+
+                {viewingStaff.experience && (
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <label className="block text-sm font-semibold text-gray-600 mb-2">Experience</label>
+                    <p className="text-gray-900 whitespace-pre-wrap">{viewingStaff.experience}</p>
+                  </div>
+                )}
 
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <label className="block text-sm font-semibold text-gray-600 mb-2">Start Date</label>
                   <p className="text-gray-900">{viewingStaff.startDate}</p>
                 </div>
+
+                {viewingStaff.documents.length > 0 && (
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <label className="block text-sm font-semibold text-gray-600 mb-2">Documents ({viewingStaff.documents.length})</label>
+                    <ul className="space-y-2 mt-2">
+                      {viewingStaff.documents.map((doc: any, i: number) => (
+                        <li key={i}>
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                            {doc.name}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
 
               {/* View Modal Footer */}
@@ -519,15 +610,141 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                     />
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Employment Status</label>
                     <select
-                      value={editForm.status}
-                      onChange={(e) => setEditForm({ ...editForm, status: e.target.value as "Active" | "Inactive" })}
+                      value={editForm.active}
+                      onChange={(e) => setEditForm({ ...editForm, active: e.target.value as "Active" | "Inactive" })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
                     >
                       <option value="Active">Active</option>
                       <option value="Inactive">Inactive</option>
                     </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Approval Status</label>
+                    <select
+                      value={editForm.approved}
+                      onChange={(e) => setEditForm({ ...editForm, approved: e.target.value as "Approved" | "Disapproved" })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
+                    >
+                      <option value="Approved">Approved</option>
+                      <option value="Disapproved">Disapproved</option>
+                    </select>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Profile Photo</label>
+                    <div className="flex items-center gap-4">
+                      {editForm.avatarUrl ? (
+                        <img src={editForm.avatarUrl} alt="" className="w-16 h-16 rounded-full object-cover border" />
+                      ) : (
+                        <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-sm">No photo</div>
+                      )}
+                      <button
+                        type="button"
+                        disabled={uploading}
+                        onClick={() => document.getElementById("avatar-upload")?.click()}
+                        className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-sm transition disabled:opacity-50"
+                      >
+                        {uploading ? "Uploading…" : "Upload Photo"}
+                      </button>
+                      {editForm.avatarUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setEditForm({ ...editForm, avatarUrl: "" })}
+                          className="px-3 py-2 text-red-500 hover:bg-red-50 rounded-lg text-sm transition"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      id="avatar-upload"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setUploading(true);
+                        try {
+                          const fd = new FormData();
+                          fd.append("file", file);
+                          fd.append("folder", "staff/avatars");
+                          const res = await fetch("/api/upload", { method: "POST", body: fd });
+                          const data = await res.json();
+                          if (data.url) setEditForm({ ...editForm, avatarUrl: data.url });
+                        } finally {
+                          setUploading(false);
+                          e.target.value = "";
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Experience (optional)</label>
+                    <textarea
+                      value={editForm.experience}
+                      onChange={(e) => setEditForm({ ...editForm, experience: e.target.value })}
+                      rows={3}
+                      placeholder="e.g. 10 years as registered nurse, specialized in geriatric care…"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none resize-none"
+                    />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Documents (optional)</label>
+                    {editForm.documents.length > 0 && (
+                      <ul className="mb-3 space-y-1">
+                        {editForm.documents.map((doc, i) => (
+                          <li key={i} className="flex items-center justify-between text-sm text-gray-700 bg-gray-50 px-3 py-2 rounded">
+                            <span className="truncate">{doc.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => setEditForm({ ...editForm, documents: editForm.documents.filter((_, j) => j !== i) })}
+                              className="text-red-500 hover:text-red-700 ml-2"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <button
+                      type="button"
+                      disabled={uploading}
+                      onClick={() => document.getElementById("doc-upload")?.click()}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-sm transition disabled:opacity-50"
+                    >
+                      {uploading ? "Uploading…" : "Upload Document"}
+                    </button>
+                    <input
+                      id="doc-upload"
+                      type="file"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setUploading(true);
+                        try {
+                          const fd = new FormData();
+                          fd.append("file", file);
+                          fd.append("folder", "staff/documents");
+                          const res = await fetch("/api/upload", { method: "POST", body: fd });
+                          const data = await res.json();
+                          if (data.url) {
+                            setEditForm({
+                              ...editForm,
+                              documents: [...editForm.documents, { name: data.name, url: data.url, type: data.type }],
+                            });
+                          }
+                        } finally {
+                          setUploading(false);
+                          e.target.value = "";
+                        }
+                      }}
+                    />
                   </div>
                 </div>
               </div>
@@ -555,103 +772,342 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   }
 
 
-  // Default: Admin Dashboard tab
+  // Default: Admin Dashboard tab — platform governance view unique to this role.
+  return <SuperAdminDashboard />;
+}
+
+/* ─── Portal Matrix Editor ─────────────────────────────────────────────── */
+
+/** All roles we want to configure. */
+const ALL_ROLES: Role[] = [
+  "SUPERADMIN",
+  "FACILITY_ADMIN",
+  "PHYSICIAN",
+  "NURSE",
+  "CAREGIVER",
+  "FAMILY",
+  "RESIDENT",
+];
+
+/** Friendly labels for the role keys. */
+const ROLE_LABELS: Record<Role, string> = {
+  SUPERADMIN: "Super Admin",
+  FACILITY_ADMIN: "Facility Admin",
+  PHYSICIAN: "Physician",
+  NURSE: "Head Nurse",
+  CAREGIVER: "Caregiver",
+  FAMILY: "Family Sponsor",
+  RESIDENT: "Resident",
+};
+
+/** Colour accents per role row for the left badge. */
+const ROLE_COLORS: Record<Role, string> = {
+  SUPERADMIN: "from-yellow-400 to-yellow-600",
+  FACILITY_ADMIN: "from-blue-400 to-blue-600",
+  PHYSICIAN: "from-teal-400 to-teal-600",
+  NURSE: "from-pink-400 to-pink-600",
+  CAREGIVER: "from-green-400 to-green-600",
+  FAMILY: "from-purple-400 to-purple-600",
+  RESIDENT: "from-orange-400 to-orange-600",
+};
+
+type MatrixState = Record<string, Record<string, boolean>>;
+
+function PortalMatrixEditor() {
+  const { data: settingRows, refetch } = useLiveQuery<{
+    id: string;
+    value: string;
+  }>("app-settings", { tables: ["AppSetting"] });
+
+  // Build the unique superset of all feature names across all roles.
+  const allFeatures = useMemo(() => {
+    return Object.keys(GLOBAL_FEATURES);
+  }, []);
+
+  // Hydrate matrix from the database setting, defaulting native features to true, others to false.
+  const [matrix, setMatrix] = useState<MatrixState>(() => {
+    const stored = settingRows.find((s) => s.id === "portal_matrix")?.value;
+    const parsed: MatrixState = stored ? JSON.parse(stored) : {};
+    const state: MatrixState = {};
+    ALL_ROLES.forEach((r) => {
+      state[r] = {};
+      const roleFeatures = ROLES[r].sidebarLinks.map((l) => l.name);
+      Object.keys(GLOBAL_FEATURES).forEach((f) => {
+        state[r][f] = parsed[r]?.[f] ?? roleFeatures.includes(f);
+      });
+    });
+    return state;
+  });
+
+  // Track saving status.
+  const [savingStatus, setSavingStatus] = useState<"saved" | "saving" | "error">("saved");
+
+  // Keep local matrix state updated if the database changes externally, as long as we're not currently saving.
+  useEffect(() => {
+    const stored = settingRows.find((s) => s.id === "portal_matrix")?.value;
+    if (stored && savingStatus !== "saving") {
+      try {
+        const parsed: MatrixState = JSON.parse(stored);
+        const state: MatrixState = {};
+        ALL_ROLES.forEach((r) => {
+          state[r] = {};
+          Object.keys(GLOBAL_FEATURES).forEach((f) => {
+            state[r][f] = parsed[r]?.[f] ?? false;
+          });
+        });
+        setMatrix(state);
+      } catch (e) {
+        console.error("Failed to parse matrix setting:", e);
+      }
+    }
+  }, [settingRows, savingStatus]);
+
+  // Centralized real-time persistence helper.
+  const saveMatrix = async (nextMatrix: MatrixState) => {
+    setSavingStatus("saving");
+    try {
+      const { upsertRecord } = await import("@/lib/api");
+      await upsertRecord("app-settings", "portal_matrix", {
+        value: JSON.stringify(nextMatrix),
+      });
+      await refetch();
+      setSavingStatus("saved");
+    } catch (err) {
+      console.error("Realtime save failed:", err);
+      setSavingStatus("error");
+    }
+  };
+
+  const toggle = useCallback(
+    (role: string, feature: string) => {
+      setMatrix((prev) => {
+        const next = {
+          ...prev,
+          [role]: { ...prev[role], [feature]: !prev[role]?.[feature] },
+        };
+        saveMatrix(next);
+        return next;
+      });
+    },
+    [settingRows]
+  );
+
+  const toggleEntireRole = useCallback(
+    (role: string) => {
+      setMatrix((prev) => {
+        const allOn = Object.keys(GLOBAL_FEATURES).every((f) => prev[role]?.[f] === true);
+        const updated = { ...prev[role] };
+        Object.keys(GLOBAL_FEATURES).forEach((f) => {
+          updated[f] = !allOn;
+        });
+        const next = { ...prev, [role]: updated };
+        saveMatrix(next);
+        return next;
+      });
+    },
+    [settingRows]
+  );
+
+  const toggleEntireFeature = useCallback(
+    (feature: string) => {
+      setMatrix((prev) => {
+        const allOn = ALL_ROLES.every((r) => prev[r]?.[feature] === true);
+        const next = { ...prev };
+        ALL_ROLES.forEach((r) => {
+          next[r] = { ...next[r], [feature]: !allOn };
+        });
+        saveMatrix(next);
+        return next;
+      });
+    },
+    [settingRows]
+  );
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2">
-          Admin Dashboard
-        </h1>
-        <p className="text-gray-600">Facility operations, systems health, and real-time metrics</p>
-      </div>
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Residents"
-          value={String(stats?.residents ?? 0)}
-          icon={Users}
-          trend={{ direction: "up", percent: 3 }}
-          backgroundColor="bg-blue-50"
-          textColor="text-blue-900"
-          iconColor="text-blue-500"
-        />
-        <StatCard
-          title="Active Incidents"
-          value={String(stats?.activeIncidents ?? 0)}
-          icon={AlertTriangle}
-          backgroundColor="bg-red-50"
-          textColor="text-red-900"
-          iconColor="text-red-500"
-        />
-        <StatCard
-          title="Staff On Duty"
-          value={String(stats?.activeStaff ?? 0)}
-          icon={Users}
-          backgroundColor="bg-green-50"
-          textColor="text-green-900"
-          iconColor="text-green-500"
-        />
-        <StatCard
-          title="System Health"
-          value="Optimal"
-          icon={Zap}
-          backgroundColor="bg-emerald-50"
-          textColor="text-emerald-900"
-          iconColor="text-emerald-500"
-        />
-      </div>
-
-      {/* Charts */}
-      <ChartContainer
-        title="Occupancy Trend (Monthly)"
-        type="area"
-        data={mockOccupancyData}
-        dataKey="value"
-        xAxisKey="name"
-        colors={["#3b82f6"]}
-        height={250}
-      />
-
-      <ChartContainer
-        title="Staff Attendance (Weekly)"
-        type="bar"
-        data={mockStaffData}
-        dataKey="value"
-        xAxisKey="name"
-        colors={["#10b981"]}
-      />
-
-      {/* System Telemetry Section */}
-      <div className="space-y-4">
-        <h3 className="text-xl font-bold text-gray-900">System Telemetry</h3>
-        <div className="bg-white rounded-lg p-6 border border-gray-200 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4">
-              <p className="text-sm text-green-700 font-semibold">API Response Time</p>
-              <p className="text-3xl font-bold text-green-600 mt-2">45ms</p>
-              <p className="text-xs text-green-600 mt-1">Excellent performance</p>
-            </div>
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4">
-              <p className="text-sm text-blue-700 font-semibold">Database Load</p>
-              <p className="text-3xl font-bold text-blue-600 mt-2">32%</p>
-              <p className="text-xs text-blue-600 mt-1">Healthy capacity</p>
-            </div>
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4">
-              <p className="text-sm text-purple-700 font-semibold">Active Sessions</p>
-              <p className="text-3xl font-bold text-purple-600 mt-2">8</p>
-              <p className="text-xs text-purple-600 mt-1">Currently online</p>
-            </div>
-          </div>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2">
+            Portal Feature Matrix
+          </h1>
+          <p className="text-gray-600">
+            Enable or disable sidebar modules per user role. Click any cell to sync changes instantly in real-time.
+          </p>
         </div>
-        <ChartContainer
-          title="Daily Active Users"
-          type="bar"
-          data={mockStaffData}
-          dataKey="value"
-          xAxisKey="name"
-          colors={["#3b82f6"]}
-        />
+        
+        {/* Realtime Status Badge */}
+        <div className="flex items-center gap-3 bg-white border border-gray-100 rounded-xl px-4 py-3.5 shadow-sm">
+          {savingStatus === "saving" && (
+            <>
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
+              </span>
+              <span className="text-sm font-semibold text-yellow-600">Syncing with Supabase...</span>
+            </>
+          )}
+          {savingStatus === "saved" && (
+            <>
+              <span className="relative flex h-3 w-3">
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500 animate-pulse"></span>
+              </span>
+              <span className="text-sm font-semibold text-green-600">Live Realtime Sync Active</span>
+            </>
+          )}
+          {savingStatus === "error" && (
+            <>
+              <span className="relative flex h-3 w-3">
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+              </span>
+              <span className="text-sm font-semibold text-red-600">Sync Error - Offline</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap gap-6 items-center text-sm text-gray-600">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-yellow-500" />
+          <span>Click checkboxes to toggle module access per role</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <ToggleLeft className="w-4 h-4 text-gray-400" />
+          <span>Click role/feature headers to toggle entire row/column</span>
+        </div>
+      </div>
+
+      {/* Matrix Grid */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            {/* Column headers: features */}
+            <thead>
+              <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                <th className="sticky left-0 z-10 bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider min-w-[180px]">
+                  Role / Module
+                </th>
+                {allFeatures.map((feature) => (
+                  <th
+                    key={feature}
+                    className="px-2 py-3 text-center min-w-[110px]"
+                  >
+                    <button
+                      onClick={() => toggleEntireFeature(feature)}
+                      className="text-xs font-bold text-gray-600 hover:text-yellow-600 transition-colors cursor-pointer flex flex-col items-center gap-1 mx-auto"
+                      title={`Toggle "${feature}" for all roles`}
+                    >
+                      <span className="leading-tight">{feature}</span>
+                      <ToggleRight className="w-3.5 h-3.5 text-gray-400" />
+                    </button>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+
+            <tbody>
+              {ALL_ROLES.map((role, idx) => {
+                const enabledCount = allFeatures.filter(
+                  (f) => matrix[role]?.[f] === true
+                ).length;
+
+                return (
+                  <tr
+                    key={role}
+                    className={`border-b border-gray-100 transition-colors hover:bg-yellow-50/40 ${
+                      idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"
+                    }`}
+                  >
+                    {/* Role label cell */}
+                    <td className="sticky left-0 z-10 bg-inherit px-4 py-3">
+                      <button
+                        onClick={() => toggleEntireRole(role)}
+                        className="flex items-center gap-3 group cursor-pointer"
+                        title={`Toggle all modules for ${ROLE_LABELS[role]}`}
+                      >
+                        <div
+                          className={`w-9 h-9 rounded-lg bg-gradient-to-br ${ROLE_COLORS[role]} flex items-center justify-center text-white text-xs font-black shadow-sm group-hover:scale-110 transition-transform`}
+                        >
+                          {ROLE_LABELS[role].charAt(0)}
+                        </div>
+                        <div className="text-left">
+                          <div className="font-semibold text-gray-900 text-sm group-hover:text-yellow-700 transition-colors">
+                            {ROLE_LABELS[role]}
+                          </div>
+                          <div className="text-[11px] text-gray-400">
+                            {enabledCount}/{allFeatures.length} modules
+                          </div>
+                        </div>
+                      </button>
+                    </td>
+
+                    {/* Feature checkbox cells */}
+                    {allFeatures.map((feature) => {
+                      const isEnabled = matrix[role]?.[feature] === true;
+                      return (
+                        <td
+                          key={feature}
+                          className="px-2 py-3 text-center"
+                        >
+                          <button
+                            onClick={() => toggle(role, feature)}
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                              isEnabled
+                                ? "bg-gradient-to-br from-green-400 to-green-600 text-white shadow-sm hover:shadow-md hover:scale-110"
+                                : "bg-gray-100 text-gray-300 hover:bg-gray-200 hover:scale-110"
+                            }`}
+                            title={`${isEnabled ? "Disable" : "Enable"} "${feature}" for ${ROLE_LABELS[role]}`}
+                          >
+                            {isEnabled ? (
+                              <CheckSquare className="w-4 h-4" />
+                            ) : (
+                              <Square className="w-4 h-4" />
+                            )}
+                          </button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Summary Footer */}
+      <div className="bg-gradient-to-r from-gray-900 to-black rounded-xl p-6 text-white">
+        <h3 className="text-lg font-bold text-yellow-400 mb-3">Matrix Summary</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          {ALL_ROLES.map((role) => {
+            const enabledCount = allFeatures.filter(
+              (f) => matrix[role]?.[f] === true
+            ).length;
+            const pct = Math.round((enabledCount / allFeatures.length) * 100);
+            return (
+              <div
+                key={role}
+                className="bg-white/10 backdrop-blur-sm rounded-lg p-3 text-center"
+              >
+                <div
+                  className={`w-8 h-8 mx-auto mb-2 rounded-lg bg-gradient-to-br ${ROLE_COLORS[role]} flex items-center justify-center text-white text-xs font-bold`}
+                >
+                  {ROLE_LABELS[role].charAt(0)}
+                </div>
+                <div className="text-xs font-medium text-gray-300 truncate">
+                  {ROLE_LABELS[role]}
+                </div>
+                <div className="text-xl font-black text-yellow-400 mt-1">
+                  {pct}%
+                </div>
+                <div className="text-[10px] text-gray-500">
+                  {enabledCount}/{allFeatures.length}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

@@ -1,0 +1,373 @@
+import { NextRequest, NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+/**
+ * Unified AI Assistant endpoint for the Super Admin portal.
+ *
+ *   POST /api/ai-assistant   { action, ... }
+ *
+ * Actions
+ *   chat     → grounded chatbot reply (knowledge-base aware)     { reply, source }
+ *   tts      → text-to-speech audio (ElevenLabs → Gemini → n/a)  { audio, mimeType } | { fallback }
+ *   stt      → speech-to-text transcription (Gemini audio)        { text } | { fallback }
+ *   extract  → pull readable text out of an uploaded file          { text } | { error }
+ *
+ * Every action degrades gracefully: if no cloud key is configured (or the call
+ * fails) we return `{ fallback: true }` so the browser can use its own built-in
+ * Web Speech APIs instead of throwing a 500. The portal always keeps working.
+ */
+
+// ── Provider config (server-side only) ────────────────────────────────────
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+
+// Audio output over the REST generateContent endpoint requires a dedicated
+// "*-tts" model. ANY other model (plain gemini-2.5-flash, …-live-preview,
+// …-realtime, etc.) rejects responseModalities:["AUDIO"], which silently drops
+// every request to the browser's single fallback voice — making all 8 Google
+// voices sound identical. This is a subtle, common misconfig, so instead of
+// only patching known-bad names we ALLOWLIST: unless the model literally ends
+// in "-tts", we force a known-good TTS model and warn once.
+const KNOWN_GOOD_TTS_MODEL = "gemini-2.5-flash-preview-tts";
+const RAW_TTS_MODEL = process.env.GEMINI_TTS_MODEL || KNOWN_GOOD_TTS_MODEL;
+const IS_TTS_MODEL = /-tts$/i.test(RAW_TTS_MODEL.trim());
+const GEMINI_TTS_MODEL = IS_TTS_MODEL ? RAW_TTS_MODEL.trim() : KNOWN_GOOD_TTS_MODEL;
+if (!IS_TTS_MODEL) {
+  console.warn(
+    `[AI Assistant] GEMINI_TTS_MODEL="${RAW_TTS_MODEL}" is not a "*-tts" model and cannot ` +
+      `produce audio; using "${KNOWN_GOOD_TTS_MODEL}" instead. ` +
+      `Set GEMINI_TTS_MODEL to a *-tts model to silence this warning.`
+  );
+}
+const GEMINI_TTS_VOICE = process.env.GEMINI_TTS_VOICE || "Kore";
+
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+const ELEVENLABS_MODEL = process.env.ELEVENLABS_MODEL || "eleven_turbo_v2_5";
+// Rachel — a warm, natural default. Override per-request or via env.
+const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM";
+
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+
+const DEFAULT_PERSONA =
+  "You are the Golden Hearth AI Assistant, a warm, concise, professional aide for an " +
+  "assisted-living facility's administration team. You help with resident care, staffing, " +
+  "operations, compliance and facility knowledge. Answer in 1-4 short sentences unless asked " +
+  "for detail. When knowledge-base context is provided, ground your answer in it and cite the " +
+  "source file name. If the context does not contain the answer, say so briefly, then help " +
+  "from general knowledge. Never invent resident medical facts.";
+
+interface ChatTurn {
+  role: "user" | "model";
+  text: string;
+}
+
+export async function POST(req: NextRequest) {
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const action = body.action as string | undefined;
+  if (!action) return NextResponse.json({ error: "No action" }, { status: 400 });
+
+  switch (action) {
+    case "chat":
+      return handleChat(body);
+    case "tts":
+      return handleTts(body);
+    case "stt":
+      return handleStt(body);
+    case "extract":
+      return handleExtract(body);
+    default:
+      return NextResponse.json({ error: `Unknown action '${action}'` }, { status: 400 });
+  }
+}
+
+// ── CHAT ───────────────────────────────────────────────────────────────────
+async function handleChat(body: Record<string, unknown>) {
+  const message = String(body.message ?? "").trim();
+  if (!message) return NextResponse.json({ error: "Empty message" }, { status: 400 });
+
+  const persona = String(body.persona ?? DEFAULT_PERSONA);
+  const context = String(body.context ?? "").slice(0, 24000);
+  const history = Array.isArray(body.history) ? (body.history as ChatTurn[]) : [];
+
+  const systemInstruction =
+    persona +
+    (context
+      ? `\n\n--- KNOWLEDGE BASE CONTEXT ---\n${context}\n--- END CONTEXT ---`
+      : "");
+
+  const contents = [
+    ...history
+      .filter((t) => t && t.text)
+      .slice(-12)
+      .map((t) => ({ role: t.role === "model" ? "model" : "user", parts: [{ text: t.text }] })),
+    { role: "user", parts: [{ text: message }] },
+  ];
+
+  if (GEMINI_API_KEY) {
+    try {
+      const res = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          contents,
+          generationConfig: { maxOutputTokens: 800, temperature: 0.5 },
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const reply = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text).join("") ?? "";
+        if (reply.trim()) {
+          return NextResponse.json({ reply: reply.trim(), source: "gemini" });
+        }
+      } else {
+        console.warn(`[AI Assistant chat] Gemini ${res.status}`);
+      }
+    } catch (err) {
+      console.warn("[AI Assistant chat] network error", (err as Error).message);
+    }
+  }
+
+  // Offline fallback — keeps the chatbot responsive without a cloud key.
+  return NextResponse.json({ reply: offlineReply(message, context), source: "offline" });
+}
+
+function offlineReply(message: string, context: string): string {
+  const msg = message.toLowerCase();
+  if (context) {
+    // Naive extractive answer: return the most relevant sentence from context.
+    const sentences = context.split(/(?<=[.!?])\s+/).filter((s) => s.length > 20);
+    const words = msg.split(/\W+/).filter((w) => w.length > 3);
+    let best = "";
+    let bestScore = 0;
+    for (const s of sentences) {
+      const sl = s.toLowerCase();
+      const score = words.reduce((n, w) => (sl.includes(w) ? n + 1 : n), 0);
+      if (score > bestScore) {
+        bestScore = score;
+        best = s;
+      }
+    }
+    if (bestScore > 0) return `From the knowledge base: ${best.trim()}`;
+  }
+  if (/^(hi|hello|hey|good (morning|afternoon|evening))/.test(msg))
+    return "Hello! I'm the Golden Hearth AI Assistant. Ask me anything about the facility, residents, or staff — or upload documents to my knowledge base and I'll learn from them.";
+  if (msg.includes("help"))
+    return "I can answer questions, read documents you upload to the knowledge base, speak my replies aloud, and take voice input. What do you need?";
+  if (msg.includes("thank")) return "You're very welcome. I'm here whenever you need me.";
+  return "I'm running in offline mode right now (no AI key configured), so I can't reason freely. Add a GEMINI_API_KEY to unlock full answers. Meanwhile I can still search any documents you upload to the knowledge base.";
+}
+
+// ── TEXT-TO-SPEECH ───────────────────────────────────────────────────────────
+async function handleTts(body: Record<string, unknown>) {
+  const text = String(body.text ?? "").trim();
+  if (!text) return NextResponse.json({ error: "No text" }, { status: 400 });
+  const provider = String(body.provider ?? "auto");
+
+  // 1) ElevenLabs — highest-quality neural voice, returns mp3 directly.
+  if (ELEVENLABS_API_KEY && (provider === "auto" || provider === "elevenlabs")) {
+    const voiceId = String(body.voiceId ?? ELEVENLABS_VOICE_ID);
+    try {
+      const res = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+        {
+          method: "POST",
+          headers: {
+            "xi-api-key": ELEVENLABS_API_KEY,
+            "Content-Type": "application/json",
+            Accept: "audio/mpeg",
+          },
+          body: JSON.stringify({
+            text: text.slice(0, 5000),
+            model_id: String(body.model ?? ELEVENLABS_MODEL),
+            voice_settings: {
+              stability: 0.5,
+              similarity_boost: 0.75,
+              style: 0.15,
+              use_speaker_boost: true,
+            },
+          }),
+        }
+      );
+      if (res.ok) {
+        const buf = Buffer.from(await res.arrayBuffer());
+        return NextResponse.json({
+          audio: buf.toString("base64"),
+          mimeType: "audio/mpeg",
+          provider: "elevenlabs",
+        });
+      }
+      console.warn(`[AI Assistant tts] ElevenLabs ${res.status}`);
+    } catch (err) {
+      console.warn("[AI Assistant tts] ElevenLabs network error", (err as Error).message);
+    }
+  }
+
+  // 2) Gemini TTS — returns raw PCM (L16 @ 24kHz); wrap it in a WAV container.
+  if (GEMINI_API_KEY && (provider === "auto" || provider === "gemini")) {
+    try {
+      const res = await fetch(`${GEMINI_BASE}/${GEMINI_TTS_MODEL}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text }] }],
+          generationConfig: {
+            responseModalities: ["AUDIO"],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: String(body.voiceId ?? GEMINI_TTS_VOICE) },
+              },
+            },
+          },
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const inline = data?.candidates?.[0]?.content?.parts?.find(
+          (p: { inlineData?: unknown }) => p.inlineData
+        )?.inlineData;
+        if (inline?.data) {
+          const rate = parseRate(inline.mimeType) || 24000;
+          const wav = pcmToWav(Buffer.from(inline.data, "base64"), rate);
+          return NextResponse.json({
+            audio: wav.toString("base64"),
+            mimeType: "audio/wav",
+            provider: "gemini",
+          });
+        }
+      } else {
+        console.warn(`[AI Assistant tts] Gemini ${res.status}`);
+      }
+    } catch (err) {
+      console.warn("[AI Assistant tts] Gemini network error", (err as Error).message);
+    }
+  }
+
+  // 3) No cloud voice available → let the browser speak with the Web Speech API.
+  return NextResponse.json({ fallback: true, reason: "no cloud TTS available" });
+}
+
+/** Extract the sample-rate hint from a Gemini audio mime type e.g. "audio/L16;rate=24000". */
+function parseRate(mimeType?: string): number | null {
+  if (!mimeType) return null;
+  const m = mimeType.match(/rate=(\d+)/);
+  return m ? Number(m[1]) : null;
+}
+
+/** Wrap raw 16-bit mono PCM in a minimal WAV (RIFF) header so browsers can play it. */
+function pcmToWav(pcm: Buffer, sampleRate: number): Buffer {
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
+  const blockAlign = (numChannels * bitsPerSample) / 8;
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20); // PCM
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+}
+
+// ── SPEECH-TO-TEXT ───────────────────────────────────────────────────────────
+async function handleStt(body: Record<string, unknown>) {
+  const audio = String(body.audio ?? "");
+  const mimeType = String(body.mimeType ?? "audio/webm");
+  if (!audio) return NextResponse.json({ error: "No audio" }, { status: 400 });
+
+  if (!GEMINI_API_KEY) {
+    return NextResponse.json({ fallback: true, reason: "no cloud STT configured" });
+  }
+
+  try {
+    const res = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: "Transcribe this audio to plain text verbatim. Return only the transcription, no commentary." },
+              { inlineData: { mimeType, data: audio } },
+            ],
+          },
+        ],
+        generationConfig: { temperature: 0 },
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const text = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text).join("") ?? "";
+      return NextResponse.json({ text: text.trim() });
+    }
+    console.warn(`[AI Assistant stt] Gemini ${res.status}`);
+  } catch (err) {
+    console.warn("[AI Assistant stt] network error", (err as Error).message);
+  }
+  return NextResponse.json({ fallback: true, reason: "cloud STT failed" });
+}
+
+// ── FILE TEXT EXTRACTION ─────────────────────────────────────────────────────
+// For binary docs the browser can't read (PDF, images, scans), we let Gemini's
+// multimodal file understanding pull the text out. Plain-text formats are read
+// client-side and never reach this handler.
+async function handleExtract(body: Record<string, unknown>) {
+  const data = String(body.base64 ?? "");
+  const mimeType = String(body.mimeType ?? "application/octet-stream");
+  const filename = String(body.filename ?? "file");
+  if (!data) return NextResponse.json({ error: "No file data" }, { status: 400 });
+
+  if (!GEMINI_API_KEY) {
+    return NextResponse.json({
+      error: "no-extractor",
+      reason: "Binary files need a GEMINI_API_KEY to extract text. Only plain-text files can be read offline.",
+    });
+  }
+
+  try {
+    const res = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: `Extract ALL readable text content from this file ("${filename}"). Preserve headings, lists and tables as plain text/markdown. Output only the extracted content with no preamble.`,
+              },
+              { inlineData: { mimeType, data } },
+            ],
+          },
+        ],
+        generationConfig: { temperature: 0, maxOutputTokens: 8192 },
+      }),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const text = json?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text).join("") ?? "";
+      if (text.trim()) return NextResponse.json({ text: text.trim() });
+      return NextResponse.json({ error: "empty", reason: "No text found in file" });
+    }
+    const detail = await res.text().catch(() => "");
+    console.warn(`[AI Assistant extract] Gemini ${res.status} ${detail.slice(0, 160)}`);
+    return NextResponse.json({ error: "extract-failed", reason: `Gemini ${res.status}` });
+  } catch (err) {
+    return NextResponse.json({ error: "network", reason: (err as Error).message });
+  }
+}

@@ -1,17 +1,17 @@
-"use client";
-
-import { useState } from "react";
-import ChartContainer from "@/components/portal/widgets/ChartContainer";
-import AlertBanner from "@/components/portal/widgets/AlertBanner";
+import { useState, useMemo, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import VitalsPanel, { VitalReading } from "@/components/portal/widgets/VitalsPanel";
 import CameraVisionFeed from "@/components/CameraVisionFeed";
 import NurseDashboard from "@/components/portal/views/NurseDashboard";
 import NurseRecords from "@/components/portal/views/NurseRecords";
+import NurseMedications from "@/components/portal/views/NurseMedications";
+import CaregiverReports from "@/components/portal/views/CaregiverReports";
+import CaregiverCallBells from "@/components/portal/views/CaregiverCallBells";
+import FacilityVitals from "@/components/portal/views/FacilityVitals";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptIncident } from "@/lib/adapters";
 import { updateRecord, deleteRecord } from "@/lib/api";
-import { X, Search, Eye, CheckCircle, Trash2 } from "lucide-react";
-import { useMemo, useEffect } from "react";
+import { X, Search, Eye, CheckCircle, Trash2, ArrowLeft, Camera, Activity } from "lucide-react";
 
 interface NursePortalContentProps {
   tab: string;
@@ -62,7 +62,6 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     [incidentRows]
   );
 
-  const [showVitalsModal, setShowVitalsModal] = useState(false);
   const [monitoringFallAlert, setMonitoringFallAlert] = useState(false);
 
   // Incidents Management
@@ -240,133 +239,13 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     }
   };
 
-  const [vitals] = useState<VitalReading[]>([
-    {
-      type: "HEART_RATE",
-      value: 78,
-      unit: "bpm",
-      normal: true,
-      lastUpdated: new Date(),
-    },
-    {
-      type: "TEMPERATURE",
-      value: 37.0,
-      unit: "°C",
-      normal: true,
-      lastUpdated: new Date(),
-    },
-    {
-      type: "BLOOD_PRESSURE",
-      value: 120,
-      unit: "mmHg",
-      normal: true,
-      lastUpdated: new Date(),
-    },
-    {
-      type: "OXYGEN",
-      value: 98,
-      unit: "%",
-      normal: true,
-      lastUpdated: new Date(),
-    },
-  ]);
-
-  // Mock data for demo
-  const mockVitalsData = [
-    { name: "12 AM", value: 72 },
-    { name: "4 AM", value: 70 },
-    { name: "8 AM", value: 75 },
-    { name: "12 PM", value: 78 },
-    { name: "4 PM", value: 80 },
-    { name: "8 PM", value: 76 },
-  ];
-
   if (tab === "monitoring") {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-foreground">Real-Time Monitoring</h2>
-
-          {/* Vital Signs Button */}
-          <button
-            onClick={() => setShowVitalsModal(true)}
-            className="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
-          >
-            Vital Signs • Arthur Pendelton
-          </button>
-        </div>
-        {/* 2-Column Grid Layout: Left: Camera Feed; Right: Alerts & Vitals Chart */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          {/* Left Column: Camera Feed (aspect-video for maximum vertical height and details) */}
-          <div className="lg:col-span-2">
-            <div className="relative w-full aspect-[4/3] md:aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border-2 border-yellow-300">
-              <CameraVisionFeed
-                cameraMode="hybrid"
-                isFallen={monitoringFallAlert}
-                onFallTriggered={handleMonitoringFallTriggered}
-                onFallCleared={() => setMonitoringFallAlert(false)}
-              />
-            </div>
-          </div>
-
-          {/* Right Column: Alerts & Analytics */}
-          <div className="space-y-6">
-            {/* Active Alerts panel */}
-            <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-gray-200 dark:border-white/5 shadow-md">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-3">Active Alerts</h3>
-              {monitoringFallAlert ? (
-                <AlertBanner
-                  type="error"
-                  title="Emergency: Fall Detected"
-                  message="Fall detection confirmed from the monitoring camera"
-                  resident={`${MONITORING_RESIDENT} (Room ${MONITORING_ROOM})`}
-                  timestamp={new Date()}
-                />
-              ) : (
-                <div className="rounded-xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 px-4 py-3.5 text-xs font-semibold text-emerald-800 dark:text-emerald-400">
-                  ✔ Fall detection is monitoring normally.
-                </div>
-              )}
-            </div>
-
-            {/* Heart Rate Chart */}
-            <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-gray-200 dark:border-white/5 shadow-md">
-              <ChartContainer
-                title="Heart Rate Trend (24h)"
-                type="area"
-                data={mockVitalsData}
-                dataKey="value"
-                xAxisKey="name"
-                colors={["#ef4444"]}
-                height={200}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Vitals Modal */}
-        {showVitalsModal && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-96 overflow-y-auto">
-              {/* Modal Header */}
-              <div className="sticky top-0 bg-gradient-to-r from-gray-900 to-black text-white p-6 flex items-center justify-between border-b border-yellow-300">
-                <h3 className="text-xl font-bold">Vital Signs • Arthur Pendelton</h3>
-                <button
-                  onClick={() => setShowVitalsModal(false)}
-                  className="p-2 hover:bg-gray-700 rounded-lg transition"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Modal Content */}
-              <div className="p-6">
-                <VitalsPanel vitals={vitals} resident="Arthur Pendelton" />
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      <NurseMonitoringView
+        monitoringFallAlert={monitoringFallAlert}
+        handleMonitoringFallTriggered={handleMonitoringFallTriggered}
+        setMonitoringFallAlert={setMonitoringFallAlert}
+      />
     );
   }
 
@@ -726,10 +605,166 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   }
 
 
+  if (tab === "medications") {
+    return <NurseMedications />;
+  }
+
+  // Call bells share the caregiver module — same CallBell model & queue workflow.
+  if (tab === "callbells") {
+    return <CaregiverCallBells />;
+  }
+
+  // Shift reports share the caregiver module — same ShiftReport model & workflow.
+  if (tab === "reports") {
+    return <CaregiverReports />;
+  }
+
   if (tab === "records") {
     return <NurseRecords />;
   }
 
   // Default: Dashboard tab
   return <NurseDashboard />;
+}
+
+/* ── Monitoring View (Dedicated Per-Resident Camera + Vitals) ──────── */
+
+function NurseMonitoringViewFallback() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-lg font-semibold text-gray-700">
+        <Camera className="w-5 h-5" /> Camera Feed
+      </div>
+      <div className="bg-black rounded-xl aspect-video flex items-center justify-center">
+        <p className="text-white/60">Loading camera feed...</p>
+      </div>
+    </div>
+  );
+}
+
+function NurseMonitoringViewInner({
+  monitoringFallAlert,
+  handleMonitoringFallTriggered,
+  setMonitoringFallAlert,
+}: {
+  monitoringFallAlert: boolean;
+  handleMonitoringFallTriggered: (analysis: any) => void;
+  setMonitoringFallAlert: (val: boolean) => void;
+}) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const resident = searchParams.get("resident");
+  const room = searchParams.get("room");
+  const [showVitals, setShowVitals] = useState(false);
+
+  return (
+    <div className="space-y-6">
+      {/* Resident Header Card */}
+      <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 shadow-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => router.push("/nurse/records")}
+              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition active:scale-95"
+              title="Go back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-green-400/20 text-green-200 text-[10px] font-bold uppercase tracking-wider border border-green-400/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                  LIVE MONITORING
+                </span>
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-bold text-white mb-1">
+                {resident || "Facility Monitoring"}
+              </h1>
+              {room && (
+                <p className="text-blue-100 text-sm">
+                  Room {room} &middot; Camera feed with AI-powered analysis
+                </p>
+              )}
+            </div>
+          </div>
+          <Camera className="w-12 h-12 text-blue-200/50 hidden sm:block" />
+        </div>
+      </div>
+
+      {/* Camera Feed — dedicated to this resident */}
+      <div className="relative aspect-video rounded-xl overflow-hidden border border-gray-200 shadow-lg">
+        <div className="absolute inset-0 z-30">
+          <CameraVisionFeed
+            cameraMode="hybrid"
+            residentName={resident || undefined}
+            residentRoom={room || undefined}
+            isFallen={monitoringFallAlert}
+            onFallTriggered={handleMonitoringFallTriggered}
+            onFallCleared={() => setMonitoringFallAlert(false)}
+          />
+        </div>
+
+        {/* Vitals Button Overlay */}
+        <div className="absolute bottom-4 right-4 z-40">
+          <button
+            onClick={() => setShowVitals(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white/90 backdrop-blur-md text-gray-900 font-semibold rounded-lg shadow-lg hover:bg-white hover:shadow-xl transition-all active:scale-95 border border-gray-200/50"
+          >
+            <Activity className="w-4 h-4 text-yellow-500" />
+            View Vitals
+          </button>
+        </div>
+      </div>
+
+      {/* Camera Mode Info */}
+      <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
+        <Camera className="w-4 h-4 text-blue-500" />
+        Switch between <span className="font-semibold text-gray-700">Local</span> (browser webcam) and{" "}
+        <span className="font-semibold text-gray-700">Tapo IP</span> (network camera) using the buttons on the camera feed.
+      </div>
+
+      {/* Vitals Modal */}
+      {showVitals && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className={`bg-white rounded-xl shadow-2xl w-full ${resident ? "max-w-md" : "max-w-3xl"} max-h-[90vh] overflow-y-auto`}>
+            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between z-10">
+              <div className="flex items-center gap-2">
+                <Activity className="w-5 h-5" />
+                <h2 className="text-xl font-bold">
+                  Vital Signs{resident ? ` — ${resident}` : ""}
+                </h2>
+              </div>
+              <button onClick={() => setShowVitals(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+            </div>
+            <div className="p-6">
+              <FacilityVitals residentFilter={resident || undefined} />
+            </div>
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end">
+              <button onClick={() => setShowVitals(false)} className="px-6 py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg transition">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NurseMonitoringView({
+  monitoringFallAlert,
+  handleMonitoringFallTriggered,
+  setMonitoringFallAlert,
+}: {
+  monitoringFallAlert: boolean;
+  handleMonitoringFallTriggered: (analysis: any) => void;
+  setMonitoringFallAlert: (val: boolean) => void;
+}) {
+  return (
+    <Suspense fallback={<NurseMonitoringViewFallback />}>
+      <NurseMonitoringViewInner
+        monitoringFallAlert={monitoringFallAlert}
+        handleMonitoringFallTriggered={handleMonitoringFallTriggered}
+        setMonitoringFallAlert={setMonitoringFallAlert}
+      />
+    </Suspense>
+  );
 }

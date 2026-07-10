@@ -18,7 +18,13 @@ import {
   MessageSquare,
   Info,
   Clock,
-  Check
+  Check,
+  Calendar,
+  Newspaper,
+  ArrowRight,
+  MapPin,
+  Phone,
+  Mail,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -135,9 +141,32 @@ export default function Home() {
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Dynamic CMS content
+  const [siteContent, setSiteContent] = useState<Record<string, string>>({});
+  const [blogPosts, setBlogPosts] = useState<Array<{
+    id: string; title: string; description: string; imageUrl?: string;
+    author: string; publishedAt: string; published: boolean;
+  }>>([]);
 
+  useEffect(() => {
+    // Fetch site content
+    fetch("/api/public/site-content", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((json) => {
+        const map: Record<string, string> = {};
+        for (const row of json.data || []) map[row.id] = row.value;
+        setSiteContent(map);
+      })
+      .catch(() => {});
 
+    // Fetch published blog posts
+    fetch("/api/public/blog-posts?f_published=true", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((json) => setBlogPosts(json.data || []))
+      .catch(() => {});
+  }, []);
 
+  const sc = (key: string, fallback: string) => siteContent[key] || fallback;
   // Scroll hooks for cinematic parallax scroll effect
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -198,8 +227,8 @@ export default function Home() {
           variants={fadeInUp}
           className="text-6xl md:text-8xl font-black tracking-tighter heading-gradient mb-6"
         >
-          Care Redefined. <br />
-          <span className="text-muted-foreground font-light italic text-4xl md:text-6xl">For Peaceful Living.</span>
+          {sc("hero_title", "Care Redefined.")} <br />
+          <span className="text-muted-foreground font-light italic text-4xl md:text-6xl">{sc("hero_subtitle", "For Peaceful Living.")}</span>
         </motion.h1>
 
         <motion.p 
@@ -208,7 +237,7 @@ export default function Home() {
           transition={{ delay: 0.4, duration: 1 }}
           className="text-lg md:text-xl text-muted-foreground max-w-2xl font-light mb-10 leading-relaxed"
         >
-          A cinematic, minimalist approach to elder care management. Equipped with Real-Time Optical Safety Matrices and friendly, responsive voice assistants. Engineered for deep empathy and supreme operational efficiency.
+          {sc("hero_description", "A cinematic, minimalist approach to elder care management. Equipped with Real-Time Optical Safety Matrices and friendly, responsive voice assistants. Engineered for deep empathy and supreme operational efficiency.")}
         </motion.p>
 
         <motion.div 
@@ -445,9 +474,9 @@ export default function Home() {
           className="grid grid-cols-1 md:grid-cols-3 gap-8"
         >
           {[
-            { icon: Activity, title: "Optical Matrix", desc: "Real-time edge-computed anomaly and fall detection ensuring absolute resident safety." },
-            { icon: Mic, title: "Voice Assistant", desc: "Low-latency conversational AI for hands-free charting and friendly companionship." },
-            { icon: ShieldCheck, title: "Secure Family Portal", desc: "Private health logs and vitals synced in real-time with family dashboards." }
+            { icon: Activity, title: sc("feature_1_title", "Optical Matrix"), desc: sc("feature_1_desc", "Real-time edge-computed anomaly and fall detection ensuring absolute resident safety.") },
+            { icon: Mic, title: sc("feature_2_title", "Voice Assistant"), desc: sc("feature_2_desc", "Low-latency conversational AI for hands-free charting and friendly companionship.") },
+            { icon: ShieldCheck, title: sc("feature_3_title", "Secure Family Portal"), desc: sc("feature_3_desc", "Private health logs and vitals synced in real-time with family dashboards.") }
           ].map((feat, i) => (
             <motion.div 
               key={i}
@@ -464,6 +493,185 @@ export default function Home() {
         </motion.div>
       </section>
       
+      {/* Blog Section */}
+      {blogPosts.length > 0 && (
+        <section id="blog" className="relative z-10 w-full px-6 py-24 max-w-7xl mx-auto border-t border-white/5">
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground mb-4">
+              Latest Updates
+            </h2>
+            <p className="text-muted-foreground font-light max-w-2xl mx-auto">
+              News, insights, and wellness updates from the Golden Hearth team.
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {blogPosts.slice(0, 6).map((post, i) => (
+              <motion.div
+                key={post.id}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: i * 0.1 }}
+              >
+                <Link
+                  href={`/blog/${post.id}`}
+                  className="group glass-panel rounded-2xl overflow-hidden hover:-translate-y-2 transition-all duration-500 block"
+                >
+                  {post.imageUrl && (
+                    <div className="relative h-48 overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={post.imageUrl}
+                        alt={post.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                    </div>
+                  )}
+                  <div className="p-6">
+                    <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-[var(--lp-accent,#f59e0b)] transition-colors line-clamp-2">
+                      {post.title}
+                    </h3>
+                    <p className="text-sm text-muted-foreground font-light mb-4 line-clamp-2">
+                      {post.description}
+                    </p>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <User className="w-3 h-3" /> {post.author}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {new Date(post.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </span>
+                    </div>
+                    <div className="mt-4 flex items-center gap-2 text-[var(--lp-accent,#f59e0b)] text-sm font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                      Read More <ArrowRight className="w-4 h-4" />
+                    </div>
+                  </div>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Contact Section */}
+      <section id="contact" className="relative z-10 w-full px-6 py-24 max-w-7xl mx-auto border-t border-white/5 flex flex-col items-center">
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.8 }}
+          className="text-center mb-16"
+        >
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground mb-4">
+            Connect With Us
+          </h2>
+          <p className="text-muted-foreground font-light max-w-2xl mx-auto text-sm md:text-base leading-relaxed">
+            Have questions about our premium assisted living community? Reach out to our concierge team or visit our residence in Bonifacio Global City.
+          </p>
+        </motion.div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 w-full">
+          {/* Contact Details Card */}
+          <motion.div
+            initial={{ opacity: 0, x: -30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="glass-panel p-8 md:p-10 rounded-3xl border border-white/5 hover:border-[var(--lp-accent,#f59e0b)]/20 transition-all duration-500 flex flex-col justify-between space-y-8 shadow-[0_0_50px_rgba(234,179,8,0.02)]"
+          >
+            <div className="space-y-6">
+              <h3 className="text-2xl font-bold text-foreground">Golden Hearth Residence</h3>
+              <p className="text-muted-foreground font-light text-sm md:text-base leading-relaxed">
+                Experience a new standard of personalized, technology-enhanced assisted living. Our team is available 24/7 to assist with admissions, tours, and care coordination.
+              </p>
+              
+              <div className="space-y-6 pt-4">
+                {/* Address */}
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-foreground/5 flex items-center justify-center border border-white/10 text-[var(--lp-accent,#f59e0b)] shrink-0">
+                    <MapPin className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Our Address</h4>
+                    <p className="text-sm md:text-base text-foreground font-light whitespace-pre-line leading-relaxed">
+                      {sc("contact_address", "123 Golden Hearth Lane,\nBonifacio Global City, Taguig,\nMetro Manila, Philippines")}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Phone */}
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-foreground/5 flex items-center justify-center border border-white/10 text-[var(--lp-accent,#f59e0b)] shrink-0">
+                    <Phone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Phone Number</h4>
+                    <p className="text-sm md:text-base text-foreground font-light leading-relaxed">
+                      <a href={`tel:${sc("contact_phone", "+63 (2) 8888-7777")}`} className="hover:text-[var(--lp-accent,#f59e0b)] transition-colors">
+                        {sc("contact_phone", "+63 (2) 8888-7777")}
+                      </a>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Email */}
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-foreground/5 flex items-center justify-center border border-white/10 text-[var(--lp-accent,#f59e0b)] shrink-0">
+                    <Mail className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Email Address</h4>
+                    <p className="text-sm md:text-base text-foreground font-light leading-relaxed">
+                      <a href={`mailto:${sc("contact_email", "concierge@goldenhearth.com")}`} className="hover:text-[var(--lp-accent,#f59e0b)] transition-colors">
+                        {sc("contact_email", "concierge@goldenhearth.com")}
+                      </a>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-6 border-t border-white/5 flex flex-wrap gap-4 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-[var(--lp-accent,#f59e0b)]" /> 24/7 Intake & Response
+              </span>
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-[var(--lp-accent,#f59e0b)]" /> Fully Verified Facility
+              </span>
+            </div>
+          </motion.div>
+
+          {/* Map Card */}
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="glass-panel p-2 rounded-3xl border border-white/5 hover:border-[var(--lp-accent,#f59e0b)]/20 transition-all duration-500 overflow-hidden min-h-[400px] h-full shadow-[0_0_50px_rgba(234,179,8,0.02)] flex"
+          >
+            <iframe
+              src={sc("contact_map_url", "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3861.9701041113264!2d121.0494499!3d14.5484443!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3397c8eb3c7849bd%3A0xc34b3e83b8a3e746!2sBonifacio%20Global%20City!5e0!3m2!1sen!2sph!4v1720610000000!5m2!1sen!2sph")}
+              width="100%"
+              height="100%"
+              style={{ border: 0 }}
+              allowFullScreen={true}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              className="rounded-2xl opacity-90 hover:opacity-100 transition-opacity duration-300 w-full min-h-[400px]"
+            />
+          </motion.div>
+        </div>
+      </section>
+
       {/* Decorative Blur */}
       <div className="absolute bottom-0 left-0 w-full h-[500px] bg-gradient-to-t from-black to-transparent pointer-events-none" />
 
@@ -471,7 +679,7 @@ export default function Home() {
       <footer id="about" className="relative z-10 w-full px-6 py-12 max-w-7xl mx-auto border-t border-white/5 light:border-black/5 flex flex-col md:flex-row items-center justify-between gap-6 text-gray-500 text-sm">
         <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
           <span className="text-foreground font-bold tracking-tight">Golden Hearth</span>
-          <span>© 2026 AI Powered Assisted Living. All rights reserved.</span>
+          <span>{sc("footer_text", "© 2026 AI Powered Assisted Living. All rights reserved.")}</span>
         </div>
         <div className="flex gap-6">
           <a href="#" className="hover:text-foreground transition-colors">Privacy Policy</a>

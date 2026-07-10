@@ -33,6 +33,17 @@ export const MODELS: Record<string, ModelDef> = {
   "medical-notes": { delegate: prisma.medicalNote, table: "MedicalNote", orderBy: { createdAt: "desc" } },
   "call-bells": { delegate: prisma.callBell, table: "CallBell", orderBy: { createdAt: "desc" } },
   "time-tracking": { delegate: prisma.timeTracking, table: "TimeTracking", orderBy: { startTime: "desc" } },
+  "knowledge-docs": { delegate: prisma.knowledgeDoc, table: "KnowledgeDoc", orderBy: { createdAt: "desc" } },
+  "app-settings": { delegate: prisma.appSetting, table: "AppSetting", orderBy: { id: "asc" } },
+  admissions: { delegate: prisma.admission, table: "Admission", orderBy: { createdAt: "desc" } },
+  rooms: { delegate: prisma.room, table: "Room", orderBy: { roomNumber: "asc" } },
+  inventory: { delegate: prisma.inventoryItem, table: "InventoryItem", orderBy: { itemName: "asc" } },
+  "service-charges": { delegate: prisma.serviceCharge, table: "ServiceCharge", orderBy: { serviceDate: "desc" } },
+  "insurance-validations": { delegate: prisma.insuranceValidation, table: "InsuranceValidation", orderBy: { createdAt: "desc" } },
+  payments: { delegate: prisma.payment, table: "Payment", orderBy: { paymentDate: "desc" } },
+  "blog-posts": { delegate: prisma.blogPost, table: "BlogPost", orderBy: { publishedAt: "desc" } },
+  "site-content": { delegate: prisma.siteContent, table: "SiteContent", orderBy: { id: "asc" } },
+  "custom-pages": { delegate: prisma.customPage, table: "CustomPage", orderBy: { sortOrder: "asc" } },
 };
 
 export function getModel(key: string): ModelDef | undefined {

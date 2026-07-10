@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getModel, isDbConfigured } from "@/lib/models";
-import { validateSession } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
+import { scopeWhere, scopeDemoRows } from "@/lib/scope";
 import { DEMO } from "@/lib/demoData";
 
 export const runtime = "nodejs";
@@ -49,22 +50,30 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ model: string }> }
 ) {
-  const role = await validateSession();
-  if (!role) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { model } = await params;
   const def = getModel(model);
   if (!def) return NextResponse.json({ error: `Unknown model '${model}'` }, { status: 404 });
 
   // No real database yet → serve demo data so the UI is fully populated.
+  // Self-service roles are still scoped to the demo relative so the boundary shows.
   if (!isDbConfigured()) {
-    return NextResponse.json({ data: DEMO[model] ?? [], demo: true });
+    const rows = scopeDemoRows(model, DEMO[model] ?? [], session.role);
+    return NextResponse.json({ data: rows, demo: true });
   }
 
   try {
     const { take, where, include, orderBy } = buildQuery(new URL(req.url), def.orderBy);
+
+    // Self-service roles (FAMILY/RESIDENT) are restricted to their own resident(s).
+    // AND the scope clause into whatever filters the client requested.
+    const scope = await scopeWhere(model, session);
+    const scopedWhere = scope ? { AND: [where, scope] } : where;
+
     const data = await def.delegate.findMany({
-      where,
+      where: scopedWhere,
       orderBy,
       take,
       ...(include ? { include } : {}),
@@ -80,12 +89,21 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ model: string }> }
 ) {
-  const role = await validateSession();
-  if (!role) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = session.role;
 
   const { model } = await params;
   const def = getModel(model);
   if (!def) return NextResponse.json({ error: `Unknown model '${model}'` }, { status: 404 });
+
+  // Self-service roles (FAMILY/RESIDENT) may only create the records their portal
+  // legitimately produces (messages to staff, visit requests). Rest is staff-only.
+  const SELF_SERVICE = role === "FAMILY" || role === "RESIDENT";
+  const SELF_WRITABLE = new Set(["messages", "visits"]);
+  if (SELF_SERVICE && !SELF_WRITABLE.has(model)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body = await req.json();
   // Demo mode: echo the payload back so the UI flow succeeds without a DB.

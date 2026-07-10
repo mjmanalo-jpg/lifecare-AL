@@ -24,5 +24,13 @@ export const createRecord = (model: string, body: unknown) =>
 export const updateRecord = (model: string, id: string, body: unknown) =>
   mutate("PATCH", `/api/db/${model}/${id}`, body);
 
+export const upsertRecord = async (model: string, id: string, body: unknown) => {
+  try {
+    return await updateRecord(model, id, body);
+  } catch {
+    return await createRecord(model, { id, ...(body as Record<string, unknown>) });
+  }
+};
+
 export const deleteRecord = (model: string, id: string) =>
   mutate("DELETE", `/api/db/${model}/${id}`);

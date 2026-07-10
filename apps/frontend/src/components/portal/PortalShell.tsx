@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, ReactNode, useEffect } from "react";
+import { useState, ReactNode, useEffect, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Swal from "sweetalert2";
+import { useLiveQuery } from "@/lib/useLiveQuery";
 import {
   Menu,
   X,
@@ -16,10 +17,18 @@ import {
   Globe,
   Lock,
   User as UserIcon,
+  Activity,
+  AlertTriangle,
+  Pill,
+  BellRing,
+  CheckSquare,
+  MessageSquare,
+  Clock,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Role, RoleDetails, ROLES } from "@/constants/roleConfig";
+import { Role, RoleDetails, ROLES, GLOBAL_FEATURES, type SidebarLink } from "@/constants/roleConfig";
 
 interface PortalShellProps {
   userRole: Role;
@@ -44,8 +53,135 @@ export default function PortalShell({
   const [notifications, setNotifications] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [language, setLanguage] = useState("en");
+  const [now, setNow] = useState(Date.now());
+
+  // Session details from GET /api/auth/session
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+  
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.authenticated) {
+          setSessionUserId(data.userId || "demo-user");
+        }
+      })
+      .catch((err) => console.warn("Failed to get session:", err));
+  }, []);
+
+  // Fetch notifications in real-time
+  const { data: notificationsData, refetch: refetchNotifications } = useLiveQuery<{
+    id: string;
+    type: string;
+    title: string;
+    message: string;
+    isRead: boolean;
+    createdAt: string;
+  }>("notifications", {
+    query: sessionUserId ? `f_userId=${sessionUserId}` : undefined,
+    tables: ["Notification"],
+  });
+
+  const [bellDropdownOpen, setBellDropdownOpen] = useState(false);
+
+  // Compute unread count
+  const unreadNotifications = notificationsData?.filter((n) => !n.isRead) || [];
+  const unreadCount = unreadNotifications.length;
+
+  const handleMarkAllRead = async () => {
+    try {
+      const { updateRecord } = await import("@/lib/api");
+      await Promise.all(
+        unreadNotifications.map((n) =>
+          updateRecord("notifications", n.id, {
+            isRead: true,
+            readAt: new Date().toISOString(),
+          })
+        )
+      );
+      await refetchNotifications();
+      Swal.fire({
+        title: "Notifications Read",
+        text: "All notifications marked as read.",
+        icon: "success",
+        timer: 1500,
+        showConfirmButton: false,
+        background: theme === "dark" ? "#1f2937" : "#ffffff",
+        color: theme === "dark" ? "#ffffff" : "#000000",
+      });
+    } catch (err) {
+      console.error("Mark all read failed:", err);
+    }
+  };
+
+  const handleMarkSingleRead = async (id: string) => {
+    try {
+      const { updateRecord } = await import("@/lib/api");
+      await updateRecord("notifications", id, {
+        isRead: true,
+        readAt: new Date().toISOString(),
+      });
+      await refetchNotifications();
+    } catch (err) {
+      console.error("Mark single read failed:", err);
+    }
+  };
 
   const roleDetails: RoleDetails = ROLES[userRole];
+
+  const { data: appSettings } = useLiveQuery<{ id: string; value: string }>("app-settings", {
+    tables: ["AppSetting"],
+  });
+
+  const portalMatrixSetting = appSettings?.find((s) => s.id === "portal_matrix")?.value;
+  const enabledFeatures = useMemo(() => {
+    if (!portalMatrixSetting) return null;
+    try {
+      return JSON.parse(portalMatrixSetting)[userRole] as Record<string, boolean>;
+    } catch {
+      return null;
+    }
+  }, [portalMatrixSetting, userRole]);
+
+  const filteredLinks = useMemo(() => {
+    if (!enabledFeatures) return roleDetails.sidebarLinks;
+
+    const links: SidebarLink[] = [];
+    const seenRoutes = new Set<string>();
+    
+    // We iterate over the keys of GLOBAL_FEATURES to check what is enabled
+    Object.keys(GLOBAL_FEATURES).forEach((featureName) => {
+      if (enabledFeatures[featureName] === true) {
+        const feat = GLOBAL_FEATURES[featureName];
+        if (feat) {
+          const route = `${roleDetails.basePath}/${feat.routeSegment}`;
+          if (!seenRoutes.has(route)) {
+            seenRoutes.add(route);
+            links.push({
+              name: featureName,
+              icon: feat.icon,
+              route,
+            });
+          }
+        }
+      }
+    });
+
+    // Fallback: If no links are checked, render the role's native Dashboard link as fallback
+    if (links.length === 0) {
+      const dbLink = roleDetails.sidebarLinks.find(l => l.name.toLowerCase().includes("dashboard"));
+      if (dbLink) links.push(dbLink);
+    }
+
+    return links;
+  }, [roleDetails, enabledFeatures]);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+
 
   // Initialize theme from localStorage
   useEffect(() => {
@@ -156,12 +292,12 @@ export default function PortalShell({
 
         {/* Navigation Links */}
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          {roleDetails.sidebarLinks.map((link) => {
+          {filteredLinks.map((link) => {
             const isActive = pathname.includes(link.route);
             const Icon = link.icon;
             return (
               <Link
-                key={link.route}
+                key={`${link.name}-${link.route}`}
                 href={link.route}
                 onClick={() => setMobileMenuOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition ${
@@ -222,7 +358,7 @@ export default function PortalShell({
             {/* Clock */}
             <div className={`text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
               <div id="current-time">
-                {new Date().toLocaleTimeString()}
+                {new Date(now).toLocaleTimeString()}
               </div>
             </div>
           </div>
@@ -245,6 +381,156 @@ export default function PortalShell({
                 <Sun className="w-5 h-5" />
               )}
             </button>
+
+            {/* Notification Bell Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setBellDropdownOpen(!bellDropdownOpen)}
+                className={`p-2 rounded-lg relative transition active:scale-95 ${
+                  theme === "dark"
+                    ? "hover:bg-gray-800 text-gray-300 active:bg-gray-700"
+                    : "hover:bg-yellow-100 text-gray-700 active:bg-yellow-200"
+                }`}
+                title="Notifications"
+              >
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 flex h-4 w-4">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-[10px] font-black text-white items-center justify-center">
+                      {unreadCount}
+                    </span>
+                  </span>
+                )}
+              </button>
+
+              {/* Notification dropdown card */}
+              {bellDropdownOpen && (
+                <div className={`absolute right-0 mt-3 w-80 sm:w-96 rounded-2xl shadow-2xl border z-50 overflow-hidden ${
+                  theme === "dark"
+                    ? "bg-gray-900 border-gray-700 text-white"
+                    : "bg-white border-yellow-100 text-gray-900"
+                }`}>
+                  {/* Dropdown Header */}
+                  <div className={`px-4 py-3 flex items-center justify-between border-b ${
+                    theme === "dark" ? "border-gray-800 bg-gray-950/50" : "border-yellow-50 bg-yellow-50/30"
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-yellow-500" />
+                      <span className="font-bold text-sm">Notifications</span>
+                    </div>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllRead}
+                        className="text-xs font-semibold text-yellow-600 hover:text-yellow-700 transition"
+                      >
+                        Mark all as read
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Dropdown List */}
+                  <div className="max-h-[350px] overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
+                    {notificationsData && notificationsData.length > 0 ? (
+                      notificationsData.map((n) => {
+                        // Helper styling per notification type
+                        const getNotificationIcon = (type: string) => {
+                          switch (type) {
+                            case "VITAL_ALERT":
+                              return <Activity className="w-4 h-4 text-red-500" />;
+                            case "INCIDENT_REPORT":
+                              return <AlertTriangle className="w-4 h-4 text-orange-500" />;
+                            case "MEDICATION_REMINDER":
+                              return <Pill className="w-4 h-4 text-purple-500" />;
+                            case "CALL_BELL":
+                              return <BellRing className="w-4 h-4 text-yellow-500" />;
+                            case "TASK_ASSIGNMENT":
+                              return <CheckSquare className="w-4 h-4 text-green-500" />;
+                            case "MESSAGE":
+                              return <MessageSquare className="w-4 h-4 text-blue-500" />;
+                            case "SHIFT_REMINDER":
+                              return <Clock className="w-4 h-4 text-indigo-500" />;
+                            case "SYSTEM_ALERT":
+                            default:
+                              return <Zap className="w-4 h-4 text-teal-500" />;
+                          }
+                        };
+
+                        const getNotificationBg = (type: string) => {
+                          switch (type) {
+                            case "VITAL_ALERT":
+                              return "bg-red-50 dark:bg-red-950/30";
+                            case "INCIDENT_REPORT":
+                              return "bg-orange-50 dark:bg-orange-950/30";
+                            case "MEDICATION_REMINDER":
+                              return "bg-purple-50 dark:bg-purple-950/30";
+                            case "CALL_BELL":
+                              return "bg-yellow-50 dark:bg-yellow-950/30";
+                            case "TASK_ASSIGNMENT":
+                              return "bg-green-50 dark:bg-green-950/30";
+                            case "MESSAGE":
+                              return "bg-blue-50 dark:bg-blue-950/30";
+                            case "SHIFT_REMINDER":
+                              return "bg-indigo-50 dark:bg-indigo-950/30";
+                            case "SYSTEM_ALERT":
+                            default:
+                              return "bg-teal-50 dark:bg-teal-950/30";
+                          }
+                        };
+
+                        const formatTimeAgo = (isoString: string) => {
+                          try {
+                            const past = new Date(isoString);
+                            const diffMs = Date.now() - past.getTime();
+                            const diffMins = Math.floor(diffMs / (60 * 1000));
+                            if (diffMins < 1) return "Just now";
+                            if (diffMins < 60) return `${diffMins}m ago`;
+                            const diffHours = Math.floor(diffMins / 60);
+                            if (diffHours < 24) return `${diffHours}h ago`;
+                            return past.toLocaleDateString();
+                          } catch {
+                            return "";
+                          }
+                        };
+
+                        return (
+                          <div
+                            key={n.id}
+                            onClick={() => !n.isRead && handleMarkSingleRead(n.id)}
+                            className={`p-4 flex gap-3 transition cursor-pointer hover:bg-yellow-50/10 ${
+                              !n.isRead ? "bg-yellow-50/5 dark:bg-yellow-500/5 font-medium" : ""
+                            }`}
+                          >
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${getNotificationBg(n.type)}`}>
+                              {getNotificationIcon(n.type)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"} float-right pl-2`}>
+                                {formatTimeAgo(n.createdAt)}
+                              </p>
+                              <p className="text-sm font-bold truncate leading-snug">{n.title}</p>
+                              <p className={`text-xs mt-0.5 line-clamp-2 leading-relaxed ${
+                                theme === "dark" ? "text-gray-300" : "text-gray-600"
+                              }`}>{n.message}</p>
+                            </div>
+                            {!n.isRead && (
+                              <div className="w-2 h-2 rounded-full bg-blue-500 self-center flex-shrink-0" />
+                            )}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+                        <p className="text-xl">🎉</p>
+                        <p className="text-sm font-medium mt-2">All caught up!</p>
+                        <p className="text-xs mt-1">No notifications right now.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
 
             {/* Profile Dropdown */}
             <div className="relative">
@@ -350,12 +636,12 @@ export default function PortalShell({
                 </div>
 
                 <nav className="p-4 space-y-2">
-                  {roleDetails.sidebarLinks.map((link) => {
+                  {filteredLinks.map((link) => {
                     const isActive = pathname.includes(link.route);
                     const Icon = link.icon;
                     return (
                       <Link
-                        key={link.route}
+                        key={`${link.name}-${link.route}`}
                         href={link.route}
                         onClick={() => setMobileMenuOpen(false)}
                         className={`flex items-center gap-3 px-3 py-2 rounded-lg transition ${

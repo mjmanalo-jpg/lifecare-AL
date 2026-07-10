@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Users, Search, X, AlertTriangle, Pill, HeartPulse, Activity, RefreshCw,
   ListChecks, BarChart3, Trash2, Pencil, Heart, Droplets, Wind, Thermometer,
-  type LucideIcon,
+  Camera, Clock, type LucideIcon,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import {
@@ -100,7 +101,8 @@ export default function NurseRecords() {
   const [search, setSearch] = useState("");
   const [careFilter, setCareFilter] = useState<"all" | CareLevel>("all");
   const [sort, setSort] = useState<"name" | "room" | "alerts">("name");
-  const [perPage, setPerPage] = useState(10);
+  const [alertsOnly, setAlertsOnly] = useState(false);
+  const [perPage, setPerPage] = useState(9);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [viewing, setViewing] = useState<RecordVM | null>(null);
@@ -165,13 +167,14 @@ export default function NurseRecords() {
     return records.filter((r) => {
       if (q && !r.name.toLowerCase().includes(q) && !r.room.toLowerCase().includes(q)) return false;
       if (careFilter !== "all" && r.careLevel !== careFilter) return false;
+      if (alertsOnly && r.alertsCount === 0) return false;
       return true;
     }).sort((a, b) =>
       sort === "alerts" ? b.alertsCount - a.alertsCount
         : sort === "room" ? a.room.localeCompare(b.room, undefined, { numeric: true })
           : a.name.localeCompare(b.name)
     );
-  }, [records, search, careFilter, sort]);
+  }, [records, search, careFilter, alertsOnly, sort]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const start = (page - 1) * perPage;
@@ -180,7 +183,12 @@ export default function NurseRecords() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset paging on filter change
     setPage(1);
-  }, [search, careFilter, sort, perPage]);
+  }, [search, careFilter, alertsOnly, sort, perPage]);
+
+  const vital = (r: RecordVM, key: string) => {
+    const v = r.vitalsLatest[key];
+    return v ? `${v.value}${v.unit ? ` ${v.unit}` : ""}` : "—";
+  };
 
   const pageAllSelected = paginated.length > 0 && paginated.every((r) => selected.has(r.id));
   const toggleAll = () => {
@@ -279,8 +287,8 @@ export default function NurseRecords() {
         <Stat label="Total Records" value={stats.total} icon={Users} tone="gray" />
         <Stat label="With Alerts" value={stats.withAlerts} icon={AlertTriangle} tone="red" />
         <Stat label="On Medications" value={stats.onMeds} icon={Pill} tone="blue" />
-        <Stat label="Skilled / Memory" value={stats.skilled} icon={Activity} tone="purple" />
         <Stat label="Checked (24h)" value={stats.checked} icon={HeartPulse} tone="green" />
+        <Stat label="Skilled / Memory" value={stats.skilled} icon={Activity} tone="purple" />
       </div>
 
       {view === "analytics" && <RecordsAnalytics records={records} />}
@@ -294,7 +302,7 @@ export default function NurseRecords() {
               <input type="text" placeholder="Search by name or room…" value={search} onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none bg-white text-gray-900" />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <select value={careFilter} onChange={(e) => setCareFilter(e.target.value as "all" | CareLevel)} className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-yellow-400 outline-none">
                 <option value="all">All Care Levels</option>
                 {CARE_ORDER.map((c) => <option key={c} value={c}>{humanize(c)}</option>)}
@@ -305,59 +313,94 @@ export default function NurseRecords() {
                 <option value="alerts">Sort: Most Alerts</option>
               </select>
               <select value={perPage} onChange={(e) => setPerPage(parseInt(e.target.value))} className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-yellow-400 outline-none">
-                <option value={10}>10 per page</option>
-                <option value={25}>25 per page</option>
-                <option value={50}>50 per page</option>
+                <option value={9}>9 per page</option>
+                <option value={18}>18 per page</option>
+                <option value={36}>36 per page</option>
               </select>
+              <label className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 bg-white select-none">
+                <input type="checkbox" checked={alertsOnly} onChange={(e) => setAlertsOnly(e.target.checked)} className="w-4 h-4 rounded cursor-pointer" />
+                <span className="text-sm text-gray-700 font-medium">Alerts only</span>
+              </label>
             </div>
           </div>
 
-          {/* Table */}
-          <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
-            <table className="w-full min-w-[720px]">
-              <thead className="bg-gradient-to-r from-gray-900 to-black text-white">
-                <tr>
-                  <th className="px-4 py-3 text-left"><input type="checkbox" checked={pageAllSelected} onChange={toggleAll} className="w-4 h-4 rounded cursor-pointer" /></th>
-                  <th className="px-4 py-3 text-left font-semibold">Name</th>
-                  <th className="px-4 py-3 text-left font-semibold">Room</th>
-                  <th className="px-4 py-3 text-left font-semibold">Age</th>
-                  <th className="px-4 py-3 text-left font-semibold">Care Level</th>
-                  <th className="px-4 py-3 text-left font-semibold">Meds</th>
-                  <th className="px-4 py-3 text-left font-semibold">Alerts</th>
-                  <th className="px-4 py-3 text-left font-semibold">Last Vitals</th>
-                  <th className="px-4 py-3 text-left font-semibold">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && records.length === 0 ? (
-                  <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-500">Loading records…</td></tr>
-                ) : error ? (
-                  <tr><td colSpan={9} className="px-4 py-8 text-center text-red-600">Failed to load: {error}</td></tr>
-                ) : paginated.length > 0 ? (
-                  paginated.map((r, idx) => (
-                    <tr key={r.id} className={`border-t border-gray-200 hover:bg-yellow-50 transition ${idx % 2 ? "bg-gray-50" : "bg-white"}`}>
-                      <td className="px-4 py-3"><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleOne(r.id)} className="w-4 h-4 rounded cursor-pointer" /></td>
-                      <td className="px-4 py-3 font-semibold text-gray-900">{r.name}</td>
-                      <td className="px-4 py-3 text-gray-700">{r.room}</td>
-                      <td className="px-4 py-3 text-gray-700">{r.age}</td>
-                      <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-semibold ${CARE_BADGE[r.careLevel]}`}>{humanize(r.careLevel)}</span></td>
-                      <td className="px-4 py-3 text-gray-700">{r.meds.length}</td>
-                      <td className="px-4 py-3">{r.alertsCount > 0 ? <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-bold">{r.alertsCount}</span> : <span className="text-gray-400">—</span>}</td>
-                      <td className="px-4 py-3 text-gray-600 text-sm whitespace-nowrap">{r.lastCheckIn ? relTime(r.lastCheckIn, nowTs) : "—"}</td>
-                      <td className="px-4 py-3">
-                        <button onClick={() => setViewing(r)} className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-sm">View</button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-500">No records match your filters.</td></tr>
-                )}
-              </tbody>
-            </table>
+          {/* Bulk Selection Header */}
+          <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3.5 mb-4">
+            <div className="flex items-center gap-2">
+              <input type="checkbox" checked={pageAllSelected} onChange={toggleAll} className="w-4 h-4 rounded cursor-pointer" />
+              <span className="text-sm font-semibold text-gray-700">Select All Residents on Page</span>
+            </div>
+            {selected.size > 0 && (
+              <span className="text-xs text-gray-500 font-medium">{selected.size} selected for bulk actions</span>
+            )}
           </div>
 
+          {/* Card-based grid */}
+          {loading && records.length === 0 ? (
+            <div className="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-500">Loading records…</div>
+          ) : error ? (
+            <div className="bg-white rounded-lg border border-red-200 p-10 text-center text-red-600">Failed to load: {error}</div>
+          ) : paginated.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {paginated.map((r) => (
+                <div key={r.id} className="bg-white rounded-lg border border-gray-200 hover:border-yellow-300 hover:shadow-lg transition overflow-hidden flex flex-col">
+                  <div className={`p-4 ${r.alertsCount > 0 ? "bg-red-50 border-b-2 border-red-300" : "bg-gray-50 border-b border-gray-200"}`}>
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(r.id)}
+                          onChange={() => toggleOne(r.id)}
+                          className="w-4 h-4 rounded cursor-pointer flex-shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <h3 className="text-lg font-bold text-gray-900 truncate">{r.name}</h3>
+                          <p className="text-sm text-gray-600">Room {r.room} • Age {r.age}</p>
+                        </div>
+                      </div>
+                      {r.alertsCount > 0 && <span className="px-2 py-1 bg-red-500 text-white rounded-full text-xs font-bold flex-shrink-0">🚨 {r.alertsCount}</span>}
+                    </div>
+                    <span className={`ml-8 px-2 py-1 rounded text-xs font-semibold ${CARE_BADGE[r.careLevel]}`}>{humanize(r.careLevel)}</span>
+                  </div>
+                  
+                  <div className="p-4 border-b border-gray-200">
+                    <p className="text-xs font-semibold text-gray-600 mb-3">LATEST VITALS</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {CARD_VITALS.map(({ key, label, icon: Icon, color }) => (
+                        <div key={key} className="flex items-center gap-2 bg-gray-50 p-2 rounded">
+                          <Icon className={`w-4 h-4 ${color}`} />
+                          <div className="min-w-0">
+                            <p className="text-xs text-gray-600">{label}</p>
+                            <p className="font-bold text-gray-900 text-sm truncate">{vital(r, key)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="px-4 py-3 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
+                    <p className="text-xs text-blue-700 font-semibold flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> {relTime(r.lastCheckIn, nowTs)}
+                    </p>
+                    <p className="text-xs text-gray-600 flex items-center gap-1">
+                      <Pill className="w-3 h-3" /> {r.meds.length} meds
+                    </p>
+                  </div>
+                  
+                  <div className="p-4 mt-auto">
+                    <button onClick={() => setViewing(r)} className="w-full px-4 py-2 bg-gradient-to-r from-blue-400 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+                      View Details
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-500">No records match your filters.</div>
+          )}
+
           {/* Pagination */}
-          <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center justify-between gap-4 flex-wrap mt-6">
             <div className="text-sm text-gray-600">
               Showing {filtered.length ? start + 1 : 0}-{Math.min(start + perPage, filtered.length)} of {filtered.length}
               {selected.size > 0 && ` • ${selected.size} selected`}
@@ -408,6 +451,8 @@ export default function NurseRecords() {
 /* ── Detail modal ────────────────────────────────────────────────────── */
 
 function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number; onClose: () => void; onEdit: () => void }) {
+  const router = useRouter();
+
   return (
     <Modal title={r.name} subtitle={`Room ${r.room} • Age ${r.age} • ${humanize(r.careLevel)}`} onClose={onClose}>
       <div className="p-6 sm:p-8 space-y-6">
@@ -478,7 +523,17 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
         )}
       </div>
       <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex items-center justify-between">
-        <button onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
+          <button
+            onClick={() => {
+              router.push(`/nurse/monitoring?resident=${encodeURIComponent(r.name)}&room=${encodeURIComponent(r.room)}`);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-400 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
+          >
+            <Camera className="w-4 h-4" /> View Monitoring
+          </button>
+        </div>
         <button onClick={onEdit} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition"><Pencil className="w-4 h-4" /> Edit Record</button>
       </div>
     </Modal>

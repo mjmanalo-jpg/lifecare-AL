@@ -5,10 +5,24 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Sun, Moon, Menu, X, User } from "lucide-react";
 import Link from "next/link";
 
+interface NavLink {
+  name: string;
+  href: string;
+}
+
+const STATIC_LINKS: NavLink[] = [
+  { name: "Features", href: "#features" },
+  { name: "Technology", href: "#technology" },
+  { name: "Showcase", href: "#showcase" },
+  { name: "Contact", href: "#contact" },
+  { name: "About Us", href: "#about" },
+];
+
 export default function Navbar() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [customLinks, setCustomLinks] = useState<NavLink[]>([]);
 
   useEffect(() => {
     setMounted(true);
@@ -20,7 +34,22 @@ export default function Navbar() {
     } else {
       document.documentElement.classList.remove("light");
     }
+
+    // Fetch custom pages for navigation
+    fetch("/api/public/custom-pages?f_published=true", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((json) => {
+        const pages = (json.data || []) as Array<{ title: string; slug: string; sortOrder: number }>;
+        setCustomLinks(
+          pages
+            .sort((a, b) => a.sortOrder - b.sortOrder)
+            .map((p) => ({ name: p.title, href: `/page/${p.slug}` }))
+        );
+      })
+      .catch(() => {});
   }, []);
+
+  const allLinks = [...STATIC_LINKS, ...customLinks];
 
   const toggleTheme = () => {
     const nextTheme = theme === "dark" ? "light" : "dark";
@@ -77,14 +106,8 @@ export default function Navbar() {
         </div>
       </Link>
 
-      {/* Navigation Links - Desktop */}
       <div className="hidden md:flex items-center gap-8">
-        {[
-          { name: "Features", href: "#features" },
-          { name: "Technology", href: "#technology" },
-          { name: "Showcase", href: "#showcase" },
-          { name: "About Us", href: "#about" },
-        ].map((link) => (
+        {allLinks.map((link) => (
           <Link 
             key={link.name} 
             href={link.href} 
@@ -160,12 +183,7 @@ export default function Navbar() {
             className="absolute top-full left-0 w-full bg-background/95 border-b border-border flex flex-col px-6 py-6 gap-6 md:hidden z-40 overflow-hidden shadow-2xl backdrop-blur-lg"
           >
             <div className="flex flex-col gap-4">
-              {[
-                { name: "Features", href: "#features" },
-                { name: "Technology", href: "#technology" },
-                { name: "Showcase", href: "#showcase" },
-                { name: "About Us", href: "#about" },
-              ].map((link) => (
+              {allLinks.map((link) => (
                 <Link 
                   key={link.name} 
                   href={link.href} 

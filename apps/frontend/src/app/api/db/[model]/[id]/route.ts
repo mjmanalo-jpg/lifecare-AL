@@ -56,6 +56,11 @@ export async function PATCH(
   const def = getModel(model);
   if (!def) return NextResponse.json({ error: `Unknown model '${model}'` }, { status: 404 });
 
+  // Self-service roles may only update messages (mark-as-read); no other edits.
+  if ((role === "FAMILY" || role === "RESIDENT") && model !== "messages") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const body = await req.json();
   if (!isDbConfigured()) {
     return NextResponse.json({ data: { id, ...body }, demo: true });
@@ -80,6 +85,11 @@ export async function DELETE(
   const { model, id } = await params;
   const def = getModel(model);
   if (!def) return NextResponse.json({ error: `Unknown model '${model}'` }, { status: 404 });
+
+  // Self-service logins (FAMILY/RESIDENT) can never delete.
+  if (role === "FAMILY" || role === "RESIDENT") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   if (!isDbConfigured()) {
     return NextResponse.json({ ok: true, demo: true });

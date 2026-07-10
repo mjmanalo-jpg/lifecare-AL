@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, X, Eye, Trash2 } from "lucide-react";
+import { Search, X, Eye, Trash2, Plus } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -9,6 +9,9 @@ import { updateRecord, deleteRecord } from "@/lib/api";
 import CaregiverReports from "@/components/portal/views/CaregiverReports";
 import CaregiverDashboard from "@/components/portal/views/CaregiverDashboard";
 import CaregiverResidents from "@/components/portal/views/CaregiverResidents";
+import CaregiverCallBells from "@/components/portal/views/CaregiverCallBells";
+import CaregiverTimeClock from "@/components/portal/views/CaregiverTimeClock";
+import AddTaskModal from "@/components/portal/views/AddTaskModal";
 
 interface CaregiverPortalContentProps {
   tab: string;
@@ -30,6 +33,7 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [viewingTask, setViewingTask] = useState<CaregiverTask | null>(null);
+  const [creatingTask, setCreatingTask] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -199,16 +203,39 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
     return <CaregiverResidents />;
   }
 
+  if (tab === "callbells") {
+    return <CaregiverCallBells />;
+  }
+
+  if (tab === "timeclock") {
+    return <CaregiverTimeClock />;
+  }
+
   if (tab === "tasks") {
     return (
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2">
-            Task Checklist
-          </h1>
-          <p className="text-gray-600">Manage daily tasks and track completion</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2">
+              Task Checklist
+            </h1>
+            <p className="text-gray-600">Manage daily tasks and track completion</p>
+          </div>
+          <button
+            onClick={() => setCreatingTask(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm self-start sm:self-auto"
+          >
+            <Plus className="w-4 h-4" /> New Task
+          </button>
         </div>
+
+        {creatingTask && (
+          <AddTaskModal
+            onClose={() => setCreatingTask(false)}
+            onSaved={() => { void refetchTasks(); setCreatingTask(false); }}
+          />
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
