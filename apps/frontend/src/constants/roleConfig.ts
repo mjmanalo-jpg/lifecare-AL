@@ -127,7 +127,6 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Clinical Dashboard", icon: Grid, route: "/nurse/dashboard" },
       { name: "Resident Records", icon: ShieldCheck, route: "/nurse/records" },
       { name: "Medication Rounds", icon: Pill, route: "/nurse/medications" },
-      { name: "Call Bells", icon: BellRing, route: "/nurse/callbells" },
       { name: "Incident Log", icon: AlertTriangle, route: "/nurse/incidents" },
       { name: "Shift Reports", icon: FileText, route: "/nurse/reports" },
     ],

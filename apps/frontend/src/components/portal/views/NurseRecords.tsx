@@ -482,8 +482,58 @@ export default function NurseRecords() {
 
 function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number; onClose: () => void; onEdit: () => void }) {
   const router = useRouter();
+  const [selectedBell, setSelectedBell] = useState<CallBellVM | null>(null);
+  const [bellModalMode, setBellModalMode] = useState<"respond" | "resolve">("respond");
+
+  const handleBellRespond = async (bellId: string) => {
+    try {
+      await updateRecord("call-bells", bellId, {
+        status: "RESPONDED",
+        respondedAt: new Date().toISOString(),
+      });
+      setSelectedBell(null);
+      Swal.fire({
+        title: "Responded",
+        text: `Responded to call bell`,
+        icon: "success",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      Swal.fire({
+        title: "Error",
+        text: err instanceof Error ? err.message : "Failed to respond",
+        icon: "error",
+      });
+    }
+  };
+
+  const handleBellResolve = async (bellId: string, notes: string) => {
+    try {
+      await updateRecord("call-bells", bellId, {
+        status: "RESOLVED",
+        resolvedAt: new Date().toISOString(),
+        notes: notes || "Resolved",
+      });
+      setSelectedBell(null);
+      Swal.fire({
+        title: "Resolved",
+        text: `Call bell marked as resolved`,
+        icon: "success",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      Swal.fire({
+        title: "Error",
+        text: err instanceof Error ? err.message : "Failed to resolve",
+        icon: "error",
+      });
+    }
+  };
 
   return (
+    <>
     <Modal title={r.name} subtitle={`Room ${r.room} • Age ${r.age} • ${humanize(r.careLevel)}`} onClose={onClose}>
       <div className="p-6 sm:p-8 space-y-6">
         {r.allergies && (
@@ -534,12 +584,36 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
             <div className="space-y-2">
               {r.callBells.map((cb, idx) => (
                 <div key={idx} className={`p-3 rounded-lg border ${cb.status === "PENDING" ? "bg-red-50 border-red-200" : cb.status === "RESPONDED" ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200"}`}>
-                  <div className="flex items-center justify-between gap-2 mb-1">
+                  <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="font-medium text-gray-900 text-sm">{cb.reason}</span>
                     <span className={`px-2 py-0.5 rounded text-xs font-semibold ${cb.status === "PENDING" ? "bg-red-200 text-red-800" : cb.status === "RESPONDED" ? "bg-yellow-200 text-yellow-800" : "bg-green-200 text-green-800"}`}>{cb.status}</span>
                   </div>
-                  <p className="text-xs text-gray-600">{Math.round((Date.now() - new Date(cb.createdAt).getTime()) / 60000)} min ago</p>
-                  {cb.notes && <p className="text-xs text-gray-700 mt-1">📝 {cb.notes}</p>}
+                  <p className="text-xs text-gray-600 mb-2">{Math.round((Date.now() - new Date(cb.createdAt).getTime()) / 60000)} min ago</p>
+                  {cb.notes && <p className="text-xs text-gray-700 mb-2">📝 {cb.notes}</p>}
+                  {cb.status !== "RESOLVED" && cb.status !== "CANCELLED" && (
+                    <div className="flex gap-2 mt-2">
+                      {cb.status === "PENDING" && (
+                        <button
+                          onClick={() => {
+                            setSelectedBell(cb);
+                            setBellModalMode("respond");
+                          }}
+                          className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-semibold rounded text-xs transition"
+                        >
+                          <Clock className="w-3 h-3" /> Respond
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setSelectedBell(cb);
+                          setBellModalMode("resolve");
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-green-500 hover:bg-green-600 text-white font-semibold rounded text-xs transition"
+                      >
+                        <CheckCircle2 className="w-3 h-3" /> Resolve
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -584,6 +658,59 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
         <button onClick={onEdit} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition"><Pencil className="w-4 h-4" /> Edit Record</button>
       </div>
     </Modal>
+
+    {/* Call Bell Action Modal */}
+    {selectedBell && bellModalMode === "respond" && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+          <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-6 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold">Respond to Call Bell</h2>
+              <p className="text-sm text-gray-900">{r.name} • Room {r.room}</p>
+            </div>
+            <button onClick={() => setSelectedBell(null)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="p-6 space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Reason</label>
+              <p className="text-gray-900 font-medium">{selectedBell.reason}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Time Waiting</label>
+              <p className="text-gray-900 font-medium">{Math.round((Date.now() - new Date(selectedBell.createdAt).getTime()) / 60000)} minutes</p>
+            </div>
+          </div>
+          <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex gap-3">
+            <button
+              onClick={() => setSelectedBell(null)}
+              className="flex-1 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                void handleBellRespond(selectedBell.id);
+              }}
+              className="flex-1 px-4 py-2 bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-semibold rounded-lg transition"
+            >
+              Mark Responded
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {selectedBell && bellModalMode === "resolve" && (
+      <CallBellResolveModal
+        bell={selectedBell}
+        resident={r}
+        onClose={() => setSelectedBell(null)}
+        onResolve={(notes) => void handleBellResolve(selectedBell.id, notes)}
+      />
+    )}
+    </>
   );
 }
 
@@ -632,6 +759,72 @@ function RecordsAnalytics({ records }: { records: RecordVM[] }) {
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>
+    </div>
+  );
+}
+
+/* ── Call Bell Resolve Modal ─────────────────────────────────────────── */
+
+function CallBellResolveModal({
+  bell,
+  resident,
+  onClose,
+  onResolve,
+}: {
+  bell: CallBellVM;
+  resident: RecordVM;
+  onClose: () => void;
+  onResolve: (notes: string) => void;
+}) {
+  const [notes, setNotes] = useState("");
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+        <div className="bg-gradient-to-r from-green-400 to-green-500 text-white p-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold">Resolve Call Bell</h2>
+            <p className="text-sm text-green-100">{resident.name} • Room {resident.room}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-green-600/20 rounded-lg transition">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Reason</label>
+            <p className="text-gray-900 font-medium">{bell.reason}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Time Waiting</label>
+            <p className="text-gray-900 font-medium">{Math.round((Date.now() - new Date(bell.createdAt).getTime()) / 60000)} minutes</p>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Resolution Notes</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="What was done to resolve this call..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-transparent outline-none text-sm"
+              rows={3}
+            />
+          </div>
+        </div>
+        <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onResolve(notes)}
+            className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg transition"
+          >
+            Mark Resolved
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
