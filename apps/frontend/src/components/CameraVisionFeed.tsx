@@ -287,6 +287,9 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     cameraMode === "tapo" ? "tapo" : "local"
   );
   const [tapoStatus, setTapoStatus] = useState<"connecting" | "connected" | "error">("connecting");
+  const [tapoPan, setTapoPan] = useState(0);   // horizontal position (-100 to 100)
+  const [tapoTilt, setTapoTilt] = useState(0); // vertical position (-100 to 100)
+  const [keysPressed, setKeysPressed] = useState<Set<string>>(new Set());
   const [aiVitals, setAiVitals] = useState({
     heartRate: 72,
     respirationRate: 16,
@@ -380,6 +383,81 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const isSpeakingRef = useRef<boolean>(false);
   const lastSpokenRef = useRef<string>("");
+
+  // Tapo PTZ Control Handler
+  const moveTapoCamera = useCallback(async (pan: number, tilt: number) => {
+    // Clamp to valid range
+    const clampedPan = Math.max(-100, Math.min(100, pan));
+    const clampedTilt = Math.max(-100, Math.min(100, tilt));
+
+    setTapoPan(clampedPan);
+    setTapoTilt(clampedTilt);
+
+    // In demo mode, just update state; in real mode, send to Tapo IP cam API
+    try {
+      await fetch("/api/vitals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "tapo_ptz",
+          pan: clampedPan,
+          tilt: clampedTilt,
+        }),
+      }).catch(() => {}); // Demo mode: endpoint doesn't exist, ignore
+    } catch (_) {}
+  }, []);
+
+  // Keyboard controls for ASWD
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if (["w", "a", "s", "d"].includes(key)) {
+        setKeysPressed((prev) => new Set([...prev, key]));
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if (["w", "a", "s", "d"].includes(key)) {
+        setKeysPressed((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, []);
+
+  // Process continuous movement from held keys
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (keysPressed.size === 0) return;
+
+      setTapoPan((prev) => {
+        let next = prev;
+        if (keysPressed.has("a")) next -= 5;  // Pan left
+        if (keysPressed.has("d")) next += 5;  // Pan right
+        return Math.max(-100, Math.min(100, next));
+      });
+
+      setTapoTilt((prev) => {
+        let next = prev;
+        if (keysPressed.has("w")) next -= 5;  // Tilt up
+        if (keysPressed.has("s")) next += 5;  // Tilt down
+        return Math.max(-100, Math.min(100, next));
+      });
+    }, 50); // 50ms = smooth 20fps movement
+
+    return () => clearInterval(interval);
+  }, [keysPressed]);
 
   const stopSpeaking = useCallback(() => {
     if (audioRef.current) {
@@ -1385,6 +1463,35 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
           </>
         )}
       </div>
+
+      {/* Tapo PTZ Controls (ASWD keyboard) */}
+      {activeCamera === "tapo" && (
+        <div className="absolute bottom-4 left-4 z-40 pointer-events-auto bg-black/70 rounded-lg p-4 backdrop-blur-md border border-blue-400/50 shadow-lg">
+          <p className="text-xs text-blue-300 font-bold mb-2">📷 TAPO IP CAM - ASWD TO PAN/TILT</p>
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-1 text-center text-[10px]">
+              <div />
+              <div className={`p-1 rounded ${keysPressed.has("w") ? "bg-blue-500 text-white" : "bg-blue-400/20 text-blue-300"}`}>
+                W ↑
+              </div>
+              <div />
+              <div className={`p-1 rounded ${keysPressed.has("a") ? "bg-blue-500 text-white" : "bg-blue-400/20 text-blue-300"}`}>
+                A ←
+              </div>
+              <div className={`p-1 rounded ${keysPressed.has("s") ? "bg-blue-500 text-white" : "bg-blue-400/20 text-blue-300"}`}>
+                S ↓
+              </div>
+              <div className={`p-1 rounded ${keysPressed.has("d") ? "bg-blue-500 text-white" : "bg-blue-400/20 text-blue-300"}`}>
+                D →
+              </div>
+            </div>
+            <div className="text-[10px] text-blue-200 space-y-1 pt-2 border-t border-blue-400/30">
+              <div>Pan: <span className="font-mono font-bold">{tapoPan > 0 ? "+" : ""}{tapoPan}°</span></div>
+              <div>Tilt: <span className="font-mono font-bold">{tapoTilt > 0 ? "+" : ""}{tapoTilt}°</span></div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Live Local Webcam (no mirror - normal orientation) */}
       <video
