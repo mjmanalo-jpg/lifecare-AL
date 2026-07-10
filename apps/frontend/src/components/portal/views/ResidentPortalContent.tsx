@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import FamilyPortalContent from "./FamilyPortalContent";
 import {
   Heart,
@@ -22,11 +22,21 @@ import {
   CheckSquare,
   Bell,
   Volume2,
+  VolumeX,
   Calendar,
   X,
   PhoneCall,
   ChevronRight,
   TrendingUp,
+  FileText,
+  HeartPulse,
+  User,
+  Activity as StepIcon,
+  Bot,
+  Send,
+  Mic,
+  MicOff,
+  MessageCircle,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -52,6 +62,9 @@ interface MedicationRow {
   frequency: string;
   route: string;
   status: string;
+  startDate: string;
+  prescribedBy?: string;
+  reason?: string;
 }
 
 interface VitalRow {
@@ -76,6 +89,12 @@ interface ResidentRow {
   };
 }
 
+interface AIChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+}
+
 export default function ResidentPortalContent({ tab }: ResidentPortalContentProps) {
   if (tab && tab !== "dashboard") {
     return <FamilyPortalContent tab={tab} />;
@@ -84,13 +103,39 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
   const [now, setNow] = useState<Date>(new Date());
   const [complianceMap, setComplianceMap] = useState<Record<string, boolean>>({});
   const [goalsChecked, setGoalsChecked] = useState<Record<string, boolean>>({});
+  const [customGoals, setCustomGoals] = useState<{ id: string; name: string; checked: boolean }[]>([]);
+  const [newGoalText, setNewGoalText] = useState("");
   
-  // Call family modal
+  // Modal states
   const [familyModalOpen, setFamilyModalOpen] = useState(false);
-  // Room service modal
   const [roomServiceModalOpen, setRoomServiceModalOpen] = useState(false);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [medsModalOpen, setMedsModalOpen] = useState(false);
+  const [menuModalOpen, setMenuModalOpen] = useState(false);
+  const [goalsModalOpen, setGoalsModalOpen] = useState(false);
+  const [vitalsModalOpen, setVitalsModalOpen] = useState(false);
+
+  // AI Voice Assistant States
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantMessages, setAssistantMessages] = useState<AIChatMessage[]>([
+    { id: "welcome", role: "assistant", text: "Hello! I am your companion assistant. Talk to me by pressing the mic, or type below. Ask me about your vitals, schedule, or dinner menu!" }
+  ]);
+  const [assistantInput, setAssistantInput] = useState("");
+  const [assistantThinking, setAssistantThinking] = useState(false);
+  const [assistantListening, setAssistantListening] = useState(false);
+  const [assistantSpeaking, setAssistantSpeaking] = useState(false);
+  const [assistantAutoSpeak, setAssistantAutoSpeak] = useState(true);
+  const [interimSpeech, setInterimSpeech] = useState("");
+  const [voice, setVoice] = useState("Kore");
+
   const [serviceRequestText, setServiceRequestText] = useState("");
   const [requestingService, setRequestingService] = useState(false);
+  const [menuSubText, setMenuSubText] = useState("");
+  const [submittingMenuSub, setSubmittingMenuSub] = useState(false);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Auto-updating clock
   useEffect(() => {
@@ -118,38 +163,99 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
 
   // Fetch resident's latest vitals log
   const { data: vitals, loading: vitalsLoading } = useLiveQuery<VitalRow>("vitals", {
-    query: "orderBy=recordedAt:desc&take=10",
+    query: "orderBy=recordedAt:desc&take=30",
     tables: ["VitalsLog"],
   });
 
-  // Load custom goals checkbox states from localStorage (persists across refreshes)
+  // Fetch app settings (voice sync)
+  const { data: settingRows } = useLiveQuery<{ id: string; value: string }>("app-settings", {
+    tables: ["AppSetting"],
+  });
+
+  useEffect(() => {
+    const saved = settingRows.find((r) => r.id === "assistantVoice")?.value;
+    if (saved) setVoice(saved);
+  }, [settingRows]);
+
+  // Load custom goals and checkbox states from localStorage (persists across refreshes)
   useEffect(() => {
     if (resident?.id) {
       const savedGoals = localStorage.getItem(`goals_${resident.id}`);
       if (savedGoals) {
-        try {
-          setGoalsChecked(JSON.parse(savedGoals));
-        } catch (e) {
-          console.error(e);
-        }
+        try { setGoalsChecked(JSON.parse(savedGoals)); } catch (e) { console.error(e); }
       }
       
       const savedMeds = localStorage.getItem(`meds_${resident.id}`);
       if (savedMeds) {
-        try {
-          setComplianceMap(JSON.parse(savedMeds));
-        } catch (e) {
-          console.error(e);
-        }
+        try { setComplianceMap(JSON.parse(savedMeds)); } catch (e) { console.error(e); }
+      }
+
+      const savedCustomGoals = localStorage.getItem(`custom_goals_${resident.id}`);
+      if (savedCustomGoals) {
+        try { setCustomGoals(JSON.parse(savedCustomGoals)); } catch (e) { console.error(e); }
       }
     }
   }, [resident?.id]);
+
+  // Scroll to bottom of chat transcript when messages update
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    }
+  }, [assistantMessages, assistantThinking, interimSpeech]);
+
+  // Speech cleanup on unmount
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop();
+      if (audioRef.current) audioRef.current.pause();
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   const toggleGoal = (goalKey: string) => {
     if (!resident?.id) return;
     const nextGoals = { ...goalsChecked, [goalKey]: !goalsChecked[goalKey] };
     setGoalsChecked(nextGoals);
     localStorage.setItem(`goals_${resident.id}`, JSON.stringify(nextGoals));
+  };
+
+  const toggleCustomGoal = (id: string) => {
+    if (!resident?.id) return;
+    const nextCustom = customGoals.map(g => g.id === id ? { ...g, checked: !g.checked } : g);
+    setCustomGoals(nextCustom);
+    localStorage.setItem(`custom_goals_${resident.id}`, JSON.stringify(nextCustom));
+  };
+
+  const addCustomGoal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resident?.id || !newGoalText.trim()) return;
+    const newGoal = {
+      id: `cg-${Date.now()}`,
+      name: newGoalText.trim(),
+      checked: false
+    };
+    const nextCustom = [...customGoals, newGoal];
+    setCustomGoals(nextCustom);
+    localStorage.setItem(`custom_goals_${resident.id}`, JSON.stringify(nextCustom));
+    setNewGoalText("");
+    Swal.fire({
+      title: "Goal Added",
+      icon: "success",
+      timer: 1000,
+      showConfirmButton: false,
+      toast: true,
+      position: "top-end"
+    });
+  };
+
+  const deleteCustomGoal = (id: string) => {
+    if (!resident?.id) return;
+    const nextCustom = customGoals.filter(g => g.id !== id);
+    setCustomGoals(nextCustom);
+    localStorage.setItem(`custom_goals_${resident.id}`, JSON.stringify(nextCustom));
   };
 
   const toggleMedicationCompliance = (medId: string) => {
@@ -166,16 +272,14 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
     const completedTasks = tasks.filter((t) => t.status === "COMPLETED").length;
     const taskRatio = totalTodayTasks > 0 ? completedTasks / totalTodayTasks : 1;
     
-    // Base is 85. Completed tasks add up to 10 points. Vitals add or subtract up to 5 points.
     let score = 85 + Math.round(taskRatio * 10);
     
-    // Add slightly positive weight if steps/vitals look stable
     const latestHeartRate = vitals.find((v) => v.type === "HEART_RATE");
     if (latestHeartRate) {
       const hrVal = parseInt(latestHeartRate.value);
-      if (hrVal >= 60 && hrVal <= 100) score += 5; // Healthy heart rate bonus
+      if (hrVal >= 60 && hrVal <= 100) score += 5;
     } else {
-      score += 4; // Healthy default range
+      score += 4;
     }
     
     return Math.min(Math.max(score, 65), 100);
@@ -189,10 +293,7 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
 
   // Filter tasks to show today's schedule
   const todayTasks = useMemo(() => {
-    return tasks.filter((t) => {
-      // Allow tasks scheduled today or near due dates
-      return true;
-    });
+    return tasks.filter((t) => true);
   }, [tasks]);
 
   const handleTaskToggle = async (task: TaskRow) => {
@@ -273,7 +374,7 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
         description: serviceRequestText,
         status: "PENDING",
         priority: "MEDIUM",
-        dueDate: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // due in 1 hour
+        dueDate: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
       });
       await refetchTasks();
       setRoomServiceModalOpen(false);
@@ -295,6 +396,43 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
     }
   };
 
+  // Trigger Menu substitution request
+  const handleMenuSubstitution = async () => {
+    if (!resident) return;
+    if (!menuSubText.trim()) {
+      Swal.fire({ title: "Please specify your request", icon: "warning" });
+      return;
+    }
+    setSubmittingMenuSub(true);
+    try {
+      await createRecord("tasks", {
+        residentId: resident.id,
+        title: `Diet Substitution: Room ${resident.roomNumber}`,
+        description: `Diet request: ${menuSubText}`,
+        status: "PENDING",
+        priority: "LOW",
+        dueDate: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      });
+      await refetchTasks();
+      setMenuModalOpen(false);
+      setMenuSubText("");
+      Swal.fire({
+        title: "Substitution Dispatched",
+        text: "Your request was logged. The kitchen and caregiver staff have been notified.",
+        icon: "success",
+      });
+    } catch (err) {
+      console.error(err);
+      Swal.fire({
+        title: "Submission Failed",
+        text: "Could not submit diet substitution request.",
+        icon: "error",
+      });
+    } finally {
+      setSubmittingMenuSub(false);
+    }
+  };
+
   // Helper icons for tasks based on names/descriptions
   const getTaskIcon = (title: string) => {
     const t = title.toLowerCase();
@@ -307,13 +445,211 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
   // Resolve Vitals metrics
   const heartRate = useMemo(() => {
     const hr = vitals.find((v) => v.type === "HEART_RATE");
-    return hr ? `${hr.value} BPM` : "72 BPM"; // Default from mockup
+    return hr ? `${hr.value} BPM` : "72 BPM";
   }, [vitals]);
 
   const activitySteps = useMemo(() => {
-    // Generate step counter mapping
     return "3,240 Steps";
   }, [vitals]);
+
+
+  // ── AI ASSISTANT CHAT TRANSCRIPT & CONTEXT INJECTIONS ──
+  const buildResidentContext = () => {
+    if (!resident) return "";
+    const taskStr = todayTasks.map(t => `- ${t.title} at ${new Date(t.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (${t.status})`).join("\n");
+    const medStr = medications.map(m => `- ${m.name} (${m.dosage}, ${m.frequency})`).join("\n");
+    const latestHR = vitals.find(v => v.type === "HEART_RATE")?.value || "72";
+    const sponsorName = resident.sponsor?.name || "None";
+    
+    return `You are Golden Hearth's empathetic, warm virtual companion. 
+The user is a resident at our assisted living facility.
+Resident Profile:
+- Name: ${resident.firstName} ${resident.lastName}
+- Room Number: ${resident.roomNumber}
+- Care Level: ${resident.careLevel}
+- Family Sponsor: ${sponsorName}
+
+Today's Schedule Tasks:
+${taskStr || "No tasks scheduled today."}
+
+Active Medications:
+${medStr || "No medications active."}
+
+Vitals:
+- Latest Heart Rate: ${latestHR} BPM
+- Daily Activity Steps: 3,240 Steps
+
+Answer user queries warmly and conversationally. Keep replies short (1-3 sentences max) so they are easy to listen to.`;
+  };
+
+  const handleSendAssistantMessage = async (text: string) => {
+    const query = text.trim();
+    if (!query || assistantThinking) return;
+    
+    setAssistantInput("");
+    setAssistantThinking(true);
+    
+    // Add user message
+    const userMsg: AIChatMessage = { id: `u-${Date.now()}`, role: "user", text: query };
+    setAssistantMessages((prev) => [...prev, userMsg]);
+
+    const context = buildResidentContext();
+    const history = assistantMessages
+      .filter((m) => m.id !== "welcome")
+      .slice(-6)
+      .map((m) => ({ role: m.role === "assistant" ? "model" : "user", text: m.text }));
+
+    let reply = "";
+    try {
+      const res = await fetch("/api/ai-assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "chat", message: query, context, history }),
+      });
+      const data = await res.json();
+      reply = data.reply || "I am here, but I couldn't compute a reply. Let me call a caregiver if needed.";
+    } catch {
+      reply = "I couldn't reach my cloud companion service. Please check our network connection.";
+    }
+
+    setAssistantMessages((prev) => [...prev, { id: `a-${Date.now()}`, role: "assistant", text: reply }]);
+    setAssistantThinking(false);
+
+    if (assistantAutoSpeak) {
+      speakTTS(reply);
+    }
+  };
+
+  // Base64 helper for neural audio playback
+  const base64ToBlob = (base64: string, mime: string): Blob => {
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: mime });
+  };
+
+  // Text-To-Speech (Gemini with browser fallback)
+  const speakTTS = async (text: string) => {
+    stopTTS();
+    setAssistantSpeaking(true);
+    try {
+      const res = await fetch("/api/ai-assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "tts", text, provider: "gemini", voiceId: voice }),
+      });
+      const data = await res.json();
+      if (!data.fallback && data.audio) {
+        const blob = base64ToBlob(data.audio, data.mimeType || "audio/mpeg");
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        await new Promise<void>((resolve) => {
+          audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+          audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+          audio.play().catch(() => resolve());
+        });
+        setAssistantSpeaking(false);
+        return;
+      }
+    } catch (err) {
+      console.warn("TTS fetch failed, falling back to Web Speech Synthesis", err);
+    }
+
+    // Fallback: Web Speech API
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      await new Promise<void>((resolve) => {
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = "en-US";
+        u.rate = 1.05;
+        u.pitch = 1.1;
+        u.onend = () => resolve();
+        u.onerror = () => resolve();
+        window.speechSynthesis.speak(u);
+      });
+    }
+    setAssistantSpeaking(false);
+  };
+
+  const stopTTS = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    setAssistantSpeaking(false);
+  };
+
+  // Speech-To-Text (Web Speech API Recognition)
+  const startSpeechToText = () => {
+    if (typeof window === "undefined") return;
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      Swal.fire({
+        title: "Microphone Speech Blocked",
+        text: "Your browser does not support native speech recognition speech inputs.",
+        icon: "info"
+      });
+      return;
+    }
+    stopTTS();
+    const recognition = new SR();
+    recognitionRef.current = recognition;
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    let finalTranscript = "";
+    recognition.onresult = (e: any) => {
+      let interim = "";
+      finalTranscript = "";
+      for (let i = 0; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalTranscript += t;
+        else interim += t;
+      }
+      setInterimSpeech(finalTranscript || interim);
+    };
+
+    recognition.onend = () => {
+      setAssistantListening(false);
+      recognitionRef.current = null;
+      const text = finalTranscript.trim();
+      if (text) {
+        handleSendAssistantMessage(text);
+      }
+      setInterimSpeech("");
+    };
+
+    recognition.onerror = (err: any) => {
+      console.warn("Speech error:", err);
+      setAssistantListening(false);
+      recognitionRef.current = null;
+      setInterimSpeech("");
+    };
+
+    setAssistantListening(true);
+    recognition.start();
+  };
+
+  const stopSpeechToText = () => {
+    recognitionRef.current?.stop();
+    setAssistantListening(false);
+  };
+
+  const toggleMic = () => {
+    if (assistantListening) {
+      stopSpeechToText();
+    } else {
+      startSpeechToText();
+    }
+  };
+
 
   // Loading state skeleton
   if (profileLoading) {
@@ -329,7 +665,7 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
   const dayName = now.toLocaleDateString("en-US", { weekday: "long" });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-8 select-none">
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-8 select-none relative">
       
       {/* ── TOP GREETING HEADER ── */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-blue-50/50 to-amber-50/30 p-6 rounded-2xl border border-blue-100/50 shadow-sm">
@@ -363,7 +699,10 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         {/* ── COL 1: Today's Schedule (span 4) ── */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col h-[600px]">
+        <div 
+          onClick={() => setScheduleModalOpen(true)}
+          className="lg:col-span-4 bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col h-[600px] hover:border-blue-400 hover:shadow-md transition cursor-pointer"
+        >
           <div className="flex items-center justify-between pb-4 border-b border-gray-100">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-blue-600" /> Today's Schedule
@@ -382,14 +721,13 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
               </div>
             ) : (
               <div className="relative border-l-2 border-blue-100 ml-4 pl-6 space-y-6 py-2">
-                {todayTasks.map((task) => {
+                {todayTasks.slice(0, 4).map((task) => {
                   const TaskIcon = getTaskIcon(task.title);
                   const isDone = task.status === "COMPLETED";
                   return (
-                    <div key={task.id} className="relative group">
+                    <div key={task.id} className="relative group" onClick={(e) => { e.stopPropagation(); handleTaskToggle(task); }}>
                       {/* Timeline dot */}
                       <button
-                        onClick={() => handleTaskToggle(task)}
                         className={`absolute -left-[35px] top-1 w-6 h-6 rounded-full flex items-center justify-center border-2 transition active:scale-95 ${
                           isDone
                             ? "bg-emerald-500 border-emerald-500 text-white"
@@ -401,11 +739,10 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
 
                       {/* Content Card */}
                       <div
-                        onClick={() => handleTaskToggle(task)}
-                        className={`p-3 rounded-xl border transition cursor-pointer ${
+                        className={`p-3 rounded-xl border transition ${
                           isDone
-                            ? "bg-emerald-50/20 border-emerald-100 hover:bg-emerald-50/40"
-                            : "bg-white border-gray-100 hover:border-blue-200 hover:shadow-sm"
+                            ? "bg-emerald-50/20 border-emerald-100"
+                            : "bg-white border-gray-100 group-hover:border-blue-200"
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -420,7 +757,7 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
                           {task.title}
                         </h4>
                         {task.description && (
-                          <p className={`text-xs mt-1 leading-relaxed ${isDone ? "text-gray-400" : "text-gray-500"}`}>
+                          <p className={`text-xs mt-1 leading-relaxed line-clamp-2 ${isDone ? "text-gray-400" : "text-gray-500"}`}>
                             {task.description}
                           </p>
                         )}
@@ -431,13 +768,19 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
               </div>
             )}
           </div>
+          <div className="pt-3 border-t border-gray-100 text-center text-xs text-blue-500 font-bold flex items-center justify-center gap-1">
+            Tap to open complete schedule planner <ChevronRight className="w-4 h-4" />
+          </div>
         </div>
 
         {/* ── COL 2: Medications & Vitals & SOS (span 5) ── */}
         <div className="lg:col-span-5 space-y-6 flex flex-col h-[600px] justify-between">
           
           {/* Medications Card */}
-          <div className="bg-blue-600 rounded-2xl p-6 text-white shadow-md flex-1 flex flex-col justify-between mb-2">
+          <div 
+            onClick={() => setMedsModalOpen(true)}
+            className="bg-blue-600 rounded-2xl p-6 text-white shadow-md flex-1 flex flex-col justify-between mb-2 hover:bg-blue-700 hover:shadow-lg transition cursor-pointer border border-blue-500"
+          >
             <div>
               <div className="flex items-center justify-between pb-3 border-b border-blue-500/30">
                 <h3 className="text-lg font-bold flex items-center gap-2 text-white">
@@ -452,13 +795,13 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
                 {medications.length === 0 ? (
                   <p className="text-sm text-blue-100 italic py-4">No medications scheduled.</p>
                 ) : (
-                  medications.map((med) => {
+                  medications.slice(0, 2).map((med) => {
                     const isChecked = complianceMap[med.id] || false;
                     return (
                       <div
                         key={med.id}
-                        onClick={() => toggleMedicationCompliance(med.id)}
-                        className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition ${
+                        onClick={(e) => { e.stopPropagation(); toggleMedicationCompliance(med.id); }}
+                        className={`p-3 rounded-xl border flex items-center justify-between transition ${
                           isChecked
                             ? "bg-blue-700/40 border-blue-400/50"
                             : "bg-blue-500/20 border-blue-400/30 hover:bg-blue-500/30"
@@ -487,8 +830,9 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
               </div>
             </div>
             
-            <div className="text-xs text-blue-200/80 pt-2 text-right">
-              Tap items to check compliance. Inform nurse if dose is skipped.
+            <div className="flex items-center justify-between text-xs text-blue-200/80 pt-2 border-t border-blue-500/30">
+              <span>Tap to check compliance</span>
+              <span className="font-bold flex items-center gap-0.5">View details <ChevronRight className="w-3.5 h-3.5" /></span>
             </div>
           </div>
 
@@ -496,7 +840,10 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
           <div className="grid grid-cols-2 gap-4">
             
             {/* Heart Rate */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition">
+            <div 
+              onClick={() => setVitalsModalOpen(true)}
+              className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:border-red-400 hover:shadow-md transition cursor-pointer"
+            >
               <div className="flex items-center gap-2 pb-2">
                 <Heart className="w-5 h-5 text-red-500 fill-red-50" />
                 <span className="text-xs font-semibold text-gray-500">Heart Rate</span>
@@ -508,7 +855,10 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
             </div>
 
             {/* Activity Steps */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition">
+            <div 
+              onClick={() => setVitalsModalOpen(true)}
+              className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:border-blue-400 hover:shadow-md transition cursor-pointer"
+            >
               <div className="flex items-center gap-2 pb-2">
                 <Activity className="w-5 h-5 text-blue-500" />
                 <span className="text-xs font-semibold text-gray-500">Activity</span>
@@ -559,7 +909,10 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
         <div className="lg:col-span-3 space-y-6 flex flex-col h-[600px] justify-between">
           
           {/* Today's Menu */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm flex-1 overflow-y-auto custom-scrollbar flex flex-col justify-between mb-2">
+          <div 
+            onClick={() => setMenuModalOpen(true)}
+            className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm flex-1 overflow-y-auto custom-scrollbar flex flex-col justify-between mb-2 hover:border-amber-400 hover:shadow-md transition cursor-pointer"
+          >
             <div>
               <h3 className="text-sm font-bold text-gray-900 pb-3 border-b border-gray-100 flex items-center gap-2">
                 <Utensils className="w-4 h-4 text-amber-500" /> Today's Menu
@@ -584,20 +937,23 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
                 <div className="space-y-1">
                   <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-600">Dinner (6:00 PM)</span>
                   <h4 className="text-xs font-bold text-gray-900">Baked Salmon</h4>
-                  <p className="text-[10px] text-gray-500 leading-normal">
+                  <p className="text-[10px] text-gray-500 leading-normal line-clamp-2">
                     With steamed asparagus, herb-seasoned wild rice, and organic lemon dressing.
                   </p>
                 </div>
               </div>
             </div>
             
-            <div className="text-[10px] text-gray-400 text-center pt-2">
-              Golden Hearth Organic Dining Room
+            <div className="text-[10px] text-amber-500 font-bold text-center pt-2 flex items-center justify-center gap-0.5 border-t border-gray-50">
+              View complete dining menu <ChevronRight className="w-3.5 h-3.5" />
             </div>
           </div>
 
           {/* Daily Goals */}
-          <div className="bg-teal-800 rounded-2xl p-5 text-white shadow-md flex flex-col justify-between h-[210px]">
+          <div 
+            onClick={() => setGoalsModalOpen(true)}
+            className="bg-teal-800 rounded-2xl p-5 text-white shadow-md flex flex-col justify-between h-[210px] hover:bg-teal-900 hover:shadow-lg transition cursor-pointer border border-teal-700"
+          >
             <div>
               <h3 className="text-sm font-bold flex items-center gap-2 pb-2 border-b border-teal-700/50 text-white">
                 <CheckCircle2 className="w-4 h-4 text-teal-300" /> Daily Goals
@@ -605,11 +961,11 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
               
               <div className="space-y-2 mt-3">
                 {/* Goal 1 */}
-                <label className="flex items-center gap-3 cursor-pointer text-xs select-none">
+                <label className="flex items-center gap-3 cursor-pointer text-xs select-none" onClick={(e) => { e.stopPropagation(); toggleGoal("goal1"); }}>
                   <input
                     type="checkbox"
                     checked={goalsChecked["goal1"] || false}
-                    onChange={() => toggleGoal("goal1")}
+                    readOnly
                     className="w-4 h-4 rounded border-teal-600 text-teal-600 focus:ring-teal-500 bg-teal-900"
                   />
                   <span className={goalsChecked["goal1"] ? "line-through text-teal-300" : "text-white"}>
@@ -618,41 +974,471 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
                 </label>
 
                 {/* Goal 2 */}
-                <label className="flex items-center gap-3 cursor-pointer text-xs select-none">
+                <label className="flex items-center gap-3 cursor-pointer text-xs select-none" onClick={(e) => { e.stopPropagation(); toggleGoal("goal2"); }}>
                   <input
                     type="checkbox"
                     checked={goalsChecked["goal2"] || false}
-                    onChange={() => toggleGoal("goal2")}
+                    readOnly
                     className="w-4 h-4 rounded border-teal-600 text-teal-600 focus:ring-teal-500 bg-teal-900"
                   />
                   <span className={goalsChecked["goal2"] ? "line-through text-teal-300" : "text-white"}>
                     Drink 2 Liters of Water
                   </span>
                 </label>
-
-                {/* Goal 3 */}
-                <label className="flex items-center gap-3 cursor-pointer text-xs select-none">
-                  <input
-                    type="checkbox"
-                    checked={goalsChecked["goal3"] || false}
-                    onChange={() => toggleGoal("goal3")}
-                    className="w-4 h-4 rounded border-teal-600 text-teal-600 focus:ring-teal-500 bg-teal-900"
-                  />
-                  <span className={goalsChecked["goal3"] ? "line-through text-teal-300" : "text-white"}>
-                    Cognitive Puzzles Session
-                  </span>
-                </label>
               </div>
             </div>
 
-            <div className="text-[10px] text-teal-300 text-center font-bold">
-              Progress: {Object.values(goalsChecked).filter(Boolean).length} / 3 Complete
+            <div className="text-[10px] text-teal-300 text-center font-bold flex items-center justify-center gap-0.5 pt-2 border-t border-teal-700/30">
+              Manage & Add custom goals <ChevronRight className="w-3.5 h-3.5" />
             </div>
           </div>
 
         </div>
 
       </div>
+
+      {/* ── 1. TODAY'S SCHEDULE DETAIL VIEW MODAL ── */}
+      {scheduleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 bg-blue-600 text-white flex items-center justify-between flex-shrink-0">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <Calendar className="w-5 h-5" /> Today's Complete Schedule
+              </h3>
+              <button onClick={() => setScheduleModalOpen(false)} className="p-1 hover:bg-blue-700 rounded transition">
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              <p className="text-sm text-gray-500">Below are your scheduled activities and checklists for today. Tap the checkbox to check them off as completed.</p>
+              
+              <div className="space-y-3 mt-4">
+                {todayTasks.length === 0 ? (
+                  <p className="text-sm text-gray-400 italic text-center py-8">No tasks recorded in your schedule today.</p>
+                ) : (
+                  todayTasks.map((t) => {
+                    const TaskIcon = getTaskIcon(t.title);
+                    const isDone = t.status === "COMPLETED";
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => handleTaskToggle(t)}
+                        className={`p-4 rounded-xl border flex items-start gap-4 transition cursor-pointer ${
+                          isDone 
+                            ? "bg-emerald-50/20 border-emerald-100 hover:bg-emerald-50/40" 
+                            : "bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm"
+                        }`}
+                      >
+                        <div className={`mt-1 w-5 h-5 rounded-full flex items-center justify-center border transition ${
+                          isDone ? "bg-emerald-500 border-emerald-500 text-white" : "border-gray-300 text-gray-400"
+                        }`}>
+                          {isDone && <CheckCircle2 className="w-4 h-4 text-white" />}
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-bold text-blue-600">
+                              {new Date(t.dueDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                              t.priority === "URGENT" ? "bg-red-100 text-red-700" :
+                              t.priority === "HIGH" ? "bg-orange-100 text-orange-700" :
+                              "bg-gray-100 text-gray-600"
+                            }`}>
+                              {t.priority}
+                            </span>
+                          </div>
+                          <h4 className={`text-base font-extrabold text-gray-900 mt-1 ${isDone ? "line-through text-gray-400" : ""}`}>
+                            {t.title}
+                          </h4>
+                          {t.description && (
+                            <p className={`text-xs mt-1 leading-relaxed ${isDone ? "text-gray-400" : "text-gray-600"}`}>
+                              {t.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
+              <button
+                onClick={() => setScheduleModalOpen(false)}
+                className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition"
+              >
+                Close Schedule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 2. UPCOMING MEDICATIONS DETAIL VIEW MODAL ── */}
+      {medsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 bg-blue-700 text-white flex items-center justify-between flex-shrink-0">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <Pill className="w-5 h-5" /> Active Medications & Prescriptions
+              </h3>
+              <button onClick={() => setMedsModalOpen(false)} className="p-1 hover:bg-blue-800 rounded transition">
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              <p className="text-sm text-gray-500">Your doctor-approved prescription list. If you take your medication, mark it below to log compliance for today.</p>
+              
+              <div className="space-y-4 mt-2">
+                {medications.length === 0 ? (
+                  <p className="text-sm text-gray-400 italic text-center py-8">No medications currently active.</p>
+                ) : (
+                  medications.map((m) => {
+                    const isChecked = complianceMap[m.id] || false;
+                    return (
+                      <div
+                        key={m.id}
+                        onClick={() => toggleMedicationCompliance(m.id)}
+                        className={`p-4 rounded-xl border flex items-start justify-between gap-4 transition cursor-pointer ${
+                          isChecked 
+                            ? "bg-blue-50/20 border-blue-200 hover:bg-blue-50/40" 
+                            : "bg-white border-gray-200 hover:border-blue-400"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <Pill className="w-5 h-5 text-blue-600 mt-1" />
+                          <div>
+                            <h4 className={`text-base font-extrabold text-gray-900 ${isChecked ? "line-through text-gray-400" : ""}`}>
+                              {m.name} <span className="font-normal text-gray-500 text-sm">{m.dosage}</span>
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 mt-2 text-xs text-gray-600">
+                              <div><span className="font-semibold text-gray-500">Frequency:</span> {m.frequency}</div>
+                              <div><span className="font-semibold text-gray-500">Route:</span> {m.route}</div>
+                              {m.prescribedBy && <div><span className="font-semibold text-gray-500">Prescribed By:</span> {m.prescribedBy}</div>}
+                              {m.reason && <div><span className="font-semibold text-gray-500">Reason:</span> {m.reason}</div>}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className={`mt-1 w-6 h-6 rounded-full flex items-center justify-center border transition ${
+                          isChecked ? "bg-emerald-500 border-emerald-500 text-white" : "border-gray-300 text-gray-400"
+                        }`}>
+                          {isChecked && <CheckCircle2 className="w-4 h-4 text-white" />}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
+              <button
+                onClick={() => setMedsModalOpen(false)}
+                className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition"
+              >
+                Close List
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 3. TODAY'S MENU DETAIL VIEW MODAL ── */}
+      {menuModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 bg-amber-500 text-white flex items-center justify-between flex-shrink-0">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <Utensils className="w-5 h-5" /> Today's Dining & Substitutions
+              </h3>
+              <button onClick={() => setMenuModalOpen(false)} className="p-1 hover:bg-amber-600 rounded transition">
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Breakfast */}
+                <div className="border border-gray-200 rounded-xl p-4 bg-amber-50/20">
+                  <div className="text-[10px] font-black uppercase text-amber-600 tracking-wider">Breakfast (08:30 AM)</div>
+                  <h4 className="font-black text-gray-900 mt-1 text-sm">Organic Oatmeal</h4>
+                  <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                    With fresh organic berries, low-fat Greek yogurt, and warm chamomile tea.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    <span className="text-[8px] px-1 bg-amber-100 text-amber-800 rounded font-bold">Low Sodium</span>
+                    <span className="text-[8px] px-1 bg-emerald-100 text-emerald-800 rounded font-bold">Diabetic Ok</span>
+                  </div>
+                </div>
+
+                {/* Lunch */}
+                <div className="border border-gray-200 rounded-xl p-4 bg-amber-50/20">
+                  <div className="text-[10px] font-black uppercase text-amber-600 tracking-wider">Lunch (12:30 PM)</div>
+                  <h4 className="font-black text-gray-900 mt-1 text-sm">Grilled Chicken Salad</h4>
+                  <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                    Lean chicken breast over organic baby spinach, cherry tomatoes, and light balsamic.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    <span className="text-[8px] px-1 bg-amber-100 text-amber-800 rounded font-bold">Low Sodium</span>
+                    <span className="text-[8px] px-1 bg-blue-100 text-blue-800 rounded font-bold">High Protein</span>
+                  </div>
+                </div>
+
+                {/* Dinner */}
+                <div className="border border-gray-200 rounded-xl p-4 bg-amber-50/20">
+                  <div className="text-[10px] font-black uppercase text-amber-600 tracking-wider">Dinner (06:00 PM)</div>
+                  <h4 className="font-black text-gray-900 mt-1 text-sm">Baked Salmon Fillet</h4>
+                  <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                    Atlantic salmon with wild rice, steamed organic asparagus, and lemon wedge.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    <span className="text-[8px] px-1 bg-blue-100 text-blue-800 rounded font-bold">Gluten Free</span>
+                    <span className="text-[8px] px-1 bg-red-100 text-red-800 rounded font-bold">Omega 3</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Substitution input */}
+              <div className="border-t border-gray-100 pt-5 space-y-3">
+                <h4 className="text-sm font-bold text-gray-900">Request Meal Substitution</h4>
+                <p className="text-xs text-gray-500">Not feeling like having salmon or salad? Type your dietary preference below to alert the chef.</p>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={menuSubText}
+                    onChange={(e) => setMenuSubText(e.target.value)}
+                    placeholder="e.g. Request grilled chicken instead of salmon for dinner..."
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none text-gray-900 text-sm"
+                  />
+                  <button
+                    onClick={handleMenuSubstitution}
+                    disabled={submittingMenuSub}
+                    className="px-5 py-2 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 transition text-sm flex items-center gap-1.5"
+                  >
+                    {submittingMenuSub && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
+                    Submit
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
+              <button
+                onClick={() => setMenuModalOpen(false)}
+                className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition"
+              >
+                Close Menu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 4. DAILY GOALS VIEW MODEL MODAL ── */}
+      {goalsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 bg-teal-800 text-white flex items-center justify-between flex-shrink-0">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-teal-300" /> Daily Health Goals Planner
+              </h3>
+              <button onClick={() => setGoalsModalOpen(false)} className="p-1 hover:bg-teal-900 rounded transition">
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+              <div>
+                <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Native Goals</h4>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 cursor-pointer p-3 bg-teal-50/20 border border-gray-100 rounded-xl text-sm select-none">
+                    <input
+                      type="checkbox"
+                      checked={goalsChecked["goal1"] || false}
+                      onChange={() => toggleGoal("goal1")}
+                      className="w-4 h-4 rounded border-teal-600 text-teal-600 focus:ring-teal-500"
+                    />
+                    <span className={goalsChecked["goal1"] ? "line-through text-gray-400 font-semibold" : "text-gray-800 font-bold"}>
+                      Morning Walk (15 mins) - Maintain aerobic cardiovascular health
+                    </span>
+                  </label>
+
+                  <label className="flex items-center gap-3 cursor-pointer p-3 bg-teal-50/20 border border-gray-100 rounded-xl text-sm select-none">
+                    <input
+                      type="checkbox"
+                      checked={goalsChecked["goal2"] || false}
+                      onChange={() => toggleGoal("goal2")}
+                      className="w-4 h-4 rounded border-teal-600 text-teal-600 focus:ring-teal-500"
+                    />
+                    <span className={goalsChecked["goal2"] ? "line-through text-gray-400 font-semibold" : "text-gray-800 font-bold"}>
+                      Drink 2 Liters of Water - Essential hydration log
+                    </span>
+                  </label>
+
+                  <label className="flex items-center gap-3 cursor-pointer p-3 bg-teal-50/20 border border-gray-100 rounded-xl text-sm select-none">
+                    <input
+                      type="checkbox"
+                      checked={goalsChecked["goal3"] || false}
+                      onChange={() => toggleGoal("goal3")}
+                      className="w-4 h-4 rounded border-teal-600 text-teal-600 focus:ring-teal-500"
+                    />
+                    <span className={goalsChecked["goal3"] ? "line-through text-gray-400 font-semibold" : "text-gray-800 font-bold"}>
+                      Cognitive Puzzles Session - Mind sharpness and mental drills
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Custom Goals */}
+              <div className="border-t border-gray-100 pt-5">
+                <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">My Custom Goals</h4>
+                
+                {customGoals.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic py-2">No custom goals added yet. Add one below!</p>
+                ) : (
+                  <div className="space-y-2 mb-4">
+                    {customGoals.map((g) => (
+                      <div key={g.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-xl">
+                        <label className="flex items-center gap-3 cursor-pointer text-sm select-none flex-1">
+                          <input
+                            type="checkbox"
+                            checked={g.checked}
+                            onChange={() => toggleCustomGoal(g.id)}
+                            className="w-4 h-4 rounded border-teal-600 text-teal-600 focus:ring-teal-500"
+                          />
+                          <span className={g.checked ? "line-through text-gray-400 font-semibold" : "text-gray-800 font-bold"}>
+                            {g.name}
+                          </span>
+                        </label>
+                        <button
+                          onClick={() => deleteCustomGoal(g.id)}
+                          className="p-1 hover:bg-red-50 rounded text-red-500 transition"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <form onSubmit={addCustomGoal} className="flex gap-2 mt-2">
+                  <input
+                    type="text"
+                    value={newGoalText}
+                    onChange={(e) => setNewGoalText(e.target.value)}
+                    placeholder="e.g. Read book for 20 mins, Stretch exercises..."
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-teal-600 outline-none text-gray-900 text-sm"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white font-bold rounded-xl transition text-sm flex items-center gap-1"
+                  >
+                    <Plus className="w-4 h-4" /> Add
+                  </button>
+                </form>
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
+              <button
+                onClick={() => setGoalsModalOpen(false)}
+                className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition"
+              >
+                Close Planner
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 5. VITALS LOG DETAIL VIEW MODAL ── */}
+      {vitalsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 bg-blue-600 text-white flex items-center justify-between flex-shrink-0">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <HeartPulse className="w-5 h-5 text-white" /> Vitals History Logs
+              </h3>
+              <button onClick={() => setVitalsModalOpen(false)} className="p-1 hover:bg-blue-700 rounded transition">
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              <p className="text-sm text-gray-500">Your recent health measurements. Clinical staff records these logs during checkups.</p>
+              
+              <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3">Measurement</th>
+                      <th className="px-4 py-3">Reading Value</th>
+                      <th className="px-4 py-3">Logged Date</th>
+                      <th className="px-4 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-gray-800">
+                    {vitals.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-gray-400 italic">No vital logs recorded yet.</td>
+                      </tr>
+                    ) : (
+                      vitals.map((v) => {
+                        const isHR = v.type === "HEART_RATE";
+                        const isBP = v.type === "BLOOD_PRESSURE";
+                        const isOxy = v.type === "OXYGEN";
+                        
+                        let displayType = v.type.replace(/_/g, " ");
+                        let alert = false;
+                        if (isHR) {
+                          const val = parseInt(v.value);
+                          if (val > 100 || val < 55) alert = true;
+                        }
+
+                        return (
+                          <tr key={v.id} className="hover:bg-gray-50 transition">
+                            <td className="px-4 py-3 font-semibold flex items-center gap-2">
+                              {isHR ? <Heart className="w-4 h-4 text-red-500" /> :
+                               isOxy ? <Volume2 className="w-4 h-4 text-blue-500" /> :
+                               <Activity className="w-4 h-4 text-gray-500" />}
+                              {displayType}
+                            </td>
+                            <td className="px-4 py-3 font-black text-gray-900">{v.value} {v.unit || ""}</td>
+                            <td className="px-4 py-3 text-xs text-gray-500">
+                              {new Date(v.recordedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                alert ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"
+                              }`}>
+                                {alert ? "Attention Needed" : "Normal"}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
+              <button
+                onClick={() => setVitalsModalOpen(false)}
+                className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition"
+              >
+                Close Logs
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── CALL FAMILY MODAL ── */}
       {familyModalOpen && (
@@ -764,6 +1550,169 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
                 Submit Request
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 6. FLOATING VOICE AND TEXT CHAT COMPANION MODAL ── */}
+      {/* Floating Action Button */}
+      <div className="fixed bottom-6 right-6 z-40">
+        <button
+          onClick={() => setAssistantOpen(true)}
+          className="w-16 h-16 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition duration-300 animate-bounce group relative border border-blue-400"
+          title="Talk with AI Companion"
+        >
+          <Bot className="w-8 h-8 text-white group-hover:rotate-12 transition duration-300" />
+          <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
+          </span>
+        </button>
+      </div>
+
+      {/* Slide-out Assistant Modal Panel */}
+      {assistantOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-end p-4 bg-black/30 backdrop-blur-sm">
+          <div className="bg-white w-full sm:w-[480px] h-[80vh] sm:h-[600px] rounded-2xl shadow-2xl border border-gray-100 flex flex-col overflow-hidden animate-slide-in">
+            
+            {/* Header */}
+            <div className="px-5 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center relative">
+                  <Bot className="w-5 h-5 text-white" />
+                  {assistantSpeaking && (
+                    <span className="absolute inset-0 rounded-full border-2 border-emerald-400 animate-ping"></span>
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-black text-sm">AI Companion</h3>
+                  <div className="flex items-center gap-1">
+                    <span className={`w-2 h-2 rounded-full ${
+                      assistantListening ? "bg-red-500 animate-pulse" :
+                      assistantSpeaking ? "bg-emerald-400 animate-pulse" : "bg-blue-300"
+                    }`} />
+                    <span className="text-[10px] text-blue-100 font-semibold uppercase tracking-wider">
+                      {assistantListening ? "Listening..." :
+                       assistantSpeaking ? "Speaking..." : "Online"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setAssistantAutoSpeak(!assistantAutoSpeak)}
+                  className={`p-1.5 rounded transition ${assistantAutoSpeak ? "bg-white/20 text-white" : "text-blue-200 hover:bg-white/10"}`}
+                  title={assistantAutoSpeak ? "Mute Voice output" : "Enable Voice output"}
+                >
+                  {assistantAutoSpeak ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={() => { stopTTS(); stopSpeechToText(); setAssistantOpen(false); }}
+                  className="p-1.5 hover:bg-white/10 rounded transition"
+                >
+                  <X className="w-5 h-5 text-white" />
+                </button>
+              </div>
+            </div>
+
+            {/* Chat Messages */}
+            <div 
+              ref={scrollRef}
+              className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 custom-scrollbar"
+            >
+              {assistantMessages.map((m) => {
+                const isAI = m.role === "assistant";
+                return (
+                  <div key={m.id} className={`flex ${isAI ? "justify-start" : "justify-end"}`}>
+                    <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
+                      isAI 
+                        ? "bg-white text-gray-900 border border-gray-100 rounded-tl-none" 
+                        : "bg-blue-600 text-white rounded-tr-none font-medium"
+                    }`}>
+                      <p className="leading-relaxed">{m.text}</p>
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {/* Voice recognition interim display */}
+              {interimSpeech && (
+                <div className="flex justify-end">
+                  <div className="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm bg-blue-500/20 text-blue-900 rounded-tr-none italic border border-blue-200">
+                    <p>{interimSpeech}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Thinking loader */}
+              {assistantThinking && (
+                <div className="flex justify-start">
+                  <div className="bg-white border border-gray-100 rounded-2xl rounded-tl-none px-4 py-3 flex items-center gap-1.5 shadow-sm text-gray-500 text-xs">
+                    <span className="animate-bounce">●</span>
+                    <span className="animate-bounce [animation-delay:0.2s]">●</span>
+                    <span className="animate-bounce [animation-delay:0.4s]">●</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Interactive prompts (Quick chips) */}
+            <div className="p-3 bg-gray-50 border-t border-gray-100 flex gap-2 overflow-x-auto flex-shrink-0 select-none custom-scrollbar">
+              <button 
+                onClick={() => handleSendAssistantMessage("What is my schedule for today?")}
+                className="px-3 py-1 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 text-blue-900 font-bold rounded-full text-xs flex-shrink-0 transition active:scale-95"
+              >
+                🗓️ Today's Schedule
+              </button>
+              <button 
+                onClick={() => handleSendAssistantMessage("What is on the dining menu?")}
+                className="px-3 py-1 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 text-blue-900 font-bold rounded-full text-xs flex-shrink-0 transition active:scale-95"
+              >
+                🥗 Today's Menu
+              </button>
+              <button 
+                onClick={() => handleSendAssistantMessage("How are my heart rate vitals looking?")}
+                className="px-3 py-1 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 text-blue-900 font-bold rounded-full text-xs flex-shrink-0 transition active:scale-95"
+              >
+                ❤️ Vitals Status
+              </button>
+            </div>
+
+            {/* Input Bar */}
+            <div className="p-4 border-t border-gray-100 bg-white flex items-center gap-3 flex-shrink-0">
+              {/* Voice Mic Trigger */}
+              <button
+                onClick={toggleMic}
+                className={`w-12 h-12 rounded-xl flex items-center justify-center shadow transition active:scale-90 flex-shrink-0 ${
+                  assistantListening
+                    ? "bg-red-500 hover:bg-red-600 text-white animate-pulse"
+                    : "bg-blue-50 hover:bg-blue-100 text-blue-600"
+                }`}
+                title={assistantListening ? "Stop listening" : "Start speaking"}
+              >
+                {assistantListening ? <MicOff className="w-5 h-5 text-white" /> : <Mic className="w-5 h-5" />}
+              </button>
+
+              <input
+                type="text"
+                value={assistantInput}
+                onChange={(e) => setAssistantInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSendAssistantMessage(assistantInput)}
+                placeholder={assistantListening ? "Listening..." : "Type or speak to assistant..."}
+                disabled={assistantListening}
+                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-600 outline-none text-gray-900 text-sm"
+              />
+
+              <button
+                onClick={() => handleSendAssistantMessage(assistantInput)}
+                disabled={!assistantInput.trim() || assistantThinking}
+                className="w-10 h-10 rounded-xl bg-blue-600 text-white shadow flex items-center justify-center hover:bg-blue-700 active:scale-90 transition disabled:opacity-50 disabled:scale-100 flex-shrink-0"
+              >
+                <Send className="w-4 h-4 text-white" />
+              </button>
+            </div>
+
           </div>
         </div>
       )}
