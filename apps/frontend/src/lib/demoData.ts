@@ -101,10 +101,10 @@ const notifications = [
 ];
 
 const callBells = [
-  { id: "cb1", status: "PENDING", reason: "Assistance requested", createdAt: iso(1 * H), resident: residentRef(residentsBase[3]) },
-  { id: "cb2", status: "RESOLVED", reason: "Water refill", resolvedAt: iso(3 * H), respondedAt: iso(3.9 * H), createdAt: iso(4 * H), resident: residentRef(residentsBase[1]) },
-  { id: "cb3", status: "RESPONDED", reason: "Repositioning help", respondedAt: iso(0.2 * H), createdAt: iso(0.4 * H), resident: residentRef(residentsBase[0]) },
-  { id: "cb4", status: "RESOLVED", reason: "Bathroom assistance", resolvedAt: iso(26 * H), respondedAt: iso(26.2 * H), createdAt: iso(26.5 * H), notes: "Assisted safely back to bed.", resident: residentRef(residentsBase[4]) },
+  { id: "cb1", residentId: "r4", status: "PENDING", reason: "Assistance requested", createdAt: iso(1 * H), resident: residentRef(residentsBase[3]) },
+  { id: "cb2", residentId: "r2", status: "RESOLVED", reason: "Water refill", resolvedAt: iso(3 * H), respondedAt: iso(3.9 * H), createdAt: iso(4 * H), resident: residentRef(residentsBase[1]) },
+  { id: "cb3", residentId: "r1", status: "RESPONDED", reason: "Repositioning help", respondedAt: iso(0.2 * H), createdAt: iso(0.4 * H), resident: residentRef(residentsBase[0]) },
+  { id: "cb4", residentId: "r5", status: "RESOLVED", reason: "Bathroom assistance", resolvedAt: iso(26 * H), respondedAt: iso(26.2 * H), createdAt: iso(26.5 * H), notes: "Assisted safely back to bed.", resident: residentRef(residentsBase[4]) },
 ];
 
 const staffRef = (s: any) => ({ user: { name: s.user.name } });
