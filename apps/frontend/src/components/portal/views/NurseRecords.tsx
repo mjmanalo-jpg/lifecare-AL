@@ -112,6 +112,7 @@ export default function NurseRecords() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [viewing, setViewing] = useState<RecordVM | null>(null);
   const [editing, setEditing] = useState<RecordVM | null>(null);
+  const [bellsViewing, setBellsViewing] = useState<RecordVM | null>(null);
   const [form, setForm] = useState<EditForm>({ name: "", room: "", careLevel: "INDEPENDENT", allergies: "", medicalHistory: "", notes: "" });
   const [saving, setSaving] = useState(false);
 
@@ -417,7 +418,12 @@ export default function NurseRecords() {
                     </div>
                   )}
 
-                  <div className="p-4 mt-auto">
+                  <div className="p-4 mt-auto space-y-2">
+                    {r.callBells.length > 0 && (
+                      <button onClick={() => setBellsViewing(r)} className="w-full px-4 py-2 bg-gradient-to-r from-orange-400 to-orange-500 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95 flex items-center justify-center gap-2">
+                        <Phone className="w-4 h-4" /> Call Bells ({r.callBells.length})
+                      </button>
+                    )}
                     <button onClick={() => setViewing(r)} className="w-full px-4 py-2 bg-gradient-to-r from-blue-400 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
                       View Details
                     </button>
@@ -445,6 +451,9 @@ export default function NurseRecords() {
           </div>
         </>
       )}
+
+      {/* Call Bells modal */}
+      {bellsViewing && <CallBellsModal r={bellsViewing} onClose={() => setBellsViewing(null)} refetchCallBells={() => void refetchCallBells()} />}
 
       {/* View modal */}
       {viewing && <RecordModal r={viewing} nowTs={nowTs} onClose={() => setViewing(null)} onEdit={() => openEdit(viewing)} />}
@@ -474,6 +483,188 @@ export default function NurseRecords() {
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+/* ── Call Bells modal ────────────────────────────────────────────────── */
+
+function CallBellsModal({ r, onClose, refetchCallBells }: { r: RecordVM; onClose: () => void; refetchCallBells: () => void }) {
+  const handleRespond = async (bellId: string) => {
+    try {
+      await updateRecord("call-bells", bellId, {
+        status: "RESPONDED",
+        respondedAt: new Date().toISOString(),
+      });
+      refetchCallBells();
+      Swal.fire({
+        title: "Responded",
+        text: "Call bell marked as responded",
+        icon: "success",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      Swal.fire({
+        title: "Error",
+        text: err instanceof Error ? err.message : "Failed to respond",
+        icon: "error",
+      });
+    }
+  };
+
+  const handleResolve = async (bellId: string) => {
+    const result = await Swal.fire({
+      title: "Resolve Call Bell?",
+      input: "textarea",
+      inputLabel: "Resolution notes",
+      inputPlaceholder: "What was done...",
+      showCancelButton: true,
+      confirmButtonColor: "#10b981",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Resolve",
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await updateRecord("call-bells", bellId, {
+          status: "RESOLVED",
+          resolvedAt: new Date().toISOString(),
+          notes: result.value || "Resolved",
+        });
+        refetchCallBells();
+        Swal.fire({
+          title: "Resolved",
+          text: "Call bell marked as resolved",
+          icon: "success",
+          timer: 1500,
+          showConfirmButton: false,
+        });
+      } catch (err) {
+        Swal.fire({
+          title: "Error",
+          text: err instanceof Error ? err.message : "Failed to resolve",
+          icon: "error",
+        });
+      }
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-gradient-to-r from-orange-400 to-orange-500 text-white p-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">Call Bells</h2>
+            <p className="text-orange-100">{r.name} • Room {r.room}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-orange-600/20 rounded-lg transition">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {r.callBells.length > 0 ? (
+            <>
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-xs text-red-700 font-semibold">PENDING</p>
+                  <p className="text-2xl font-bold text-red-600 mt-1">
+                    {r.callBells.filter(cb => cb.status === "PENDING").length}
+                  </p>
+                </div>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <p className="text-xs text-yellow-700 font-semibold">RESPONDING</p>
+                  <p className="text-2xl font-bold text-yellow-600 mt-1">
+                    {r.callBells.filter(cb => cb.status === "RESPONDED").length}
+                  </p>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <p className="text-xs text-green-700 font-semibold">RESOLVED</p>
+                  <p className="text-2xl font-bold text-green-600 mt-1">
+                    {r.callBells.filter(cb => cb.status === "RESOLVED").length}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {r.callBells.map((bell) => (
+                  <div
+                    key={bell.id}
+                    className={`p-4 rounded-lg border ${
+                      bell.status === "PENDING"
+                        ? "bg-red-50 border-red-200"
+                        : bell.status === "RESPONDED"
+                        ? "bg-yellow-50 border-yellow-200"
+                        : "bg-green-50 border-green-200"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div>
+                        <h3 className="font-bold text-gray-900">{bell.reason}</h3>
+                        <p className="text-xs text-gray-600 mt-1">
+                          {Math.round((Date.now() - new Date(bell.createdAt).getTime()) / 60000)} min ago
+                        </p>
+                      </div>
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${
+                          bell.status === "PENDING"
+                            ? "bg-red-200 text-red-800"
+                            : bell.status === "RESPONDED"
+                            ? "bg-yellow-200 text-yellow-800"
+                            : "bg-green-200 text-green-800"
+                        }`}
+                      >
+                        {bell.status}
+                      </span>
+                    </div>
+
+                    {bell.notes && (
+                      <p className="text-xs text-gray-700 p-2 bg-white/50 rounded border border-gray-200 mb-3">
+                        📝 {bell.notes}
+                      </p>
+                    )}
+
+                    {bell.status !== "RESOLVED" && bell.status !== "CANCELLED" && (
+                      <div className="flex gap-2 mt-3">
+                        {bell.status === "PENDING" && (
+                          <button
+                            onClick={() => void handleRespond(bell.id)}
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-semibold rounded text-sm transition"
+                          >
+                            <Clock className="w-4 h-4" /> Respond
+                          </button>
+                        )}
+                        <button
+                          onClick={() => void handleResolve(bell.id)}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded text-sm transition"
+                        >
+                          <CheckCircle2 className="w-4 h-4" /> Resolve
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-12 text-gray-500">
+              <Phone className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-lg font-medium">No call bells</p>
+              <p className="text-sm">This resident has no active call bells</p>
+            </div>
+          )}
+        </div>
+
+        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-gray-700 hover:bg-gray-800 text-white font-semibold rounded-lg transition"
+          >
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
