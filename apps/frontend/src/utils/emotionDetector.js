@@ -1,6 +1,12 @@
 // Real-time emotion detection using face landmarks, pose analysis, and TensorFlow.js CNN
 // 100% local processing, heavily accelerated by WebGL
 
+// Suppress TensorFlow.js verbose logging (WebGL context warnings, etc.)
+if (typeof window !== 'undefined' && window.tf) {
+  window.tf.env().set('DEBUG', false);
+  window.tf.env().set('IS_BROWSER', true);
+}
+
 let faceapi = null;
 let faceApiLoaded = false;
 let faceApiLoading = false;
@@ -8,13 +14,25 @@ let faceApiLoading = false;
 export async function loadFaceAPI() {
   if (faceApiLoaded || faceApiLoading) return;
   faceApiLoading = true;
-  
+
   if (!faceapi) {
     faceapi = await import('@vladmandic/face-api');
   }
 
+  // Suppress TensorFlow.js verbose logging during model loading
+  const savedDebugMode = global.TF_DEBUG || false;
+  if (typeof global !== 'undefined') {
+    global.TF_DEBUG = false;
+  }
+
   await faceapi.nets.tinyFaceDetector.loadFromUri('/models/face-api');
   await faceapi.nets.faceExpressionNet.loadFromUri('/models/face-api');
+
+  // Restore previous debug mode
+  if (typeof global !== 'undefined') {
+    global.TF_DEBUG = savedDebugMode;
+  }
+
   faceApiLoaded = true;
   faceApiLoading = false;
 }

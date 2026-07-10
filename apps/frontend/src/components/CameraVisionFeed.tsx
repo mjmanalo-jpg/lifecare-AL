@@ -5,6 +5,22 @@ import { Camera, AlertTriangle, Activity, Shield, Brain, Cpu, Volume2, VolumeX, 
 import { analyzeEmotionFromLandmarks, loadFaceAPI } from "@/utils/emotionDetector";
 import { rppgProcessor, type VitalEstimate } from "@/utils/rppgProcessor";
 
+// Suppress TensorFlow.js and WebGL verbose logging
+if (typeof window !== "undefined") {
+  if ((window as any).tf) {
+    (window as any).tf.env().set("DEBUG", false);
+  }
+  // Suppress console warnings from WebGL context
+  const originalWarn = console.warn;
+  const warnFilter = (...args: any[]) => {
+    const msg = args.join(" ");
+    if (!msg.includes("OpenGL") && !msg.includes("WebGL")) {
+      originalWarn(...args);
+    }
+  };
+  console.warn = warnFilter;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
