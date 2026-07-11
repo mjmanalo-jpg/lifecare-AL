@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Camera, AlertTriangle, Activity, Shield, Brain, Cpu, Volume2, VolumeX, Heart } from "lucide-react";
+import { Camera, AlertTriangle, Activity, Shield, Brain, Cpu, Volume2, VolumeX, Heart, History, RefreshCw, X } from "lucide-react";
 import { analyzeEmotionFromLandmarks, loadFaceAPI } from "@/utils/emotionDetector";
 import { rppgProcessor, type VitalEstimate } from "@/utils/rppgProcessor";
 
@@ -349,6 +349,23 @@ const getBackendUrl = () => {
   return "http://localhost:8000";
 };
 
+function captureSnapshot(videoEl: HTMLVideoElement | null, imgEl: HTMLImageElement | null, canvasEl: HTMLCanvasElement | null): string | undefined {
+  try {
+    const source = videoEl && videoEl.readyState >= 2 ? videoEl : null;
+    const imgSource = imgEl && imgEl.complete && imgEl.naturalWidth > 0 ? imgEl : null;
+    if (!source && !imgSource) return undefined;
+    const w = source?.videoWidth || imgSource?.naturalWidth || 640;
+    const h = source?.videoHeight || imgSource?.naturalHeight || 480;
+    const c = canvasEl || document.createElement("canvas");
+    c.width = w; c.height = h;
+    const ctx = c.getContext("2d");
+    if (!ctx) return undefined;
+    if (source) ctx.drawImage(source, 0, 0, w, h);
+    else if (imgSource) ctx.drawImage(imgSource, 0, 0, w, h);
+    return c.toDataURL("image/jpeg", 0.7);
+  } catch { return undefined; }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -361,6 +378,18 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   const [tapoStatus, setTapoStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const [tapoPan, setTapoPan] = useState(0);   // horizontal position (-100 to 100)
   const [tapoTilt, setTapoTilt] = useState(0); // vertical position (-100 to 100)
+
+  // Tapo connection retry state
+  const tapoRetryRef = useRef(0);
+  const tapoMaxRetries = 5;
+  const tapoRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tapoStreamUrlRef = useRef(`${getBackendUrl()}/api/v1/camera/tapo_feed`);
+
+  // Camera history state
+  interface CameraEvent { id: string; type: "fall" | "connection" | "snapshot" | "alert"; message: string; timestamp: number; thumbnail?: string }
+  const [history, setHistory] = useState<CameraEvent[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const historyIdRef = useRef(0);
   const [aiVitals, setAiVitals] = useState({
     heartRate: 72,
     respirationRate: 16,
@@ -581,14 +610,37 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     }
   }, [isMuted, stopSpeaking]);
 
-  // Tapo IP Camera Connection — CONNECTION ONLY, no config pushing.
+  // Tapo IP Camera Connection — retry-capable, with auto-reconnect.
   // The stream is served by the backend <img> below (GET /api/v1/camera/tapo_feed).
   // The backend builds the RTSP URL from its OWN .env — the frontend never pushes
-  // the camera IP or credentials over the wire. Connection status is driven by the
-  // <img> element's onLoad / onError handlers.
-  useEffect(() => {
-    if (activeCamera !== "tapo") return;
+  // the camera IP or credentials over the wire.
+  const reconnectTapo = useCallback(() => {
+    // Bust the MJPEG cache by appending a timestamp — forces the browser to
+    // re-open the SSE stream instead of reusing the stale/errored connection.
+    tapoStreamUrlRef.current = `${getBackendUrl()}/api/v1/camera/tapo_feed?t=${Date.now()}`;
     setTapoStatus("connecting");
+    tapoRetryRef.current += 1;
+    // Force the <img> to re-fetch by toggling src
+    if (tapoImgRef.current) {
+      tapoImgRef.current.src = tapoStreamUrlRef.current;
+    }
+    setHistory(prev => [{
+      id: `conn-${++historyIdRef.current}`,
+      type: "connection" as const,
+      message: `Reconnect attempt ${tapoRetryRef.current}/${tapoMaxRetries}`,
+      timestamp: Date.now(),
+    }, ...prev].slice(0, 50));
+  }, []);
+
+  useEffect(() => {
+    if (activeCamera !== "tapo") {
+      // Clean up any pending retry timer when switching away
+      if (tapoRetryTimerRef.current) clearTimeout(tapoRetryTimerRef.current);
+      return;
+    }
+    setTapoStatus("connecting");
+    tapoRetryRef.current = 0;
+    tapoStreamUrlRef.current = `${getBackendUrl()}/api/v1/camera/tapo_feed?t=${Date.now()}`;
   }, [activeCamera]);
 
   useEffect(() => {
@@ -1411,6 +1463,16 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       summary:"Fall detected. Resident requires immediate assistance.",
     };
     analysisRef.current=override; setAnalysis(override);
+
+    // Capture snapshot on fall detection
+    const thumb = captureSnapshot(videoRef.current, tapoImgRef.current, captureRef.current);
+    setHistory(prev => [{
+      id: `fall-${++historyIdRef.current}`,
+      type: "fall" as const,
+      message: "Fall detected — snapshot captured",
+      timestamp: Date.now(),
+      thumbnail: thumb,
+    }, ...prev].slice(0, 50));
   }, [fallen]);
 
   // ── Derived UI colors ─────────────────────────────────────────────────────
@@ -1436,6 +1498,18 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
 
       {/* Camera Mode Selector (Hybrid Support) */}
       <div className="absolute top-3 right-3 z-50 flex gap-2 pointer-events-auto">
+        <button
+          onClick={() => setShowHistory(prev => !prev)}
+          className={`relative px-2.5 py-1 rounded-md text-[10px] font-bold transition flex items-center gap-1 shadow-md cursor-pointer select-none ${
+            showHistory ? "bg-amber-500/90 text-black" : "bg-black/60 text-zinc-400 hover:bg-black/80"
+          }`}
+          title="Camera History"
+        >
+          <History className="w-3.5 h-3.5" /> History
+          {history.length > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] font-bold flex items-center justify-center leading-none">{history.length > 99 ? "99+" : history.length}</span>
+          )}
+        </button>
         {activeCamera === "local" && useBackendFeed && (
           <button
             onClick={startLocalCamera}
@@ -1495,17 +1569,43 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       {/* Tapo IP Camera Stream */}
       <img
         ref={tapoImgRef}
-        src={`${getBackendUrl()}/api/v1/camera/tapo_feed`}
+        src={tapoStreamUrlRef.current}
         alt="Tapo IP Camera Stream"
         crossOrigin="anonymous"
         onLoad={() => {
           setTapoStatus("connected");
           setCamActive(true);
+          tapoRetryRef.current = 0;
+          if (tapoRetryTimerRef.current) clearTimeout(tapoRetryTimerRef.current);
+          setHistory(prev => [{
+            id: `conn-${++historyIdRef.current}`,
+            type: "connection" as const,
+            message: "Tapo camera connected",
+            timestamp: Date.now(),
+          }, ...prev].slice(0, 50));
         }}
         onError={() => {
-          console.warn("[Tapo] Connection failed, attempting fallback...");
-          setTapoStatus("error");
-          setActiveCamera("local");
+          console.warn(`[Tapo] Connection failed (attempt ${tapoRetryRef.current + 1}/${tapoMaxRetries})`);
+          setHistory(prev => [{
+            id: `conn-${++historyIdRef.current}`,
+            type: "connection" as const,
+            message: `Connection failed (attempt ${tapoRetryRef.current + 1}/${tapoMaxRetries})`,
+            timestamp: Date.now(),
+          }, ...prev].slice(0, 50));
+          if (tapoRetryRef.current < tapoMaxRetries) {
+            setTapoStatus("connecting");
+            // Exponential backoff: 2s, 4s, 8s, 16s
+            const delay = Math.min(2000 * Math.pow(2, tapoRetryRef.current), 16000);
+            tapoRetryTimerRef.current = setTimeout(() => reconnectTapo(), delay);
+          } else {
+            setTapoStatus("error");
+            setHistory(prev => [{
+              id: `conn-${++historyIdRef.current}`,
+              type: "connection" as const,
+              message: "Max retries reached. Tapo camera offline.",
+              timestamp: Date.now(),
+            }, ...prev].slice(0, 50));
+          }
         }}
         className={`absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-500 ${
           activeCamera === "tapo" && tapoStatus === "connected" ? "opacity-100 z-0" : "opacity-0 -z-10"
@@ -1564,6 +1664,22 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
           <span className={`w-1.5 h-1.5 rounded-full ${gemPending?"bg-amber-400 animate-pulse":modelsOk?"bg-emerald-500 animate-pulse":"bg-zinc-600"}`}/>
           {gemPending?"AI Vision Analyzing...":modelsOk?"AI Systems Live":"Initializing..."}
         </span>
+
+        {activeCamera === "tapo" && (
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider backdrop-blur-sm border pointer-events-auto ${
+            tapoStatus === "connected" ? "bg-emerald-600/80 text-emerald-200 border-emerald-400/30"
+              : tapoStatus === "connecting" ? "bg-amber-600/80 text-amber-200 border-amber-400/30"
+              : "bg-red-600/80 text-red-200 border-red-400/30"
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${tapoStatus === "connected" ? "bg-emerald-400 animate-pulse" : tapoStatus === "connecting" ? "bg-amber-400 animate-pulse" : "bg-red-400"}`}/>
+            Tapo: {tapoStatus === "connected" ? "Live" : tapoStatus === "connecting" ? "Connecting..." : "Offline"}
+            {tapoStatus === "error" && (
+              <button onClick={reconnectTapo} className="ml-1 p-0.5 rounded hover:bg-white/20 transition" title="Reconnect">
+                <RefreshCw className="w-3 h-3"/>
+              </button>
+            )}
+          </span>
+        )}
 
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-black/72 text-[9px] font-mono text-amber-400 uppercase tracking-wider backdrop-blur-sm border border-white/10">
           <Brain className="w-3 h-3"/>
@@ -1714,6 +1830,46 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
           </span>
         )}
       </div>
+
+      {/* ── HISTORY PANEL ── */}
+      {showHistory && (
+        <div className="absolute top-14 right-3 z-50 w-72 max-h-[60vh] bg-black/90 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl overflow-hidden pointer-events-auto">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+            <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+              <History className="w-3.5 h-3.5" /> Camera History
+            </span>
+            <button onClick={() => setShowHistory(false)} className="p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="overflow-y-auto max-h-[calc(60vh-36px)] p-2 space-y-1.5">
+            {history.length === 0 ? (
+              <p className="text-[10px] text-zinc-500 text-center py-6">No events recorded yet.</p>
+            ) : (
+              history.map((ev) => (
+                <div key={ev.id} className={`rounded-lg p-2 border ${
+                  ev.type === "fall" ? "bg-red-900/30 border-red-500/30"
+                    : ev.type === "connection" ? "bg-blue-900/20 border-blue-500/20"
+                    : ev.type === "alert" ? "bg-amber-900/20 border-amber-500/20"
+                    : "bg-zinc-800/40 border-zinc-700/30"
+                }`}>
+                  <div className="flex items-start gap-2">
+                    {ev.thumbnail && (
+                      <img src={ev.thumbnail} alt="Snapshot" className="w-12 h-9 object-cover rounded border border-white/10 flex-shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-[10px] font-semibold ${
+                        ev.type === "fall" ? "text-red-400" : ev.type === "connection" ? "text-blue-400" : ev.type === "alert" ? "text-amber-400" : "text-zinc-300"
+                      }`}>{ev.message}</p>
+                      <p className="text-[9px] text-zinc-500 mt-0.5">{new Date(ev.timestamp).toLocaleTimeString()}</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

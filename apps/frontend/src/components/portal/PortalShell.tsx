@@ -215,23 +215,36 @@ export default function PortalShell({
   const filteredLinks = useMemo(() => {
     if (!enabledFeatures) return roleDetails.sidebarLinks;
 
+    // Features absent from the stored matrix default to the role's native
+    // sidebar (same rule as the Portal Matrix editor) — otherwise a stale
+    // snapshot saved before a feature existed would silently hide it.
+    const isEnabled = (featureName: string) =>
+      enabledFeatures[featureName] ??
+      roleDetails.sidebarLinks.some((l) => l.name === featureName);
+
     const links: SidebarLink[] = [];
     const seenRoutes = new Set<string>();
-    
-    // We iterate over the keys of GLOBAL_FEATURES to check what is enabled
+
+    // Native links first, preserving the role's configured order.
+    roleDetails.sidebarLinks.forEach((link) => {
+      if (isEnabled(link.name) && !seenRoutes.has(link.route)) {
+        seenRoutes.add(link.route);
+        links.push(link);
+      }
+    });
+
+    // Then any extra features the matrix grants beyond the role's defaults.
     Object.keys(GLOBAL_FEATURES).forEach((featureName) => {
       if (enabledFeatures[featureName] === true) {
         const feat = GLOBAL_FEATURES[featureName];
-        if (feat) {
-          const route = `${roleDetails.basePath}/${feat.routeSegment}`;
-          if (!seenRoutes.has(route)) {
-            seenRoutes.add(route);
-            links.push({
-              name: featureName,
-              icon: feat.icon,
-              route,
-            });
-          }
+        const route = `${roleDetails.basePath}/${feat.routeSegment}`;
+        if (!seenRoutes.has(route)) {
+          seenRoutes.add(route);
+          links.push({
+            name: featureName,
+            icon: feat.icon,
+            route,
+          });
         }
       }
     });

@@ -851,8 +851,9 @@ function PortalMatrixEditor() {
         const state: MatrixState = {};
         ALL_ROLES.forEach((r) => {
           state[r] = {};
+          const roleFeatures = ROLES[r].sidebarLinks.map((l) => l.name);
           Object.keys(GLOBAL_FEATURES).forEach((f) => {
-            state[r][f] = parsed[r]?.[f] ?? false;
+            state[r][f] = parsed[r]?.[f] ?? roleFeatures.includes(f);
           });
         });
         setMatrix(state);

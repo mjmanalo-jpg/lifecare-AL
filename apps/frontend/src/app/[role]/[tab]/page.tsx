@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import PortalShell from "@/components/portal/PortalShell";
 import { PATH_TO_ROLE, ROUTE_TO_TAB, Role } from "@/constants/roleConfig";
 import NursePortalContent from "@/components/portal/views/NursePortalContent";
+import PhysicianPortalContent from "@/components/portal/views/PhysicianPortalContent";
 import CaregiverPortalContent from "@/components/portal/views/CaregiverPortalContent";
 import FamilyPortalContent from "@/components/portal/views/FamilyPortalContent";
 import ResidentPortalContent from "@/components/portal/views/ResidentPortalContent";
@@ -50,8 +51,8 @@ export default function RolePortalPage() {
       activeTab={activeTab}
       onLogout={handleLogout}
     >
-      {/* Clinical roles share the nurse portal content. */}
-      {(userRole === "NURSE" || userRole === "PHYSICIAN") && <NursePortalContent tab={tabParam || "dashboard"} />}
+      {userRole === "NURSE" && <NursePortalContent tab={tabParam || "dashboard"} />}
+      {userRole === "PHYSICIAN" && <PhysicianPortalContent tab={tabParam || "dashboard"} />}
       {userRole === "CAREGIVER" && <CaregiverPortalContent tab={tabParam || "dashboard"} />}
       {/* Resident/Patient sees the customized resident dashboard, family sees family view */}
       {userRole === "FAMILY" && <FamilyPortalContent tab={tabParam || "dashboard"} />}

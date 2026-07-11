@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Users, Search, X, Heart, Droplets, Wind, Thermometer, AlertTriangle,
   Pill, Activity, Clock, RefreshCw, ListChecks, BarChart3, HeartPulse,
+  Camera, ArrowUpRight,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -27,7 +29,8 @@ interface VitalRow {
   room: string | null;
 }
 interface MedVM { name: string; dosage: string; frequency: string; status: string }
-interface IncidentVM { type: string; severity: string; date: string | null; resolved: boolean; description: string }
+interface IncidentVM { type: string; severity: string; date: string | null; resolved: boolean; description: string; location: string | null; immediateActions: string | null; witnesses: string | null; followUpRequired: boolean; followUpNotes: string | null }
+interface CallBellVM { id: string; status: string; reason: string | null; notes: string | null; createdAt: string | null; respondedAt: string | null; resolvedAt: string | null }
 interface ResidentVM {
   id: string;
   name: string;
@@ -40,6 +43,7 @@ interface ResidentVM {
   notes: string;
   meds: MedVM[];
   incidents: IncidentVM[];
+  callBells: CallBellVM[];
   vitalsLatest: Record<string, { value: string; unit: string; recordedAt: string | null }>;
   vitalsAll: { type: string; value: string; unit: string; recordedAt: string | null }[];
   lastCheckIn: string | null;
@@ -96,6 +100,10 @@ export default function CaregiverResidents() {
     "vitals",
     { query: "include=resident&take=500", tables: ["VitalsLog"] }
   );
+  const { data: callBellRows } = useLiveQuery<Record<string, unknown>>(
+    "call-bells",
+    { query: "include=resident&take=300", tables: ["CallBell"] }
+  );
 
   const [nowTs, setNowTs] = useState(0);
   useEffect(() => {
@@ -138,6 +146,26 @@ export default function CaregiverResidents() {
     return { byId, byRoom };
   }, [vitalRows]);
 
+  const callBellIndex = useMemo(() => {
+    const byId = new Map<string, CallBellVM[]>();
+    callBellRows.forEach((row) => {
+      const rid = row.residentId ? String(row.residentId) : null;
+      if (!rid) return;
+      const bell: CallBellVM = {
+        id: String(row.id),
+        status: asStr(row.status),
+        reason: row.reason ? String(row.reason) : null,
+        notes: row.notes ? String(row.notes) : null,
+        createdAt: row.createdAt ? String(row.createdAt) : null,
+        respondedAt: row.respondedAt ? String(row.respondedAt) : null,
+        resolvedAt: row.resolvedAt ? String(row.resolvedAt) : null,
+      };
+      const arr = byId.get(rid);
+      if (arr) arr.push(bell); else byId.set(rid, [bell]);
+    });
+    return byId;
+  }, [callBellRows]);
+
   const residents = useMemo<ResidentVM[]>(() => {
     return residentRows.map((row) => {
       const r = adaptResident(row);
@@ -179,7 +207,13 @@ export default function CaregiverResidents() {
           date: i.incidentDate ? String(i.incidentDate) : null,
           resolved: Boolean(i.resolvedAt),
           description: asStr(i.description),
+          location: i.location ? String(i.location) : null,
+          immediateActions: i.immediateActions ? String(i.immediateActions) : null,
+          witnesses: i.witnesses ? String(i.witnesses) : null,
+          followUpRequired: Boolean(i.followUpRequired),
+          followUpNotes: i.followUpNotes ? String(i.followUpNotes) : null,
         })),
+        callBells: callBellIndex.get(r.id) ?? [],
         vitalsLatest,
         vitalsAll: vrows
           .filter((v) => v.recordedAt)
@@ -188,7 +222,7 @@ export default function CaregiverResidents() {
         lastCheckIn,
       };
     });
-  }, [residentRows, vitalIndex]);
+  }, [residentRows, vitalIndex, callBellIndex]);
 
   const stats = useMemo(() => {
     const withAlerts = residents.filter((r) => r.alertsCount > 0).length;
@@ -376,6 +410,8 @@ export default function CaregiverResidents() {
 /* ── Detail modal ────────────────────────────────────────────────────── */
 
 function ResidentModal({ r, nowTs, onClose }: { r: ResidentVM; nowTs: number; onClose: () => void }) {
+  const router = useRouter();
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto">
@@ -432,7 +468,7 @@ function ResidentModal({ r, nowTs, onClose }: { r: ResidentVM; nowTs: number; on
               <div className="space-y-2">
                 {r.meds.length ? r.meds.map((m, i) => (
                   <div key={i} className="flex items-center justify-between gap-2 p-2 bg-blue-50 rounded border border-blue-200">
-                    <span className="text-gray-900 text-sm">💊 {m.name} <span className="text-gray-500">{m.dosage}</span></span>
+                    <span className="text-gray-900 text-sm">{m.name} <span className="text-gray-500">{m.dosage}</span></span>
                     <span className="text-xs text-gray-600">{m.frequency}</span>
                   </div>
                 )) : <p className="text-sm text-gray-500">No active medications.</p>}
@@ -443,7 +479,7 @@ function ResidentModal({ r, nowTs, onClose }: { r: ResidentVM; nowTs: number; on
               <div className="space-y-2">
                 {r.conditions.length ? r.conditions.map((c, i) => (
                   <div key={i} className="flex items-center gap-2 p-2 bg-purple-50 rounded border border-purple-200">
-                    <span className="text-purple-600">📋</span><span className="text-gray-900 text-sm">{c}</span>
+                    <span className="text-purple-600">*</span><span className="text-gray-900 text-sm">{c}</span>
                   </div>
                 )) : <p className="text-sm text-gray-500">None recorded.</p>}
               </div>
@@ -476,7 +512,17 @@ function ResidentModal({ r, nowTs, onClose }: { r: ResidentVM; nowTs: number; on
           )}
         </div>
 
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex justify-end">
+        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex items-center justify-between">
+          <button
+            onClick={() => {
+              onClose();
+              router.push(`/caregiver/monitoring?resident=${encodeURIComponent(r.name)}&room=${encodeURIComponent(r.room)}`);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
+          >
+            <Camera className="w-4 h-4" /> Camera Monitoring
+            <ArrowUpRight className="w-3.5 h-3.5" />
+          </button>
           <button onClick={onClose} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
         </div>
       </div>

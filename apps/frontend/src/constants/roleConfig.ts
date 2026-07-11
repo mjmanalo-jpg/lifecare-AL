@@ -23,6 +23,11 @@ import {
   Pill,
   BellRing,
   Timer,
+  ClipboardList,
+  BookOpen,
+  TrendingUp,
+  PenTool,
+  Target,
 } from "lucide-react";
 
 export type Role =
@@ -83,6 +88,11 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   medications: "Medication Rounds",
   callbells: "Call Bells",
   timeclock: "Time Clock",
+  rounds: "Patient Rounds",
+  orders: "Orders & Prescriptions",
+  notes: "Clinical Notes",
+  vitals: "Vitals Trends",
+  careteam: "Care Team",
 };
 
 export const PATH_TO_ROLE: Record<string, Role> = {
@@ -142,6 +152,7 @@ export const ROLES: Record<Role, RoleDetails> = {
     sidebarLinks: [
       { name: "Shift Dashboard", icon: Grid, route: "/caregiver/dashboard" },
       { name: "Task Checklist", icon: CheckCircle, route: "/caregiver/tasks" },
+      { name: "Care Team", icon: Stethoscope, route: "/caregiver/careteam" },
       { name: "Call Bells", icon: BellRing, route: "/caregiver/callbells" },
       { name: "Resident Status", icon: Users, route: "/caregiver/residents" },
       { name: "Time Clock", icon: Timer, route: "/caregiver/timeclock" },
@@ -160,6 +171,8 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Family Dashboard", icon: Grid, route: "/family/dashboard" },
       { name: "My Relative", icon: User, route: "/family/relative" },
       { name: "Daily Report", icon: CheckCircle, route: "/family/report" },
+      { name: "Care Team", icon: Stethoscope, route: "/family/careteam" },
+      { name: "Care Goals", icon: Target, route: "/family/goals" },
       { name: "Alerts", icon: AlertTriangle, route: "/family/alerts" },
       { name: "Messages", icon: MessageSquare, route: "/family/messages" },
       { name: "Appointments", icon: Clock, route: "/family/appointments" },
@@ -196,10 +209,13 @@ export const ROLES: Record<Role, RoleDetails> = {
     footerText: "Physician Medical Portal",
     sidebarLinks: [
       { name: "Clinical Dashboard", icon: Grid, route: "/physician/dashboard" },
-      { name: "Vitals Monitor", icon: Activity, route: "/physician/monitoring" },
-      { name: "Medication Rounds", icon: Pill, route: "/physician/medications" },
-      { name: "Incident Log", icon: AlertTriangle, route: "/physician/incidents" },
-      { name: "Resident Records", icon: ShieldCheck, route: "/physician/records" },
+      { name: "Patient Rounds", icon: ClipboardList, route: "/physician/rounds" },
+      { name: "Medical Records", icon: BookOpen, route: "/physician/records" },
+      { name: "Orders & Prescriptions", icon: Pill, route: "/physician/orders" },
+      { name: "Clinical Notes", icon: PenTool, route: "/physician/notes" },
+      { name: "Vitals Trends", icon: TrendingUp, route: "/physician/vitals" },
+      { name: "Incident Review", icon: AlertTriangle, route: "/physician/incidents" },
+      { name: "Messages", icon: MessageSquare, route: "/physician/messages" },
     ],
   },
   RESIDENT: {
@@ -270,7 +286,16 @@ export const GLOBAL_FEATURES: Record<string, FeatureInfo> = {
   "Rooms": { name: "Rooms", icon: DoorOpen, routeSegment: "rooms" },
   "Occupancy": { name: "Occupancy", icon: BedDouble, routeSegment: "occupancy" },
   "Inventory": { name: "Inventory", icon: Package, routeSegment: "inventory" },
+  "Call Bells": { name: "Call Bells", icon: BellRing, routeSegment: "callbells" },
   "Vitals Monitor": { name: "Vitals Monitor", icon: Activity, routeSegment: "monitoring" },
   "Health Timeline": { name: "Health Timeline", icon: Activity, routeSegment: "timeline" },
+  "Patient Rounds": { name: "Patient Rounds", icon: ClipboardList, routeSegment: "rounds" },
+  "Orders & Prescriptions": { name: "Orders & Prescriptions", icon: Pill, routeSegment: "orders" },
+  "Clinical Notes": { name: "Clinical Notes", icon: PenTool, routeSegment: "notes" },
+  "Vitals Trends": { name: "Vitals Trends", icon: TrendingUp, routeSegment: "vitals" },
+  "Incident Review": { name: "Incident Review", icon: AlertTriangle, routeSegment: "incidents" },
+  "Medical Records": { name: "Medical Records", icon: BookOpen, routeSegment: "records" },
+  "Care Team": { name: "Care Team", icon: Stethoscope, routeSegment: "careteam" },
+  "Care Goals": { name: "Care Goals", icon: Target, routeSegment: "goals" },
 };
 
