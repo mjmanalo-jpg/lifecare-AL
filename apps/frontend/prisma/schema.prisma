@@ -787,15 +787,21 @@ model SiteContent {
 // Custom navigation pages created by the Super Admin. Published pages appear
 // in the landing-page navbar and are routed to /page/:slug.
 model CustomPage {
-  id        String   @id @default(uuid())
-  title     String
-  slug      String   @unique
-  content   String   @db.Text
-  published Boolean  @default(true)
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  title        String
+  slug         String   @unique
+  content      String   @db.Text
+  description  String?  @db.Text
+  imageUrl     String?
+  pagePurpose  String?  @default("informational")
+  parcelType   String?  @default("standard")
+  published    Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([slug])
   @@index([published])
+  @@index([pagePurpose])
+  @@index([parcelType])
 }

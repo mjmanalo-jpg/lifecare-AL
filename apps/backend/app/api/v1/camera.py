@@ -8,9 +8,14 @@ from dotenv import load_dotenv
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
-# Load frontend's .env.local
-env_path = Path(__file__).resolve().parent.parent.parent.parent.parent / "frontend" / ".env.local"
-load_dotenv(dotenv_path=env_path)
+# Load env from BOTH the backend's own .env and the frontend's .env.local.
+# override=True is critical: uvicorn --reload spawns a child process that inherits
+# the parent's (stale) environment, so without override the OLD camera IP sticks
+# around across reloads and edits to .env are silently ignored.
+_backend_env = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+_frontend_env = Path(__file__).resolve().parent.parent.parent.parent.parent / "frontend" / ".env.local"
+load_dotenv(dotenv_path=_backend_env, override=True)
+load_dotenv(dotenv_path=_frontend_env, override=True)
 
 router = APIRouter()
 
@@ -115,7 +120,13 @@ def _tapo_rtsp_url():
 def _open_rtsp(url):
     """Open an RTSP capture over TCP with a connect timeout so it can't hang forever."""
     # Force TCP transport (Tapo/UDP is flaky over Wi-Fi) and cap the open/read timeout.
-    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;5000000"
+    # CRITICAL: 'stimeout' was renamed to 'timeout' in FFmpeg 5.0+. If only 'stimeout'
+    # is set on a modern build it is IGNORED and the connect falls back to the 30s
+    # default (the "30090 ms" hang you saw). We set BOTH names (microseconds) so the
+    # timeout is honored regardless of FFmpeg version -> a dead host fails in ~3s.
+    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+        "rtsp_transport;tcp|timeout;3000000|stimeout;3000000|max_delay;500000"
+    )
     cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
     # Keep only the newest frame — without this OpenCV queues RTSP frames and the
     # displayed video falls further and further behind real time (the "lag").
@@ -147,15 +158,26 @@ def _grab_loop():
     url = _tapo_rtsp_url()
     cap = _open_rtsp(url)
     fails = 0
+    first_fail_logged = False
     while _grab_run:
         if not cap.isOpened():
-            cap.release(); time.sleep(0.4); cap = _open_rtsp(url); continue
+            if not first_fail_logged:
+                print(f"[Camera] ⚠️  RTSP connection unavailable. Using simulated frames. URL: {url}")
+                first_fail_logged = True
+            cap.release(); time.sleep(0.2); cap = _open_rtsp(url); continue
         ok, frame = cap.read()
         if not ok or frame is None:
             fails += 1
-            if fails > 30:                     # ~1.5s of failures -> reconnect
-                cap.release(); cap = _open_rtsp(url); fails = 0
+            if fails == 1:
+                print(f"[Camera] ⚠️  Frame read failed ({fails}/15). Retrying...")
+            if fails > 15:                     # ~0.3s of failures -> reconnect (reduced from 30)
+                if first_fail_logged:
+                    print(f"[Camera] 🔄 Reconnecting to Tapo camera after {fails} failures...")
+                cap.release(); cap = _open_rtsp(url); fails = 0; first_fail_logged = False
             time.sleep(0.02); continue
+        if first_fail_logged:
+            print(f"[Camera] ✅ RTSP connection restored!")
+            first_fail_logged = False
         fails = 0
         if MJPEG_WIDTH and frame.shape[1] > MJPEG_WIDTH:
             h = int(frame.shape[0] * MJPEG_WIDTH / frame.shape[1])
@@ -177,12 +199,21 @@ def _ensure_grabber():
 
 
 def gen_tapo_frames():
-    _ensure_grabber()
+    # If DISABLE_TAPO_CAMERA=true in .env, skip RTSP and use simulated frames only
+    disable_tapo = os.getenv("DISABLE_TAPO_CAMERA", "false").lower() == "true"
+    if not disable_tapo:
+        _ensure_grabber()
+
     while True:
-        with _grab_lock:
-            data = _grab_latest
-        if data is None:
-            data = generate_simulated_frame()   # placeholder until first real frame lands
+        if disable_tapo:
+            # Force simulated frames
+            data = generate_simulated_frame()
+        else:
+            with _grab_lock:
+                data = _grab_latest
+            if data is None:
+                data = generate_simulated_frame()   # placeholder until first real frame lands
+
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + data + b'\r\n')
         time.sleep(0.04) # ~25 FPS out

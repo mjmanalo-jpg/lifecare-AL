@@ -68,9 +68,8 @@ Pydantic validation, `Depends()` injection, `async def` I/O, routers split by do
 - **Signed sessions (LIVE):** `golden_hearth_session` is HMAC-SHA256 signed via
   `SESSION_SECRET`; role **and** `userId` are tamper-proof. Set a strong `SESSION_SECRET`
   in every non-local environment.
-- **Self-service data boundary (LIVE):** `src/lib/scope.ts` restricts every FAMILY read to
-  that sponsor's resident(s) and every RESIDENT read to their own record; writes limited to
-  messages/visits; no deletes. Enforced live and in demo mode.
+- **Family data boundary (LIVE):** `src/lib/scope.ts` restricts every FAMILY read to that
+  sponsor's resident(s); FAMILY writes limited to messages/visits; no deletes.
 - **HIPAA posture:** camera frames processed on the edge / in RAM; only incident-triggered
   clips persist.
 - **POST-MVP (documented, not built):** Supabase Row Level Security + JWT as

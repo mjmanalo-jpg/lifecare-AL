@@ -125,6 +125,61 @@ function detCol(label: string): string {
 
 const RISK_COL = { low:"#34d399", medium:"#f59e0b", high:"#ef4444" } as const;
 
+// ── Module-level MediaPipe singletons (cached across component mounts) ──────
+// Without this, every mount re-downloads the WASM runtime + model files from CDN,
+// adding 3-5 seconds of blank screen on each navigation.
+let _mpVision: any = null;
+let _mpPose: any = null;
+let _mpDetector: any = null;
+let _mpLoading = false;
+let _mpReady = false;
+let _mpPromise: Promise<{ pose: any; detector: any }> | null = null;
+
+async function loadMediaPipeOnce(): Promise<{ pose: any; detector: any }> {
+  if (_mpReady) return { pose: _mpPose, detector: _mpDetector };
+  if (_mpPromise) return _mpPromise;
+
+  _mpLoading = true;
+  _mpPromise = (async () => {
+    const mpv = await import("@mediapipe/tasks-vision");
+    const { PoseLandmarker, ObjectDetector, FilesetResolver } = mpv;
+
+    // Load WASM runtime first (shared by all models)
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+    );
+    _mpVision = vision;
+
+    // Load pose first (critical for camera to start working)
+    const pose = await PoseLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+        delegate: "GPU",
+      },
+      runningMode: "VIDEO", numPoses: 2,
+    });
+    _mpPose = pose;
+
+    // Defer heavy object detector — load in background after pose is ready
+    ObjectDetector.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/float16/1/efficientdet_lite2.tflite",
+        delegate: "GPU",
+      },
+      scoreThreshold: 0.4,
+      maxResults: 12,
+      runningMode: "VIDEO",
+    }).then(d => { _mpDetector = d; });
+
+    _mpReady = true;
+    _mpLoading = false;
+
+    return { pose, detector: null as any };
+  })();
+
+  return _mpPromise;
+}
+
 // Ambianic fall metric: a real fall drops the body's center of mass fast — more than
 // 60% of the frame height per second. Slowly lying down stays well under this, which
 // is how a fast fall is told apart from someone settling onto a couch/bed for a nap.
@@ -320,7 +375,6 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   const canvasRef  = useRef<HTMLCanvasElement|null>(null);
   const captureRef = useRef<HTMLCanvasElement|null>(null);
   const faceCropRef = useRef<HTMLCanvasElement|null>(null); // offscreen zoom-crop of the face for accurate emotion
-  const tapoVideoRef = useRef<HTMLVideoElement|null>(null);
   const tapoImgRef = useRef<HTMLImageElement|null>(null);
 
   // Model refs
@@ -527,56 +581,14 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     }
   }, [isMuted, stopSpeaking]);
 
-  // Tapo IP Camera Connection
-  // Uses backend MJPEG feed which transcodes the Tapo RTSP stream
+  // Tapo IP Camera Connection — CONNECTION ONLY, no config pushing.
+  // The stream is served by the backend <img> below (GET /api/v1/camera/tapo_feed).
+  // The backend builds the RTSP URL from its OWN .env — the frontend never pushes
+  // the camera IP or credentials over the wire. Connection status is driven by the
+  // <img> element's onLoad / onError handlers.
   useEffect(() => {
-    if (activeCamera !== "tapo" || !tapoVideoRef.current) return;
-
-    const tapoIp = process.env.NEXT_PUBLIC_TAPO_CAMERA_IP || "192.168.1.36";
-    const tapoPort = process.env.NEXT_PUBLIC_TAPO_CAMERA_PORT || "554";
-    const tapoUser = process.env.NEXT_PUBLIC_TAPO_CAMERA_USERNAME || "";
-    const tapoPass = process.env.NEXT_PUBLIC_TAPO_CAMERA_PASSWORD || "";
-    const streamQuality = process.env.NEXT_PUBLIC_TAPO_STREAM || "stream1";
-
-    // Backend MJPEG endpoint that transcodes Tapo RTSP stream
-    const backendBaseUrl = getBackendUrl();
-    const mjpegUrl = `${backendBaseUrl}/api/v1/camera/tapo?ip=${tapoIp}&port=${tapoPort}&user=${encodeURIComponent(tapoUser)}&pass=${encodeURIComponent(tapoPass)}&stream=${streamQuality}`;
-
-    console.log("[Tapo] Connecting to Tapo camera:", tapoIp, "via backend MJPEG...");
+    if (activeCamera !== "tapo") return;
     setTapoStatus("connecting");
-
-    if (tapoVideoRef.current) {
-      tapoVideoRef.current.src = mjpegUrl;
-      tapoVideoRef.current.onloadstart = () => {
-        console.log("[Tapo] MJPEG stream loading...");
-        setTapoStatus("connecting");
-      };
-      tapoVideoRef.current.oncanplay = () => {
-        console.log("[Tapo] MJPEG stream connected!");
-        setTapoStatus("connected");
-      };
-      tapoVideoRef.current.onerror = (err) => {
-        console.warn("[Tapo] MJPEG connection failed, fallback to local:", err);
-        setTapoStatus("error");
-        setTimeout(() => {
-          console.log("[Tapo] Switching to local camera...");
-          setActiveCamera("local");
-        }, 2000);
-      };
-
-      tapoVideoRef.current.play().catch((e) => {
-        console.error("[Tapo] Play error:", e.message);
-        setTapoStatus("error");
-        setTimeout(() => setActiveCamera("local"), 2000);
-      });
-    }
-
-    return () => {
-      if (tapoVideoRef.current) {
-        tapoVideoRef.current.src = "";
-        tapoVideoRef.current.pause();
-      }
-    };
   }, [activeCamera]);
 
   useEffect(() => {
@@ -615,53 +627,40 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     };
   }, [stopSpeaking]);
 
-  // ── Init MediaPipe models ─────────────────────────────────────────────────
+  // ── Init MediaPipe models (uses module-level singleton) ────────────────────
   useEffect(() => {
     let dead = false;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+
     (async () => {
       try {
-        setModelMsg("Loading MediaPipe runtime...");
-        const mpv = await import("@mediapipe/tasks-vision");
-        const { PoseLandmarker, HandLandmarker, ObjectDetector, FilesetResolver } = mpv;
-
-        const vision = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
-        );
+        setModelMsg("Loading AI models...");
+        const { pose, detector } = await loadMediaPipeOnce();
         if (dead) return;
 
-        setModelMsg("Loading Pose AI (wave & behavior detection)...");
-        poseRef.current = await PoseLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-            delegate:"GPU",
-          },
-          runningMode:"VIDEO", numPoses:2,
-        });
-        if (dead) return;
-
-        setModelMsg("Loading Object Detector (EfficientDet-Lite2)...");
-        detectorRef.current = await ObjectDetector.createFromOptions(vision, {
-          baseOptions: {
-            // Lite2 is a notably larger/more-accurate COCO detector than Lite0 —
-            // much better at small objects (cup, cell phone) at camera distance.
-            modelAssetPath:"https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/float16/1/efficientdet_lite2.tflite",
-            delegate:"GPU",
-          },
-          // LOWER threshold = keep more true detections. 0.55 was silently dropping
-          // valid cup/phone hits (~0.4–0.5 confidence) before they were ever drawn.
-          scoreThreshold:0.4,
-          maxResults:12,
-          runningMode:"VIDEO",
-        });
-        if (dead) return;
-
+        poseRef.current = pose;
+        if (detector) detectorRef.current = detector;
         setModelsOk(true);
         setModelMsg("All systems online ✓");
+
+        // If detector was deferred, poll until it's ready
+        if (!detector) {
+          pollTimer = setInterval(() => {
+            if (_mpDetector && !dead) {
+              detectorRef.current = _mpDetector;
+              if (pollTimer) clearInterval(pollTimer);
+            }
+          }, 200);
+        }
       } catch (e: any) {
         setModelMsg(`Model error: ${e?.message ?? "failed"}`);
       }
     })();
-    return () => { dead = true; };
+
+    return () => {
+      dead = true;
+      if (pollTimer) clearInterval(pollTimer);
+    };
   }, []);
 
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -697,13 +696,21 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
 
   useEffect(() => {
     loadFaceAPI();
-    startLocalCamera();
+    if (activeCamera === "local") {
+      startLocalCamera();
+    } else {
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((t) => t.stop());
+        localStreamRef.current = null;
+      }
+      setCamActive(false);
+    }
     return () => {
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((t) => t.stop());
       }
     };
-  }, [startLocalCamera]);
+  }, [activeCamera, startLocalCamera]);
 
   // Local facial emotion detection removed to rely purely on AI Vision
 
@@ -1491,7 +1498,10 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         src={`${getBackendUrl()}/api/v1/camera/tapo_feed`}
         alt="Tapo IP Camera Stream"
         crossOrigin="anonymous"
-        onLoad={() => setTapoStatus("connected")}
+        onLoad={() => {
+          setTapoStatus("connected");
+          setCamActive(true);
+        }}
         onError={() => {
           console.warn("[Tapo] Connection failed, attempting fallback...");
           setTapoStatus("error");

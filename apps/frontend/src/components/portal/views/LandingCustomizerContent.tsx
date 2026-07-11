@@ -88,6 +88,10 @@ interface CustomPageRow {
   content: string;
   published: boolean;
   sortOrder: number;
+  description?: string;
+  imageUrl?: string;
+  pagePurpose?: string;
+  parcelType?: string;
 }
 
 const CONTENT_FIELDS: { id: string; label: string; multiline?: boolean }[] = [
@@ -1260,12 +1264,70 @@ function BlogManager() {
  * PAGES MANAGER — Custom navigation pages for the landing site
  * ════════════════════════════════════════════════════════════════════════════ */
 
+const PAGE_TEMPLATES = [
+  {
+    id: "about",
+    name: "About Us",
+    description: "Organization overview and mission",
+    content: "# About Us\n\nTell your story here. Share your mission, vision, and values.\n\n## Our Mission\nDescribe what drives your organization.\n\n## Our Values\nHighlight what matters most.",
+    purpose: "informational",
+    parcelType: "standard",
+  },
+  {
+    id: "services",
+    name: "Services",
+    description: "List of services offered",
+    content: "# Our Services\n\n## Service 1\nDescription of your first service.\n\n## Service 2\nDescription of your second service.\n\n## Service 3\nDescription of your third service.",
+    purpose: "marketing",
+    parcelType: "service",
+  },
+  {
+    id: "careers",
+    name: "Careers",
+    description: "Join our team",
+    content: "# Join Our Team\n\nWe're looking for talented individuals to join our growing organization.\n\n## Open Positions\n- Position 1\n- Position 2\n- Position 3\n\nApply now at careers@example.com",
+    purpose: "recruitment",
+    parcelType: "careers",
+  },
+  {
+    id: "faq",
+    name: "FAQ",
+    description: "Frequently asked questions",
+    content: "# Frequently Asked Questions\n\n## Question 1?\nProvide a helpful answer here.\n\n## Question 2?\nAddress common concerns.\n\n## Question 3?\nOffer clear guidance.",
+    purpose: "support",
+    parcelType: "standard",
+  },
+  {
+    id: "privacy",
+    name: "Privacy Policy",
+    description: "Privacy and data protection",
+    content: "# Privacy Policy\n\nLast updated: [Date]\n\n## Introduction\nWe are committed to protecting your privacy.\n\n## Data Collection\nWe collect information to provide better services.\n\n## Your Rights\nYou have the right to access and control your data.",
+    purpose: "legal",
+    parcelType: "compliance",
+  },
+  {
+    id: "contact",
+    name: "Contact Us",
+    description: "Get in touch",
+    content: "# Contact Us\n\nWe'd love to hear from you.\n\n## Reach Out\n**Email:** contact@example.com\n**Phone:** +1 (555) 123-4567\n**Address:** Your location here",
+    purpose: "contact",
+    parcelType: "standard",
+  },
+];
+
+const PURPOSE_OPTIONS = ["informational", "marketing", "recruitment", "support", "legal", "contact", "educational"];
+const PARCEL_TYPES = ["standard", "service", "careers", "compliance", "promotional", "news"];
+
 const emptyPage = (): Omit<CustomPageRow, "id"> => ({
   title: "",
   slug: "",
   content: "",
   published: true,
   sortOrder: 0,
+  description: "",
+  imageUrl: "",
+  pagePurpose: "informational",
+  parcelType: "standard",
 });
 
 function PagesManager() {
@@ -1273,8 +1335,11 @@ function PagesManager() {
     tables: ["CustomPage"],
   });
   const [modalOpen, setModalOpen] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(!modalOpen);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyPage());
+  const [imgUploading, setImgUploading] = useState(false);
+  const pageFileRef = useRef<HTMLInputElement>(null);
 
   const slugify = (text: string) =>
     text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -1282,6 +1347,7 @@ function PagesManager() {
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyPage());
+    setShowTemplates(true);
     setModalOpen(true);
   };
 
@@ -1293,8 +1359,47 @@ function PagesManager() {
       content: p.content,
       published: p.published,
       sortOrder: p.sortOrder,
+      description: p.description || "",
+      imageUrl: p.imageUrl || "",
+      pagePurpose: p.pagePurpose || "informational",
+      parcelType: p.parcelType || "standard",
     });
+    setShowTemplates(false);
     setModalOpen(true);
+  };
+
+  const applyTemplate = (template: typeof PAGE_TEMPLATES[0]) => {
+    setForm({
+      title: template.name,
+      slug: slugify(template.name),
+      content: template.content,
+      published: true,
+      sortOrder: pages.length,
+      description: template.description,
+      imageUrl: "",
+      pagePurpose: template.purpose,
+      parcelType: template.parcelType,
+    });
+    setShowTemplates(false);
+  };
+
+  const handleImageUpload = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    setImgUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("folder", "pages");
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      setForm((f) => ({ ...f, imageUrl: json.url }));
+    } catch {
+      Swal.fire({ title: "Upload Failed", icon: "error" });
+    } finally {
+      setImgUploading(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -1360,13 +1465,18 @@ function PagesManager() {
       ) : (
         <div className="space-y-3">
           {pages.map((p) => (
-            <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4 hover:shadow-md hover:border-yellow-300 transition">
-              <GripVertical className="w-5 h-5 text-gray-300 flex-shrink-0" />
+            <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-4 flex items-start gap-4 hover:shadow-md hover:border-yellow-300 transition">
+              <GripVertical className="w-5 h-5 text-gray-300 flex-shrink-0 mt-1" />
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-gray-900 truncate">{p.title}</h3>
-                <p className="text-sm text-gray-500">/page/{p.slug}</p>
+                {p.description && <p className="text-sm text-gray-600 truncate">{p.description}</p>}
+                <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                  <span className="px-2 py-1 bg-gray-100 rounded">/page/{p.slug}</span>
+                  {p.pagePurpose && <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">{p.pagePurpose}</span>}
+                  {p.parcelType && <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">{p.parcelType}</span>}
+                </div>
               </div>
-              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
                 p.published ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
               }`}>
                 {p.published ? "Published" : "Draft"}
@@ -1388,73 +1498,202 @@ function PagesManager() {
       {/* Page modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
-              <h3 className="text-lg font-bold text-gray-900">{editingId ? "Edit Page" : "New Page"}</h3>
+              <h3 className="text-lg font-bold text-gray-900">{editingId ? "Edit Page" : showTemplates ? "Choose Template" : "New Page"}</h3>
               <button onClick={() => setModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-lg transition">
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            <div className="p-6 space-y-5">
-              <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Page Title *</label>
-                <input
-                  type="text"
-                  value={form.title}
-                  onChange={(e) => {
-                    const title = e.target.value;
-                    setForm((f) => ({ ...f, title, slug: editingId ? f.slug : slugify(title) }));
-                  }}
-                  placeholder="e.g. About Us, Careers, FAQ…"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none text-gray-900"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">URL Slug</label>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-400">/page/</span>
-                  <input
-                    type="text"
-                    value={form.slug}
-                    onChange={(e) => setForm((f) => ({ ...f, slug: slugify(e.target.value) }))}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none font-mono text-gray-900"
-                  />
+
+            {showTemplates && !editingId ? (
+              <div className="p-6 space-y-6">
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-4">Select a template to get started, or start from scratch.</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    {PAGE_TEMPLATES.map((template) => (
+                      <button
+                        key={template.id}
+                        onClick={() => applyTemplate(template)}
+                        className="text-left p-4 border border-gray-200 rounded-xl hover:border-yellow-400 hover:shadow-md transition group"
+                      >
+                        <h5 className="font-semibold text-gray-900 group-hover:text-yellow-600 transition">{template.name}</h5>
+                        <p className="text-sm text-gray-600">{template.description}</p>
+                        <div className="flex items-center gap-2 mt-2 text-xs">
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">{template.purpose}</span>
+                          <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">{template.parcelType}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setShowTemplates(false)}
+                    className="w-full px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition"
+                  >
+                    Create Blank Page
+                  </button>
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Content (Markdown)</label>
-                <textarea
-                  value={form.content}
-                  onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                  rows={12}
-                  placeholder="# Page Title\n\nYour page content here…\n\n## Section Heading"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none resize-y font-mono text-sm text-gray-900"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+            ) : (
+              <div className="p-6 space-y-5">
+                {!editingId && (
+                  <button
+                    onClick={() => setShowTemplates(true)}
+                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    ← Back to templates
+                  </button>
+                )}
+
+                {/* Page Image */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Sort Order</label>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Featured Image (optional)</label>
+                  <div
+                    onClick={() => pageFileRef.current?.click()}
+                    className="border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-yellow-400 transition overflow-hidden"
+                  >
+                    {form.imageUrl ? (
+                      <div className="relative h-40">
+                        <img src={form.imageUrl} alt="Featured" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 transition flex items-center justify-center text-white text-sm font-medium">
+                          <Upload className="w-4 h-4 mr-2" /> Replace
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+                        <ImageIcon className="w-8 h-8 mb-2" />
+                        <p className="text-sm">{imgUploading ? "Uploading…" : "Click to upload featured image"}</p>
+                      </div>
+                    )}
+                  </div>
+                  {form.imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, imageUrl: "" }))}
+                      className="mt-2 text-xs text-red-500 hover:text-red-600 font-medium"
+                    >
+                      Remove image
+                    </button>
+                  )}
+                  <input ref={pageFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e.target.files)} />
+                </div>
+
+                {/* Page Title */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Page Title *</label>
                   <input
-                    type="number"
-                    value={form.sortOrder}
-                    onChange={(e) => setForm((f) => ({ ...f, sortOrder: parseInt(e.target.value) || 0 }))}
+                    type="text"
+                    value={form.title}
+                    onChange={(e) => {
+                      const title = e.target.value;
+                      setForm((f) => ({ ...f, title, slug: editingId ? f.slug : slugify(title) }));
+                    }}
+                    placeholder="e.g. About Us, Careers, FAQ…"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none text-gray-900"
                   />
                 </div>
-                <div className="flex items-end">
-                  <label className="flex items-center gap-3 cursor-pointer select-none pb-3">
-                    <input type="checkbox" checked={form.published} onChange={(e) => setForm((f) => ({ ...f, published: e.target.checked }))} className="w-5 h-5 rounded" />
-                    <span className="font-semibold text-gray-700">Published</span>
-                  </label>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Page Description</label>
+                  <textarea
+                    value={form.description || ""}
+                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                    rows={2}
+                    placeholder="Brief description of this page's purpose…"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none resize-y text-gray-900"
+                  />
+                </div>
+
+                {/* URL Slug */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">URL Slug</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-400">/page/</span>
+                    <input
+                      type="text"
+                      value={form.slug}
+                      onChange={(e) => setForm((f) => ({ ...f, slug: slugify(e.target.value) }))}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none font-mono text-gray-900"
+                    />
+                  </div>
+                </div>
+
+                {/* Page Purpose and Parcel Type */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Page Purpose</label>
+                    <select
+                      value={form.pagePurpose || "informational"}
+                      onChange={(e) => setForm((f) => ({ ...f, pagePurpose: e.target.value }))}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none text-gray-900"
+                    >
+                      <option value="">Select purpose…</option>
+                      {PURPOSE_OPTIONS.map((purpose) => (
+                        <option key={purpose} value={purpose}>
+                          {purpose.charAt(0).toUpperCase() + purpose.slice(1)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Content Type / Parcel</label>
+                    <select
+                      value={form.parcelType || "standard"}
+                      onChange={(e) => setForm((f) => ({ ...f, parcelType: e.target.value }))}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none text-gray-900"
+                    >
+                      <option value="">Select type…</option>
+                      {PARCEL_TYPES.map((type) => (
+                        <option key={type} value={type}>
+                          {type.charAt(0).toUpperCase() + type.slice(1)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Page Content */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Content (Markdown)</label>
+                  <textarea
+                    value={form.content}
+                    onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+                    rows={12}
+                    placeholder="# Page Title\n\nYour page content here…\n\n## Section Heading"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none resize-y font-mono text-sm text-gray-900"
+                  />
+                </div>
+
+                {/* Sort Order and Published */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Sort Order</label>
+                    <input
+                      type="number"
+                      value={form.sortOrder}
+                      onChange={(e) => setForm((f) => ({ ...f, sortOrder: parseInt(e.target.value) || 0 }))}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none text-gray-900"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <label className="flex items-center gap-3 cursor-pointer select-none pb-3">
+                      <input type="checkbox" checked={form.published} onChange={(e) => setForm((f) => ({ ...f, published: e.target.checked }))} className="w-5 h-5 rounded" />
+                      <span className="font-semibold text-gray-700">Published</span>
+                    </label>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
-              <button onClick={() => setModalOpen(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Cancel</button>
-              <button onClick={handleSubmit} className="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
-                {editingId ? "Update Page" : "Create Page"}
-              </button>
-            </div>
+            )}
+
+            {!showTemplates || editingId ? (
+              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
+                <button onClick={() => setModalOpen(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Cancel</button>
+                <button onClick={handleSubmit} className="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+                  {editingId ? "Update Page" : "Create Page"}
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       )}
