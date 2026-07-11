@@ -31,6 +31,7 @@ import {
   FileText,
   HeartPulse,
   User,
+  Users,
   Activity as StepIcon,
   Bot,
   Send,
@@ -134,6 +135,11 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
   const [menuModalOpen, setMenuModalOpen] = useState(false);
   const [goalsModalOpen, setGoalsModalOpen] = useState(false);
   const [vitalsModalOpen, setVitalsModalOpen] = useState(false);
+  const [callBellModalOpen, setCallBellModalOpen] = useState(false);
+  const [callBellTarget, setCallBellTarget] = useState<"Nurse" | "Caregiver" | "Nurse & Caregiver">("Nurse & Caregiver");
+  const [callBellReason, setCallBellReason] = useState("");
+  const [callBellNote, setCallBellNote] = useState("");
+  const [sendingBell, setSendingBell] = useState(false);
 
   // AI Voice Assistant States
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -191,6 +197,12 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
   // Fetch app settings (voice sync)
   const { data: settingRows } = useLiveQuery<{ id: string; value: string }>("app-settings", {
     tables: ["AppSetting"],
+  });
+
+  // Fetch resident's call bells
+  const { data: callBellRows, refetch: refetchBells } = useLiveQuery<Record<string, unknown>>("call-bells", {
+    query: "include=resident&take=50",
+    tables: ["CallBell"],
   });
 
   useEffect(() => {
@@ -333,6 +345,30 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
     return { text: "Stable", color: "bg-amber-500 text-white" };
   };
 
+  // Active call bells for this resident
+  const activeBells = useMemo(() => {
+    if (!resident) return [];
+    return callBellRows
+      .filter((b) => b.residentId === resident.id && (b.status === "PENDING" || b.status === "RESPONDED"))
+      .map((b) => ({
+        id: String(b.id),
+        status: String(b.status),
+        reason: b.reason ? String(b.reason) : null,
+        createdAt: b.createdAt ? String(b.createdAt) : null,
+        respondedAt: b.respondedAt ? String(b.respondedAt) : null,
+      }));
+  }, [callBellRows, resident]);
+
+  const cancelBell = async (bellId: string) => {
+    try {
+      await updateRecord("call-bells", bellId, { status: "CANCELLED", resolvedAt: new Date().toISOString() });
+      await refetchBells();
+      Swal.fire({ title: "Call Bell Cancelled", icon: "success", timer: 1200, showConfirmButton: false, toast: true, position: "top-end" });
+    } catch {
+      Swal.fire({ title: "Failed to cancel", icon: "error" });
+    }
+  };
+
   // Filter tasks to show today's schedule
   const todayTasks = useMemo(() => {
     return tasks.filter((t) => true);
@@ -384,6 +420,7 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
           status: "PENDING",
           reason: "Emergency SOS Alert from Resident Portal Dashboard",
         });
+        await refetchBells();
         Swal.fire({
           title: "Emergency SOS Dispatched!",
           text: "Head Nurse Sarah Jenkins and Caregiver Caleb Randall have been alerted.",
@@ -398,6 +435,40 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
           icon: "error",
         });
       }
+    }
+  };
+
+  // Trigger call bell with reason and target
+  const handleCallBell = async () => {
+    if (!resident || !callBellReason) return;
+    setSendingBell(true);
+    try {
+      await createRecord("call-bells", {
+        residentId: resident.id,
+        status: "PENDING",
+        reason: `[${callBellTarget}] ${callBellReason}${callBellNote ? ` — ${callBellNote}` : ""}`,
+      });
+      await refetchBells();
+      setCallBellModalOpen(false);
+      setCallBellReason("");
+      setCallBellNote("");
+      Swal.fire({
+        title: "Call Bell Sent!",
+        text: `A ${callBellTarget.toLowerCase()} has been notified. Help is on the way.`,
+        icon: "success",
+        confirmButtonColor: "#10b981",
+        timer: 2500,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      console.error(err);
+      Swal.fire({
+        title: "Call Bell Failed",
+        text: "Could not send call bell. Please use the physical emergency cord.",
+        icon: "error",
+      });
+    } finally {
+      setSendingBell(false);
     }
   };
 
@@ -1004,16 +1075,49 @@ Vitals:
 
           </div>
 
+          {/* ── Active Call Bell Banner ── */}
+          {activeBells.length > 0 && (
+            <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-4 animate-pulse">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                </span>
+                <span className="text-sm font-black text-red-800 uppercase tracking-wider">
+                  Help Requested — {activeBells.length === 1 ? "1 active bell" : `${activeBells.length} active bells`}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {activeBells.map((bell) => (
+                  <div key={bell.id} className="flex items-center justify-between bg-white rounded-xl px-3 py-2 border border-red-200">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-red-700 truncate">{bell.reason || "Help Request"}</p>
+                      <p className="text-[10px] text-red-500">
+                        Status: <span className="font-semibold">{bell.status === "RESPONDED" ? "Staff en route" : "Waiting for staff"}</span>
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => cancelBell(bell.id)}
+                      className="ml-3 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition active:scale-95 flex-shrink-0"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Quick Action buttons at bottom */}
           <div className="grid grid-cols-3 gap-3">
             
-            {/* SOS BUTTON */}
+            {/* CALL BELL BUTTON — opens modal */}
             <button
-              onClick={handleSOS}
+              onClick={() => setCallBellModalOpen(true)}
               className="py-3 bg-red-50 border border-red-200 hover:bg-red-100 active:scale-95 text-red-700 font-black rounded-xl text-center shadow-sm transition flex flex-col items-center justify-center gap-1"
             >
-              <span className="text-xs font-extrabold tracking-wider bg-red-200 px-2 py-0.5 rounded-full mb-1">SOS</span>
-              <span className="text-[10px] uppercase">Request Help</span>
+              <Bell className="w-5 h-5 mb-1" />
+              <span className="text-[10px] uppercase">Call Bell</span>
             </button>
 
             {/* CALL FAMILY */}
@@ -1681,6 +1785,105 @@ Vitals:
               >
                 {requestingService && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black" />}
                 Submit Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CALL BELL MODAL ── */}
+      {callBellModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="px-6 py-4 bg-red-600 text-white flex items-center justify-between">
+              <h3 className="font-bold flex items-center gap-2">
+                <Bell className="w-5 h-5 text-white" /> Call for Help
+              </h3>
+              <button onClick={() => setCallBellModalOpen(false)} className="p-1 hover:bg-red-700 rounded transition">
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">Select who you need and the reason. The nearest available staff member will be notified immediately.</p>
+
+              {/* Target selection */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider">Who do you need?</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {(["Nurse", "Caregiver", "Nurse & Caregiver"] as const).map((target) => (
+                    <button
+                      key={target}
+                      onClick={() => setCallBellTarget(target)}
+                      className={`py-3 rounded-xl border-2 text-sm font-bold transition active:scale-95 ${
+                        callBellTarget === target
+                          ? "border-red-500 bg-red-50 text-red-700"
+                          : "border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300"
+                      }`}
+                    >
+                      {target === "Nurse" && <HeartPulse className="w-4 h-4 mx-auto mb-1" />}
+                      {target === "Caregiver" && <User className="w-4 h-4 mx-auto mb-1" />}
+                      {target === "Nurse & Caregiver" && <Users className="w-4 h-4 mx-auto mb-1" />}
+                      {target}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reason selection */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider">Reason for call</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { label: "Feeling unwell", icon: "🤒" },
+                    { label: "Pain", icon: "😣" },
+                    { label: "Need assistance", icon: "🤝" },
+                    { label: "Bathroom help", icon: "🚽" },
+                    { label: "Medication needed", icon: "💊" },
+                    { label: "Fall / Emergency", icon: "🚨" },
+                  ] as const).map((reason) => (
+                    <button
+                      key={reason.label}
+                      onClick={() => setCallBellReason(reason.label)}
+                      className={`px-3 py-2.5 rounded-xl border-2 text-xs font-bold text-left transition active:scale-95 ${
+                        callBellReason === reason.label
+                          ? "border-red-500 bg-red-50 text-red-700"
+                          : "border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300"
+                      }`}
+                    >
+                      <span className="mr-1">{reason.icon}</span> {reason.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Optional note */}
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1">Additional note (optional)</label>
+                <textarea
+                  value={callBellNote}
+                  onChange={(e) => setCallBellNote(e.target.value)}
+                  rows={2}
+                  placeholder="Anything staff should know..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-400 outline-none text-sm resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+              <button
+                onClick={() => setCallBellModalOpen(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCallBell}
+                disabled={!callBellReason || sendingBell}
+                className="px-5 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-bold rounded-lg hover:shadow-lg transition active:scale-95 text-sm flex items-center gap-2 disabled:opacity-50"
+              >
+                {sendingBell && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
+                <Bell className="w-4 h-4" /> Send Call Bell
               </button>
             </div>
           </div>

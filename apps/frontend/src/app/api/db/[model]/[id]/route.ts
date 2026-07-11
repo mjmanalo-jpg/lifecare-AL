@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getModel, isDbConfigured } from "@/lib/models";
-import { validateSession } from "@/lib/auth";
+import { getSession, validateSession } from "@/lib/auth";
 import { DEMO } from "@/lib/demoData";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,21 +50,55 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ model: string; id: string }> }
 ) {
-  const role = await validateSession();
-  if (!role) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const role = session.role;
 
   const { model, id } = await params;
   const def = getModel(model);
   if (!def) return NextResponse.json({ error: `Unknown model '${model}'` }, { status: 404 });
 
-  // Self-service roles may only update messages (mark-as-read); no other edits.
-  if ((role === "FAMILY" || role === "RESIDENT") && model !== "messages") {
+  // Self-service roles may only update messages (mark-as-read) and cancel
+  // their own call bells; no other edits.
+  const SELF_SERVICE = role === "FAMILY" || role === "RESIDENT";
+  if (SELF_SERVICE && model !== "messages" && model !== "call-bells") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const body = await req.json();
   if (!isDbConfigured()) {
     return NextResponse.json({ data: { id, ...body }, demo: true });
+  }
+
+  // Self-service call-bell updates: cancel-only, and only for a bell that
+  // belongs to the caller's own resident (or a sponsored resident for FAMILY).
+  if (SELF_SERVICE && model === "call-bells") {
+    if (String(body.status ?? "") !== "CANCELLED") {
+      return NextResponse.json(
+        { error: "Residents may only cancel their own call bells" },
+        { status: 403 }
+      );
+    }
+    try {
+      const bell = await prisma.callBell.findUnique({ where: { id }, select: { residentId: true } });
+      if (!bell) return NextResponse.json({ error: "Not found" }, { status: 404 });
+      const owned = await prisma.resident.findFirst({
+        where: {
+          id: bell.residentId,
+          ...(role === "RESIDENT" ? { userId: session.userId } : { sponsorId: session.userId }),
+        },
+        select: { id: true },
+      });
+      if (!owned) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      const data = await prisma.callBell.update({
+        where: { id },
+        data: { status: "CANCELLED", resolvedAt: new Date() },
+      });
+      return NextResponse.json({ data });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Update failed";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
   }
 
   try {
