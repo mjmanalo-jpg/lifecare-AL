@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Assisted Living Facility Management System — Flowchart Blueprint</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { font-family: Arial, Helvetica, sans-serif; }
+  @page { size: Letter; margin: 0; }
+
+  .page {
+    width: 8.5in; height: 11in;
+    page-break-after: always;
+    position: relative;
+    overflow: hidden;
+    background: #f7f9fc;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  /* ── Cover ─────────────────────────────────────────── */
+  .cover {
+    background:
+      linear-gradient(rgba(46,64,102,.18) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(46,64,102,.18) 1px, transparent 1px),
+      #0e1729;
+    background-size: 96px 96px;
+    padding: 1.3in .8in .9in;
+    color: #fff;
+  }
+  .cover-card {
+    background: #1d3fae; border-radius: 14px;
+    padding: .55in .45in; margin-bottom: .55in;
+  }
+  .cover-card .kicker { font-size: 13px; font-weight: 800; letter-spacing: .5px; margin-bottom: 26px; }
+  .cover-card h1 { font-size: 34px; line-height: 1.35; font-weight: 800; margin-bottom: 18px; }
+  .cover-card .sub { color: #9dc3f5; font-size: 13.5px; }
+  .phase-row {
+    background: #1a2540; border-radius: 10px;
+    padding: 13px 18px; margin-bottom: 12px;
+    display: flex; align-items: flex-start; gap: 22px;
+  }
+  .phase-row .tag { color: #57a8f5; font-weight: 800; font-size: 12.5px; white-space: nowrap; padding-top: 1px; width: 68px; }
+  .phase-row .body b { display: block; font-size: 13.5px; margin-bottom: 3px; }
+  .phase-row .body span { color: #8e9bb3; font-size: 11px; }
+  .cover-foot {
+    position: absolute; bottom: .55in; left: .8in; right: .8in;
+    display: flex; justify-content: space-between;
+    color: #3d4a63; font-size: 10.5px;
+  }
+  .cover-foot .glory { display: block; margin-top: 4px; }
+
+  /* ── Content pages ─────────────────────────────────── */
+  .pagehead {
+    background: #0e1729; color: #fff;
+    padding: 22px 34px; font-size: 16.5px; font-weight: 800; letter-spacing: .3px;
+  }
+  .content { padding: 26px 40px 0; }
+  .section-title {
+    color: #14315e; font-weight: 800; font-size: 13px; letter-spacing: .4px;
+    margin: 18px 0 14px; padding-top: 14px; border-top: 1px solid #dde4ee;
+  }
+  .section-title.first { border-top: none; padding-top: 0; margin-top: 0; }
+
+  .footer {
+    position: absolute; bottom: .42in; left: 40px; right: 40px;
+    border-top: 1px solid #dde4ee; padding-top: 8px;
+    font-size: 10px; color: #8b97ab;
+  }
+  .footer .pg { float: right; }
+
+  /* ── Flow primitives ───────────────────────────────── */
+  .flow { display: flex; flex-direction: column; align-items: center; }
+  .node {
+    border: 1.6px solid #64748b; border-radius: 9px; background: #fff;
+    padding: 9px 18px; font-size: 11.5px; font-weight: 700; color: #334155;
+    text-align: center; min-width: 150px;
+  }
+  .node.wide { min-width: 300px; }
+  .node.pill { border-radius: 22px; background: #1d3fae; border-color: #1d3fae; color: #fff; min-width: 120px; font-weight: 800; }
+  .node.blue   { border-color: #3b82f6; color: #1d4ed8; background: #eff6ff; }
+  .node.blue-o { border-color: #3b82f6; color: #1d4ed8; background: #fff; }
+  .node.green  { border-color: #22c55e; color: #15803d; background: #f0fdf4; }
+  .node.teal   { border-color: #14b8a6; color: #0f766e; background: #f0fdfa; }
+  .node.red    { border-color: #ef4444; color: #b91c1c; background: #fef2f2; }
+  .node.purple { border-color: #8b5cf6; color: #6d28d9; background: #f5f3ff; }
+  .node.amber  { border-color: #f59e0b; color: #b45309; background: #fffbeb; }
+  .node.slate  { border-color: #94a3b8; color: #334155; background: #f1f5f9; }
+  .node.indigo { border-color: #6366f1; color: #4338ca; background: #eef2ff; }
+
+  .stem { width: 2px; height: 16px; background: #94a3b8; }
+  .stem.arrow { position: relative; height: 20px; margin-bottom: 6px; }
+  .stem.arrow::after {
+    content: ""; position: absolute; bottom: -1px; left: -3.5px;
+    border-left: 4.5px solid transparent; border-right: 4.5px solid transparent;
+    border-top: 6px solid #94a3b8;
+  }
+  .hbar { height: 2px; background: #b6c2d4; align-self: stretch; margin: 0 60px; }
+
+  .split { display: flex; justify-content: center; gap: 12px; align-self: stretch; }
+  .branch { display: flex; flex-direction: column; align-items: center; flex: 1; }
+  .branch .node { min-width: 0; width: 100%; padding: 9px 6px; font-size: 10.6px; }
+
+  .gridrow { display: flex; gap: 12px; margin-bottom: 12px; }
+  .gridrow .node { flex: 1; min-width: 0; padding: 10px 6px; font-size: 10.6px; }
+  .chainrow { display: flex; align-items: center; gap: 0; margin-bottom: 14px; }
+  .chainrow .node { flex: 1; min-width: 0; padding: 10px 6px; font-size: 10.4px; }
+  .chainrow .harrow {
+    width: 26px; height: 2px; background: #94a3b8; position: relative; flex: none;
+  }
+  .chainrow .harrow::after {
+    content: ""; position: absolute; right: -1px; top: -3.5px;
+    border-top: 4.5px solid transparent; border-bottom: 4.5px solid transparent;
+    border-left: 6px solid #94a3b8;
+  }
+  .twocol { display: flex; gap: 36px; }
+  .twocol > div { flex: 1; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ PAGE 1 — COVER ═══════════════ -->
+<div class="page cover">
+  <div class="cover-card">
+    <div class="kicker">SYSTEM ARCHITECTURE BLUEPRINT</div>
+    <h1>Assisted Living Facility<br>Management System</h1>
+    <div class="sub">End-to-End Operational, Clinical &amp; AI Workflow Blueprint</div>
+  </div>
+
+  <div class="phase-row"><div class="tag">PHASE 1</div><div class="body"><b>Authentication &amp; Onboarding</b><span>Entry point, MFA, RBAC validation, and Resident Admission onboarding.</span></div></div>
+  <div class="phase-row"><div class="tag">PHASE 2</div><div class="body"><b>Daily Care Management</b><span>Clinical task scheduler, QR code scan, patient profile, and Voice-to-Text logs.</span></div></div>
+  <div class="phase-row"><div class="tag">PHASE 3</div><div class="body"><b>AI Monitoring &amp; Operations</b><span>Computer vision surveillance, fall alarms, notifications, operations, and portals.</span></div></div>
+  <div class="phase-row"><div class="tag">PHASE 4</div><div class="body"><b>Billing &amp; Portal Services</b><span>Clinical charges recording, automated billing, financial reporting, and client portals.</span></div></div>
+  <div class="phase-row"><div class="tag">PHASE 5</div><div class="body"><b>Discharge &amp; Analytics</b><span>System dashboard telemetry, clinical discharge protocol, and patient record archiving.</span></div></div>
+  <div class="phase-row"><div class="tag">PHASE 6</div><div class="body"><b>Fleet &amp; Transport Management</b><span>Transport requests, dispatch, vehicle &amp; driver assignment, GPS trips, and fleet maintenance.</span></div></div>
+  <div class="phase-row"><div class="tag">PHASE 7</div><div class="body"><b>Hospitality &amp; Property Management (PMS)</b><span>World-class hotel operations: front desk &amp; guest management, housekeeping &amp; maintenance, aircon/HVAC service, engagement, and occupancy analytics.</span></div></div>
+
+  <div class="cover-foot">
+    <div>Version: 5.3.0 (HARDENED)<span class="glory">All for the glory of the mighty name of the Lord Jesus Christ!</span></div>
+    <div>Date: July 2026</div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE 2 — PHASE 1 ═══════════════ -->
+<div class="page">
+  <div class="pagehead">PHASE 1: AUTHENTICATION, RBAC &amp; ONBOARDING</div>
+  <div class="content">
+    <div class="flow">
+      <div class="node pill">START</div>
+      <div class="stem arrow"></div>
+      <div class="node blue wide">Public Landing Website</div>
+      <div class="stem"></div>
+      <div class="hbar"></div>
+      <div class="split" style="margin: 0 30px;">
+        <div class="branch"><div class="stem arrow"></div><div class="node blue-o">View Information</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node blue-o">Book a Tour</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node blue-o">User Login</div></div>
+      </div>
+      <div class="stem"></div>
+      <div class="node slate wide">Authentication (Username/MFA)</div>
+      <div class="stem arrow"></div>
+      <div class="node slate wide">Role-Based Access Control (RBAC)</div>
+      <div class="stem"></div>
+      <div class="hbar" style="margin: 0 20px;"></div>
+      <div class="split">
+        <div class="branch"><div class="stem arrow"></div><div class="node purple">Administrator</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node purple">Facility Admin</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node purple">Receptionist</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node purple">Nurse</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node purple">Caregiver</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node purple">Physician</div></div>
+      </div>
+      <div class="stem arrow" style="margin-top: 8px;"></div>
+      <div class="node purple wide" style="background:#faf5ff;">Role-Based Dashboard</div>
+    </div>
+
+    <div class="section-title" style="margin-top: 26px;">RESIDENT ADMISSION &amp; ONBOARDING WORKFLOW</div>
+    <div class="chainrow">
+      <div class="node green">1. Registration</div><div class="harrow"></div>
+      <div class="node green">2. Medical Assess.</div><div class="harrow"></div>
+      <div class="node green">3. Care Assess.</div><div class="harrow"></div>
+      <div class="node green">4. Insurance Verify</div>
+    </div>
+    <div class="chainrow">
+      <div class="node green">5. Room Assignment</div><div class="harrow"></div>
+      <div class="node green">6. QR Code Gen.</div><div class="harrow"></div>
+      <div class="node green">7. Assign Care Team</div><div class="harrow"></div>
+      <div class="node green">8. Individual Care Plan</div>
+    </div>
+  </div>
+  <div class="footer">Assisted Living Facility Management System<span class="pg">Page 2 of 8</span><br>All for the glory of the mighty name of the Lord Jesus Christ!</div>
+</div>
+
+<!-- ═══════════════ PAGE 3 — PHASE 2 ═══════════════ -->
+<div class="page">
+  <div class="pagehead">PHASE 2: DAILY CLINICAL CARE &amp; SIGN-OFF WORKFLOW</div>
+  <div class="content">
+    <div class="flow">
+      <div class="node teal wide" style="border-color:#10b981;color:#047857;background:#ecfdf5;">AI Scheduler Assigns Daily Tasks</div>
+      <div class="stem arrow"></div>
+      <div class="node blue-o wide">Caregiver/Nurse Scan Resident QR Code</div>
+      <div class="stem arrow"></div>
+      <div class="node blue-o wide">Open Resident Profile</div>
+      <div class="stem"></div>
+      <div class="hbar" style="margin: 0 26px;"></div>
+      <div class="split">
+        <div class="branch"><div class="stem arrow"></div><div class="node">Vital Signs</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node">Medication Admin</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node">ADL Assistance</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node">Nutrition &amp; Meal</div></div>
+      </div>
+      <div class="split" style="margin-top: 10px;">
+        <div class="branch"><div class="node">Rehab Sessions</div></div>
+        <div class="branch"><div class="node">Physician Consult</div></div>
+        <div class="branch"><div class="node">Laboratory Results</div></div>
+        <div class="branch"><div class="node">Progress Notes</div></div>
+      </div>
+      <div class="split" style="margin-top: 10px; max-width: 240px;">
+        <div class="branch"><div class="node">Incident Reporting</div></div>
+      </div>
+      <div class="stem" style="margin-top: 6px;"></div>
+      <div class="node blue-o wide">Voice-to-Text Documentation</div>
+      <div class="stem arrow"></div>
+      <div class="node wide" style="border-color:#10b981;color:#047857;background:#ecfdf5;">AI Generates Clinical Notes</div>
+      <div class="stem arrow"></div>
+      <div class="node slate wide">Nurse/Caregiver 4-Digit PIN Sign-Off</div>
+      <div class="stem arrow"></div>
+      <div class="node slate wide">Audit Trail Recorded</div>
+    </div>
+  </div>
+  <div class="footer">Assisted Living Facility Management System<span class="pg">Page 3 of 8</span><br>All for the glory of the mighty name of the Lord Jesus Christ!</div>
+</div>
+
+<!-- ═══════════════ PAGE 4 — PHASE 3 ═══════════════ -->
+<div class="page">
+  <div class="pagehead">PHASE 3: AI MONITORING, OPERATIONS &amp; PORTALS</div>
+  <div class="content">
+    <div class="section-title first">AI VISION CAMERA MONITORING &amp; FALL DETECTION</div>
+    <div class="flow">
+      <div class="node wide" style="border-color:#10b981;color:#047857;background:#ecfdf5;">AI Vision Camera Monitoring</div>
+      <div class="stem"></div>
+      <div class="hbar" style="margin: 0 14px; background:#f5b3b3;"></div>
+      <div class="split">
+        <div class="branch"><div class="stem arrow"></div><div class="node red">Fall Detection</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node red">Wandering Det.</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node red">Bed Exit Det.</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node red">Restricted Area</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node red">Unusual Behavior</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node red">Emergency Det.</div></div>
+      </div>
+      <div class="stem" style="margin-top: 6px;"></div>
+      <div class="node red wide">Automatic Alert Generation</div>
+      <div class="stem"></div>
+      <div class="hbar" style="margin: 0 40px; background:#f5b3b3;"></div>
+      <div class="split">
+        <div class="branch"><div class="stem arrow"></div><div class="node red" style="background:#fff;">Notify Nurse</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node red" style="background:#fff;">Notify Caregiver</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node red" style="background:#fff;">Notify Physician</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node red" style="background:#fff;">Notify Admin</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node red" style="background:#fff;">Notify Family</div></div>
+      </div>
+      <div class="stem arrow" style="margin-top: 8px;"></div>
+      <div class="node blue-o wide">Incident Investigation &amp; Resolution</div>
+    </div>
+
+    <div class="section-title">SUPPORTING OPERATIONAL WORKFLOWS</div>
+    <div class="gridrow">
+      <div class="node">Medication Inv.</div><div class="node">Medical Supply</div><div class="node">Appt. Scheduling</div><div class="node">Therapy Sched.</div><div class="node">Visitor Mgmt</div>
+    </div>
+    <div class="gridrow">
+      <div class="node">Staff Scheduling</div><div class="node">Maintenance</div><div class="node">Housekeeping</div><div class="node">Internal Messaging</div><div class="node">Notifications</div>
+    </div>
+
+    <div class="section-title">FAMILY &amp; RESIDENT PORTAL</div>
+    <div class="gridrow">
+      <div class="node blue">Care Updates</div><div class="node blue">Med. Schedule</div><div class="node blue">Appointments</div><div class="node blue">Activity Part.</div>
+    </div>
+    <div class="gridrow" style="max-width: 74%;">
+      <div class="node blue">Secure Messaging</div><div class="node blue">Billing &amp; Payments</div><div class="node blue">Documents</div>
+    </div>
+  </div>
+  <div class="footer">Assisted Living Facility Management System<span class="pg">Page 4 of 8</span><br>All for the glory of the mighty name of the Lord Jesus Christ!</div>
+</div>
+
+<!-- ═══════════════ PAGE 5 — PHASE 4/5 ═══════════════ -->
+<div class="page">
+  <div class="pagehead">PHASE 4: BILLING, DECISION SUPPORT &amp; DISCHARGE</div>
+  <div class="content">
+    <div class="twocol">
+      <div>
+        <div class="section-title first">BILLING &amp; FINANCE</div>
+        <div class="flow">
+          <div class="node green" style="align-self: stretch;">Service Charges Recorded</div>
+          <div class="stem arrow"></div>
+          <div class="node green" style="align-self: stretch;">Insurance Validation</div>
+          <div class="stem arrow"></div>
+          <div class="node green" style="align-self: stretch;">Invoice Generation</div>
+          <div class="stem arrow"></div>
+          <div class="node green" style="align-self: stretch;">Payment Processing</div>
+          <div class="stem arrow"></div>
+          <div class="node green" style="align-self: stretch;">Receipt Issued</div>
+          <div class="stem arrow"></div>
+          <div class="node green" style="align-self: stretch;">Financial Reports</div>
+        </div>
+      </div>
+      <div>
+        <div class="section-title first">REPORTS &amp; DECISION SUPPORT</div>
+        <div class="flow">
+          <div class="node" style="align-self: stretch; border-color:#10b981;color:#047857;background:#ecfdf5;">AI Analytics Dashboard</div>
+          <div class="stem arrow"></div>
+          <div class="node slate" style="align-self: stretch; background:#fff; margin-bottom:8px;">Resident Health Trends</div>
+          <div class="node slate" style="align-self: stretch; background:#fff; margin-bottom:8px;">Medication Compliance</div>
+          <div class="node slate" style="align-self: stretch; background:#fff; margin-bottom:8px;">Incident Trends</div>
+          <div class="node slate" style="align-self: stretch; background:#fff; margin-bottom:8px;">Staff Productivity</div>
+          <div class="node slate" style="align-self: stretch; background:#fff; margin-bottom:8px;">Occupancy Reports</div>
+          <div class="node slate" style="align-self: stretch; background:#fff; margin-bottom:8px;">Financial Analytics</div>
+          <div class="node slate" style="align-self: stretch; background:#fff;">Regulatory Compliance</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">DISCHARGE MANAGEMENT WORKFLOW</div>
+    <div class="chainrow">
+      <div class="node green">Physician Approval</div><div class="harrow"></div>
+      <div class="node green">Final Assessment</div><div class="harrow"></div>
+      <div class="node green">Care Plan Closure</div><div class="harrow"></div>
+      <div class="node green">Medication Summary</div>
+    </div>
+    <div class="chainrow">
+      <div class="node green">Billing Clearance</div><div class="harrow"></div>
+      <div class="node green">Discharge Docs</div><div class="harrow"></div>
+      <div class="node green">Archive Record</div><div class="harrow"></div>
+      <div class="node green">Logout</div>
+    </div>
+    <div class="flow" style="margin-top: 10px;">
+      <div class="stem arrow"></div>
+      <div class="node pill">END</div>
+    </div>
+  </div>
+  <div class="footer">Assisted Living Facility Management System<span class="pg">Page 5 of 8</span><br>All for the glory of the mighty name of the Lord Jesus Christ!</div>
+</div>
+
+<!-- ═══════════════ PAGE 6 — PHASE 6: FLEET ═══════════════ -->
+<div class="page">
+  <div class="pagehead">PHASE 6: FLEET &amp; TRANSPORT MANAGEMENT</div>
+  <div class="content">
+    <div class="section-title first">RESIDENT TRANSPORT WORKFLOW</div>
+    <div class="flow">
+      <div class="node indigo wide">Transport Request (Portal / AI Companion / Front Desk)</div>
+      <div class="stem"></div>
+      <div class="hbar" style="margin: 0 26px;"></div>
+      <div class="split">
+        <div class="branch"><div class="stem arrow"></div><div class="node indigo" style="background:#fff;">Medical Appointment</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node indigo" style="background:#fff;">Dialysis / Therapy Run</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node indigo" style="background:#fff;">Family Outing</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node red">Emergency Transfer</div></div>
+      </div>
+      <div class="stem" style="margin-top: 6px;"></div>
+      <div class="node slate wide">Dispatcher Review, Priority &amp; Approval</div>
+      <div class="stem arrow"></div>
+      <div class="split" style="max-width: 82%;">
+        <div class="branch"><div class="node amber">Vehicle Assignment<br><span style="font-weight:600; font-size:9.5px;">Shuttle · Wheelchair Van · Ambulance</span></div></div>
+        <div class="branch"><div class="node amber">Driver Assignment<br><span style="font-weight:600; font-size:9.5px;">License &amp; Certification Check</span></div></div>
+        <div class="branch"><div class="node amber">Escort Assignment<br><span style="font-weight:600; font-size:9.5px;">Nurse / Caregiver if required</span></div></div>
+      </div>
+      <div class="stem" style="margin-top: 6px;"></div>
+      <div class="node slate wide">Pre-Trip Safety Inspection Checklist</div>
+      <div class="stem arrow"></div>
+      <div class="node blue wide">Trip In Progress — Live GPS Tracking &amp; Family Notification</div>
+      <div class="stem arrow"></div>
+      <div class="node blue-o wide">Arrival Check-In → Return Trip → Drop-Off Confirmation</div>
+      <div class="stem arrow"></div>
+      <div class="node green wide">Trip Log Recorded → Billable Charge Posted to Invoice</div>
+    </div>
+
+    <div class="section-title">FLEET MAINTENANCE &amp; COMPLIANCE LOOP</div>
+    <div class="chainrow">
+      <div class="node amber">Odometer &amp; Fuel Log</div><div class="harrow"></div>
+      <div class="node amber">Preventive Maint. Schedule</div><div class="harrow"></div>
+      <div class="node amber">Repair Work Order</div><div class="harrow"></div>
+      <div class="node amber">Garage / Vendor Service</div>
+    </div>
+    <div class="chainrow">
+      <div class="node amber">Insurance &amp; Registration Alerts</div><div class="harrow"></div>
+      <div class="node amber">Driver Trip-Hours &amp; Safety Score</div><div class="harrow"></div>
+      <div class="node amber">Vehicle Downtime Report</div><div class="harrow"></div>
+      <div class="node green">Fleet Analytics Dashboard</div>
+    </div>
+  </div>
+  <div class="footer">Assisted Living Facility Management System<span class="pg">Page 6 of 8</span><br>All for the glory of the mighty name of the Lord Jesus Christ!</div>
+</div>
+
+<!-- ═══════════════ PAGE 7 — PHASE 7: PMS ═══════════════ -->
+<div class="page">
+  <div class="pagehead">PHASE 7: HOSPITALITY &amp; PROPERTY MANAGEMENT SYSTEM (PMS)</div>
+  <div class="content">
+    <div class="section-title first">PMS — CENTRAL HUB OF HOSPITALITY OPERATIONS</div>
+    <div class="flow">
+      <div class="node teal wide">Property Management System (PMS)<br><span style="font-weight:600; font-size:9.5px;">Resident Profiles · Apartment Assignments · Front-Desk Activities</span></div>
+      <div class="stem"></div>
+      <div class="hbar" style="margin: 0 14px; background:#99d6cf;"></div>
+      <div class="split">
+        <div class="branch"><div class="stem arrow"></div><div class="node teal" style="background:#fff;">Front Desk &amp;<br>Guest Management</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node teal" style="background:#fff;">Housekeeping &amp;<br>Maintenance</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node teal" style="background:#fff;">Resident &amp; Family<br>Engagement</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node teal" style="background:#fff;">Reporting &amp;<br>Analytics</div></div>
+      </div>
+    </div>
+
+    <div class="section-title">FRONT DESK &amp; GUEST MANAGEMENT</div>
+    <div class="chainrow">
+      <div class="node blue">Guest / New Resident Arrival</div><div class="harrow"></div>
+      <div class="node blue">Check-In (ID &amp; Visitor Pass)</div><div class="harrow"></div>
+      <div class="node blue">Inquiries &amp; Requests</div><div class="harrow"></div>
+      <div class="node blue">Ancillary Payments<br><span style="font-weight:600; font-size:9.3px;">Guest Dining · Salon Services</span></div><div class="harrow"></div>
+      <div class="node blue">Check-Out &amp; Receipt</div>
+    </div>
+
+    <div class="section-title">APARTMENT / ROOM STATUS LIFECYCLE (MOBILE STAFF TOOLS)</div>
+    <div class="chainrow">
+      <div class="node amber">Make Ready</div><div class="harrow"></div>
+      <div class="node amber">Inspection Passed</div><div class="harrow"></div>
+      <div class="node green">Occupied</div><div class="harrow"></div>
+      <div class="node amber">Turnover<br><span style="font-weight:600; font-size:9.3px;">Move-Out / Transfer</span></div><div class="harrow"></div>
+      <div class="node amber">Deep Clean &amp; Maintenance ↺</div>
+    </div>
+
+    <div class="section-title">RESIDENT &amp; FAMILY ENGAGEMENT</div>
+    <div class="gridrow">
+      <div class="node purple">Preference Profiles</div>
+      <div class="node purple">Event Attendance</div>
+      <div class="node purple">Dining Reservations</div>
+      <div class="node purple">Automated Announcements</div>
+      <div class="node purple">Community Calendar</div>
+    </div>
+
+    <div class="section-title">REPORTING &amp; ANALYTICS — KEY PERFORMANCE INDICATORS</div>
+    <div class="gridrow">
+      <div class="node green">Occupancy Rate</div>
+      <div class="node green">Unit Turnover Time</div>
+      <div class="node green">Resident Satisfaction</div>
+      <div class="node green">Service SLA Compliance</div>
+      <div class="node green">Ancillary Revenue</div>
+    </div>
+  </div>
+  <div class="footer">Assisted Living Facility Management System<span class="pg">Page 7 of 8</span><br>All for the glory of the mighty name of the Lord Jesus Christ!</div>
+</div>
+
+<!-- ═══════════════ PAGE 8 — PHASE 7 (CONT.): SERVICES ═══════════════ -->
+<div class="page">
+  <div class="pagehead">PHASE 7 (CONT.): HOTEL-STYLE RESIDENT SERVICES &amp; MAINTENANCE</div>
+  <div class="content">
+    <div class="section-title first">RESIDENT SERVICE REQUEST WORKFLOW</div>
+    <div class="flow">
+      <div class="node teal wide">Service Request (Resident Portal / AI Companion Voice / Call Bell / Front Desk)</div>
+      <div class="stem"></div>
+      <div class="hbar" style="margin: 0 14px; background:#99d6cf;"></div>
+      <div class="split">
+        <div class="branch"><div class="stem arrow"></div><div class="node teal" style="background:#fff;">Aircon / HVAC<br><span style="font-weight:600; font-size:9.5px;">Temp Adjust · Filter · Repair</span></div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node teal" style="background:#fff;">Housekeeping<br><span style="font-weight:600; font-size:9.5px;">Room Clean · Linen Change</span></div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node teal" style="background:#fff;">Room Service<br><span style="font-weight:600; font-size:9.5px;">Meals · Snacks · Beverages</span></div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node teal" style="background:#fff;">Laundry &amp; Pressing</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node teal" style="background:#fff;">Repairs<br><span style="font-weight:600; font-size:9.5px;">Plumbing · Electrical · Wi-Fi/TV</span></div></div>
+      </div>
+      <div class="stem" style="margin-top: 6px;"></div>
+      <div class="node slate wide">Ticket Created — Priority: Routine / Urgent / Emergency</div>
+      <div class="stem arrow"></div>
+      <div class="node slate wide">Auto-Assign: Housekeeping Team · Maintenance Engineer · Kitchen · IT</div>
+      <div class="stem arrow"></div>
+      <div class="node blue wide">Work Order In Progress → Completed with Photo Proof</div>
+      <div class="stem arrow"></div>
+      <div class="node teal wide">Resident Confirmation &amp; Satisfaction Rating (1–5 ★)</div>
+      <div class="stem arrow"></div>
+      <div class="node green wide">Billable Services Posted to Invoice → Service Analytics</div>
+    </div>
+
+    <div class="section-title">PREVENTIVE FACILITY MAINTENANCE CALENDAR</div>
+    <div class="gridrow">
+      <div class="node amber">HVAC Quarterly Service</div>
+      <div class="node amber">Generator Monthly Test</div>
+      <div class="node amber">Elevator Inspection</div>
+      <div class="node amber">Fire &amp; Safety Systems</div>
+      <div class="node amber">Pest Control</div>
+    </div>
+
+    <div class="section-title">CONCIERGE &amp; PREMIUM "HOTEL ON THE HOSPITAL" SERVICES</div>
+    <div class="gridrow">
+      <div class="node purple">Concierge Desk</div>
+      <div class="node purple">Wake-Up &amp; Reminder Calls</div>
+      <div class="node purple">Turndown Service</div>
+      <div class="node purple">Salon &amp; Barber</div>
+      <div class="node purple">Massage &amp; Spa Therapy</div>
+    </div>
+    <div class="gridrow">
+      <div class="node purple">Café / Bistro &amp; Snack Cart</div>
+      <div class="node purple">Movie &amp; Game Nights</div>
+      <div class="node purple">Garden Lounge Reservation</div>
+      <div class="node purple">Guest Suite for Family Stay</div>
+      <div class="node purple">Chaplain / Spiritual Care Visit</div>
+    </div>
+  </div>
+  <div class="footer">Assisted Living Facility Management System<span class="pg">Page 8 of 8</span><br>All for the glory of the mighty name of the Lord Jesus Christ!</div>
+</div>
+
+</body>
+</html>
