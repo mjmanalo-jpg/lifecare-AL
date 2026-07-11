@@ -672,9 +672,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Decorative Blur */}
-      <div className="absolute bottom-0 left-0 w-full h-[500px] bg-gradient-to-t from-black to-transparent pointer-events-none" />
-
       {/* Footer */}
       <footer id="about" className="relative z-10 w-full px-6 py-12 max-w-7xl mx-auto border-t border-white/5 light:border-black/5 flex flex-col md:flex-row items-center justify-between gap-6 text-gray-500 text-sm">
         <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
