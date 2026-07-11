@@ -1,4 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { isDbConfigured } from "@/lib/models";
+import {
+  ASSISTANT_CONFIG_KEY,
+  TONE_STYLES,
+  parseAssistantConfig,
+  type AssistantConfig,
+} from "@/lib/assistantConfig";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,13 +58,52 @@ const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8i
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
-const DEFAULT_PERSONA =
-  "You are the Golden Hearth AI Assistant, a warm, concise, professional aide for an " +
-  "assisted-living facility's administration team. You help with resident care, staffing, " +
-  "operations, compliance and facility knowledge. Answer in 1-4 short sentences unless asked " +
-  "for detail. When knowledge-base context is provided, ground your answer in it and cite the " +
-  "source file name. If the context does not contain the answer, say so briefly, then help " +
-  "from general knowledge. Never invent resident medical facts.";
+/**
+ * The persona is no longer hardcoded — it's assembled from the shared
+ * `assistantConfig` AppSetting (edited live on /superadmin/assistant) plus the
+ * audience: "resident" gets a companion voice, everyone else the staff aide.
+ * Reading it server-side means the tone can't be tampered with client-side and
+ * every portal picks up admin changes on the very next message.
+ */
+async function loadAssistantConfig(): Promise<AssistantConfig> {
+  if (!isDbConfigured()) return parseAssistantConfig(null);
+  try {
+    const row = await prisma.appSetting.findUnique({ where: { id: ASSISTANT_CONFIG_KEY } });
+    return parseAssistantConfig(row?.value);
+  } catch {
+    return parseAssistantConfig(null);
+  }
+}
+
+function buildPersona(cfg: AssistantConfig, audience: string): string {
+  const style = TONE_STYLES[cfg.tone] ?? TONE_STYLES.friendly;
+  const who =
+    audience === "resident"
+      ? `You are ${cfg.name}, the personal AI companion of a resident living at the Golden Hearth ` +
+        "assisted-living home. You chat with the resident directly. Talk like a trusted friend: " +
+        "use their first name, simple everyday words, and 1-3 short sentences per reply so it is " +
+        "easy to listen to out loud. Never sound like a machine — no bullet lists, no jargon, no " +
+        "canned phrases. Show genuine interest in how they feel and remember what they said earlier " +
+        "in the conversation. If they mention pain, an emergency, or feeling unwell, respond with " +
+        "care and gently remind them to press the call bell so staff can help right away."
+      : `You are ${cfg.name}, the AI assistant for the Golden Hearth assisted-living facility's ` +
+        "staff and administrators. You help with resident care, staffing, operations, compliance " +
+        "and facility knowledge. Answer in 1-4 short sentences unless asked for detail, and cite " +
+        "the source file name when you use the knowledge base.";
+  return [
+    who,
+    `Personality: ${style}`,
+    cfg.useEmoji
+      ? "A light sprinkle of friendly emoji is welcome — at most one per reply."
+      : "Do not use emoji.",
+    "When knowledge-base or resident context is provided, ground your answer in it. If the " +
+      "context does not contain the answer, say so briefly, then help from general knowledge. " +
+      "Never invent resident medical facts.",
+    cfg.instructions ? `Instructions from the facility administrator: ${cfg.instructions}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
 
 interface ChatTurn {
   role: "user" | "model";
@@ -93,7 +140,9 @@ async function handleChat(body: Record<string, unknown>) {
   const message = String(body.message ?? "").trim();
   if (!message) return NextResponse.json({ error: "Empty message" }, { status: 400 });
 
-  const persona = String(body.persona ?? DEFAULT_PERSONA);
+  const audience = String(body.audience ?? "admin");
+  const cfg = await loadAssistantConfig();
+  const persona = body.persona ? String(body.persona) : buildPersona(cfg, audience);
   const context = String(body.context ?? "").slice(0, 24000);
   const history = Array.isArray(body.history) ? (body.history as ChatTurn[]) : [];
 
@@ -119,7 +168,11 @@ async function handleChat(body: Record<string, unknown>) {
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: systemInstruction }] },
           contents,
-          generationConfig: { maxOutputTokens: 800, temperature: 0.5 },
+          // Warmer tones benefit from a livelier sampling temperature.
+          generationConfig: {
+            maxOutputTokens: 800,
+            temperature: cfg.tone === "professional" ? 0.5 : 0.8,
+          },
         }),
       });
       if (res.ok) {

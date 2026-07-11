@@ -41,6 +41,23 @@ import {
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
+import { ASSISTANT_CONFIG_KEY, parseAssistantConfig } from "@/lib/assistantConfig";
+
+// speechSynthesis.getVoices() is empty until the async voiceschanged event on
+// first load — a sync call then picks no voice and the OS default (often a
+// robotic male voice) speaks instead. Wait for the list briefly.
+function getBrowserVoices(): Promise<SpeechSynthesisVoice[]> {
+  return new Promise((resolve) => {
+    const synth = window.speechSynthesis;
+    const now = synth.getVoices();
+    if (now.length) return resolve(now);
+    const timer = setTimeout(() => resolve(synth.getVoices()), 1500);
+    synth.onvoiceschanged = () => {
+      clearTimeout(timer);
+      resolve(synth.getVoices());
+    };
+  });
+}
 
 interface ResidentPortalContentProps {
   tab: string;
@@ -176,6 +193,23 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
     const saved = settingRows.find((r) => r.id === "assistantVoice")?.value;
     if (saved) setVoice(saved);
   }, [settingRows]);
+
+  // Personality configured by the Super Admin — live-synced via AppSetting,
+  // so name/tone/greeting changes reach this dashboard without a refresh.
+  const assistantCfg = useMemo(
+    () => parseAssistantConfig(settingRows.find((r) => r.id === ASSISTANT_CONFIG_KEY)?.value),
+    [settingRows]
+  );
+
+  // Keep the welcome bubble in sync with the configured greeting as long as
+  // the resident hasn't started chatting yet.
+  useEffect(() => {
+    setAssistantMessages((prev) =>
+      prev.length === 1 && prev[0].id === "welcome" && prev[0].text !== assistantCfg.greeting
+        ? [{ ...prev[0], text: assistantCfg.greeting }]
+        : prev
+    );
+  }, [assistantCfg.greeting]);
 
   // Load custom goals and checkbox states from localStorage (persists across refreshes)
   useEffect(() => {
@@ -461,9 +495,9 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
     const latestHR = vitals.find(v => v.type === "HEART_RATE")?.value || "72";
     const sponsorName = resident.sponsor?.name || "None";
     
-    return `You are Golden Hearth's empathetic, warm virtual companion. 
-The user is a resident at our assisted living facility.
-Resident Profile:
+    // Data only — the persona/tone is built server-side from the Super Admin's
+    // live assistantConfig, so it can't drift from the rest of the app.
+    return `Resident Profile:
 - Name: ${resident.firstName} ${resident.lastName}
 - Room Number: ${resident.roomNumber}
 - Care Level: ${resident.careLevel}
@@ -477,9 +511,7 @@ ${medStr || "No medications active."}
 
 Vitals:
 - Latest Heart Rate: ${latestHR} BPM
-- Daily Activity Steps: 3,240 Steps
-
-Answer user queries warmly and conversationally. Keep replies short (1-3 sentences max) so they are easy to listen to.`;
+- Daily Activity Steps: 3,240 Steps`;
   };
 
   const handleSendAssistantMessage = async (text: string) => {
@@ -504,7 +536,7 @@ Answer user queries warmly and conversationally. Keep replies short (1-3 sentenc
       const res = await fetch("/api/ai-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "chat", message: query, context, history }),
+        body: JSON.stringify({ action: "chat", message: query, context, history, audience: "resident" }),
       });
       const data = await res.json();
       reply = data.reply || "I am here, but I couldn't compute a reply. Let me call a caregiver if needed.";
@@ -559,13 +591,21 @@ Answer user queries warmly and conversationally. Keep replies short (1-3 sentenc
       console.warn("TTS fetch failed, falling back to Web Speech Synthesis", err);
     }
 
-    // Fallback: Web Speech API
+    // Fallback: Web Speech API — prefer a warm neural/female voice over the
+    // OS default (often a robotic male voice).
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      const voices = await getBrowserVoices();
       await new Promise<void>((resolve) => {
         const u = new SpeechSynthesisUtterance(text);
         u.lang = "en-US";
-        u.rate = 1.05;
-        u.pitch = 1.1;
+        u.rate = 1.0;
+        u.pitch = 1.05;
+        const preferred =
+          voices.find((v) => /aria|jenny|natural/i.test(v.name) && v.lang.startsWith("en")) ??
+          voices.find((v) => /zira|samantha|female/i.test(v.name) && v.lang.startsWith("en")) ??
+          voices.find((v) => v.lang === "en-US") ??
+          null;
+        if (preferred) u.voice = preferred;
         u.onend = () => resolve();
         u.onerror = () => resolve();
         window.speechSynthesis.speak(u);
@@ -1585,7 +1625,7 @@ Answer user queries warmly and conversationally. Keep replies short (1-3 sentenc
                   )}
                 </div>
                 <div>
-                  <h3 className="font-black text-sm">AI Companion</h3>
+                  <h3 className="font-black text-sm">{assistantCfg.name || "AI Companion"}</h3>
                   <div className="flex items-center gap-1">
                     <span className={`w-2 h-2 rounded-full ${
                       assistantListening ? "bg-red-500 animate-pulse" :

@@ -16,7 +16,16 @@ import {
   LoaderCircle,
   Database,
   X,
+  Wand2,
+  Save,
 } from "lucide-react";
+import {
+  ASSISTANT_CONFIG_KEY,
+  DEFAULT_ASSISTANT_CONFIG,
+  TONE_OPTIONS,
+  parseAssistantConfig,
+  type AssistantConfig,
+} from "@/lib/assistantConfig";
 import {
   KnowledgeDoc,
   ingestFile,
@@ -45,16 +54,34 @@ interface GeminiVoice {
 // Maps each Gemini voice to a distinct browser-voice config for the fallback
 // path. Uses different name patterns + rate/pitch combos so voices sound
 // perceptibly different even when Gemini TTS is unavailable.
+// Patterns must name specific voices — a generic vendor word like "microsoft"
+// previously matched "Microsoft David" and turned every female pick male.
 const BROWSER_VOICE_MAP: Record<string, { namePattern?: RegExp; rate: number; pitch: number }> = {
-  Zephyr:  { namePattern: /female|zoe|samantha|google us/i, rate: 1.1, pitch: 1.15 },
-  Puck:    { namePattern: /female|siri|google/i,             rate: 1.2, pitch: 1.3 },
-  Charon:  { namePattern: /male|david|daniel|google/i,       rate: 0.9, pitch: 0.85 },
-  Kore:    { namePattern: /female|zira|microsoft/i,          rate: 0.95, pitch: 1.05 },
-  Fenrir:  { namePattern: /male|alex|fred|google/i,          rate: 1.05, pitch: 0.7 },
-  Leda:    { namePattern: /female|samantha|google/i,         rate: 1.0,  pitch: 1.4 },
-  Orus:    { namePattern: /male|google uk|tom/i,             rate: 0.85, pitch: 0.9 },
-  Aoede:   { namePattern: /female|veena|google/i,            rate: 1.15, pitch: 1.2 },
+  Zephyr:  { namePattern: /aria|samantha|zoe|female/i,   rate: 1.1, pitch: 1.15 },
+  Puck:    { namePattern: /jenny|siri|female/i,          rate: 1.2, pitch: 1.3 },
+  Charon:  { namePattern: /guy|david|daniel|male/i,      rate: 0.9, pitch: 0.85 },
+  Kore:    { namePattern: /aria|jenny|zira|female/i,     rate: 0.95, pitch: 1.05 },
+  Fenrir:  { namePattern: /guy|alex|fred|male/i,         rate: 1.05, pitch: 0.7 },
+  Orus:    { namePattern: /ryan|george|tom|male/i,       rate: 0.85, pitch: 0.9 },
+  Leda:    { namePattern: /jenny|samantha|female/i,      rate: 1.0,  pitch: 1.4 },
+  Aoede:   { namePattern: /libby|michelle|veena|female/i, rate: 1.15, pitch: 1.2 },
 };
+
+// speechSynthesis.getVoices() is empty until the async voiceschanged event on
+// first load — the old sync call then picked no voice and the OS default
+// (often a robotic male voice) spoke instead. Wait for the list briefly.
+function getBrowserVoices(): Promise<SpeechSynthesisVoice[]> {
+  return new Promise((resolve) => {
+    const synth = window.speechSynthesis;
+    const now = synth.getVoices();
+    if (now.length) return resolve(now);
+    const timer = setTimeout(() => resolve(synth.getVoices()), 1500);
+    synth.onvoiceschanged = () => {
+      clearTimeout(timer);
+      resolve(synth.getVoices());
+    };
+  });
+}
 
 const GEMINI_VOICES: GeminiVoice[] = [
   { id: "Zephyr", desc: "Bright", accent: "amber" },
@@ -113,6 +140,11 @@ export default function AIAssistantContent() {
     tables: ["AppSetting"],
   });
 
+  // ── Personality — shared config that drives every portal's assistant ─────
+  const [config, setConfig] = useState<AssistantConfig>(DEFAULT_ASSISTANT_CONFIG);
+  const [configDirty, setConfigDirty] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -126,6 +158,45 @@ export default function AIAssistantContent() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing external DB state
     if (saved) setVoice(saved);
   }, [settingRows]);
+  // Sync the personality config too — unless the admin has unsaved edits.
+  useEffect(() => {
+    const raw = settingRows.find((r) => r.id === ASSISTANT_CONFIG_KEY)?.value;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing external DB state
+    if (raw && !configDirty) setConfig(parseAssistantConfig(raw));
+  }, [settingRows, configDirty]);
+
+  const editConfig = useCallback((patch: Partial<AssistantConfig>) => {
+    setConfig((c) => ({ ...c, ...patch }));
+    setConfigDirty(true);
+  }, []);
+
+  const saveConfig = useCallback(async () => {
+    setSavingConfig(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: ASSISTANT_CONFIG_KEY, value: JSON.stringify(config) }),
+      });
+      if (!res.ok) throw new Error(`Save failed (${res.status})`);
+      setConfigDirty(false);
+      Swal.fire({
+        icon: "success",
+        title: "Personality updated",
+        text: "Every portal assistant — including the resident companion — now uses it live.",
+        timer: 2200,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      Swal.fire({
+        icon: "error",
+        title: "Couldn't save personality",
+        text: err instanceof Error ? err.message : "Unknown error",
+      });
+    } finally {
+      setSavingConfig(false);
+    }
+  }, [config]);
   useEffect(() => {
     voiceChatRef.current = voiceChat;
   }, [voiceChat]);
@@ -187,17 +258,18 @@ export default function AIAssistantContent() {
       // selected Gemini voice sounds perceptibly different even via the browser.
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         setEngine("browser");
+        const voices = await getBrowserVoices();
         await new Promise<void>((resolve) => {
           const u = new SpeechSynthesisUtterance(text);
           const cfg = BROWSER_VOICE_MAP[voiceId ?? voice] ?? BROWSER_VOICE_MAP.Kore;
           u.rate = cfg.rate;
           u.pitch = cfg.pitch;
           u.lang = "en-US";
-          const voices = window.speechSynthesis.getVoices();
-          // Try to find a voice matching the Gemini voice's name pattern, then
-          // fall back to any en-US voice, then any English voice.
+          // Match the Gemini voice's name pattern first, then prefer the OS's
+          // neural "Natural" voices (far less robotic), then any English voice.
           const preferred =
             (cfg.namePattern ? voices.find((v) => cfg.namePattern!.test(v.name) && v.lang.startsWith("en")) : null) ??
+            voices.find((v) => /natural/i.test(v.name) && v.lang.startsWith("en")) ??
             voices.find((v) => v.lang === "en-US") ??
             voices.find((v) => v.lang.startsWith("en")) ??
             null;
@@ -298,7 +370,7 @@ export default function AIAssistantContent() {
         const res = await fetch("/api/ai-assistant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "chat", message: text, context, history }),
+          body: JSON.stringify({ action: "chat", message: text, context, history, audience: "admin" }),
         });
         const data = await res.json();
         reply = data.reply || "Sorry, I couldn't generate a response.";
@@ -464,6 +536,99 @@ export default function AIAssistantContent() {
         </div>
       </div>
 
+      {/* ── Personality — live-synced to every portal's assistant ──────── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <Wand2 className="w-4 h-4 text-yellow-500" />
+          <p className="text-sm font-bold text-gray-800">Personality</p>
+          <span className="text-xs text-gray-400">
+            Applies in realtime to this assistant and the resident dashboard companion
+          </span>
+          {configDirty && (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+              Unsaved changes
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Assistant name</label>
+              <input
+                value={config.name}
+                onChange={(e) => editConfig({ name: e.target.value })}
+                placeholder="e.g. Sunny"
+                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Tone</label>
+              <div className="grid grid-cols-2 gap-2">
+                {TONE_OPTIONS.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => editConfig({ tone: t.id })}
+                    className={`rounded-xl border p-2.5 text-left transition active:scale-[0.98] ${
+                      config.tone === t.id
+                        ? "border-yellow-400 bg-yellow-50 ring-1 ring-yellow-400"
+                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold text-gray-800">{t.label}</span>
+                    <span className="block text-xs text-gray-500">{t.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={config.useEmoji}
+                onChange={(e) => editConfig({ useEmoji: e.target.checked })}
+                className="w-4 h-4 rounded accent-yellow-400"
+              />
+              Allow a light sprinkle of emoji
+            </label>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">
+                Greeting shown to residents
+              </label>
+              <textarea
+                value={config.greeting}
+                onChange={(e) => editConfig({ greeting: e.target.value })}
+                rows={3}
+                placeholder="Hi there! I'm Sunny, your Golden Hearth companion…"
+                className="w-full resize-none border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">
+                Extra instructions <span className="font-normal text-gray-400">(optional — house rules, menus, reminders…)</span>
+              </label>
+              <textarea
+                value={config.instructions}
+                onChange={(e) => editConfig({ instructions: e.target.value })}
+                rows={3}
+                placeholder="e.g. Bingo is every Friday 3pm in the sunroom. Dinner is served 5:30–7pm."
+                className="w-full resize-none border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
+              />
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={saveConfig}
+                disabled={savingConfig || !configDirty}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-br from-yellow-400 to-yellow-500 text-black text-sm font-semibold hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
+              >
+                {savingConfig ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Save personality
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ── Chat column ─────────────────────────────────────────────── */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 flex flex-col h-[70vh] overflow-hidden">
@@ -474,7 +639,7 @@ export default function AIAssistantContent() {
                 <Bot className="w-5 h-5 text-black" />
               </div>
               <div>
-                <p className="font-bold text-gray-900 leading-tight">Golden Hearth Assistant</p>
+                <p className="font-bold text-gray-900 leading-tight">{config.name || "Golden Hearth Assistant"}</p>
                 <p className="text-xs text-gray-500 flex items-center gap-1">
                   {speaking ? (
                     <><Volume2 className="w-3 h-3 text-yellow-600 animate-pulse" /> speaking…</>
