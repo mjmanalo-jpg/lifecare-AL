@@ -485,18 +485,18 @@ export default function AIAssistantContent() {
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <Volume2 className="w-4 h-4 text-yellow-500" />
           <p className="text-sm font-bold text-gray-800">AI Voice</p>
-          <span className="text-xs text-gray-400">Google neural voices — tap a voice to preview it</span>
+          <span className="text-xs text-gray-400">Neural AI voices — tap a voice to preview it</span>
           {engine === "gemini" && (
             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-              Google voice active
+              AI voice active
             </span>
           )}
           {engine === "browser" && (
             <span
               className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700"
-              title="Gemini TTS unreachable — using the browser's single built-in voice, so every card sounds the same. Set GEMINI_API_KEY and a *-tts model to hear the 8 distinct Google voices."
+              title="Cloud AI voice unreachable — using the browser's built-in voice, so the voice cards may sound similar until it reconnects."
             >
-              ⚠ Browser fallback — voices sound identical
+              ⚠ Basic voice mode
             </span>
           )}
         </div>
@@ -697,7 +697,7 @@ export default function AIAssistantContent() {
                         <Volume2 className="w-3 h-3" /> Play
                       </button>
                       {m.source && m.source !== "offline" && (
-                        <span className="text-[10px] uppercase tracking-wide text-gray-300">{m.source}</span>
+                        <span className="text-[10px] uppercase tracking-wide text-gray-300">AI</span>
                       )}
                     </div>
                   )}
