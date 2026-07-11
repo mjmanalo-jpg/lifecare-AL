@@ -51,6 +51,9 @@ export async function scopeWhere(
   const uid = session.userId;
 
   if (session.role === "FAMILY" && uid) {
+    // Global app settings (assistant voice/personality…) are shared, non-sensitive
+    // config every portal reads live; writes remain staff-only via POST rules.
+    if (modelKey === "app-settings") return null;
     if (modelKey === "residents") return { sponsorId: uid };
     if (RESIDENT_SCOPED.has(modelKey)) {
       const ids = await sponsoredResidentIds(uid);
@@ -66,6 +69,7 @@ export async function scopeWhere(
   }
 
   if (session.role === "RESIDENT" && uid) {
+    if (modelKey === "app-settings") return null;
     if (modelKey === "residents") return { userId: uid };
     if (RESIDENT_SCOPED.has(modelKey)) {
       const id = await selfResidentId(uid);
@@ -163,6 +167,7 @@ export function scopeDemoRows(modelKey: string, rows: Row[], role: string, userI
     if (role === "FAMILY" || role === "RESIDENT") return getDemoNotificationsForRole(role);
     return userId ? rows.filter((n) => (n as { userId?: string }).userId === userId) : rows;
   }
+  if (modelKey === "app-settings") return rows; // global config — visible to all roles
   if (role !== "FAMILY" && role !== "RESIDENT") return rows;
   if (modelKey === "residents") return rows.filter((r) => r.id === DEMO_RESIDENT_ID);
   if (RESIDENT_SCOPED.has(modelKey) || modelKey === "payments") return rows.filter(belongsToDemoResident);
