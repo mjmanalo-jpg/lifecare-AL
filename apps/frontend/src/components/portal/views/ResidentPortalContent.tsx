@@ -38,6 +38,7 @@ import {
   MicOff,
   MessageCircle,
 } from "lucide-react";
+import Link from "next/link";
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
@@ -110,6 +111,8 @@ interface AIChatMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
+  /** Optional deep-link rendered as a button under the bubble (e.g. after the AI saves a visit). */
+  link?: { href: string; label: string };
 }
 
 export default function ResidentPortalContent({ tab }: ResidentPortalContentProps) {
@@ -153,6 +156,7 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
   // Auto-updating clock
   useEffect(() => {
@@ -242,6 +246,10 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
   useEffect(() => {
     return () => {
       recognitionRef.current?.stop();
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stream.getTracks().forEach((t) => t.stop());
+        mediaRecorderRef.current = null;
+      }
       if (audioRef.current) audioRef.current.pause();
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
@@ -532,6 +540,7 @@ Vitals:
       .map((m) => ({ role: m.role === "assistant" ? "model" : "user", text: m.text }));
 
     let reply = "";
+    let link: AIChatMessage["link"];
     try {
       const res = await fetch("/api/ai-assistant", {
         method: "POST",
@@ -540,11 +549,17 @@ Vitals:
       });
       const data = await res.json();
       reply = data.reply || "I am here, but I couldn't compute a reply. Let me call a caregiver if needed.";
+      // The AI saved something real (visit request, call bell) — offer a direct
+      // link so the resident can see it immediately.
+      const actions: { name: string; ok?: boolean }[] = Array.isArray(data.actions) ? data.actions : [];
+      if (actions.some((a) => a.name === "request_visit" && a.ok)) {
+        link = { href: "/resident/appointments", label: "View my appointments" };
+      }
     } catch {
       reply = "I couldn't reach my cloud companion service. Please check our network connection.";
     }
 
-    setAssistantMessages((prev) => [...prev, { id: `a-${Date.now()}`, role: "assistant", text: reply }]);
+    setAssistantMessages((prev) => [...prev, { id: `a-${Date.now()}`, role: "assistant", text: reply, ...(link ? { link } : {}) }]);
     setAssistantThinking(false);
 
     if (assistantAutoSpeak) {
@@ -625,8 +640,83 @@ Vitals:
     setAssistantSpeaking(false);
   };
 
-  // Speech-To-Text (Web Speech API Recognition)
-  const startSpeechToText = () => {
+  // ── Speech-To-Text ────────────────────────────────────────────────────────
+  // Cloud-first: record with MediaRecorder and let Gemini transcribe — it
+  // understands English, Tagalog, Cebuano/Bisaya, other dialects, and mixes.
+  // Browser SpeechRecognition (English-only) remains the fallback.
+  const blobToBase64 = (blob: Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(String(reader.result).split(",")[1] ?? "");
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+  const startCloudSTT = async (): Promise<boolean> => {
+    if (
+      typeof window === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia ||
+      typeof MediaRecorder === "undefined"
+    ) {
+      return false;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = MediaRecorder.isTypeSupported("audio/webm")
+        ? new MediaRecorder(stream, { mimeType: "audio/webm" })
+        : new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+      rec.ondataavailable = (e) => {
+        if (e.data.size) chunks.push(e.data);
+      };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        mediaRecorderRef.current = null;
+        setAssistantListening(false);
+        setInterimSpeech("");
+        const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+        if (blob.size < 2000) return; // accidental tap — nothing meaningful recorded
+        try {
+          setAssistantThinking(true);
+          const base64 = await blobToBase64(blob);
+          const res = await fetch("/api/ai-assistant", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "stt", audio: base64, mimeType: blob.type }),
+          });
+          const data = await res.json();
+          setAssistantThinking(false);
+          if (data.text?.trim()) {
+            handleSendAssistantMessage(data.text.trim());
+          } else if (data.fallback) {
+            startBrowserSTT(); // no cloud key — let the resident retry via browser STT
+          }
+        } catch {
+          setAssistantThinking(false);
+        }
+      };
+      mediaRecorderRef.current = rec;
+      setAssistantListening(true);
+      setInterimSpeech("Listening… tap the mic again when you're done");
+      rec.start();
+      // Safety net: stop automatically after 30 seconds.
+      setTimeout(() => {
+        if (mediaRecorderRef.current === rec && rec.state === "recording") rec.stop();
+      }, 30000);
+      return true;
+    } catch {
+      return false; // mic denied or unsupported — try the browser engine
+    }
+  };
+
+  const startSpeechToText = async () => {
+    stopTTS();
+    if (await startCloudSTT()) return;
+    startBrowserSTT();
+  };
+
+  // Browser Web Speech API fallback (English-only).
+  const startBrowserSTT = () => {
     if (typeof window === "undefined") return;
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
@@ -637,7 +727,6 @@ Vitals:
       });
       return;
     }
-    stopTTS();
     const recognition = new SR();
     recognitionRef.current = recognition;
     recognition.continuous = false;
@@ -678,6 +767,10 @@ Vitals:
   };
 
   const stopSpeechToText = () => {
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop(); // onstop transcribes + sends
+      return;
+    }
     recognitionRef.current?.stop();
     setAssistantListening(false);
   };
@@ -1666,11 +1759,21 @@ Vitals:
                 return (
                   <div key={m.id} className={`flex ${isAI ? "justify-start" : "justify-end"}`}>
                     <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
-                      isAI 
-                        ? "bg-white text-gray-900 border border-gray-100 rounded-tl-none" 
+                      isAI
+                        ? "bg-white text-gray-900 border border-gray-100 rounded-tl-none"
                         : "bg-blue-600 text-white rounded-tr-none font-medium"
                     }`}>
                       <p className="leading-relaxed">{m.text}</p>
+                      {m.link && (
+                        <Link
+                          href={m.link.href}
+                          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 active:scale-95 transition"
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                          {m.link.label}
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </Link>
+                      )}
                     </div>
                   </div>
                 );

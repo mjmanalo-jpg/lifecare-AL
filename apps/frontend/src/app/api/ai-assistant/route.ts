@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isDbConfigured } from "@/lib/models";
+import { getSession } from "@/lib/auth";
 import {
   ASSISTANT_CONFIG_KEY,
   TONE_STYLES,
@@ -93,6 +94,9 @@ function buildPersona(cfg: AssistantConfig, audience: string): string {
   return [
     who,
     `Personality: ${style}`,
+    "Always reply in the language the user is speaking — English, Tagalog, Cebuano/Bisaya, " +
+      "another Philippine dialect, or a natural mix (Taglish). Match their language and switch " +
+      "the moment they do.",
     cfg.useEmoji
       ? "A light sprinkle of friendly emoji is welcome — at most one per reply."
       : "Do not use emoji.",
@@ -108,6 +112,124 @@ function buildPersona(cfg: AssistantConfig, audience: string): string {
 interface ChatTurn {
   role: "user" | "model";
   text: string;
+}
+
+interface GeminiPart {
+  text?: string;
+  functionCall?: { name: string; args?: Record<string, unknown> };
+}
+
+// ── Resident actions (Gemini function calling) ─────────────────────────────
+// When a logged-in RESIDENT chats, the model gets real tools: asking for a
+// visit or for help doesn't just produce words — it writes the same Visit /
+// CallBell rows the portal forms create, so staff and family dashboards see
+// them in realtime through the existing live-query layer.
+const RESIDENT_TOOLS = [
+  {
+    functionDeclarations: [
+      {
+        name: "request_visit",
+        description:
+          "Save a visit request when the resident asks for a family member or friend to come " +
+          "visit. Resolve relative dates ('tomorrow', 'this Saturday afternoon') to an exact " +
+          "ISO 8601 date-time using the current date-time provided. If the resident says " +
+          "'my family' without a name, use the family sponsor from the resident context.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            visitorName: { type: "STRING", description: "The visitor's name" },
+            relationship: { type: "STRING", description: "Relationship to the resident (daughter, friend…)" },
+            checkInTime: { type: "STRING", description: "Requested visit date-time in ISO 8601" },
+            purpose: { type: "STRING", description: "Short purpose of the visit" },
+          },
+          required: ["visitorName", "checkInTime"],
+        },
+      },
+      {
+        name: "ring_call_bell",
+        description:
+          "Ring the staff call bell when the resident needs help, feels pain or unwell, or asks " +
+          "for assistance. Staff are notified immediately — use it for anything urgent.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            reason: { type: "STRING", description: "Why the resident needs help" },
+          },
+          required: ["reason"],
+        },
+      },
+    ],
+  },
+];
+
+/** The Resident.id behind the current session, only for RESIDENT logins. */
+async function residentIdForSession(): Promise<string | null> {
+  if (!isDbConfigured()) return null;
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "RESIDENT" || !session.userId) return null;
+    const row = await prisma.resident.findFirst({
+      where: { userId: session.userId },
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function executeResidentTool(
+  name: string,
+  args: Record<string, unknown>,
+  residentId: string
+): Promise<Record<string, unknown>> {
+  if (name === "request_visit") {
+    const when = new Date(String(args.checkInTime ?? ""));
+    if (isNaN(when.getTime())) {
+      return { ok: false, error: "Invalid date-time — ask the resident which day and time they want." };
+    }
+    const visit = await prisma.visit.create({
+      data: {
+        residentId,
+        visitorName: String(args.visitorName ?? "Family member"),
+        relationship: args.relationship ? String(args.relationship) : null,
+        purpose: args.purpose ? String(args.purpose) : "Requested via AI companion",
+        notes: "Requested through the AI companion chat",
+        checkInTime: when,
+      },
+    });
+    return { ok: true, visitId: visit.id, scheduledFor: when.toISOString() };
+  }
+
+  if (name === "ring_call_bell") {
+    const bell = await prisma.callBell.create({
+      data: { residentId, reason: String(args.reason ?? "Assistance requested via AI companion") },
+    });
+    // Notify staff — mirrors the /api/db call-bells auto-notification.
+    const resident = await prisma.resident.findUnique({
+      where: { id: residentId },
+      select: { firstName: true, lastName: true, roomNumber: true },
+    });
+    const staff = await prisma.user.findMany({
+      where: { role: { in: ["FACILITY_ADMIN", "NURSE", "CAREGIVER"] }, isActive: true },
+      select: { id: true },
+    });
+    const who = resident ? `${resident.firstName} ${resident.lastName}` : "A resident";
+    const room = resident ? `Room ${resident.roomNumber}` : "their room";
+    await prisma.notification.createMany({
+      data: staff.map((u) => ({
+        userId: u.id,
+        type: "CALL_BELL" as const,
+        title: `Call Bell: ${who}`,
+        message: `${who} in ${room} asked the AI companion for help: "${bell.reason}".`,
+        relatedEntityId: bell.id,
+        relatedEntityType: "CallBell",
+      })),
+    });
+    return { ok: true, callBellId: bell.id };
+  }
+
+  return { ok: false, error: `Unknown tool '${name}'` };
 }
 
 export async function POST(req: NextRequest) {
@@ -146,13 +268,22 @@ async function handleChat(body: Record<string, unknown>) {
   const context = String(body.context ?? "").slice(0, 24000);
   const history = Array.isArray(body.history) ? (body.history as ChatTurn[]) : [];
 
+  // Real actions are only armed for a verified RESIDENT session with a DB.
+  const residentId = audience === "resident" ? await residentIdForSession() : null;
+
   const systemInstruction =
     persona +
+    `\nCurrent date-time: ${new Date().toString()}` +
+    (residentId
+      ? "\nYou can take real actions with your tools: request_visit saves a visit request the " +
+        "staff and family can see; ring_call_bell alerts staff immediately. If the visitor name " +
+        "or day is unclear, ask one short follow-up question first, then call the tool."
+      : "") +
     (context
       ? `\n\n--- KNOWLEDGE BASE CONTEXT ---\n${context}\n--- END CONTEXT ---`
       : "");
 
-  const contents = [
+  const contents: Array<{ role: string; parts: Array<Record<string, unknown>> }> = [
     ...history
       .filter((t) => t && t.text)
       .slice(-12)
@@ -162,22 +293,70 @@ async function handleChat(body: Record<string, unknown>) {
 
   if (GEMINI_API_KEY) {
     try {
+      const requestBody = {
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        // Warmer tones benefit from a livelier sampling temperature.
+        generationConfig: {
+          maxOutputTokens: 800,
+          temperature: cfg.tone === "professional" ? 0.5 : 0.8,
+        },
+        ...(residentId ? { tools: RESIDENT_TOOLS } : {}),
+      };
       const res = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:generateContent`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          contents,
-          // Warmer tones benefit from a livelier sampling temperature.
-          generationConfig: {
-            maxOutputTokens: 800,
-            temperature: cfg.tone === "professional" ? 0.5 : 0.8,
-          },
-        }),
+        body: JSON.stringify({ ...requestBody, contents }),
       });
       if (res.ok) {
         const data = await res.json();
-        const reply = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text).join("") ?? "";
+        const parts: GeminiPart[] = data?.candidates?.[0]?.content?.parts ?? [];
+        const call = parts.find((p) => p.functionCall)?.functionCall;
+
+        // ── Tool call: execute for real, then let the model confirm naturally ──
+        if (call && residentId) {
+          let result: Record<string, unknown>;
+          try {
+            result = await executeResidentTool(call.name, call.args ?? {}, residentId);
+          } catch (err) {
+            result = { ok: false, error: (err as Error).message };
+          }
+          let reply = "";
+          try {
+            const followRes = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:generateContent`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+              body: JSON.stringify({
+                ...requestBody,
+                contents: [
+                  ...contents,
+                  { role: "model", parts: [{ functionCall: call }] },
+                  { role: "user", parts: [{ functionResponse: { name: call.name, response: result } }] },
+                ],
+              }),
+            });
+            if (followRes.ok) {
+              const followData = await followRes.json();
+              reply =
+                followData?.candidates?.[0]?.content?.parts
+                  ?.map((p: { text?: string }) => p.text)
+                  .join("") ?? "";
+            }
+          } catch {
+            /* fall through to templated confirmation */
+          }
+          if (!reply.trim()) {
+            reply = result.ok
+              ? "All done — I've saved that for you and the staff can see it now."
+              : "I'm sorry, I couldn't save that just now. Please try again or press the call bell for help.";
+          }
+          return NextResponse.json({
+            reply: reply.trim(),
+            source: "gemini",
+            actions: [{ name: call.name, ...result }],
+          });
+        }
+
+        const reply = parts.map((p) => p.text ?? "").join("");
         if (reply.trim()) {
           return NextResponse.json({ reply: reply.trim(), source: "gemini" });
         }
@@ -356,7 +535,12 @@ async function handleStt(body: Record<string, unknown>) {
         contents: [
           {
             parts: [
-              { text: "Transcribe this audio to plain text verbatim. Return only the transcription, no commentary." },
+              {
+                text:
+                  "Transcribe this audio to plain text verbatim, in its original language — " +
+                  "English, Tagalog, Cebuano/Bisaya, another Philippine dialect, or a mix. " +
+                  "Do not translate. Return only the transcription, no commentary.",
+              },
               { inlineData: { mimeType, data: audio } },
             ],
           },
