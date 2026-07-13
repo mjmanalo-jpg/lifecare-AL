@@ -28,6 +28,12 @@ import {
   TrendingUp,
   PenTool,
   Target,
+  Bus,
+  Car,
+  Route,
+  Wrench,
+  Fuel,
+  Utensils,
 } from "lucide-react";
 
 export type Role =
@@ -37,7 +43,8 @@ export type Role =
   | "NURSE"
   | "CAREGIVER"
   | "FAMILY"
-  | "RESIDENT";
+  | "RESIDENT"
+  | "FLEET_MANAGEMENT";
 
 export interface SidebarLink {
   name: string;
@@ -93,6 +100,14 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   notes: "Clinical Notes",
   vitals: "Vitals Trends",
   careteam: "Care Team",
+  requests: "Transport Requests",
+  trips: "Trip Board",
+  vehicles: "Vehicles",
+  drivers: "Drivers",
+  maintenance: "Maintenance",
+  fuel: "Fuel & Odometer",
+  transport: "Transport",
+  dining: "Dining & Compliance",
 };
 
 export const PATH_TO_ROLE: Record<string, Role> = {
@@ -105,6 +120,7 @@ export const PATH_TO_ROLE: Record<string, Role> = {
   facility_admin: "FACILITY_ADMIN",
   physician: "PHYSICIAN",
   resident: "RESIDENT",
+  fleet_management: "FLEET_MANAGEMENT",
 };
 
 export const ROLES: Record<Role, RoleDetails> = {
@@ -176,6 +192,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Alerts", icon: AlertTriangle, route: "/family/alerts" },
       { name: "Messages", icon: MessageSquare, route: "/family/messages" },
       { name: "Appointments", icon: Clock, route: "/family/appointments" },
+      { name: "Transport", icon: Bus, route: "/family/transport" },
       { name: "Billing", icon: DollarSign, route: "/family/expenses" },
     ],
   },
@@ -197,6 +214,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Inventory", icon: Package, route: "/facility_admin/inventory" },
       { name: "Reports", icon: FileText, route: "/facility_admin/reports" },
       { name: "Billing", icon: DollarSign, route: "/facility_admin/billing" },
+      { name: "Dining & Compliance", icon: Utensils, route: "/facility_admin/dining" },
     ],
   },
   PHYSICIAN: {
@@ -231,6 +249,25 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Daily Report", icon: CheckCircle, route: "/resident/report" },
       { name: "Messages", icon: MessageSquare, route: "/resident/messages" },
       { name: "Appointments", icon: Clock, route: "/resident/appointments" },
+      { name: "Transport", icon: Bus, route: "/resident/transport" },
+    ],
+  },
+  FLEET_MANAGEMENT: {
+    name: "Fleet Manager",
+    badge: "Fleet & Transport",
+    desc: "Dispatch resident transport, track live trips, and keep the vehicle fleet compliant and road-ready.",
+    icon: Bus,
+    profileName: "Marcus Dela Cruz",
+    basePath: "/fleet_management",
+    footerText: "Fleet & Transport Portal",
+    sidebarLinks: [
+      { name: "Fleet Dashboard", icon: Grid, route: "/fleet_management/dashboard" },
+      { name: "Transport Requests", icon: ClipboardList, route: "/fleet_management/requests" },
+      { name: "Trip Board", icon: Route, route: "/fleet_management/trips" },
+      { name: "Vehicles", icon: Car, route: "/fleet_management/vehicles" },
+      { name: "Drivers", icon: Users, route: "/fleet_management/drivers" },
+      { name: "Maintenance", icon: Wrench, route: "/fleet_management/maintenance" },
+      { name: "Fuel & Odometer", icon: Fuel, route: "/fleet_management/fuel" },
     ],
   },
 };
@@ -297,5 +334,14 @@ export const GLOBAL_FEATURES: Record<string, FeatureInfo> = {
   "Medical Records": { name: "Medical Records", icon: BookOpen, routeSegment: "records" },
   "Care Team": { name: "Care Team", icon: Stethoscope, routeSegment: "careteam" },
   "Care Goals": { name: "Care Goals", icon: Target, routeSegment: "goals" },
+  "Fleet Dashboard": { name: "Fleet Dashboard", icon: Grid, routeSegment: "dashboard" },
+  "Transport Requests": { name: "Transport Requests", icon: ClipboardList, routeSegment: "requests" },
+  "Trip Board": { name: "Trip Board", icon: Route, routeSegment: "trips" },
+  "Vehicles": { name: "Vehicles", icon: Car, routeSegment: "vehicles" },
+  "Drivers": { name: "Drivers", icon: Users, routeSegment: "drivers" },
+  "Maintenance": { name: "Maintenance", icon: Wrench, routeSegment: "maintenance" },
+  "Fuel & Odometer": { name: "Fuel & Odometer", icon: Fuel, routeSegment: "fuel" },
+  "Transport": { name: "Transport", icon: Bus, routeSegment: "transport" },
+  "Dining & Compliance": { name: "Dining & Compliance", icon: Utensils, routeSegment: "dining" },
 };
 

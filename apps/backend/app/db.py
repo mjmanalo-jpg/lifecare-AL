@@ -3,13 +3,10 @@ PostgreSQL + Supabase Database Configuration
 Async connection pool using asyncpg for FastAPI
 """
 
-import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import pool
-
-# Supabase PostgreSQL Connection
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://user:password@localhost:5432/assisted_living")
+from app.config import DATABASE_URL
 
 # Create async engine with connection pooling
 engine = create_async_engine(
@@ -17,6 +14,7 @@ engine = create_async_engine(
     echo=False,
     poolclass=pool.NullPool,  # Disable pooling for serverless environments (Cloud Run, Fargate)
     pool_pre_ping=True,  # Verify connections before use
+    connect_args={"statement_cache_size": 0},
 )
 
 # Create async session factory

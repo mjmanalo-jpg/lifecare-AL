@@ -26,6 +26,7 @@ async function seedUsers() {
     { email: "maria.santos@goldenhearth.com", name: "Maria Santos", role: "CAREGIVER", phone: "555-0103" },
     { email: "john.pendelton@family.com", name: "John Pendelton", role: "FAMILY", phone: "555-0200" },
     { email: "arthur.pendelton@resident.com", name: "Arthur Pendelton", role: "RESIDENT", phone: "555-0201" },
+    { email: "fleet.manager@goldenhearth.com", name: "Marcus Dela Cruz", role: "FLEET_MANAGEMENT", phone: "555-0400" },
   ];
   const out = {};
   for (const u of users) {
@@ -238,6 +239,11 @@ async function main() {
   addNotif(familyUser, "MEDICATION_REMINDER", "Medications Administered", "Head Nurse Sarah Jenkins successfully administered daily blood pressure pills.");
   addNotif(familyUser, "MESSAGE", "Daily Comfort Report", "Caleb Randall reports Arthur slept comfortably and participated in social games.");
 
+  const fleetUser = users["fleet.manager@goldenhearth.com"];
+  addNotif(fleetUser, "TRANSPORT_UPDATE", "New Transport Request", "Arthur Pendelton requested a dialysis run for tomorrow 8:00 AM — pending dispatcher review.");
+  addNotif(fleetUser, "SYSTEM_ALERT", "Registration Expiring", "Wheelchair Van WV-001 registration expires in 14 days. Renew to stay compliant.");
+  addNotif(fleetUser, "TASK_ASSIGNMENT", "Preventive Maintenance Due", "Sedan SD-001 passed its service interval — schedule preventive maintenance.");
+
   addNotif(residentUser, "TASK_ASSIGNMENT", "Physical Therapy Scheduled", "Your PT session with Caleb is scheduled for 2:00 PM today.");
   addNotif(residentUser, "MEDICATION_REMINDER", "Medications Reminder", "Afternoon pills are scheduled in 15 minutes.");
   addNotif(residentUser, "MESSAGE", "New Message from Sponsor", "John Pendelton shared a photo and message with your care dashboard.");
@@ -326,6 +332,96 @@ async function main() {
       publishedAt: daysAgo(1),
       published: true
     }
+  ]);
+
+  // ── Phase 6: Fleet & Transport ─────────────────────────────────────────────
+  const hoursFromNow = (n) => new Date(Date.now() + n * 3600 * 1000);
+
+  await seedIfEmpty("vehicle", () => [
+    { name: "Shuttle One", licensePlate: "SH-001", type: "SHUTTLE", status: "AVAILABLE", make: "Toyota", model: "Hiace GL", year: 2023, vin: "JTFHS02P500012345", capacity: 12, wheelchairCapacity: 0, odometer: 48230, fuelLevel: 82, insuranceProvider: "Malayan Insurance", insurancePolicyNumber: "MI-4821-FLT", insuranceExpiry: inDays(160), registrationExpiry: inDays(210), lastServiceDate: daysAgo(40), nextServiceDate: inDays(50), nextServiceOdometer: 53000, gpsDeviceId: "GPS-SH1" },
+    { name: "Wheelchair Van", licensePlate: "WV-001", type: "WHEELCHAIR_VAN", status: "AVAILABLE", make: "Ford", model: "Transit 350", year: 2022, vin: "1FTBW2CM6NKA23456", capacity: 6, wheelchairCapacity: 2, odometer: 61540, fuelLevel: 58, insuranceProvider: "Pioneer Insurance", insurancePolicyNumber: "PI-7734-FLT", insuranceExpiry: inDays(300), registrationExpiry: inDays(14), lastServiceDate: daysAgo(25), nextServiceDate: inDays(65), nextServiceOdometer: 66000, gpsDeviceId: "GPS-WV1", notes: "Lift inspected monthly." },
+    { name: "Ambulance Unit", licensePlate: "AMB-001", type: "AMBULANCE", status: "AVAILABLE", make: "Mercedes-Benz", model: "Sprinter 519", year: 2024, vin: "WDAPF4CC5N9723456", capacity: 3, wheelchairCapacity: 1, odometer: 21870, fuelLevel: 95, insuranceProvider: "Malayan Insurance", insurancePolicyNumber: "MI-9010-EMS", insuranceExpiry: inDays(25), registrationExpiry: inDays(320), lastServiceDate: daysAgo(15), nextServiceDate: inDays(75), nextServiceOdometer: 26000, gpsDeviceId: "GPS-AMB1", notes: "Stocked per EMS checklist." },
+    { name: "Sedan Escort", licensePlate: "SD-001", type: "SEDAN", status: "MAINTENANCE", make: "Toyota", model: "Camry", year: 2021, vin: "4T1BF1FK5MU123456", capacity: 4, wheelchairCapacity: 0, odometer: 88410, fuelLevel: 34, insuranceProvider: "Pioneer Insurance", insurancePolicyNumber: "PI-2210-FLT", insuranceExpiry: inDays(95), registrationExpiry: inDays(120), lastServiceDate: daysAgo(90), nextServiceDate: daysAgo(5), nextServiceOdometer: 88000, notes: "Brake pads replacement in progress." },
+  ]);
+
+  await seedIfEmpty("driver", () => [
+    { name: "James Miguel", phone: "555-0401", email: "james.miguel@goldenhearth.com", licenseNumber: "DLN-99882", licenseClass: "Professional B", licenseExpiry: inDays(400), certifications: "Wheelchair Transport, First Aid, Defensive Driving", certificationExpiry: inDays(180), safetyScore: 96, tripHours: 412.5, isActive: true, hireDate: daysAgo(900) },
+    { name: "Rosa Santos", phone: "555-0402", email: "rosa.santos@goldenhearth.com", licenseNumber: "DLN-99883", licenseClass: "Professional B", licenseExpiry: inDays(21), certifications: "Ambulance Operations, BLS, First Aid", certificationExpiry: inDays(90), safetyScore: 88, tripHours: 268.0, isActive: true, hireDate: daysAgo(600), notes: "License renewal filed." },
+    { name: "Eddie Ramos", phone: "555-0403", email: "eddie.ramos@goldenhearth.com", licenseNumber: "DLN-99884", licenseClass: "Non-Professional", licenseExpiry: inDays(700), certifications: "Defensive Driving", safetyScore: 71, tripHours: 96.5, isActive: false, hireDate: daysAgo(300), notes: "On leave; retraining scheduled." },
+  ]);
+
+  // Resolve fleet ids for relation seeding (works on fresh AND re-run seeds).
+  const vehByPlate = {};
+  for (const v of await prisma.vehicle.findMany()) vehByPlate[v.licensePlate] = v;
+  const drvByLicense = {};
+  for (const d of await prisma.driver.findMany()) drvByLicense[d.licenseNumber] = d;
+  const shuttle = vehByPlate["SH-001"];
+  const wcVan = vehByPlate["WV-001"];
+  const ambulance = vehByPlate["AMB-001"];
+  const sedan = vehByPlate["SD-001"];
+  const drvJames = drvByLicense["DLN-99882"];
+  const drvRosa = drvByLicense["DLN-99883"];
+
+  if (shuttle && wcVan && ambulance && drvJames && drvRosa) {
+    await seedIfEmpty("transportRequest", () => [
+      { residentId: R["302"].id, type: "MEDICAL_APPOINTMENT", destination: "St. Luke's Medical Center", purpose: "Endocrinology consult — diabetes review", requestedDate: hoursFromNow(24), returnRequired: true, escortRequired: true, escortRole: "NURSE", priority: "NORMAL", status: "PENDING", source: "PORTAL", notes: "Family requests morning slot." },
+      { residentId: R["302"].id, type: "DIALYSIS", destination: "St. Luke's Dialysis Center", purpose: "Recurring dialysis run", requestedDate: hoursAgo(1), returnRequired: true, wheelchairNeeded: true, escortRequired: true, escortRole: "NURSE", priority: "HIGH", status: "SCHEDULED", source: "FRONT_DESK", reviewedBy: "Dispatcher", reviewedAt: daysAgo(1) },
+      { residentId: R["310"].id, type: "MEDICAL_APPOINTMENT", destination: "Makati Medical Center", purpose: "Cardiology follow-up", requestedDate: hoursFromNow(4), returnRequired: true, priority: "NORMAL", status: "SCHEDULED", source: "AI_COMPANION", reviewedBy: "Dispatcher", reviewedAt: daysAgo(2) },
+      { residentId: R["308"].id, type: "THERAPY", destination: "Rehab Partners PT Clinic", purpose: "Post-surgery physical therapy", requestedDate: hoursFromNow(48), returnRequired: true, escortRequired: true, escortRole: "CAREGIVER", priority: "NORMAL", status: "APPROVED", source: "PORTAL", reviewedBy: "Dispatcher", reviewedAt: hoursAgo(5) },
+      { residentId: R["305"].id, type: "FAMILY_OUTING", destination: "SM Mall of Asia", purpose: "Family lunch", requestedDate: hoursFromNow(120), returnRequired: true, escortRequired: true, escortRole: "CAREGIVER", priority: "LOW", status: "DECLINED", source: "PORTAL", reviewedBy: "Dispatcher", reviewedAt: daysAgo(1), declineReason: "No caregiver escort available that afternoon; please rebook." },
+    ]);
+
+    // Link the dialysis request to its live trip + build the rest of the log.
+    const dialysisReq = await prisma.transportRequest.findFirst({ where: { type: "DIALYSIS", residentId: R["302"].id } });
+    const cardioReq = await prisma.transportRequest.findFirst({ where: { destination: "Makati Medical Center", residentId: R["310"].id } });
+
+    await seedIfEmpty("trip", () => [
+      { requestId: dialysisReq?.id ?? null, residentId: R["302"].id, vehicleId: wcVan.id, driverId: drvJames.id, escortName: "Sarah Jenkins", escortRole: "NURSE", status: "EN_ROUTE", destination: "St. Luke's Dialysis Center", scheduledAt: hoursAgo(1), departedAt: hoursAgo(0.4), distanceKm: 12.5, currentLat: 14.5591, currentLng: 121.0312, lastPingAt: new Date(), inspectionDone: true, inspectionChecklist: JSON.stringify([{ item: "Tires & wheels", ok: true }, { item: "Brakes", ok: true }, { item: "Lights & signals", ok: true }, { item: "Fuel level", ok: true }, { item: "Wheelchair lift & securement", ok: true }, { item: "Seatbelts & restraints", ok: true }, { item: "First-aid kit & O2", ok: true }, { item: "Interior sanitized", ok: true }]), familyNotified: true, charge: 60, notes: "Dialysis run — recurring Tue/Thu/Sat." },
+      { requestId: cardioReq?.id ?? null, residentId: R["310"].id, vehicleId: shuttle.id, driverId: drvRosa.id, status: "SCHEDULED", destination: "Makati Medical Center", scheduledAt: hoursFromNow(4), distanceKm: 9.8, charge: 75, notes: "Cardiology follow-up." },
+      { residentId: R["305"].id, vehicleId: shuttle.id, driverId: drvJames.id, escortName: "Caleb Randall", escortRole: "CAREGIVER", status: "COMPLETED", destination: "Luneta Park — Family Outing", scheduledAt: daysAgo(3), departedAt: daysAgo(3), arrivedAt: daysAgo(3), returnDepartedAt: daysAgo(3), completedAt: daysAgo(3), distanceKm: 18.2, inspectionDone: true, familyNotified: true, billed: true, charge: 50 },
+      { residentId: R["312"].id, vehicleId: ambulance.id, driverId: drvRosa.id, escortName: "Rebecca Wilson", escortRole: "NURSE", status: "COMPLETED", destination: "Philippine Heart Center — ER", scheduledAt: daysAgo(6), departedAt: daysAgo(6), arrivedAt: daysAgo(6), completedAt: daysAgo(6), distanceKm: 14.6, inspectionDone: true, familyNotified: true, billed: true, charge: 250, notes: "EMERGENCY transfer — AFib episode, stabilized." },
+    ]);
+
+    // Keep the wheelchair van marked ON_TRIP to match its live EN_ROUTE trip.
+    await prisma.vehicle.update({ where: { id: wcVan.id }, data: { status: "ON_TRIP" } });
+
+    await seedIfEmpty("vehicleMaintenance", () => [
+      { vehicleId: sedan.id, type: "REPAIR", status: "IN_PROGRESS", title: "Brake pads & rotor replacement", description: "Grinding noise reported; front brakes worn.", scheduledDate: daysAgo(1), odometerAt: 88410, cost: 340, vendor: "AutoCare Garage Makati", downtimeHours: 26 },
+      { vehicleId: shuttle.id, type: "PREVENTIVE", status: "SCHEDULED", title: "Preventive service — Shuttle One", description: "5,000 km interval: oil, filters, fluids, multi-point inspection.", scheduledDate: inDays(6), vendor: "Toyota Service Center" },
+      { vehicleId: wcVan.id, type: "INSPECTION", status: "COMPLETED", title: "Wheelchair lift monthly inspection", description: "Hydraulics, securement straps, and safety interlocks.", scheduledDate: daysAgo(9), completedDate: daysAgo(8), odometerAt: 61210, cost: 85, vendor: "MobilityPlus Service", downtimeHours: 3, notes: "Passed. Next check in 30 days." },
+      { vehicleId: ambulance.id, type: "PREVENTIVE", status: "COMPLETED", title: "Ambulance quarterly service", description: "Engine service + EMS equipment calibration.", scheduledDate: daysAgo(16), completedDate: daysAgo(15), odometerAt: 21400, cost: 520, vendor: "Mercedes-Benz Commercial", downtimeHours: 9 },
+    ]);
+
+    await seedIfEmpty("fuelLog", () => [
+      { vehicleId: wcVan.id, driverId: drvJames.id, logDate: hoursAgo(12), odometer: 61540, liters: 42.3, cost: 2620, fuelType: "Diesel" },
+      { vehicleId: shuttle.id, driverId: drvRosa.id, logDate: daysAgo(2), odometer: 48230, liters: 55.0, cost: 3410, fuelType: "Diesel" },
+      { vehicleId: wcVan.id, driverId: drvJames.id, logDate: daysAgo(6), odometer: 61180, liters: 40.1, cost: 2480, fuelType: "Diesel" },
+      { vehicleId: ambulance.id, driverId: drvRosa.id, logDate: daysAgo(8), odometer: 21870, liters: 48.6, cost: 3010, fuelType: "Diesel", notes: "Post-emergency refill." },
+      { vehicleId: shuttle.id, driverId: drvJames.id, logDate: daysAgo(9), odometer: 47820, liters: 52.4, cost: 3250, fuelType: "Diesel" },
+    ]);
+
+    console.log("  • fleet: vehicles, drivers, requests, trips, maintenance, fuel logs ready");
+  }
+
+  // Seed dining/menu data
+  await seedIfEmpty("dailyMenu", () => [
+    { mealType: "BREAKFAST", name: "Oatmeal with Fresh Berries", description: "Warm organic rolled oats topped with fresh blueberries, strawberries, and a drizzle of honey.", dietaryTags: "Low Sodium,High Fiber", menuDate: new Date() },
+    { mealType: "LUNCH", name: "Grilled Herb Salmon", description: "Wild-caught salmon fillet grilled with garlic herbs, served with asparagus and brown rice.", dietaryTags: "Diabetic Friendly,Low Sodium,High Protein", menuDate: new Date() },
+    { mealType: "DINNER", name: "Roasted Turkey Breast", description: "Slices of tender roasted turkey breast with steamed broccoli and mashed sweet potatoes.", dietaryTags: "Low Fat,High Protein", menuDate: new Date() },
+  ]);
+
+  // Seed dietitian consults
+  if (R["302"] && R["305"]) {
+    await seedIfEmpty("dietitianConsult", () => [
+      { residentId: R["302"].id, dietitianName: "Clara Vance, RD, LDN", reason: "Resident exhibits consistent elevated fasting blood glucose levels; requires carbohydrate-controlled meal alignment.", recommendations: "Limit simple carbohydrates. Restrict fruit juices. Focus on complex carbs with high fiber. Introduce a late-night high-protein snack.", status: "COMPLETED", consultDate: daysAgo(5) },
+      { residentId: R["305"].id, dietitianName: "Clara Vance, RD, LDN", reason: "Difficulty chewing and swallowing dry meats during dinner service.", recommendations: "Recommend transitional mechanical soft diet or pureed meat dishes with broth/gravy to prevent choking hazard.", status: "PENDING", consultDate: daysAgo(2) }
+    ]);
+  }
+
+  // Seed compliance logs
+  await seedIfEmpty("foodComplianceLog", () => [
+    { title: "Weekly HACCP Kitchen Inspection", category: "SANITATION", status: "COMPLIANT", score: 98, auditedBy: "Facility Admin", auditDate: daysAgo(4), details: "All stainless steel prep surfaces fully sanitized. Dishwasher temp reaching sanitizing threshold (82°C). Allergen separation protocols active." },
+    { title: "Walk-in Cooler Thermostat Calibration Audit", category: "TEMPERATURE", status: "COMPLIANT", score: 100, auditedBy: "Facility Admin", auditDate: daysAgo(7), details: "Cooler temperature checked against master probe. Re-calibrated to steady 3.8°C. Dry storage humidity logged at 45%." }
   ]);
 
   console.log("Seed complete.");

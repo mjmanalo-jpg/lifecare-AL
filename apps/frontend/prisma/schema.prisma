@@ -25,6 +25,7 @@ enum Role {
   CAREGIVER
   FAMILY
   RESIDENT
+  FLEET_MANAGEMENT
 }
 
 enum CareLevel {
@@ -120,6 +121,7 @@ enum NotificationType {
   MESSAGE
   SHIFT_REMINDER
   SYSTEM_ALERT
+  TRANSPORT_UPDATE
 }
 
 enum AttendanceStatus {
@@ -207,6 +209,11 @@ model Resident {
   admission           Admission?     @relation("AdmissionResident")
   serviceCharges      ServiceCharge[]
   insuranceValidations InsuranceValidation[]
+  transportRequests   TransportRequest[]
+  trips               Trip[]
+  goals               ResidentGoal[]
+  medicationLogs      MedicationLog[]
+  dietitianConsults   DietitianConsult[]
 
   @@index([careLevel])
   @@index([roomNumber])
@@ -305,12 +312,45 @@ model Medication {
   reason            String?
   sideEffects       String?
   contraindications String?
+  complianceRecords  MedicationLog[]
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
   @@index([residentId])
   @@index([status])
   @@index([startDate])
+}
+
+// Resident self-care goals (daily checklist + custom goals)
+model ResidentGoal {
+  id            String   @id @default(uuid())
+  residentId    String
+  resident      Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  isCompleted   Boolean  @default(false)
+  isCustom      Boolean  @default(false)
+  goalDate      DateTime @default(now())
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([residentId, goalDate])
+  @@index([isCompleted])
+}
+
+// Medication compliance log (tracks when resident confirms taking medication)
+model MedicationLog {
+  id            String     @id @default(uuid())
+  residentId    String
+  resident      Resident   @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  medicationId  String
+  medication    Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  takenAt       DateTime   @default(now())
+  createdAt     DateTime   @default(now())
+
+  @@index([residentId, takenAt])
+  @@index([medicationId])
 }
 
 // Task management
@@ -784,6 +824,257 @@ model SiteContent {
   updatedAt DateTime @updatedAt
 }
 
+// ============================================================================
+// PHASE 6 — FLEET & TRANSPORT MANAGEMENT
+// ============================================================================
+// Resident transport workflow: request → dispatcher review → vehicle/driver/
+// escort assignment → pre-trip inspection → live GPS trip → drop-off → trip log
+// → billable ServiceCharge. Plus the maintenance & compliance loop (odometer,
+// fuel, insurance/registration alerts, preventive schedule, work orders).
+
+enum VehicleType {
+  SHUTTLE
+  WHEELCHAIR_VAN
+  AMBULANCE
+  SEDAN
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  ON_TRIP
+  MAINTENANCE
+  OUT_OF_SERVICE
+}
+
+enum TransportRequestType {
+  MEDICAL_APPOINTMENT
+  DIALYSIS
+  THERAPY
+  FAMILY_OUTING
+  EMERGENCY_TRANSFER
+  OTHER
+}
+
+enum TransportRequestStatus {
+  PENDING
+  APPROVED
+  SCHEDULED
+  DECLINED
+  COMPLETED
+  CANCELLED
+}
+
+enum TransportPriority {
+  LOW
+  NORMAL
+  HIGH
+  EMERGENCY
+}
+
+enum TripStatus {
+  SCHEDULED
+  INSPECTION
+  EN_ROUTE
+  ARRIVED
+  RETURNING
+  COMPLETED
+  CANCELLED
+}
+
+enum MaintenanceType {
+  PREVENTIVE
+  REPAIR
+  INSPECTION
+}
+
+enum MaintenanceStatus {
+  SCHEDULED
+  OPEN
+  IN_PROGRESS
+  AWAITING_PARTS
+  COMPLETED
+  CANCELLED
+}
+
+model Vehicle {
+  id                    String        @id @default(uuid())
+  name                  String
+  licensePlate          String        @unique
+  type                  VehicleType   @default(SHUTTLE)
+  status                VehicleStatus @default(AVAILABLE)
+  make                  String?
+  model                 String?
+  year                  Int?
+  vin                   String?
+  capacity              Int           @default(4)
+  wheelchairCapacity    Int           @default(0)
+  odometer              Int           @default(0)
+  fuelLevel             Int           @default(100) // percent
+  insuranceProvider     String?
+  insurancePolicyNumber String?
+  insuranceExpiry       DateTime?
+  registrationExpiry    DateTime?
+  lastServiceDate       DateTime?
+  nextServiceDate       DateTime?
+  nextServiceOdometer   Int?
+  gpsDeviceId           String?
+  notes                 String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  trips             Trip[]
+  maintenanceOrders VehicleMaintenance[]
+  fuelLogs          FuelLog[]
+
+  @@index([status])
+  @@index([type])
+  @@index([licensePlate])
+  @@index([insuranceExpiry])
+  @@index([registrationExpiry])
+}
+
+model Driver {
+  id                  String    @id @default(uuid())
+  name                String
+  phone               String?
+  email               String?
+  licenseNumber       String
+  licenseClass        String?
+  licenseExpiry       DateTime?
+  // Comma-separated certifications, e.g. "Wheelchair Transport, First Aid, BLS"
+  certifications      String?
+  certificationExpiry DateTime?
+  safetyScore         Float     @default(100)
+  tripHours           Float     @default(0)
+  isActive            Boolean   @default(true)
+  avatarUrl           String?
+  hireDate            DateTime?
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  trips    Trip[]
+  fuelLogs FuelLog[]
+
+  @@index([isActive])
+  @@index([licenseExpiry])
+}
+
+model TransportRequest {
+  id              String                 @id @default(uuid())
+  residentId      String
+  resident        Resident               @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  type            TransportRequestType   @default(MEDICAL_APPOINTMENT)
+  destination     String
+  purpose         String?
+  requestedDate   DateTime
+  returnRequired  Boolean                @default(true)
+  wheelchairNeeded Boolean               @default(false)
+  escortRequired  Boolean                @default(false)
+  escortRole      String? // NURSE | CAREGIVER
+  priority        TransportPriority      @default(NORMAL)
+  status          TransportRequestStatus @default(PENDING)
+  source          String                 @default("PORTAL") // PORTAL | AI_COMPANION | FRONT_DESK
+  notes           String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  declineReason   String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  trip Trip?
+
+  @@index([residentId])
+  @@index([status])
+  @@index([priority])
+  @@index([requestedDate])
+}
+
+model Trip {
+  id                  String            @id @default(uuid())
+  requestId           String?           @unique
+  request             TransportRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  residentId          String
+  resident            Resident          @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  vehicleId           String?
+  vehicle             Vehicle?          @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  driverId            String?
+  driver              Driver?           @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  escortName          String?
+  escortRole          String? // NURSE | CAREGIVER
+  status              TripStatus        @default(SCHEDULED)
+  destination         String
+  origin              String            @default("Golden Hearth Facility")
+  scheduledAt         DateTime
+  departedAt          DateTime?
+  arrivedAt           DateTime?
+  returnDepartedAt    DateTime?
+  completedAt         DateTime?
+  distanceKm          Float?
+  // Live GPS ping — updated in transit; realtime subscribers re-render the map.
+  currentLat          Float?
+  currentLng          Float?
+  lastPingAt          DateTime?
+  inspectionDone      Boolean           @default(false)
+  // JSON array of { item: string, ok: boolean } for the pre-trip safety checklist.
+  inspectionChecklist String?           @db.Text
+  familyNotified      Boolean           @default(false)
+  billed              Boolean           @default(false)
+  charge              Float?
+  notes               String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([residentId])
+  @@index([vehicleId])
+  @@index([driverId])
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+model VehicleMaintenance {
+  id            String            @id @default(uuid())
+  vehicleId     String
+  vehicle       Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  type          MaintenanceType   @default(PREVENTIVE)
+  status        MaintenanceStatus @default(SCHEDULED)
+  title         String
+  description   String?
+  scheduledDate DateTime?
+  completedDate DateTime?
+  odometerAt    Int?
+  cost          Float?
+  vendor        String?
+  downtimeHours Float?
+  notes         String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([vehicleId])
+  @@index([status])
+  @@index([type])
+  @@index([scheduledDate])
+}
+
+model FuelLog {
+  id        String   @id @default(uuid())
+  vehicleId String
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  driverId  String?
+  driver    Driver?  @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  logDate   DateTime @default(now())
+  odometer  Int
+  liters    Float
+  cost      Float
+  fuelType  String   @default("Diesel")
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vehicleId])
+  @@index([logDate])
+}
+
 // Custom navigation pages created by the Super Admin. Published pages appear
 // in the landing-page navbar and are routed to /page/:slug.
 model CustomPage {
@@ -804,4 +1095,54 @@ model CustomPage {
   @@index([published])
   @@index([pagePurpose])
   @@index([parcelType])
+}
+
+// Daily dining menu (breakfast/lunch/dinner)
+model DailyMenu {
+  id            String   @id @default(uuid())
+  mealType      String            // BREAKFAST, LUNCH, DINNER
+  name          String
+  description   String?  @db.Text
+  dietaryTags   String?           // comma-separated: "Low Sodium,High Protein"
+  imageUrl      String?
+  menuDate      DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([menuDate])
+  @@index([mealType])
+}
+
+model DietitianConsult {
+  id              String           @id @default(uuid())
+  residentId      String
+  resident        Resident         @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  dietitianName   String
+  consultDate     DateTime         @default(now())
+  reason          String           @db.Text
+  recommendations String           @db.Text
+  status          String           @default("COMPLETED") // PENDING | COMPLETED
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([residentId])
+  @@index([status])
+}
+
+model FoodComplianceLog {
+  id            String             @id @default(uuid())
+  title         String
+  category      String             // TEMPERATURE | SANITATION | ALLERGEN | SOURCING
+  status        String             // COMPLIANT | NON_COMPLIANT | WARNING
+  score         Int
+  auditedBy     String
+  auditDate     DateTime           @default(now())
+  details       String?            @db.Text
+  checklistJson String?            @db.Text
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([category])
+  @@index([status])
+  @@index([auditDate])
 }

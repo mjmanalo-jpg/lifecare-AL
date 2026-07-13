@@ -119,7 +119,7 @@ export async function POST(
   // Self-service roles (FAMILY/RESIDENT) may only create the records their portal
   // legitimately produces (messages to staff, visit requests). Rest is staff-only.
   const SELF_SERVICE = role === "FAMILY" || role === "RESIDENT";
-  const SELF_WRITABLE = new Set(["messages", "visits", "call-bells", "tasks"]);
+  const SELF_WRITABLE = new Set(["messages", "visits", "call-bells", "tasks", "transport-requests", "resident-goals", "medication-logs"]);
   if (SELF_SERVICE && !SELF_WRITABLE.has(model)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -334,6 +334,36 @@ function getSeedsForRole(role: string, userId: string) {
           updatedAt: getPastTime(5 * H),
         },
       ];
+    case "FLEET_MANAGEMENT":
+      return [
+        {
+          userId,
+          type: "TRANSPORT_UPDATE" as const,
+          title: "New Transport Request",
+          message: "Arthur Pendelton requested a dialysis run for tomorrow 8:00 AM — pending dispatcher review.",
+          isRead: false,
+          createdAt: getPastTime(12 * 1000),
+          updatedAt: getPastTime(12 * 1000),
+        },
+        {
+          userId,
+          type: "SYSTEM_ALERT" as const,
+          title: "Registration Expiring",
+          message: "Wheelchair Van WV-001 registration expires in 14 days. Renew to stay compliant.",
+          isRead: false,
+          createdAt: getPastTime(3 * H),
+          updatedAt: getPastTime(3 * H),
+        },
+        {
+          userId,
+          type: "TASK_ASSIGNMENT" as const,
+          title: "Preventive Maintenance Due",
+          message: "Shuttle SH-001 hits its 5,000 km service interval this week.",
+          isRead: true,
+          createdAt: getPastTime(1 * D),
+          updatedAt: getPastTime(1 * D),
+        },
+      ];
     case "RESIDENT":
       return [
         {
@@ -478,7 +508,63 @@ async function handleAutoNotification(model: string, data: any) {
       });
     }
 
-    // 5. Vitals Trigger
+    // 5. Transport Requests Trigger — alert dispatchers (fleet + facility admin)
+    if (model === "transport-requests") {
+      const dispatchUsers = await prisma.user.findMany({
+        where: {
+          role: { in: ["FLEET_MANAGEMENT", "FACILITY_ADMIN"] },
+          isActive: true,
+        },
+        select: { id: true },
+      });
+
+      const resident = await prisma.resident.findUnique({
+        where: { id: data.residentId },
+        select: { firstName: true, lastName: true },
+      });
+      const name = resident ? `${resident.firstName} ${resident.lastName}` : "A resident";
+      const isEmergency = data.priority === "EMERGENCY" || data.type === "EMERGENCY_TRANSFER";
+
+      await prisma.notification.createMany({
+        data: dispatchUsers.map((u) => ({
+          userId: u.id,
+          type: "TRANSPORT_UPDATE" as const,
+          title: isEmergency
+            ? `EMERGENCY Transport: ${name}`
+            : `New Transport Request: ${name}`,
+          message: `${name} requested ${String(data.type || "transport").replace(/_/g, " ").toLowerCase()} to "${data.destination}" — pending dispatcher review.`,
+          relatedEntityId: data.id,
+          relatedEntityType: "TransportRequest",
+        })),
+      });
+    }
+
+    // 6. Trips Trigger — notify the resident's sponsor + resident login of the schedule
+    if (model === "trips") {
+      const resident = await prisma.resident.findUnique({
+        where: { id: data.residentId },
+        select: { firstName: true, lastName: true, sponsorId: true, userId: true },
+      });
+      if (resident) {
+        const name = `${resident.firstName} ${resident.lastName}`;
+        const recipients = [resident.sponsorId, resident.userId].filter(Boolean) as string[];
+        if (recipients.length) {
+          const when = data.scheduledAt ? new Date(data.scheduledAt).toLocaleString() : "soon";
+          await prisma.notification.createMany({
+            data: recipients.map((uid) => ({
+              userId: uid,
+              type: "TRANSPORT_UPDATE" as const,
+              title: `Transport Scheduled: ${name}`,
+              message: `A trip to "${data.destination}" has been scheduled for ${when}. You'll be notified when the vehicle departs.`,
+              relatedEntityId: data.id,
+              relatedEntityType: "Trip",
+            })),
+          });
+        }
+      }
+    }
+
+    // 7. Vitals Trigger
     if (model === "vitals") {
       const staffUsers = await prisma.user.findMany({
         where: {

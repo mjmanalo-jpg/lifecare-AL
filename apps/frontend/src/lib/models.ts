@@ -41,9 +41,20 @@ export const MODELS: Record<string, ModelDef> = {
   "service-charges": { delegate: prisma.serviceCharge, table: "ServiceCharge", orderBy: { serviceDate: "desc" } },
   "insurance-validations": { delegate: prisma.insuranceValidation, table: "InsuranceValidation", orderBy: { createdAt: "desc" } },
   payments: { delegate: prisma.payment, table: "Payment", orderBy: { paymentDate: "desc" } },
+  vehicles: { delegate: prisma.vehicle, table: "Vehicle", orderBy: { name: "asc" } },
+  drivers: { delegate: prisma.driver, table: "Driver", orderBy: { name: "asc" } },
+  "transport-requests": { delegate: prisma.transportRequest, table: "TransportRequest", orderBy: { requestedDate: "desc" } },
+  trips: { delegate: prisma.trip, table: "Trip", orderBy: { scheduledAt: "desc" } },
+  "vehicle-maintenance": { delegate: prisma.vehicleMaintenance, table: "VehicleMaintenance", orderBy: { scheduledDate: "desc" } },
+  "fuel-logs": { delegate: prisma.fuelLog, table: "FuelLog", orderBy: { logDate: "desc" } },
   "blog-posts": { delegate: prisma.blogPost, table: "BlogPost", orderBy: { publishedAt: "desc" } },
   "site-content": { delegate: prisma.siteContent, table: "SiteContent", orderBy: { id: "asc" } },
   "custom-pages": { delegate: prisma.customPage, table: "CustomPage", orderBy: { sortOrder: "asc" } },
+  "resident-goals": { delegate: prisma.residentGoal, table: "ResidentGoal", orderBy: { createdAt: "desc" } },
+  "medication-logs": { delegate: prisma.medicationLog, table: "MedicationLog", orderBy: { takenAt: "desc" } },
+  "daily-menus": { delegate: prisma.dailyMenu, table: "DailyMenu", orderBy: { menuDate: "desc" } },
+  "dietitian-consults": { delegate: prisma.dietitianConsult, table: "DietitianConsult", orderBy: { consultDate: "desc" } },
+  "food-compliance-logs": { delegate: prisma.foodComplianceLog, table: "FoodComplianceLog", orderBy: { auditDate: "desc" } },
 };
 
 export function getModel(key: string): ModelDef | undefined {
@@ -56,6 +67,11 @@ export function getModel(key: string): ModelDef | undefined {
  * routes serve demo data so the portals are fully populated instead of erroring.
  */
 export function isDbConfigured(): boolean {
-  const url = process.env.DATABASE_URL;
-  return Boolean(url) && !url.includes("<");
+  let url = process.env.DATABASE_URL;
+  if (!url) return false;
+  url = url.trim();
+  if ((url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'"))) {
+    url = url.slice(1, -1).trim();
+  }
+  return (url.startsWith("postgresql://") || url.startsWith("postgres://")) && !url.includes("<");
 }

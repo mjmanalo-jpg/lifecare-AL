@@ -25,6 +25,7 @@ import {
   MessageSquare,
   Clock,
   Zap,
+  Bus,
 } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -531,6 +532,8 @@ export default function PortalShell({
                               return <MessageSquare className="w-4 h-4 text-blue-500" />;
                             case "SHIFT_REMINDER":
                               return <Clock className="w-4 h-4 text-indigo-500" />;
+                            case "TRANSPORT_UPDATE":
+                              return <Bus className="w-4 h-4 text-cyan-500" />;
                             case "SYSTEM_ALERT":
                             default:
                               return <Zap className="w-4 h-4 text-teal-500" />;
@@ -553,6 +556,8 @@ export default function PortalShell({
                               return "bg-blue-50 dark:bg-blue-950/30";
                             case "SHIFT_REMINDER":
                               return "bg-indigo-50 dark:bg-indigo-950/30";
+                            case "TRANSPORT_UPDATE":
+                              return "bg-cyan-50 dark:bg-cyan-950/30";
                             case "SYSTEM_ALERT":
                             default:
                               return "bg-teal-50 dark:bg-teal-950/30";

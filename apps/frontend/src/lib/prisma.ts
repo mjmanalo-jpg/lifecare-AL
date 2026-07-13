@@ -1,5 +1,22 @@
 import { PrismaClient } from "@prisma/client";
 
+// Clean up environment variables to resolve Vercel double quotes or spaces issues
+if (process.env.DATABASE_URL) {
+  let url = process.env.DATABASE_URL.trim();
+  if ((url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'"))) {
+    url = url.slice(1, -1).trim();
+  }
+  process.env.DATABASE_URL = url;
+}
+
+if (process.env.DIRECT_URL) {
+  let url = process.env.DIRECT_URL.trim();
+  if ((url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'"))) {
+    url = url.slice(1, -1).trim();
+  }
+  process.env.DIRECT_URL = url;
+}
+
 /**
  * Prisma singleton. In dev, Next.js hot-reload would otherwise spawn a new
  * client (and a new connection pool) on every reload, exhausting Supabase's

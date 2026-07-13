@@ -2,11 +2,31 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Assisted Living Facility Management System — Flowchart Blueprint</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { font-family: Arial, Helvetica, sans-serif; }
   @page { size: Letter; margin: 0; }
+
+  /* ── Canvas Layout & Canvas Shadows ── */
+  body {
+    background: #0b0f19;
+    color: #334155;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 84px; /* Space for sticky header */
+  }
+
+  .blueprint-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    padding: 20px 0;
+  }
 
   .page {
     width: 8.5in; height: 11in;
@@ -14,6 +34,10 @@
     position: relative;
     overflow: hidden;
     background: #f7f9fc;
+    margin-bottom: 30px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
   }
   .page:last-child { page-break-after: auto; }
 
@@ -114,9 +138,144 @@
   }
   .twocol { display: flex; gap: 36px; }
   .twocol > div { flex: 1; }
+
+  /* Sticky Toolbar */
+  .toolbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  }
+
+  .toolbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  
+  .toolbar-brand h2 {
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  .toolbar-brand span {
+    font-size: 10px;
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+  }
+
+  .toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .zoom-indicator {
+    font-size: 12px;
+    color: #94a3b8;
+    font-weight: 600;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  }
+
+  .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  }
+
+  .btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2);
+  }
+
+  /* Print Override Styles */
+  @media print {
+    body {
+      background: #fff !important;
+      padding-top: 0 !important;
+      min-height: 0 !important;
+    }
+    .no-print {
+      display: none !important;
+    }
+    .blueprint-container {
+      padding: 0 !important;
+      margin: 0 !important;
+      display: block !important;
+    }
+    .page {
+      margin: 0 !important;
+      box-shadow: none !important;
+      border: none !important;
+      border-radius: 0 !important;
+      transform: none !important;
+      width: 8.5in !important;
+      height: 11in !important;
+      page-break-after: always !important;
+    }
+    .page:last-child {
+      page-break-after: avoid !important;
+    }
+  }
 </style>
 </head>
 <body>
+
+<header class="toolbar no-print">
+  <div class="toolbar-brand">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: #60a5fa;"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="M12 6v6l4 2"></path></svg>
+    <h2>GOLDEN HEARTH</h2>
+    <span>Flowchart Blueprint</span>
+  </div>
+  <div class="toolbar-actions">
+    <div id="zoomText" class="zoom-indicator">Scale: 100%</div>
+    <button onclick="window.print()" class="btn">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+      Export PDF
+    </button>
+  </div>
+</header>
+
+<div class="blueprint-container">
 
 <!-- ═══════════════ PAGE 1 — COVER ═══════════════ -->
 <div class="page cover">
@@ -132,12 +291,12 @@
   <div class="phase-row"><div class="tag">PHASE 4</div><div class="body"><b>Billing &amp; Portal Services</b><span>Clinical charges recording, automated billing, financial reporting, and client portals.</span></div></div>
   <div class="phase-row"><div class="tag">PHASE 5</div><div class="body"><b>Discharge &amp; Analytics</b><span>System dashboard telemetry, clinical discharge protocol, and patient record archiving.</span></div></div>
   <div class="phase-row"><div class="tag">PHASE 6</div><div class="body"><b>Fleet &amp; Transport Management</b><span>Transport requests, dispatch, vehicle &amp; driver assignment, GPS trips, and fleet maintenance.</span></div></div>
-  <div class="phase-row"><div class="tag">PHASE 7</div><div class="body"><b>Hospitality &amp; Property Management (PMS)</b><span>World-class hotel operations: front desk &amp; guest management, housekeeping &amp; maintenance, aircon/HVAC service, engagement, and occupancy analytics.</span></div></div>
+  <div class="phase-row"><div class="tag">PHASE 7</div><div class="body"><b>Hospitality &amp; Property Management (PMS)</b><span>World-class hotel operations: front desk &amp; guest management, housekeeping &amp; maintenance, aircon/HVAC service, engagement, dining compliance &amp; dietitian registry, and occupancy analytics.</span></div></div>
 
   <div class="phase-row"><div class="tag">ROLES</div><div class="body"><b>Role-Specific Portal Flowcharts</b><span>Step-by-step flow for each of the 7 user portals: Super Admin, Facility Admin, Physician, Nurse, Caregiver, Family, Resident.</span></div></div>
 
   <div class="cover-foot">
-    <div>Version: 5.4.0 (HARDENED)<span class="glory">All for the glory of the mighty name of the Lord Jesus Christ!</span></div>
+    <div>Version: 5.5.0 (DIETARY ALIGNMENT)<span class="glory">All for the glory of the mighty name of the Lord Jesus Christ!</span></div>
     <div>Date: July 2026</div>
   </div>
 </div>
@@ -545,6 +704,7 @@
           </div>
           <div class="split" style="margin-top: 8px;">
             <div class="branch"><div class="node amber">Inventory<br><span style="font-weight:600; font-size:9.5px;">Medication · Supplies</span></div></div>
+            <div class="branch"><div class="node teal">Dining &amp; Compliance<br><span style="font-weight:600; font-size:9.5px;">Food Safety · Dietitian · Cuisine</span></div></div>
             <div class="branch"><div class="node red">Incidents Review</div></div>
           </div>
           <div class="stem arrow" style="margin-top: 8px;"></div>
@@ -706,6 +866,42 @@
   </div>
   <div class="footer">Assisted Living Facility Management System<span class="pg">Page 12 of 12</span><br>All for the glory of the mighty name of the Lord Jesus Christ!</div>
 </div>
+
+</div> <!-- Close blueprint-container -->
+
+<script>
+  function resizePages() {
+    const pages = document.querySelectorAll('.page');
+    const viewportWidth = window.innerWidth;
+    const pageOriginalWidth = 816; // 8.5in * 96px = 816px
+    const pageOriginalHeight = 1056; // 11in * 96px = 1056px
+    const zoomText = document.getElementById('zoomText');
+    
+    // Check if we need to scale down to fit viewport
+    if (viewportWidth < pageOriginalWidth + 40) {
+      const scale = (viewportWidth - 40) / pageOriginalWidth;
+      const zoomPct = Math.round(scale * 100);
+      if (zoomText) zoomText.innerText = `Scale: ${zoomPct}%`;
+      
+      pages.forEach(page => {
+        page.style.transform = `scale(${scale})`;
+        page.style.transformOrigin = 'top center';
+        // Pull subsequent pages up so there's no massive gap due to transform scaling
+        page.style.marginBottom = `${-(pageOriginalHeight * (1 - scale)) + 20}px`;
+      });
+    } else {
+      if (zoomText) zoomText.innerText = 'Scale: 100%';
+      pages.forEach(page => {
+        page.style.transform = '';
+        page.style.transformOrigin = '';
+        page.style.marginBottom = '';
+      });
+    }
+  }
+
+  window.addEventListener('resize', resizePages);
+  window.addEventListener('load', resizePages);
+</script>
 
 </body>
 </html>

@@ -11,6 +11,7 @@ import FamilyMessages from "@/components/portal/views/family/FamilyMessages";
 import FamilyAppointments from "@/components/portal/views/family/FamilyAppointments";
 import FamilyBilling from "@/components/portal/views/family/FamilyBilling";
 import FamilyPhotos from "@/components/portal/views/family/FamilyPhotos";
+import MyTransport from "@/components/portal/views/fleet/MyTransport";
 
 interface FamilyPortalContentProps {
   tab: string;
@@ -43,6 +44,8 @@ export default function FamilyPortalContent({ tab }: FamilyPortalContentProps) {
       return <FamilyBilling />;
     case "photos":
       return <FamilyPhotos />;
+    case "transport":
+      return <MyTransport />;
     default:
       return <FamilyDashboard />;
   }

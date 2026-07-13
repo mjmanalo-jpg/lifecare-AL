@@ -18,6 +18,7 @@ import FacilityOccupancy from "@/components/portal/views/FacilityOccupancy";
 import FacilityBilling from "@/components/portal/views/FacilityBilling";
 import FacilityInventory from "@/components/portal/views/FacilityInventory";
 import FacilityReports from "@/components/portal/views/FacilityReports";
+import FacilityDining from "@/components/portal/views/FacilityDining";
 import CameraVisionFeed from "@/components/CameraVisionFeed";
 
 interface FacilityAdminPortalContentProps {
@@ -219,6 +220,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
   if (tab === "occupancy") return <FacilityOccupancy />;
   if (tab === "billing") return <FacilityBilling />;
   if (tab === "inventory") return <FacilityInventory />;
+  if (tab === "dining") return <FacilityDining />;
 
   // Staff Registry tab
   if (tab === "staff") {

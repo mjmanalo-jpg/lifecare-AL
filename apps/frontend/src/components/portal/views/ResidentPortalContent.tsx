@@ -122,9 +122,6 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
   }
 
   const [now, setNow] = useState<Date>(new Date());
-  const [complianceMap, setComplianceMap] = useState<Record<string, boolean>>({});
-  const [goalsChecked, setGoalsChecked] = useState<Record<string, boolean>>({});
-  const [customGoals, setCustomGoals] = useState<{ id: string; name: string; checked: boolean }[]>([]);
   const [newGoalText, setNewGoalText] = useState("");
   
   // Modal states
@@ -205,6 +202,17 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
     tables: ["CallBell"],
   });
 
+  // Fetch today's dining menu
+  const { data: menuRows } = useLiveQuery<{ id: string; mealType: string; name: string; description: string | null; dietaryTags: string | null; imageUrl: string | null; menuDate: string }>("daily-menus", {
+    tables: ["DailyMenu"],
+  });
+
+  // Fetch active staff for SOS notification
+  const { data: staffRows } = useLiveQuery<{ id: string; position: string; user?: { firstName: string; lastName: string } }>("staff", {
+    query: "include=user",
+    tables: ["Staff"],
+  });
+
   useEffect(() => {
     const saved = settingRows.find((r) => r.id === "assistantVoice")?.value;
     if (saved) setVoice(saved);
@@ -227,25 +235,61 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
     );
   }, [assistantCfg.greeting]);
 
-  // Load custom goals and checkbox states from localStorage (persists across refreshes)
-  useEffect(() => {
-    if (resident?.id) {
-      const savedGoals = localStorage.getItem(`goals_${resident.id}`);
-      if (savedGoals) {
-        try { setGoalsChecked(JSON.parse(savedGoals)); } catch (e) { console.error(e); }
-      }
-      
-      const savedMeds = localStorage.getItem(`meds_${resident.id}`);
-      if (savedMeds) {
-        try { setComplianceMap(JSON.parse(savedMeds)); } catch (e) { console.error(e); }
-      }
+  // ── Realtime data: daily goals + custom goals from DB ──
+  const { data: goalRows, refetch: refetchGoals } = useLiveQuery<{ id: string; residentId: string; title: string; isCompleted: boolean; isCustom: boolean; goalDate: string }>("resident-goals", {
+    tables: ["ResidentGoal"],
+  });
 
-      const savedCustomGoals = localStorage.getItem(`custom_goals_${resident.id}`);
-      if (savedCustomGoals) {
-        try { setCustomGoals(JSON.parse(savedCustomGoals)); } catch (e) { console.error(e); }
-      }
+  // ── Realtime data: medication compliance log (today) ──
+  const { data: complianceRows, refetch: refetchCompliance } = useLiveQuery<{ id: string; medicationId: string; takenAt: string }>("medication-logs", {
+    tables: ["MedicationLog"],
+  });
+
+  // Derive a lookup map: medicationId -> true (if there's a log for today)
+  const complianceMap = useMemo(() => {
+    const map: Record<string, boolean> = {};
+    const today = new Date().toISOString().slice(0, 10);
+    for (const row of complianceRows) {
+      if (row.takenAt.slice(0, 10) === today) map[row.medicationId] = true;
     }
-  }, [resident?.id]);
+    return map;
+  }, [complianceRows]);
+
+  // Derive goals as a lookup: title -> { id, isCompleted }
+  const goalsChecked = useMemo(() => {
+    const map: Record<string, { id: string; checked: boolean }> = {};
+    for (const g of goalRows.filter(r => !r.isCustom)) {
+      map[g.title] = { id: g.id, checked: g.isCompleted };
+    }
+    return map;
+  }, [goalRows]);
+
+  const customGoals = useMemo(() =>
+    goalRows.filter(r => r.isCustom).map(r => ({ id: r.id, name: r.title, checked: r.isCompleted })),
+    [goalRows]
+  );
+
+  // Auto-seed 3 default daily goals on first load if none exist yet
+  useEffect(() => {
+    if (!resident?.id || goalRows.length > 0) return;
+    const defaults = [
+      { title: "Morning Walk", description: "Morning Walk (15 mins)" },
+      { title: "Drink 2 Liters of Water", description: "Drink 2 Liters of Water" },
+      { title: "Cognitive Puzzles Session", description: "Cognitive Puzzles Session" },
+    ];
+    (async () => {
+      for (const d of defaults) {
+        await createRecord("resident-goals", {
+          residentId: resident.id,
+          title: d.title,
+          description: d.description,
+          isCompleted: false,
+          isCustom: false,
+        });
+      }
+      refetchGoals();
+    })();
+  }, [resident?.id, goalRows.length, refetchGoals]);
 
   // Scroll to bottom of chat transcript when messages update
   useEffect(() => {
@@ -269,32 +313,42 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
     };
   }, []);
 
-  const toggleGoal = (goalKey: string) => {
+  const toggleGoal = async (goalTitle: string) => {
     if (!resident?.id) return;
-    const nextGoals = { ...goalsChecked, [goalKey]: !goalsChecked[goalKey] };
-    setGoalsChecked(nextGoals);
-    localStorage.setItem(`goals_${resident.id}`, JSON.stringify(nextGoals));
+    const existing = goalsChecked[goalTitle];
+    if (existing) {
+      await updateRecord("resident-goals", existing.id, { isCompleted: !existing.checked });
+    } else {
+      await createRecord("resident-goals", {
+        residentId: resident.id,
+        title: goalTitle,
+        description: goalTitle,
+        isCompleted: true,
+        isCustom: false,
+      });
+    }
+    refetchGoals();
   };
 
-  const toggleCustomGoal = (id: string) => {
-    if (!resident?.id) return;
-    const nextCustom = customGoals.map(g => g.id === id ? { ...g, checked: !g.checked } : g);
-    setCustomGoals(nextCustom);
-    localStorage.setItem(`custom_goals_${resident.id}`, JSON.stringify(nextCustom));
+  const toggleCustomGoal = async (id: string) => {
+    const goal = customGoals.find(g => g.id === id);
+    if (!goal) return;
+    await updateRecord("resident-goals", id, { isCompleted: !goal.checked });
+    refetchGoals();
   };
 
-  const addCustomGoal = (e: React.FormEvent) => {
+  const addCustomGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resident?.id || !newGoalText.trim()) return;
-    const newGoal = {
-      id: `cg-${Date.now()}`,
-      name: newGoalText.trim(),
-      checked: false
-    };
-    const nextCustom = [...customGoals, newGoal];
-    setCustomGoals(nextCustom);
-    localStorage.setItem(`custom_goals_${resident.id}`, JSON.stringify(nextCustom));
+    await createRecord("resident-goals", {
+      residentId: resident.id,
+      title: newGoalText.trim(),
+      description: newGoalText.trim(),
+      isCompleted: false,
+      isCustom: true,
+    });
     setNewGoalText("");
+    refetchGoals();
     Swal.fire({
       title: "Goal Added",
       icon: "success",
@@ -305,23 +359,30 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
     });
   };
 
-  const deleteCustomGoal = (id: string) => {
-    if (!resident?.id) return;
-    const nextCustom = customGoals.filter(g => g.id !== id);
-    setCustomGoals(nextCustom);
-    localStorage.setItem(`custom_goals_${resident.id}`, JSON.stringify(nextCustom));
+  const deleteCustomGoal = async (id: string) => {
+    await deleteRecord("resident-goals", id);
+    refetchGoals();
   };
 
-  const toggleMedicationCompliance = (medId: string) => {
+  const toggleMedicationCompliance = async (medId: string) => {
     if (!resident?.id) return;
-    const nextCompliance = { ...complianceMap, [medId]: !complianceMap[medId] };
-    setComplianceMap(nextCompliance);
-    localStorage.setItem(`meds_${resident.id}`, JSON.stringify(nextCompliance));
+    const today = new Date().toISOString().slice(0, 10);
+    // Check if there's already a log for today
+    const existing = complianceRows.find(r => r.medicationId === medId && r.takenAt.slice(0, 10) === today);
+    if (existing) {
+      await deleteRecord("medication-logs", existing.id);
+    } else {
+      await createRecord("medication-logs", {
+        residentId: resident.id,
+        medicationId: medId,
+      });
+    }
+    refetchCompliance();
   };
 
   // Generate dynamic wellness score based on variables
   const wellnessScore = useMemo(() => {
-    if (!resident) return 94; // Premium default fallback
+    if (!resident) return 0;
     const totalTodayTasks = tasks.length;
     const completedTasks = tasks.filter((t) => t.status === "COMPLETED").length;
     const taskRatio = totalTodayTasks > 0 ? completedTasks / totalTodayTasks : 1;
@@ -423,7 +484,7 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
         await refetchBells();
         Swal.fire({
           title: "Emergency SOS Dispatched!",
-          text: "Head Nurse Sarah Jenkins and Caregiver Caleb Randall have been alerted.",
+          text: `${activeStaffNames} have been alerted.`,
           icon: "success",
           confirmButtonColor: "#10b981",
         });
@@ -558,12 +619,64 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
   // Resolve Vitals metrics
   const heartRate = useMemo(() => {
     const hr = vitals.find((v) => v.type === "HEART_RATE");
-    return hr ? `${hr.value} BPM` : "72 BPM";
+    return hr ? `${hr.value} BPM` : "--";
   }, [vitals]);
 
-  const activitySteps = useMemo(() => {
-    return "3,240 Steps";
+  const heartRateNumeric = useMemo(() => {
+    const hr = vitals.find((v) => v.type === "HEART_RATE");
+    return hr ? parseInt(hr.value) : null;
   }, [vitals]);
+
+  const heartRateStatus = useMemo(() => {
+    if (heartRateNumeric === null) return { text: "No Data", color: "bg-gray-100 text-gray-500" };
+    if (heartRateNumeric >= 60 && heartRateNumeric <= 100) return { text: "Within Range", color: "bg-emerald-50 text-emerald-600" };
+    return { text: "Attention Needed", color: "bg-red-50 text-red-600" };
+  }, [heartRateNumeric]);
+
+  const activitySteps = useMemo(() => {
+    const steps = vitals.find((v) => v.type === "STEPS" || v.type === "ACTIVITY_STEPS");
+    return steps ? `${Number(steps.value).toLocaleString()} Steps` : "-- Steps";
+  }, [vitals]);
+
+  const activityGoalPct = useMemo(() => {
+    if (goalRows.length === 0) return 0;
+    const completed = goalRows.filter(g => g.isCompleted).length;
+    return Math.round((completed / goalRows.length) * 100);
+  }, [goalRows]);
+
+  // Compute next medication dose from schedule/frequency
+  const nextDoseTime = useMemo(() => {
+    if (medications.length === 0) return null;
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMin = now.getMinutes();
+    // Common dose times parsed from frequency
+    const doseTimes = [8, 12, 14, 18, 20]; // 8AM, 12PM, 2PM, 6PM, 8PM
+    const next = doseTimes.find(t => t > currentHour || (t === currentHour && currentMin === 0));
+    if (!next) return doseTimes[0]; // wraps to next morning
+    const h = next % 12 || 12;
+    const ampm = next < 12 ? "AM" : "PM";
+    return `${h}:00 ${ampm}`;
+  }, [medications]);
+
+  // Today's menu filtered by current time of day
+  const todayMenuItems = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return menuRows.filter(m => m.menuDate.slice(0, 10) === today);
+  }, [menuRows]);
+
+  // Active staff names for SOS
+  const activeStaffNames = useMemo(() => {
+    const active = staffRows.filter(s => s.user);
+    const nurse = active.find(s => s.position?.toUpperCase().includes("NURSE"));
+    const caregiver = active.find(s => s.position?.toUpperCase().includes("CAREGIVER"));
+    const names: string[] = [];
+    if (nurse?.user) names.push(`${nurse.user.firstName} ${nurse.user.lastName}`);
+    if (caregiver?.user) names.push(`${caregiver.user.firstName} ${caregiver.user.lastName}`);
+    if (names.length === 0) return "On-duty staff";
+    if (names.length === 1) return names[0];
+    return names.join(" and ");
+  }, [staffRows]);
 
 
   // ── AI ASSISTANT CHAT TRANSCRIPT & CONTEXT INJECTIONS ──
@@ -571,7 +684,7 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
     if (!resident) return "";
     const taskStr = todayTasks.map(t => `- ${t.title} at ${new Date(t.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (${t.status})`).join("\n");
     const medStr = medications.map(m => `- ${m.name} (${m.dosage}, ${m.frequency})`).join("\n");
-    const latestHR = vitals.find(v => v.type === "HEART_RATE")?.value || "72";
+    const latestHR = vitals.find(v => v.type === "HEART_RATE")?.value || "Not recorded yet";
     const sponsorName = resident.sponsor?.name || "None";
     
     // Data only — the persona/tone is built server-side from the Super Admin's
@@ -590,7 +703,7 @@ ${medStr || "No medications active."}
 
 Vitals:
 - Latest Heart Rate: ${latestHR} BPM
-- Daily Activity Steps: 3,240 Steps`;
+- Daily Activity Steps: ${activitySteps}`;
   };
 
   const handleSendAssistantMessage = async (text: string) => {
@@ -860,12 +973,12 @@ Vitals:
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-gray-500">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mb-4" />
-        <span className="text-sm font-semibold">Syncing with Golden Hearth Database...</span>
+        <span className="text-sm font-semibold">Syncing with your care database...</span>
       </div>
     );
   }
 
-  const residentName = resident ? `${resident.firstName} ${resident.lastName}` : "Eleanor";
+  const residentName = resident ? `${resident.firstName} ${resident.lastName}` : "";
   const dayName = now.toLocaleDateString("en-US", { weekday: "long" });
 
   return (
@@ -875,10 +988,10 @@ Vitals:
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-blue-50/50 to-amber-50/30 p-6 rounded-2xl border border-blue-100/50 shadow-sm">
         <div className="space-y-2">
           <h1 className="text-3xl md:text-4xl font-extrabold text-blue-900 tracking-tight">
-            Good Morning, {resident?.firstName || "Eleanor"}
+            Good Morning, {resident?.firstName || ""}
           </h1>
           <p className="text-gray-600 text-sm md:text-base max-w-xl leading-relaxed">
-            It's a beautiful {dayName}. You have <span className="font-semibold text-blue-900">{todayTasks.filter(t => t.status !== "COMPLETED").length} activities</span> left scheduled today, and your wellness score is looking excellent.
+            It's a beautiful {dayName}. You have <span className="font-semibold text-blue-900">{todayTasks.filter(t => t.status !== "COMPLETED").length} activities</span> left scheduled today, and your wellness score is looking {wellnessScore >= 90 ? "optimal" : wellnessScore >= 80 ? "good" : "steady"}.
           </p>
         </div>
         
@@ -991,7 +1104,7 @@ Vitals:
                   <Pill className="w-5 h-5 text-white" /> Upcoming Medications
                 </h3>
                 <span className="text-[10px] uppercase font-black bg-blue-700/50 px-2 py-1 rounded text-blue-200 tracking-wider">
-                  Next Dose: 2:00 PM
+                  {nextDoseTime ? `Next Dose: ${nextDoseTime}` : "No Doses Scheduled"}
                 </span>
               </div>
               
@@ -1053,8 +1166,8 @@ Vitals:
                 <span className="text-xs font-semibold text-gray-500">Heart Rate</span>
               </div>
               <div className="text-3xl font-black text-gray-900">{heartRate}</div>
-              <span className="text-[10px] text-emerald-600 font-bold px-2 py-0.5 bg-emerald-50 rounded-full mt-2 inline-block">
-                Within Range
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full mt-2 inline-block ${heartRateStatus.color}`}>
+                {heartRateStatus.text}
               </span>
             </div>
 
@@ -1069,7 +1182,7 @@ Vitals:
               </div>
               <div className="text-3xl font-black text-gray-900">{activitySteps}</div>
               <span className="text-[10px] text-blue-600 font-bold px-2 py-0.5 bg-blue-50 rounded-full mt-2 inline-block">
-                Daily Goal: 80%
+                Daily Goal: {activityGoalPct}%
               </span>
             </div>
 
@@ -1156,28 +1269,35 @@ Vitals:
               </h3>
               
               <div className="mt-3 space-y-4">
-                {/* Lunch */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-600">Lunch (12:30 PM)</span>
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">Low Sodium</span>
+                {todayMenuItems.length === 0 ? (
+                  <div className="text-center py-6 text-gray-400">
+                    <Utensils className="w-8 h-8 mx-auto text-gray-200 mb-2" />
+                    <p className="text-xs italic">No menu set for today yet.</p>
                   </div>
-                  {/* Salad image mockup */}
-                  <div className="h-20 w-full bg-cover bg-center rounded-lg relative border border-gray-100" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=300')" }}>
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent rounded-lg flex items-end p-2">
-                      <span className="text-white text-xs font-black truncate">Grilled Chicken Salad</span>
+                ) : (
+                  todayMenuItems.slice(0, 2).map((item) => (
+                    <div key={item.id} className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-600">{item.mealType}</span>
+                        {item.dietaryTags && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">{item.dietaryTags.split(",")[0]}</span>
+                        )}
+                      </div>
+                      {item.imageUrl ? (
+                        <div className="h-20 w-full bg-cover bg-center rounded-lg relative border border-gray-100" style={{ backgroundImage: `url('${item.imageUrl}')` }}>
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent rounded-lg flex items-end p-2">
+                            <span className="text-white text-xs font-black truncate">{item.name}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <h4 className="text-xs font-bold text-gray-900">{item.name}</h4>
+                          {item.description && <p className="text-[10px] text-gray-500 leading-normal line-clamp-2">{item.description}</p>}
+                        </>
+                      )}
                     </div>
-                  </div>
-                </div>
-
-                {/* Dinner */}
-                <div className="space-y-1">
-                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-600">Dinner (6:00 PM)</span>
-                  <h4 className="text-xs font-bold text-gray-900">Baked Salmon</h4>
-                  <p className="text-[10px] text-gray-500 leading-normal line-clamp-2">
-                    With steamed asparagus, herb-seasoned wild rice, and organic lemon dressing.
-                  </p>
-                </div>
+                  ))
+                )}
               </div>
             </div>
             
@@ -1198,27 +1318,27 @@ Vitals:
               
               <div className="space-y-2 mt-3">
                 {/* Goal 1 */}
-                <label className="flex items-center gap-3 cursor-pointer text-xs select-none" onClick={(e) => { e.stopPropagation(); toggleGoal("goal1"); }}>
+                <label className="flex items-center gap-3 cursor-pointer text-xs select-none" onClick={(e) => { e.stopPropagation(); toggleGoal("Morning Walk"); }}>
                   <input
                     type="checkbox"
-                    checked={goalsChecked["goal1"] || false}
+                    checked={goalsChecked["Morning Walk"]?.checked || false}
                     readOnly
                     className="w-4 h-4 rounded border-teal-600 text-teal-600 focus:ring-teal-500 bg-teal-900"
                   />
-                  <span className={goalsChecked["goal1"] ? "line-through text-teal-300" : "text-white"}>
+                  <span className={goalsChecked["Morning Walk"]?.checked ? "line-through text-teal-300" : "text-white"}>
                     Morning Walk (15 mins)
                   </span>
                 </label>
 
                 {/* Goal 2 */}
-                <label className="flex items-center gap-3 cursor-pointer text-xs select-none" onClick={(e) => { e.stopPropagation(); toggleGoal("goal2"); }}>
+                <label className="flex items-center gap-3 cursor-pointer text-xs select-none" onClick={(e) => { e.stopPropagation(); toggleGoal("Drink 2 Liters of Water"); }}>
                   <input
                     type="checkbox"
-                    checked={goalsChecked["goal2"] || false}
+                    checked={goalsChecked["Drink 2 Liters of Water"]?.checked || false}
                     readOnly
                     className="w-4 h-4 rounded border-teal-600 text-teal-600 focus:ring-teal-500 bg-teal-900"
                   />
-                  <span className={goalsChecked["goal2"] ? "line-through text-teal-300" : "text-white"}>
+                  <span className={goalsChecked["Drink 2 Liters of Water"]?.checked ? "line-through text-teal-300" : "text-white"}>
                     Drink 2 Liters of Water
                   </span>
                 </label>
@@ -1400,44 +1520,30 @@ Vitals:
             
             <div className="p-6 overflow-y-auto space-y-6 flex-1">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Breakfast */}
-                <div className="border border-gray-200 rounded-xl p-4 bg-amber-50/20">
-                  <div className="text-[10px] font-black uppercase text-amber-600 tracking-wider">Breakfast (08:30 AM)</div>
-                  <h4 className="font-black text-gray-900 mt-1 text-sm">Organic Oatmeal</h4>
-                  <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
-                    With fresh organic berries, low-fat Greek yogurt, and warm chamomile tea.
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    <span className="text-[8px] px-1 bg-amber-100 text-amber-800 rounded font-bold">Low Sodium</span>
-                    <span className="text-[8px] px-1 bg-emerald-100 text-emerald-800 rounded font-bold">Diabetic Ok</span>
+                {todayMenuItems.length === 0 ? (
+                  <div className="col-span-3 text-center py-8 text-gray-400">
+                    <Utensils className="w-10 h-10 mx-auto text-gray-200 mb-2" />
+                    <p className="font-semibold text-sm">No menu set for today</p>
+                    <p className="text-xs mt-1">The kitchen hasn't published today's menu yet.</p>
                   </div>
-                </div>
-
-                {/* Lunch */}
-                <div className="border border-gray-200 rounded-xl p-4 bg-amber-50/20">
-                  <div className="text-[10px] font-black uppercase text-amber-600 tracking-wider">Lunch (12:30 PM)</div>
-                  <h4 className="font-black text-gray-900 mt-1 text-sm">Grilled Chicken Salad</h4>
-                  <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
-                    Lean chicken breast over organic baby spinach, cherry tomatoes, and light balsamic.
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    <span className="text-[8px] px-1 bg-amber-100 text-amber-800 rounded font-bold">Low Sodium</span>
-                    <span className="text-[8px] px-1 bg-blue-100 text-blue-800 rounded font-bold">High Protein</span>
-                  </div>
-                </div>
-
-                {/* Dinner */}
-                <div className="border border-gray-200 rounded-xl p-4 bg-amber-50/20">
-                  <div className="text-[10px] font-black uppercase text-amber-600 tracking-wider">Dinner (06:00 PM)</div>
-                  <h4 className="font-black text-gray-900 mt-1 text-sm">Baked Salmon Fillet</h4>
-                  <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
-                    Atlantic salmon with wild rice, steamed organic asparagus, and lemon wedge.
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    <span className="text-[8px] px-1 bg-blue-100 text-blue-800 rounded font-bold">Gluten Free</span>
-                    <span className="text-[8px] px-1 bg-red-100 text-red-800 rounded font-bold">Omega 3</span>
-                  </div>
-                </div>
+                ) : (
+                  todayMenuItems.map((item) => (
+                    <div key={item.id} className="border border-gray-200 rounded-xl p-4 bg-amber-50/20">
+                      <div className="text-[10px] font-black uppercase text-amber-600 tracking-wider">{item.mealType}</div>
+                      <h4 className="font-black text-gray-900 mt-1 text-sm">{item.name}</h4>
+                      {item.description && (
+                        <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{item.description}</p>
+                      )}
+                      {item.dietaryTags && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {item.dietaryTags.split(",").map((tag, i) => (
+                            <span key={i} className="text-[8px] px-1 bg-amber-100 text-amber-800 rounded font-bold">{tag.trim()}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
 
               {/* Substitution input */}
@@ -1496,11 +1602,11 @@ Vitals:
                   <label className="flex items-center gap-3 cursor-pointer p-3 bg-teal-50/20 border border-gray-100 rounded-xl text-sm select-none">
                     <input
                       type="checkbox"
-                      checked={goalsChecked["goal1"] || false}
-                      onChange={() => toggleGoal("goal1")}
+                      checked={goalsChecked["Morning Walk"]?.checked || false}
+                      onChange={() => toggleGoal("Morning Walk")}
                       className="w-4 h-4 rounded border-teal-600 text-teal-600 focus:ring-teal-500"
                     />
-                    <span className={goalsChecked["goal1"] ? "line-through text-gray-400 font-semibold" : "text-gray-800 font-bold"}>
+                    <span className={goalsChecked["Morning Walk"]?.checked ? "line-through text-gray-400 font-semibold" : "text-gray-800 font-bold"}>
                       Morning Walk (15 mins) - Maintain aerobic cardiovascular health
                     </span>
                   </label>
@@ -1508,11 +1614,11 @@ Vitals:
                   <label className="flex items-center gap-3 cursor-pointer p-3 bg-teal-50/20 border border-gray-100 rounded-xl text-sm select-none">
                     <input
                       type="checkbox"
-                      checked={goalsChecked["goal2"] || false}
-                      onChange={() => toggleGoal("goal2")}
+                      checked={goalsChecked["Drink 2 Liters of Water"]?.checked || false}
+                      onChange={() => toggleGoal("Drink 2 Liters of Water")}
                       className="w-4 h-4 rounded border-teal-600 text-teal-600 focus:ring-teal-500"
                     />
-                    <span className={goalsChecked["goal2"] ? "line-through text-gray-400 font-semibold" : "text-gray-800 font-bold"}>
+                    <span className={goalsChecked["Drink 2 Liters of Water"]?.checked ? "line-through text-gray-400 font-semibold" : "text-gray-800 font-bold"}>
                       Drink 2 Liters of Water - Essential hydration log
                     </span>
                   </label>
@@ -1520,11 +1626,11 @@ Vitals:
                   <label className="flex items-center gap-3 cursor-pointer p-3 bg-teal-50/20 border border-gray-100 rounded-xl text-sm select-none">
                     <input
                       type="checkbox"
-                      checked={goalsChecked["goal3"] || false}
-                      onChange={() => toggleGoal("goal3")}
+                      checked={goalsChecked["Cognitive Puzzles Session"]?.checked || false}
+                      onChange={() => toggleGoal("Cognitive Puzzles Session")}
                       className="w-4 h-4 rounded border-teal-600 text-teal-600 focus:ring-teal-500"
                     />
-                    <span className={goalsChecked["goal3"] ? "line-through text-gray-400 font-semibold" : "text-gray-800 font-bold"}>
+                    <span className={goalsChecked["Cognitive Puzzles Session"]?.checked ? "line-through text-gray-400 font-semibold" : "text-gray-800 font-bold"}>
                       Cognitive Puzzles Session - Mind sharpness and mental drills
                     </span>
                   </label>
@@ -1635,6 +1741,16 @@ Vitals:
                         if (isHR) {
                           const val = parseInt(v.value);
                           if (val > 100 || val < 55) alert = true;
+                        } else if (isBP) {
+                          const parts = v.value.split("/");
+                          if (parts.length === 2) {
+                            const sys = parseInt(parts[0]);
+                            const dia = parseInt(parts[1]);
+                            if (sys > 140 || sys < 90 || dia > 90 || dia < 60) alert = true;
+                          }
+                        } else if (isOxy) {
+                          const val = parseInt(v.value);
+                          if (val < 90) alert = true;
                         }
 
                         return (

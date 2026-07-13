@@ -28,6 +28,10 @@ const RESIDENT_SCOPED = new Set([
   "call-bells",
   "service-charges",
   "insurance-validations",
+  // Fleet & transport — family/resident may follow their own requests & trips.
+  "transport-requests",
+  "trips",
+  "dietitian-consults",
 ]);
 
 const DENY: Record<string, unknown> = { id: "__none__" };
@@ -148,6 +152,12 @@ function getDemoNotificationsForRole(role: string): Row[] {
         { id: "fm_n2", type: "MEDICATION_REMINDER", title: "Medications Administered", message: "Head Nurse Sarah Jenkins successfully administered daily blood pressure pills.", isRead: false, createdAt: iso(2 * H) },
         { id: "fm_n3", type: "MESSAGE", title: "Daily Comfort Report", message: "Caleb Randall reports Arthur slept comfortably and participated in social games.", isRead: true, createdAt: iso(5 * H) },
       ];
+    case "FLEET_MANAGEMENT":
+      return [
+        { id: "fl_n1", type: "TRANSPORT_UPDATE", title: "New Transport Request", message: "Arthur Pendelton requested a dialysis run for tomorrow 8:00 AM — pending dispatcher review.", isRead: false, createdAt: iso(12 * 1000) },
+        { id: "fl_n2", type: "SYSTEM_ALERT", title: "Registration Expiring", message: "Wheelchair Van WV-001 registration expires in 14 days. Renew to stay compliant.", isRead: false, createdAt: iso(3 * H) },
+        { id: "fl_n3", type: "TASK_ASSIGNMENT", title: "Preventive Maintenance Due", message: "Shuttle SH-001 hits its 5,000 km service interval this week.", isRead: true, createdAt: iso(1 * D) },
+      ];
     case "RESIDENT":
       return [
         { id: "re_n1", type: "TASK_ASSIGNMENT", title: "Physical Therapy Scheduled", message: "Your PT session with Caleb is scheduled for 2:00 PM today.", isRead: false, createdAt: iso(30 * 1000) },
@@ -164,7 +174,9 @@ function getDemoNotificationsForRole(role: string): Row[] {
 export function scopeDemoRows(modelKey: string, rows: Row[], role: string, userId?: string): Row[] {
   if (modelKey === "notifications") {
     // Use actual demo notifications filtered by userId for staff, or role-based for self-service
-    if (role === "FAMILY" || role === "RESIDENT") return getDemoNotificationsForRole(role);
+    // (FLEET_MANAGEMENT also gets role-specific demo notifications for a populated bell).
+    if (role === "FAMILY" || role === "RESIDENT" || role === "FLEET_MANAGEMENT")
+      return getDemoNotificationsForRole(role);
     return userId ? rows.filter((n) => (n as { userId?: string }).userId === userId) : rows;
   }
   if (modelKey === "app-settings") return rows; // global config — visible to all roles
