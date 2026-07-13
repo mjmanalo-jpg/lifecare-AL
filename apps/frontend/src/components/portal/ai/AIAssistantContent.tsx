@@ -114,7 +114,7 @@ export default function AIAssistantContent() {
     {
       id: "welcome",
       role: "assistant",
-      text: "Hello — I'm the Golden Hearth AI Assistant. Ask me anything, talk to me with the mic, or upload documents to my knowledge base and I'll answer from them.",
+      text: "Hello — I'm your AI Assistant. Ask me anything, talk to me with the mic, or upload documents to my knowledge base and I'll answer from them.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -599,7 +599,7 @@ export default function AIAssistantContent() {
                 value={config.greeting}
                 onChange={(e) => editConfig({ greeting: e.target.value })}
                 rows={3}
-                placeholder="Hi there! I'm Sunny, your Golden Hearth companion…"
+                placeholder="Hi there! I'm Sunny, your AI companion…"
                 className="w-full resize-none border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
               />
             </div>
@@ -639,7 +639,7 @@ export default function AIAssistantContent() {
                 <Bot className="w-5 h-5 text-black" />
               </div>
               <div>
-                <p className="font-bold text-gray-900 leading-tight">{config.name || "Golden Hearth Assistant"}</p>
+                <p className="font-bold text-gray-900 leading-tight">{config.name || "AI Assistant"}</p>
                 <p className="text-xs text-gray-500 flex items-center gap-1">
                   {speaking ? (
                     <><Volume2 className="w-3 h-3 text-yellow-600 animate-pulse" /> speaking…</>

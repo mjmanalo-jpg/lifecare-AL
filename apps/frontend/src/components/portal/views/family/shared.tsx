@@ -166,12 +166,5 @@ export function MoneyStat({ label, value, icon: Icon, tone, sub }: { label: stri
   );
 }
 
-/** Fallback chart data used when the database has no vitals yet. */
-export const MOCK_VITALS_TREND = [
-  { name: "Mon", value: 74 },
-  { name: "Tue", value: 76 },
-  { name: "Wed", value: 75 },
-  { name: "Thu", value: 77 },
-  { name: "Fri", value: 75 },
-  { name: "Sat", value: 73 },
-];
+/** Empty fallback — when no vitals exist yet the chart shows nothing. */
+export const EMPTY_VITALS_TREND: { name: string; value: number }[] = [];

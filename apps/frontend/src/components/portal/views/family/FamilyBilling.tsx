@@ -11,6 +11,7 @@ import {
   PieChart, Pie, Cell, Legend,
 } from "recharts";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { useFacilityConfig } from "@/lib/useFacilityConfig";
 import { createRecord, updateRecord } from "@/lib/api";
 import {
   adaptInvoice, adaptServiceCharge, adaptInsuranceValidation, adaptPayment,
@@ -34,6 +35,7 @@ const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`;
 
 /** Billing & Finance — invoices, service charges, insurance, online payments, analytics. */
 export default function FamilyBilling() {
+  const { facilityName } = useFacilityConfig();
   const { displayName } = useRelative();
   const nowTs = useNowTs();
 
@@ -462,7 +464,7 @@ export default function FamilyBilling() {
               </div>
               <div className="text-center space-y-1">
                 <h2 className="text-2xl font-extrabold text-green-600 tracking-tight uppercase">Receipt of Payment</h2>
-                <p className="text-xs text-gray-500 font-semibold">Golden Hearth Assisted Living Facility</p>
+                <p className="text-xs text-gray-500 font-semibold">{facilityName || "Facility"} Assisted Living Facility</p>
                 <p className="text-[10px] text-gray-400 font-mono mt-1">TXN ID: {viewingReceipt.transactionId}</p>
               </div>
               <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 space-y-4 text-xs mt-4">

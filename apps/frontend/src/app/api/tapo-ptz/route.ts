@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const clampedPan = Math.max(-100, Math.min(100, Number(pan)));
     const clampedTilt = Math.max(-100, Math.min(100, Number(tilt)));
 
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || "http://localhost:8000";
+    const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
 
     try {
       const response = await fetch(`${backendUrl}/api/v1/camera/move_position`, {

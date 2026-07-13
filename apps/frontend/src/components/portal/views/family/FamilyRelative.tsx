@@ -11,7 +11,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { humanize } from "@/lib/adapters";
 import {
   useRelative, relVitalsOf, latestVitalOf, TabLoading, EmptyState,
-  LiveBadge, MOCK_VITALS_TREND, type Row,
+  LiveBadge, EMPTY_VITALS_TREND, type Row,
 } from "./shared";
 
 const VITALS = [
@@ -127,7 +127,7 @@ export default function FamilyRelative() {
 
       {/* HR trend */}
       <div className="bg-white rounded-lg p-4 border border-gray-200">
-        <ChartContainer title="Heart Rate Trend" type="area" data={relHrTrend.length ? relHrTrend : MOCK_VITALS_TREND} dataKey="value" xAxisKey="name" colors={["#ef4444"]} height={220} />
+        <ChartContainer title="Heart Rate Trend" type="area" data={relHrTrend.length ? relHrTrend : EMPTY_VITALS_TREND} dataKey="value" xAxisKey="name" colors={["#ef4444"]} height={220} />
       </div>
 
       {/* Medications + Conditions */}

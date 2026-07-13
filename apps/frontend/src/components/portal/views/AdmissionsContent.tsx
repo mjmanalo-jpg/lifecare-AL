@@ -8,6 +8,7 @@ import {
   CheckCircle2, Loader2, CircleDot, Ban, AlertTriangle, Download, Printer, Pencil,
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { useFacilityConfig } from "@/lib/useFacilityConfig";
 import { createRecord, updateRecord } from "@/lib/api";
 import { insuranceProvider } from "@/lib/integrations/insurance";
 import { qrDataUrl } from "@/lib/qr";
@@ -25,8 +26,6 @@ const STEPS = [
 const STEP_COUNT = STEPS.length; // 7
 
 const CARE_LEVELS = ["INDEPENDENT", "ASSISTED", "MEMORY", "SKILLED"];
-// Facility floor plan (no Unit model until Phase 3) — rooms 301–340.
-const ROOM_POOL = Array.from({ length: 40 }, (_, i) => String(301 + i));
 
 type Row = Record<string, unknown>;
 type TeamMember = { id: string; name: string; role: string; userId?: string };
@@ -100,9 +99,14 @@ export default function AdmissionsContent() {
     });
     return taken;
   }, [residentRows, admissionRows, form.id]);
+
+  const { data: roomRows } = useLiveQuery<Record<string, unknown>>(
+    "rooms", { query: "take=200", tables: ["Room"] }
+  );
+  const allRooms = useMemo(() => roomRows.map((r) => s(r.roomNumber)).filter(Boolean), [roomRows]);
   const availableRooms = useMemo(
-    () => ROOM_POOL.filter((r) => !occupiedRooms.has(r) || r === form.roomNumber),
-    [occupiedRooms, form.roomNumber]
+    () => allRooms.filter((r) => !occupiedRooms.has(r) || r === form.roomNumber),
+    [allRooms, occupiedRooms, form.roomNumber]
   );
 
   const openNew = () => { setForm({ ...emptyForm }); setStep(1); setVerifyMsg(""); setWizardOpen(true); };

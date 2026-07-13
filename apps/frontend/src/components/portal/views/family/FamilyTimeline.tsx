@@ -3,7 +3,7 @@
 import ChartContainer from "@/components/portal/widgets/ChartContainer";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { humanize } from "@/lib/adapters";
-import { TabLoading, EmptyState, MOCK_VITALS_TREND, type Row } from "./shared";
+import { TabLoading, EmptyState, EMPTY_VITALS_TREND, type Row } from "./shared";
 
 /** Health Timeline — chronological live vitals feed with trend chart. */
 export default function FamilyTimeline() {
@@ -32,7 +32,7 @@ export default function FamilyTimeline() {
       <ChartContainer
         title="Heart Rate (Recent)"
         type="line"
-        data={heartRateTrend.length ? heartRateTrend : MOCK_VITALS_TREND}
+        data={heartRateTrend.length ? heartRateTrend : EMPTY_VITALS_TREND}
         dataKey="value"
         xAxisKey="name"
         colors={["#ef4444"]}

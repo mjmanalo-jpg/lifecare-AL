@@ -43,7 +43,7 @@ function adaptTrip(row: Record<string, unknown>) {
     escortRole: str(row.escortRole),
     status: str(row.status, "SCHEDULED"),
     destination: str(row.destination, "—"),
-    origin: str(row.origin, "Golden Hearth Facility"),
+    origin: str(row.origin, "Home"),
     scheduledAt: str(row.scheduledAt),
     departedAt: str(row.departedAt),
     arrivedAt: str(row.arrivedAt),
@@ -89,8 +89,8 @@ const INSPECTION_ITEMS = [
   "First-aid kit & O2", "Interior sanitized",
 ];
 
-const BASE_LAT = 14.5547;
-const BASE_LNG = 121.0244;
+const BASE_LAT = parseFloat(process.env.NEXT_PUBLIC_FACILITY_LAT || "0");
+const BASE_LNG = parseFloat(process.env.NEXT_PUBLIC_FACILITY_LNG || "0");
 const ASSUMED_TRIP_MS = 30 * 60 * 1000; // assumed leg duration for progress/ETA
 
 /* ── Time helpers ── */

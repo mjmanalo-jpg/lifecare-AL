@@ -68,6 +68,21 @@ export default function PhysicianRounds() {
   const { data: noteRows } = useLiveQuery<Record<string, unknown>>(
     "medical-notes", { query: "take=200", tables: ["MedicalNote"] }
   );
+  const { data: staffRows } = useLiveQuery<Record<string, unknown>>(
+    "staff", { query: "include=user", tables: ["Staff"] }
+  );
+
+  const physicianName = useMemo(() => {
+    const physician = staffRows.find((s: any) => {
+      const pos = String(s.position || "").toUpperCase();
+      return pos.includes("PHYSICIAN") || pos.includes("DOCTOR");
+    });
+    if (physician?.user) {
+      const u = physician.user as Record<string, unknown>;
+      return `${String(u.firstName || "")} ${String(u.lastName || "")}`.trim() || "Physician";
+    }
+    return "Physician";
+  }, [staffRows]);
 
   const [nowTs, setNowTs] = useState(0);
   useEffect(() => {
@@ -157,7 +172,7 @@ export default function PhysicianRounds() {
           noteType: "ROUND_NOTE",
           title: `Round completed: ${p.name}`,
           content: `Dr. round completed.\n\n${result.value}`,
-          authorName: "Dr. Alan Reyes",
+          authorName: physicianName,
           residentId: p.id,
         }).catch(() => {});
       }

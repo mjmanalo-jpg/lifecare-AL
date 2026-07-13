@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { useFacilityConfig } from "@/lib/useFacilityConfig";
 import { createRecord, updateRecord } from "@/lib/api";
 
 /* ── Safe coercion helpers ── */
@@ -162,6 +163,7 @@ export default function FleetRequests() {
   const { data: driverRows } = useLiveQuery<Record<string, unknown>>(
     "drivers", { query: "take=300", tables: ["Driver"] }
   );
+  const { facilityName } = useFacilityConfig();
 
   const requests = useMemo<TransportRequest[]>(() => requestRows.map(adaptRequest), [requestRows]);
   const residents = useMemo(() => residentRows.map(adaptResident), [residentRows]);
@@ -363,7 +365,7 @@ export default function FleetRequests() {
         escortName: assigning.escortRequired ? assignForm.escortName.trim() : null,
         escortRole: assigning.escortRequired ? assignForm.escortRole : null,
         destination: assigning.destination,
-        origin: "Golden Hearth Facility",
+        origin: facilityName || "Facility",
         scheduledAt: new Date(assignForm.scheduledAt).toISOString(),
         distanceKm: assignForm.distanceKm ? Number(assignForm.distanceKm) : null,
         charge: Number(assignForm.charge) || 0,

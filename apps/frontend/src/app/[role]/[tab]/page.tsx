@@ -12,6 +12,7 @@ import ResidentPortalContent from "@/components/portal/views/ResidentPortalConte
 import SuperAdminPortalContent from "@/components/portal/views/SuperAdminPortalContent";
 import FacilityAdminPortalContent from "@/components/portal/views/FacilityAdminPortalContent";
 import FleetManagementPortalContent from "@/components/portal/views/FleetManagementPortalContent";
+import DriverPortalContent from "@/components/portal/views/DriverPortalContent";
 import { useEffect, useState } from "react";
 
 export default function RolePortalPage() {
@@ -69,6 +70,10 @@ export default function RolePortalPage() {
       {/* Fleet Manager sees the fleet & transport dispatch portal. */}
       {userRole === "FLEET_MANAGEMENT" && (
         <FleetManagementPortalContent tab={tabParam || "dashboard"} />
+      )}
+      {/* Driver sees the driver dispatch portal. */}
+      {userRole === "DRIVER" && (
+        <DriverPortalContent tab={tabParam || "dashboard"} />
       )}
     </PortalShell>
   );

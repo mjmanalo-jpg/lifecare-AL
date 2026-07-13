@@ -44,7 +44,8 @@ export type Role =
   | "CAREGIVER"
   | "FAMILY"
   | "RESIDENT"
-  | "FLEET_MANAGEMENT";
+  | "FLEET_MANAGEMENT"
+  | "DRIVER";
 
 export interface SidebarLink {
   name: string;
@@ -108,6 +109,7 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   fuel: "Fuel & Odometer",
   transport: "Transport",
   dining: "Dining & Compliance",
+  checklist: "Inspection Checklist",
 };
 
 export const PATH_TO_ROLE: Record<string, Role> = {
@@ -121,6 +123,7 @@ export const PATH_TO_ROLE: Record<string, Role> = {
   physician: "PHYSICIAN",
   resident: "RESIDENT",
   fleet_management: "FLEET_MANAGEMENT",
+  driver: "DRIVER",
 };
 
 export const ROLES: Record<Role, RoleDetails> = {
@@ -268,6 +271,21 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Drivers", icon: Users, route: "/fleet_management/drivers" },
       { name: "Maintenance", icon: Wrench, route: "/fleet_management/maintenance" },
       { name: "Fuel & Odometer", icon: Fuel, route: "/fleet_management/fuel" },
+    ],
+  },
+  DRIVER: {
+    name: "Transport Driver",
+    badge: "Logistics",
+    desc: "Perform vehicle safety inspections, log odometer and fuel, and manage active transport requests.",
+    icon: Car,
+    profileName: "Eduardo Lopez",
+    basePath: "/driver",
+    footerText: "Driver Dispatch Portal",
+    sidebarLinks: [
+      { name: "Shift Dashboard", icon: Grid, route: "/driver/dashboard" },
+      { name: "Trip Board", icon: Route, route: "/driver/trips" },
+      { name: "Inspection Checklist", icon: ClipboardList, route: "/driver/checklist" },
+      { name: "Fuel & Odometer", icon: Fuel, route: "/driver/fuel" },
     ],
   },
 };

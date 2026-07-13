@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { useFacilityConfig } from "@/lib/useFacilityConfig";
 import { adaptInvoice, adaptServiceCharge, adaptInsuranceValidation, adaptPayment } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 
@@ -49,6 +50,7 @@ export default function FacilityBilling() {
   const { data: paymentRows, loading: payLoading, refetch: refetchPayments } = useLiveQuery<Record<string, unknown>>(
     "payments", { query: "include=invoice&take=300", tables: ["Payment", "Invoice"] }
   );
+  const { facilityName, facilityAddress } = useFacilityConfig();
 
   // Normalized Models
   const invoices = useMemo<Invoice[]>(() => invoiceRows.map(adaptInvoice), [invoiceRows]);
@@ -826,9 +828,9 @@ export default function FacilityBilling() {
               {/* Invoice Branding Header */}
               <div className="flex justify-between items-start border-b border-gray-200 pb-6 gap-4">
                 <div>
-                  <h2 className="text-2xl font-extrabold text-yellow-600 uppercase tracking-tight">Golden Hearth</h2>
+                  <h2 className="text-2xl font-extrabold text-yellow-600 uppercase tracking-tight">{facilityName || "Facility"}</h2>
                   <p className="text-xs text-gray-500">Assisted Living Facility</p>
-                  <p className="text-xs text-gray-500">120 Carecrest Blvd, Suite 400</p>
+                  {facilityAddress && <p className="text-xs text-gray-500">{facilityAddress}</p>}
                 </div>
                 <div className="text-right">
                   <h3 className="text-xl font-bold text-gray-900">INVOICE</h3>
@@ -948,7 +950,7 @@ export default function FacilityBilling() {
               {/* branding */}
               <div className="text-center space-y-1">
                 <h2 className="text-2xl font-extrabold text-green-600 tracking-tight uppercase">Receipt of Payment</h2>
-                <p className="text-xs text-gray-500">Golden Hearth Assisted Living Facility</p>
+                <p className="text-xs text-gray-500">{facilityName || "Facility"} Assisted Living Facility</p>
                 <p className="text-xs text-gray-500 font-mono">TXN: {viewingReceipt.transactionId}</p>
               </div>
 

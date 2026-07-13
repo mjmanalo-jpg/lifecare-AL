@@ -216,7 +216,7 @@ export default function LandingCustomizerContent() {
   const handleReset = async () => {
     const res = await Swal.fire({
       title: "Reset to default?",
-      text: "This restores the original Golden Hearth landing design.",
+      text: "This restores the original landing design.",
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#ef4444",
@@ -487,7 +487,7 @@ export default function LandingCustomizerContent() {
 
             {bg.type === "default" && (
               <p className="text-sm text-gray-500 bg-gray-50 rounded-lg p-4">
-                Using the original hand-tuned Golden Hearth design. Pick another option to customize the background.
+                Using the original hand-tuned design. Pick another option to customize the background.
               </p>
             )}
 
@@ -735,14 +735,14 @@ export default function LandingCustomizerContent() {
                               <circle cx="12" cy="12" r="3" fill={`${acnt}20`} />
                               <path d="M12 5V9M12 15V19M5 12H9M15 12H19" strokeLinecap="round" />
                             </svg>
-                            <span className="text-[7px] font-bold text-white tracking-tight">Golden Hearth</span>
+                            <span className="text-[7px] font-bold text-white tracking-tight">Care Portal</span>
                           </div>
 
                           {/* Heading */}
                           <p className="text-[13px] font-extrabold text-white leading-[1.15] tracking-tight">Empathetic Care,</p>
                           <p className="text-[13px] font-light leading-[1.15] tracking-tight" style={{ color: acnt }}>AI Assisted Efficiency.</p>
                           <p className="text-[5px] text-zinc-400 font-light mt-2 leading-relaxed max-w-[95%]">
-                            Bypass email and password checks. Golden Hearth enables direct preview access to dashboards for nurses, caregivers, admins, and family members.
+                            Bypass email and password checks. This facility enables direct preview access to dashboards for nurses, caregivers, admins, and family members.
                           </p>
 
                           {/* Feature cards — matching actual page spacing */}
@@ -770,7 +770,7 @@ export default function LandingCustomizerContent() {
 
                         {/* Copyright */}
                         <div className="relative z-10 text-[4.5px] text-zinc-600 border-t border-white/5 pt-2 mt-3">
-                          © 2026 Golden Hearth AI. Simulated Walkthrough Mode Active.
+                          © 2026 AI Powered Assisted Living. Simulated Walkthrough Mode Active.
                         </div>
                       </div>
 
@@ -903,11 +903,11 @@ const FALLBACKS: Record<string, string> = {
   feature_2_desc: "Low-latency conversational AI for hands-free charting and friendly companionship.",
   feature_3_title: "Secure Family Portal",
   feature_3_desc: "Private health logs and vitals synced in real-time with family dashboards.",
-  contact_address: "123 Golden Hearth Lane,\nBonifacio Global City, Taguig,\nMetro Manila, Philippines",
-  contact_phone: "+63 (2) 8888-7777",
-  contact_email: "concierge@goldenhearth.com",
-  contact_map_url: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3861.9701041113264!2d121.0494499!3d14.5484443!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3397c8eb3c7849bd%3A0xc34b3e83b8a3e746!2sBonifacio%20Global%20City!5e0!3m2!1sen!2sph!4v1720610000000!5m2!1sen!2sph",
-  footer_text: "© 2026 AI Powered Assisted Living. All rights reserved.",
+  contact_address: "",
+  contact_phone: "",
+  contact_email: "",
+  contact_map_url: "",
+  footer_text: "© 2026 All rights reserved.",
 };
 
 function SiteContentEditor() {
@@ -1309,7 +1309,7 @@ const PAGE_TEMPLATES = [
     id: "contact",
     name: "Contact Us",
     description: "Get in touch",
-    content: "# Contact Us\n\nWe'd love to hear from you.\n\n## Reach Out\n**Email:** contact@example.com\n**Phone:** +1 (555) 123-4567\n**Address:** Your location here",
+    content: "# Contact Us\n\nWe'd love to hear from you.\n\n## Reach Out\n**Email:** [your email]\n**Phone:** [your phone]\n**Address:** [your location]",
     purpose: "contact",
     parcelType: "standard",
   },

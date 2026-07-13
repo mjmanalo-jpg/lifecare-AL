@@ -342,11 +342,9 @@ function drawScanLine(ctx: CanvasRenderingContext2D, W: number, H: number, t: nu
 // ─────────────────────────────────────────────────────────────────────────────
 
 const getBackendUrl = () => {
-  if (process.env.NEXT_PUBLIC_BACKEND_API_URL) {
-    return process.env.NEXT_PUBLIC_BACKEND_API_URL;
-  }
-  // Fall back to local backend so Vercel can stream the local Tapo RTSP feed
-  return "http://localhost:8000";
+  // Always use the Next.js API proxy routes to avoid mixed-content blocks
+  // when the Vercel frontend (HTTPS) consumes the local backend (HTTP).
+  return "";
 };
 
 function captureSnapshot(videoEl: HTMLVideoElement | null, imgEl: HTMLImageElement | null, canvasEl: HTMLCanvasElement | null): string | undefined {
@@ -383,7 +381,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   const tapoRetryRef = useRef(0);
   const tapoMaxRetries = 5;
   const tapoRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const tapoStreamUrlRef = useRef(`${getBackendUrl()}/api/v1/camera/tapo_feed`);
+  const tapoStreamUrlRef = useRef("/api/camera/tapo-feed");
 
   // Camera history state
   interface CameraEvent { id: string; type: "fall" | "connection" | "snapshot" | "alert"; message: string; timestamp: number; thumbnail?: string }
@@ -617,7 +615,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   const reconnectTapo = useCallback(() => {
     // Bust the MJPEG cache by appending a timestamp — forces the browser to
     // re-open the SSE stream instead of reusing the stale/errored connection.
-    tapoStreamUrlRef.current = `${getBackendUrl()}/api/v1/camera/tapo_feed?t=${Date.now()}`;
+    tapoStreamUrlRef.current = `/api/camera/tapo-feed?t=${Date.now()}`;
     setTapoStatus("connecting");
     tapoRetryRef.current += 1;
     // Force the <img> to re-fetch by toggling src
@@ -640,7 +638,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     }
     setTapoStatus("connecting");
     tapoRetryRef.current = 0;
-    tapoStreamUrlRef.current = `${getBackendUrl()}/api/v1/camera/tapo_feed?t=${Date.now()}`;
+    tapoStreamUrlRef.current = `/api/camera/tapo-feed?t=${Date.now()}`;
   }, [activeCamera]);
 
   useEffect(() => {
@@ -739,8 +737,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     } catch (e: any) {
       console.warn("Local camera blocked or insecure context. Falling back to FastAPI backend feed:", e);
       setCamError(e?.message ?? "Device in use");
-      const backendBaseUrl = getBackendUrl();
-      setBackendFeedUrl(`${backendBaseUrl}/api/v1/camera/feed`);
+      setBackendFeedUrl("/api/camera/feed");
       setUseBackendFeed(true);
       setCamActive(true);
     }

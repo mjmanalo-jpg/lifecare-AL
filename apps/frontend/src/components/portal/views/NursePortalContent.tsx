@@ -42,10 +42,6 @@ type MonitoringAnalysis = {
   globalPosture?: string;
 };
 
-const INCIDENT_STORAGE_KEY = "nurseIncidents";
-const MONITORING_RESIDENT = "Arthur Pendelton";
-const MONITORING_ROOM = "302";
-
 import Swal from "sweetalert2";
 
 export default function NursePortalContent({ tab }: NursePortalContentProps) {
@@ -68,19 +64,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   // Incidents Management
   // Local state holds ONLY monitoring/camera-sourced incidents; DB incidents
   // come from useLiveQuery and are merged in below.
-  const [monitoringIncidents, setMonitoringIncidents] = useState<NurseIncident[]>(() => {
-    if (typeof window === "undefined") return [];
-
-    try {
-      const saved = window.localStorage.getItem(INCIDENT_STORAGE_KEY);
-      if (!saved) return [];
-
-      const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
+  const [monitoringIncidents, setMonitoringIncidents] = useState<NurseIncident[]>([]);
 
   // Combined feed used by stats / filters / pagination (monitoring first).
   const incidents = useMemo<NurseIncident[]>(
@@ -119,15 +103,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     setIncidentPage(1);
   }, [incidentSearch, incidentFilterSeverity, incidentFilterStatus]);
 
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(INCIDENT_STORAGE_KEY, JSON.stringify(monitoringIncidents));
-    } catch {
-      // localStorage can be unavailable in private mode; keep in-memory incidents.
-    }
-  }, [monitoringIncidents]);
-
-  const handleMonitoringFallTriggered = (analysis: MonitoringAnalysis) => {
+  const handleMonitoringFallTriggered = (analysis: MonitoringAnalysis & { resident?: string; room?: string }) => {
     setMonitoringFallAlert(true);
     setMonitoringIncidents((prev) => {
       const hasOpenMonitoringFall = prev.some(
@@ -144,8 +120,8 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
         id: `monitoring-fall-${Date.now()}`,
         type: "Fall Detection",
         severity: "critical",
-        resident: MONITORING_RESIDENT,
-        room: MONITORING_ROOM,
+        resident: analysis.resident || "",
+        room: analysis.room || "",
         timestamp: new Date(),
         status: "open",
         description: analysisSummary,
@@ -700,7 +676,7 @@ function NurseMonitoringViewInner({
             residentName={resident || undefined}
             residentRoom={room || undefined}
             isFallen={monitoringFallAlert}
-            onFallTriggered={handleMonitoringFallTriggered}
+            onFallTriggered={(analysis: any) => handleMonitoringFallTriggered({ ...analysis, resident: resident || "", room: room || "" })}
             onFallCleared={() => setMonitoringFallAlert(false)}
           />
         </div>

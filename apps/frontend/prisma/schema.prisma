@@ -26,6 +26,7 @@ enum Role {
   FAMILY
   RESIDENT
   FLEET_MANAGEMENT
+  DRIVER
 }
 
 enum CareLevel {

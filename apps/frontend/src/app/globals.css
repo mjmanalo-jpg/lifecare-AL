@@ -8,6 +8,8 @@
   --color-surface-hover: var(--surface-hover);
   --color-border: var(--border);
   --color-muted-foreground: var(--muted-foreground);
+  --color-card-bg: var(--card-bg);
+  --color-card-border: var(--card-border);
   --font-sans: "Inter", system-ui, sans-serif;
 }
 
@@ -19,6 +21,8 @@
     --surface: rgba(255, 255, 255, 0.03);
     --surface-hover: rgba(255, 255, 255, 0.08);
     --border: rgba(255, 255, 255, 0.1);
+    --card-bg: #18181b;
+    --card-border: rgba(255, 255, 255, 0.06);
     --heading-from: #ffffff;
     --heading-to: #6b7280;
   }
@@ -30,6 +34,8 @@
     --surface: rgba(0, 0, 0, 0.02);
     --surface-hover: rgba(0, 0, 0, 0.05);
     --border: rgba(0, 0, 0, 0.08);
+    --card-bg: #ffffff;
+    --card-border: rgba(0, 0, 0, 0.06);
     --heading-from: #18181b;
     --heading-to: #52525b;
   }

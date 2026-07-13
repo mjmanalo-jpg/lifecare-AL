@@ -774,7 +774,7 @@ function AddMedicationModal({ residents, onClose, onSaved }: {
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Prescribed By</label>
-              <input type="text" value={form.prescribedBy} onChange={set("prescribedBy")} placeholder="Dr. Alan Reyes" className={inputCls} />
+              <input type="text" value={form.prescribedBy} onChange={set("prescribedBy")} placeholder="Prescribing physician" className={inputCls} />
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Start Date <span className="text-red-500">*</span></label>

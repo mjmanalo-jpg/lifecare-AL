@@ -11,7 +11,7 @@ import VitalsPanel, { VitalReading } from "@/components/portal/widgets/VitalsPan
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptIncident, humanize } from "@/lib/adapters";
 import {
-  useRelative, Panel, LiveBadge, MOCK_VITALS_TREND, type Row,
+  useRelative, Panel, LiveBadge, EMPTY_VITALS_TREND, type Row,
 } from "./shared";
 
 /** Family Dashboard — the live overview that ties every module together. */
@@ -200,7 +200,7 @@ export default function FamilyDashboard() {
             <ChartContainer
               title="Heart Rate Trend"
               type="area"
-              data={heartRateTrend.length ? heartRateTrend : MOCK_VITALS_TREND}
+              data={heartRateTrend.length ? heartRateTrend : EMPTY_VITALS_TREND}
               dataKey="value"
               xAxisKey="name"
               colors={["#ef4444"]}

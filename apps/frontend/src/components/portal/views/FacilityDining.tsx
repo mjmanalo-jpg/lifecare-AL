@@ -76,6 +76,24 @@ export default function FacilityDining() {
     tables: ["FoodComplianceLog"]
   });
 
+  // Fetch staff for dietitian name
+  const { data: staffRows } = useLiveQuery<Record<string, unknown>>("staff", {
+    query: "include=user", tables: ["Staff"]
+  });
+
+  const dietitianStaffName = useMemo(() => {
+    const dietitian = staffRows.find((s: any) => {
+      const pos = String(s.position || "").toUpperCase();
+      return pos.includes("DIETITIAN") || pos.includes("NUTRITION");
+    });
+    if (dietitian?.user) {
+      const u = dietitian.user as Record<string, unknown>;
+      const name = `${String(u.firstName || "")} ${String(u.lastName || "")}`.trim();
+      return name || "Dietitian";
+    }
+    return "Dietitian";
+  }, [staffRows]);
+
   // Temp check state (local UI helper)
   const [tempFreezer, setTempFreezer] = useState("-18");
   const [tempCooler, setTempCooler] = useState("4");
@@ -95,7 +113,7 @@ export default function FacilityDining() {
   const [showAddConsult, setShowAddConsult] = useState(false);
   const [consultForm, setConsultForm] = useState({
     residentId: "",
-    dietitianName: "Clara Vance, RD, LDN",
+    dietitianName: "",
     reason: "",
     recommendations: "",
     status: "PENDING"
@@ -107,8 +125,8 @@ export default function FacilityDining() {
     title: "Quarterly HACCP Self-Audit",
     category: "TEMPERATURE",
     status: "COMPLIANT",
-    score: 95,
-    auditedBy: "Facility Admin",
+    score: 0,
+    auditedBy: "",
     details: "",
     refrigeratorChecked: true,
     dryStorageChecked: true,
@@ -123,8 +141,8 @@ export default function FacilityDining() {
         title: "Daily Kitchen Temperature Checklist",
         category: "TEMPERATURE",
         status: "COMPLIANT",
-        score: 100,
-        auditedBy: "Facility Admin",
+        score: complianceForm.score || 0,
+        auditedBy: complianceForm.auditedBy || "Staff",
         details: `Freezer Temp: ${tempFreezer}°C (Target: ≤ -18°C) | Refrigerator Temp: ${tempCooler}°C (Target: 0-4°C) | Dry Storage Temp: ${tempDry}°C (Target: 15-21°C).`,
         auditDate: new Date().toISOString()
       });
@@ -253,7 +271,7 @@ export default function FacilityDining() {
       setShowAddConsult(false);
       setConsultForm({
         residentId: "",
-        dietitianName: "Clara Vance, RD, LDN",
+        dietitianName: dietitianStaffName,
         reason: "",
         recommendations: "",
         status: "PENDING"
@@ -460,10 +478,10 @@ export default function FacilityDining() {
             
             <div className="space-y-3">
               <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center font-bold text-black text-sm">CV</div>
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center font-bold text-black text-sm">{dietitianStaffName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}</div>
                 <div>
-                  <h4 className="font-bold text-gray-900 text-xs">Clara Vance, RD, LDN</h4>
-                  <p className="text-[10px] text-gray-500">License: RD-094132 • Geriatric Nutrition</p>
+                  <h4 className="font-bold text-gray-900 text-xs">{dietitianStaffName}</h4>
+                  <p className="text-[10px] text-gray-500">Geriatric Nutrition</p>
                   <p className="text-[9px] text-green-700 font-semibold mt-0.5">● Active Consulting</p>
                 </div>
               </div>
@@ -787,8 +805,7 @@ export default function FacilityDining() {
                   onChange={(e) => setConsultForm({ ...consultForm, dietitianName: e.target.value })} 
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-400 outline-none text-sm bg-white"
                 >
-                  <option value="Clara Vance, RD, LDN">Clara Vance, RD, LDN (Geriatrics)</option>
-                  <option value="Leah McPhee, MS, RDN">Leah McPhee, MS, RDN (Renal &amp; Diabetes)</option>
+                  <option value={dietitianStaffName}>{dietitianStaffName}</option>
                 </select>
               </div>
 

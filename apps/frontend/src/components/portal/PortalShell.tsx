@@ -4,6 +4,7 @@ import { useState, ReactNode, useEffect, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { useFacilityConfig } from "@/lib/useFacilityConfig";
 import {
   Menu,
   X,
@@ -55,6 +56,7 @@ export default function PortalShell({
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [language, setLanguage] = useState("en");
   const [now, setNow] = useState(Date.now());
+  const { facilityName } = useFacilityConfig();
 
   // Session details from GET /api/auth/session
   const [sessionUserId, setSessionUserId] = useState<string | null>(null);
@@ -351,7 +353,7 @@ export default function PortalShell({
                 ♥
               </div>
               <div className="text-sm">
-                <div className={`font-black text-lg leading-tight ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Golden Hearth</div>
+                <div className={`font-black text-lg leading-tight ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{facilityName || "Care Portal"}</div>
                 <div className={`text-xs font-bold ${theme === "dark" ? "text-yellow-300" : "text-yellow-700"}`}>{roleDetails.badge}</div>
               </div>
             </div>
@@ -744,7 +746,7 @@ export default function PortalShell({
                       ♥
                     </div>
                     <div className="text-sm">
-                      <div className={`font-black text-lg leading-tight ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Golden Hearth</div>
+                      <div className={`font-black text-lg leading-tight ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{facilityName || "Care Portal"}</div>
                       <div className={`text-xs font-bold ${theme === "dark" ? "text-yellow-300" : "text-yellow-700"}`}>
                         {roleDetails.badge}
                       </div>

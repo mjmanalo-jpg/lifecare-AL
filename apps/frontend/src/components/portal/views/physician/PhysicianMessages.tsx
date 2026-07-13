@@ -34,6 +34,21 @@ export default function PhysicianMessages() {
   const { data: userRows } = useLiveQuery<Record<string, unknown>>(
     "users", { query: "take=100", tables: ["User"] }
   );
+  const { data: staffRows } = useLiveQuery<Record<string, unknown>>(
+    "staff", { query: "include=user", tables: ["Staff"] }
+  );
+
+  const physicianName = useMemo(() => {
+    const physician = staffRows.find((s: any) => {
+      const pos = String(s.position || "").toUpperCase();
+      return pos.includes("PHYSICIAN") || pos.includes("DOCTOR");
+    });
+    if (physician?.user) {
+      const u = physician.user as Record<string, unknown>;
+      return `${String(u.firstName || "")} ${String(u.lastName || "")}`.trim() || "Physician";
+    }
+    return "Physician";
+  }, [staffRows]);
 
   const [nowTs, setNowTs] = useState(0);
   useEffect(() => {
@@ -70,7 +85,7 @@ export default function PhysicianMessages() {
     try {
       await createRecord("messages", {
         content: newMessage.trim(),
-        senderName: "Dr. Alan Reyes",
+        senderName: physicianName,
         senderRole: "PHYSICIAN",
         recipientId: newRecipient,
         recipientName: users.find((u) => u.id === newRecipient)?.name || "",

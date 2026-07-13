@@ -276,10 +276,24 @@ interface MedForm {
 function AddOrderModal({ residents, onClose, onSaved }: {
   residents: { id: string; name: string; room: string }[]; onClose: () => void; onSaved: () => void;
 }) {
+  const { data: staffRows } = useLiveQuery<Record<string, unknown>>(
+    "staff", { query: "include=user", tables: ["Staff"] }
+  );
+  const physicianName = useMemo(() => {
+    const physician = staffRows.find((s: any) => {
+      const pos = String(s.position || "").toUpperCase();
+      return pos.includes("PHYSICIAN") || pos.includes("DOCTOR");
+    });
+    if (physician?.user) {
+      const u = physician.user as Record<string, unknown>;
+      return `${String(u.firstName || "")} ${String(u.lastName || "")}`.trim() || "Physician";
+    }
+    return "Physician";
+  }, [staffRows]);
   const [form, setForm] = useState<MedForm>({
     residentId: "", name: "", dosage: "", frequency: "Daily",
     route: "oral", status: "ACTIVE", startDate: new Date().toISOString().slice(0, 10), endDate: "",
-    prescribedBy: "Dr. Alan Reyes", reason: "", sideEffects: "", contraindications: "",
+    prescribedBy: physicianName, reason: "", sideEffects: "", contraindications: "",
   });
   const [saving, setSaving] = useState(false);
   const set = (key: keyof MedForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setForm((f) => ({ ...f, [key]: e.target.value }));

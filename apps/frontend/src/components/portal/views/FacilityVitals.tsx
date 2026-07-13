@@ -96,17 +96,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
       baseVal = parseFloat(v.value);
       unit = v.unit || "";
     } else {
-      // Fallback base values for telemetry demo when DB logs are missing
-      if (key === "HEART_RATE") { baseVal = 72; unit = "bpm"; }
-      else if (key === "OXYGEN") { baseVal = 98; unit = "%"; }
-      else if (key === "TEMPERATURE") { baseVal = 36.8; unit = "°C"; }
-      else if (key === "BLOOD_PRESSURE") {
-        const sys = Math.round(120 + (offsets.SYS || 0));
-        const dia = Math.round(80 + (offsets.DIA || 0));
-        return `${sys}/${dia} mmHg`;
-      } else {
-        return "—";
-      }
+      return "—";
     }
 
     if (isNaN(baseVal)) return v ? `${v.value} ${v.unit}` : "—";

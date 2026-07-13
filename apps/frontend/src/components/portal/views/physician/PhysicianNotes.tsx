@@ -53,6 +53,21 @@ export default function PhysicianNotes() {
   const { data: residentRows } = useLiveQuery<Record<string, unknown>>(
     "residents", { query: "take=300", tables: ["Resident"] }
   );
+  const { data: staffRows } = useLiveQuery<Record<string, unknown>>(
+    "staff", { query: "include=user", tables: ["Staff"] }
+  );
+
+  const physicianName = useMemo(() => {
+    const physician = staffRows.find((s: any) => {
+      const pos = String(s.position || "").toUpperCase();
+      return pos.includes("PHYSICIAN") || pos.includes("DOCTOR");
+    });
+    if (physician?.user) {
+      const u = physician.user as Record<string, unknown>;
+      return `${String(u.firstName || "")} ${String(u.lastName || "")}`.trim() || "Physician";
+    }
+    return "Physician";
+  }, [staffRows]);
 
   const [nowTs, setNowTs] = useState(0);
   useEffect(() => {
@@ -231,13 +246,13 @@ export default function PhysicianNotes() {
       )}
 
       {/* Add Note Modal */}
-      {adding && <AddNoteModal residents={residents.map((r) => ({ id: r.id, name: r.name, room: r.room }))} onClose={() => setAdding(false)} onSaved={() => { void refetch(); setAdding(false); }} />}
+      {adding && <AddNoteModal residents={residents.map((r) => ({ id: r.id, name: r.name, room: r.room }))} physicianName={physicianName} onClose={() => setAdding(false)} onSaved={() => { void refetch(); setAdding(false); }} />}
     </div>
   );
 }
 
-function AddNoteModal({ residents, onClose, onSaved }: {
-  residents: { id: string; name: string; room: string }[]; onClose: () => void; onSaved: () => void;
+function AddNoteModal({ residents, physicianName, onClose, onSaved }: {
+  residents: { id: string; name: string; room: string }[]; physicianName: string; onClose: () => void; onSaved: () => void;
 }) {
   const [form, setForm] = useState({ residentId: "", title: "", content: "", noteType: "CLINICAL_NOTE" });
   const [saving, setSaving] = useState(false);
@@ -252,7 +267,7 @@ function AddNoteModal({ residents, onClose, onSaved }: {
     try {
       await createRecord("medical-notes", {
         residentId: form.residentId, title: form.title.trim(), content: form.content.trim(),
-        noteType: form.noteType, authorName: "Dr. Alan Reyes",
+        noteType: form.noteType, authorName: physicianName,
       });
       Swal.fire({ title: "Note Created", icon: "success", timer: 1400, showConfirmButton: false });
       onSaved();

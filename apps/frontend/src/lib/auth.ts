@@ -37,6 +37,7 @@ const VALID_ROLES: Role[] = [
   "FAMILY",
   "RESIDENT",
   "FLEET_MANAGEMENT",
+  "DRIVER",
 ];
 
 // URL-safe base64 helpers (btoa/atob exist in the Node runtime used by route handlers).

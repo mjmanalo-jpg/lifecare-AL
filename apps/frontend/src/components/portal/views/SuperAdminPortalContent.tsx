@@ -788,6 +788,7 @@ const ALL_ROLES: Role[] = [
   "FAMILY",
   "RESIDENT",
   "FLEET_MANAGEMENT",
+  "DRIVER",
 ];
 
 /** Friendly labels for the role keys. */
@@ -800,6 +801,7 @@ const ROLE_LABELS: Record<Role, string> = {
   FAMILY: "Family Sponsor",
   RESIDENT: "Resident",
   FLEET_MANAGEMENT: "Fleet Manager",
+  DRIVER: "Transport Driver",
 };
 
 /** Colour accents per role row for the left badge. */
@@ -812,6 +814,7 @@ const ROLE_COLORS: Record<Role, string> = {
   FAMILY: "from-purple-400 to-purple-600",
   RESIDENT: "from-orange-400 to-orange-600",
   FLEET_MANAGEMENT: "from-indigo-400 to-indigo-600",
+  DRIVER: "from-amber-400 to-amber-600",
 };
 
 type MatrixState = Record<string, Record<string, boolean>>;
