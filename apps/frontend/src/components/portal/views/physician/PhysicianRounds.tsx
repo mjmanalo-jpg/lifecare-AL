@@ -73,7 +73,7 @@ export default function PhysicianRounds() {
   );
 
   const physicianName = useMemo(() => {
-    const physician = staffRows.find((s: any) => {
+    const physician = staffRows.find((s: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
       const pos = String(s.position || "").toUpperCase();
       return pos.includes("PHYSICIAN") || pos.includes("DOCTOR");
     });

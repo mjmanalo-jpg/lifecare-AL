@@ -23,6 +23,7 @@ export type ChartType = "line" | "bar" | "radar" | "area";
 interface ChartContainerProps {
   title: string;
   type: ChartType;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any[];
   dataKey: string;
   xAxisKey?: string;

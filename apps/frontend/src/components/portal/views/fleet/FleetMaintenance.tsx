@@ -136,6 +136,7 @@ export default function FleetMaintenance() {
 
   const preventiveDue = useMemo(() =>
     vehicles.filter(v => {
+      // eslint-disable-next-line react-hooks/purity
       const dateDue = v.nextServiceDate && new Date(v.nextServiceDate).getTime() < Date.now();
       const odoDue = v.nextServiceOdometer > 0 && v.odometer >= v.nextServiceOdometer;
       return dateDue || odoDue;

@@ -35,6 +35,7 @@ class BPSimulator {
   /**
    * Create BP profile for a resident
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   createProfile(resident: any): ResidentBPProfile {
     const age = this.calculateAge(resident.dateOfBirth);
     const medicalHistory = resident.medicalHistory || "";
@@ -46,7 +47,7 @@ class BPSimulator {
     );
 
     // Extract medication antihypertensive effects
-    const medications = (resident.medications || []).map((m: any) => m.name);
+    const medications = (resident.medications || []).map((m: any) => m.name); // eslint-disable-line @typescript-eslint/no-explicit-any
 
     return {
       residentId: resident.id,

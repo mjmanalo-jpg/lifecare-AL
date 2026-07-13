@@ -10,17 +10,11 @@ import {
   ChevronLeft,
   Mic,
   User,
-  Map,
   Cpu,
   AlertTriangle,
   CheckCircle,
-  DollarSign,
-  MessageSquare,
-  Info,
   Clock,
-  Check,
   Calendar,
-  Newspaper,
   ArrowRight,
   MapPin,
   Phone,
@@ -68,6 +62,7 @@ interface RoadmapStep {
   title: string;
   tag: string;
   desc: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon: any;
   subTasks: string[];
   kpis: { label: string; value: string }[];

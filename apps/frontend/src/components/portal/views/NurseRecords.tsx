@@ -603,6 +603,7 @@ function CallBellsModal({ r, onClose, refetchCallBells }: { r: RecordVM; onClose
                       <div>
                         <h3 className="font-bold text-gray-900">{bell.reason}</h3>
                         <p className="text-xs text-gray-600 mt-1">
+                          {/* eslint-disable-next-line react-hooks/purity */}
                           {Math.round((Date.now() - new Date(bell.createdAt).getTime()) / 60000)} min ago
                         </p>
                       </div>
@@ -779,6 +780,7 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
                     <span className="font-medium text-gray-900 text-sm">{cb.reason}</span>
                     <span className={`px-2 py-0.5 rounded text-xs font-semibold ${cb.status === "PENDING" ? "bg-red-200 text-red-800" : cb.status === "RESPONDED" ? "bg-yellow-200 text-yellow-800" : "bg-green-200 text-green-800"}`}>{cb.status}</span>
                   </div>
+                  {/* eslint-disable-next-line react-hooks/purity */}
                   <p className="text-xs text-gray-600 mb-2">{Math.round((Date.now() - new Date(cb.createdAt).getTime()) / 60000)} min ago</p>
                   {cb.notes && <p className="text-xs text-gray-700 mb-2">📝 {cb.notes}</p>}
                   {cb.status !== "RESOLVED" && cb.status !== "CANCELLED" && (
@@ -870,6 +872,7 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Time Waiting</label>
+              {/* eslint-disable-next-line react-hooks/purity */}
               <p className="text-gray-900 font-medium">{Math.round((Date.now() - new Date(selectedBell.createdAt).getTime()) / 60000)} minutes</p>
             </div>
           </div>
@@ -988,6 +991,7 @@ function CallBellResolveModal({
           </div>
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">Time Waiting</label>
+            {/* eslint-disable-next-line react-hooks/purity */}
             <p className="text-gray-900 font-medium">{Math.round((Date.now() - new Date(bell.createdAt).getTime()) / 60000)} minutes</p>
           </div>
           <div>

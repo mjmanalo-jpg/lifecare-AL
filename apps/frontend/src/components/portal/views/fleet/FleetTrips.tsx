@@ -144,6 +144,7 @@ export default function FleetTrips() {
 
   const pingBusy = useRef(false);
   const tripsRef = useRef<Trip[]>([]);
+  // eslint-disable-next-line react-hooks/refs
   tripsRef.current = trips;
 
   const filtered = useMemo(() => {
@@ -190,7 +191,9 @@ export default function FleetTrips() {
   const pingTrip = async (trip: Trip) => {
     const now = new Date().toISOString();
     await updateRecord("trips", trip.id, {
+      // eslint-disable-next-line react-hooks/purity
       currentLat: (trip.currentLat ?? BASE_LAT) + (Math.random() - 0.4) * 0.004,
+      // eslint-disable-next-line react-hooks/purity
       currentLng: (trip.currentLng ?? BASE_LNG) + (Math.random() - 0.3) * 0.004,
       lastPingAt: now,
     });

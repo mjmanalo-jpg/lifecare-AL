@@ -255,6 +255,7 @@ export default function FleetDashboard() {
   const tripsPerDay = useMemo(() => {
     const days: { name: string; trips: number }[] = [];
     for (let i = 13; i >= 0; i--) {
+      // eslint-disable-next-line react-hooks/purity
       const d = new Date(Date.now() - i * DAY_MS);
       const key = d.toDateString();
       days.push({

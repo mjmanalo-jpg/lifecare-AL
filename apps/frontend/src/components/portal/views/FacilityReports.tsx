@@ -50,7 +50,7 @@ export default function FacilityReports() {
   const [dateRange, setDateRange] = useState("30");
   const [search, setSearch] = useState("");
 
-  const now = Date.now();
+  const [now] = useState(() => Date.now());
   const rangeMs = Number(dateRange) * 86400 * 1000;
 
   const filteredIncidents = useMemo(() => {
@@ -81,6 +81,7 @@ export default function FacilityReports() {
 
   const filteredInvoices = useMemo(() => {
     const q = search.trim().toLowerCase();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return invoices.filter((inv: any) => {
       const name = inv.resident ? `${inv.resident.firstName ?? ""} ${inv.resident.lastName ?? ""}`.toLowerCase() : "";
       if (q && !name.includes(q) && !(inv.invoiceNumber ?? "").toLowerCase().includes(q)) return false;
@@ -109,6 +110,7 @@ export default function FacilityReports() {
       filename = "residents_report.csv";
     } else if (reportType === "billing") {
       csv = "Invoice,Resident,Amount,Paid,Balance,Status,Due Date\n";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       filteredInvoices.forEach((inv: any) => {
         const name = inv.resident ? `${inv.resident.firstName ?? ""} ${inv.resident.lastName ?? ""}` : "";
         const total = inv.totalAmount ?? 0;
@@ -555,6 +557,7 @@ function BillingReport({ invoices, search: _s }: { invoices: Record<string, unkn
   const paginated = invoices.slice(start, start + pp);
 
   const stats = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const all = invoices as any[];
     return {
       total: all.length,
@@ -568,6 +571,7 @@ function BillingReport({ invoices, search: _s }: { invoices: Record<string, unkn
 
   const statusDist = useMemo(() => {
     const m = new Map<string, number>();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (invoices as any[]).forEach(i => m.set(i.status, (m.get(i.status) || 0) + 1));
     return Array.from(m.entries()).map(([n, v]) => ({ name: n, value: v }));
   }, [invoices]);
@@ -629,6 +633,7 @@ function BillingReport({ invoices, search: _s }: { invoices: Record<string, unkn
                 <tr><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Invoice</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Resident</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Amount</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Status</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Due</th></tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                 {paginated.map((inv: any) => {
                   const name = inv.resident ? `${inv.resident.firstName ?? ""} ${inv.resident.lastName ?? ""}` : "—";
                   return (

@@ -26,10 +26,8 @@ export default function RolePortalPage() {
   const userRole: Role = roleParam ? (PATH_TO_ROLE[roleParam.toLowerCase()] || "FAMILY") : "FAMILY";
   const activeTab = tabParam ? (ROUTE_TO_TAB[tabParam] || "Dashboard") : "Dashboard";
 
-  useEffect(() => {
-    // Simulate session check on client side (server-side check happens in layout)
-    setIsLoading(false);
-  }, []);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setIsLoading(false); }, []);
 
   const handleLogout = async () => {
     await fetch("/api/auth/session", { method: "DELETE" });

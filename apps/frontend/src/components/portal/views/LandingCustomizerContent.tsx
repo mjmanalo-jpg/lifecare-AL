@@ -921,6 +921,7 @@ function SiteContentEditor() {
   useEffect(() => {
     const map: Record<string, string> = {};
     for (const r of rows) map[r.id] = r.value;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEdits((prev) => {
       const merged = { ...prev };
       for (const [k, v] of Object.entries(map)) {
@@ -1137,7 +1138,7 @@ function BlogManager() {
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <Newspaper className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500 font-medium">No blog posts yet</p>
-          <p className="text-sm text-gray-400">Click "New Post" to create your first article.</p>
+          <p className="text-sm text-gray-400">Click &quot;New Post&quot; to create your first article.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -1460,7 +1461,7 @@ function PagesManager() {
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <FilePlus className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500 font-medium">No custom pages yet</p>
-          <p className="text-sm text-gray-400">Click "Add Page" to create a new navigation page.</p>
+          <p className="text-sm text-gray-400">Click &quot;Add Page&quot; to create a new navigation page.</p>
         </div>
       ) : (
         <div className="space-y-3">

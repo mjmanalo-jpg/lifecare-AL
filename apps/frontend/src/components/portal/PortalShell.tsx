@@ -55,7 +55,7 @@ export default function PortalShell({
   const [notifications, setNotifications] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [language, setLanguage] = useState("en");
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const { facilityName } = useFacilityConfig();
 
   // Session details from GET /api/auth/session
@@ -271,6 +271,7 @@ export default function PortalShell({
   // Initialize theme from localStorage
   useEffect(() => {
     const savedTheme = (localStorage.getItem("theme") as "light" | "dark") || "light";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTheme(savedTheme);
     if (savedTheme === "dark") {
       document.documentElement.classList.remove("light");

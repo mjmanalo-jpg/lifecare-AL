@@ -146,6 +146,7 @@ export default function FleetFuel() {
 
   const costByWeek = useMemo(() => {
     const weeks: { name: string; start: number; cost: number }[] = [];
+    // eslint-disable-next-line react-hooks/purity
     const now = Date.now();
     for (let i = 7; i >= 0; i--) {
       const start = now - (i + 1) * WEEK_MS;

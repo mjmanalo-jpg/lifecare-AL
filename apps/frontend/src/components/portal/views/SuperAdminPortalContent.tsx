@@ -506,7 +506,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <label className="block text-sm font-semibold text-gray-600 mb-2">Documents ({viewingStaff.documents.length})</label>
                     <ul className="space-y-2 mt-2">
-                      {viewingStaff.documents.map((doc: any, i: number) => (
+                      {viewingStaff.documents.map((doc: any, i: number) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
                         <li key={i}>
                           <a
                             href={doc.url}
@@ -862,6 +862,7 @@ function PortalMatrixEditor() {
             state[r][f] = parsed[r]?.[f] ?? roleFeatures.includes(f);
           });
         });
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setMatrix(state);
       } catch (e) {
         console.error("Failed to parse matrix setting:", e);

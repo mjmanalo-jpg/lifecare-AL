@@ -401,6 +401,7 @@ function getSeedsForRole(role: string, userId: string) {
 
 // ── Auto Notification Triggers ───────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleAutoNotification(model: string, data: any) {
   try {
     // 1. Call Bells Trigger

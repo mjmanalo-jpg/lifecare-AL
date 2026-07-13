@@ -625,6 +625,7 @@ function NurseMonitoringViewInner({
   setMonitoringFallAlert,
 }: {
   monitoringFallAlert: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handleMonitoringFallTriggered: (analysis: any) => void;
   setMonitoringFallAlert: (val: boolean) => void;
 }) {
@@ -676,7 +677,7 @@ function NurseMonitoringViewInner({
             residentName={resident || undefined}
             residentRoom={room || undefined}
             isFallen={monitoringFallAlert}
-            onFallTriggered={(analysis: any) => handleMonitoringFallTriggered({ ...analysis, resident: resident || "", room: room || "" })}
+            onFallTriggered={(analysis: any) => handleMonitoringFallTriggered({ ...analysis, resident: resident || "", room: room || "" })} // eslint-disable-line @typescript-eslint/no-explicit-any
             onFallCleared={() => setMonitoringFallAlert(false)}
           />
         </div>
@@ -732,6 +733,7 @@ function NurseMonitoringView({
   setMonitoringFallAlert,
 }: {
   monitoringFallAlert: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handleMonitoringFallTriggered: (analysis: any) => void;
   setMonitoringFallAlert: (val: boolean) => void;
 }) {

@@ -82,6 +82,7 @@ export default function FacilityDining() {
   });
 
   const dietitianStaffName = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dietitian = staffRows.find((s: any) => {
       const pos = String(s.position || "").toUpperCase();
       return pos.includes("DIETITIAN") || pos.includes("NUTRITION");

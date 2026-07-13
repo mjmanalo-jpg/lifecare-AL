@@ -276,13 +276,13 @@ function normalize(raw: Partial<LandingConfig> | null): LandingConfig {
   const rawLogin: Partial<LoginConfig> = raw.login || {};
   const loginBg: Partial<LandingBackground> = rawLogin.background || {};
   const normalizedLogin: LoginConfig = {
-    templateId: (["split", "centered", "sidebar", "frosted"].includes(rawLogin.templateId as any))
+    templateId: (["split", "centered", "sidebar", "frosted"].includes(rawLogin.templateId as any)) // eslint-disable-line @typescript-eslint/no-explicit-any
       ? (rawLogin.templateId as LoginTemplateId)
       : DEFAULT_LOGIN_CONFIG.templateId,
     baseTheme: rawLogin.baseTheme === "light" ? "light" : "dark",
     accent: typeof rawLogin.accent === "string" ? rawLogin.accent : DEFAULT_LOGIN_CONFIG.accent,
     background: {
-      type: (["default", "solid", "gradient", "image"].includes(loginBg.type as any))
+      type: (["default", "solid", "gradient", "image"].includes(loginBg.type as any)) // eslint-disable-line @typescript-eslint/no-explicit-any
         ? (loginBg.type as BackgroundType)
         : DEFAULT_LOGIN_CONFIG.background.type,
       color: typeof loginBg.color === "string" ? loginBg.color : DEFAULT_LOGIN_CONFIG.background.color,

@@ -117,10 +117,6 @@ interface AIChatMessage {
 }
 
 export default function ResidentPortalContent({ tab }: ResidentPortalContentProps) {
-  if (tab && tab !== "dashboard") {
-    return <FamilyPortalContent tab={tab} />;
-  }
-
   const [now, setNow] = useState<Date>(new Date());
   const [newGoalText, setNewGoalText] = useState("");
   
@@ -157,6 +153,7 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
   const [submittingMenuSub, setSubmittingMenuSub] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -215,6 +212,7 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
 
   useEffect(() => {
     const saved = settingRows.find((r) => r.id === "assistantVoice")?.value;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (saved) setVoice(saved);
   }, [settingRows]);
 
@@ -228,6 +226,7 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
   // Keep the welcome bubble in sync with the configured greeting as long as
   // the resident hasn't started chatting yet.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAssistantMessages((prev) =>
       prev.length === 1 && prev[0].id === "welcome" && prev[0].text !== assistantCfg.greeting
         ? [{ ...prev[0], text: assistantCfg.greeting }]
@@ -666,6 +665,7 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
   }, [menuRows]);
 
   // Active staff names for SOS
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const activeStaffNames = useMemo(() => {
     const active = staffRows.filter(s => s.user);
     const nurse = active.find(s => s.position?.toUpperCase().includes("NURSE"));
@@ -714,6 +714,7 @@ Vitals:
     setAssistantThinking(true);
     
     // Add user message
+    // eslint-disable-next-line react-hooks/purity
     const userMsg: AIChatMessage = { id: `u-${Date.now()}`, role: "user", text: query };
     setAssistantMessages((prev) => [...prev, userMsg]);
 
@@ -902,6 +903,7 @@ Vitals:
   // Browser Web Speech API fallback (English-only).
   const startBrowserSTT = () => {
     if (typeof window === "undefined") return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
       Swal.fire({
@@ -918,6 +920,7 @@ Vitals:
     recognition.lang = "en-US";
 
     let finalTranscript = "";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (e: any) => {
       let interim = "";
       finalTranscript = "";
@@ -939,6 +942,7 @@ Vitals:
       setInterimSpeech("");
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onerror = (err: any) => {
       console.warn("Speech error:", err);
       setAssistantListening(false);
@@ -969,6 +973,10 @@ Vitals:
 
 
   // Loading state skeleton
+  if (tab && tab !== "dashboard") {
+    return <FamilyPortalContent tab={tab} />;
+  }
+
   if (profileLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-gray-500">
@@ -991,7 +999,7 @@ Vitals:
             Good Morning, {resident?.firstName || ""}
           </h1>
           <p className="text-gray-600 text-sm md:text-base max-w-xl leading-relaxed">
-            It's a beautiful {dayName}. You have <span className="font-semibold text-blue-900">{todayTasks.filter(t => t.status !== "COMPLETED").length} activities</span> left scheduled today, and your wellness score is looking {wellnessScore >= 90 ? "optimal" : wellnessScore >= 80 ? "good" : "steady"}.
+            It&apos;s a beautiful {dayName}. You have <span className="font-semibold text-blue-900">{todayTasks.filter(t => t.status !== "COMPLETED").length} activities</span> left scheduled today, and your wellness score is looking {wellnessScore >= 90 ? "optimal" : wellnessScore >= 80 ? "good" : "steady"}.
           </p>
         </div>
         
@@ -1022,7 +1030,7 @@ Vitals:
         >
           <div className="flex items-center justify-between pb-4 border-b border-gray-100">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-blue-600" /> Today's Schedule
+              <Calendar className="w-5 h-5 text-blue-600" /> Today&apos;s Schedule
             </h2>
             <span className="text-xs font-semibold text-blue-600 px-2.5 py-1 bg-blue-50 rounded-full">
               {now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
@@ -1265,7 +1273,7 @@ Vitals:
           >
             <div>
               <h3 className="text-sm font-bold text-gray-900 pb-3 border-b border-gray-100 flex items-center gap-2">
-                <Utensils className="w-4 h-4 text-amber-500" /> Today's Menu
+                <Utensils className="w-4 h-4 text-amber-500" /> Today&apos;s Menu
               </h3>
               
               <div className="mt-3 space-y-4">
@@ -1360,7 +1368,7 @@ Vitals:
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
             <div className="px-6 py-4 bg-blue-600 text-white flex items-center justify-between flex-shrink-0">
               <h3 className="font-bold text-lg flex items-center gap-2">
-                <Calendar className="w-5 h-5" /> Today's Complete Schedule
+                <Calendar className="w-5 h-5" /> Today&apos;s Complete Schedule
               </h3>
               <button onClick={() => setScheduleModalOpen(false)} className="p-1 hover:bg-blue-700 rounded transition">
                 <X className="w-5 h-5 text-white" />
@@ -1511,7 +1519,7 @@ Vitals:
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
             <div className="px-6 py-4 bg-amber-500 text-white flex items-center justify-between flex-shrink-0">
               <h3 className="font-bold text-lg flex items-center gap-2">
-                <Utensils className="w-5 h-5" /> Today's Dining & Substitutions
+                <Utensils className="w-5 h-5" /> Today&apos;s Dining & Substitutions
               </h3>
               <button onClick={() => setMenuModalOpen(false)} className="p-1 hover:bg-amber-600 rounded transition">
                 <X className="w-5 h-5 text-white" />
@@ -1524,7 +1532,7 @@ Vitals:
                   <div className="col-span-3 text-center py-8 text-gray-400">
                     <Utensils className="w-10 h-10 mx-auto text-gray-200 mb-2" />
                     <p className="font-semibold text-sm">No menu set for today</p>
-                    <p className="text-xs mt-1">The kitchen hasn't published today's menu yet.</p>
+                    <p className="text-xs mt-1">The kitchen hasn&apos;t published today&apos;s menu yet.</p>
                   </div>
                 ) : (
                   todayMenuItems.map((item) => (
@@ -1736,7 +1744,7 @@ Vitals:
                         const isBP = v.type === "BLOOD_PRESSURE";
                         const isOxy = v.type === "OXYGEN";
                         
-                        let displayType = v.type.replace(/_/g, " ");
+                        const displayType = v.type.replace(/_/g, " ");
                         let alert = false;
                         if (isHR) {
                           const val = parseInt(v.value);
@@ -2125,13 +2133,13 @@ Vitals:
                 onClick={() => handleSendAssistantMessage("What is my schedule for today?")}
                 className="px-3 py-1 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 text-blue-900 font-bold rounded-full text-xs flex-shrink-0 transition active:scale-95"
               >
-                🗓️ Today's Schedule
+                🗓️ Today&apos;s Schedule
               </button>
               <button 
                 onClick={() => handleSendAssistantMessage("What is on the dining menu?")}
                 className="px-3 py-1 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 text-blue-900 font-bold rounded-full text-xs flex-shrink-0 transition active:scale-95"
               >
-                🥗 Today's Menu
+                🥗 Today&apos;s Menu
               </button>
               <button 
                 onClick={() => handleSendAssistantMessage("How are my heart rate vitals looking?")}

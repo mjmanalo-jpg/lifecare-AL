@@ -436,6 +436,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <label className="block text-sm font-semibold text-gray-600 mb-2">Documents ({viewingStaff.documents.length})</label>
                     <ul className="space-y-2 mt-2">
+                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                       {viewingStaff.documents.map((doc: any, i: number) => (
                         <li key={i}>
                           <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm">

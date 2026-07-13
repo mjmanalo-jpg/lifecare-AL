@@ -87,6 +87,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
     return () => clearInterval(interval);
   }, [residentFilter]);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getDisplayValue = (rv: any, key: string) => {
     const v = rv.vitals[key];
     

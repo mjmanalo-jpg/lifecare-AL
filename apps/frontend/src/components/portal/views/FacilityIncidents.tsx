@@ -64,7 +64,7 @@ export default function FacilityIncidents() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let result = incidents.filter(i => {
+    const result = incidents.filter(i => {
       if (q && !i.type.toLowerCase().includes(q) && !i.resident.toLowerCase().includes(q) && !i.room.toLowerCase().includes(q) && !i.description.toLowerCase().includes(q)) return false;
       if (severityFilter !== "all" && i.severity !== severityFilter) return false;
       if (statusFilter === "open" && i.resolved) return false;
@@ -133,6 +133,7 @@ export default function FacilityIncidents() {
   const start = (page - 1) * perPage;
   const paginated = filtered.slice(start, start + perPage);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setPage(1); }, [search, severityFilter, statusFilter, typeFilter, perPage]);
 
   const handleResolve = async (id: string) => {

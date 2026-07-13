@@ -9,6 +9,7 @@ export const EmergencyCallSystem = ({
   callBells,
   onAcknowledge
 }: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   callBells: any[];
   onAcknowledge: (id: number) => void;
 }) => (
@@ -56,6 +57,7 @@ export const IncidentQuickReport = ({
 }: {
   showForm: boolean;
   onShowForm: (show: boolean) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   newIncident: any;
   onIncidentChange: (field: string, value: string) => void;
   onSubmit: () => void;
@@ -135,6 +137,7 @@ export const QuickMessaging = ({
   onMessageChange,
   onSendMessage
 }: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   messages: any[];
   showMessaging: boolean;
   onShowMessaging: (show: boolean) => void;
@@ -189,9 +192,11 @@ export const VitalsQuickLog = ({
   onVitalsChange,
   onSubmit
 }: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vitalsLog: any[];
   showVitalsForm: boolean;
   onShowForm: (show: boolean) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   newVitals: any;
   onVitalsChange: (field: string, value: string) => void;
   onSubmit: () => void;
@@ -272,6 +277,7 @@ export const TimeTracking = ({
   onClockToggle,
   onBreakToggle
 }: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   shiftTime: any;
   onClockToggle: () => void;
   onBreakToggle: () => void;

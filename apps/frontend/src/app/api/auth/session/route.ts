@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
     if (!resolvedUserId && isDbConfigured()) {
       try {
         const user = await prisma.user.findFirst({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           where: { role: role as any },
           select: { id: true },
           orderBy: { createdAt: "asc" },

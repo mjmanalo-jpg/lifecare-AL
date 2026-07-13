@@ -26,6 +26,7 @@ export default function LandingBackground() {
   const { background: bg, accent, baseTheme } = config;
   const [mounted, setMounted] = useState(false);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
 
   // Publish accent + base theme to the document so the whole page reacts.

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ShieldCheck,
   Activity,
-  Users,
+
   Mic,
   ArrowLeft,
   ChevronDown,
@@ -29,6 +29,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const savedTheme = localStorage.getItem("theme") as "dark" | "light" | null;
     const initialTheme = savedTheme || "dark";

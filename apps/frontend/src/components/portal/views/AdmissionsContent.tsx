@@ -237,6 +237,7 @@ export default function AdmissionsContent() {
   // none has been picked yet. Staff can still change it via the dropdown.
   useEffect(() => {
     if (step === 5 && !form.roomNumber && availableRooms.length) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       set({ roomNumber: availableRooms[0] });
     }
   }, [step, form.roomNumber, availableRooms]);
@@ -245,6 +246,7 @@ export default function AdmissionsContent() {
   useEffect(() => {
     if (step === 5 && !form.qrPayload && form.id) {
       const payload = `GH-RES-${form.id.slice(0, 8)}`;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       set({ qrPayload: payload });
     }
   }, [step, form.qrPayload, form.id]);

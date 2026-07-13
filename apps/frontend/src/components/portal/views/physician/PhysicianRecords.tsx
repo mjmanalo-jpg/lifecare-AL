@@ -172,7 +172,7 @@ export default function PhysicianRecords() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let result = records.filter((r) => {
+    const result = records.filter((r) => {
       if (q && !r.name.toLowerCase().includes(q) && !r.room.toLowerCase().includes(q) && !r.allergies.toLowerCase().includes(q)) return false;
       if (careFilter !== "all" && r.careLevel !== careFilter) return false;
       if (alertsOnly && r.alertsCount === 0) return false;
@@ -194,6 +194,7 @@ export default function PhysicianRecords() {
   const start = (page - 1) * perPage;
   const paginated = filtered.slice(start, start + perPage);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setPage(1); }, [search, careFilter, alertsOnly, perPage, sortBy, sortAsc]);
 
   const vital = (r: RecordVM, key: string) => {

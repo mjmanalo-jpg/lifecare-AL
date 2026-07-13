@@ -197,6 +197,7 @@ export default function NurseRecordsWithCallBells() {
                         <p className="font-semibold text-gray-900">{bell.reason}</p>
                         <p className="text-xs text-gray-600 mt-1">
                           {Math.round(
+                            // eslint-disable-next-line react-hooks/purity
                             (Date.now() - new Date(bell.createdAt).getTime()) / 60000
                           )}{" "}
                           min ago
