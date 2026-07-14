@@ -290,7 +290,7 @@
   <div class="phase-row"><div class="tag">PHASE 3</div><div class="body"><b>AI Monitoring &amp; Operations</b><span>Computer vision surveillance, fall alarms, notifications, operations, and portals.</span></div></div>
   <div class="phase-row"><div class="tag">PHASE 4</div><div class="body"><b>Billing &amp; Portal Services</b><span>Clinical charges recording, automated billing, financial reporting, and client portals.</span></div></div>
   <div class="phase-row"><div class="tag">PHASE 5</div><div class="body"><b>Discharge &amp; Analytics</b><span>System dashboard telemetry, clinical discharge protocol, and patient record archiving.</span></div></div>
-  <div class="phase-row"><div class="tag">PHASE 6</div><div class="body"><b>Fleet &amp; Transport Management</b><span>Transport requests, dispatch, vehicle &amp; driver assignment, GPS trips, and fleet maintenance.</span></div></div>
+  <div class="phase-row"><div class="tag">PHASE 6</div><div class="body"><b>Fleet &amp; Transport Management</b><span>Pickup &#8594; drop-off transport requests (patient · family · driver), dispatch, vehicle &amp; driver assignment, live-GPS trips with navigation, and fleet maintenance.</span></div></div>
   <div class="phase-row"><div class="tag">PHASE 7</div><div class="body"><b>Hospitality &amp; Property Management (PMS)</b><span>World-class hotel operations: front desk &amp; guest management, housekeeping &amp; maintenance, aircon/HVAC service, engagement, dining compliance &amp; dietitian registry, and occupancy analytics.</span></div></div>
 
   <div class="phase-row"><div class="tag">ROLES</div><div class="body"><b>Role-Specific Portal Flowcharts</b><span>Step-by-step flow for each of the 8 user portals: Super Admin, Facility Admin, Physician, Nurse, Caregiver, Family, Resident, Transport Driver.</span></div></div>
@@ -507,16 +507,18 @@
   <div class="content">
     <div class="section-title first">RESIDENT TRANSPORT WORKFLOW</div>
     <div class="flow">
-      <div class="node indigo wide">Transport Request (Portal / AI Companion / Front Desk)</div>
+      <div class="node indigo wide">Transport Request (Patient · Family · Driver · AI Companion · Front Desk)</div>
       <div class="stem"></div>
       <div class="hbar" style="margin: 0 26px;"></div>
       <div class="split">
         <div class="branch"><div class="stem arrow"></div><div class="node indigo" style="background:#fff;">Medical Appointment</div></div>
         <div class="branch"><div class="stem arrow"></div><div class="node indigo" style="background:#fff;">Dialysis / Therapy Run</div></div>
         <div class="branch"><div class="stem arrow"></div><div class="node indigo" style="background:#fff;">Family Outing</div></div>
-        <div class="branch"><div class="stem arrow"></div><div class="node red">Emergency Transfer</div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node red">Emergency / Ambulance</div></div>
       </div>
       <div class="stem" style="margin-top: 6px;"></div>
+      <div class="node teal wide">Pickup &#8594; Drop-off Location<br><span style="font-weight:600; font-size:9.5px;">Any leg &middot; facility &#8644; hospital &#8644; home &middot; swap for return trip</span></div>
+      <div class="stem arrow"></div>
       <div class="node slate wide">Dispatcher Review, Priority &amp; Approval</div>
       <div class="stem arrow"></div>
       <div class="split" style="max-width: 82%;">
@@ -527,9 +529,9 @@
       <div class="stem" style="margin-top: 6px;"></div>
       <div class="node slate wide">Pre-Trip Safety Inspection Checklist</div>
       <div class="stem arrow"></div>
-      <div class="node blue wide">Trip In Progress — Live GPS Tracking &amp; Family Notification</div>
+      <div class="node blue wide">Trip In Progress — Live GPS · Pickup → Drop-off Navigation · Family Notification</div>
       <div class="stem arrow"></div>
-      <div class="node blue-o wide">Arrival Check-In → Return Trip → Drop-Off Confirmation</div>
+      <div class="node blue-o wide">Drop-off Check-In → Return Leg (swap pickup/drop-off) → Confirmation</div>
       <div class="stem arrow"></div>
       <div class="node green wide">Trip Log Recorded → Billable Charge Posted to Invoice</div>
     </div>
@@ -728,20 +730,22 @@
         <div class="flow">
           <div class="node pill">LOGIN</div>
           <div class="stem arrow"></div>
-          <div class="node blue" style="align-self: stretch;">Clinical Dashboard</div>
-          <div class="stem arrow"></div>
-          <div class="node blue-o" style="align-self: stretch;">Patient Rounds — Assigned Residents</div>
-          <div class="stem arrow"></div>
-          <div class="node blue-o" style="align-self: stretch;">Medical Records Review</div>
-          <div class="stem arrow"></div>
-          <div class="node amber" style="align-self: stretch;">Orders &amp; Prescriptions</div>
-          <div class="stem arrow"></div>
-          <div class="node teal" style="align-self: stretch;">Clinical Notes<br><span style="font-weight:600; font-size:9.5px;">Voice-to-Text · AI-Generated Draft</span></div>
+          <div class="node blue" style="align-self: stretch;">Command Center<br><span style="font-weight:600; font-size:9.5px;">Cross-team triage — patient · family · nurse · caregiver signals</span></div>
           <div class="stem"></div>
           <div class="hbar" style="margin: 0 8px;"></div>
           <div class="split">
-            <div class="branch"><div class="stem arrow"></div><div class="node green" style="background:#fff;">Vitals Trends</div></div>
-            <div class="branch"><div class="stem arrow"></div><div class="node red">Incident Review</div></div>
+            <div class="branch"><div class="stem arrow"></div><div class="node blue-o">Case Review &amp; Diagnosis<br><span style="font-weight:600; font-size:9.3px;">Consolidated chart · diagnose · co-sign</span></div></div>
+            <div class="branch"><div class="stem arrow"></div><div class="node amber">Prescribing &amp; Orders<br><span style="font-weight:600; font-size:9.3px;">Approve &amp; e-sign</span></div></div>
+          </div>
+          <div class="stem arrow" style="margin-top: 6px;"></div>
+          <div class="node purple" style="align-self: stretch; background:#fff;">Care Plans &amp; Directives<br><span style="font-weight:600; font-size:9.5px;">Goals the team executes · family follows</span></div>
+          <div class="stem arrow"></div>
+          <div class="node teal" style="align-self: stretch;">Consults &amp; Referrals</div>
+          <div class="stem"></div>
+          <div class="hbar" style="margin: 0 8px;"></div>
+          <div class="split">
+            <div class="branch"><div class="stem arrow"></div><div class="node red">Incident Medical Review</div></div>
+            <div class="branch"><div class="stem arrow"></div><div class="node green" style="background:#fff;">Clinical Notes<br><span style="font-weight:600; font-size:9.3px;">Voice-to-Text · AI Draft</span></div></div>
           </div>
           <div class="stem arrow" style="margin-top: 6px;"></div>
           <div class="node slate" style="align-self: stretch;">Secure Messages &amp; Handover</div>
@@ -880,7 +884,7 @@
       <div class="hbar" style="margin: 0 14px;"></div>
       <div class="split">
         <div class="branch"><div class="stem arrow"></div><div class="node yellow" style="background:#fff;">Inspection Checklist<br><span style="font-weight:600; font-size:9.5px;">8-Item Safety Checklist · InspectionDone flag</span></div></div>
-        <div class="branch"><div class="stem arrow"></div><div class="node blue" style="background:#fff;">Trip Board<br><span style="font-weight:600; font-size:9.5px;">View Assigned Trips &bull; Scheduled Routes</span></div></div>
+        <div class="branch"><div class="stem arrow"></div><div class="node blue" style="background:#fff;">Trip Board<br><span style="font-weight:600; font-size:9.5px;">Assigned trips &bull; Pickup &#8594; Drop-off &bull; Navigate (Maps)</span></div></div>
         <div class="branch"><div class="stem arrow"></div><div class="node purple" style="background:#fff;">Fuel &amp; Odometer<br><span style="font-weight:600; font-size:9.5px;">Refuel Log Form &bull; Vehicle Mileage Updates</span></div></div>
       </div>
     </div>
@@ -888,8 +892,8 @@
     <div class="section-title">TRANSIT COMPLIANCE &amp; STATUS CONTROLLER</div>
     <div class="chainrow">
       <div class="node blue">Inspect Vehicle<br><span style="font-weight:600; font-size:9.3px;">Submit Pre-Trip Checklist</span></div><div class="harrow"></div>
-      <div class="node yellow">Depart Facility<br><span style="font-weight:600; font-size:9.3px;">Stamp departedAt &bull; Status: EN_ROUTE</span></div><div class="harrow"></div>
-      <div class="node purple">Arrive at Destination<br><span style="font-weight:600; font-size:9.3px;">Stamp arrivedAt &bull; Status: ARRIVED</span></div><div class="harrow"></div>
+      <div class="node yellow">Depart Pickup<br><span style="font-weight:600; font-size:9.3px;">Stamp departedAt &bull; Status: EN_ROUTE</span></div><div class="harrow"></div>
+      <div class="node purple">Arrive at Drop-off<br><span style="font-weight:600; font-size:9.3px;">Stamp arrivedAt &bull; Status: ARRIVED</span></div><div class="harrow"></div>
       <div class="node blue">Start Return Trip<br><span style="font-weight:600; font-size:9.3px;">Stamp returnDepartedAt &bull; Status: RETURNING</span></div><div class="harrow"></div>
       <div class="node green">Complete Trip<br><span style="font-weight:600; font-size:9.3px;">Stamp completedAt &bull; Log Trip Hours</span></div>
     </div>

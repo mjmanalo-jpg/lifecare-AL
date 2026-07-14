@@ -11,6 +11,7 @@ async function mutate(method: string, path: string, body?: unknown) {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
+    credentials: "same-origin",
     cache: "no-store",
   });
   const json = await res.json().catch(() => ({}));

@@ -4,11 +4,12 @@ import { useMemo, useState, useEffect } from "react";
 import {
   Users, AlertTriangle, HeartPulse, BellRing, Activity, RefreshCw,
   Sun, Sunset, Moon, CheckCircle2, Clock, ShieldAlert, ChevronRight, Heart,
+  TrendingUp, Droplets, Wind, Thermometer, Search,
   type LucideIcon,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
+  ResponsiveContainer, AreaChart, Area, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, Legend,
 } from "recharts";
 import { useLiveQuery, useStats } from "@/lib/useLiveQuery";
@@ -19,7 +20,7 @@ import { updateRecord } from "@/lib/api";
 
 type Incident = ReturnType<typeof adaptIncident>;
 interface ResidentVM { id: string; name: string; room: string; careLevel: string; alertsCount: number }
-interface VitalVM { id: string; type: string; value: string; unit: string; recordedAt: string | null; resident: string; room: string; abnormal: boolean }
+interface VitalVM { id: string; type: string; value: string; unit: string; recordedAt: string | null; residentId: string; resident: string; room: string; abnormal: boolean }
 interface CallBellVM { id: string; status: string; reason: string; resident: string; room: string; createdAt: string | null }
 
 /* ── Static metadata ─────────────────────────────────────────────────── */
@@ -31,6 +32,17 @@ const SEVERITY_META: Record<string, { label: string; badge: string; color: strin
   low: { label: "Low", badge: "bg-blue-100 text-blue-700", color: "#3b82f6" },
 };
 const SEVERITY_ORDER = ["critical", "high", "medium", "low"] as const;
+
+const VITAL_TYPES = [
+  { key: "HEART_RATE", label: "Heart Rate", icon: Heart, color: "#ef4444", unit: "bpm" },
+  { key: "BLOOD_PRESSURE", label: "Blood Pressure", icon: Droplets, color: "#3b82f6", unit: "mmHg" },
+  { key: "OXYGEN", label: "Oxygen Saturation", icon: Wind, color: "#22c55e", unit: "%" },
+  { key: "TEMPERATURE", label: "Temperature", icon: Thermometer, color: "#f97316", unit: "°C" },
+  { key: "RESPIRATORY_RATE", label: "Respiratory Rate", icon: Activity, color: "#8b5cf6", unit: "/min" },
+  { key: "BLOOD_GLUCOSE", label: "Blood Glucose", icon: Droplets, color: "#ec4899", unit: "mg/dL" },
+];
+
+const CHART_COLORS = ["#ef4444", "#3b82f6", "#22c55e", "#f97316", "#8b5cf6", "#ec4899"];
 
 /* ── Helpers ─────────────────────────────────────────────────────────── */
 
@@ -92,6 +104,10 @@ export default function NurseDashboard() {
     return () => clearInterval(t);
   }, []);
 
+  const [vitalSearch, setVitalSearch] = useState("");
+  const [selectedResident, setSelectedResident] = useState("all");
+  const [selectedType, setSelectedType] = useState<string>(VITAL_TYPES[0].key);
+
   const residents = useMemo<ResidentVM[]>(
     () => residentRows.map((row) => {
       const r = adaptResident(row);
@@ -108,6 +124,7 @@ export default function NurseDashboard() {
       return {
         id: String(row.id), type, value, unit: asStr(row.unit),
         recordedAt: row.recordedAt ? String(row.recordedAt) : null,
+        residentId: row.residentId ? String(row.residentId) : "",
         resident: residentName(res), room: res?.roomNumber ?? "—",
         abnormal: isAbnormal(type, value),
       };
@@ -127,22 +144,82 @@ export default function NurseDashboard() {
     [bellRows]
   );
 
+  /* ── Derived: incidents / bells ─────────────────────────────────────── */
+
   const openIncidents = useMemo(() => incidents.filter((i) => !i.resolved), [incidents]);
   const criticalIncidents = useMemo(
     () => openIncidents.filter((i) => i.severity === "critical" || i.severity === "high"),
     [openIncidents]
   );
   const pendingBells = useMemo(() => bells.filter((b) => b.status === "PENDING"), [bells]);
-  const abnormalVitals = useMemo(
-    () => vitals.filter((v) => v.abnormal)
-      .sort((a, b) => new Date(b.recordedAt ?? 0).getTime() - new Date(a.recordedAt ?? 0).getTime())
-      .slice(0, 8),
-    [vitals]
-  );
   const attentionResidents = useMemo(
     () => residents.filter((r) => r.alertsCount > 0).sort((a, b) => b.alertsCount - a.alertsCount).slice(0, 6),
     [residents]
   );
+
+  const severityData = useMemo(
+    () => SEVERITY_ORDER.map((s) => ({ name: SEVERITY_META[s].label, value: openIncidents.filter((i) => i.severity === s).length, color: SEVERITY_META[s].color }))
+      .filter((d) => d.value > 0),
+    [openIncidents]
+  );
+
+  /* ── Derived: vitals trends ────────────────────────────────────────── */
+
+  const filteredVitals = useMemo(() => {
+    const q = vitalSearch.trim().toLowerCase();
+    return vitals.filter((v) => {
+      if (q && !v.resident.toLowerCase().includes(q) && !v.room.toLowerCase().includes(q)) return false;
+      if (selectedResident !== "all" && v.residentId !== selectedResident) return false;
+      return true;
+    });
+  }, [vitals, vitalSearch, selectedResident]);
+
+  const chartData = useMemo(() => {
+    const selected = VITAL_TYPES.find((t) => t.key === selectedType);
+    if (!selected) return [];
+    const byResident = new Map<string, { resident: string; data: { name: string; value: number }[] }>();
+    filteredVitals
+      .filter((v) => v.type === selectedType && v.recordedAt)
+      .sort((a, b) => new Date(a.recordedAt!).getTime() - new Date(b.recordedAt!).getTime())
+      .forEach((v) => {
+        const n = parseFloat(v.value);
+        if (isNaN(n)) return;
+        const entry = byResident.get(v.residentId) || { resident: v.resident, data: [] };
+        entry.data.push({
+          name: new Date(v.recordedAt!).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          value: n,
+        });
+        byResident.set(v.residentId, entry);
+      });
+    return Array.from(byResident.values());
+  }, [filteredVitals, selectedType]);
+
+  const abnormalVitals = useMemo(
+    () => filteredVitals.filter((v) => v.abnormal)
+      .sort((a, b) => new Date(b.recordedAt ?? 0).getTime() - new Date(a.recordedAt ?? 0).getTime())
+      .slice(0, 20),
+    [filteredVitals]
+  );
+
+  const latestByResident = useMemo(() => {
+    const map = new Map<string, Record<string, VitalVM>>();
+    [...filteredVitals].sort((a, b) => new Date(b.recordedAt ?? 0).getTime() - new Date(a.recordedAt ?? 0).getTime())
+      .forEach((v) => {
+        const resMap = map.get(v.residentId) || {};
+        if (!resMap[v.type]) resMap[v.type] = v;
+        map.set(v.residentId, resMap);
+      });
+    return Array.from(map.entries()).slice(0, 20);
+  }, [filteredVitals]);
+
+  const vitalsStats = useMemo(() => ({
+    total: filteredVitals.length,
+    abnormalCount: filteredVitals.filter((v) => v.abnormal).length,
+    patients: new Set(filteredVitals.map((v) => v.residentId)).size,
+    types: new Set(filteredVitals.map((v) => v.type)).size,
+  }), [filteredVitals]);
+
+  /* ── Derived: HR for stat card ─────────────────────────────────────── */
 
   const hr = useMemo(() => {
     const readings = vitals.filter((v) => v.type === "HEART_RATE" && v.recordedAt)
@@ -150,18 +227,8 @@ export default function NurseDashboard() {
       .filter((x) => !isNaN(x.n))
       .sort((a, b) => a.ts - b.ts);
     const avg = readings.length ? Math.round(readings.reduce((s, x) => s + x.n, 0) / readings.length) : 0;
-    const trend = readings.map((x) => ({
-      name: new Date(x.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      HR: x.n,
-    }));
-    return { avg, trend };
+    return { avg };
   }, [vitals]);
-
-  const severityData = useMemo(
-    () => SEVERITY_ORDER.map((s) => ({ name: SEVERITY_META[s].label, value: openIncidents.filter((i) => i.severity === s).length, color: SEVERITY_META[s].color }))
-      .filter((d) => d.value > 0),
-    [openIncidents]
-  );
 
   const shift = shiftFor(nowTs ? new Date(nowTs).getHours() : 9);
   const ShiftIcon = shift.icon;
@@ -213,12 +280,15 @@ export default function NurseDashboard() {
         <Stat label="Avg Heart Rate" value={hr.avg ? String(hr.avg) : "—"} unit={hr.avg ? "bpm" : ""} icon={HeartPulse} tone="rose" />
       </div>
 
-      {/* Charts */}
+      {/* Incidents Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card title="Heart Rate Trend" icon={Heart} className="lg:col-span-2">
-          {hr.trend.length > 0 ? (
+          {vitals.filter((v) => v.type === "HEART_RATE").length > 0 ? (
             <ResponsiveContainer width="100%" height={240}>
-              <AreaChart data={hr.trend} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+              <AreaChart data={vitals.filter((v) => v.type === "HEART_RATE" && v.recordedAt)
+                .sort((a, b) => new Date(a.recordedAt!).getTime() - new Date(b.recordedAt!).getTime())
+                .map((v) => ({ name: new Date(v.recordedAt!).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), HR: parseFloat(v.value) }))}
+                margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
                 <defs>
                   <linearGradient id="hrFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4} />
@@ -245,7 +315,7 @@ export default function NurseDashboard() {
                 <Tooltip /><Legend />
               </PieChart>
             </ResponsiveContainer>
-          ) : <Empty text="No open incidents. 🎉" />}
+          ) : <Empty text="No open incidents." />}
         </Card>
       </div>
 
@@ -272,9 +342,9 @@ export default function NurseDashboard() {
           ) : <Empty text="No critical or high-severity incidents open." />}
         </Card>
 
-        <Card title="Abnormal Vitals" icon={Activity} count={abnormalVitals.length}>
+        <Card title="Abnormal Vitals" icon={AlertTriangle} count={abnormalVitals.length}>
           {abnormalVitals.length > 0 ? (
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-80 overflow-y-auto">
               {abnormalVitals.map((v) => (
                 <div key={v.id} className="p-2.5 rounded-lg bg-amber-50 border border-amber-100">
                   <div className="flex items-center justify-between gap-2">
@@ -315,12 +385,124 @@ export default function NurseDashboard() {
                     <p className="font-medium text-gray-900 truncate">{r.name}</p>
                     <p className="text-xs text-gray-600">Room {r.room} • {r.careLevel}</p>
                   </div>
-                  <span className="px-2 py-1 bg-red-500 text-white rounded-full text-xs font-bold flex-shrink-0">🚨 {r.alertsCount}</span>
+                  <span className="px-2 py-1 bg-red-500 text-white rounded-full text-xs font-bold flex-shrink-0">{r.alertsCount}</span>
                 </div>
               ))}
             </div>
           ) : <Empty text="All residents stable." />}
         </Card>
+      </div>
+
+      {/* ── Vitals Trends Section ─────────────────────────────────────── */}
+      <div className="border-t border-gray-200 pt-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-yellow-500 flex-shrink-0" /> Vitals Trends
+            </h2>
+            <p className="text-gray-600 text-sm mt-1">Analyze vital sign trends, spot anomalies, and track patient health trajectories</p>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <MiniStat label="Total Readings" value={vitalsStats.total} icon={Activity} tone="gray" />
+            <MiniStat label="Abnormal" value={vitalsStats.abnormalCount} icon={AlertTriangle} tone="red" />
+            <MiniStat label="Patients" value={vitalsStats.patients} icon={Heart} tone="blue" />
+            <MiniStat label="Vital Types" value={vitalsStats.types} icon={TrendingUp} tone="purple" />
+          </div>
+        </div>
+
+        {/* Search & Filters */}
+        <div className="space-y-3 mb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+            <input type="text" placeholder="Search by patient or room..." value={vitalSearch} onChange={(e) => setVitalSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <select value={selectedResident} onChange={(e) => setSelectedResident(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none">
+              <option value="all">All Patients</option>
+              {residents.map((r) => <option key={r.id} value={r.id}>{r.name} — Room {r.room}</option>)}
+            </select>
+            <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none">
+              {VITAL_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* Trend Chart */}
+        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+          <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-yellow-500" /> {VITAL_TYPES.find((t) => t.key === selectedType)?.label} Trend
+          </h3>
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={320}>
+              <LineChart margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis fontSize={11} tickLine={false} axisLine={false} width={40} />
+                <Tooltip />
+                {chartData.map((series, i) => (
+                  <Line key={i} data={series.data} type="monotone" dataKey="value" name={series.resident}
+                    stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-sm text-gray-500 py-12 text-center">No readings for the selected vitals type and filters.</p>
+          )}
+        </div>
+
+        {/* Abnormal + Latest by Patient */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-500" /> Abnormal Readings ({abnormalVitals.length})
+            </h3>
+            {abnormalVitals.length > 0 ? (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {abnormalVitals.map((v) => (
+                  <div key={v.id} className="p-2.5 rounded-lg bg-amber-50 border border-amber-100">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-gray-900 text-sm">{humanizeVital(v.type)}</span>
+                      <span className="font-bold text-amber-700 text-sm">{v.value} {v.unit}</span>
+                    </div>
+                    <p className="text-xs text-gray-600 truncate">{v.resident} • Room {v.room} • {relTime(v.recordedAt, nowTs)}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 py-8 text-center">All readings within normal range.</p>
+            )}
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <Heart className="w-4 h-4 text-blue-500" /> Latest Readings by Patient
+            </h3>
+            {latestByResident.length > 0 ? (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {latestByResident.map(([rid, vMap]) => {
+                  const firstV = Object.values(vMap)[0];
+                  return (
+                    <div key={rid} className="p-2.5 rounded-lg bg-gray-50 border border-gray-200">
+                      <p className="font-medium text-gray-900 text-sm">{firstV?.resident ?? "Unknown"}</p>
+                      <div className="grid grid-cols-3 gap-1 mt-1">
+                        {Object.entries(vMap).slice(0, 3).map(([type, v]) => (
+                          <div key={type} className={`text-xs ${v.abnormal ? "text-amber-700 font-bold" : "text-gray-600"}`}>
+                            {type.split("_")[0]}: {v.value}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 py-8 text-center">No vitals data available.</p>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -334,6 +516,7 @@ const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
   red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
   purple: { wrap: "bg-purple-50 border-purple-200", icon: "text-purple-500", value: "text-purple-600" },
   rose: { wrap: "bg-rose-50 border-rose-200", icon: "text-rose-500", value: "text-rose-600" },
+  gray: { wrap: "bg-white border-gray-200", icon: "text-gray-500", value: "text-gray-900" },
 };
 
 function Stat({ label, value, unit, icon: Icon, tone }: { label: string; value: string; unit?: string; icon: LucideIcon; tone: keyof typeof TONES }) {
@@ -345,6 +528,19 @@ function Stat({ label, value, unit, icon: Icon, tone }: { label: string; value: 
         <Icon className={`w-4 h-4 ${t.icon}`} />
       </div>
       <p className={`text-2xl sm:text-3xl font-bold mt-1 ${t.value}`}>{value}{unit ? <span className="text-base font-medium ml-1">{unit}</span> : null}</p>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, icon: Icon, tone }: { label: string; value: number; icon: LucideIcon; tone: keyof typeof TONES }) {
+  const t = TONES[tone];
+  return (
+    <div className={`p-3 rounded-lg border ${t.wrap}`}>
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-gray-600 font-semibold">{label}</p>
+        <Icon className={`w-3.5 h-3.5 ${t.icon}`} />
+      </div>
+      <p className={`text-xl font-bold mt-0.5 ${t.value}`}>{value}</p>
     </div>
   );
 }

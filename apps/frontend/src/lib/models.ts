@@ -53,8 +53,19 @@ export const MODELS: Record<string, ModelDef> = {
   "resident-goals": { delegate: prisma.residentGoal, table: "ResidentGoal", orderBy: { createdAt: "desc" } },
   "medication-logs": { delegate: prisma.medicationLog, table: "MedicationLog", orderBy: { takenAt: "desc" } },
   "daily-menus": { delegate: prisma.dailyMenu, table: "DailyMenu", orderBy: { menuDate: "desc" } },
+  "service-requests": { delegate: prisma.serviceRequest, table: "ServiceRequest", orderBy: { createdAt: "desc" } },
+  "facility-maintenance": { delegate: prisma.facilityMaintenance, table: "FacilityMaintenance", orderBy: { scheduledDate: "asc" } },
+  "concierge-bookings": { delegate: prisma.conciergeBooking, table: "ConciergeBooking", orderBy: { scheduledAt: "desc" } },
+  "front-desk-visits": { delegate: prisma.frontDeskVisit, table: "FrontDeskVisit", orderBy: { arrivalTime: "desc" } },
+  "room-turnovers": { delegate: prisma.roomTurnover, table: "RoomTurnover", orderBy: { startedAt: "desc" } },
+  "resident-preferences": { delegate: prisma.residentPreference, table: "ResidentPreference", orderBy: { category: "asc" } },
+  "community-events": { delegate: prisma.communityEvent, table: "CommunityEvent", orderBy: { startTime: "asc" } },
+  "event-attendances": { delegate: prisma.eventAttendance, table: "EventAttendance", orderBy: { createdAt: "desc" } },
+  "dining-reservations": { delegate: prisma.diningReservation, table: "DiningReservation", orderBy: { reservedAt: "desc" } },
+  announcements: { delegate: prisma.announcement, table: "Announcement", orderBy: { publishedAt: "desc" } },
   "dietitian-consults": { delegate: prisma.dietitianConsult, table: "DietitianConsult", orderBy: { consultDate: "desc" } },
   "food-compliance-logs": { delegate: prisma.foodComplianceLog, table: "FoodComplianceLog", orderBy: { auditDate: "desc" } },
+  "camera-monitoring-logs": { delegate: prisma.cameraMonitoringLog, table: "CameraMonitoringLog", orderBy: { createdAt: "desc" } },
 };
 
 export function getModel(key: string): ModelDef | undefined {

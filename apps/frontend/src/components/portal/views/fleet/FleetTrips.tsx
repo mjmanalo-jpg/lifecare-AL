@@ -44,6 +44,8 @@ function adaptTrip(row: Record<string, unknown>) {
     status: str(row.status, "SCHEDULED"),
     destination: str(row.destination, "—"),
     origin: str(row.origin, "Home"),
+    pickupLocation: str(row.pickupLocation) || str(row.origin, "Facility"),
+    dropoffLocation: str(row.dropoffLocation) || str(row.destination, "—"),
     scheduledAt: str(row.scheduledAt),
     departedAt: str(row.departedAt),
     arrivedAt: str(row.arrivedAt),
@@ -471,12 +473,13 @@ export default function FleetTrips() {
                     </div>
                   </div>
 
-                  {/* Route line */}
+                  {/* Route line — pickup → drop-off */}
                   <div className="flex items-center gap-1.5 text-sm text-gray-700">
-                    <MapPin className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                    <span className="truncate">{trip.origin}</span>
+                    <MapPin className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                    <span className="truncate" title={trip.pickupLocation}>{trip.pickupLocation}</span>
                     <span className="text-gray-400">→</span>
-                    <span className="font-medium truncate">{trip.destination}</span>
+                    <MapPin className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                    <span className="font-medium truncate" title={trip.dropoffLocation}>{trip.dropoffLocation}</span>
                   </div>
 
                   {/* Crew & schedule */}

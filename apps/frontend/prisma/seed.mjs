@@ -27,6 +27,7 @@ async function seedUsers() {
     { email: "john.pendelton@family.com", name: "John Pendelton", role: "FAMILY", phone: "555-0200" },
     { email: "arthur.pendelton@resident.com", name: "Arthur Pendelton", role: "RESIDENT", phone: "555-0201" },
     { email: "fleet.manager@goldenhearth.com", name: "Marcus Dela Cruz", role: "FLEET_MANAGEMENT", phone: "555-0400" },
+    { email: "james.miguel@goldenhearth.com", name: "James Miguel", role: "DRIVER", phone: "555-0401" },
   ];
   const out = {};
   for (const u of users) {
@@ -42,6 +43,7 @@ async function seedUsers() {
 
 async function seedStaff(users) {
   const rows = [
+    { email: "alan.reyes@goldenhearth.com", position: "Physician", department: "Medical", hireDate: daysAgo(1000), isApproved: true },
     { email: "sarah.jenkins@goldenhearth.com", position: "Head Nurse", department: "Clinical Care", hireDate: daysAgo(1200), isApproved: true },
     { email: "rebecca.wilson@goldenhearth.com", position: "RN - Supervisor", department: "Clinical Care", hireDate: daysAgo(1800), isApproved: true },
     { email: "caleb.randall@goldenhearth.com", position: "Caregiver", department: "Daily Assistance", hireDate: daysAgo(560), isApproved: true },
@@ -223,9 +225,11 @@ async function main() {
   addNotif(facAdminUser, "INCIDENT_REPORT", "Incident Logged", "Caregiver Caleb Randall logged a call bell response event in Room 305.");
   addNotif(facAdminUser, "TASK_ASSIGNMENT", "Staff Shift Roster", "12 active care professionals have successfully clocked in for today's shifts.");
 
-  addNotif(physicianUser, "VITAL_ALERT", "Arthur Pendelton Vitals Alert", "Arthur's Heart Rate spiked to 104 bpm during therapy. Vitals now stable.");
-  addNotif(physicianUser, "MEDICATION_REMINDER", "Medication Warning", "Frank Osei (Room 312) medication overdue by 2 hours.");
-  addNotif(physicianUser, "MESSAGE", "New Handover Note", "Sarah Jenkins, RN submitted clinical handover reports.");
+  // Physician notifications — unique to the medical-authority role.
+  addNotif(physicianUser, "MEDICATION_REMINDER", "Order Awaiting Approval", "Apixaban 5mg for Margaret Wilson (Room 312) is pending your approval & e-signature.");
+  addNotif(physicianUser, "MESSAGE", "Clinical Note to Co-sign", "Sarah Jenkins, RN submitted a clinical note for Arthur Pendelton (Room 302) awaiting your co-signature.");
+  addNotif(physicianUser, "SYSTEM_ALERT", "New Consult Request", "Swallowing-assessment consult raised for Eleanor Fitzroy (Room 305) — awaiting your response.");
+  addNotif(physicianUser, "VITAL_ALERT", "Patient Needs Assessment", "Margaret Wilson (Room 312) BP elevated at 165/95 — please review and direct care.");
 
   addNotif(nurseUser2, "CALL_BELL", "Emergency Call Bell: Room 302", "Arthur Pendelton triggered the room call bell. Assistance needed.");
   addNotif(nurseUser2, "VITAL_ALERT", "Arthur SpO2 Dropped", "Oxygen saturation level dipped below 95% temporarily.");
@@ -363,23 +367,30 @@ async function main() {
   const drvRosa = drvByLicense["DLN-99883"];
 
   if (shuttle && wcVan && ambulance && drvJames && drvRosa) {
+    const FAC = "Golden Hearth Facility";
     await seedIfEmpty("transportRequest", () => [
-      { residentId: R["302"].id, type: "MEDICAL_APPOINTMENT", destination: "St. Luke's Medical Center", purpose: "Endocrinology consult — diabetes review", requestedDate: hoursFromNow(24), returnRequired: true, escortRequired: true, escortRole: "NURSE", priority: "NORMAL", status: "PENDING", source: "PORTAL", notes: "Family requests morning slot." },
-      { residentId: R["302"].id, type: "DIALYSIS", destination: "St. Luke's Dialysis Center", purpose: "Recurring dialysis run", requestedDate: hoursAgo(1), returnRequired: true, wheelchairNeeded: true, escortRequired: true, escortRole: "NURSE", priority: "HIGH", status: "SCHEDULED", source: "FRONT_DESK", reviewedBy: "Dispatcher", reviewedAt: daysAgo(1) },
-      { residentId: R["310"].id, type: "MEDICAL_APPOINTMENT", destination: "Makati Medical Center", purpose: "Cardiology follow-up", requestedDate: hoursFromNow(4), returnRequired: true, priority: "NORMAL", status: "SCHEDULED", source: "AI_COMPANION", reviewedBy: "Dispatcher", reviewedAt: daysAgo(2) },
-      { residentId: R["308"].id, type: "THERAPY", destination: "Rehab Partners PT Clinic", purpose: "Post-surgery physical therapy", requestedDate: hoursFromNow(48), returnRequired: true, escortRequired: true, escortRole: "CAREGIVER", priority: "NORMAL", status: "APPROVED", source: "PORTAL", reviewedBy: "Dispatcher", reviewedAt: hoursAgo(5) },
-      { residentId: R["305"].id, type: "FAMILY_OUTING", destination: "SM Mall of Asia", purpose: "Family lunch", requestedDate: hoursFromNow(120), returnRequired: true, escortRequired: true, escortRole: "CAREGIVER", priority: "LOW", status: "DECLINED", source: "PORTAL", reviewedBy: "Dispatcher", reviewedAt: daysAgo(1), declineReason: "No caregiver escort available that afternoon; please rebook." },
+      { residentId: R["302"].id, type: "MEDICAL_APPOINTMENT", pickupLocation: FAC, dropoffLocation: "St. Luke's Medical Center", destination: "St. Luke's Medical Center", purpose: "Endocrinology consult — diabetes review", requestedDate: hoursFromNow(24), returnRequired: true, escortRequired: true, escortRole: "NURSE", priority: "NORMAL", status: "PENDING", source: "PORTAL", notes: "Family requests morning slot." },
+      { residentId: R["302"].id, type: "DIALYSIS", pickupLocation: FAC, dropoffLocation: "St. Luke's Dialysis Center", destination: "St. Luke's Dialysis Center", purpose: "Recurring dialysis run", requestedDate: hoursAgo(1), returnRequired: true, wheelchairNeeded: true, escortRequired: true, escortRole: "NURSE", priority: "HIGH", status: "SCHEDULED", source: "FRONT_DESK", reviewedBy: "Dispatcher", reviewedAt: daysAgo(1) },
+      { residentId: R["310"].id, type: "MEDICAL_APPOINTMENT", pickupLocation: FAC, dropoffLocation: "Makati Medical Center", destination: "Makati Medical Center", purpose: "Cardiology follow-up", requestedDate: hoursFromNow(4), returnRequired: true, priority: "NORMAL", status: "SCHEDULED", source: "AI_COMPANION", reviewedBy: "Dispatcher", reviewedAt: daysAgo(2) },
+      { residentId: R["308"].id, type: "THERAPY", pickupLocation: FAC, dropoffLocation: "Rehab Partners PT Clinic", destination: "Rehab Partners PT Clinic", purpose: "Post-surgery physical therapy", requestedDate: hoursFromNow(48), returnRequired: true, escortRequired: true, escortRole: "CAREGIVER", priority: "NORMAL", status: "APPROVED", source: "PORTAL", reviewedBy: "Dispatcher", reviewedAt: hoursAgo(5) },
+      { residentId: R["305"].id, type: "FAMILY_OUTING", pickupLocation: FAC, dropoffLocation: "SM Mall of Asia", destination: "SM Mall of Asia", purpose: "Family lunch", requestedDate: hoursFromNow(120), returnRequired: true, escortRequired: true, escortRole: "CAREGIVER", priority: "LOW", status: "DECLINED", source: "PORTAL", reviewedBy: "Dispatcher", reviewedAt: daysAgo(1), declineReason: "No caregiver escort available that afternoon; please rebook." },
+      { residentId: R["312"].id, type: "EMERGENCY_TRANSFER", pickupLocation: "Philippine Heart Center — ER", dropoffLocation: FAC, destination: FAC, purpose: "Stabilized — return to facility", requestedDate: hoursFromNow(2), returnRequired: false, wheelchairNeeded: true, priority: "HIGH", status: "APPROVED", source: "DRIVER", reviewedBy: "Dispatcher", reviewedAt: hoursAgo(1), notes: "Ambulance return leg (hospital → facility)." },
     ]);
 
     // Link the dialysis request to its live trip + build the rest of the log.
     const dialysisReq = await prisma.transportRequest.findFirst({ where: { type: "DIALYSIS", residentId: R["302"].id } });
     const cardioReq = await prisma.transportRequest.findFirst({ where: { destination: "Makati Medical Center", residentId: R["310"].id } });
 
+    const CHECKLIST = JSON.stringify([{ item: "Tires & wheels", ok: true }, { item: "Brakes", ok: true }, { item: "Lights & signals", ok: true }, { item: "Fuel level", ok: true }, { item: "Wheelchair lift & securement", ok: true }, { item: "Seatbelts & restraints", ok: true }, { item: "First-aid kit & O2", ok: true }, { item: "Interior sanitized", ok: true }]);
     await seedIfEmpty("trip", () => [
-      { requestId: dialysisReq?.id ?? null, residentId: R["302"].id, vehicleId: wcVan.id, driverId: drvJames.id, escortName: "Sarah Jenkins", escortRole: "NURSE", status: "EN_ROUTE", destination: "St. Luke's Dialysis Center", scheduledAt: hoursAgo(1), departedAt: hoursAgo(0.4), distanceKm: 12.5, currentLat: 14.5591, currentLng: 121.0312, lastPingAt: new Date(), inspectionDone: true, inspectionChecklist: JSON.stringify([{ item: "Tires & wheels", ok: true }, { item: "Brakes", ok: true }, { item: "Lights & signals", ok: true }, { item: "Fuel level", ok: true }, { item: "Wheelchair lift & securement", ok: true }, { item: "Seatbelts & restraints", ok: true }, { item: "First-aid kit & O2", ok: true }, { item: "Interior sanitized", ok: true }]), familyNotified: true, charge: 60, notes: "Dialysis run — recurring Tue/Thu/Sat." },
-      { requestId: cardioReq?.id ?? null, residentId: R["310"].id, vehicleId: shuttle.id, driverId: drvRosa.id, status: "SCHEDULED", destination: "Makati Medical Center", scheduledAt: hoursFromNow(4), distanceKm: 9.8, charge: 75, notes: "Cardiology follow-up." },
-      { residentId: R["305"].id, vehicleId: shuttle.id, driverId: drvJames.id, escortName: "Caleb Randall", escortRole: "CAREGIVER", status: "COMPLETED", destination: "Luneta Park — Family Outing", scheduledAt: daysAgo(3), departedAt: daysAgo(3), arrivedAt: daysAgo(3), returnDepartedAt: daysAgo(3), completedAt: daysAgo(3), distanceKm: 18.2, inspectionDone: true, familyNotified: true, billed: true, charge: 50 },
-      { residentId: R["312"].id, vehicleId: ambulance.id, driverId: drvRosa.id, escortName: "Rebecca Wilson", escortRole: "NURSE", status: "COMPLETED", destination: "Philippine Heart Center — ER", scheduledAt: daysAgo(6), departedAt: daysAgo(6), arrivedAt: daysAgo(6), completedAt: daysAgo(6), distanceKm: 14.6, inspectionDone: true, familyNotified: true, billed: true, charge: 250, notes: "EMERGENCY transfer — AFib episode, stabilized." },
+      { requestId: dialysisReq?.id ?? null, residentId: R["302"].id, vehicleId: wcVan.id, driverId: drvJames.id, escortName: "Sarah Jenkins", escortRole: "NURSE", status: "EN_ROUTE", pickupLocation: FAC, dropoffLocation: "St. Luke's Dialysis Center", origin: FAC, destination: "St. Luke's Dialysis Center", scheduledAt: hoursAgo(1), departedAt: hoursAgo(0.4), distanceKm: 12.5, currentLat: 14.5591, currentLng: 121.0312, lastPingAt: new Date(), inspectionDone: true, inspectionChecklist: CHECKLIST, familyNotified: true, charge: 60, notes: "Dialysis run — recurring Tue/Thu/Sat." },
+      { requestId: cardioReq?.id ?? null, residentId: R["310"].id, vehicleId: shuttle.id, driverId: drvRosa.id, status: "SCHEDULED", pickupLocation: FAC, dropoffLocation: "Makati Medical Center", origin: FAC, destination: "Makati Medical Center", scheduledAt: hoursFromNow(4), distanceKm: 9.8, charge: 75, notes: "Cardiology follow-up." },
+      { residentId: R["305"].id, vehicleId: shuttle.id, driverId: drvJames.id, escortName: "Caleb Randall", escortRole: "CAREGIVER", status: "COMPLETED", pickupLocation: FAC, dropoffLocation: "Luneta Park — Family Outing", origin: FAC, destination: "Luneta Park — Family Outing", scheduledAt: daysAgo(3), departedAt: daysAgo(3), arrivedAt: daysAgo(3), returnDepartedAt: daysAgo(3), completedAt: daysAgo(3), distanceKm: 18.2, inspectionDone: true, familyNotified: true, billed: true, charge: 50 },
+      { residentId: R["312"].id, vehicleId: ambulance.id, driverId: drvRosa.id, escortName: "Rebecca Wilson", escortRole: "NURSE", status: "COMPLETED", pickupLocation: FAC, dropoffLocation: "Philippine Heart Center — ER", origin: FAC, destination: "Philippine Heart Center — ER", scheduledAt: daysAgo(6), departedAt: daysAgo(6), arrivedAt: daysAgo(6), completedAt: daysAgo(6), distanceKm: 14.6, inspectionDone: true, familyNotified: true, billed: true, charge: 250, notes: "EMERGENCY transfer — AFib episode, stabilized." },
+      // Extra trips for the active driver (James) so every driver module is populated.
+      { residentId: R["308"].id, vehicleId: shuttle.id, driverId: drvJames.id, escortName: "Caleb Randall", escortRole: "CAREGIVER", status: "SCHEDULED", pickupLocation: FAC, dropoffLocation: "Rehab Partners PT Clinic", origin: FAC, destination: "Rehab Partners PT Clinic", scheduledAt: hoursFromNow(6), distanceKm: 7.4, charge: 55, notes: "Post-surgery physical therapy." },
+      { residentId: R["302"].id, vehicleId: wcVan.id, driverId: drvJames.id, escortName: "Sarah Jenkins", escortRole: "NURSE", status: "INSPECTION", pickupLocation: FAC, dropoffLocation: "St. Luke's Medical Center", origin: FAC, destination: "St. Luke's Medical Center", scheduledAt: hoursFromNow(1), distanceKm: 11.2, inspectionDone: false, inspectionChecklist: CHECKLIST, charge: 60, notes: "Endocrinology consult — pre-trip inspection." },
+      { residentId: R["312"].id, vehicleId: ambulance.id, driverId: drvJames.id, escortName: "Rebecca Wilson", escortRole: "NURSE", status: "RETURNING", pickupLocation: "Philippine Heart Center — ER", dropoffLocation: FAC, origin: "Philippine Heart Center — ER", destination: FAC, scheduledAt: hoursAgo(3), departedAt: hoursAgo(2.5), arrivedAt: hoursAgo(1.5), returnDepartedAt: hoursAgo(0.5), distanceKm: 14.6, currentLat: 14.5760, currentLng: 121.0437, lastPingAt: new Date(), inspectionDone: true, inspectionChecklist: CHECKLIST, familyNotified: true, charge: 250, notes: "Ambulance return leg — hospital → facility." },
     ]);
 
     // Keep the wheelchair van marked ON_TRIP to match its live EN_ROUTE trip.
@@ -423,6 +434,132 @@ async function main() {
     { title: "Weekly HACCP Kitchen Inspection", category: "SANITATION", status: "COMPLIANT", score: 98, auditedBy: "Facility Admin", auditDate: daysAgo(4), details: "All stainless steel prep surfaces fully sanitized. Dishwasher temp reaching sanitizing threshold (82°C). Allergen separation protocols active." },
     { title: "Walk-in Cooler Thermostat Calibration Audit", category: "TEMPERATURE", status: "COMPLIANT", score: 100, auditedBy: "Facility Admin", auditDate: daysAgo(7), details: "Cooler temperature checked against master probe. Re-calibrated to steady 3.8°C. Dry storage humidity logged at 45%." }
   ]);
+
+  // ── Phase 7 (cont.): Hotel-Style Resident Services & Maintenance ───────────
+
+  await seedIfEmpty("serviceRequest", () => [
+    { residentId: R["302"].id, roomNumber: "302", category: "AIRCON_HVAC", subType: "Temp Adjust", details: "Room feels warm in the afternoon — please lower to 22°C.", source: "RESIDENT_PORTAL", priority: "ROUTINE", status: "IN_PROGRESS", assignedTeam: "MAINTENANCE_ENGINEER", assignedTo: "Ben Alvarez", startedAt: hoursAgo(1) },
+    { residentId: R["302"].id, roomNumber: "302", category: "HOUSEKEEPING", subType: "Linen Change", details: "Fresh linens please, plus towel restock.", source: "AI_COMPANION", priority: "ROUTINE", status: "COMPLETED", assignedTeam: "HOUSEKEEPING_TEAM", assignedTo: "Lena Cruz", startedAt: hoursAgo(7), completedAt: hoursAgo(5), photoProofUrl: "https://images.unsplash.com/photo-1584132967334-10e028bd69f7?q=80&w=600" },
+    { residentId: R["305"].id, roomNumber: "305", category: "ROOM_SERVICE", subType: "Meals", details: "Mechanical-soft dinner tray to the room tonight.", source: "CALL_BELL", priority: "URGENT", status: "ASSIGNED", assignedTeam: "KITCHEN", billable: true, charge: 18, notes: "Dietitian-approved menu only." },
+    { residentId: R["312"].id, roomNumber: "312", category: "REPAIRS", subType: "Wi-Fi/TV", details: "TV remote unresponsive and Wi-Fi drops in the evening.", source: "FRONT_DESK", priority: "ROUTINE", status: "OPEN", assignedTeam: "IT_SUPPORT" },
+    { residentId: R["310"].id, roomNumber: "310", category: "LAUNDRY", subType: "Laundry & Pressing", details: "Two barongs pressed for Sunday visit.", source: "RESIDENT_PORTAL", priority: "ROUTINE", status: "CONFIRMED", assignedTeam: "HOUSEKEEPING_TEAM", assignedTo: "Lena Cruz", startedAt: daysAgo(2), completedAt: daysAgo(2), confirmedAt: daysAgo(1), rating: 5, ratingComment: "Crisp and on time — thank you!", billable: true, charge: 12, billed: true, photoProofUrl: "https://images.unsplash.com/photo-1517677208171-0bc6725a3e60?q=80&w=600" },
+    { residentId: R["312"].id, roomNumber: "312", category: "REPAIRS", subType: "Plumbing", details: "Bathroom sink draining slowly — water pooling.", source: "CALL_BELL", priority: "EMERGENCY", status: "COMPLETED", assignedTeam: "MAINTENANCE_ENGINEER", assignedTo: "Ben Alvarez", startedAt: daysAgo(1), completedAt: daysAgo(1), photoProofUrl: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?q=80&w=600", notes: "Trap cleared; resealed." },
+  ]);
+
+  await seedIfEmpty("facilityMaintenance", () => [
+    { title: "HVAC Quarterly Service — East Wing", system: "HVAC", type: "PREVENTIVE", status: "SCHEDULED", frequency: "QUARTERLY", location: "East Wing rooftop plant", description: "Coil cleaning, refrigerant check, filter replacement across AHUs 1–4.", scheduledDate: inDays(6), nextDueDate: inDays(6), assignedTo: "Ben Alvarez", vendor: "CoolAir Services PH" },
+    { title: "Generator Monthly Load Test", system: "GENERATOR", type: "INSPECTION", status: "SCHEDULED", frequency: "MONTHLY", location: "Power house", description: "30-minute full-load test, fuel level and transfer-switch verification.", scheduledDate: inDays(2), nextDueDate: inDays(2), assignedTo: "Facilities Team", notes: "Log run-hours after test." },
+    { title: "Elevator Annual Certification Inspection", system: "ELEVATOR", type: "INSPECTION", status: "IN_PROGRESS", frequency: "ANNUAL", location: "Lift bank A & B", description: "Third-party safety certification: brakes, cables, leveling, door sensors.", scheduledDate: daysAgo(1), nextDueDate: daysAgo(1), vendor: "OtisPro Inspections", cost: 950 },
+    { title: "Fire & Safety Systems Check", system: "FIRE_SAFETY", type: "PREVENTIVE", status: "COMPLETED", frequency: "QUARTERLY", location: "All floors", description: "Sprinklers, smoke detectors, extinguishers, alarm panel & pull stations.", scheduledDate: daysAgo(12), completedDate: daysAgo(11), nextDueDate: inDays(79), assignedTo: "Facilities Team", vendor: "SafeGuard Fire Systems", cost: 620, notes: "2 extinguishers recharged." },
+    { title: "Pest Control Treatment — Kitchen & Storage", system: "PEST_CONTROL", type: "PREVENTIVE", status: "COMPLETED", frequency: "MONTHLY", location: "Kitchen, dry storage, waste area", description: "Gel bait rotation + perimeter treatment; food-safe products only.", scheduledDate: daysAgo(20), completedDate: daysAgo(19), nextDueDate: inDays(11), vendor: "EcoPest Manila", cost: 180 },
+  ]);
+
+  await seedIfEmpty("conciergeBooking", () => [
+    { residentId: R["302"].id, category: "WAKE_UP_CALL", serviceName: "Wake-Up & Reminder Calls", scheduledAt: inDays(1), status: "CONFIRMED", staffName: "Front Desk", location: "Room 302", price: 0, billable: false, notes: "6:30 AM daily — medication reminder included." },
+    { residentId: R["302"].id, category: "SALON_BARBER", serviceName: "Salon & Barber", scheduledAt: inDays(2), status: "REQUESTED", location: "Wellness Salon, G/F", price: 25, billable: true, notes: "Haircut before Sunday family visit." },
+    { residentId: R["305"].id, category: "SPA_MASSAGE", serviceName: "Massage & Spa Therapy", scheduledAt: daysAgo(1), status: "COMPLETED", staffName: "Wellness Team", location: "Spa Suite", price: 45, billable: true, billed: true, rating: 5, notes: "Gentle mobility massage." },
+    { residentId: R["310"].id, category: "GUEST_SUITE", serviceName: "Guest Suite for Family Stay", scheduledAt: inDays(5), status: "CONFIRMED", staffName: "Concierge Desk", location: "Guest Suite 2, 2/F", price: 120, billable: true, notes: "Two nights — daughter visiting from Cebu." },
+    { residentId: R["308"].id, category: "CHAPLAIN", serviceName: "Chaplain / Spiritual Care Visit", scheduledAt: inDays(1), status: "CONFIRMED", staffName: "Fr. Del Rosario", location: "Garden Lounge", price: 0, billable: false },
+    { residentId: R["305"].id, category: "MOVIE_GAME_NIGHT", serviceName: "Movie & Game Nights", scheduledAt: inDays(3), status: "REQUESTED", location: "Activity Hall", price: 0, billable: false, notes: "Classic film night reservation." },
+  ]);
+
+  console.log("  • phase 7: service requests, facility maintenance calendar, concierge bookings ready");
+
+  // ── Phase 7 PMS: Hospitality & Property Management System ───────────────────
+
+  // Housekeeping lifecycle status on existing rooms (mobile staff tools).
+  const roomHousekeeping = {
+    "103": "DEEP_CLEAN", "203": "INSPECTION", "301": "READY",
+    "302": "OCCUPIED", "305": "OCCUPIED", "308": "MOVE_OUT",
+    "310": "OCCUPIED", "312": "OCCUPIED",
+  };
+  for (const [rn, hk] of Object.entries(roomHousekeeping)) {
+    await prisma.room.updateMany({ where: { roomNumber: rn }, data: { housekeepingStatus: hk } });
+  }
+
+  await seedIfEmpty("frontDeskVisit", () => [
+    { visitType: "GUEST_VISIT", status: "CHECKED_IN", visitorName: "John Pendelton", visitorPhone: "555-0200", idType: "Driver's License", idNumber: "N01-88-123456", visitorPass: "VP-0417", residentId: R["302"].id, roomNumber: "302", purpose: "Sunday family visit", arrivalTime: hoursAgo(1.5), checkInTime: hoursAgo(1.4), ancillaryItems: JSON.stringify([{ label: "Guest lunch (2)", amount: 24 }]), ancillaryTotal: 24 },
+    { visitType: "NEW_RESIDENT_ARRIVAL", status: "ARRIVED", visitorName: "Dorothy Hale", visitorPhone: "555-0311", idType: "Passport", idNumber: "P1234567A", roomNumber: "314", purpose: "Move-in — Room 314", arrivalTime: hoursAgo(0.5), notes: "Admission step 8 pending room allocation." },
+    { visitType: "TOUR", status: "CHECKED_OUT", visitorName: "Grace & Michael Tan", visitorPhone: "555-0620", idType: "Driver's License", idNumber: "N02-77-998877", visitorPass: "VP-0416", purpose: "Prospective resident tour", arrivalTime: daysAgo(1), checkInTime: daysAgo(1), checkOutTime: hoursAgo(25.5), receiptNumber: "RCPT-2207", notes: "Interested in a suite for their mother." },
+    { visitType: "GUEST_VISIT", status: "CHECKED_OUT", visitorName: "Rosa Chen", visitorPhone: "555-0512", idType: "UMID", idNumber: "CRN-0111-2222", visitorPass: "VP-0410", residentId: R["310"].id, roomNumber: "310", purpose: "Afternoon visit + salon treat", arrivalTime: daysAgo(2), checkInTime: daysAgo(2), checkOutTime: hoursAgo(46), ancillaryItems: JSON.stringify([{ label: "Salon — haircut", amount: 25 }, { label: "Café drinks", amount: 8 }]), ancillaryTotal: 33, receiptNumber: "RCPT-2201" },
+  ]);
+
+  await seedIfEmpty("roomTurnover", () => [
+    { roomNumber: "103", stage: "DEEP_CLEAN", status: "IN_PROGRESS", outgoingResident: "Prior resident", assignedTo: "Lena Cruz", checklist: JSON.stringify([{ item: "Strip & launder linens", ok: true }, { item: "Deep clean bathroom", ok: true }, { item: "Sanitize surfaces", ok: false }, { item: "Restock amenities", ok: false }]), startedAt: hoursAgo(6), notes: "Repaint scheduled after deep clean." },
+    { roomNumber: "203", stage: "INSPECTION", status: "IN_PROGRESS", incomingResident: "Dorothy Hale", assignedTo: "Ben Alvarez", checklist: JSON.stringify([{ item: "Make ready", ok: true }, { item: "HVAC check", ok: true }, { item: "Final inspection", ok: false }]), startedAt: daysAgo(1), notes: "Suite prepped for incoming resident." },
+    { roomNumber: "301", stage: "READY", status: "COMPLETED", outgoingResident: "Prior resident", assignedTo: "Lena Cruz", inspectionPassed: true, startedAt: daysAgo(3), readyAt: hoursAgo(52), notes: "Turnover completed in ~20h." },
+    { roomNumber: "308", stage: "MOVE_OUT", status: "IN_PROGRESS", outgoingResident: "James Murphy (transfer)", startedAt: hoursAgo(3), notes: "Transfer to skilled-nursing wing." },
+  ]);
+
+  await seedIfEmpty("residentPreference", () => [
+    { residentId: R["302"].id, category: "Room Comfort", preference: "Preferred room temperature", value: "22°C", notes: "Feels warm in the afternoon." },
+    { residentId: R["302"].id, category: "Wake-Up", preference: "Preferred wake-up time", value: "6:30 AM", notes: "With medication reminder." },
+    { residentId: R["302"].id, category: "Dining", preference: "Dietary preference", value: "Low-sodium, diabetic-friendly" },
+    { residentId: R["302"].id, category: "Activities", preference: "Favorite activities", value: "Garden walks, chess, classic films" },
+    { residentId: R["302"].id, category: "Communication", preference: "Preferred contact", value: "Notify son (John) for updates" },
+    { residentId: R["305"].id, category: "Dining", preference: "Texture", value: "Mechanical-soft meals" },
+  ]);
+
+  await seedIfEmpty("communityEvent", () => [
+    { title: "Sunday Garden Concert", category: "SOCIAL", description: "Live acoustic music in the therapeutic garden with afternoon tea.", location: "Garden Lounge", startTime: inDays(3), endTime: inDays(3), capacity: 40, host: "Activities Team", imageUrl: "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?q=80&w=800", published: true },
+    { title: "Chair Yoga & Wellness", category: "WELLNESS", description: "Gentle guided chair yoga for mobility and relaxation.", location: "Activity Hall", startTime: inDays(1), endTime: inDays(1), capacity: 20, host: "Wellness Team", imageUrl: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?q=80&w=800", published: true },
+    { title: "Classic Movie Night — Casablanca", category: "RECREATION", description: "Cinema evening with popcorn and refreshments.", location: "Activity Hall", startTime: inDays(2), endTime: inDays(2), capacity: 50, host: "Activities Team", imageUrl: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=800", published: true },
+    { title: "Sunday Chapel Service", category: "SPIRITUAL", description: "Interfaith spiritual care service with Fr. Del Rosario.", location: "Chapel", startTime: inDays(3), endTime: inDays(3), host: "Chaplaincy", published: true },
+  ]);
+
+  const evConcert = await prisma.communityEvent.findFirst({ where: { title: "Sunday Garden Concert" } });
+  const evYoga = await prisma.communityEvent.findFirst({ where: { title: "Chair Yoga & Wellness" } });
+  const evMovie = await prisma.communityEvent.findFirst({ where: { title: "Classic Movie Night — Casablanca" } });
+  if (evConcert && evYoga && evMovie) {
+    await seedIfEmpty("eventAttendance", () => [
+      { eventId: evConcert.id, residentId: R["302"].id, status: "GOING" },
+      { eventId: evYoga.id, residentId: R["302"].id, status: "ATTENDED", checkedInAt: hoursAgo(20), rating: 5, notes: "Loved it." },
+      { eventId: evMovie.id, residentId: R["305"].id, status: "ATTENDED", checkedInAt: hoursAgo(30), rating: 4 },
+    ]);
+  }
+
+  await seedIfEmpty("diningReservation", () => [
+    { residentId: R["302"].id, mealType: "DINNER", reservedAt: hoursFromNow(4), partySize: 3, venue: "Main Dining", status: "CONFIRMED", guestNames: "John Pendelton + 1 guest", specialRequests: "Window table; low-sodium meal for Arthur." },
+    { residentId: R["310"].id, mealType: "LUNCH", reservedAt: hoursAgo(24), partySize: 1, venue: "Bistro", status: "COMPLETED" },
+    { residentId: R["305"].id, mealType: "DINNER", reservedAt: hoursFromNow(6), partySize: 2, venue: "Private Room", status: "REQUESTED", guestNames: "Daughter visiting", specialRequests: "Pureed/mechanical-soft option." },
+  ]);
+
+  await seedIfEmpty("announcement", () => [
+    { title: "Elevator Maintenance — Lift B", body: "Lift B will undergo its annual safety certification this week. Please use Lift A. We apologize for any inconvenience.", audience: "ALL", priority: "HIGH", authorName: "Facility Admin", pinned: true, published: true, autoNotify: false, publishedAt: hoursAgo(4) },
+    { title: "Sunday Garden Concert This Weekend", body: "Join us in the Garden Lounge this Sunday afternoon for live acoustic music and afternoon tea. Families welcome!", audience: "RESIDENTS", priority: "NORMAL", authorName: "Activities Team", published: true, autoNotify: false, publishedAt: daysAgo(1) },
+    { title: "Flu Vaccination Clinic — Next Tuesday", body: "The on-site clinic will offer seasonal flu vaccinations next Tuesday from 9 AM to 12 PM. Please sign up at the front desk.", audience: "ALL", priority: "NORMAL", authorName: "Head Nurse", published: true, autoNotify: false, publishedAt: daysAgo(2) },
+  ]);
+
+  console.log("  • phase 7 PMS: front desk, room turnovers, preferences, community events, dining, announcements ready");
+
+  // ── Physician portal demo: care directives, notes to co-sign, consults ─────
+  if (R["302"] && R["305"] && R["312"]) {
+    await seedIfEmpty("residentGoal", () => [
+      { residentId: R["302"].id, title: "Ambulate 15 min twice daily", description: "Supervised walks morning and afternoon to improve mobility.", isCustom: true },
+      { residentId: R["302"].id, title: "Fasting glucose < 130 mg/dL", description: "Diabetic diet adherence; recheck fasting glucose weekly.", isCustom: true },
+      { residentId: R["305"].id, title: "Reorientation routine 3x daily", description: "Memory-care reorientation with calendar and familiar photos.", isCustom: true },
+      { residentId: R["312"].id, title: "BP target < 140/90", description: "Monitor BP each shift; report readings > 160 systolic.", isCustom: true },
+    ]);
+
+    await seedIfEmpty("medicalNote", () => [
+      { residentId: R["302"].id, title: "Evening clinical note", content: "Resident stable. Ate well, ambulated with walker. No distress.", noteType: "CLINICAL_NOTE", authorName: "Sarah Jenkins, RN" },
+      { residentId: R["305"].id, title: "Behavioral observation", content: "Mild sundowning after 6 PM; redirection effective.", noteType: "PROGRESS_NOTE", authorName: "Caleb Randall" },
+      { residentId: R["302"].id, title: "Stage 2 hypertension — regimen review", content: "ASSESSMENT: BP trending high on current dose.\nPLAN: increase lisinopril; recheck in 1 week.", noteType: "DIAGNOSIS", authorName: "Dr. Alan Reyes" },
+      { residentId: R["312"].id, title: "Cardiology referral — AFib workup", content: "Recurrent palpitations; request cardiology evaluation and Holter monitor.", noteType: "REFERRAL", authorName: "Dr. Alan Reyes" },
+      { residentId: R["305"].id, title: "Consult: swallowing assessment", content: "Nurse reports intermittent coughing with meals — please advise on SLP consult.", noteType: "CONSULTATION", authorName: "Sarah Jenkins, RN" },
+    ]);
+
+    // Ensure a PENDING order exists for the physician approval queue.
+    const pendingCount = await prisma.medication.count({ where: { status: "PENDING" } });
+    if (pendingCount === 0) {
+      await prisma.medication.create({ data: {
+        residentId: R["312"].id, name: "Apixaban", dosage: "5mg", frequency: "Twice daily", route: "oral",
+        status: "PENDING", startDate: new Date(), reason: "AFib anticoagulation — awaiting physician approval",
+      } });
+      console.log("  • physician: seeded 1 pending order for approval queue");
+    }
+    console.log("  • physician: care directives, notes to co-sign, consults ready");
+  }
 
   console.log("Seed complete.");
 }

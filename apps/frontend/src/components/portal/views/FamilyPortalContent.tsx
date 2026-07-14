@@ -12,6 +12,8 @@ import FamilyAppointments from "@/components/portal/views/family/FamilyAppointme
 import FamilyBilling from "@/components/portal/views/family/FamilyBilling";
 import FamilyPhotos from "@/components/portal/views/family/FamilyPhotos";
 import MyTransport from "@/components/portal/views/fleet/MyTransport";
+import MyHotelServices from "@/components/portal/views/services/MyHotelServices";
+import MyCommunity from "@/components/portal/views/pms/MyCommunity";
 
 interface FamilyPortalContentProps {
   tab: string;
@@ -46,6 +48,10 @@ export default function FamilyPortalContent({ tab }: FamilyPortalContentProps) {
       return <FamilyPhotos />;
     case "transport":
       return <MyTransport />;
+    case "services":
+      return <MyHotelServices />;
+    case "community":
+      return <MyCommunity />;
     default:
       return <FamilyDashboard />;
   }

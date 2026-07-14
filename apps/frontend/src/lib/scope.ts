@@ -32,9 +32,37 @@ const RESIDENT_SCOPED = new Set([
   "transport-requests",
   "trips",
   "dietitian-consults",
+  // Phase 7 — hotel-style services: family/resident follow their own tickets & bookings.
+  "service-requests",
+  "concierge-bookings",
+  // Phase 7 PMS — resident & family engagement (own resident only).
+  "resident-preferences",
+  "event-attendances",
+  "dining-reservations",
 ]);
 
+// Non-sensitive shared content every portal reads live (writes stay staff-only
+// via the POST rules). Community calendar + broadcast announcements.
+const GLOBAL_READABLE = new Set(["app-settings", "community-events", "announcements"]);
+
 const DENY: Record<string, unknown> = { id: "__none__" };
+
+/** True when the given resident id belongs to the self-service caller. */
+export async function residentBelongsToSession(
+  residentId: string,
+  session: SessionData
+): Promise<boolean> {
+  if (!session.userId || !residentId) return false;
+  const where =
+    session.role === "RESIDENT"
+      ? { id: residentId, userId: session.userId }
+      : session.role === "FAMILY"
+      ? { id: residentId, sponsorId: session.userId }
+      : null;
+  if (!where) return false;
+  const row = await prisma.resident.findFirst({ where, select: { id: true } });
+  return !!row;
+}
 
 /** Resident ids a FAMILY sponsor may see. */
 async function sponsoredResidentIds(userId: string): Promise<string[]> {
@@ -55,9 +83,10 @@ export async function scopeWhere(
   const uid = session.userId;
 
   if (session.role === "FAMILY" && uid) {
-    // Global app settings (assistant voice/personality…) are shared, non-sensitive
-    // config every portal reads live; writes remain staff-only via POST rules.
-    if (modelKey === "app-settings") return null;
+    // Global app settings (assistant voice/personality…) + community calendar &
+    // announcements are shared, non-sensitive content every portal reads live;
+    // writes remain staff-only via POST rules.
+    if (GLOBAL_READABLE.has(modelKey)) return null;
     if (modelKey === "residents") return { sponsorId: uid };
     if (RESIDENT_SCOPED.has(modelKey)) {
       const ids = await sponsoredResidentIds(uid);
@@ -73,7 +102,7 @@ export async function scopeWhere(
   }
 
   if (session.role === "RESIDENT" && uid) {
-    if (modelKey === "app-settings") return null;
+    if (GLOBAL_READABLE.has(modelKey)) return null;
     if (modelKey === "residents") return { userId: uid };
     if (RESIDENT_SCOPED.has(modelKey)) {
       const id = await selfResidentId(uid);
@@ -129,10 +158,12 @@ function getDemoNotificationsForRole(role: string): Row[] {
         { id: "fa_n3", type: "TASK_ASSIGNMENT", title: "Staff Shift Roster", message: "12 active care professionals have successfully clocked in for today's shifts.", isRead: true, createdAt: iso(18 * H) },
       ];
     case "PHYSICIAN":
+      // Unique to the physician's medical-authority perspective (see route.ts).
       return [
-        { id: "ph_n1", type: "VITAL_ALERT", title: "Arthur Pendelton Vitals Alert", message: "Arthur's Heart Rate spiked to 104 bpm during therapy. Vitals now stable.", isRead: false, createdAt: iso(15 * 1000) },
-        { id: "ph_n2", type: "MEDICATION_REMINDER", title: "Medication Warning", message: "Frank Osei (Room 312) medication overdue by 2 hours.", isRead: false, createdAt: iso(3 * H) },
-        { id: "ph_n3", type: "MESSAGE", title: "New Handover Note", message: "Sarah Jenkins, RN submitted clinical handover reports.", isRead: true, createdAt: iso(6 * H) },
+        { id: "ph_n1", type: "MEDICATION_REMINDER", title: "Order Awaiting Approval", message: "Apixaban 5mg for Margaret Wilson (Room 312) is pending your approval & e-signature.", isRead: false, createdAt: iso(15 * 1000) },
+        { id: "ph_n2", type: "MESSAGE", title: "Clinical Note to Co-sign", message: "Sarah Jenkins, RN submitted a clinical note for Arthur Pendelton (Room 302) awaiting your co-signature.", isRead: false, createdAt: iso(2 * H) },
+        { id: "ph_n3", type: "SYSTEM_ALERT", title: "New Consult Request", message: "Swallowing-assessment consult raised for Eleanor Fitzroy (Room 305) — awaiting your response.", isRead: false, createdAt: iso(3 * H) },
+        { id: "ph_n4", type: "VITAL_ALERT", title: "Patient Needs Assessment", message: "Margaret Wilson (Room 312) BP elevated at 165/95 — please review and direct care.", isRead: true, createdAt: iso(6 * H) },
       ];
     case "NURSE":
       return [
@@ -179,7 +210,7 @@ export function scopeDemoRows(modelKey: string, rows: Row[], role: string, userI
       return getDemoNotificationsForRole(role);
     return userId ? rows.filter((n) => (n as { userId?: string }).userId === userId) : rows;
   }
-  if (modelKey === "app-settings") return rows; // global config — visible to all roles
+  if (GLOBAL_READABLE.has(modelKey)) return rows; // shared config/content — visible to all roles
   if (role !== "FAMILY" && role !== "RESIDENT") return rows;
   if (modelKey === "residents") return rows.filter((r) => r.id === DEMO_RESIDENT_ID);
   if (RESIDENT_SCOPED.has(modelKey) || modelKey === "payments") return rows.filter(belongsToDemoResident);

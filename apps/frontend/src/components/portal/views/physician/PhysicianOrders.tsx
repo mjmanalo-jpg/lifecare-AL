@@ -4,12 +4,13 @@ import { useMemo, useState, useEffect } from "react";
 import {
   Pill, Search, X, Plus, RefreshCw, CheckCircle2, AlertTriangle,
   Eye, Trash2, PauseCircle, PlayCircle, Ban, Clock, UserRound,
-  Stethoscope, type LucideIcon,
+  Stethoscope, ChevronLeft, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident, humanize } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
+import { useClinician } from "@/components/portal/views/clinical/useClinician";
 
 type MedStatus = "ACTIVE" | "DISCONTINUED" | "PENDING" | "ON_HOLD";
 interface MedVM {
@@ -31,7 +32,8 @@ const FREQUENCIES = ["Daily", "Twice daily", "Three times daily", "Four times da
 
 const asStr = (v: unknown): string => (v == null ? "" : String(v));
 
-export default function PhysicianOrders() {
+export default function PhysicianOrders({ approveMode = false }: { approveMode?: boolean }) {
+  const { name: signerName } = useClinician("PHYSICIAN");
   const { data: medRows, loading, error, refetch } = useLiveQuery<Record<string, unknown>>(
     "medications", { query: "include=resident&take=500", tables: ["Medication"] }
   );
@@ -43,6 +45,8 @@ export default function PhysicianOrders() {
   const [statusFilter, setStatusFilter] = useState<"all" | MedStatus>("all");
   const [viewing, setViewing] = useState<MedVM | null>(null);
   const [adding, setAdding] = useState(false);
+  const [page, setPage] = useState(1);
+  const PER_PAGE = 10;
 
   const residents = useMemo(() => residentRows.map(adaptResident), [residentRows]);
   const residentById = useMemo(() => new Map(residents.map((r) => [r.id, r])), [residents]);
@@ -82,6 +86,11 @@ export default function PhysicianOrders() {
 
   const refreshAll = () => { void refetch(); void refetchResidents(); };
 
+  useEffect(() => { setPage(1); }, [search, statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const pageClamped = Math.min(page, totalPages);
+  const paginated = filtered.slice((pageClamped - 1) * PER_PAGE, pageClamped * PER_PAGE);
+
   const handleStatus = async (m: MedVM, status: MedStatus, verb: string) => {
     const result = await Swal.fire({
       title: `${verb} Medication?`, text: `${m.name} ${m.dosage} for ${m.residentName}`,
@@ -99,6 +108,26 @@ export default function PhysicianOrders() {
       Swal.fire({ title: "Updated", icon: "success", timer: 1300, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ title: "Update Failed", text: err instanceof Error ? err.message : "Could not update.", icon: "error" });
+    }
+  };
+
+  const handleApprove = async (m: MedVM) => {
+    const result = await Swal.fire({
+      title: "Approve & Sign Order?",
+      text: `${m.name} ${m.dosage} for ${m.residentName} — activate and sign as ${signerName}.`,
+      icon: "question", showCancelButton: true, confirmButtonColor: "#22c55e", cancelButtonColor: "#6b7280", confirmButtonText: "Approve & Sign",
+    });
+    if (!result.isConfirmed) return;
+    try {
+      await updateRecord("medications", m.id, {
+        status: "ACTIVE", prescribedBy: signerName,
+        startDate: m.startDate ?? new Date().toISOString(),
+      });
+      await refetch();
+      setViewing((v) => (v && v.id === m.id ? { ...v, status: "ACTIVE", prescribedBy: signerName } : v));
+      Swal.fire({ title: "Approved & Signed", icon: "success", timer: 1300, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: "Approve Failed", text: err instanceof Error ? err.message : "Could not approve.", icon: "error" });
     }
   };
 
@@ -170,7 +199,7 @@ export default function PhysicianOrders() {
         <div className="bg-white rounded-lg border border-red-200 p-10 text-center text-red-600">Failed to load: {error}</div>
       ) : filtered.length > 0 ? (
         <div className="space-y-2">
-          {filtered.map((m) => (
+          {paginated.map((m) => (
             <div key={m.id} className="bg-white rounded-lg border border-gray-200 hover:border-yellow-300 hover:shadow-md transition p-4 flex items-center gap-4 flex-wrap">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -189,7 +218,12 @@ export default function PhysicianOrders() {
                     <PauseCircle className="w-4 h-4" /> Hold
                   </button>
                 )}
-                {(m.status === "ON_HOLD" || m.status === "PENDING") && (
+                {approveMode && m.status === "PENDING" && (
+                  <button onClick={() => void handleApprove(m)} className="flex items-center gap-1 px-2.5 py-1 text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded text-sm font-semibold transition">
+                    <CheckCircle2 className="w-4 h-4" /> Approve &amp; Sign
+                  </button>
+                )}
+                {(m.status === "ON_HOLD" || (m.status === "PENDING" && !approveMode)) && (
                   <button onClick={() => void handleStatus(m, "ACTIVE", "Resume")} className="flex items-center gap-1 px-2.5 py-1 text-green-600 hover:bg-green-50 rounded text-sm font-medium transition">
                     <PlayCircle className="w-4 h-4" /> Resume
                   </button>
@@ -206,6 +240,24 @@ export default function PhysicianOrders() {
       ) : (
         <div className="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-500">
           {meds.length === 0 ? "No orders on file. Create the first prescription." : "No orders match your filters."}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {filtered.length > PER_PAGE && (
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <p className="text-sm text-gray-600">{(pageClamped - 1) * PER_PAGE + 1}–{Math.min(pageClamped * PER_PAGE, filtered.length)} of {filtered.length}</p>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pageClamped === 1}
+              className="flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium">
+              <ChevronLeft className="w-4 h-4" /> Prev
+            </button>
+            <span className="px-3 py-2 text-sm font-medium text-gray-700">Page {pageClamped} / {totalPages}</span>
+            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={pageClamped === totalPages}
+              className="flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium">
+              Next <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 

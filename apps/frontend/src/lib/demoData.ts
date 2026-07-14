@@ -306,6 +306,83 @@ const fuelLogs = [
   { id: "fl5", vehicleId: "veh1", vehicle: vehicleRef(vehicles[0]), driverId: "drv1", driver: driverRef(drivers[0]), logDate: iso(9 * D), odometer: 47820, liters: 52.4, cost: 3250, fuelType: "Diesel", notes: null, createdAt: iso(9 * D), updatedAt: iso(9 * D) },
 ];
 
+// ── Phase 7: Hotel-Style Resident Services & Maintenance ─────────────────────
+
+const serviceRequests = [
+  { id: "sr1", residentId: "r1", resident: residentRef(residentsBase[0]), roomNumber: "302", category: "AIRCON_HVAC", subType: "Temp Adjust", details: "Room feels warm in the afternoon — please lower to 22°C.", source: "RESIDENT_PORTAL", priority: "ROUTINE", status: "IN_PROGRESS", assignedTeam: "MAINTENANCE_ENGINEER", assignedTo: "Ben Alvarez", photoProofUrl: null, startedAt: iso(1 * H), completedAt: null, confirmedAt: null, rating: null, ratingComment: null, billable: false, charge: null, billed: false, notes: null, createdAt: iso(3 * H), updatedAt: iso(1 * H) },
+  { id: "sr2", residentId: "r1", resident: residentRef(residentsBase[0]), roomNumber: "302", category: "HOUSEKEEPING", subType: "Linen Change", details: "Fresh linens please, plus towel restock.", source: "AI_COMPANION", priority: "ROUTINE", status: "COMPLETED", assignedTeam: "HOUSEKEEPING_TEAM", assignedTo: "Lena Cruz", photoProofUrl: "https://images.unsplash.com/photo-1584132967334-10e028bd69f7?q=80&w=600", startedAt: iso(7 * H), completedAt: iso(5 * H), confirmedAt: null, rating: null, ratingComment: null, billable: false, charge: null, billed: false, notes: null, createdAt: iso(9 * H), updatedAt: iso(5 * H) },
+  { id: "sr3", residentId: "r2", resident: residentRef(residentsBase[1]), roomNumber: "305", category: "ROOM_SERVICE", subType: "Meals", details: "Mechanical-soft dinner tray to the room tonight.", source: "CALL_BELL", priority: "URGENT", status: "ASSIGNED", assignedTeam: "KITCHEN", assignedTo: null, photoProofUrl: null, startedAt: null, completedAt: null, confirmedAt: null, rating: null, ratingComment: null, billable: true, charge: 18, billed: false, notes: "Dietitian-approved menu only.", createdAt: iso(0.5 * H), updatedAt: iso(0.5 * H) },
+  { id: "sr4", residentId: "r4", resident: residentRef(residentsBase[3]), roomNumber: "312", category: "REPAIRS", subType: "Wi-Fi/TV", details: "TV remote unresponsive and Wi-Fi drops in the evening.", source: "FRONT_DESK", priority: "ROUTINE", status: "OPEN", assignedTeam: "IT_SUPPORT", assignedTo: null, photoProofUrl: null, startedAt: null, completedAt: null, confirmedAt: null, rating: null, ratingComment: null, billable: false, charge: null, billed: false, notes: null, createdAt: iso(2 * H), updatedAt: iso(2 * H) },
+  { id: "sr5", residentId: "r3", resident: residentRef(residentsBase[2]), roomNumber: "310", category: "LAUNDRY", subType: "Laundry & Pressing", details: "Two barongs pressed for Sunday visit.", source: "RESIDENT_PORTAL", priority: "ROUTINE", status: "CONFIRMED", assignedTeam: "HOUSEKEEPING_TEAM", assignedTo: "Lena Cruz", photoProofUrl: "https://images.unsplash.com/photo-1517677208171-0bc6725a3e60?q=80&w=600", startedAt: iso(2 * D), completedAt: iso(1.5 * D), confirmedAt: iso(1 * D), rating: 5, ratingComment: "Crisp and on time — thank you!", billable: true, charge: 12, billed: true, notes: null, createdAt: iso(2.5 * D), updatedAt: iso(1 * D) },
+  { id: "sr6", residentId: "r4", resident: residentRef(residentsBase[3]), roomNumber: "312", category: "REPAIRS", subType: "Plumbing", details: "Bathroom sink draining slowly — water pooling.", source: "CALL_BELL", priority: "EMERGENCY", status: "COMPLETED", assignedTeam: "MAINTENANCE_ENGINEER", assignedTo: "Ben Alvarez", photoProofUrl: "https://images.unsplash.com/photo-1585704032915-c3400ca199e7?q=80&w=600", startedAt: iso(1.2 * D), completedAt: iso(1 * D), confirmedAt: null, rating: null, ratingComment: null, billable: false, charge: null, billed: false, notes: "Trap cleared; resealed.", createdAt: iso(1.3 * D), updatedAt: iso(1 * D) },
+];
+
+const facilityMaintenance = [
+  { id: "fm1", title: "HVAC Quarterly Service — East Wing", system: "HVAC", type: "PREVENTIVE", status: "SCHEDULED", frequency: "QUARTERLY", location: "East Wing rooftop plant", description: "Coil cleaning, refrigerant check, filter replacement across AHUs 1–4.", scheduledDate: iso(-6 * D), completedDate: null, nextDueDate: iso(-6 * D), assignedTo: "Ben Alvarez", vendor: "CoolAir Services PH", cost: null, notes: null, createdAt: iso(30 * D), updatedAt: iso(2 * D) },
+  { id: "fm2", title: "Generator Monthly Load Test", system: "GENERATOR", type: "INSPECTION", status: "SCHEDULED", frequency: "MONTHLY", location: "Power house", description: "30-minute full-load test, fuel level and transfer-switch verification.", scheduledDate: iso(-2 * D), completedDate: null, nextDueDate: iso(-2 * D), assignedTo: "Facilities Team", vendor: null, cost: null, notes: "Log run-hours after test.", createdAt: iso(28 * D), updatedAt: iso(3 * D) },
+  { id: "fm3", title: "Elevator Annual Certification Inspection", system: "ELEVATOR", type: "INSPECTION", status: "IN_PROGRESS", frequency: "ANNUAL", location: "Lift bank A & B", description: "Third-party safety certification: brakes, cables, leveling, door sensors.", scheduledDate: iso(1 * D), completedDate: null, nextDueDate: iso(1 * D), assignedTo: null, vendor: "OtisPro Inspections", cost: 950, notes: null, createdAt: iso(45 * D), updatedAt: iso(4 * H) },
+  { id: "fm4", title: "Fire & Safety Systems Check", system: "FIRE_SAFETY", type: "PREVENTIVE", status: "COMPLETED", frequency: "QUARTERLY", location: "All floors", description: "Sprinklers, smoke detectors, extinguishers, alarm panel & pull stations.", scheduledDate: iso(12 * D), completedDate: iso(11 * D), nextDueDate: iso(-79 * D), assignedTo: "Facilities Team", vendor: "SafeGuard Fire Systems", cost: 620, notes: "2 extinguishers recharged.", createdAt: iso(100 * D), updatedAt: iso(11 * D) },
+  { id: "fm5", title: "Pest Control Treatment — Kitchen & Storage", system: "PEST_CONTROL", type: "PREVENTIVE", status: "COMPLETED", frequency: "MONTHLY", location: "Kitchen, dry storage, waste area", description: "Gel bait rotation + perimeter treatment; food-safe products only.", scheduledDate: iso(20 * D), completedDate: iso(19 * D), nextDueDate: iso(-11 * D), assignedTo: null, vendor: "EcoPest Manila", cost: 180, notes: null, createdAt: iso(50 * D), updatedAt: iso(19 * D) },
+];
+
+const conciergeBookings = [
+  { id: "cb1", residentId: "r1", resident: residentRef(residentsBase[0]), category: "WAKE_UP_CALL", serviceName: "Wake-Up & Reminder Call", scheduledAt: iso(-16 * H), status: "CONFIRMED", staffName: "Front Desk", location: "Room 302", price: 0, billable: false, billed: false, rating: null, notes: "6:30 AM daily — medication reminder included.", createdAt: iso(1 * D), updatedAt: iso(5 * H) },
+  { id: "cb2", residentId: "r1", resident: residentRef(residentsBase[0]), category: "SALON_BARBER", serviceName: "Salon & Barber", scheduledAt: iso(-2 * D), status: "REQUESTED", staffName: null, location: "Wellness Salon, G/F", price: 25, billable: true, billed: false, rating: null, notes: "Haircut before Sunday family visit.", createdAt: iso(4 * H), updatedAt: iso(4 * H) },
+  { id: "cb3", residentId: "r2", resident: residentRef(residentsBase[1]), category: "SPA_MASSAGE", serviceName: "Massage & Spa Therapy", scheduledAt: iso(1 * D), status: "COMPLETED", staffName: "Wellness Team", location: "Spa Suite", price: 45, billable: true, billed: true, rating: 5, notes: "Gentle mobility massage.", createdAt: iso(3 * D), updatedAt: iso(1 * D) },
+  { id: "cb4", residentId: "r3", resident: residentRef(residentsBase[2]), category: "GUEST_SUITE", serviceName: "Guest Suite for Family Stay", scheduledAt: iso(-5 * D), status: "CONFIRMED", staffName: "Concierge Desk", location: "Guest Suite 2, 2/F", price: 120, billable: true, billed: false, rating: null, notes: "Two nights — daughter visiting from Cebu.", createdAt: iso(2 * D), updatedAt: iso(1 * D) },
+  { id: "cb5", residentId: "r5", resident: residentRef(residentsBase[4]), category: "CHAPLAIN", serviceName: "Chaplain / Spiritual Care Visit", scheduledAt: iso(-1 * D), status: "CONFIRMED", staffName: "Fr. Del Rosario", location: "Garden Lounge", price: 0, billable: false, billed: false, rating: null, notes: null, createdAt: iso(6 * H), updatedAt: iso(3 * H) },
+  { id: "cb6", residentId: "r2", resident: residentRef(residentsBase[1]), category: "MOVIE_GAME_NIGHT", serviceName: "Movie & Game Night", scheduledAt: iso(-3 * D), status: "REQUESTED", staffName: null, location: "Activity Hall", price: 0, billable: false, billed: false, rating: null, notes: "Classic film night reservation.", createdAt: iso(2 * H), updatedAt: iso(2 * H) },
+];
+
+// ── Phase 7: Hospitality & Property Management System (PMS) ──────────────────
+
+const frontDeskVisits = [
+  { id: "fdv1", visitType: "GUEST_VISIT", status: "CHECKED_IN", visitorName: "John Pendelton", visitorPhone: "555-0200", idType: "Driver's License", idNumber: "N01-88-123456", visitorPass: "VP-0417", residentId: "r1", resident: residentRef(residentsBase[0]), roomNumber: "302", purpose: "Sunday family visit", arrivalTime: iso(1.5 * H), checkInTime: iso(1.4 * H), checkOutTime: null, ancillaryItems: JSON.stringify([{ label: "Guest lunch (2)", amount: 24 }]), ancillaryTotal: 24, receiptNumber: null, notes: null, createdAt: iso(1.5 * H), updatedAt: iso(1.4 * H) },
+  { id: "fdv2", visitType: "NEW_RESIDENT_ARRIVAL", status: "ARRIVED", visitorName: "Dorothy Hale", visitorPhone: "555-0311", idType: "Passport", idNumber: "P1234567A", visitorPass: null, residentId: null, resident: null, roomNumber: "314", purpose: "Move-in — Room 314", arrivalTime: iso(0.5 * H), checkInTime: null, checkOutTime: null, ancillaryItems: null, ancillaryTotal: 0, receiptNumber: null, notes: "Admission step 8 pending room allocation.", createdAt: iso(0.5 * H), updatedAt: iso(0.5 * H) },
+  { id: "fdv3", visitType: "TOUR", status: "CHECKED_OUT", visitorName: "Grace &amp; Michael Tan", visitorPhone: "555-0620", idType: "Driver's License", idNumber: "N02-77-998877", visitorPass: "VP-0416", residentId: null, resident: null, roomNumber: null, purpose: "Prospective resident tour", arrivalTime: iso(1 * D), checkInTime: iso(1 * D), checkOutTime: iso(1 * D - 1.5 * H), ancillaryItems: null, ancillaryTotal: 0, receiptNumber: "RCPT-2207", notes: "Interested in a suite for their mother.", createdAt: iso(1 * D), updatedAt: iso(1 * D - 1.5 * H) },
+  { id: "fdv4", visitType: "GUEST_VISIT", status: "CHECKED_OUT", visitorName: "Rosa Chen", visitorPhone: "555-0512", idType: "UMID", idNumber: "CRN-0111-2222", visitorPass: "VP-0410", residentId: "r3", resident: residentRef(residentsBase[2]), roomNumber: "310", purpose: "Afternoon visit + salon treat", arrivalTime: iso(2 * D), checkInTime: iso(2 * D), checkOutTime: iso(2 * D - 2 * H), ancillaryItems: JSON.stringify([{ label: "Salon — haircut", amount: 25 }, { label: "Café drinks", amount: 8 }]), ancillaryTotal: 33, receiptNumber: "RCPT-2201", notes: null, createdAt: iso(2 * D), updatedAt: iso(2 * D - 2 * H) },
+];
+
+const roomTurnovers = [
+  { id: "rt1", roomNumber: "103", stage: "DEEP_CLEAN", status: "IN_PROGRESS", outgoingResident: "Prior resident", incomingResident: null, assignedTo: "Lena Cruz", inspectionPassed: false, checklist: JSON.stringify([{ item: "Strip & launder linens", ok: true }, { item: "Deep clean bathroom", ok: true }, { item: "Sanitize surfaces", ok: false }, { item: "Restock amenities", ok: false }]), startedAt: iso(6 * H), readyAt: null, notes: "Repaint scheduled after deep clean.", createdAt: iso(6 * H), updatedAt: iso(1 * H) },
+  { id: "rt2", roomNumber: "203", stage: "INSPECTION", status: "IN_PROGRESS", outgoingResident: null, incomingResident: "Dorothy Hale", assignedTo: "Ben Alvarez", inspectionPassed: false, checklist: JSON.stringify([{ item: "Make ready", ok: true }, { item: "HVAC check", ok: true }, { item: "Final inspection", ok: false }]), startedAt: iso(1 * D), readyAt: null, notes: "Suite prepped for incoming resident.", createdAt: iso(1 * D), updatedAt: iso(2 * H) },
+  { id: "rt3", roomNumber: "301", stage: "READY", status: "COMPLETED", outgoingResident: "Prior resident", incomingResident: null, assignedTo: "Lena Cruz", inspectionPassed: true, checklist: null, startedAt: iso(3 * D), readyAt: iso(3 * D - 20 * H), notes: "Turnover completed in 20h.", createdAt: iso(3 * D), updatedAt: iso(3 * D - 20 * H) },
+  { id: "rt4", roomNumber: "308", stage: "MOVE_OUT", status: "IN_PROGRESS", outgoingResident: "James Murphy (transfer)", incomingResident: null, assignedTo: null, inspectionPassed: false, checklist: null, startedAt: iso(3 * H), readyAt: null, notes: "Transfer to skilled-nursing wing.", createdAt: iso(3 * H), updatedAt: iso(3 * H) },
+];
+
+const residentPreferences = [
+  { id: "rp1", residentId: "r1", resident: residentRef(residentsBase[0]), category: "Room Comfort", preference: "Preferred room temperature", value: "22°C", notes: "Feels warm in the afternoon.", createdAt: iso(30 * D), updatedAt: iso(2 * D) },
+  { id: "rp2", residentId: "r1", resident: residentRef(residentsBase[0]), category: "Wake-Up", preference: "Preferred wake-up time", value: "6:30 AM", notes: "With medication reminder.", createdAt: iso(30 * D), updatedAt: iso(30 * D) },
+  { id: "rp3", residentId: "r1", resident: residentRef(residentsBase[0]), category: "Dining", preference: "Dietary preference", value: "Low-sodium, diabetic-friendly", notes: null, createdAt: iso(30 * D), updatedAt: iso(5 * D) },
+  { id: "rp4", residentId: "r1", resident: residentRef(residentsBase[0]), category: "Activities", preference: "Favorite activities", value: "Garden walks, chess, classic films", notes: null, createdAt: iso(20 * D), updatedAt: iso(20 * D) },
+  { id: "rp5", residentId: "r1", resident: residentRef(residentsBase[0]), category: "Communication", preference: "Preferred contact", value: "Notify son (John) for updates", notes: null, createdAt: iso(20 * D), updatedAt: iso(20 * D) },
+];
+
+const communityEvents = [
+  { id: "ce1", title: "Sunday Garden Concert", category: "SOCIAL", description: "Live acoustic music in the therapeutic garden with afternoon tea.", location: "Garden Lounge", startTime: iso(-2 * D), endTime: iso(-2 * D - 2 * H), capacity: 40, host: "Activities Team", imageUrl: "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?q=80&w=800", published: true, createdAt: iso(10 * D), updatedAt: iso(10 * D) },
+  { id: "ce2", title: "Chair Yoga & Wellness", category: "WELLNESS", description: "Gentle guided chair yoga for mobility and relaxation.", location: "Activity Hall", startTime: iso(-1 * D), endTime: iso(-1 * D - 1 * H), capacity: 20, host: "Wellness Team", imageUrl: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?q=80&w=800", published: true, createdAt: iso(8 * D), updatedAt: iso(8 * D) },
+  { id: "ce3", title: "Classic Movie Night — Casablanca", category: "RECREATION", description: "Cinema evening with popcorn and refreshments.", location: "Activity Hall", startTime: iso(-3 * D), endTime: iso(-3 * D - 2.5 * H), capacity: 50, host: "Activities Team", imageUrl: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=800", published: true, createdAt: iso(6 * D), updatedAt: iso(6 * D) },
+  { id: "ce4", title: "Sunday Chapel Service", category: "SPIRITUAL", description: "Interfaith spiritual care service with Fr. Del Rosario.", location: "Chapel", startTime: iso(-4 * D), endTime: iso(-4 * D - 1 * H), capacity: null, host: "Chaplaincy", imageUrl: null, published: true, createdAt: iso(5 * D), updatedAt: iso(5 * D) },
+];
+
+const eventAttendances = [
+  { id: "ea1", eventId: "ce1", event: { id: "ce1", title: "Sunday Garden Concert", startTime: iso(-2 * D) }, residentId: "r1", resident: residentRef(residentsBase[0]), status: "GOING", checkedInAt: null, rating: null, notes: null, createdAt: iso(3 * D), updatedAt: iso(3 * D) },
+  { id: "ea2", eventId: "ce2", event: { id: "ce2", title: "Chair Yoga & Wellness", startTime: iso(-1 * D) }, residentId: "r1", resident: residentRef(residentsBase[0]), status: "ATTENDED", checkedInAt: iso(-1 * D), rating: 5, notes: "Loved it.", createdAt: iso(4 * D), updatedAt: iso(-1 * D) },
+  { id: "ea3", eventId: "ce3", event: { id: "ce3", title: "Classic Movie Night — Casablanca", startTime: iso(-3 * D) }, residentId: "r2", resident: residentRef(residentsBase[1]), status: "ATTENDED", checkedInAt: iso(-3 * D), rating: 4, notes: null, createdAt: iso(5 * D), updatedAt: iso(-3 * D) },
+];
+
+const diningReservations = [
+  { id: "dr1", residentId: "r1", resident: residentRef(residentsBase[0]), mealType: "DINNER", reservedAt: iso(-6 * H), partySize: 3, venue: "Main Dining", status: "CONFIRMED", guestNames: "John Pendelton + 1 guest", specialRequests: "Window table; low-sodium meal for Arthur.", createdAt: iso(1 * D), updatedAt: iso(5 * H) },
+  { id: "dr2", residentId: "r3", resident: residentRef(residentsBase[2]), mealType: "LUNCH", reservedAt: iso(-1 * D), partySize: 1, venue: "Bistro", status: "COMPLETED", guestNames: null, specialRequests: null, createdAt: iso(2 * D), updatedAt: iso(-1 * D) },
+  { id: "dr3", residentId: "r2", resident: residentRef(residentsBase[1]), mealType: "DINNER", reservedAt: iso(-2 * H), partySize: 2, venue: "Private Room", status: "REQUESTED", guestNames: "Daughter visiting", specialRequests: "Pureed/mechanical-soft option.", createdAt: iso(3 * H), updatedAt: iso(3 * H) },
+];
+
+const announcements = [
+  { id: "an1", title: "Elevator Maintenance — Lift B", body: "Lift B will undergo its annual safety certification this week. Please use Lift A. We apologize for any inconvenience.", audience: "ALL", priority: "HIGH", authorName: "Facility Admin", pinned: true, published: true, autoNotify: true, publishedAt: iso(4 * H), createdAt: iso(4 * H), updatedAt: iso(4 * H) },
+  { id: "an2", title: "Sunday Garden Concert This Weekend", body: "Join us in the Garden Lounge this Sunday afternoon for live acoustic music and afternoon tea. Families welcome!", audience: "RESIDENTS", priority: "NORMAL", authorName: "Activities Team", pinned: false, published: true, autoNotify: true, publishedAt: iso(1 * D), createdAt: iso(1 * D), updatedAt: iso(1 * D) },
+  { id: "an3", title: "Flu Vaccination Clinic — Next Tuesday", body: "The on-site clinic will offer seasonal flu vaccinations next Tuesday from 9 AM to 12 PM. Please sign up at the front desk.", audience: "ALL", priority: "NORMAL", authorName: "Head Nurse", pinned: false, published: true, autoNotify: true, publishedAt: iso(2 * D), createdAt: iso(2 * D), updatedAt: iso(2 * D) },
+];
+
 export const DEMO: Record<string, any[]> = {
   users: staff.map((s) => ({ id: s.userId, ...s.user, role: "STAFF" })),
   admissions,
@@ -337,6 +414,16 @@ export const DEMO: Record<string, any[]> = {
   "blog-posts": blogPosts,
   "site-content": siteContent,
   "custom-pages": customPages,
+  "service-requests": serviceRequests,
+  "facility-maintenance": facilityMaintenance,
+  "concierge-bookings": conciergeBookings,
+  "front-desk-visits": frontDeskVisits,
+  "room-turnovers": roomTurnovers,
+  "resident-preferences": residentPreferences,
+  "community-events": communityEvents,
+  "event-attendances": eventAttendances,
+  "dining-reservations": diningReservations,
+  announcements,
 };
 
 export const DEMO_STATS = {

@@ -15,10 +15,8 @@ import AdmissionsContent from "@/components/portal/views/AdmissionsContent";
 import AIAssistantContent from "@/components/portal/ai/AIAssistantContent";
 import FacilityRooms from "@/components/portal/views/FacilityRooms";
 import FacilityOccupancy from "@/components/portal/views/FacilityOccupancy";
-import FacilityBilling from "@/components/portal/views/FacilityBilling";
 import FacilityInventory from "@/components/portal/views/FacilityInventory";
-import FacilityReports from "@/components/portal/views/FacilityReports";
-import FacilityDining from "@/components/portal/views/FacilityDining";
+import FacilityUnifiedView from "@/components/portal/views/FacilityUnifiedView";
 import CameraVisionFeed from "@/components/CameraVisionFeed";
 
 interface FacilityAdminPortalContentProps {
@@ -213,14 +211,14 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
   if (tab === "admissions") return <AdmissionsContent />;
   if (tab === "assistant") return <AIAssistantContent />;
   if (tab === "residents") return <FacilityResidents />;
-  if (tab === "reports") return <FacilityReports />;
   if (tab === "incidents") return <FacilityIncidents />;
   if (tab === "monitoring") return <MonitoringView />;
   if (tab === "rooms") return <FacilityRooms />;
   if (tab === "occupancy") return <FacilityOccupancy />;
-  if (tab === "billing") return <FacilityBilling />;
   if (tab === "inventory") return <FacilityInventory />;
-  if (tab === "dining") return <FacilityDining />;
+  // Unified operations hub — reports, billing, dining, services, maintenance, concierge, front desk, turnover, community
+  if (["reports", "billing", "dining", "services", "maintenance", "concierge", "frontdesk", "turnover", "community"].includes(tab))
+    return <FacilityUnifiedView initialTab={tab} />;
 
   // Staff Registry tab
   if (tab === "staff") {

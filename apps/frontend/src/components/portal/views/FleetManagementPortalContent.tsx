@@ -1,12 +1,9 @@
 "use client";
 
 import FleetDashboard from "@/components/portal/views/fleet/FleetDashboard";
-import FleetRequests from "@/components/portal/views/fleet/FleetRequests";
-import FleetTrips from "@/components/portal/views/fleet/FleetTrips";
 import FleetVehicles from "@/components/portal/views/fleet/FleetVehicles";
 import FleetDrivers from "@/components/portal/views/fleet/FleetDrivers";
-import FleetMaintenance from "@/components/portal/views/fleet/FleetMaintenance";
-import FleetFuel from "@/components/portal/views/fleet/FleetFuel";
+import FleetHub from "@/components/portal/views/fleet/FleetHub";
 
 interface FleetManagementPortalContentProps {
   tab: string;
@@ -18,23 +15,25 @@ interface FleetManagementPortalContentProps {
  * dispatcher request review → vehicle/driver/escort assignment →
  * pre-trip inspection → live GPS trip → drop-off → billable charge,
  * plus the maintenance & compliance loop.
+ *
+ * maintenance / fuel / requests / trips are now unified into FleetHub.
  */
 export default function FleetManagementPortalContent({
   tab,
 }: FleetManagementPortalContentProps) {
   switch (tab) {
+    case "maintenance":
+      return <FleetHub initialTab="maintenance" />;
+    case "fuel":
+      return <FleetHub initialTab="fuel" />;
     case "requests":
-      return <FleetRequests />;
+      return <FleetHub initialTab="requests" />;
     case "trips":
-      return <FleetTrips />;
+      return <FleetHub initialTab="trips" />;
     case "vehicles":
       return <FleetVehicles />;
     case "drivers":
       return <FleetDrivers />;
-    case "maintenance":
-      return <FleetMaintenance />;
-    case "fuel":
-      return <FleetFuel />;
     default:
       return <FleetDashboard />;
   }

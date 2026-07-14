@@ -841,7 +841,7 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
           <button onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
           <button
             onClick={() => {
-              router.push(`/nurse/monitoring?resident=${encodeURIComponent(r.name)}&room=${encodeURIComponent(r.room)}`);
+              router.push(`/nurse/monitoring?resident=${encodeURIComponent(r.name)}&room=${encodeURIComponent(r.room)}&residentId=${encodeURIComponent(r.id)}`);
             }}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-400 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
           >

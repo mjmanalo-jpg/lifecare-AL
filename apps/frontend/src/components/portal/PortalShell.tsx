@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ReactNode, useEffect, useMemo } from "react";
+import { useState, ReactNode, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Role, RoleDetails, ROLES, GLOBAL_FEATURES, type SidebarLink } from "@/constants/roleConfig";
+import { Role, RoleDetails, ROLES } from "@/constants/roleConfig";
 
 interface PortalShellProps {
   userRole: Role;
@@ -130,136 +130,16 @@ export default function PortalShell({
     }
   };
 
-  const handleSimulateAlert = async (type: "call-bells" | "incidents" | "vitals") => {
-    try {
-      const { createRecord } = await import("@/lib/api");
-      
-      // Fetch the first resident dynamically
-      const resResidents = await fetch("/api/db/residents?take=1");
-      const jsonResidents = await resResidents.json();
-      const resident = jsonResidents.data?.[0];
-      if (!resident) {
-        Swal.fire({
-          title: "No Residents Found",
-          text: "Please add a resident first to simulate alerts.",
-          icon: "warning",
-          background: theme === "dark" ? "#1f2937" : "#ffffff",
-          color: theme === "dark" ? "#ffffff" : "#000000",
-        });
-        return;
-      }
-
-      let payload = {};
-      if (type === "call-bells") {
-        payload = {
-          residentId: resident.id,
-          status: "PENDING",
-          reason: "Emergency Assistance Request via Notification Panel Simulator",
-        };
-      } else if (type === "incidents") {
-        payload = {
-          residentId: resident.id,
-          incidentType: "FALL",
-          severity: "CRITICAL",
-          description: "Simulated computer-vision anomaly: Resident balance loss detected in Room " + resident.roomNumber,
-          incidentDate: new Date().toISOString(),
-        };
-      } else if (type === "vitals") {
-        payload = {
-          residentId: resident.id,
-          type: "HEART_RATE",
-          value: "114",
-          unit: "bpm",
-          recordedAt: new Date().toISOString(),
-          notes: "Simulated abnormal high heart rate (>100 bpm) detected during activity.",
-        };
-      }
-
-      await createRecord(type, payload);
-      
-      Swal.fire({
-        title: "Simulation Dispatched",
-        text: `Successfully triggered real-time ${type.slice(0, -1)} event for ${resident.firstName} ${resident.lastName}.`,
-        icon: "success",
-        timer: 1500,
-        showConfirmButton: false,
-        background: theme === "dark" ? "#1f2937" : "#ffffff",
-        color: theme === "dark" ? "#ffffff" : "#000000",
-      });
-    } catch (err) {
-      console.error("Simulation failed:", err);
-      Swal.fire({
-        title: "Simulation Failed",
-        text: err instanceof Error ? err.message : "Request failed",
-        icon: "error",
-        background: theme === "dark" ? "#1f2937" : "#ffffff",
-        color: theme === "dark" ? "#ffffff" : "#000000",
-      });
-    }
-  };
-
 
   const roleDetails: RoleDetails = ROLES[userRole];
 
-  const { data: appSettings } = useLiveQuery<{ id: string; value: string }>("app-settings", {
-    tables: ["AppSetting"],
-  });
-
-  const portalMatrixSetting = appSettings?.find((s) => s.id === "portal_matrix")?.value;
-  const enabledFeatures = useMemo(() => {
-    if (!portalMatrixSetting) return null;
-    try {
-      return JSON.parse(portalMatrixSetting)[userRole] as Record<string, boolean>;
-    } catch {
-      return null;
-    }
-  }, [portalMatrixSetting, userRole]);
-
-  const filteredLinks = useMemo(() => {
-    if (!enabledFeatures) return roleDetails.sidebarLinks;
-
-    // Features absent from the stored matrix default to the role's native
-    // sidebar (same rule as the Portal Matrix editor) — otherwise a stale
-    // snapshot saved before a feature existed would silently hide it.
-    const isEnabled = (featureName: string) =>
-      enabledFeatures[featureName] ??
-      roleDetails.sidebarLinks.some((l) => l.name === featureName);
-
-    const links: SidebarLink[] = [];
-    const seenRoutes = new Set<string>();
-
-    // Native links first, preserving the role's configured order.
-    roleDetails.sidebarLinks.forEach((link) => {
-      if (isEnabled(link.name) && !seenRoutes.has(link.route)) {
-        seenRoutes.add(link.route);
-        links.push(link);
-      }
-    });
-
-    // Then any extra features the matrix grants beyond the role's defaults.
-    Object.keys(GLOBAL_FEATURES).forEach((featureName) => {
-      if (enabledFeatures[featureName] === true) {
-        const feat = GLOBAL_FEATURES[featureName];
-        const route = `${roleDetails.basePath}/${feat.routeSegment}`;
-        if (!seenRoutes.has(route)) {
-          seenRoutes.add(route);
-          links.push({
-            name: featureName,
-            icon: feat.icon,
-            route,
-          });
-        }
-      }
-    });
-
-    // Fallback: If no links are checked, render the role's native Dashboard link as fallback
-    if (links.length === 0) {
-      const dbLink = roleDetails.sidebarLinks.find(l => l.name.toLowerCase().includes("dashboard"));
-      if (dbLink) links.push(dbLink);
-    }
-
-    return links;
-  }, [roleDetails, enabledFeatures]);
+  // The sidebar is the role's own comprehensive feature set — fixed and
+  // consistent. It was previously derived from the polled `portal_matrix`
+  // app-setting, which caused two bugs: a load→loaded flip that made the nav
+  // items blink on every mount, and injection of cross-role features that mapped
+  // to routes the portal can't render (an inconsistent, bloated sidebar). Each
+  // role's sidebarLinks in roleConfig is now the single source of truth.
+  const filteredLinks = roleDetails.sidebarLinks;
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -615,37 +495,6 @@ export default function PortalShell({
                         <p className="text-xs text-gray-400 mt-1 mb-4">No notifications right now.</p>
                       </div>
                     )}
-
-                    {/* Developer Real-time Simulator Panel */}
-                    <div className={`p-4 border-t ${theme === "dark" ? "border-gray-800 bg-gray-950/20" : "border-gray-100 bg-gray-50/30"}`}>
-                      <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                        <Zap className="w-3 h-3 text-yellow-500 animate-pulse" />
-                        Real-time Alert Simulator
-                      </p>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        <button
-                          onClick={() => handleSimulateAlert("call-bells")}
-                          className="flex flex-col items-center justify-center p-2 rounded-lg bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-100/50 dark:border-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 transition"
-                        >
-                          <BellRing className="w-4 h-4 mb-1" />
-                          <span className="text-[9px] font-semibold text-center leading-none">Call Bell</span>
-                        </button>
-                        <button
-                          onClick={() => handleSimulateAlert("incidents")}
-                          className="flex flex-col items-center justify-center p-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-100/50 dark:border-red-900/20 hover:bg-red-100 dark:hover:bg-red-950/40 text-red-700 dark:text-red-400 transition"
-                        >
-                          <AlertTriangle className="w-4 h-4 mb-1" />
-                          <span className="text-[9px] font-semibold text-center leading-none">Fall Alert</span>
-                        </button>
-                        <button
-                          onClick={() => handleSimulateAlert("vitals")}
-                          className="flex flex-col items-center justify-center p-2 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-100/50 dark:border-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-950/40 text-purple-700 dark:text-purple-400 transition"
-                        >
-                          <Activity className="w-4 h-4 mb-1" />
-                          <span className="text-[9px] font-semibold text-center leading-none">Vital HR</span>
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 </div>
               )}

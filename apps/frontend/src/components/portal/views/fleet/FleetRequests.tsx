@@ -34,6 +34,8 @@ function adaptRequest(row: Record<string, unknown>) {
     roomNumber: resident ? str(resident.roomNumber, "—") : "—",
     type: str(row.type, "OTHER"),
     destination: str(row.destination, "—"),
+    pickupLocation: str(row.pickupLocation, "Golden Hearth Facility"),
+    dropoffLocation: str(row.dropoffLocation) || str(row.destination, "—"),
     purpose: str(row.purpose),
     requestedDate: str(row.requestedDate),
     returnRequired: bool(row.returnRequired),
@@ -121,7 +123,8 @@ const DEFAULT_CHARGE: Record<string, number> = {
 };
 
 const emptyRequestForm = {
-  residentId: "", type: "MEDICAL_APPOINTMENT", destination: "", purpose: "",
+  residentId: "", type: "MEDICAL_APPOINTMENT",
+  pickupLocation: "Golden Hearth Facility", dropoffLocation: "", purpose: "",
   requestedDate: "", returnRequired: true, wheelchairNeeded: false,
   escortRequired: false, escortRole: "NURSE", priority: "NORMAL", notes: "",
 };
@@ -237,15 +240,16 @@ export default function FleetRequests() {
       ...emptyRequestForm,
       type: "EMERGENCY_TRANSFER",
       priority: "EMERGENCY",
-      destination: "Nearest Hospital — ER",
+      pickupLocation: "Golden Hearth Facility",
+      dropoffLocation: "Nearest Hospital — ER",
       requestedDate: toLocalInput(new Date().toISOString()),
     });
     setShowCreate(true);
   };
 
   const handleCreate = async () => {
-    if (!createForm.residentId || !createForm.destination || !createForm.requestedDate) {
-      Swal.fire({ title: "Missing Fields", text: "Resident, destination and requested date are required.", icon: "warning" });
+    if (!createForm.residentId || !createForm.dropoffLocation || !createForm.requestedDate) {
+      Swal.fire({ title: "Missing Fields", text: "Resident, drop-off and requested date are required.", icon: "warning" });
       return;
     }
     const confirmed = await Swal.fire({
@@ -259,7 +263,9 @@ export default function FleetRequests() {
       await createRecord("transport-requests", {
         residentId: createForm.residentId,
         type: createForm.type,
-        destination: createForm.destination,
+        pickupLocation: createForm.pickupLocation,
+        dropoffLocation: createForm.dropoffLocation,
+        destination: createForm.dropoffLocation,
         purpose: createForm.purpose,
         requestedDate: new Date(createForm.requestedDate).toISOString(),
         returnRequired: createForm.returnRequired,
@@ -364,8 +370,10 @@ export default function FleetRequests() {
         driverId: assignForm.driverId,
         escortName: assigning.escortRequired ? assignForm.escortName.trim() : null,
         escortRole: assigning.escortRequired ? assignForm.escortRole : null,
-        destination: assigning.destination,
-        origin: facilityName || "Facility",
+        pickupLocation: assigning.pickupLocation,
+        dropoffLocation: assigning.dropoffLocation,
+        destination: assigning.dropoffLocation,
+        origin: assigning.pickupLocation || facilityName || "Facility",
         scheduledAt: new Date(assignForm.scheduledAt).toISOString(),
         distanceKm: assignForm.distanceKm ? Number(assignForm.distanceKm) : null,
         charge: Number(assignForm.charge) || 0,
@@ -507,7 +515,13 @@ export default function FleetRequests() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-700">
-                      <div className="flex items-center gap-1"><MapPin className="w-3 h-3 text-gray-400 flex-shrink-0" />{req.destination}</div>
+                      <div className="flex items-center gap-1 text-xs">
+                        <MapPin className="w-3 h-3 text-green-500 flex-shrink-0" />
+                        <span className="truncate max-w-[130px]" title={req.pickupLocation}>{req.pickupLocation}</span>
+                        <span className="text-gray-400">→</span>
+                        <MapPin className="w-3 h-3 text-red-500 flex-shrink-0" />
+                        <span className="truncate max-w-[130px] font-medium" title={req.dropoffLocation}>{req.dropoffLocation}</span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-600">{fmtDT(req.requestedDate)}</td>
                     <td className="px-4 py-3">
@@ -798,9 +812,13 @@ function RequestFormModal({ title, form, residents, onChange, onSave, onCancel }
                 <option value="EMERGENCY">Emergency</option>
               </select>
             </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Destination</label>
-              <input type="text" value={form.destination} onChange={set("destination")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="e.g. St. Luke's Medical Center" />
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Pickup Location</label>
+              <input type="text" value={form.pickupLocation} onChange={set("pickupLocation")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="e.g. Golden Hearth Facility" />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Drop-off Location</label>
+              <input type="text" value={form.dropoffLocation} onChange={set("dropoffLocation")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="e.g. St. Luke's Medical Center" />
             </div>
             <div className="col-span-2">
               <label className="block text-sm font-semibold text-gray-700 mb-1">Purpose</label>

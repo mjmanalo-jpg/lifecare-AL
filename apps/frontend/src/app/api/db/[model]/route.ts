@@ -119,7 +119,7 @@ export async function POST(
   // Self-service roles (FAMILY/RESIDENT) may only create the records their portal
   // legitimately produces (messages to staff, visit requests). Rest is staff-only.
   const SELF_SERVICE = role === "FAMILY" || role === "RESIDENT";
-  const SELF_WRITABLE = new Set(["messages", "visits", "call-bells", "tasks", "transport-requests", "resident-goals", "medication-logs"]);
+  const SELF_WRITABLE = new Set(["messages", "visits", "call-bells", "tasks", "transport-requests", "resident-goals", "medication-logs", "service-requests", "concierge-bookings", "resident-preferences", "event-attendances", "dining-reservations"]);
   if (SELF_SERVICE && !SELF_WRITABLE.has(model)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -215,30 +215,42 @@ function getSeedsForRole(role: string, userId: string) {
         },
       ];
     case "PHYSICIAN":
+      // Physician notifications are unique to the medical-authority role: orders
+      // to approve & sign, care-team notes to co-sign, consults to answer, and
+      // patients needing a physician assessment — not the nurse's bedside alerts.
       return [
         {
           userId,
-          type: "VITAL_ALERT" as const,
-          title: "Arthur Pendelton Vitals Alert",
-          message: "Arthur's Heart Rate spiked to 104 bpm during therapy. Vitals now stable.",
+          type: "MEDICATION_REMINDER" as const,
+          title: "Order Awaiting Approval",
+          message: "Apixaban 5mg for Margaret Wilson (Room 312) is pending your approval & e-signature.",
           isRead: false,
           createdAt: getPastTime(20 * 1000),
           updatedAt: getPastTime(20 * 1000),
         },
         {
           userId,
-          type: "MEDICATION_REMINDER" as const,
-          title: "Medication Warning",
-          message: "Frank Osei (Room 312) medication overdue by 2 hours.",
+          type: "MESSAGE" as const,
+          title: "Clinical Note to Co-sign",
+          message: "Sarah Jenkins, RN submitted a clinical note for Arthur Pendelton (Room 302) awaiting your co-signature.",
+          isRead: false,
+          createdAt: getPastTime(2 * H),
+          updatedAt: getPastTime(2 * H),
+        },
+        {
+          userId,
+          type: "SYSTEM_ALERT" as const,
+          title: "New Consult Request",
+          message: "Swallowing-assessment consult raised for Eleanor Fitzroy (Room 305) — awaiting your response.",
           isRead: false,
           createdAt: getPastTime(3 * H),
           updatedAt: getPastTime(3 * H),
         },
         {
           userId,
-          type: "MESSAGE" as const,
-          title: "New Handover Note",
-          message: "Sarah Jenkins, RN submitted clinical handover reports.",
+          type: "VITAL_ALERT" as const,
+          title: "Patient Needs Assessment",
+          message: "Margaret Wilson (Room 312) BP elevated at 165/95 — please review and direct care.",
           isRead: true,
           createdAt: getPastTime(6 * H),
           updatedAt: getPastTime(6 * H),
@@ -565,7 +577,165 @@ async function handleAutoNotification(model: string, data: any) {
       }
     }
 
-    // 7. Vitals Trigger
+    // 7. Service Requests Trigger — alert the hotel-services desk (facility admin + super admin)
+    if (model === "service-requests") {
+      const staffUsers = await prisma.user.findMany({
+        where: {
+          role: { in: ["FACILITY_ADMIN", "SUPERADMIN"] },
+          isActive: true,
+        },
+        select: { id: true },
+      });
+
+      const resident = await prisma.resident.findUnique({
+        where: { id: data.residentId },
+        select: { firstName: true, lastName: true, roomNumber: true },
+      });
+      const name = resident ? `${resident.firstName} ${resident.lastName}` : "A resident";
+      const room = resident?.roomNumber ? `Room ${resident.roomNumber}` : "their room";
+      const isEmergency = data.priority === "EMERGENCY";
+      const category = String(data.category || "service").replace(/_/g, " ").toLowerCase();
+
+      await prisma.notification.createMany({
+        data: staffUsers.map((u) => ({
+          userId: u.id,
+          type: "SERVICE_UPDATE" as const,
+          title: isEmergency
+            ? `EMERGENCY Service Ticket: ${name}`
+            : `New Service Request: ${name}`,
+          message: `${name} in ${room} requested ${category}${data.subType ? ` — ${data.subType}` : ""} (${String(data.priority || "ROUTINE").toLowerCase()} priority).`,
+          relatedEntityId: data.id,
+          relatedEntityType: "ServiceRequest",
+        })),
+      });
+    }
+
+    // 8. Concierge Bookings Trigger — alert the concierge desk (facility admin)
+    if (model === "concierge-bookings") {
+      const staffUsers = await prisma.user.findMany({
+        where: {
+          role: { in: ["FACILITY_ADMIN", "SUPERADMIN"] },
+          isActive: true,
+        },
+        select: { id: true },
+      });
+
+      const resident = await prisma.resident.findUnique({
+        where: { id: data.residentId },
+        select: { firstName: true, lastName: true, roomNumber: true },
+      });
+      const name = resident ? `${resident.firstName} ${resident.lastName}` : "A resident";
+      const when = data.scheduledAt ? new Date(data.scheduledAt).toLocaleString() : "soon";
+
+      await prisma.notification.createMany({
+        data: staffUsers.map((u) => ({
+          userId: u.id,
+          type: "SERVICE_UPDATE" as const,
+          title: `Concierge Booking: ${name}`,
+          message: `${name} requested "${data.serviceName || "a concierge service"}" for ${when} — pending confirmation.`,
+          relatedEntityId: data.id,
+          relatedEntityType: "ConciergeBooking",
+        })),
+      });
+    }
+
+    // 9. Announcements Trigger — fan out to the target audience live.
+    if (model === "announcements" && data.autoNotify !== false && data.published !== false) {
+      const audience = String(data.audience || "ALL");
+      const roleMap: Record<string, string[]> = {
+        ALL: ["SUPERADMIN", "FACILITY_ADMIN", "PHYSICIAN", "NURSE", "CAREGIVER", "FAMILY", "RESIDENT", "FLEET_MANAGEMENT", "DRIVER"],
+        RESIDENTS: ["RESIDENT"],
+        FAMILIES: ["FAMILY"],
+        STAFF: ["SUPERADMIN", "FACILITY_ADMIN", "PHYSICIAN", "NURSE", "CAREGIVER"],
+      };
+      const roles = roleMap[audience] ?? roleMap.ALL;
+      const users = await prisma.user.findMany({
+        where: { role: { in: roles as never }, isActive: true },
+        select: { id: true },
+      });
+      if (users.length) {
+        await prisma.notification.createMany({
+          data: users.map((u) => ({
+            userId: u.id,
+            type: "ANNOUNCEMENT" as const,
+            title: String(data.title || "Announcement"),
+            message: String(data.body || "").slice(0, 160),
+            relatedEntityId: data.id,
+            relatedEntityType: "Announcement",
+          })),
+        });
+      }
+    }
+
+    // 10. Community Event Trigger — invite residents + their sponsors to new events.
+    if (model === "community-events" && data.published !== false) {
+      const users = await prisma.user.findMany({
+        where: { role: { in: ["RESIDENT", "FAMILY"] }, isActive: true },
+        select: { id: true },
+      });
+      if (users.length) {
+        const when = data.startTime ? new Date(data.startTime).toLocaleString() : "soon";
+        await prisma.notification.createMany({
+          data: users.map((u) => ({
+            userId: u.id,
+            type: "EVENT_INVITE" as const,
+            title: `New Event: ${data.title}`,
+            message: `${data.title} — ${when}${data.location ? ` at ${data.location}` : ""}. RSVP in the Community tab.`,
+            relatedEntityId: data.id,
+            relatedEntityType: "CommunityEvent",
+          })),
+        });
+      }
+    }
+
+    // 11. Dining Reservation Trigger — notify the kitchen/front desk (facility admin).
+    if (model === "dining-reservations") {
+      const staffUsers = await prisma.user.findMany({
+        where: { role: { in: ["FACILITY_ADMIN", "SUPERADMIN"] }, isActive: true },
+        select: { id: true },
+      });
+      const resident = await prisma.resident.findUnique({
+        where: { id: data.residentId },
+        select: { firstName: true, lastName: true },
+      });
+      const name = resident ? `${resident.firstName} ${resident.lastName}` : "A resident";
+      const when = data.reservedAt ? new Date(data.reservedAt).toLocaleString() : "soon";
+      if (staffUsers.length) {
+        await prisma.notification.createMany({
+          data: staffUsers.map((u) => ({
+            userId: u.id,
+            type: "SERVICE_UPDATE" as const,
+            title: `Dining Reservation: ${name}`,
+            message: `${name} reserved ${String(data.mealType || "a meal").toLowerCase()} for ${data.partySize || 1} at ${data.venue || "the dining room"} — ${when}.`,
+            relatedEntityId: data.id,
+            relatedEntityType: "DiningReservation",
+          })),
+        });
+      }
+    }
+
+    // 12. Front Desk Arrival Trigger — alert the front desk (facility admin).
+    if (model === "front-desk-visits") {
+      const staffUsers = await prisma.user.findMany({
+        where: { role: { in: ["FACILITY_ADMIN", "SUPERADMIN"] }, isActive: true },
+        select: { id: true },
+      });
+      if (staffUsers.length) {
+        const kind = String(data.visitType || "guest").replace(/_/g, " ").toLowerCase();
+        await prisma.notification.createMany({
+          data: staffUsers.map((u) => ({
+            userId: u.id,
+            type: "SERVICE_UPDATE" as const,
+            title: `Front Desk: ${data.visitorName}`,
+            message: `${data.visitorName} arrived (${kind})${data.roomNumber ? ` for Room ${data.roomNumber}` : ""} — awaiting check-in.`,
+            relatedEntityId: data.id,
+            relatedEntityType: "FrontDeskVisit",
+          })),
+        });
+      }
+    }
+
+    // 13. Vitals Trigger
     if (model === "vitals") {
       const staffUsers = await prisma.user.findMany({
         where: {

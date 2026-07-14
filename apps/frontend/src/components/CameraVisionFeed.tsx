@@ -57,6 +57,7 @@ interface Props {
   cameraMode?: "local" | "tapo" | "hybrid";
   residentName?: string;
   residentRoom?: string;
+  residentId?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -377,7 +378,7 @@ function captureSnapshot(videoEl: HTMLVideoElement | null, imgEl: HTMLImageEleme
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallCleared, cameraMode = "hybrid", residentName, residentRoom }: Props) {
+export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallCleared, cameraMode = "hybrid", residentName, residentRoom, residentId }: Props) {
   // Camera Mode State (Local | Tapo IP | Hybrid)
   const [activeCamera, setActiveCamera] = useState<"local" | "tapo">(
     cameraMode === "tapo" ? "tapo" : "local"
@@ -445,6 +446,40 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   const waveRef     = useRef(false);
   const gemBusyRef  = useRef(false);
   const gemDeadRef  = useRef(false);  // set once the API key is confirmed dead -> stop wasteful cloud calls
+
+  // Monitoring log persistence — save analysis snapshots to DB every 30s and fall events immediately
+  const lastSaveRef = useRef(0);
+  const SAVE_INTERVAL_MS = 30_000;
+  const saveMonitoringLog = useCallback(async (logType: string, analysis: VisionAnalysis) => {
+    try {
+      await fetch("/api/db/camera-monitoring-logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          residentId: residentId || null,
+          residentName: residentName || null,
+          roomNumber: residentRoom || null,
+          logType,
+          emotion: analysis.globalEmotion,
+          emotionConfidence: analysis.emotionConfidence,
+          behavior: analysis.globalBehavior,
+          posture: analysis.globalPosture,
+          alert: analysis.alert,
+          alertReason: analysis.alertReason,
+          summary: analysis.summary,
+          objects: analysis.objects,
+          heartRate: aiVitals.heartRate,
+          respirationRate: aiVitals.respirationRate,
+          temperature: aiVitals.temperature,
+          oxygen: aiVitals.oxygen,
+          bloodPressureSys: bpEstimate?.systolicBP ?? null,
+          bloodPressureDia: bpEstimate?.diastolicBP ?? null,
+          cameraId: cameraMode,
+        }),
+      });
+    } catch { /* non-critical — ignore save errors */ }
+  }, [residentId, residentName, residentRoom, cameraMode, aiVitals.heartRate, aiVitals.respirationRate, aiVitals.temperature, aiVitals.oxygen, bpEstimate?.systolicBP, bpEstimate?.diastolicBP]);
 
   // Wave detection - separate left and right history for accuracy
   const lWristHistRef = useRef<number[]>([]);
@@ -1385,6 +1420,12 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         lastVisionRef.current=now; runVision();
       }
 
+      // Persist monitoring log to DB every 30 seconds
+      if (now - lastSaveRef.current > SAVE_INTERVAL_MS) {
+        lastSaveRef.current = now;
+        saveMonitoringLog("ANALYSIS", analysisRef.current);
+      }
+
       // Centralized Fall Detection — a person horizontal on the floor IS a fall.
       const currentlyFallen = poseFallenRef.current || objFallenRef.current;
 
@@ -1400,6 +1441,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
             selfFallenRef.current = true;
             setSelfFallen(true);
             onFallTriggered?.(analysisRef.current);
+            saveMonitoringLog("FALL_DETECTION", analysisRef.current);
           } else if (fallStartRef.current == null) {
             fallStartRef.current = now;
           } else if (now - fallStartRef.current > LYING_CONFIRM_MS) {
@@ -1408,6 +1450,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
             selfFallenRef.current = true;
             setSelfFallen(true);
             onFallTriggered?.(analysisRef.current);
+            saveMonitoringLog("FALL_DETECTION", analysisRef.current);
           }
         } else {
           // If we are already in selfFallen state, reset the fall start timer

@@ -1,41 +1,52 @@
 "use client";
 
-import PhysicianDashboard from "@/components/portal/views/physician/PhysicianDashboard";
-import PhysicianRounds from "@/components/portal/views/physician/PhysicianRounds";
-import PhysicianRecords from "@/components/portal/views/physician/PhysicianRecords";
+import PhysicianCommandCenter from "@/components/portal/views/physician/PhysicianCommandCenter";
+import PhysicianCaseReview from "@/components/portal/views/physician/PhysicianCaseReview";
 import PhysicianOrders from "@/components/portal/views/physician/PhysicianOrders";
-import PhysicianNotes from "@/components/portal/views/physician/PhysicianNotes";
-import PhysicianVitals from "@/components/portal/views/physician/PhysicianVitals";
+import PhysicianCarePlans from "@/components/portal/views/physician/PhysicianCarePlans";
+import PhysicianConsults from "@/components/portal/views/physician/PhysicianConsults";
 import PhysicianIncidents from "@/components/portal/views/physician/PhysicianIncidents";
-import PhysicianMessages from "@/components/portal/views/physician/PhysicianMessages";
+import ClinicalNotes from "@/components/portal/views/clinical/ClinicalNotes";
+import ClinicalMessages from "@/components/portal/views/clinical/ClinicalMessages";
 
 interface PhysicianPortalContentProps {
   tab: string;
 }
 
+/**
+ * Physician portal — a medical-authority / oversight perspective, deliberately
+ * distinct from the nurse's hands-on operations portal. The physician diagnoses,
+ * prescribes & signs, sets care-plan directives, answers consults/referrals, and
+ * reviews & co-signs what the patient, family, nurse & caregiver report. Every
+ * module is live via Supabase realtime + polling.
+ */
 export default function PhysicianPortalContent({ tab }: PhysicianPortalContentProps) {
   switch (tab) {
     case "dashboard":
-      return <PhysicianDashboard />;
-    case "rounds":
-      return <PhysicianRounds />;
-    case "records":
-      return <PhysicianRecords />;
+      return <PhysicianCommandCenter />;
+    case "casereview":
+      return <PhysicianCaseReview />;
     case "orders":
-      return <PhysicianOrders />;
-    case "notes":
-      return <PhysicianNotes />;
-    case "vitals":
-      return <PhysicianVitals />;
+      return <PhysicianOrders approveMode />;
+    case "careplans":
+      return <PhysicianCarePlans />;
+    case "consults":
+      return <PhysicianConsults />;
     case "incidents":
       return <PhysicianIncidents />;
+    case "notes":
+      return <ClinicalNotes clinicianRole="PHYSICIAN" />;
     case "messages":
-      return <PhysicianMessages />;
+      return <ClinicalMessages clinicianRole="PHYSICIAN" />;
+    // Legacy route segments still resolve to the closest physician module.
+    case "rounds":
+    case "records":
+      return <PhysicianCaseReview />;
+    case "vitals":
     case "monitoring":
-      return <PhysicianVitals />;
     case "tasks":
-      return <PhysicianDashboard />;
+      return <PhysicianCommandCenter />;
     default:
-      return <PhysicianDashboard />;
+      return <PhysicianCommandCenter />;
   }
 }

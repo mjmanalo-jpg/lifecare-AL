@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import {
   Bus, Plus, RefreshCw, X, MapPin, Clock, CheckCircle, AlertTriangle,
   Accessibility, Stethoscope, Droplets, HeartPulse, TreePine, Siren,
-  Navigation, User, Car,
+  Navigation, User, Car, ArrowLeftRight,
   type LucideIcon,
 } from "lucide-react";
 import Swal from "sweetalert2";
@@ -49,9 +49,11 @@ const TRIP_STEP_LABELS: Record<string, string> = {
   CANCELLED: "Cancelled",
 };
 
+const FACILITY = "Golden Hearth Facility";
 const emptyForm = {
   type: "MEDICAL_APPOINTMENT",
-  destination: "",
+  pickupLocation: FACILITY,
+  dropoffLocation: "",
   purpose: "",
   requestedDate: "",
   returnRequired: true,
@@ -124,8 +126,8 @@ export default function MyTransport() {
   );
 
   const handleSubmit = async () => {
-    if (!form.destination || !form.requestedDate) {
-      Swal.fire({ title: "Missing Fields", text: "Destination and date/time are required.", icon: "warning" });
+    if (!form.pickupLocation || !form.dropoffLocation || !form.requestedDate) {
+      Swal.fire({ title: "Missing Fields", text: "Pickup, drop-off and date/time are required.", icon: "warning" });
       return;
     }
     if (!resolvedResidentId) {
@@ -136,7 +138,9 @@ export default function MyTransport() {
       await createRecord("transport-requests", {
         residentId: resolvedResidentId,
         type: form.type,
-        destination: form.destination,
+        pickupLocation: form.pickupLocation,
+        dropoffLocation: form.dropoffLocation,
+        destination: form.dropoffLocation,
         purpose: form.purpose || null,
         requestedDate: new Date(form.requestedDate).toISOString(),
         returnRequired: form.returnRequired,
@@ -212,7 +216,7 @@ export default function MyTransport() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2 font-semibold text-gray-900">
                     <MapPin className="w-4 h-4 text-yellow-500" />
-                    {String(trip.origin ?? "Facility")} → {String(trip.destination ?? "")}
+                    {String(trip.pickupLocation ?? trip.origin ?? "Facility")} → {String(trip.dropoffLocation ?? trip.destination ?? "")}
                   </div>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${live ? "bg-green-100 text-green-700" : "bg-indigo-100 text-indigo-700"}`}>
                     {live && <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse mr-1.5" />}
@@ -284,7 +288,11 @@ export default function MyTransport() {
                     <Icon className="w-5 h-5" />
                   </div>
                   <div className="flex-1 min-w-[180px]">
-                    <p className="text-sm font-semibold text-gray-900">{meta.label} — {String(r.destination ?? "")}</p>
+                    <p className="text-sm font-semibold text-gray-900">{meta.label}</p>
+                    <p className="text-xs text-gray-600 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                      {String(r.pickupLocation ?? "Facility")} → {String(r.dropoffLocation ?? r.destination ?? "")}
+                    </p>
                     <p className="text-xs text-gray-500">
                       {r.requestedDate ? new Date(String(r.requestedDate)).toLocaleString() : "—"}
                       {r.returnRequired ? " · round trip" : " · one way"}
@@ -342,8 +350,23 @@ export default function MyTransport() {
                   <input type="datetime-local" value={form.requestedDate} onChange={(e) => set("requestedDate", e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Destination</label>
-                  <input type="text" value={form.destination} onChange={(e) => set("destination", e.target.value)} placeholder="e.g. St. Luke's Medical Center" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-semibold text-gray-700">Pickup &amp; Drop-off</label>
+                    <button type="button" onClick={() => setForm((f) => ({ ...f, pickupLocation: f.dropoffLocation, dropoffLocation: f.pickupLocation }))}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-yellow-700 hover:text-yellow-800" title="Swap pickup & drop-off">
+                      <ArrowLeftRight className="w-3.5 h-3.5" /> Swap
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-2.5 w-4 h-4 text-green-500" />
+                      <input type="text" value={form.pickupLocation} onChange={(e) => set("pickupLocation", e.target.value)} placeholder="Pickup — e.g. Golden Hearth Facility" className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
+                    </div>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-2.5 w-4 h-4 text-red-500" />
+                      <input type="text" value={form.dropoffLocation} onChange={(e) => set("dropoffLocation", e.target.value)} placeholder="Drop-off — e.g. St. Luke's Medical Center" className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
+                    </div>
+                  </div>
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Purpose</label>

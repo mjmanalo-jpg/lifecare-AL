@@ -9,9 +9,14 @@ import NurseMedications from "@/components/portal/views/NurseMedications";
 import CaregiverReports from "@/components/portal/views/caregiver/CaregiverReports";
 import CaregiverCallBells from "@/components/portal/views/caregiver/CaregiverCallBells";
 import FacilityVitals from "@/components/portal/views/FacilityVitals";
+import PhysicianRounds from "@/components/portal/views/physician/PhysicianRounds";
+import PhysicianOrders from "@/components/portal/views/physician/PhysicianOrders";
+import PhysicianVitals from "@/components/portal/views/physician/PhysicianVitals";
+import ClinicalNotes from "@/components/portal/views/clinical/ClinicalNotes";
+import ClinicalMessages from "@/components/portal/views/clinical/ClinicalMessages";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptIncident } from "@/lib/adapters";
-import { updateRecord, deleteRecord } from "@/lib/api";
+import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { X, Search, Eye, CheckCircle, Trash2, ArrowLeft, Camera, Activity } from "lucide-react";
 
 interface NursePortalContentProps {
@@ -103,19 +108,34 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     setIncidentPage(1);
   }, [incidentSearch, incidentFilterSeverity, incidentFilterStatus]);
 
-  const handleMonitoringFallTriggered = (analysis: MonitoringAnalysis & { resident?: string; room?: string }) => {
+  const handleMonitoringFallTriggered = async (analysis: MonitoringAnalysis & { resident?: string; room?: string }) => {
     setMonitoringFallAlert(true);
+
+    const hasOpenMonitoringFall = monitoringIncidents.some(
+      (incident) =>
+        incident.source === "monitoring" &&
+        incident.type === "Fall Detection" &&
+        incident.status !== "closed"
+    );
+
+    if (hasOpenMonitoringFall) return;
+
+    const analysisSummary = analysis.summary || "Fall detection triggered from monitoring camera.";
+
+    // Persist to DB as a real incident
+    try {
+      await createRecord("incidents", {
+        incidentType: "FALL",
+        severity: "CRITICAL",
+        description: `AUTOMATED CAMERA FALL DETECTION\n\n${analysisSummary}`,
+        notes: `AI Vision Analysis — Emotion: ${analysis.globalEmotion || "Unknown"}; Behavior: ${analysis.globalBehavior || "Unknown"}; Posture: ${analysis.globalPosture || "Unknown"}.`,
+        incidentDate: new Date().toISOString(),
+      });
+      await refetchIncidents();
+    } catch { /* non-critical — local fallback below */ }
+
+    // Also keep local state for immediate UI update
     setMonitoringIncidents((prev) => {
-      const hasOpenMonitoringFall = prev.some(
-        (incident) =>
-          incident.source === "monitoring" &&
-          incident.type === "Fall Detection" &&
-          incident.status !== "closed"
-      );
-
-      if (hasOpenMonitoringFall) return prev;
-
-      const analysisSummary = analysis.summary || "Fall detection triggered from monitoring camera.";
       const incident: NurseIncident = {
         id: `monitoring-fall-${Date.now()}`,
         type: "Fall Detection",
@@ -125,11 +145,10 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
         timestamp: new Date(),
         status: "open",
         description: analysisSummary,
-        notes: `Saved from /nurse/monitoring. Emotion: ${analysis.globalEmotion || "Unknown"}; behavior: ${analysis.globalBehavior || "Unknown"}; posture: ${analysis.globalPosture || "Unknown"}.`,
+        notes: `Camera monitoring. Emotion: ${analysis.globalEmotion || "Unknown"}; behavior: ${analysis.globalBehavior || "Unknown"}; posture: ${analysis.globalPosture || "Unknown"}.`,
         resolved: false,
         source: "monitoring",
       };
-
       return [incident, ...prev];
     });
   };
@@ -586,6 +605,25 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     return <NurseMedications />;
   }
 
+  // Shared clinical modules — the Head Nurse portal mirrors the physician's
+  // clinical toolset (rounds, orders, notes, vitals, secure messages), all live
+  // and scoped to the NURSE role for authorship/attribution.
+  if (tab === "rounds") {
+    return <PhysicianRounds clinicianRole="NURSE" />;
+  }
+  if (tab === "orders") {
+    return <PhysicianOrders />;
+  }
+  if (tab === "notes") {
+    return <ClinicalNotes clinicianRole="NURSE" />;
+  }
+  if (tab === "vitals") {
+    return <PhysicianVitals />;
+  }
+  if (tab === "messages") {
+    return <ClinicalMessages clinicianRole="NURSE" />;
+  }
+
   // Call bells share the caregiver module — same CallBell model & queue workflow.
   if (tab === "callbells") {
     return <CaregiverCallBells />;
@@ -633,6 +671,7 @@ function NurseMonitoringViewInner({
   const router = useRouter();
   const resident = searchParams.get("resident");
   const room = searchParams.get("room");
+  const residentId = searchParams.get("residentId");
   const [showVitals, setShowVitals] = useState(false);
 
   return (
@@ -676,6 +715,7 @@ function NurseMonitoringViewInner({
             cameraMode="hybrid"
             residentName={resident || undefined}
             residentRoom={room || undefined}
+            residentId={residentId || undefined}
             isFallen={monitoringFallAlert}
             onFallTriggered={(analysis: any) => handleMonitoringFallTriggered({ ...analysis, resident: resident || "", room: room || "" })} // eslint-disable-line @typescript-eslint/no-explicit-any
             onFallCleared={() => setMonitoringFallAlert(false)}

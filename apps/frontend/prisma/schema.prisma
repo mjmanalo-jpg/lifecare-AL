@@ -123,6 +123,9 @@ enum NotificationType {
   SHIFT_REMINDER
   SYSTEM_ALERT
   TRANSPORT_UPDATE
+  SERVICE_UPDATE
+  ANNOUNCEMENT
+  EVENT_INVITE
 }
 
 enum AttendanceStatus {
@@ -215,6 +218,13 @@ model Resident {
   goals               ResidentGoal[]
   medicationLogs      MedicationLog[]
   dietitianConsults   DietitianConsult[]
+  serviceRequests     ServiceRequest[]
+  conciergeBookings   ConciergeBooking[]
+  frontDeskVisits     FrontDeskVisit[]
+  preferences         ResidentPreference[]
+  eventAttendances    EventAttendance[]
+  diningReservations  DiningReservation[]
+  cameraMonitoringLogs CameraMonitoringLog[]
 
   @@index([careLevel])
   @@index([roomNumber])
@@ -425,13 +435,22 @@ model MedicalNote {
   resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
   title     String?
   content   String
+  // Free-form category: CLINICAL_NOTE, SOAP_NOTE, PROGRESS_NOTE, DIAGNOSIS,
+  // DIRECTIVE, CONSULTATION, REFERRAL, CARE_PLAN, etc. (physician + nurse share
+  // the MedicalNote model; the type distinguishes the clinical document.)
   noteType  String?
   authorName String?
   isConfidential Boolean @default(false)
+  // Physician oversight: co-signing a note (e.g. a nurse's clinical note or a
+  // diagnosis) records the reviewing physician and time. Powers the physician's
+  // authority perspective over the nurse/caregiver documentation.
+  coSignedBy String?
+  coSignedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([residentId])
+  @@index([noteType])
   @@index([createdAt])
 }
 
@@ -612,20 +631,24 @@ enum RoomType {
 }
 
 model Room {
-  id          String     @id @default(uuid())
-  roomNumber  String     @unique
-  floor       Int?
-  wing        String?
-  roomType    RoomType   @default(SEMI_PRIVATE)
-  capacity    Int        @default(1)
-  status      RoomStatus @default(AVAILABLE)
-  features    String?
-  rateMonthly Float?
-  notes       String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id                String     @id @default(uuid())
+  roomNumber        String     @unique
+  floor             Int?
+  wing              String?
+  roomType          RoomType   @default(SEMI_PRIVATE)
+  capacity          Int        @default(1)
+  status            RoomStatus @default(AVAILABLE)
+  // PMS housekeeping lifecycle (mobile staff tools): make ready → inspection →
+  // ready → occupied → turnover → move-out → deep clean → (loop).
+  housekeepingStatus UnitStatus @default(READY)
+  features          String?
+  rateMonthly       Float?
+  notes             String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
   @@index([status])
+  @@index([housekeepingStatus])
   @@index([floor])
   @@index([wing])
   @@index([roomType])
@@ -966,6 +989,11 @@ model TransportRequest {
   residentId      String
   resident        Resident               @relation(fields: [residentId], references: [id], onDelete: Cascade)
   type            TransportRequestType   @default(MEDICAL_APPOINTMENT)
+  // Explicit pickup → drop-off so any leg is possible (facility→hospital,
+  // home→facility, hospital→facility for ambulance/logistics, etc.). destination
+  // is kept as the drop-off fallback for older records.
+  pickupLocation  String?
+  dropoffLocation String?
   destination     String
   purpose         String?
   requestedDate   DateTime
@@ -1004,6 +1032,10 @@ model Trip {
   escortName          String?
   escortRole          String? // NURSE | CAREGIVER
   status              TripStatus        @default(SCHEDULED)
+  // pickup → drop-off for this leg; a return leg simply swaps them. origin/
+  // destination remain populated (= pickup/drop-off) for backward compatibility.
+  pickupLocation      String?
+  dropoffLocation     String?
   destination         String
   origin              String            @default("Golden Hearth Facility")
   scheduledAt         DateTime
@@ -1146,4 +1178,434 @@ model FoodComplianceLog {
   @@index([category])
   @@index([status])
   @@index([auditDate])
+}
+
+// ============================================================================
+// PHASE 7 (CONT.) — HOTEL-STYLE RESIDENT SERVICES & MAINTENANCE
+// ============================================================================
+// Resident service workflow: request (portal / AI companion / call bell /
+// front desk) → ticket with Routine/Urgent/Emergency priority → auto-assigned
+// team (housekeeping / maintenance / kitchen / IT) → work order in progress →
+// completed with photo proof → resident confirmation + 1-5★ rating → billable
+// charge posted to the invoice pipeline → service analytics.
+// Plus the preventive facility maintenance calendar (HVAC / generator /
+// elevator / fire & safety / pest control) and concierge "hotel on the
+// hospital" premium bookings.
+
+enum ServiceRequestCategory {
+  AIRCON_HVAC   // temp adjust · filter · repair
+  HOUSEKEEPING  // room clean · linen change
+  ROOM_SERVICE  // meals · snacks · beverages
+  LAUNDRY       // laundry & pressing
+  REPAIRS       // plumbing · electrical · wifi/tv
+}
+
+enum ServiceRequestPriority {
+  ROUTINE
+  URGENT
+  EMERGENCY
+}
+
+enum ServiceRequestStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED  // work done — awaiting resident confirmation & rating
+  CONFIRMED  // resident confirmed + rated
+  CANCELLED
+}
+
+enum ServiceTeam {
+  HOUSEKEEPING_TEAM
+  MAINTENANCE_ENGINEER
+  KITCHEN
+  IT_SUPPORT
+  CONCIERGE
+}
+
+enum FacilitySystem {
+  HVAC          // quarterly service
+  GENERATOR     // monthly test
+  ELEVATOR      // inspection
+  FIRE_SAFETY   // fire & safety systems
+  PEST_CONTROL
+  OTHER
+}
+
+enum MaintenanceFrequency {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  SEMI_ANNUAL
+  ANNUAL
+}
+
+enum ConciergeCategory {
+  CONCIERGE_DESK
+  WAKE_UP_CALL
+  TURNDOWN
+  SALON_BARBER
+  CAFE_BISTRO
+  MOVIE_GAME_NIGHT
+  GARDEN_LOUNGE
+  GUEST_SUITE
+  SPA_MASSAGE
+  CHAPLAIN
+}
+
+enum ConciergeBookingStatus {
+  REQUESTED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model ServiceRequest {
+  id            String                 @id @default(uuid())
+  residentId    String
+  resident      Resident               @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  roomNumber    String?
+  category      ServiceRequestCategory @default(HOUSEKEEPING)
+  subType       String?                // e.g. "Temp Adjust", "Linen Change", "Wi-Fi/TV"
+  details       String?                @db.Text
+  source        String                 @default("RESIDENT_PORTAL") // RESIDENT_PORTAL | AI_COMPANION | CALL_BELL | FRONT_DESK
+  priority      ServiceRequestPriority @default(ROUTINE)
+  status        ServiceRequestStatus   @default(OPEN)
+  assignedTeam  ServiceTeam?
+  assignedTo    String?                // staff member name working the ticket
+  photoProofUrl String?                // completion photo proof
+  startedAt     DateTime?
+  completedAt   DateTime?
+  confirmedAt   DateTime?
+  rating        Int?                   // resident satisfaction 1–5 ★
+  ratingComment String?
+  billable      Boolean                @default(false)
+  charge        Float?
+  billed        Boolean                @default(false) // ServiceCharge posted to invoice pipeline
+  notes         String?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@index([residentId])
+  @@index([status])
+  @@index([category])
+  @@index([priority])
+  @@index([assignedTeam])
+  @@index([createdAt])
+}
+
+// Preventive facility maintenance calendar. Completing a PREVENTIVE entry
+// auto-schedules the next occurrence from `frequency`.
+model FacilityMaintenance {
+  id            String               @id @default(uuid())
+  title         String
+  system        FacilitySystem       @default(OTHER)
+  type          MaintenanceType      @default(PREVENTIVE)
+  status        MaintenanceStatus    @default(SCHEDULED)
+  frequency     MaintenanceFrequency @default(QUARTERLY)
+  location      String?              // wing / floor / room / plant area
+  description   String?              @db.Text
+  scheduledDate DateTime?
+  completedDate DateTime?
+  nextDueDate   DateTime?
+  assignedTo    String?
+  vendor        String?
+  cost          Float?
+  notes         String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([system])
+  @@index([status])
+  @@index([scheduledDate])
+  @@index([nextDueDate])
+}
+
+model ConciergeBooking {
+  id          String                 @id @default(uuid())
+  residentId  String
+  resident    Resident               @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  category    ConciergeCategory      @default(CONCIERGE_DESK)
+  serviceName String                 // e.g. "Salon & Barber", "Guest Suite for Family Stay"
+  scheduledAt DateTime
+  status      ConciergeBookingStatus @default(REQUESTED)
+  staffName   String?
+  location    String?
+  price       Float?
+  billable    Boolean                @default(true)
+  billed      Boolean                @default(false)
+  rating      Int?                   // 1–5 ★ after completion
+  notes       String?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@index([residentId])
+  @@index([status])
+  @@index([category])
+  @@index([scheduledAt])
+}
+
+// ============================================================================
+// PHASE 7 — HOSPITALITY & PROPERTY MANAGEMENT SYSTEM (PMS)
+// ============================================================================
+// Central hub of hospitality operations across four sub-domains + KPI analytics:
+//   1. Front Desk & Guest Management — arrival → check-in (ID & visitor pass) →
+//      inquiries/requests → ancillary payments (dining/salon) → check-out & receipt
+//   2. Apartment/Room Status Lifecycle (mobile staff tools) — make ready →
+//      inspection passed → occupied → turnover → move-out/transfer → deep clean ↺
+//   3. Resident & Family Engagement — preference profiles · event attendance ·
+//      dining reservations · automated announcements · community calendar
+//   4. Reporting & Analytics KPIs — occupancy rate · unit turnover time ·
+//      resident satisfaction · service SLA compliance · ancillary revenue
+// KPIs are computed live from these models + Room/ServiceRequest/ServiceCharge;
+// no aggregate table is stored so the dashboard is always real-time.
+
+enum UnitStatus {
+  MAKE_READY   // being prepared for next resident
+  INSPECTION   // awaiting inspection sign-off
+  READY        // inspection passed — available to assign
+  OCCUPIED
+  TURNOVER     // resident moving; changeover in progress
+  MOVE_OUT     // move-out / transfer
+  DEEP_CLEAN   // deep clean & maintenance
+}
+
+enum FrontDeskVisitType {
+  GUEST_VISIT
+  NEW_RESIDENT_ARRIVAL
+  TOUR
+  CONTRACTOR
+  DELIVERY
+}
+
+enum FrontDeskStatus {
+  ARRIVED
+  CHECKED_IN
+  CHECKED_OUT
+}
+
+enum EventCategory {
+  SOCIAL
+  WELLNESS
+  RECREATION
+  SPIRITUAL
+  EDUCATIONAL
+  DINING
+  OUTING
+}
+
+enum RSVPStatus {
+  INVITED
+  GOING
+  DECLINED
+  ATTENDED
+  NO_SHOW
+}
+
+enum DiningReservationStatus {
+  REQUESTED
+  CONFIRMED
+  SEATED
+  COMPLETED
+  CANCELLED
+}
+
+enum AnnouncementAudience {
+  ALL
+  RESIDENTS
+  FAMILIES
+  STAFF
+}
+
+// Front Desk & Guest Management — arrivals, ID/pass issuance, ancillary
+// charges (guest dining / salon), and check-out receipts.
+model FrontDeskVisit {
+  id             String             @id @default(uuid())
+  visitType      FrontDeskVisitType @default(GUEST_VISIT)
+  status         FrontDeskStatus    @default(ARRIVED)
+  visitorName    String
+  visitorPhone   String?
+  idType         String?            // Driver's License, Passport, UMID, etc.
+  idNumber       String?
+  visitorPass    String?            // pass number issued at check-in
+  residentId     String?            // resident being visited (null for tours/new arrivals)
+  resident       Resident?          @relation(fields: [residentId], references: [id], onDelete: SetNull)
+  roomNumber     String?
+  purpose        String?
+  arrivalTime    DateTime           @default(now())
+  checkInTime    DateTime?
+  checkOutTime   DateTime?
+  // Ancillary payments captured at the desk (guest dining, salon, etc.).
+  ancillaryItems String?            @db.Text // JSON [{label, amount}]
+  ancillaryTotal Float              @default(0)
+  receiptNumber  String?
+  notes          String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([status])
+  @@index([visitType])
+  @@index([residentId])
+  @@index([arrivalTime])
+}
+
+// Apartment/Room turnover lifecycle log — one record per changeover cycle;
+// powers the Unit Turnover Time KPI (readyAt − startedAt).
+model RoomTurnover {
+  id               String     @id @default(uuid())
+  roomNumber       String
+  stage            UnitStatus @default(MOVE_OUT)
+  status           String     @default("IN_PROGRESS") // IN_PROGRESS | COMPLETED | CANCELLED
+  outgoingResident String?
+  incomingResident String?
+  assignedTo       String?    // mobile staff member
+  inspectionPassed Boolean    @default(false)
+  checklist        String?    @db.Text // JSON [{item, ok}]
+  startedAt        DateTime   @default(now())
+  readyAt          DateTime?  // when the unit reached READY (turnover complete)
+  notes            String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@index([roomNumber])
+  @@index([stage])
+  @@index([status])
+  @@index([startedAt])
+}
+
+// Preference profiles — resident-set (or staff-captured) comfort/dining/
+// activity/communication preferences that personalize hospitality delivery.
+model ResidentPreference {
+  id         String   @id @default(uuid())
+  residentId String
+  resident   Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  category   String   // Dining · Room Comfort · Activities · Wake-Up · Communication
+  preference String   // label, e.g. "Preferred wake-up time"
+  value      String   // the setting, e.g. "6:30 AM"
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([residentId])
+  @@index([category])
+}
+
+// Community calendar events.
+model CommunityEvent {
+  id          String        @id @default(uuid())
+  title       String
+  category    EventCategory @default(SOCIAL)
+  description String?       @db.Text
+  location    String?
+  startTime   DateTime
+  endTime     DateTime?
+  capacity    Int?
+  host        String?
+  imageUrl    String?
+  published   Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  attendances EventAttendance[]
+
+  @@index([startTime])
+  @@index([category])
+  @@index([published])
+}
+
+// Event RSVP / attendance — resident-scoped; post-event rating feeds the
+// Resident Satisfaction KPI.
+model EventAttendance {
+  id          String         @id @default(uuid())
+  eventId     String
+  event       CommunityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  residentId  String
+  resident    Resident       @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  status      RSVPStatus     @default(GOING)
+  checkedInAt DateTime?
+  rating      Int?           // 1–5 ★ post-event satisfaction
+  notes       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([eventId, residentId])
+  @@index([eventId])
+  @@index([residentId])
+  @@index([status])
+}
+
+// Dining reservations.
+model DiningReservation {
+  id              String                  @id @default(uuid())
+  residentId      String
+  resident        Resident                @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  mealType        String                  // BREAKFAST · LUNCH · DINNER
+  reservedAt      DateTime
+  partySize       Int                     @default(1)
+  venue           String?                 // Main Dining · Bistro · Private Room · Garden
+  status          DiningReservationStatus @default(REQUESTED)
+  guestNames      String?
+  specialRequests String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@index([residentId])
+  @@index([status])
+  @@index([reservedAt])
+}
+
+// Automated announcements broadcast to a target audience; on create with
+// autoNotify, fans out Notification rows to the audience.
+model Announcement {
+  id          String               @id @default(uuid())
+  title       String
+  body        String               @db.Text
+  audience    AnnouncementAudience @default(ALL)
+  priority    String               @default("NORMAL") // NORMAL · HIGH · URGENT
+  authorName  String?
+  pinned      Boolean              @default(false)
+  published   Boolean              @default(true)
+  autoNotify  Boolean              @default(true)
+  publishedAt DateTime             @default(now())
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([audience])
+  @@index([published])
+  @@index([pinned])
+  @@index([publishedAt])
+}
+
+model CameraMonitoringLog {
+  id              String   @id @default(uuid())
+  residentId      String?
+  resident        Resident? @relation(fields: [residentId], references: [id], onDelete: SetNull)
+  residentName    String?
+  roomNumber      String?
+  logType         String   @default("ANALYSIS") // ANALYSIS | FALL_DETECTION | SNAPSHOT | ALERT
+  emotion         String?
+  emotionConfidence Float?
+  behavior        String?
+  posture         String?
+  alert           Boolean  @default(false)
+  alertReason     String?
+  summary         String?  @db.Text
+  objects         Json?    // detected objects array
+  heartRate       Float?
+  bloodPressureSys Int?
+  bloodPressureDia Int?
+  respirationRate Int?
+  temperature     Float?
+  oxygen          Float?
+  snapshotUrl     String?  // base64 data URL or future storage URL
+  cameraId        String?  // which camera produced this
+  sessionStart    DateTime?
+  sessionEnd      DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([residentId])
+  @@index([logType])
+  @@index([createdAt])
+  @@index([alert])
 }

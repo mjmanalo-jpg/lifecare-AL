@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
-import FamilyPortalContent from "./FamilyPortalContent";
+import ResidentHub from "./resident/ResidentHub";
 import {
   Heart,
   Activity,
@@ -277,16 +277,20 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
       { title: "Cognitive Puzzles Session", description: "Cognitive Puzzles Session" },
     ];
     (async () => {
-      for (const d of defaults) {
-        await createRecord("resident-goals", {
-          residentId: resident.id,
-          title: d.title,
-          description: d.description,
-          isCompleted: false,
-          isCustom: false,
-        });
+      try {
+        for (const d of defaults) {
+          await createRecord("resident-goals", {
+            residentId: resident.id,
+            title: d.title,
+            description: d.description,
+            isCompleted: false,
+            isCustom: false,
+          });
+        }
+        refetchGoals();
+      } catch (e) {
+        console.warn("[auto-seed goals] skipped:", e);
       }
-      refetchGoals();
     })();
   }, [resident?.id, goalRows.length, refetchGoals]);
 
@@ -974,7 +978,8 @@ Vitals:
 
   // Loading state skeleton
   if (tab && tab !== "dashboard") {
-    return <FamilyPortalContent tab={tab} />;
+    const hubTab = (["report", "appointments", "transport", "services", "community"].includes(tab) ? tab : "report") as "report";
+    return <ResidentHub initialTab={hubTab} />;
   }
 
   if (profileLoading) {
