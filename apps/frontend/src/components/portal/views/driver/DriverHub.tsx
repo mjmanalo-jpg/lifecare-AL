@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronRight, Car, Navigation, MapPin, Truck, CheckCircle2,
   AlertTriangle, ShieldCheck, Clock, Star, UserCheck, RotateCcw, Phone,
   Siren, Package, Wrench, Gauge, Zap, CircleDot, History, Loader2,
-  Plus, UserRound, ArrowLeftRight,
+  Plus, UserRound, ArrowLeftRight, Maximize2,
   type LucideIcon,
 } from "lucide-react";
 import Swal from "sweetalert2";
@@ -269,6 +269,8 @@ function DashboardTab() {
     } else { setVehiclePos(undefined); }
   }, [activeTrip?.status]);
 
+  const [showFullMap, setShowFullMap] = useState(false);
+
   const handleEmergencySOS = () => {
     Swal.fire({
       title: "EMERGENCY SOS",
@@ -452,13 +454,6 @@ function DashboardTab() {
           </div>
         </div>
         <div className="space-y-5">
-          {/* Map */}
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <NavigationMap
-              destination={activeTrip ? (destCoords[activeTrip.destination] || { text: activeTrip.destination }) : undefined}
-              vehiclePosition={vehiclePos} height="200px" showRoute={!!activeTrip}
-            />
-          </div>
           {/* Assigned Vehicle */}
           {assignedVehicle && (
             <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -472,6 +467,53 @@ function DashboardTab() {
           )}
         </div>
       </div>
+
+      {/* Full-width live route map */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <div>
+            <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2"><MapPin className="w-4 h-4 text-yellow-500" /> Live Route Map</h3>
+            {activeTrip
+              ? <p className="text-xs text-gray-500 mt-0.5">{activeTrip.pickupLocation} → {activeTrip.dropoffLocation}</p>
+              : <p className="text-xs text-gray-400 mt-0.5">No active trip — showing facility location.</p>}
+          </div>
+          <button onClick={() => setShowFullMap(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+            <Maximize2 className="w-3.5 h-3.5" /> Expand
+          </button>
+        </div>
+        <NavigationMap
+          destination={activeTrip ? (destCoords[activeTrip.destination] || { text: activeTrip.destination }) : undefined}
+          vehiclePosition={vehiclePos} height="360px" showRoute={!!activeTrip}
+        />
+      </div>
+
+      {/* Expandable full-screen map modal */}
+      {showFullMap && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowFullMap(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[94vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-4 flex items-center justify-between flex-shrink-0 gap-3">
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold flex items-center gap-2"><MapPin className="w-5 h-5" /> Live Route Map</h2>
+                {activeTrip && <p className="text-xs text-black/70 truncate">{activeTrip.pickupLocation} → {activeTrip.dropoffLocation}</p>}
+              </div>
+              <button onClick={() => setShowFullMap(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition flex-shrink-0"><X className="w-6 h-6" /></button>
+            </div>
+            <div className="flex-1 min-h-0">
+              <NavigationMap
+                destination={activeTrip ? (destCoords[activeTrip.destination] || { text: activeTrip.destination }) : undefined}
+                vehiclePosition={vehiclePos} height="72vh" showRoute={!!activeTrip}
+              />
+            </div>
+            {activeTrip && (
+              <div className="px-4 py-3 border-t border-gray-200 flex-shrink-0">
+                <a href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(activeTrip.pickupLocation)}&destination=${encodeURIComponent(activeTrip.dropoffLocation)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-800">
+                  <Navigation className="w-4 h-4" /> Open turn-by-turn navigation
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Bottom: Transport + Incidents */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
