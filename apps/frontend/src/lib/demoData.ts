@@ -383,6 +383,13 @@ const announcements = [
   { id: "an3", title: "Flu Vaccination Clinic — Next Tuesday", body: "The on-site clinic will offer seasonal flu vaccinations next Tuesday from 9 AM to 12 PM. Please sign up at the front desk.", audience: "ALL", priority: "NORMAL", authorName: "Head Nurse", pinned: false, published: true, autoNotify: true, publishedAt: iso(2 * D), createdAt: iso(2 * D), updatedAt: iso(2 * D) },
 ];
 
+// ── SBAR clinical escalations ────────────────────────────────────────────────
+const escalations = [
+  { id: "esc1", residentId: "r4", resident: residentRef(residentsBase[3]), situation: "SpO2 dropped to 88% on room air with laboured breathing over the last 10 minutes.", background: "Hx: Atrial Fibrillation, Heart Failure. Allergies: Codeine. Active meds: Warfarin 5mg.", assessment: "Possible acute respiratory distress / fluid overload; vitals trending down.", recommendation: "Request physician review now — consider O2 and stat orders.", priority: "EMERGENCY", status: "OPEN", raisedBy: "Sarah Jenkins, RN", raisedByRole: "NURSE", assignedToRole: "PHYSICIAN", acknowledgedBy: null, response: null, resolvedBy: null, resolvedAt: null, createdAt: iso(0.07 * H), updatedAt: iso(0.07 * H) },
+  { id: "esc2", residentId: "r2", resident: residentRef(residentsBase[1]), situation: "Increasing confusion and agitation since afternoon; refusing evening medications.", background: "Hx: Alzheimer's, Arthritis. Memory-care resident.", assessment: "Sundowning vs delirium — needs medical review.", recommendation: "Please advise on management / medication review.", priority: "URGENT", status: "ACKNOWLEDGED", raisedBy: "Sarah Jenkins, RN", raisedByRole: "NURSE", assignedToRole: "PHYSICIAN", acknowledgedBy: "Dr. Alan Reyes", response: null, resolvedBy: null, resolvedAt: null, createdAt: iso(0.43 * H), updatedAt: iso(0.2 * H) },
+  { id: "esc3", residentId: "r1", resident: residentRef(residentsBase[0]), situation: "BP 165/95 on morning check with a mild headache.", background: "Hx: Hypertension, Type 2 Diabetes. Allergies: Penicillin, Sulfa.", assessment: "Blood pressure above target range.", recommendation: "Review antihypertensive regimen.", priority: "ROUTINE", status: "RESOLVED", raisedBy: "Caleb Randall", raisedByRole: "CAREGIVER", assignedToRole: "PHYSICIAN", acknowledgedBy: "Dr. Alan Reyes", response: "Increase lisinopril to 20mg daily; recheck BP each shift and report any systolic > 160.", resolvedBy: "Dr. Alan Reyes", resolvedAt: iso(2.5 * H), createdAt: iso(4 * H), updatedAt: iso(2.5 * H) },
+];
+
 export const DEMO: Record<string, any[]> = {
   users: staff.map((s) => ({ id: s.userId, ...s.user, role: "STAFF" })),
   admissions,
@@ -417,6 +424,7 @@ export const DEMO: Record<string, any[]> = {
   "service-requests": serviceRequests,
   "facility-maintenance": facilityMaintenance,
   "concierge-bookings": conciergeBookings,
+  escalations,
   "front-desk-visits": frontDeskVisits,
   "room-turnovers": roomTurnovers,
   "resident-preferences": residentPreferences,

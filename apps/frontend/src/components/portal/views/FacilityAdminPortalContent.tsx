@@ -17,6 +17,7 @@ import FacilityRooms from "@/components/portal/views/FacilityRooms";
 import FacilityOccupancy from "@/components/portal/views/FacilityOccupancy";
 import FacilityInventory from "@/components/portal/views/FacilityInventory";
 import FacilityUnifiedView from "@/components/portal/views/FacilityUnifiedView";
+import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
 import CameraVisionFeed from "@/components/CameraVisionFeed";
 
 interface FacilityAdminPortalContentProps {
@@ -216,6 +217,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
   if (tab === "rooms") return <FacilityRooms />;
   if (tab === "occupancy") return <FacilityOccupancy />;
   if (tab === "inventory") return <FacilityInventory />;
+  if (tab === "escalations") return <EscalationsBoard role="FACILITY_ADMIN" />;
   // Unified operations hub — reports, billing, dining, services, maintenance, concierge, front desk, turnover, community
   if (["reports", "billing", "dining", "services", "maintenance", "concierge", "frontdesk", "turnover", "community"].includes(tab))
     return <FacilityUnifiedView initialTab={tab} />;

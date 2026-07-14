@@ -206,6 +206,12 @@ export async function PATCH(
         console.error("[id/route.ts:serviceCompletedNotifyError]", e)
       );
     }
+    // A resolved SBAR escalation → notify the resident's family/self of the outcome.
+    if (model === "escalations" && body.status === "RESOLVED") {
+      notifyEscalationResolved(data).catch((e) =>
+        console.error("[id/route.ts:escalationResolvedNotifyError]", e)
+      );
+    }
     return NextResponse.json({ data });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Update failed";
@@ -231,6 +237,28 @@ async function notifyServiceCompleted(data: any) {
       message: `Your ${category}${data.subType ? ` — ${data.subType}` : ""} request is done${data.photoProofUrl ? " (photo proof attached)" : ""}. Please confirm and rate the service (1–5 ★).`,
       relatedEntityId: data.id,
       relatedEntityType: "ServiceRequest",
+    })),
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function notifyEscalationResolved(data: any) {
+  const resident = await prisma.resident.findUnique({
+    where: { id: data.residentId },
+    select: { firstName: true, lastName: true, sponsorId: true, userId: true },
+  });
+  if (!resident) return;
+  const recipients = [resident.sponsorId, resident.userId].filter(Boolean) as string[];
+  if (!recipients.length) return;
+  const name = `${resident.firstName} ${resident.lastName}`;
+  await prisma.notification.createMany({
+    data: recipients.map((uid) => ({
+      userId: uid,
+      type: "SBAR_ESCALATION" as const,
+      title: "Clinical Concern Resolved",
+      message: `The care team resolved a clinical concern for ${name}${data.resolvedBy ? ` — reviewed by ${data.resolvedBy}` : ""}.${data.response ? ` Plan: ${String(data.response).slice(0, 120)}` : ""}`,
+      relatedEntityId: data.id,
+      relatedEntityType: "Escalation",
     })),
   });
 }

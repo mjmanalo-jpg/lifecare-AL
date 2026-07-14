@@ -561,6 +561,17 @@ async function main() {
     console.log("  • physician: care directives, notes to co-sign, consults ready");
   }
 
+  // ── SBAR clinical escalations ───────────────────────────────────────────────
+  if (R["302"] && R["305"] && R["312"]) {
+    const minsAgo = (n) => new Date(Date.now() - n * 60000);
+    await seedIfEmpty("escalation", () => [
+      { residentId: R["312"].id, situation: "SpO2 dropped to 88% on room air with laboured breathing over the last 10 minutes.", background: "Hx: Atrial Fibrillation, Heart Failure. Allergies: Codeine. Active meds: Warfarin 5mg.", assessment: "Possible acute respiratory distress / fluid overload; vitals trending down.", recommendation: "Request physician review now — consider O2 and stat orders.", priority: "EMERGENCY", status: "OPEN", raisedBy: "Sarah Jenkins, RN", raisedByRole: "NURSE", assignedToRole: "PHYSICIAN", createdAt: minsAgo(4) },
+      { residentId: R["305"].id, situation: "Increasing confusion and agitation since afternoon; refusing evening medications.", background: "Hx: Alzheimer's, Arthritis. Memory-care resident.", assessment: "Sundowning vs delirium — needs medical review.", recommendation: "Please advise on management / medication review.", priority: "URGENT", status: "ACKNOWLEDGED", raisedBy: "Sarah Jenkins, RN", raisedByRole: "NURSE", assignedToRole: "PHYSICIAN", acknowledgedBy: "Dr. Alan Reyes", acknowledgedAt: minsAgo(12), createdAt: minsAgo(26) },
+      { residentId: R["302"].id, situation: "BP 165/95 on morning check with a mild headache.", background: "Hx: Hypertension, Type 2 Diabetes. Allergies: Penicillin, Sulfa.", assessment: "Blood pressure above target range.", recommendation: "Review antihypertensive regimen.", priority: "ROUTINE", status: "RESOLVED", raisedBy: "Caleb Randall", raisedByRole: "CAREGIVER", assignedToRole: "PHYSICIAN", acknowledgedBy: "Dr. Alan Reyes", acknowledgedAt: hoursAgo(3), response: "Increase lisinopril to 20mg daily; recheck BP each shift and report any systolic > 160.", resolvedBy: "Dr. Alan Reyes", resolvedAt: hoursAgo(2.5), createdAt: hoursAgo(4) },
+    ]);
+    console.log("  • SBAR escalations ready");
+  }
+
   console.log("Seed complete.");
 }
 

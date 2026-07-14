@@ -18,7 +18,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
  *      "No linked account".
  */
 
-export type ClinicianRole = "PHYSICIAN" | "NURSE";
+export type ClinicianRole = "PHYSICIAN" | "NURSE" | "CAREGIVER" | "FACILITY_ADMIN";
 
 export interface Clinician {
   name: string;
@@ -28,9 +28,14 @@ export interface Clinician {
 
 const matchesRole = (position: string, role: ClinicianRole) => {
   const pos = position.toUpperCase();
-  return role === "PHYSICIAN"
-    ? pos.includes("PHYSICIAN") || pos.includes("DOCTOR")
-    : pos.includes("NURSE");
+  if (role === "PHYSICIAN") return pos.includes("PHYSICIAN") || pos.includes("DOCTOR");
+  if (role === "NURSE") return pos.includes("NURSE");
+  if (role === "CAREGIVER") return pos.includes("CAREGIVER") || pos.includes("AIDE");
+  return pos.includes("ADMIN") || pos.includes("FACILITY"); // FACILITY_ADMIN
+};
+
+const FALLBACK: Record<ClinicianRole, string> = {
+  PHYSICIAN: "Physician", NURSE: "Head Nurse", CAREGIVER: "Caregiver", FACILITY_ADMIN: "Facility Admin",
 };
 
 const displayName = (u: Record<string, unknown>, fallback: string) => {
@@ -49,7 +54,7 @@ export function useClinician(role: ClinicianRole): Clinician {
   });
 
   return useMemo(() => {
-    const fallback = role === "PHYSICIAN" ? "Physician" : "Head Nurse";
+    const fallback = FALLBACK[role];
 
     // 1. Titled Staff member for this role.
     const staffMatch = staffRows.find((s) => matchesRole(String((s as { position?: unknown }).position ?? ""), role));

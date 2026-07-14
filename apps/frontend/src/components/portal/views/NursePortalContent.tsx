@@ -14,6 +14,7 @@ import PhysicianOrders from "@/components/portal/views/physician/PhysicianOrders
 import PhysicianVitals from "@/components/portal/views/physician/PhysicianVitals";
 import ClinicalNotes from "@/components/portal/views/clinical/ClinicalNotes";
 import ClinicalMessages from "@/components/portal/views/clinical/ClinicalMessages";
+import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptIncident } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
@@ -622,6 +623,9 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   }
   if (tab === "messages") {
     return <ClinicalMessages clinicianRole="NURSE" />;
+  }
+  if (tab === "escalations") {
+    return <EscalationsBoard role="NURSE" />;
   }
 
   // Call bells share the caregiver module — same CallBell model & queue workflow.

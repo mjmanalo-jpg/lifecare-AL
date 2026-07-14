@@ -63,6 +63,7 @@ export const MODELS: Record<string, ModelDef> = {
   "event-attendances": { delegate: prisma.eventAttendance, table: "EventAttendance", orderBy: { createdAt: "desc" } },
   "dining-reservations": { delegate: prisma.diningReservation, table: "DiningReservation", orderBy: { reservedAt: "desc" } },
   announcements: { delegate: prisma.announcement, table: "Announcement", orderBy: { publishedAt: "desc" } },
+  escalations: { delegate: prisma.escalation, table: "Escalation", orderBy: { createdAt: "desc" } },
   "dietitian-consults": { delegate: prisma.dietitianConsult, table: "DietitianConsult", orderBy: { consultDate: "desc" } },
   "food-compliance-logs": { delegate: prisma.foodComplianceLog, table: "FoodComplianceLog", orderBy: { auditDate: "desc" } },
   "camera-monitoring-logs": { delegate: prisma.cameraMonitoringLog, table: "CameraMonitoringLog", orderBy: { createdAt: "desc" } },

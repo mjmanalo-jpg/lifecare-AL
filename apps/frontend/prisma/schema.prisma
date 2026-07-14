@@ -126,6 +126,7 @@ enum NotificationType {
   SERVICE_UPDATE
   ANNOUNCEMENT
   EVENT_INVITE
+  SBAR_ESCALATION
 }
 
 enum AttendanceStatus {
@@ -224,6 +225,7 @@ model Resident {
   preferences         ResidentPreference[]
   eventAttendances    EventAttendance[]
   diningReservations  DiningReservation[]
+  escalations         Escalation[]
   cameraMonitoringLogs CameraMonitoringLog[]
 
   @@index([careLevel])
@@ -1608,4 +1610,63 @@ model CameraMonitoringLog {
   @@index([logType])
   @@index([createdAt])
   @@index([alert])
+}
+
+// ============================================================================
+// SBAR CLINICAL ESCALATION
+// ============================================================================
+// Standardized clinical hand-off: Caregiver/Nurse raise Situation-Background-
+// Assessment-Recommendation on a resident; it routes to the Physician (on-call
+// Facility Admin if the SLA is breached), who acknowledges, responds with
+// orders/recommendation, and resolves. Fully live (Supabase realtime) — the
+// physician sees new escalations instantly and the family is notified of the
+// outcome. No static data, no localStorage.
+
+enum EscalationPriority {
+  ROUTINE   // SLA 4h
+  URGENT    // SLA 30m
+  EMERGENCY // SLA 5m
+}
+
+enum EscalationStatus {
+  OPEN         // raised, awaiting acknowledgement
+  ACKNOWLEDGED // receiver has seen it
+  IN_PROGRESS  // being acted on
+  RESOLVED     // closed with a response
+  ESCALATED    // SLA breached / bumped to on-call (Facility Admin)
+  CANCELLED
+}
+
+model Escalation {
+  id             String             @id @default(uuid())
+  residentId     String
+  resident       Resident           @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  // SBAR
+  situation      String             @db.Text
+  background     String?            @db.Text
+  assessment     String?            @db.Text
+  recommendation String?            @db.Text
+  priority       EscalationPriority @default(URGENT)
+  status         EscalationStatus   @default(OPEN)
+  // Routing
+  raisedBy       String             // clinician name
+  raisedByRole   String             // NURSE | CAREGIVER
+  assignedToRole String             @default("PHYSICIAN") // PHYSICIAN | FACILITY_ADMIN (on-call)
+  acknowledgedBy String?
+  acknowledgedAt DateTime?
+  // Physician outcome
+  response       String?            @db.Text // recommendation / orders back to the team
+  resolvedBy     String?
+  resolvedAt     DateTime?
+  // Optional links to the triggering event
+  relatedIncidentId String?
+  relatedVitalId    String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([residentId])
+  @@index([status])
+  @@index([priority])
+  @@index([assignedToRole])
+  @@index([createdAt])
 }

@@ -735,7 +735,39 @@ async function handleAutoNotification(model: string, data: any) {
       }
     }
 
-    // 13. Vitals Trigger
+    // 13. SBAR Escalation Trigger — route to the assigned clinical role.
+    if (model === "escalations") {
+      const target = String(data.assignedToRole || "PHYSICIAN");
+      // On-call escalations also loop in facility admins for coverage.
+      const roles = target === "FACILITY_ADMIN"
+        ? ["FACILITY_ADMIN", "SUPERADMIN"]
+        : ["PHYSICIAN", "FACILITY_ADMIN"];
+      const staffUsers = await prisma.user.findMany({
+        where: { role: { in: roles as never }, isActive: true },
+        select: { id: true },
+      });
+      const resident = await prisma.resident.findUnique({
+        where: { id: data.residentId },
+        select: { firstName: true, lastName: true, roomNumber: true },
+      });
+      const name = resident ? `${resident.firstName} ${resident.lastName}` : "A resident";
+      const room = resident?.roomNumber ? `Room ${resident.roomNumber}` : "their room";
+      const isEmergency = data.priority === "EMERGENCY";
+      if (staffUsers.length) {
+        await prisma.notification.createMany({
+          data: staffUsers.map((u) => ({
+            userId: u.id,
+            type: "SBAR_ESCALATION" as const,
+            title: isEmergency ? `EMERGENCY Escalation: ${name}` : `SBAR Escalation: ${name}`,
+            message: `${data.raisedBy || "A clinician"} escalated ${name} (${room}), ${String(data.priority || "URGENT").toLowerCase()} priority: "${String(data.situation || "").slice(0, 120)}".`,
+            relatedEntityId: data.id,
+            relatedEntityType: "Escalation",
+          })),
+        });
+      }
+    }
+
+    // 14. Vitals Trigger
     if (model === "vitals") {
       const staffUsers = await prisma.user.findMany({
         where: {

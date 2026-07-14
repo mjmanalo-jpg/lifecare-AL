@@ -8,6 +8,7 @@ import PhysicianConsults from "@/components/portal/views/physician/PhysicianCons
 import PhysicianIncidents from "@/components/portal/views/physician/PhysicianIncidents";
 import ClinicalNotes from "@/components/portal/views/clinical/ClinicalNotes";
 import ClinicalMessages from "@/components/portal/views/clinical/ClinicalMessages";
+import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
 
 interface PhysicianPortalContentProps {
   tab: string;
@@ -32,6 +33,8 @@ export default function PhysicianPortalContent({ tab }: PhysicianPortalContentPr
       return <PhysicianCarePlans />;
     case "consults":
       return <PhysicianConsults />;
+    case "escalations":
+      return <EscalationsBoard role="PHYSICIAN" />;
     case "incidents":
       return <PhysicianIncidents />;
     case "notes":

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Stethoscope, RefreshCw, Activity, Pill, AlertTriangle, PenTool, ClipboardCheck,
   HeartPulse, MessageSquare, BellRing, CheckSquare, Users, ChevronRight,
-  Signature, TrendingUp, type LucideIcon,
+  Signature, TrendingUp, Siren, type LucideIcon,
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
@@ -59,6 +59,7 @@ export default function PhysicianCommandCenter() {
   const messagesQ = useLiveQuery<Row>("messages", { query: "include=sender&take=200", tables: ["Message"] });
   const tasksQ = useLiveQuery<Row>("tasks", { query: "include=resident&take=300", tables: ["Task"] });
   const callBellsQ = useLiveQuery<Row>("call-bells", { query: "include=resident&take=200", tables: ["CallBell"] });
+  const escalationsQ = useLiveQuery<Row>("escalations", { query: "take=200", tables: ["Escalation"] });
 
   const [nowTs, setNowTs] = useState(0);
   useEffect(() => { const tick = () => setNowTs(Date.now()); tick(); const t = setInterval(tick, 60_000); return () => clearInterval(t); }, []);
@@ -66,6 +67,7 @@ export default function PhysicianCommandCenter() {
   const refreshAll = () => {
     residentsQ.refetch(); vitalsQ.refetch(); medsQ.refetch(); incidentsQ.refetch();
     notesQ.refetch(); messagesQ.refetch(); tasksQ.refetch(); callBellsQ.refetch();
+    escalationsQ.refetch();
   };
 
   const residents = useMemo(() => residentsQ.data.map(adaptResident), [residentsQ.data]);
@@ -117,6 +119,7 @@ export default function PhysicianCommandCenter() {
   const unsignedNotes = useMemo(() => notesQ.data.filter((n) =>
     !PHYSICIAN_NOTE_TYPES.has(asStr(n.noteType)) && asStr(n.noteType) !== "MEDICATION_ADMIN" && !n.coSignedBy), [notesQ.data]);
   const openConsults = useMemo(() => notesQ.data.filter((n) => asStr(n.noteType) === "CONSULTATION" && !n.coSignedBy), [notesQ.data]);
+  const openEscalations = useMemo(() => escalationsQ.data.filter((e) => !["RESOLVED", "CANCELLED"].includes(asStr(e.status))), [escalationsQ.data]);
 
   const stats = useMemo(() => ({
     patients: residents.length,
@@ -230,6 +233,7 @@ export default function PhysicianCommandCenter() {
             <h2 className="font-bold text-gray-900">Pending Physician Actions</h2>
           </div>
           <div className="space-y-2">
+            <ActionRow icon={Siren} tone="red" label="SBAR escalations awaiting response" count={openEscalations.length} onClick={() => go("/physician/escalations")} />
             <ActionRow icon={Pill} tone="amber" label="Orders awaiting approval" count={pendingOrders.length} onClick={() => go("/physician/orders")} />
             <ActionRow icon={Signature} tone="blue" label="Care-team notes to co-sign" count={unsignedNotes.length} onClick={() => go("/physician/rounds")} />
             <ActionRow icon={Stethoscope} tone="teal" label="Open consult requests" count={openConsults.length} onClick={() => go("/physician/consults")} />

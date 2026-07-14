@@ -8,6 +8,7 @@ import CaregiverTimeClock from "@/components/portal/views/caregiver/CaregiverTim
 import CaregiverReports from "@/components/portal/views/caregiver/CaregiverReports";
 import CaregiverCareTeam from "@/components/portal/views/caregiver/CaregiverCareTeam";
 import CaregiverMonitoring from "@/components/portal/views/caregiver/CaregiverMonitoring";
+import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
 
 interface CaregiverPortalContentProps {
   tab: string;
@@ -35,6 +36,8 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
       return <CaregiverCareTeam />;
     case "monitoring":
       return <CaregiverMonitoring />;
+    case "escalations":
+      return <EscalationsBoard role="CAREGIVER" />;
     default:
       return <CaregiverDashboard />;
   }
