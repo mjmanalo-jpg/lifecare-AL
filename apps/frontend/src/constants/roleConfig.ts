@@ -46,7 +46,6 @@ import {
   Shield,
   ClipboardCheck,
   Bell,
-  ScanFace,
 } from "lucide-react";
 
 export type Role =
@@ -101,8 +100,8 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   appearance: "Landing Studio",
   assistant: "AI Assistant",
   matrix: "Portal Matrix",
-  admissions: "Admissions",
-  registration: "Resident Registration",
+  admissions: "Admissions & Registration",
+  registration: "Admissions & Registration",
   rooms: "Rooms",
   occupancy: "Occupancy",
   billing: "Billing",
@@ -172,8 +171,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "LCMS Feature Matrix", icon: ShieldCheck, route: "/superadmin/featurematrix" },
       { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/superadmin/dailyrounds" },
       // "Portal Matrix" is merged into "LCMS Feature Matrix" as its Access Control tab.
-      { name: "Admissions", icon: UserPlus, route: "/superadmin/admissions" },
-      { name: "Resident Registration", icon: ScanFace, route: "/superadmin/registration" },
+      { name: "Admissions & Registration", icon: UserPlus, route: "/superadmin/admissions" },
       { name: "Staff Registry", icon: Users, route: "/superadmin/staff" },
       { name: "AI Assistant", icon: Sparkles, route: "/superadmin/assistant" },
       { name: "Landing Studio", icon: Palette, route: "/superadmin/appearance" },
@@ -458,8 +456,7 @@ export const GLOBAL_FEATURES: Record<string, FeatureInfo> = {
   "Clinical Coordination": { name: "Clinical Coordination", icon: Siren, routeSegment: "escalations" },
   "Shift Endorsement & Continuity": { name: "Shift Endorsement & Continuity", icon: FileText, routeSegment: "reports" },
   "Daily Care Documentation & Monitoring": { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, routeSegment: "tasks" },
-  "Admissions": { name: "Admissions", icon: UserPlus, routeSegment: "admissions" },
-  "Resident Registration": { name: "Resident Registration", icon: ScanFace, routeSegment: "registration" },
+  "Admissions & Registration": { name: "Admissions & Registration", icon: UserPlus, routeSegment: "admissions" },
   "Staff Registry": { name: "Staff Registry", icon: Users, routeSegment: "staff" },
   "Staff": { name: "Staff", icon: Users, routeSegment: "staff" },
   "AI Assistant": { name: "AI Assistant", icon: Sparkles, routeSegment: "assistant" },

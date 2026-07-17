@@ -3,8 +3,7 @@
 import LandingCustomizerContent from "@/components/portal/views/LandingCustomizerContent";
 import SuperAdminDashboard from "@/components/portal/views/SuperAdminDashboard";
 import AIAssistantContent from "@/components/portal/ai/AIAssistantContent";
-import AdmissionsContent from "@/components/portal/views/AdmissionsContent";
-import ResidentRegistration from "@/components/portal/views/ResidentRegistration";
+import OnboardingHub from "@/components/portal/views/OnboardingHub";
 import FacilityResidents from "@/components/portal/views/FacilityResidents";
 import PhysicianCarePlans from "@/components/portal/views/physician/PhysicianCarePlans";
 import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
@@ -194,12 +193,13 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     }
   };
 
+  // Combined onboarding hub: Admissions + Resident Registration as tabs.
   if (tab === "admissions") {
-    return <AdmissionsContent />;
+    return <OnboardingHub initialTab="admissions" />;
   }
 
   if (tab === "registration") {
-    return <ResidentRegistration />;
+    return <OnboardingHub initialTab="registration" />;
   }
 
   if (tab === "appearance") {
