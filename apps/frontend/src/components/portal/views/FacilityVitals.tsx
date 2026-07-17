@@ -218,7 +218,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
         <>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+              <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
                 <Activity className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Vitals Monitor
               </h1>
               <p className="text-gray-600 text-sm">Facility-wide vital signs overview</p>
@@ -375,7 +375,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
       {viewingResident && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-6 flex items-center justify-between">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-6 flex items-center justify-between">
               <h2 className="text-xl font-bold">{viewingResident.split("||")[0]} — All Vitals</h2>
               <button onClick={() => setViewingResident(null)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>

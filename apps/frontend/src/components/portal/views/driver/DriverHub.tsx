@@ -156,7 +156,7 @@ export default function DriverHub({ initialTab = "dashboard" }: DriverHubProps) 
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
             {header.title}
           </h1>
           <p className="text-gray-600 text-sm mt-1">{header.subtitle}</p>
@@ -343,7 +343,7 @@ function DashboardTab() {
       <div className="bg-white rounded-lg border border-gray-200 p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center text-white shrink-0">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shrink-0">
               <Car className="w-6 h-6" />
             </div>
             <div>
@@ -468,7 +468,8 @@ function DashboardTab() {
         </div>
       </div>
 
-      {/* Full-width live route map */}
+      {/* Full-width live route map — hidden when full-screen modal is open */}
+      {!showFullMap && (
       <div className="bg-white rounded-lg border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
           <div>
@@ -486,32 +487,64 @@ function DashboardTab() {
           vehiclePosition={vehiclePos} height="360px" showRoute={!!activeTrip}
         />
       </div>
+      )}
 
       {/* Expandable full-screen map modal */}
       {showFullMap && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowFullMap(false)}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[94vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-4 flex items-center justify-between flex-shrink-0 gap-3">
-              <div className="min-w-0">
-                <h2 className="text-lg font-bold flex items-center gap-2"><MapPin className="w-5 h-5" /> Live Route Map</h2>
-                {activeTrip && <p className="text-xs text-black/70 truncate">{activeTrip.pickupLocation} → {activeTrip.dropoffLocation}</p>}
+        <div className="fixed inset-0 z-50" onClick={() => setShowFullMap(false)}>
+          {/* Map fills entire screen */}
+          <div className="absolute inset-0">
+            <NavigationMap
+              destination={activeTrip ? (destCoords[activeTrip.destination] || { text: activeTrip.destination }) : undefined}
+              vehiclePosition={vehiclePos} height="100%" showRoute={!!activeTrip}
+              className="!rounded-none !border-0"
+            />
+          </div>
+
+          {/* Floating top bar */}
+          <div className="absolute top-0 left-0 right-0 z-[1001] p-3 sm:p-4">
+            <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 px-4 py-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/25"><MapPin className="w-4.5 h-4.5 text-white" /></div>
+                <div className="min-w-0">
+                  <h2 className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                    Live Route Map
+                    {activeTrip && <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      activeTrip.status === "EN_ROUTE" ? "bg-green-100 text-green-700" :
+                      activeTrip.status === "RETURNING" ? "bg-amber-100 text-amber-700" :
+                      activeTrip.status === "ARRIVED" ? "bg-blue-100 text-blue-700" :
+                      "bg-gray-100 text-gray-600"
+                    }`}>{activeTrip.status.replace("_", " ")}</span>}
+                  </h2>
+                  {activeTrip && <p className="text-gray-500 text-[11px] truncate">{activeTrip.residentName} · {activeTrip.pickupLocation} → {activeTrip.dropoffLocation}</p>}
+                </div>
               </div>
-              <button onClick={() => setShowFullMap(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition flex-shrink-0"><X className="w-6 h-6" /></button>
+              <button onClick={() => setShowFullMap(false)} className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition shrink-0"><X className="w-5 h-5 text-gray-600" /></button>
             </div>
-            <div className="flex-1 min-h-0">
-              <NavigationMap
-                destination={activeTrip ? (destCoords[activeTrip.destination] || { text: activeTrip.destination }) : undefined}
-                vehiclePosition={vehiclePos} height="72vh" showRoute={!!activeTrip}
-              />
-            </div>
-            {activeTrip && (
-              <div className="px-4 py-3 border-t border-gray-200 flex-shrink-0">
-                <a href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(activeTrip.pickupLocation)}&destination=${encodeURIComponent(activeTrip.dropoffLocation)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-800">
-                  <Navigation className="w-4 h-4" /> Open turn-by-turn navigation
+          </div>
+
+          {/* Floating bottom bar */}
+          {activeTrip && (
+            <div className="absolute bottom-0 left-0 right-0 z-[1001] p-3 sm:p-4">
+              <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 px-4 py-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-4 text-xs min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-gray-600 font-medium truncate">{activeTrip.pickupLocation}</span>
+                  </div>
+                  <span className="text-gray-300 shrink-0">→</span>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-red-500" />
+                    <span className="text-gray-600 font-medium truncate">{activeTrip.dropoffLocation}</span>
+                  </div>
+                </div>
+                <a href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(activeTrip.pickupLocation)}&destination=${encodeURIComponent(activeTrip.dropoffLocation)}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs font-bold rounded-xl hover:shadow-lg hover:shadow-blue-500/25 transition-all active:scale-95 shrink-0">
+                  <Navigation className="w-4 h-4" /> Navigate
                 </a>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -643,7 +676,7 @@ function TripsTab({ onView }: { onView: (r: Record<string, unknown>) => void }) 
             <input type="text" placeholder="Search resident, destination, vehicle…" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
               className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none" />
           </div>
-          <button onClick={() => setShowRequest(true)} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm whitespace-nowrap active:scale-95"><Plus className="w-4 h-4" /> Request Pickup</button>
+          <button onClick={() => setShowRequest(true)} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm whitespace-nowrap active:scale-95"><Plus className="w-4 h-4" /> Request Pickup</button>
           <button onClick={() => void refetch()} className="p-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"><RefreshCw className="w-4 h-4" /></button>
         </div>
       </div>
@@ -775,7 +808,7 @@ function DriverRequestModal({ passengers, onClose, onSaved }: {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold">Request Pickup</h2>
           <button onClick={onClose} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
@@ -827,7 +860,7 @@ function DriverRequestModal({ passengers, onClose, onSaved }: {
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
           <button onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition text-sm">Cancel</button>
           <button onClick={() => void submit()} disabled={!valid || saving}
-            className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 text-sm">
+            className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 text-sm">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} {saving ? "Sending…" : "Send Request"}
           </button>
         </div>
@@ -1070,7 +1103,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
         </div>
         <button onClick={() => void refetch()} className="p-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"><RefreshCw className="w-4 h-4" /></button>
         <button onClick={() => { setForm({ vehicleId: "", odometer: "", liters: "", cost: "", fuelType: "Diesel", notes: "" }); setShowCreate(true); }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm active:scale-95">
+          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm active:scale-95">
           <Fuel className="w-4 h-4" /> Log Refuel
         </button>
       </div>
@@ -1139,7 +1172,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
               <h2 className="text-xl font-bold">Log Refuel</h2>
               <button onClick={() => setShowCreate(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
@@ -1165,7 +1198,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
             </form>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
               <button onClick={() => setShowCreate(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
-              <button onClick={handleSubmit} disabled={saving} className="px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm disabled:opacity-50">
+              <button onClick={handleSubmit} disabled={saving} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm disabled:opacity-50">
                 {saving ? "Saving..." : "Log Refuel"}
               </button>
             </div>
@@ -1188,7 +1221,7 @@ function ViewModal({ row, onClose }: { row: Record<string, unknown>; onClose: ()
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-          <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between z-10">
+          <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
             <h2 className="text-xl font-bold">Trip Details</h2>
             <button onClick={onClose} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
           </div>
@@ -1237,7 +1270,7 @@ function ViewModal({ row, onClose }: { row: Record<string, unknown>; onClose: ()
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-          <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between z-10">
+          <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
             <h2 className="text-xl font-bold">Fuel Log</h2>
             <button onClick={onClose} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
           </div>

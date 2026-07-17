@@ -143,21 +143,326 @@ enum AdmissionStatus {
 }
 
 // ============================================================================
+// V2.1 ENUMS — MULTI-TENANT & ACUITY ENGINE
+// ============================================================================
+
+enum CommunityType {
+  ASSISTED_LIVING
+  INDEPENDENT_LIVING
+  MEMORY_CARE
+  TRANSITIONAL_CARE
+  HOME_CARE
+}
+
+enum CommunityUnitType {
+  ASSISTED_LIVING
+  INDEPENDENT_LIVING
+  MEMORY_CARE
+  SKILLED_NURSING
+  TRANSITIONAL_CARE
+  HOME_CARE
+}
+
+enum AssessmentType {
+  ADMISSION
+  ANNUAL
+  QUARTERLY
+  CONDITION_CHANGE
+  CARE_PLAN_REVIEW
+  DISCHARGE
+  TRANSFER
+}
+
+enum AssessmentStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  REVIEWED
+  SUPERSEDED
+}
+
+enum AcuityLevel {
+  LOW
+  MODERATE
+  HIGH
+  CRITICAL
+}
+
+enum ServiceCategory {
+  PERSONAL_CARE
+  MOBILITY
+  MEDICATION
+  NUTRITION
+  HYDRATION
+  VITALS
+  SKIN_CARE
+  COGNITIVE
+  BEHAVIORAL
+  SOCIAL
+  REHABILITATION
+  TRANSPORT
+  DOCUMENTATION
+  COMMUNICATION
+}
+
+enum ServiceFrequency {
+  DAILY
+  TWICE_DAILY
+  WEEKLY
+  AS_NEEDED
+}
+
+enum SOPCategory {
+  CLINICAL
+  OPERATIONAL
+  SAFETY
+  EMERGENCY
+}
+
+enum SOPStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum KpiCategory {
+  CLINICAL
+  OPERATIONAL
+  FINANCIAL
+  QUALITY
+  STAFFING
+  SATISFACTION
+}
+
+enum ObservationType {
+  INTAKE
+  OUTPUT
+  SKIN_ASSESSMENT
+  MOOD_BEHAVIOR
+  PAIN_LEVEL
+  SLEEP
+  ACTIVITY
+  SOCIAL
+  COGNITIVE
+  VITALS_RECORDED
+  WEIGHT
+  MEDICATION_TAKEN
+  FALL_NEAR_MISS
+  REPOSITIONING
+}
+
+enum QualityPeriodType {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum StaffingPlanStatus {
+  PLANNED
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+}
+
+enum OvertimeRisk {
+  NONE
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// ============================================================================
+// LCMS MODULE 1 — RESIDENT DEMOGRAPHICS
+// ============================================================================
+
+enum MaritalStatus {
+  SINGLE
+  MARRIED
+  DIVORCED
+  WIDOWED
+  SEPARATED
+  PARTNER
+}
+
+enum ConsentStatus {
+  ACTIVE
+  WITHDRAWN
+  PENDING
+  EXPIRED
+}
+
+// ============================================================================
+// LCMS MODULE 2 — ASSESSMENT DETAIL
+// ============================================================================
+
+enum IADLLevel {
+  INDEPENDENT
+  MINIMAL_ASSISTANCE
+  MODERATE_ASSISTANCE
+  MAXIMAL_ASSISTANCE
+  DEPENDENT
+}
+
+enum InfectionRiskLevel {
+  LOW
+  MODERATE
+  HIGH
+  CRITICAL
+}
+
+enum CareDependencyLevel {
+  INDEPENDENT
+  MINIMAL_ASSISTANCE
+  MODERATE_ASSISTANCE
+  MAXIMAL_ASSISTANCE
+  FULL_ASSISTANCE
+}
+
+// ============================================================================
+// LCMS MODULE 3 — CARE PLAN
+// ============================================================================
+
+enum CarePlanStatus {
+  DRAFT
+  ACTIVE
+  UNDER_REVIEW
+  COMPLETED
+  DISCONTINUED
+}
+
+enum CarePlanReviewFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+// ============================================================================
+// LCMS MODULE 4 — DAILY DOCUMENTATION
+// ============================================================================
+
+enum EliminationType {
+  URINATION
+  BOWEL_MOVEMENT
+  BOTH
+}
+
+enum ContinenceStatus {
+  CONTINENT
+  OCCASIONAL_INCONTINENCE
+  FREQUENT_INCONTINENCE
+  INCONTINENT
+  CATHETER
+  OSTOMY
+}
+
+enum MobilityType {
+  WALKING
+  WHEELCHAIR
+  TRANSFER
+  EXERCISE
+  BED_REST
+  STANDING
+}
+
+enum PainScale {
+  NONE
+  MILD
+  MODERATE
+  SEVERE
+  VERY_SEVERE
+  WORST_POSSIBLE
+}
+
+enum SleepQuality {
+  RESTFUL
+  FAIR
+  POOR
+  RESTLESS
+  INSOMNIA
+}
+
+enum WoundStage {
+  EPISODE
+  HEALING
+  HEALED
+  DETERIORATED
+}
+
+// ============================================================================
+// LCMS MODULE 6 — MEDICATION
+// ============================================================================
+
+enum MARStatus {
+  GIVEN
+  REFUSED
+  HELD
+  MISSED
+  PARTIAL
+  SCHEDULED
+}
+
+// ============================================================================
+// LCMS MODULE 7 — CLINICAL COORDINATION
+// ============================================================================
+
+enum ReferralStatus {
+  REQUESTED
+  APPROVED
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum FollowUpStatus {
+  PENDING
+  SCHEDULED
+  COMPLETED
+  OVERDUE
+  CANCELLED
+}
+
+// ============================================================================
+// LCMS MODULE 8 — REPORTS
+// ============================================================================
+
+enum ReportType {
+  RESIDENT
+  MEDICATION
+  CLINICAL
+  COMPLIANCE
+  MANAGEMENT
+  AUDIT
+  FINANCIAL
+  STAFF_PERFORMANCE
+}
+
+enum ReportFormat {
+  TABLE
+  CHART
+  SUMMARY
+  DETAILED
+}
+
+// ============================================================================
 // MODELS
 // ============================================================================
 
 model User {
-  id        String   @id @default(uuid())
-  role      Role     @default(FAMILY)
-  email     String   @unique
-  name      String
-  firstName String?
-  lastName  String?
-  phone     String?
-  isActive  Boolean  @default(true)
-  lastLogin DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  role         Role     @default(FAMILY)
+  email        String   @unique
+  passwordHash String?
+  pinHash      String?  // PIN-based login (4-6 digit)
+  name         String
+  firstName    String?
+  lastName     String?
+  phone        String?
+  isActive     Boolean  @default(true)
+  lastLogin    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
   staff             Staff?
@@ -198,6 +503,46 @@ model Resident {
   // Optional self-login account (RESIDENT role). Scopes a resident to their own record.
   userId              String?        @unique
   residentUser        User?          @relation("ResidentSelf", fields: [userId], references: [id], onDelete: SetNull)
+
+  // V2.1 — Multi-tenant & acuity
+  communityId         String?
+  community           Community?     @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  organizationId      String?
+  buildingId          String?
+  building            Building?      @relation(fields: [buildingId], references: [id], onDelete: SetNull)
+  unitId              String?
+  unit                Unit?          @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  currentCarePackageId String?
+  currentCarePackage  CarePackage?   @relation(fields: [currentCarePackageId], references: [id], onDelete: SetNull)
+  currentAcuityScoreId String?
+  currentAcuityLevel  AcuityLevel?
+  lastAssessmentDate  DateTime?
+  nextAssessmentDue   DateTime?
+
+  // LCMS Module 1 — Extended Demographics
+  nationality         String?
+  religion            String?
+  maritalStatus       MaritalStatus?
+  language            String?
+  diagnosis           String?
+  surgeries           String?         @db.Text
+  hospitalizations    String?         @db.Text
+  causeOfDeath        String?
+  deathDate           DateTime?
+  isDeceased          Boolean         @default(false)
+  photoUrl            String?
+
+  // LCMS Module 1 — Advance Care Preferences
+  advanceDirectives   String?         @db.Text
+  dnrStatus           Boolean         @default(false)
+  livingWill          String?         @db.Text
+  healthcareProxy    String?
+  healthcareProxyPhone String?
+  codeStatus          String?         @default("FULL_CODE")
+
+  // LCMS Module 2 — Care Dependency
+  careDependencyLevel CareDependencyLevel?
+
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
 
@@ -227,12 +572,33 @@ model Resident {
   diningReservations  DiningReservation[]
   escalations         Escalation[]
   cameraMonitoringLogs CameraMonitoringLog[]
+  assessments         Assessment[]
+  acuityScores        AcuityScore[]
+  qualityScores       ResidentQualityScore[]
+  observations        Observation[]
+  // LCMS new relations
+  vaccinations        Vaccination[]
+  documents           ResidentDocument[]
+  woundCares          WoundCare[]
+  eliminations        EliminationLog[]
+  painAssessments     PainAssessment[]
+  sleepLogs           SleepLog[]
+  mobilityLogs        MobilityLog[]
+  carePlans           CarePlan[]
+  hospitalReferrals   HospitalReferral[]
+  followUps           FollowUp[]
+  careTimeline        CareTimelineEntry[]
+  medicationAdministrations MedicationAdministration[]
+  dailyRounds            DailyRound[]
 
   @@index([careLevel])
   @@index([roomNumber])
   @@index([admissionDate])
   @@index([sponsorId])
   @@index([createdAt])
+  @@index([communityId])
+  @@index([currentAcuityLevel])
+  @@index([careDependencyLevel])
 }
 
 model Staff {
@@ -248,6 +614,11 @@ model Staff {
   avatarUrl     String?
   experience    String?
   documents     Json?
+
+  // V2.1 — Multi-tenant
+  communityId   String?
+  community     Community? @relation(fields: [communityId], references: [id], onDelete: SetNull)
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -257,10 +628,12 @@ model Staff {
   timeTracking      TimeTracking[]
   incidentsReported Incident[]        @relation("StaffReporter")
   shiftReports      ShiftReport[]
+  staffCompetencies StaffCompetency[]
 
   @@index([userId])
   @@index([position])
   @@index([isActive])
+  @@index([communityId])
 }
 
 // Health monitoring
@@ -326,6 +699,8 @@ model Medication {
   sideEffects       String?
   contraindications String?
   complianceRecords  MedicationLog[]
+  administrations   MedicationAdministration[]
+  changeLogs       MedicationChangeLog[]
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
@@ -360,10 +735,20 @@ model MedicationLog {
   medicationId  String
   medication    Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
   takenAt       DateTime   @default(now())
+  // LCMS Module 6 — MAR Status
+  marStatus     MARStatus  @default(GIVEN)
+  dosage        String?
+  route         String?
+  refusedReason String?
+  heldReason    String?
+  witnessId     String?
+  witnessName   String?
+  notes         String?
   createdAt     DateTime   @default(now())
 
   @@index([residentId, takenAt])
   @@index([medicationId])
+  @@index([marStatus])
 }
 
 // Task management
@@ -379,6 +764,20 @@ model Task {
   assignedTo    Staff?       @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
   dueDate       DateTime
   completedAt   DateTime?
+
+  // V2.1 — Tenant-scoping & care package linking
+  communityId   String?
+  community     Community?   @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  unitId        String?
+  unit          Unit?        @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  serviceCatalogId String?
+  serviceCatalog ServiceCatalog? @relation(fields: [serviceCatalogId], references: [id], onDelete: SetNull)
+  sopId         String?
+  recurringPattern Json?
+  generatedFrom String?
+  documentationRequired String?
+  observationId String?
+
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
@@ -387,6 +786,7 @@ model Task {
   @@index([priority])
   @@index([assignedToId])
   @@index([dueDate])
+  @@index([communityId])
 }
 
 // Communication
@@ -646,14 +1046,1056 @@ model Room {
   features          String?
   rateMonthly       Float?
   notes             String?
+
+  // V2.1 — Tenant-scoping
+  communityId       String?
+  community         Community? @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  buildingId        String?
+  building          Building?  @relation(fields: [buildingId], references: [id], onDelete: SetNull)
+  floorId           String?
+  floorRelation     Floor?     @relation(fields: [floorId], references: [id], onDelete: SetNull)
+  unitId            String?
+  unit              Unit?      @relation(fields: [unitId], references: [id], onDelete: SetNull)
+
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 
   @@index([status])
   @@index([housekeepingStatus])
-  @@index([floor])
   @@index([wing])
   @@index([roomType])
+  @@index([communityId])
+  @@index([buildingId])
+  @@index([floorId])
+  @@index([unitId])
+}
+
+// ============================================================================
+// V2.1 — MULTI-TENANT HIERARCHY
+// ============================================================================
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  legalName String?
+  taxId     String?
+  address   String?
+  phone     String?
+  email     String?
+  website   String?
+  logoUrl   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  communities Community[]
+
+  @@index([isActive])
+}
+
+model Community {
+  id               String        @id @default(uuid())
+  organizationId   String
+  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name             String
+  address          String?
+  city             String?
+  state            String?
+  zip              String?
+  phone            String?
+  email            String?
+  timezone         String        @default("America/New_York")
+  latitude         Float?
+  longitude        Float?
+  communityType    CommunityType @default(ASSISTED_LIVING)
+  licenseNumber    String?
+  licenseExpiry    DateTime?
+  bedsTotal        Int?
+  bedsAvailable    Int?
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  buildings            Building[]
+  floors               Floor[]
+  units                Unit[]
+  staff                Staff[]
+  residents            Resident[]
+  assessments          Assessment[]
+  acuityScores         AcuityScore[]
+  carePackages         CarePackage[]
+  serviceCatalogs      ServiceCatalog[]
+  communitySops        CommunitySop[]
+  competencies         Competency[]
+  staffingPlans        StaffingPlan[]
+  qualityDashboards    CommunityQualityDashboard[]
+  kpiRecords           KpiRecord[]
+  observations         Observation[]
+  tasks                Task[]
+  rooms                Room[]
+  staffCompetencies    StaffCompetency[]
+  residentQualityScores ResidentQualityScore[]
+
+  @@index([organizationId])
+  @@index([communityType])
+  @@index([isActive])
+}
+
+model Building {
+  id          String    @id @default(uuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  name        String
+  code        String?
+  floorsCount Int       @default(1)
+  address     String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  floors Floor[]
+  rooms  Room[]
+  residents Resident[]
+
+  @@index([communityId])
+}
+
+model Floor {
+  id          String    @id @default(uuid())
+  buildingId  String
+  building    Building  @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  floorNumber Int
+  name        String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  units Unit[]
+  rooms Room[]
+
+  @@index([buildingId])
+  @@index([communityId])
+}
+
+model Unit {
+  id          String           @id @default(uuid())
+  floorId     String
+  floor       Floor            @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  communityId String
+  community   Community        @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  name        String
+  unitType    CommunityUnitType @default(ASSISTED_LIVING)
+  capacity    Int              @default(1)
+  staffingRatio Json?
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  rooms  Room[]
+  tasks  Task[]
+  residents Resident[]
+  staffingPlans StaffingPlan[]
+
+  @@index([floorId])
+  @@index([communityId])
+  @@index([unitType])
+}
+
+// ============================================================================
+// V2.1 — ASSESSMENT & ACUITY ENGINE
+// ============================================================================
+
+model Assessment {
+  id              String           @id @default(uuid())
+  residentId      String
+  resident        Resident         @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  communityId     String
+  community       Community        @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  assessmentType  AssessmentType
+  version         Int              @default(1)
+  status          AssessmentStatus @default(DRAFT)
+
+  adlScore           Int
+  cognitionScore     Int
+  mobilityScore      Int
+  medicalScore       Int
+  behavioralScore    Int
+  nutritionScore     Int
+  hydrationScore     Int
+  skinIntegrityScore Int
+  socialEngagementScore Int
+
+  totalRawScore      Int
+  dimensionCount     Int              @default(9)
+  maxPossibleScore   Int
+
+  assessedById       String?
+  assessedByName     String
+  assessmentTool     String?
+  notes              String?          @db.Text
+  attachments        Json?
+
+  isReassessment         Boolean      @default(false)
+  previousAssessmentId   String?
+  reassessmentReason     String?
+
+  completedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  acuityScore AcuityScore?
+
+  @@index([residentId])
+  @@index([communityId])
+  @@index([assessmentType])
+  @@index([completedAt])
+  @@index([residentId, completedAt])
+}
+
+model AcuityScore {
+  id             String      @id @default(uuid())
+  assessmentId   String      @unique
+  assessment     Assessment  @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  residentId     String
+  resident       Resident    @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  communityId    String
+  community      Community   @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  dimensionScores Json
+  weightedScore   Float
+  normalizedScore Float
+
+  acuityLevel        AcuityLevel
+  careLevel          CareLevel
+  careLevelConfidence Float?
+
+  dailyCareMinutes Int
+  shiftBreakdown   Json
+  staffingDemand   Json
+
+  weightsUsed   Json
+  weightVersion String
+
+  validFrom  DateTime  @default(now())
+  validUntil DateTime?
+  isCurrent  Boolean   @default(true)
+  scoredAt   DateTime  @default(now())
+  scoredById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([residentId])
+  @@index([communityId])
+  @@index([acuityLevel])
+  @@index([careLevel])
+  @@index([isCurrent])
+  @@index([validUntil])
+}
+
+// ============================================================================
+// V2.1 — SERVICE CATALOG & CARE PACKAGES
+// ============================================================================
+
+model ServiceCatalog {
+  id          String          @id @default(uuid())
+  communityId String
+  community   Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  name        String
+  category    ServiceCategory
+  description String?
+  estimatedMinutes Int        @default(15)
+  requiredCompetencies Json?
+  suppliesNeeded      Json?
+  sopId       String?
+  documentationRequired String?
+  documentationTemplate String?
+  qualityIndicator String?
+  monitoringFrequency String?
+  billable    Boolean         @default(false)
+  baseRate    Float?
+  billingCode String?
+  isActive    Boolean         @default(true)
+  sortOrder   Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  carePackageItems CarePackageItem[]
+  tasks            Task[]
+
+  @@index([communityId])
+  @@index([category])
+  @@index([isActive])
+}
+
+model CarePackage {
+  id              String    @id @default(uuid())
+  communityId     String
+  community       Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  name            String
+  careLevel       CareLevel
+  description     String?
+  baseMonthlyRate Float?
+  serviceCount    Int       @default(0)
+  isActive        Boolean   @default(true)
+  isDefault       Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  items     CarePackageItem[]
+  residents Resident[]
+
+  @@index([communityId])
+  @@index([careLevel])
+  @@index([isActive])
+}
+
+model CarePackageItem {
+  id               String        @id @default(uuid())
+  carePackageId    String
+  carePackage      CarePackage   @relation(fields: [carePackageId], references: [id], onDelete: Cascade)
+  serviceCatalogId String
+  serviceCatalog   ServiceCatalog @relation(fields: [serviceCatalogId], references: [id], onDelete: Cascade)
+  quantity         Int           @default(1)
+  frequency        ServiceFrequency @default(DAILY)
+  shifts           Json?
+  customMinutes    Int?
+  customRate       Float?
+  notes            String?
+  sortOrder        Int           @default(0)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([carePackageId])
+  @@index([serviceCatalogId])
+  @@unique([carePackageId, serviceCatalogId])
+}
+
+// ============================================================================
+// V2.1 — SOP & COMPETENCY
+// ============================================================================
+
+model CommunitySop {
+  id                String      @id @default(uuid())
+  communityId       String
+  community         Community   @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  title             String
+  category          SOPCategory
+  version           Int         @default(1)
+  status            SOPStatus   @default(DRAFT)
+  procedureText     String      @db.Text
+  checklistItems    Json?
+  escalationPathway Json?
+  competencyRequired Json?
+  effectiveDate     DateTime?
+  reviewDate        DateTime?
+  approvedById      String?
+  approvedByName    String?
+  attachments       Json?
+  isActive          Boolean     @default(true)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([communityId])
+  @@index([category])
+  @@index([status])
+}
+
+model Competency {
+  id             String    @id @default(uuid())
+  communityId    String
+  community      Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  name           String
+  category       String?
+  description    String?
+  isRequired     Boolean   @default(false)
+  validityMonths Int?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  staffCompetencies StaffCompetency[]
+
+  @@index([communityId])
+  @@index([category])
+}
+
+model StaffCompetency {
+  id             String    @id @default(uuid())
+  staffId        String
+  staff          Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  competencyId   String
+  competency     Competency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+  communityId    String
+  community      Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  verified       Boolean   @default(false)
+  verifiedById   String?
+  verifiedAt     DateTime?
+  expiryDate     DateTime?
+  trainingHours  Float?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([staffId])
+  @@index([competencyId])
+  @@index([expiryDate])
+  @@unique([staffId, competencyId])
+}
+
+// ============================================================================
+// V2.1 — QUALITY SCORECARDS & KPIs
+// ============================================================================
+
+model ResidentQualityScore {
+  id              String    @id @default(uuid())
+  residentId      String
+  resident        Resident  @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  communityId     String
+  community       Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  periodStart     DateTime
+  periodEnd       DateTime
+  periodType      QualityPeriodType
+
+  careCompletionScore      Float?
+  medicationComplianceScore Float?
+  nutritionScore           Float?
+  hydrationScore           Float?
+  mobilityScore            Float?
+  engagementScore          Float?
+  riskManagementScore      Float?
+
+  overallScore     Float
+  acuityAdjusted   Float?
+  tasksScheduled   Int       @default(0)
+  tasksCompleted   Int       @default(0)
+  medsScheduled    Int       @default(0)
+  medsTaken        Int       @default(0)
+  incidentsCount   Int       @default(0)
+  observationsCount Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([residentId])
+  @@index([communityId])
+  @@index([periodType])
+}
+
+model CommunityQualityDashboard {
+  id          String    @id @default(uuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  snapshotDate DateTime
+
+  documentationCompletionRate Float?
+  lateEntryRate               Float?
+  carePlanReviewCompliance    Float?
+  incidentClosureRate         Float?
+  incidentRate                Float?
+  fallRate                    Float?
+  medicationErrorRate         Float?
+  staffingUtilization         Float?
+  overtimeRate                Float?
+  competencyCompliance        Float?
+  averageResidentQualityScore Float?
+  weightLossRate              Float?
+  pressureInjuryRate          Float?
+  taskCompletionRate          Float?
+  callBellResponseTime        Float?
+  occupancyRate               Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([communityId])
+  @@index([snapshotDate])
+}
+
+model KpiRecord {
+  id          String    @id @default(uuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  category    KpiCategory
+  name        String
+  value       Float
+  unit        String?
+  target      Float?
+  delta       Float?
+  deltaDirection String?
+  period      String    @default("MONTHLY")
+  periodStart DateTime
+  periodEnd   DateTime
+  trend       Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([communityId])
+  @@index([category])
+  @@index([period])
+  @@index([communityId, category, periodStart])
+}
+
+// ============================================================================
+// V2.1 — AUDIT LOG & OBSERVATIONS
+// ============================================================================
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  communityId String?
+  actorId     String?
+  actorName   String
+  actorRole   String
+  action      String
+  entityType  String
+  entityId    String
+  before      Json?
+  after       Json?
+  ipAddress   String?
+  userAgent   String?
+  sessionId   String?
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  @@index([communityId])
+  @@index([actorId])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model Observation {
+  id              String          @id @default(uuid())
+  residentId      String
+  resident        Resident        @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  communityId     String
+  community       Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  observationType ObservationType
+  category        String?
+  value           String
+  numericValue    Float?
+  unit            String?
+  severity        String?
+  notes           String?
+  observedById    String?
+  observedByName  String?
+  taskLink        String?
+  medicationLogLink String?
+  vitalsLogLink   String?
+  source          String          @default("MANUAL")
+  observedAt      DateTime
+  createdAt       DateTime        @default(now())
+
+  @@index([residentId])
+  @@index([communityId])
+  @@index([observationType])
+  @@index([residentId, observationType, observedAt])
+}
+
+// ============================================================================
+// V2.1 — STAFFING INTELLIGENCE
+// ============================================================================
+
+model StaffingPlan {
+  id               String            @id @default(uuid())
+  communityId      String
+  community        Community         @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  unitId           String?
+  unit             Unit?             @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  planDate         DateTime
+  shiftType        ShiftType
+
+  totalCareMinutes Int               @default(0)
+  requiredFTE      Float             @default(0)
+  requiredStaff    Int               @default(0)
+  scheduledStaff   Int               @default(0)
+  scheduledHours   Float             @default(0)
+  availableStaff   Int               @default(0)
+  coverageGap      Int               @default(0)
+  coverageRatio    Float             @default(0)
+  overtimeRisk     OvertimeRisk      @default(NONE)
+
+  assignments      Json?
+  status           StaffingPlanStatus @default(PLANNED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([communityId])
+  @@index([unitId])
+  @@index([planDate])
+  @@index([communityId, planDate, shiftType])
+}
+
+// ============================================================================
+// LCMS MODULE 1 — VACCINATION RECORDS
+// ============================================================================
+
+model Vaccination {
+  id            String   @id @default(uuid())
+  residentId    String
+  resident      Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  vaccineName   String
+  vaccineType   String?  // COVID, INFLUENZA, PNEUMONIA, HEPATITIS, TDAP, OTHER
+  manufacturer  String?
+  lotNumber     String?
+  doseNumber    Int?
+  totalDoses    Int?
+  dateGiven     DateTime
+  site          String?  // Left arm, Right arm, etc.
+  administeredBy String?
+  expirationDate DateTime?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([residentId])
+  @@index([vaccineType])
+  @@index([dateGiven])
+}
+
+// ============================================================================
+// LCMS MODULE 1 — RESIDENT DOCUMENTS
+// ============================================================================
+
+model ResidentDocument {
+  id            String   @id @default(uuid())
+  residentId    String
+  resident      Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  documentType  String   // CONSENT_FORM, INSURANCE, IDENTIFICATION, PHYSICIAN_ORDER, ADVANCE_DIRECTIVE, OTHER
+  title         String
+  fileName      String?
+  fileUrl       String?
+  fileContent   String?  @db.Text
+  uploadedById  String?
+  uploadedByName String?
+  isConfidential Boolean @default(false)
+  expiresAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([residentId])
+  @@index([documentType])
+  @@index([isConfidential])
+}
+
+// ============================================================================
+// LCMS MODULE 4 — ELIMINATION TRACKING
+// ============================================================================
+
+model EliminationLog {
+  id              String           @id @default(uuid())
+  residentId      String
+  resident        Resident         @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  type            EliminationType
+  time            DateTime
+  continenceStatus ContinenceStatus @default(CONTINENT)
+  volume          String?          // NORMAL, HIGH, LOW, NONE
+  consistency     String?          // For bowel: NORMAL, LIQUID, SOLID, HARD, BLOODY
+  color           String?          // For urine: NORMAL, DARK, RED, CLOUDY
+  odor            String?
+  assistanceNeeded Boolean         @default(false)
+  notes           String?
+  observedById    String?
+  observedByName  String?
+  createdAt       DateTime         @default(now())
+
+  @@index([residentId])
+  @@index([type])
+  @@index([time])
+  @@index([residentId, type, time])
+}
+
+// ============================================================================
+// LCMS MODULE 4 — PAIN ASSESSMENT
+// ============================================================================
+
+model PainAssessment {
+  id            String     @id @default(uuid())
+  residentId    String
+  resident      Resident   @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  painScale     PainScale
+  numericScore  Int?       // 0-10 numeric scale
+  location      String?    // Head, Chest, Abdomen, Back, Left Arm, Right Arm, etc.
+  type          String?    // SHARP, DULL, ACHING, BURNING, THROBBING, CRAMPING
+  duration      String?    // CONSTANT, INTERMITTENT, WITH_MOVEMENT
+  triggers      String?    // What makes it worse
+  reliefActions String?    // What makes it better
+  medicationGiven String?
+  medicationResponse String?
+  notes         String?
+  assessedById  String?
+  assessedByName String?
+  assessedAt    DateTime   @default(now())
+  createdAt     DateTime   @default(now())
+
+  @@index([residentId])
+  @@index([painScale])
+  @@index([assessedAt])
+  @@index([residentId, assessedAt])
+}
+
+// ============================================================================
+// LCMS MODULE 4 — WOUND CARE
+// ============================================================================
+
+model WoundCare {
+  id            String     @id @default(uuid())
+  residentId    String
+  resident      Resident   @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  woundType     String     // PRESSURE_ULCER, SURGICAL, SKIN_TEAR, IV_SITE, OTHER
+  location      String
+  stage         WoundStage @default(EPISODE)
+  sizeLength    Float?     // cm
+  sizeWidth     Float?     // cm
+  sizeDepth     Float?     // cm
+  woundBed      String?    // GRANULATION, SLUFF, ESCHAR, MUSCLE, BONE
+  exudateType   String?    // NONE, SEROUS, SANGUINEOUS, PURULENT
+  exudateAmount String?    // NONE, SCANT, SMALL, MODERATE, LARGE
+  surroundingSkin String?  // INTACT, REDNESS, SWELLING, MACERATED
+  odor          Boolean    @default(false)
+  painLevel     Int?       // 0-10
+  treatment     String?    @db.Text
+  dressingType  String?
+  dressingChangeFrequency String?
+  photoUrl      String?
+  healedDate    DateTime?
+  assessedById  String?
+  assessedByName String?
+  assessedAt    DateTime   @default(now())
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([residentId])
+  @@index([woundType])
+  @@index([stage])
+  @@index([assessedAt])
+}
+
+// ============================================================================
+// LCMS MODULE 4 — SLEEP LOG
+// ============================================================================
+
+model SleepLog {
+  id            String       @id @default(uuid())
+  residentId    String
+  resident      Resident     @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  date          DateTime
+  bedtime       DateTime
+  wakeTime      DateTime?
+  totalHours    Float?
+  quality       SleepQuality @default(FAIR)
+  interruptions Int?         @default(0)
+  interruptionReason String?
+  medicationUsed String?
+  notes         String?
+  observedById  String?
+  observedByName String?
+  createdAt     DateTime     @default(now())
+
+  @@index([residentId])
+  @@index([date])
+  @@index([quality])
+  @@index([residentId, date])
+}
+
+// ============================================================================
+// LCMS MODULE 4 — MOBILITY LOG
+// ============================================================================
+
+model MobilityLog {
+  id            String       @id @default(uuid())
+  residentId    String
+  resident      Resident     @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  type          MobilityType
+  startTime     DateTime
+  endTime       DateTime?
+  duration      Int?         // minutes
+  distance      String?      // e.g., "100 feet", "2 laps"
+  assistanceLevel String?    // INDEPENDENT, MINIMAL, MODERATE, MAXIMAL, DEPENDENT
+  assistiveDevice String?    // WALKER, WHEELCHAIR, CANE, NONE
+  fallOccurred  Boolean      @default(false)
+  notes         String?
+  observedById  String?
+  observedByName String?
+  createdAt     DateTime     @default(now())
+
+  @@index([residentId])
+  @@index([type])
+  @@index([startTime])
+  @@index([residentId, type, startTime])
+}
+
+// ============================================================================
+// LCMS MODULE 3 — FORMAL CARE PLAN
+// ============================================================================
+
+model CarePlan {
+  id              String             @id @default(uuid())
+  residentId      String
+  resident        Resident           @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  title           String
+  status          CarePlanStatus     @default(DRAFT)
+  startDate       DateTime
+  reviewDate      DateTime?
+  reviewFrequency CarePlanReviewFrequency @default(MONTHLY)
+  nextReviewDate  DateTime?
+  careGoals       String?            @db.Text
+  interventions   String?            @db.Text
+  responsibleRoles String?           // JSON array of role assignments
+  assignedStaff   String?            // JSON array of staff assignments
+  notes           String?            @db.Text
+  createdById     String?
+  createdByName   String?
+  approvedById    String?
+  approvedByName  String?
+  approvedAt      DateTime?
+  discontinuedReason String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  carePlanItems   CarePlanItem[]
+  reviews         CarePlanReview[]
+
+  @@index([residentId])
+  @@index([status])
+  @@index([startDate])
+  @@index([nextReviewDate])
+  @@index([residentId, status])
+}
+
+model CarePlanItem {
+  id            String     @id @default(uuid())
+  carePlanId    String
+  carePlan      CarePlan   @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
+  category      String     // GOAL, INTERVENTION, RESPONSIBILITY, REVIEW_NOTE
+  title         String
+  description   String?
+  targetDate    DateTime?
+  status        String     @default("ACTIVE") // ACTIVE, COMPLETED, DISCONTINUED
+  completedAt   DateTime?
+  sortOrder     Int        @default(0)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([carePlanId])
+  @@index([category])
+  @@index([status])
+}
+
+model CarePlanReview {
+  id            String     @id @default(uuid())
+  carePlanId    String
+  carePlan      CarePlan   @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
+  reviewDate    DateTime   @default(now())
+  reviewerName  String
+  reviewerRole  String
+  summary       String     @db.Text
+  changesMade   String?    @db.Text
+  nextReviewDate DateTime?
+  createdAt     DateTime   @default(now())
+
+  @@index([carePlanId])
+  @@index([reviewDate])
+}
+
+// ============================================================================
+// LCMS MODULE 7 — HOSPITAL REFERRALS
+// ============================================================================
+
+model HospitalReferral {
+  id              String         @id @default(uuid())
+  residentId      String
+  resident        Resident       @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  facilityName    String
+  facilityAddress String?
+  facilityPhone   String?
+  reason          String         @db.Text
+  urgency         String         @default("ROUTINE") // ROUTINE, URGENT, EMERGENCY
+  status          ReferralStatus @default(REQUESTED)
+  referredById    String?
+  referredByName  String?
+  referredByRole  String?
+  approvedById    String?
+  approvedByName  String?
+  approvedAt      DateTime?
+  scheduledDate   DateTime?
+  transportArranged Boolean      @default(false)
+  transportRequestId String?
+  outcome         String?        @db.Text
+  followUpRequired Boolean      @default(false)
+  completedAt     DateTime?
+  notes           String?        @db.Text
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([residentId])
+  @@index([status])
+  @@index([urgency])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// LCMS MODULE 7 — FOLLOW-UP TRACKING
+// ============================================================================
+
+model FollowUp {
+  id              String          @id @default(uuid())
+  residentId      String
+  resident        Resident        @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?         @db.Text
+  type            String          // MEDICAL, CARE_PLAN, MEDICATION, INCIDENT, FAMILY, OTHER
+  priority        String          @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  status          FollowUpStatus  @default(PENDING)
+  dueDate         DateTime
+  completedDate   DateTime?
+  assignedToId    String?
+  assignedToName  String?
+  assignedToRole  String?
+  outcome         String?         @db.Text
+  relatedType     String?         // INCIDENT, MEDICATION, CARE_PLAN, etc.
+  relatedId       String?
+  notes           String?         @db.Text
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([residentId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([type])
+  @@index([residentId, status])
+}
+
+// ============================================================================
+// LCMS MODULE 8 — CARE TIMELINE
+// ============================================================================
+
+model CareTimelineEntry {
+  id            String   @id @default(uuid())
+  residentId    String
+  resident      Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  entryType     String   // ADMISSION, ASSESSMENT, INCIDENT, MEDICATION, CARE_UPDATE, DISCHARGE, TRANSFER, DEATH, NOTE
+  title         String
+  description   String?  @db.Text
+  severity      String?  // INFO, WARNING, CRITICAL
+  relatedType   String?  // Model name that this entry relates to
+  relatedId     String?  // ID of the related record
+  entryDate     DateTime @default(now())
+  enteredById   String?
+  enteredByName String?
+  isImportant   Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([residentId])
+  @@index([entryType])
+  @@index([entryDate])
+  @@index([residentId, entryType, entryDate])
+  @@index([isImportant])
+}
+
+// ============================================================================
+// LCMS MODULE 8 — REPORTS
+// ============================================================================
+
+model GeneratedReport {
+  id            String     @id @default(uuid())
+  reportType    ReportType
+  title         String
+  description   String?
+  format        ReportFormat @default(TABLE)
+  parameters    Json?      // filters, date range, etc.
+  data          Json       // the actual report data
+  summary       String?    @db.Text
+  communityId   String?
+  generatedById String?
+  generatedByName String?
+  isScheduled   Boolean    @default(false)
+  scheduleCron  String?
+  lastGenerated DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([reportType])
+  @@index([communityId])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// LCMS MODULE 8 — LOW STOCK ALERTS
+// ============================================================================
+
+model InventoryAlert {
+  id            String   @id @default(uuid())
+  inventoryItemId String
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  itemName      String
+  currentQuantity Int
+  minimumStock  Int
+  alertType     String   @default("LOW_STOCK") // LOW_STOCK, EXPIRING, EXPIRED, REORDER
+  message       String
+  acknowledged  Boolean  @default(false)
+  acknowledgedById String?
+  acknowledgedAt DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([inventoryItemId])
+  @@index([alertType])
+  @@index([acknowledged])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// LCMS MODULE 6 — MEDICATION HISTORY (extends MedicationLog)
+// ============================================================================
+
+model MedicationAdministration {
+  id            String     @id @default(uuid())
+  medicationId  String
+  medication    Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  residentId    String
+  resident      Resident   @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  status        MARStatus  @default(SCHEDULED)
+  scheduledTime DateTime
+  actualTime    DateTime?
+  dosage        String?
+  route         String?
+  reasonForRefusal String?
+  heldReason    String?
+  witnessId     String?
+  witnessName   String?
+  notes         String?
+  recordedById  String?
+  recordedByName String?
+  createdAt     DateTime   @default(now())
+
+  @@index([medicationId])
+  @@index([residentId])
+  @@index([status])
+  @@index([scheduledTime])
+  @@index([residentId, scheduledTime])
+}
+
+// ============================================================================
+// LCMS MODULE 6 — MEDICATION CHANGE LOG
+// ============================================================================
+
+model MedicationChangeLog {
+  id            String     @id @default(uuid())
+  medicationId  String
+  medication    Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  changeType    String     // STARTED, DOSE_CHANGED, FREQUENCY_CHANGED, ROUTE_CHANGED, DISCONTINUED, RESTARTED
+  previousValue String?
+  newValue      String?
+  reason        String?
+  changedById   String?
+  changedByName String?
+  changedAt     DateTime   @default(now())
+
+  @@index([medicationId])
+  @@index([changeType])
+  @@index([changedAt])
 }
 
 // ============================================================================
@@ -682,14 +2124,20 @@ model InventoryItem {
   minimumStock Int                @default(5)
   location     String?
   supplier     String?
+  batchNumber  String?
   expiryDate   DateTime?
+  unitCost     Float?
+  reorderPoint Int?
+  lastRestocked DateTime?
   notes        String?
+  alerts       InventoryAlert[]
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
   @@index([category])
   @@index([itemName])
   @@index([expiryDate])
+  @@index([batchNumber])
 }
 
 // ============================================================================
@@ -1669,4 +3117,323 @@ model Escalation {
   @@index([priority])
   @@index([assignedToRole])
   @@index([createdAt])
+}
+
+// ============================================================
+// LCMS MODULE 4 — COMPREHENSIVE DAILY ROUNDS
+// ============================================================
+
+enum Shift {
+  DAY
+  EVENING
+  NIGHT
+}
+
+enum DailyRoundStatus {
+  IN_PROGRESS
+  COMPLETED
+  REVIEWED
+}
+
+enum EdemaSeverity {
+  NONE
+  TRACE
+  MILD
+  MODERATE
+  SEVERE
+  DEEP
+}
+
+enum MoodState {
+  CALM
+  HAPPY
+  SAD
+  ANXIOUS
+  AGITATED
+  CONFUSED
+  AGGRESSIVE
+  WITHDRAWN
+  COOPERATIVE
+  APATHETIC
+}
+
+enum ConcernCategory {
+  PHYSICAL
+  BEHAVIORAL
+  SKIN
+  NUTRITION
+  HYDRATION
+  MOBILITY
+  PAIN
+  SLEEP
+  MEDICATION
+  OTHER
+}
+
+enum ConcernSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+enum AppetiteLevel {
+  GOOD
+  FAIR
+  POOR
+  REFUSED
+  NPO
+}
+
+enum AssistanceLevel {
+  INDEPENDENT
+  SUPERVISED
+  MINIMAL
+  MODERATE
+  MAXIMAL
+  DEPENDENT
+}
+
+model DailyRound {
+  id              String            @id @default(uuid())
+  residentId      String
+  resident        Resident          @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  caregiverId     String?
+  caregiverName   String?
+  shift           Shift
+  roundDate       DateTime          @db.Date
+  startTime       DateTime          @default(now())
+  endTime         DateTime?
+  status          DailyRoundStatus  @default(IN_PROGRESS)
+  generalNotes    String?           @db.Text
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  bowelRecords    BowelRecord[]
+  urineRecords    UrineRecord[]
+  edemaRecords    EdemaRecord[]
+  concerns        ConcernRecord[]
+  painRecords     PainRecord[]
+  moodRecords     MoodRecord[]
+  sleepRecord     SleepRecord?
+  mobilityRecords MobilityRecord[]
+  mealRecords     MealRecord[]
+  vitalSigns      VitalSigns[]
+
+  @@index([residentId])
+  @@index([roundDate])
+  @@index([shift])
+  @@index([status])
+  @@index([residentId, roundDate, shift])
+}
+
+model BowelRecord {
+  id              String     @id @default(uuid())
+  dailyRoundId    String
+  dailyRound      DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
+  time            DateTime
+  bristolType     Int?
+  consistency     String?
+  color           String?
+  amount          String?
+  hasMucus        Boolean    @default(false)
+  hasBlood        Boolean    @default(false)
+  odor            String?
+  containment     String?
+  notes           String?
+  createdAt       DateTime   @default(now())
+
+  @@index([dailyRoundId])
+  @@index([time])
+}
+
+model UrineRecord {
+  id              String     @id @default(uuid())
+  dailyRoundId    String
+  dailyRound      DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
+  time            DateTime
+  color           String?
+  clarity         String?
+  volume          String?
+  estimatedMl     Int?
+  hasBlood        Boolean    @default(false)
+  odor            String?
+  urgency         String?
+  containment     String?
+  outputMl        Int?
+  notes           String?
+  createdAt       DateTime   @default(now())
+
+  @@index([dailyRoundId])
+  @@index([time])
+}
+
+model EdemaRecord {
+  id              String     @id @default(uuid())
+  dailyRoundId    String
+  dailyRound      DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
+  time            DateTime
+  location        String
+  severity        EdemaSeverity
+  pitting         Boolean    @default(false)
+  skinColor       String?
+  skinTemperature String?
+  notes           String?
+  createdAt       DateTime   @default(now())
+
+  @@index([dailyRoundId])
+  @@index([location])
+}
+
+model ConcernRecord {
+  id              String          @id @default(uuid())
+  dailyRoundId    String
+  dailyRound      DailyRound      @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
+  time            DateTime
+  category        ConcernCategory
+  description     String
+  severity        ConcernSeverity
+  status          String          @default("OPEN")
+  actionTaken     String?
+  escalatedTo     String?
+  createdAt       DateTime        @default(now())
+
+  @@index([dailyRoundId])
+  @@index([category])
+  @@index([severity])
+}
+
+model PainRecord {
+  id                  String     @id @default(uuid())
+  dailyRoundId        String
+  dailyRound          DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
+  time                DateTime
+  location            String
+  score               Int
+  type                String?
+  duration            String?
+  triggers            String?
+  reliefActions       String?
+  medicationGiven     String?
+  medicationResponse  String?
+  notes               String?
+  createdAt           DateTime   @default(now())
+
+  @@index([dailyRoundId])
+  @@index([score])
+}
+
+model MoodRecord {
+  id               String     @id @default(uuid())
+  dailyRoundId     String
+  dailyRound       DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
+  time             DateTime
+  mood             MoodState
+  behaviorNotes    String?
+  socialEngagement String?
+  cooperation      String?
+  communication    String?
+  triggers         String?
+  interventions    String?
+  notes            String?
+  createdAt        DateTime   @default(now())
+
+  @@index([dailyRoundId])
+  @@index([mood])
+}
+
+model SleepRecord {
+  id                   String     @id @default(uuid())
+  dailyRoundId         String     @unique
+  dailyRound           DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
+  bedtime              DateTime?
+  wakeTime             DateTime?
+  totalHours           Float?
+  quality              SleepQuality
+  interruptions        Int        @default(0)
+  interruptionReason   String?
+  naps                 Int        @default(0)
+  napDuration          String?
+  medicationUsed       String?
+  positionalChanges    String?
+  notes                String?
+  createdAt            DateTime   @default(now())
+
+  @@index([dailyRoundId])
+  @@index([quality])
+}
+
+model MobilityRecord {
+  id                String     @id @default(uuid())
+  dailyRoundId      String
+  dailyRound        DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
+  time              DateTime
+  activityType      String
+  assistanceLevel   AssistanceLevel
+  assistiveDevice   String?
+  durationMinutes   Int?
+  distance          String?
+  gaitPattern       String?
+  fallOccurred      Boolean    @default(false)
+  fallCircumstances String?
+  transferFrom      String?
+  transferTo        String?
+  notes             String?
+  createdAt         DateTime   @default(now())
+
+  @@index([dailyRoundId])
+  @@index([activityType])
+  @@index([fallOccurred])
+}
+
+model MealRecord {
+  id              String     @id @default(uuid())
+  dailyRoundId    String
+  dailyRound      DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
+  time            DateTime
+  mealType        MealType
+  appetite        AppetiteLevel
+  intakeLevel     String
+  fluidIntake     String?
+  fluidAmountMl   Int?
+  foodRefusals    String?
+  textureDiet     String?
+  supplements     String?
+  feedingAssist   String?
+  chokingRisk     Boolean    @default(false)
+  notes           String?
+  createdAt       DateTime   @default(now())
+
+  @@index([dailyRoundId])
+  @@index([mealType])
+}
+
+model VitalSigns {
+  id              String     @id @default(uuid())
+  dailyRoundId    String
+  dailyRound      DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
+  time            DateTime
+  systolic        Int?
+  diastolic       Int?
+  heartRate       Int?
+  temperature     Float?
+  temperatureUnit String     @default("F")
+  respRate        Int?
+  spo2            Int?
+  bloodSugarLevel Int?
+  weight          Float?
+  weightUnit      String     @default("lbs")
+  painScore       Int?
+  notes           String?
+  createdAt       DateTime   @default(now())
+
+  @@index([dailyRoundId])
+  @@index([time])
 }

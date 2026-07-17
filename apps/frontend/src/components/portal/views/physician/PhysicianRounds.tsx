@@ -264,7 +264,7 @@ export default function PhysicianRounds({ clinicianRole = "PHYSICIAN" }: { clini
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <ClipboardList className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Patient Rounds
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -320,7 +320,7 @@ export default function PhysicianRounds({ clinicianRole = "PHYSICIAN" }: { clini
             <div key={p.id} className={`bg-white rounded-lg border transition hover:shadow-md overflow-hidden ${p.openAlerts > 0 ? "border-red-200" : "border-gray-200"}`}>
               <div className={`px-4 py-3 flex items-center justify-between gap-4 ${p.openAlerts > 0 ? "bg-red-50" : "bg-gray-50"}`}>
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-500 flex items-center justify-center text-black font-bold flex-shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-black font-bold flex-shrink-0">
                     {p.name.charAt(0)}
                   </div>
                   <div className="min-w-0">

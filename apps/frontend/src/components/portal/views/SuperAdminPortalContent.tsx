@@ -4,13 +4,30 @@ import LandingCustomizerContent from "@/components/portal/views/LandingCustomize
 import SuperAdminDashboard from "@/components/portal/views/SuperAdminDashboard";
 import AIAssistantContent from "@/components/portal/ai/AIAssistantContent";
 import AdmissionsContent from "@/components/portal/views/AdmissionsContent";
-import { Trash2, Search, Eye, Edit, X, ShieldCheck, ToggleLeft, ToggleRight, CheckSquare, Square } from "lucide-react";
-import { useState, useMemo, useCallback, useEffect } from "react";
+import ResidentRegistration from "@/components/portal/views/ResidentRegistration";
+import FacilityResidents from "@/components/portal/views/FacilityResidents";
+import PhysicianCarePlans from "@/components/portal/views/physician/PhysicianCarePlans";
+import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
+import FacilityUnifiedView from "@/components/portal/views/FacilityUnifiedView";
+import FacilityInventory from "@/components/portal/views/FacilityInventory";
+import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
+import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
+import CarePlanBoard from "@/components/portal/views/clinical/CarePlanBoard";
+import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
+import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
+import MARBoard from "@/components/portal/views/clinical/MARBoard";
+import AuditLogViewer from "@/components/portal/views/clinical/AuditLogViewer";
+import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
+import InventoryAlertsPanel from "@/components/portal/views/clinical/InventoryAlertsPanel";
+import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
+import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
+import FeatureMatrixDashboard from "@/components/portal/views/superadmin/FeatureMatrixDashboard";
+import { Trash2, Search, Eye, Edit, X } from "lucide-react";
+import { useState, useMemo } from "react";
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptStaff } from "@/lib/adapters";
 import { updateRecord, deleteRecord } from "@/lib/api";
-import { ROLES, type Role, GLOBAL_FEATURES } from "@/constants/roleConfig";
 
 interface SuperAdminPortalContentProps {
   tab: string;
@@ -181,6 +198,10 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     return <AdmissionsContent />;
   }
 
+  if (tab === "registration") {
+    return <ResidentRegistration />;
+  }
+
   if (tab === "appearance") {
     return <LandingCustomizerContent />;
   }
@@ -189,8 +210,54 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     return <AIAssistantContent />;
   }
 
+  // Combined view: the Feature Matrix dashboard now hosts both the System
+  // Overview and the Access Control (portal) matrix as tabs. Both legacy routes
+  // resolve to it, defaulting to the relevant tab.
   if (tab === "matrix") {
-    return <PortalMatrixEditor />;
+    return <FeatureMatrixDashboard initialTab="matrix" />;
+  }
+
+  if (tab === "featurematrix") {
+    return <FeatureMatrixDashboard initialTab="overview" />;
+  }
+
+  if (tab === "dailyrounds") {
+    return <DailyRoundsBoard clinicianRole="FACILITY_ADMIN" />;
+  }
+
+  // Core LCMS Modules Aligned
+  if (tab === "records") {
+    return <FacilityResidents />;
+  }
+  if (tab === "rounds") {
+    return <AssessmentAcuityBoard clinicianRole="FACILITY_ADMIN" />;
+  }
+  if (tab === "careplans") {
+    return <CarePlanBoard />;
+  }
+  if (tab === "tasks") {
+    return <DailyDocumentation clinicianRole="FACILITY_ADMIN" />;
+  }
+  if (tab === "reports") {
+    return <ClinicalReports />;
+  }
+  if (tab === "medications") {
+    return <MARBoard />;
+  }
+  if (tab === "escalations") {
+    return <EscalationsBoard role="FACILITY_ADMIN" />;
+  }
+  if (tab === "vaccinations") {
+    return <VaccinationTracker />;
+  }
+  if (tab === "documents") {
+    return <ResidentDocuments />;
+  }
+  if (tab === "auditlog") {
+    return <AuditLogViewer />;
+  }
+  if (tab === "inventory-alerts") {
+    return <InventoryAlertsPanel />;
   }
 
   if (tab === "staff") {
@@ -198,7 +265,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
               Staff Registry
             </h1>
             <p className="text-gray-600">Manage facility staff members, positions, and status</p>
@@ -237,7 +304,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
         {loading && staff.length === 0 ? (
           <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
             <div className="inline-block w-6 h-6 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin mb-3" />
-            <p>Loading staff…</p>
+            <p>Loading staffâ€¦</p>
           </div>
         ) : (
         <>
@@ -281,7 +348,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                           {staff.avatarUrl ? (
                             <img src={staff.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-500 flex items-center justify-center text-black font-bold text-sm">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-black font-bold text-sm">
                               {staff.name.charAt(0)}
                             </div>
                           )}
@@ -360,7 +427,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                     {staff.avatarUrl ? (
                       <img src={staff.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover mt-0.5" />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-500 flex items-center justify-center text-black font-bold text-sm mt-0.5">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-black font-bold text-sm mt-0.5">
                         {staff.name.charAt(0)}
                       </div>
                     )}
@@ -419,7 +486,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
         {/* Results Summary */}
         <div className="text-sm text-gray-600">
           Showing {filteredStaff.length} of {staff.length} staff members
-          {selectedStaff.size > 0 && ` • ${selectedStaff.size} selected`}
+          {selectedStaff.size > 0 && ` â€¢ ${selectedStaff.size} selected`}
         </div>
         </>
         )}
@@ -445,7 +512,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                   {viewingStaff.avatarUrl ? (
                     <img src={viewingStaff.avatarUrl} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-gray-200" />
                   ) : (
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-500 flex items-center justify-center text-black font-bold text-2xl">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-black font-bold text-2xl">
                       {viewingStaff.name.charAt(0)}
                     </div>
                   )}
@@ -537,7 +604,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                     startEditing(viewingStaff);
                     setViewingStaff(null);
                   }}
-                  className="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
+                  className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
                 >
                   Edit Staff Member
                 </button>
@@ -551,7 +618,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
               {/* Edit Modal Header */}
-              <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-6 flex items-center justify-between border-b border-yellow-600">
+              <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-6 flex items-center justify-between border-b border-yellow-600">
                 <h2 className="text-2xl font-bold">Edit Staff Member</h2>
                 <button
                   onClick={() => setEditingStaff(null)}
@@ -646,7 +713,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                         onClick={() => document.getElementById("avatar-upload")?.click()}
                         className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-sm transition disabled:opacity-50"
                       >
-                        {uploading ? "Uploading…" : "Upload Photo"}
+                        {uploading ? "Uploadingâ€¦" : "Upload Photo"}
                       </button>
                       {editForm.avatarUrl && (
                         <button
@@ -688,7 +755,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                       value={editForm.experience}
                       onChange={(e) => setEditForm({ ...editForm, experience: e.target.value })}
                       rows={3}
-                      placeholder="e.g. 10 years as registered nurse, specialized in geriatric care…"
+                      placeholder="e.g. 10 years as registered nurse, specialized in geriatric careâ€¦"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none resize-none"
                     />
                   </div>
@@ -717,7 +784,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                       onClick={() => document.getElementById("doc-upload")?.click()}
                       className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg text-sm transition disabled:opacity-50"
                     >
-                      {uploading ? "Uploading…" : "Upload Document"}
+                      {uploading ? "Uploadingâ€¦" : "Upload Document"}
                     </button>
                     <input
                       id="doc-upload"
@@ -759,7 +826,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                 </button>
                 <button
                   onClick={handleSaveEdit}
-                  className="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
+                  className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
                 >
                   Save Changes
                 </button>
@@ -772,351 +839,6 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   }
 
 
-  // Default: Admin Dashboard tab — platform governance view unique to this role.
+  // Default: Admin Dashboard tab â€” platform governance view unique to this role.
   return <SuperAdminDashboard />;
-}
-
-/* ─── Portal Matrix Editor ─────────────────────────────────────────────── */
-
-/** All roles we want to configure. */
-const ALL_ROLES: Role[] = [
-  "SUPERADMIN",
-  "FACILITY_ADMIN",
-  "PHYSICIAN",
-  "NURSE",
-  "CAREGIVER",
-  "FAMILY",
-  "RESIDENT",
-  "FLEET_MANAGEMENT",
-  "DRIVER",
-];
-
-/** Friendly labels for the role keys. */
-const ROLE_LABELS: Record<Role, string> = {
-  SUPERADMIN: "Super Admin",
-  FACILITY_ADMIN: "Facility Admin",
-  PHYSICIAN: "Physician",
-  NURSE: "Head Nurse",
-  CAREGIVER: "Caregiver",
-  FAMILY: "Family Sponsor",
-  RESIDENT: "Resident",
-  FLEET_MANAGEMENT: "Fleet Manager",
-  DRIVER: "Transport Driver",
-};
-
-/** Colour accents per role row for the left badge. */
-const ROLE_COLORS: Record<Role, string> = {
-  SUPERADMIN: "from-yellow-400 to-yellow-600",
-  FACILITY_ADMIN: "from-blue-400 to-blue-600",
-  PHYSICIAN: "from-teal-400 to-teal-600",
-  NURSE: "from-pink-400 to-pink-600",
-  CAREGIVER: "from-green-400 to-green-600",
-  FAMILY: "from-purple-400 to-purple-600",
-  RESIDENT: "from-orange-400 to-orange-600",
-  FLEET_MANAGEMENT: "from-indigo-400 to-indigo-600",
-  DRIVER: "from-amber-400 to-amber-600",
-};
-
-type MatrixState = Record<string, Record<string, boolean>>;
-
-function PortalMatrixEditor() {
-  const { data: settingRows, refetch } = useLiveQuery<{
-    id: string;
-    value: string;
-  }>("app-settings", { tables: ["AppSetting"] });
-
-  // Build the unique superset of all feature names across all roles.
-  const allFeatures = useMemo(() => {
-    return Object.keys(GLOBAL_FEATURES);
-  }, []);
-
-  // Hydrate matrix from the database setting, defaulting native features to true, others to false.
-  const [matrix, setMatrix] = useState<MatrixState>(() => {
-    const stored = settingRows.find((s) => s.id === "portal_matrix")?.value;
-    const parsed: MatrixState = stored ? JSON.parse(stored) : {};
-    const state: MatrixState = {};
-    ALL_ROLES.forEach((r) => {
-      state[r] = {};
-      const roleFeatures = ROLES[r].sidebarLinks.map((l) => l.name);
-      Object.keys(GLOBAL_FEATURES).forEach((f) => {
-        state[r][f] = parsed[r]?.[f] ?? roleFeatures.includes(f);
-      });
-    });
-    return state;
-  });
-
-  // Track saving status.
-  const [savingStatus, setSavingStatus] = useState<"saved" | "saving" | "error">("saved");
-
-  // Keep local matrix state updated if the database changes externally, as long as we're not currently saving.
-  useEffect(() => {
-    const stored = settingRows.find((s) => s.id === "portal_matrix")?.value;
-    if (stored && savingStatus !== "saving") {
-      try {
-        const parsed: MatrixState = JSON.parse(stored);
-        const state: MatrixState = {};
-        ALL_ROLES.forEach((r) => {
-          state[r] = {};
-          const roleFeatures = ROLES[r].sidebarLinks.map((l) => l.name);
-          Object.keys(GLOBAL_FEATURES).forEach((f) => {
-            state[r][f] = parsed[r]?.[f] ?? roleFeatures.includes(f);
-          });
-        });
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setMatrix(state);
-      } catch (e) {
-        console.error("Failed to parse matrix setting:", e);
-      }
-    }
-  }, [settingRows, savingStatus]);
-
-  // Centralized real-time persistence helper.
-  const saveMatrix = async (nextMatrix: MatrixState) => {
-    setSavingStatus("saving");
-    try {
-      const { upsertRecord } = await import("@/lib/api");
-      await upsertRecord("app-settings", "portal_matrix", {
-        value: JSON.stringify(nextMatrix),
-      });
-      await refetch();
-      setSavingStatus("saved");
-    } catch (err) {
-      console.error("Realtime save failed:", err);
-      setSavingStatus("error");
-    }
-  };
-
-  const toggle = useCallback(
-    (role: string, feature: string) => {
-      setMatrix((prev) => {
-        const next = {
-          ...prev,
-          [role]: { ...prev[role], [feature]: !prev[role]?.[feature] },
-        };
-        saveMatrix(next);
-        return next;
-      });
-    },
-    [settingRows]
-  );
-
-  const toggleEntireRole = useCallback(
-    (role: string) => {
-      setMatrix((prev) => {
-        const allOn = Object.keys(GLOBAL_FEATURES).every((f) => prev[role]?.[f] === true);
-        const updated = { ...prev[role] };
-        Object.keys(GLOBAL_FEATURES).forEach((f) => {
-          updated[f] = !allOn;
-        });
-        const next = { ...prev, [role]: updated };
-        saveMatrix(next);
-        return next;
-      });
-    },
-    [settingRows]
-  );
-
-  const toggleEntireFeature = useCallback(
-    (feature: string) => {
-      setMatrix((prev) => {
-        const allOn = ALL_ROLES.every((r) => prev[r]?.[feature] === true);
-        const next = { ...prev };
-        ALL_ROLES.forEach((r) => {
-          next[r] = { ...next[r], [feature]: !allOn };
-        });
-        saveMatrix(next);
-        return next;
-      });
-    },
-    [settingRows]
-  );
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2">
-            Portal Feature Matrix
-          </h1>
-          <p className="text-gray-600">
-            Enable or disable sidebar modules per user role. Click any cell to sync changes instantly in real-time.
-          </p>
-        </div>
-        
-        {/* Realtime Status Badge */}
-        <div className="flex items-center gap-3 bg-white border border-gray-100 rounded-xl px-4 py-3.5 shadow-sm">
-          {savingStatus === "saving" && (
-            <>
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
-              </span>
-              <span className="text-sm font-semibold text-yellow-600">Syncing with Supabase...</span>
-            </>
-          )}
-          {savingStatus === "saved" && (
-            <>
-              <span className="relative flex h-3 w-3">
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500 animate-pulse"></span>
-              </span>
-              <span className="text-sm font-semibold text-green-600">Live Realtime Sync Active</span>
-            </>
-          )}
-          {savingStatus === "error" && (
-            <>
-              <span className="relative flex h-3 w-3">
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-              </span>
-              <span className="text-sm font-semibold text-red-600">Sync Error - Offline</span>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Legend */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap gap-6 items-center text-sm text-gray-600">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-yellow-500" />
-          <span>Click checkboxes to toggle module access per role</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <ToggleLeft className="w-4 h-4 text-gray-400" />
-          <span>Click role/feature headers to toggle entire row/column</span>
-        </div>
-      </div>
-
-      {/* Matrix Grid */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            {/* Column headers: features */}
-            <thead>
-              <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-                <th className="sticky left-0 z-10 bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider min-w-[180px]">
-                  Role / Module
-                </th>
-                {allFeatures.map((feature) => (
-                  <th
-                    key={feature}
-                    className="px-2 py-3 text-center min-w-[110px]"
-                  >
-                    <button
-                      onClick={() => toggleEntireFeature(feature)}
-                      className="text-xs font-bold text-gray-600 hover:text-yellow-600 transition-colors cursor-pointer flex flex-col items-center gap-1 mx-auto"
-                      title={`Toggle "${feature}" for all roles`}
-                    >
-                      <span className="leading-tight">{feature}</span>
-                      <ToggleRight className="w-3.5 h-3.5 text-gray-400" />
-                    </button>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-
-            <tbody>
-              {ALL_ROLES.map((role, idx) => {
-                const enabledCount = allFeatures.filter(
-                  (f) => matrix[role]?.[f] === true
-                ).length;
-
-                return (
-                  <tr
-                    key={role}
-                    className={`border-b border-gray-100 transition-colors hover:bg-yellow-50/40 ${
-                      idx % 2 === 0 ? "bg-white" : "bg-gray-50/50"
-                    }`}
-                  >
-                    {/* Role label cell */}
-                    <td className="sticky left-0 z-10 bg-inherit px-4 py-3">
-                      <button
-                        onClick={() => toggleEntireRole(role)}
-                        className="flex items-center gap-3 group cursor-pointer"
-                        title={`Toggle all modules for ${ROLE_LABELS[role]}`}
-                      >
-                        <div
-                          className={`w-9 h-9 rounded-lg bg-gradient-to-br ${ROLE_COLORS[role]} flex items-center justify-center text-white text-xs font-black shadow-sm group-hover:scale-110 transition-transform`}
-                        >
-                          {ROLE_LABELS[role].charAt(0)}
-                        </div>
-                        <div className="text-left">
-                          <div className="font-semibold text-gray-900 text-sm group-hover:text-yellow-700 transition-colors">
-                            {ROLE_LABELS[role]}
-                          </div>
-                          <div className="text-[11px] text-gray-400">
-                            {enabledCount}/{allFeatures.length} modules
-                          </div>
-                        </div>
-                      </button>
-                    </td>
-
-                    {/* Feature checkbox cells */}
-                    {allFeatures.map((feature) => {
-                      const isEnabled = matrix[role]?.[feature] === true;
-                      return (
-                        <td
-                          key={feature}
-                          className="px-2 py-3 text-center"
-                        >
-                          <button
-                            onClick={() => toggle(role, feature)}
-                            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
-                              isEnabled
-                                ? "bg-gradient-to-br from-green-400 to-green-600 text-white shadow-sm hover:shadow-md hover:scale-110"
-                                : "bg-gray-100 text-gray-300 hover:bg-gray-200 hover:scale-110"
-                            }`}
-                            title={`${isEnabled ? "Disable" : "Enable"} "${feature}" for ${ROLE_LABELS[role]}`}
-                          >
-                            {isEnabled ? (
-                              <CheckSquare className="w-4 h-4" />
-                            ) : (
-                              <Square className="w-4 h-4" />
-                            )}
-                          </button>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Summary Footer */}
-      <div className="bg-gradient-to-r from-gray-900 to-black rounded-xl p-6 text-white">
-        <h3 className="text-lg font-bold text-yellow-400 mb-3">Matrix Summary</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
-          {ALL_ROLES.map((role) => {
-            const enabledCount = allFeatures.filter(
-              (f) => matrix[role]?.[f] === true
-            ).length;
-            const pct = Math.round((enabledCount / allFeatures.length) * 100);
-            return (
-              <div
-                key={role}
-                className="bg-white/10 backdrop-blur-sm rounded-lg p-3 text-center"
-              >
-                <div
-                  className={`w-8 h-8 mx-auto mb-2 rounded-lg bg-gradient-to-br ${ROLE_COLORS[role]} flex items-center justify-center text-white text-xs font-bold`}
-                >
-                  {ROLE_LABELS[role].charAt(0)}
-                </div>
-                <div className="text-xs font-medium text-gray-300 truncate">
-                  {ROLE_LABELS[role]}
-                </div>
-                <div className="text-xl font-black text-yellow-400 mt-1">
-                  {pct}%
-                </div>
-                <div className="text-[10px] text-gray-500">
-                  {enabledCount}/{allFeatures.length}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
 }

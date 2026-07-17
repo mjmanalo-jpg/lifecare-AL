@@ -9,12 +9,23 @@ import NurseMedications from "@/components/portal/views/NurseMedications";
 import CaregiverReports from "@/components/portal/views/caregiver/CaregiverReports";
 import CaregiverCallBells from "@/components/portal/views/caregiver/CaregiverCallBells";
 import FacilityVitals from "@/components/portal/views/FacilityVitals";
-import PhysicianRounds from "@/components/portal/views/physician/PhysicianRounds";
 import PhysicianOrders from "@/components/portal/views/physician/PhysicianOrders";
 import PhysicianVitals from "@/components/portal/views/physician/PhysicianVitals";
 import ClinicalNotes from "@/components/portal/views/clinical/ClinicalNotes";
 import ClinicalMessages from "@/components/portal/views/clinical/ClinicalMessages";
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
+import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
+import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
+import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
+import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
+import CarePlanBoard from "@/components/portal/views/clinical/CarePlanBoard";
+import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
+import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
+import MARBoard from "@/components/portal/views/clinical/MARBoard";
+import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker";
+import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
+import AuditLogViewer from "@/components/portal/views/clinical/AuditLogViewer";
+import InventoryAlertsPanel from "@/components/portal/views/clinical/InventoryAlertsPanel";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptIncident } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
@@ -297,7 +308,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
             Incident Log
           </h1>
           <p className="text-gray-600">Track and manage resident incidents and safety events</p>
@@ -610,7 +621,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   // clinical toolset (rounds, orders, notes, vitals, secure messages), all live
   // and scoped to the NURSE role for authorship/attribution.
   if (tab === "rounds") {
-    return <PhysicianRounds clinicianRole="NURSE" />;
+    return <AssessmentAcuityBoard clinicianRole="NURSE" />;
   }
   if (tab === "orders") {
     return <PhysicianOrders />;
@@ -640,6 +651,40 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
 
   if (tab === "records") {
     return <NurseRecords />;
+  }
+
+  if (tab === "tasks") {
+    return <DailyDocumentation clinicianRole="NURSE" />;
+  }
+  if (tab === "dailyrounds") {
+    return <DailyRoundsBoard clinicianRole="NURSE" />;
+  }
+  if (tab === "taskboard") {
+    return <CaregiverTasks />;
+  }
+  if (tab === "careplans") {
+    return <CarePlanBoard />;
+  }
+  if (tab === "vaccinations") {
+    return <VaccinationTracker />;
+  }
+  if (tab === "documents") {
+    return <ResidentDocuments />;
+  }
+  if (tab === "mar") {
+    return <MARBoard />;
+  }
+  if (tab === "followups") {
+    return <FollowUpTracker />;
+  }
+  if (tab === "auditlog") {
+    return <AuditLogViewer />;
+  }
+  if (tab === "inventory-alerts") {
+    return <InventoryAlertsPanel />;
+  }
+  if (tab === "clinicalreports") {
+    return <ClinicalReports />;
   }
 
   // Default: Dashboard tab
@@ -749,7 +794,7 @@ function NurseMonitoringViewInner({
       {showVitals && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className={`bg-white rounded-xl shadow-2xl w-full ${resident ? "max-w-md" : "max-w-3xl"} max-h-[90vh] overflow-y-auto`}>
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
               <div className="flex items-center gap-2">
                 <Activity className="w-5 h-5" />
                 <h2 className="text-xl font-bold">
@@ -771,7 +816,7 @@ function NurseMonitoringViewInner({
   );
 }
 
-function NurseMonitoringView({
+export function NurseMonitoringView({
   monitoringFallAlert,
   handleMonitoringFallTriggered,
   setMonitoringFallAlert,

@@ -126,7 +126,7 @@ export default function AIAssistantContent() {
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [voice, setVoice] = useState("Kore"); // selected Google voice
-  const [engine, setEngine] = useState<"" | "gemini" | "browser">(""); // which TTS actually spoke
+  const [engine, setEngine] = useState<string>(""); // which TTS actually spoke
 
   // ── Knowledge base — live from Supabase/Prisma (realtime + polling) ──────
   const { data: docs, refetch: refetchDocs } = useLiveQuery<KnowledgeDoc>("knowledge-docs", {
@@ -227,7 +227,7 @@ export default function AIAssistantContent() {
         const res = await fetch("/api/ai-assistant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "tts", text, provider: "gemini", voiceId: voiceId ?? voice }),
+          body: JSON.stringify({ action: "tts", text, provider: "auto", voiceId: voiceId ?? voice }),
         });
         const data = await res.json();
         if (!data.fallback && data.audio) {
@@ -470,7 +470,7 @@ export default function AIAssistantContent() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2 flex items-center gap-2">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2 flex items-center gap-2">
             <Sparkles className="w-8 h-8 text-yellow-500" />
             AI Assistant
           </h1>
@@ -619,7 +619,7 @@ export default function AIAssistantContent() {
               <button
                 onClick={saveConfig}
                 disabled={savingConfig || !configDirty}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-br from-yellow-400 to-yellow-500 text-black text-sm font-semibold hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-black text-sm font-semibold hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
               >
                 {savingConfig ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 Save personality
@@ -635,7 +635,7 @@ export default function AIAssistantContent() {
           {/* header */}
           <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-yellow-50 to-white">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-500 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
                 <Bot className="w-5 h-5 text-black" />
               </div>
               <div>
@@ -683,7 +683,7 @@ export default function AIAssistantContent() {
                 <div
                   className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                     m.role === "user"
-                      ? "bg-gradient-to-br from-yellow-400 to-yellow-500 text-black rounded-br-sm"
+                      ? "bg-gradient-to-br from-blue-500 to-indigo-600 text-black rounded-br-sm"
                       : "bg-gray-100 text-gray-800 rounded-bl-sm"
                   }`}
                 >
@@ -745,7 +745,7 @@ export default function AIAssistantContent() {
               <button
                 onClick={() => send(input)}
                 disabled={!input.trim() || thinking}
-                className="p-3 rounded-xl bg-gradient-to-br from-yellow-400 to-yellow-500 text-black hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0 active:scale-95"
+                className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-black hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0 active:scale-95"
               >
                 {thinking ? <LoaderCircle className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
               </button>

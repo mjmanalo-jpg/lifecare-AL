@@ -147,7 +147,7 @@ export default function UnitTurnoverBoard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
             Unit Turnover
           </h1>
           <p className="text-gray-600">Apartment lifecycle — make ready · inspection · occupied · turnover · move-out · deep clean ↺</p>
@@ -232,7 +232,7 @@ export default function UnitTurnoverBoard() {
                     <Eye className="w-3.5 h-3.5" /> View Details
                   </button>
                   <button onClick={() => advance(room)} disabled={busy}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-md transition active:scale-95 disabled:opacity-60 text-xs">
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-md transition active:scale-95 disabled:opacity-60 text-xs">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <><ArrowRight className="w-3.5 h-3.5" /> Advance</>}
                   </button>
                 </div>
@@ -325,7 +325,7 @@ function TurnoverViewModal({ room, turnover, onClose }: { room: RoomCard; turnov
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold">Room {room.roomNumber}</h2>
           <button onClick={onClose} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
@@ -376,7 +376,7 @@ function ChecklistsModal({ turnovers, onClose }: { turnovers: Turnover[]; onClos
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5" />
             <h2 className="text-xl font-bold">Active Turnover Checklists</h2>

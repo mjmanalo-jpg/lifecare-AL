@@ -237,7 +237,7 @@ export default function LandingCustomizerContent() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-1">
+          <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1">
             Landing Studio
           </h1>
           <p className="text-gray-600 text-sm">
@@ -264,7 +264,7 @@ export default function LandingCustomizerContent() {
             disabled={!dirty}
             className={`flex items-center gap-2 px-5 py-2 rounded-lg font-semibold text-sm transition active:scale-95 ${
               dirty
-                ? "bg-gradient-to-r from-yellow-400 to-yellow-500 text-black hover:shadow-lg"
+                ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-black hover:shadow-lg"
                 : "bg-gray-100 text-gray-400 cursor-not-allowed"
             }`}
           >
@@ -978,7 +978,7 @@ function SiteContentEditor() {
           <h2 className="text-lg font-bold text-gray-900">Site Content Editor</h2>
           <p className="text-sm text-gray-500">Edit all text content displayed on the public landing page.</p>
         </div>
-        <button onClick={handleSaveAll} className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+        <button onClick={handleSaveAll} className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
           <Save className="w-4 h-4" /> Save All
         </button>
       </div>
@@ -1128,7 +1128,7 @@ function BlogManager() {
           <h2 className="text-lg font-bold text-gray-900">Blog Posts</h2>
           <p className="text-sm text-gray-500">Create and manage blog posts displayed on the landing page.</p>
         </div>
-        <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+        <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
           <Plus className="w-4 h-4" /> New Post
         </button>
       </div>
@@ -1250,7 +1250,7 @@ function BlogManager() {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
               <button onClick={() => setModalOpen(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Cancel</button>
-              <button onClick={handleSubmit} className="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+              <button onClick={handleSubmit} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
                 {editingId ? "Update Post" : "Publish Post"}
               </button>
             </div>
@@ -1452,7 +1452,7 @@ function PagesManager() {
           <h2 className="text-lg font-bold text-gray-900">Custom Pages</h2>
           <p className="text-sm text-gray-500">Add pages to the landing page navigation. Published pages appear in the navbar.</p>
         </div>
-        <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+        <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
           <Plus className="w-4 h-4" /> Add Page
         </button>
       </div>
@@ -1690,7 +1690,7 @@ function PagesManager() {
             {!showTemplates || editingId ? (
               <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
                 <button onClick={() => setModalOpen(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Cancel</button>
-                <button onClick={handleSubmit} className="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+                <button onClick={handleSubmit} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
                   {editingId ? "Update Page" : "Create Page"}
                 </button>
               </div>

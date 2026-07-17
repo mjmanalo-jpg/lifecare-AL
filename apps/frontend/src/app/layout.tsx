@@ -6,8 +6,8 @@ import SmoothScroll from "@/components/SmoothScroll";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Golden Hearth | AI Assisted Care",
-  description: "Next-Generation AI Powered Assisted Living Platform",
+  title: "LifeCare CMS (LCMS) | Real-time Assisted Living Management",
+  description: "Next-Generation LifeCare CMS (LCMS) Person-Centered Care Platform",
 };
 
 export default function RootLayout({

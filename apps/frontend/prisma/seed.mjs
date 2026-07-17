@@ -7,37 +7,43 @@
  * high-volume child tables (vitals, incidents, tasks, …) only seed when empty.
  */
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
+
+const DEFAULT_PASSWORD = "LifeCare@2026";
+const SALT_ROUNDS = 10;
 
 const daysAgo = (n) => new Date(Date.now() - n * 24 * 3600 * 1000);
 const hoursAgo = (n) => new Date(Date.now() - n * 3600 * 1000);
 const inDays = (n) => new Date(Date.now() + n * 24 * 3600 * 1000);
 
 async function seedUsers() {
+  const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, SALT_ROUNDS);
   const users = [
-    { email: "admin@goldenhearth.com", name: "System Admin", role: "SUPERADMIN", phone: "555-0100" },
-    { email: "facility.admin@goldenhearth.com", name: "Facility Admin", role: "FACILITY_ADMIN", phone: "555-0150" },
-    { email: "alan.reyes@goldenhearth.com", name: "Dr. Alan Reyes", role: "PHYSICIAN", phone: "555-0160" },
-    { email: "sarah.jenkins@goldenhearth.com", name: "Sarah Jenkins", role: "NURSE", phone: "555-0101" },
-    { email: "rebecca.wilson@goldenhearth.com", name: "Rebecca Wilson", role: "NURSE", phone: "555-0105" },
-    { email: "caleb.randall@goldenhearth.com", name: "Caleb Randall", role: "CAREGIVER", phone: "555-0102" },
-    { email: "james.mitchell@goldenhearth.com", name: "James Mitchell", role: "CAREGIVER", phone: "555-0104" },
-    { email: "maria.santos@goldenhearth.com", name: "Maria Santos", role: "CAREGIVER", phone: "555-0103" },
-    { email: "john.pendelton@family.com", name: "John Pendelton", role: "FAMILY", phone: "555-0200" },
-    { email: "arthur.pendelton@resident.com", name: "Arthur Pendelton", role: "RESIDENT", phone: "555-0201" },
-    { email: "fleet.manager@goldenhearth.com", name: "Marcus Dela Cruz", role: "FLEET_MANAGEMENT", phone: "555-0400" },
-    { email: "james.miguel@goldenhearth.com", name: "James Miguel", role: "DRIVER", phone: "555-0401" },
+    { email: "admin@goldenhearth.com", name: "System Admin", role: "SUPERADMIN", phone: "555-0100", firstName: "System", lastName: "Admin" },
+    { email: "facility.admin@goldenhearth.com", name: "Facility Admin", role: "FACILITY_ADMIN", phone: "555-0150", firstName: "Facility", lastName: "Admin" },
+    { email: "alan.reyes@goldenhearth.com", name: "Dr. Alan Reyes", role: "PHYSICIAN", phone: "555-0160", firstName: "Alan", lastName: "Reyes" },
+    { email: "sarah.jenkins@goldenhearth.com", name: "Sarah Jenkins", role: "NURSE", phone: "555-0101", firstName: "Sarah", lastName: "Jenkins" },
+    { email: "rebecca.wilson@goldenhearth.com", name: "Rebecca Wilson", role: "NURSE", phone: "555-0105", firstName: "Rebecca", lastName: "Wilson" },
+    { email: "caleb.randall@goldenhearth.com", name: "Caleb Randall", role: "CAREGIVER", phone: "555-0102", firstName: "Caleb", lastName: "Randall" },
+    { email: "james.mitchell@goldenhearth.com", name: "James Mitchell", role: "CAREGIVER", phone: "555-0104", firstName: "James", lastName: "Mitchell" },
+    { email: "maria.santos@goldenhearth.com", name: "Maria Santos", role: "CAREGIVER", phone: "555-0103", firstName: "Maria", lastName: "Santos" },
+    { email: "john.pendelton@family.com", name: "John Pendelton", role: "FAMILY", phone: "555-0200", firstName: "John", lastName: "Pendelton" },
+    { email: "arthur.pendelton@resident.com", name: "Arthur Pendelton", role: "RESIDENT", phone: "555-0201", firstName: "Arthur", lastName: "Pendelton" },
+    { email: "fleet.manager@goldenhearth.com", name: "Marcus Dela Cruz", role: "FLEET_MANAGEMENT", phone: "555-0400", firstName: "Marcus", lastName: "Dela Cruz" },
+    { email: "james.miguel@goldenhearth.com", name: "James Miguel", role: "DRIVER", phone: "555-0401", firstName: "James", lastName: "Miguel" },
   ];
   const out = {};
   for (const u of users) {
     const rec = await prisma.user.upsert({
       where: { email: u.email },
-      update: { name: u.name, role: u.role, phone: u.phone },
-      create: u,
+      update: { name: u.name, role: u.role, phone: u.phone, passwordHash },
+      create: { ...u, passwordHash },
     });
     out[u.email] = rec;
   }
+  console.log(`  • Users: ${users.length} accounts seeded (password: ${DEFAULT_PASSWORD})`);
   return out;
 }
 
@@ -244,9 +250,9 @@ async function main() {
   addNotif(familyUser, "MESSAGE", "Daily Comfort Report", "Caleb Randall reports Arthur slept comfortably and participated in social games.");
 
   const fleetUser = users["fleet.manager@goldenhearth.com"];
-  addNotif(fleetUser, "TRANSPORT_UPDATE", "New Transport Request", "Arthur Pendelton requested a dialysis run for tomorrow 8:00 AM — pending dispatcher review.");
-  addNotif(fleetUser, "SYSTEM_ALERT", "Registration Expiring", "Wheelchair Van WV-001 registration expires in 14 days. Renew to stay compliant.");
-  addNotif(fleetUser, "TASK_ASSIGNMENT", "Preventive Maintenance Due", "Sedan SD-001 passed its service interval — schedule preventive maintenance.");
+  addNotif(fleetUser, "TRANSPORT_UPDATE", "New Transport Request", "Arthur Pendelton requested a medical appointment transport to St. Luke's Medical Center for an Endocrinology consult — pending dispatcher review.");
+  addNotif(fleetUser, "SYSTEM_ALERT", "Registration Expiring", "Wheelchair Van WV-001 registration expires in 14 days. File for renewal to maintain road compliance.");
+  addNotif(fleetUser, "TASK_ASSIGNMENT", "Preventive Maintenance Overdue", "Sedan Escort SD-001 is 410 km overdue for its scheduled 88,000 km preventive service.");
 
   addNotif(residentUser, "TASK_ASSIGNMENT", "Physical Therapy Scheduled", "Your PT session with Caleb is scheduled for 2:00 PM today.");
   addNotif(residentUser, "MEDICATION_REMINDER", "Medications Reminder", "Afternoon pills are scheduled in 15 minutes.");
@@ -570,6 +576,257 @@ async function main() {
       { residentId: R["302"].id, situation: "BP 165/95 on morning check with a mild headache.", background: "Hx: Hypertension, Type 2 Diabetes. Allergies: Penicillin, Sulfa.", assessment: "Blood pressure above target range.", recommendation: "Review antihypertensive regimen.", priority: "ROUTINE", status: "RESOLVED", raisedBy: "Caleb Randall", raisedByRole: "CAREGIVER", assignedToRole: "PHYSICIAN", acknowledgedBy: "Dr. Alan Reyes", acknowledgedAt: hoursAgo(3), response: "Increase lisinopril to 20mg daily; recheck BP each shift and report any systolic > 160.", resolvedBy: "Dr. Alan Reyes", resolvedAt: hoursAgo(2.5), createdAt: hoursAgo(4) },
     ]);
     console.log("  • SBAR escalations ready");
+  }
+
+  // ── LCMS Module 4: Comprehensive Daily Rounds (10-area bedside documentation) ─
+  if (R["302"] && R["305"] && R["310"] && R["312"] && R["308"]) {
+    const roundCount = await prisma.dailyRound.count();
+    if (roundCount > 0) {
+      console.log(`  • dailyRound: ${roundCount} rows exist — skipping`);
+    } else {
+      const midnight = (offsetDays = 0) => {
+        const d = new Date(Date.now() - offsetDays * 24 * 3600 * 1000);
+        d.setHours(0, 0, 0, 0);
+        return d;
+      };
+      const today = midnight(0);
+      const yesterday = midnight(1);
+
+      // Arthur (302) — DAY shift today, fully documented across all 10 areas.
+      await prisma.dailyRound.create({ data: {
+        residentId: R["302"].id, caregiverName: "Caleb Randall", shift: "DAY",
+        roundDate: today, startTime: hoursAgo(5), endTime: hoursAgo(4), status: "COMPLETED",
+        generalNotes: "Pleasant morning. Participated in garden walk; appetite good.",
+        bowelRecords: { create: [
+          { time: hoursAgo(5), bristolType: 4, consistency: "Formed", color: "Brown", amount: "Moderate", containment: "Toilet", notes: "Normal pattern." },
+        ] },
+        urineRecords: { create: [
+          { time: hoursAgo(5), color: "Pale yellow", clarity: "Clear", volume: "Moderate", estimatedMl: 350, urgency: "Normal", containment: "Toilet" },
+          { time: hoursAgo(2), color: "Yellow", clarity: "Clear", volume: "Small", estimatedMl: 200, containment: "Toilet" },
+        ] },
+        edemaRecords: { create: [
+          { time: hoursAgo(4), location: "Bilateral ankles", severity: "TRACE", pitting: false, skinColor: "Normal", skinTemperature: "Warm", notes: "Baseline for diabetic monitoring." },
+        ] },
+        concerns: { create: [
+          { time: hoursAgo(4), category: "NUTRITION", description: "Left half of lunch sandwich; prefers softer bread.", severity: "LOW", status: "OPEN", actionTaken: "Dietary preference noted for kitchen." },
+        ] },
+        painRecords: { create: [
+          { time: hoursAgo(5), location: "Lower back", score: 2, type: "Aching", duration: "Intermittent", triggers: "Prolonged sitting", reliefActions: "Repositioning, short walk", notes: "No medication required." },
+        ] },
+        moodRecords: { create: [
+          { time: hoursAgo(5), mood: "HAPPY", behaviorNotes: "Chatty and engaged during breakfast.", socialEngagement: "High — joined group activity", cooperation: "Full", communication: "Clear" },
+        ] },
+        sleepRecord: { create: {
+          bedtime: hoursAgo(13), wakeTime: hoursAgo(6), totalHours: 7, quality: "RESTFUL",
+          interruptions: 1, interruptionReason: "Bathroom visit", naps: 0, notes: "Slept comfortably.",
+        } },
+        mobilityRecords: { create: [
+          { time: hoursAgo(4), activityType: "Ambulation", assistanceLevel: "SUPERVISED", assistiveDevice: "Walker", durationMinutes: 15, distance: "Garden loop (~120m)", gaitPattern: "Steady", fallOccurred: false },
+        ] },
+        mealRecords: { create: [
+          { time: hoursAgo(5), mealType: "BREAKFAST", appetite: "GOOD", intakeLevel: "100%", fluidIntake: "Good", fluidAmountMl: 300, textureDiet: "Regular — diabetic", supplements: "Multivitamin", feedingAssist: "Setup only", chokingRisk: false },
+          { time: hoursAgo(1), mealType: "LUNCH", appetite: "FAIR", intakeLevel: "75%", fluidIntake: "Fair", fluidAmountMl: 250, foodRefusals: "Half sandwich", textureDiet: "Regular — diabetic", chokingRisk: false },
+        ] },
+        vitalSigns: { create: [
+          { time: hoursAgo(5), systolic: 138, diastolic: 82, heartRate: 78, temperature: 98.6, respRate: 16, spo2: 96, bloodSugarLevel: 128, weight: 172, painScore: 2 },
+        ] },
+      } });
+
+      // Eleanor (305) — EVENING shift yesterday, memory-care concerns escalated.
+      await prisma.dailyRound.create({ data: {
+        residentId: R["305"].id, caregiverName: "Maria Santos", shift: "EVENING",
+        roundDate: yesterday, startTime: daysAgo(1), endTime: daysAgo(1), status: "REVIEWED",
+        generalNotes: "Sundowning after 6 PM; redirection effective. Mechanical-soft diet followed.",
+        bowelRecords: { create: [
+          { time: daysAgo(1), bristolType: 2, consistency: "Hard/lumpy", color: "Dark brown", amount: "Small", containment: "Brief", notes: "Monitor for constipation — 2nd day of hard stool." },
+        ] },
+        urineRecords: { create: [
+          { time: daysAgo(1), color: "Dark yellow", clarity: "Slightly cloudy", volume: "Small", estimatedMl: 150, odor: "Strong", containment: "Brief", notes: "Encourage fluids; watch for UTI signs." },
+        ] },
+        edemaRecords: { create: [
+          { time: daysAgo(1), location: "Left ankle", severity: "MILD", pitting: true, skinColor: "Slightly pale", skinTemperature: "Cool", notes: "Elevated legs during evening rest." },
+        ] },
+        concerns: { create: [
+          { time: daysAgo(1), category: "BEHAVIORAL", description: "Increased confusion and agitation after dinner; refused evening medications initially.", severity: "HIGH", status: "ESCALATED", actionTaken: "Redirection techniques applied; second attempt at meds successful.", escalatedTo: "Sarah Jenkins, RN" },
+          { time: daysAgo(1), category: "HYDRATION", description: "Low fluid intake all shift (~400ml).", severity: "MEDIUM", status: "OPEN", actionTaken: "Hourly sips offered; family favorite juice requested." },
+        ] },
+        painRecords: { create: [
+          { time: daysAgo(1), location: "Both knees", score: 4, type: "Arthritic ache", duration: "Constant", triggers: "Evening stiffness", reliefActions: "Warm compress", medicationGiven: "Acetaminophen 500mg", medicationResponse: "Improved to 2/10 after 45 min" },
+        ] },
+        moodRecords: { create: [
+          { time: daysAgo(1), mood: "CONFUSED", behaviorNotes: "Asked for late husband repeatedly; comforted with photo album.", socialEngagement: "Low", cooperation: "Partial", communication: "Repetitive", triggers: "Evening/sundowning", interventions: "Reorientation, calm environment, familiar photos" },
+        ] },
+        sleepRecord: { create: {
+          bedtime: daysAgo(1), totalHours: 5.5, quality: "RESTLESS",
+          interruptions: 3, interruptionReason: "Wandering episodes; redirected back to bed", naps: 2, napDuration: "30 min each", notes: "Night wandering — bed alarm active.",
+        } },
+        mobilityRecords: { create: [
+          { time: daysAgo(1), activityType: "Transfer", assistanceLevel: "MODERATE", assistiveDevice: "Gait belt", transferFrom: "Wheelchair", transferTo: "Bed", fallOccurred: false, notes: "Unsteady during evening transfer." },
+        ] },
+        mealRecords: { create: [
+          { time: daysAgo(1), mealType: "DINNER", appetite: "POOR", intakeLevel: "50%", fluidIntake: "Poor", fluidAmountMl: 150, foodRefusals: "Refused meat course", textureDiet: "Mechanical soft", feedingAssist: "Cueing + partial assist", chokingRisk: true, notes: "Intermittent coughing with thin liquids — SLP consult pending." },
+        ] },
+        vitalSigns: { create: [
+          { time: daysAgo(1), systolic: 128, diastolic: 76, heartRate: 68, temperature: 98.2, respRate: 18, spo2: 97, weight: 118, painScore: 4 },
+        ] },
+      } });
+
+      // Margaret (312) — NIGHT shift today, skilled-care cardiac monitoring.
+      await prisma.dailyRound.create({ data: {
+        residentId: R["312"].id, caregiverName: "James Mitchell", shift: "NIGHT",
+        roundDate: today, startTime: hoursAgo(9), status: "IN_PROGRESS",
+        generalNotes: "Close cardiac monitoring per SBAR escalation. O2 at bedside.",
+        urineRecords: { create: [
+          { time: hoursAgo(8), color: "Amber", clarity: "Clear", volume: "Small", estimatedMl: 180, outputMl: 180, containment: "Bedside commode", notes: "Strict I/O monitoring — heart failure." },
+        ] },
+        edemaRecords: { create: [
+          { time: hoursAgo(8), location: "Bilateral lower legs", severity: "MODERATE", pitting: true, skinColor: "Shiny, taut", skinTemperature: "Cool", notes: "+2 pitting; legs elevated. Physician aware." },
+        ] },
+        concerns: { create: [
+          { time: hoursAgo(8), category: "PHYSICAL", description: "SpO2 dipped to 88% on room air with laboured breathing.", severity: "CRITICAL", status: "ESCALATED", actionTaken: "SBAR escalation raised to physician; O2 ready.", escalatedTo: "Dr. Alan Reyes" },
+        ] },
+        painRecords: { create: [
+          { time: hoursAgo(7), location: "Chest (mild pressure)", score: 3, type: "Pressure", duration: "Resolved in 10 min", reliefActions: "Rest, semi-Fowler position", notes: "Physician notified with vitals." },
+        ] },
+        moodRecords: { create: [
+          { time: hoursAgo(8), mood: "ANXIOUS", behaviorNotes: "Worried about breathing episode.", socialEngagement: "Low — resting", cooperation: "Full", communication: "Clear", interventions: "Reassurance, breathing coaching" },
+        ] },
+        sleepRecord: { create: {
+          bedtime: hoursAgo(10), totalHours: 4, quality: "POOR",
+          interruptions: 4, interruptionReason: "Dyspnea episodes; vitals checks q2h", naps: 0, positionalChanges: "Semi-Fowler maintained", notes: "Frequent monitoring per escalation protocol.",
+        } },
+        mobilityRecords: { create: [
+          { time: hoursAgo(6), activityType: "Bed mobility", assistanceLevel: "MAXIMAL", assistiveDevice: "None", fallOccurred: false, notes: "Bed rest per physician pending review." },
+        ] },
+        mealRecords: { create: [
+          { time: hoursAgo(8), mealType: "SNACK", appetite: "FAIR", intakeLevel: "50%", fluidIntake: "Restricted", fluidAmountMl: 100, textureDiet: "Low sodium, fluid restricted", chokingRisk: false },
+        ] },
+        vitalSigns: { create: [
+          { time: hoursAgo(8), systolic: 152, diastolic: 90, heartRate: 92, temperature: 98.9, respRate: 24, spo2: 88, painScore: 3, notes: "Escalated — SpO2 88% on room air." },
+          { time: hoursAgo(4), systolic: 144, diastolic: 86, heartRate: 84, temperature: 98.7, respRate: 20, spo2: 93, painScore: 1, notes: "Improving after repositioning." },
+        ] },
+      } });
+
+      // Robert (310) — DAY shift today, independent baseline round.
+      await prisma.dailyRound.create({ data: {
+        residentId: R["310"].id, caregiverName: "Caleb Randall", shift: "DAY",
+        roundDate: today, startTime: hoursAgo(6), endTime: hoursAgo(5.5), status: "COMPLETED",
+        generalNotes: "Independent with all ADLs. Quick wellness check only.",
+        bowelRecords: { create: [
+          { time: hoursAgo(6), bristolType: 4, consistency: "Formed", color: "Brown", amount: "Moderate", containment: "Toilet" },
+        ] },
+        moodRecords: { create: [
+          { time: hoursAgo(6), mood: "COOPERATIVE", behaviorNotes: "Reading in the lounge; declined group activity politely.", socialEngagement: "Moderate", cooperation: "Full", communication: "Clear" },
+        ] },
+        sleepRecord: { create: { totalHours: 7.5, quality: "RESTFUL", interruptions: 0, naps: 0 } },
+        mobilityRecords: { create: [
+          { time: hoursAgo(6), activityType: "Ambulation", assistanceLevel: "INDEPENDENT", durationMinutes: 30, distance: "Facility walk", gaitPattern: "Normal", fallOccurred: false },
+        ] },
+        mealRecords: { create: [
+          { time: hoursAgo(5), mealType: "BREAKFAST", appetite: "GOOD", intakeLevel: "100%", fluidIntake: "Good", fluidAmountMl: 400, textureDiet: "Regular", chokingRisk: false },
+        ] },
+        vitalSigns: { create: [
+          { time: hoursAgo(6), systolic: 124, diastolic: 78, heartRate: 70, temperature: 98.4, respRate: 14, spo2: 98, weight: 168 },
+        ] },
+      } });
+
+      // James (308) — EVENING shift today, post-surgery mobility focus with a fall event.
+      await prisma.dailyRound.create({ data: {
+        residentId: R["308"].id, caregiverName: "Maria Santos", shift: "EVENING",
+        roundDate: today, startTime: hoursAgo(3), status: "IN_PROGRESS",
+        generalNotes: "PT progressing. Near-fall during evening transfer — incident logged.",
+        concerns: { create: [
+          { time: hoursAgo(2), category: "MOBILITY", description: "Knee buckled during wheelchair-to-bed transfer; caught by staff — no injury.", severity: "MEDIUM", status: "OPEN", actionTaken: "Two-person assist ordered for transfers; PT notified." },
+        ] },
+        painRecords: { create: [
+          { time: hoursAgo(3), location: "Right hip (surgical site)", score: 5, type: "Post-operative", duration: "With movement", triggers: "Transfers, PT exercises", reliefActions: "Ice pack 20 min", medicationGiven: "Prescribed analgesic per MAR", medicationResponse: "Reduced to 3/10" },
+        ] },
+        moodRecords: { create: [
+          { time: hoursAgo(3), mood: "CALM", behaviorNotes: "Motivated about recovery; mild frustration with mobility limits.", socialEngagement: "Moderate", cooperation: "Full", communication: "Clear" },
+        ] },
+        mobilityRecords: { create: [
+          { time: hoursAgo(2), activityType: "Transfer", assistanceLevel: "MODERATE", assistiveDevice: "Gait belt + walker", transferFrom: "Wheelchair", transferTo: "Bed", fallOccurred: true, fallCircumstances: "Right knee buckled mid-transfer; staff-assisted lowering, no impact, no injury. Incident report filed.", notes: "Upgraded to two-person assist." },
+          { time: hoursAgo(3), activityType: "PT exercises", assistanceLevel: "MINIMAL", durationMinutes: 30, notes: "Completed full PT set." },
+        ] },
+        mealRecords: { create: [
+          { time: hoursAgo(3), mealType: "DINNER", appetite: "GOOD", intakeLevel: "100%", fluidIntake: "Good", fluidAmountMl: 350, textureDiet: "Regular — high protein", supplements: "Protein shake", chokingRisk: false },
+        ] },
+        vitalSigns: { create: [
+          { time: hoursAgo(3), systolic: 130, diastolic: 80, heartRate: 76, temperature: 98.5, respRate: 16, spo2: 97, painScore: 5 },
+        ] },
+      } });
+
+      console.log("  • dailyRound: 5 rounds seeded across DAY/EVENING/NIGHT with all 10 documentation areas");
+    }
+  }
+
+  // ── LCMS Module 2: Assessment & Acuity Engine ───────────────────────────────
+  {
+    // Assessment.communityId is required (FK) → ensure an org + community exist,
+    // then backfill residents so every assessment can attach to a community.
+    let org = await prisma.organization.findFirst();
+    if (!org) org = await prisma.organization.create({ data: { name: "Golden Hearth Care Group" } });
+    let community = await prisma.community.findFirst();
+    if (!community) {
+      community = await prisma.community.create({ data: {
+        organizationId: org.id, name: "Golden Hearth Assisted Living",
+        city: "Taguig", state: "Metro Manila", communityType: "ASSISTED_LIVING",
+        bedsTotal: 60, bedsAvailable: 8,
+      } });
+    }
+    await prisma.resident.updateMany({ where: { communityId: null }, data: { communityId: community.id } });
+
+    const assessCount = await prisma.assessment.count();
+    if (assessCount > 0) {
+      console.log(`  • assessment: ${assessCount} rows exist — skipping`);
+    } else {
+      // Shared acuity math (mirrors AssessmentAcuityBoard). Scores are 1–5 per
+      // dimension (5 = most dependent/acute) across 9 dimensions → max 45.
+      const computeAcuity = (s) => {
+        const total = s.adl + s.cognition + s.mobility + s.medical + s.behavioral + s.nutrition + s.hydration + s.skinIntegrity + s.socialEngagement;
+        const pct = Math.round((total / 45) * 100);
+        const acuityLevel = pct < 40 ? "LOW" : pct < 60 ? "MODERATE" : pct < 80 ? "HIGH" : "CRITICAL";
+        let careLevel;
+        if (s.cognition >= 4 || s.behavioral >= 4) careLevel = "MEMORY";
+        else if (pct < 30) careLevel = "INDEPENDENT";
+        else if (pct < 65) careLevel = "ASSISTED";
+        else careLevel = "SKILLED";
+        const dailyCareMinutes = acuityLevel === "LOW" ? 60 : acuityLevel === "MODERATE" ? 120 : acuityLevel === "HIGH" ? 210 : 320;
+        const shiftBreakdown = { DAY: Math.round(dailyCareMinutes * 0.45), EVENING: Math.round(dailyCareMinutes * 0.35), NIGHT: Math.round(dailyCareMinutes * 0.20) };
+        const staffingDemand = { nurseMinutes: Math.round(dailyCareMinutes * 0.35), caregiverMinutes: Math.round(dailyCareMinutes * 0.65) };
+        const confidence = Math.round((0.75 + Math.min(0.2, Math.abs(pct - 50) / 250)) * 100) / 100;
+        return { total, pct, acuityLevel, careLevel, dailyCareMinutes, shiftBreakdown, staffingDemand, confidence };
+      };
+
+      const mkAssessment = async (resident, type, scores, assessedByName, offsetDays) => {
+        if (!resident) return;
+        const c = computeAcuity(scores);
+        const a = await prisma.assessment.create({ data: {
+          residentId: resident.id, communityId: community.id, assessmentType: type, status: "COMPLETED",
+          adlScore: scores.adl, cognitionScore: scores.cognition, mobilityScore: scores.mobility,
+          medicalScore: scores.medical, behavioralScore: scores.behavioral, nutritionScore: scores.nutrition,
+          hydrationScore: scores.hydration, skinIntegrityScore: scores.skinIntegrity, socialEngagementScore: scores.socialEngagement,
+          totalRawScore: c.total, dimensionCount: 9, maxPossibleScore: 45,
+          assessedByName, assessmentTool: "LCMS 9-Dimension Acuity", completedAt: daysAgo(offsetDays),
+        } });
+        await prisma.acuityScore.create({ data: {
+          assessmentId: a.id, residentId: resident.id, communityId: community.id,
+          dimensionScores: scores, weightedScore: c.pct, normalizedScore: c.pct,
+          acuityLevel: c.acuityLevel, careLevel: c.careLevel, careLevelConfidence: c.confidence,
+          dailyCareMinutes: c.dailyCareMinutes, shiftBreakdown: c.shiftBreakdown, staffingDemand: c.staffingDemand,
+          weightsUsed: { perDimension: 1, dimensions: 9 }, weightVersion: "v1.0",
+          scoredAt: daysAgo(offsetDays), isCurrent: true,
+        } });
+        // Keep the resident's careLevel aligned with the latest acuity result.
+        await prisma.resident.update({ where: { id: resident.id }, data: { careLevel: c.careLevel } });
+      };
+
+      await mkAssessment(R["310"], "ADMISSION", { adl: 1, cognition: 1, mobility: 2, medical: 2, behavioral: 1, nutrition: 1, hydration: 1, skinIntegrity: 1, socialEngagement: 2 }, "Sarah Jenkins, RN", 20);
+      await mkAssessment(R["302"], "ANNUAL", { adl: 3, cognition: 2, mobility: 3, medical: 3, behavioral: 2, nutrition: 2, hydration: 2, skinIntegrity: 2, socialEngagement: 2 }, "Sarah Jenkins, RN", 10);
+      await mkAssessment(R["312"], "QUARTERLY", { adl: 4, cognition: 3, mobility: 4, medical: 5, behavioral: 3, nutrition: 3, hydration: 4, skinIntegrity: 4, socialEngagement: 3 }, "Dr. Alan Reyes", 5);
+      await mkAssessment(R["305"], "CONDITION_CHANGE", { adl: 4, cognition: 5, mobility: 3, medical: 3, behavioral: 4, nutrition: 4, hydration: 4, skinIntegrity: 3, socialEngagement: 4 }, "Sarah Jenkins, RN", 3);
+      console.log("  • assessment + acuity: 4 assessments seeded (org + community linked; resident care levels synced)");
+    }
   }
 
   console.log("Seed complete.");

@@ -14,6 +14,13 @@ import FamilyPhotos from "@/components/portal/views/family/FamilyPhotos";
 import MyTransport from "@/components/portal/views/fleet/MyTransport";
 import MyHotelServices from "@/components/portal/views/services/MyHotelServices";
 import MyCommunity from "@/components/portal/views/pms/MyCommunity";
+import NurseMedications from "@/components/portal/views/NurseMedications";
+import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
+import CarePlanBoard from "@/components/portal/views/clinical/CarePlanBoard";
+import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
+import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
+import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker";
+import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
 
 interface FamilyPortalContentProps {
   tab: string;
@@ -52,6 +59,24 @@ export default function FamilyPortalContent({ tab }: FamilyPortalContentProps) {
       return <MyHotelServices />;
     case "community":
       return <MyCommunity />;
+    case "rounds":
+      return <FamilyTimeline />;
+    case "reports":
+      return <ClinicalReports />;
+    case "medications":
+      return <NurseMedications />;
+    case "escalations":
+      return <FamilyAlerts />;
+    case "tasks":
+      return <DailyDocumentation clinicianRole="FACILITY_ADMIN" />;
+    case "careplans":
+      return <CarePlanBoard />;
+    case "vaccinations":
+      return <VaccinationTracker />;
+    case "documents":
+      return <ResidentDocuments />;
+    case "followups":
+      return <FollowUpTracker />;
     default:
       return <FamilyDashboard />;
   }

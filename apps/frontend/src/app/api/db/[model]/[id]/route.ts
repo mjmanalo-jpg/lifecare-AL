@@ -64,7 +64,7 @@ export async function PATCH(
   // their own concierge bookings; no other edits.
   const SELF_SERVICE = role === "FAMILY" || role === "RESIDENT";
   const SELF_PATCHABLE = new Set([
-    "messages", "call-bells", "service-requests", "concierge-bookings",
+    "messages", "notifications", "call-bells", "service-requests", "concierge-bookings",
     // Phase 7 PMS engagement — residents manage their own profile & bookings.
     "resident-preferences", "event-attendances", "dining-reservations",
   ]);

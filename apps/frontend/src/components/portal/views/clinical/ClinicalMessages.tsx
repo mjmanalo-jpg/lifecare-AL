@@ -176,7 +176,7 @@ export default function ClinicalMessages({ clinicianRole = "PHYSICIAN" }: { clin
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <MessageSquare className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Secure Messages
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -188,7 +188,7 @@ export default function ClinicalMessages({ clinicianRole = "PHYSICIAN" }: { clin
           <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
             <RefreshCw className="w-4 h-4" /> Refresh
           </button>
-          <button onClick={() => setComposing(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+          <button onClick={() => setComposing(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
             <Plus className="w-4 h-4" /> Compose
           </button>
         </div>

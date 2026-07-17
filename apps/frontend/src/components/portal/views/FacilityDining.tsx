@@ -667,7 +667,7 @@ export default function FacilityDining() {
       {showAddCompliance && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
               <h2 className="text-xl font-extrabold flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-amber-800" /> Log HACCP Compliance Audit
               </h2>
@@ -778,7 +778,7 @@ export default function FacilityDining() {
       {showAddConsult && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
               <h2 className="text-xl font-extrabold flex items-center gap-2">
                 <Users className="w-5 h-5 text-amber-800" /> Request Dietitian Consultation
               </h2>
@@ -833,7 +833,7 @@ export default function FacilityDining() {
       {showAddMenu && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
               <h2 className="text-xl font-extrabold flex items-center gap-2">
                 <ClipboardList className="w-5 h-5 text-amber-800" /> Schedule Cuisine Menu Item
               </h2>

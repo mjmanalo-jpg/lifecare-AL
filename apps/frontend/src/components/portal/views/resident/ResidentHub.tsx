@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronRight, Plus, Trash2, Star, CheckCircle2, Clock,
   HeartPulse, AlertTriangle, Pill, Droplets, Wind, Thermometer, MessageSquare,
   MapPin, Navigation, User, Car, Accessibility, Stethoscope, Siren, TreePine,
-  UtensilsCrossed, CalendarDays, SlidersHorizontal, Pin, Loader2, Phone,
+  UtensilsCrossed, CalendarDays, SlidersHorizontal, Pin, Loader2, Phone, FileText,
   type LucideIcon,
 } from "lucide-react";
 import Swal from "sweetalert2";
@@ -76,16 +76,314 @@ function StatBox({ label, value, icon: Icon, color }: { label: string; value: st
   );
 }
 
-/* ── View Modal ── */
-function ViewModal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+/* ── View Modal (type-aware) ── */
+function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: () => void }) {
+  const isTransport = row._tab === "transport";
+  const isAppointment = row._tab === "appointments";
+  const type = isTransport ? "transport" : isAppointment ? "appointment" : title.startsWith("Announcement") ? "announcement" : title.startsWith("Event") ? "event" : title.startsWith("Dining") ? "dining" : title.startsWith("Preference") ? "preference" : title.startsWith("Ticket") || row._tab === "services" ? "service" : "generic";
+
+  if (type === "transport") {
+    const reqType = str(row.type);
+    const meta = { MEDICAL_APPOINTMENT: { label: "Medical Appointment", icon: Stethoscope, gradient: "from-blue-500 to-indigo-600" }, DIALYSIS: { label: "Dialysis Run", icon: Droplets, gradient: "from-cyan-500 to-blue-500" }, THERAPY: { label: "Therapy Run", icon: HeartPulse, gradient: "from-purple-500 to-pink-500" }, FAMILY_OUTING: { label: "Family Outing", icon: TreePine, gradient: "from-emerald-500 to-teal-500" }, EMERGENCY_TRANSFER: { label: "Emergency Transfer", icon: Siren, gradient: "from-red-500 to-rose-600" }, OTHER: { label: "Other", icon: Bus, gradient: "from-gray-500 to-slate-600" } }[reqType] ?? { label: reqType, icon: Bus, gradient: "from-gray-500 to-slate-600" };
+    const TypeIcon = meta.icon;
+    const status = str(row.status);
+    const statusPill = REQUEST_STATUS_COLORS[status] ?? "bg-gray-100 text-gray-600";
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className={`bg-gradient-to-r ${meta.gradient} px-6 py-5 text-white flex items-center justify-between`}>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0"><TypeIcon className="w-5 h-5" /></div>
+              <div className="min-w-0">
+                <p className="text-white/70 text-xs font-medium">{meta.label}</p>
+                <h2 className="font-bold text-lg truncate">{str(row.destination)}</h2>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition shrink-0"><X className="w-5 h-5" /></button>
+          </div>
+          <div className="p-6 space-y-3 overflow-y-auto flex-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</span>
+              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${statusPill}`}>{status}</span>
+            </div>
+            {row.requestedDate && <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Date & Time</span>
+              <span className="text-sm font-semibold text-gray-900">{fmtDT(str(row.requestedDate))}</span>
+            </div>}
+            {row.purpose && <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Purpose</span>
+              <span className="text-sm text-gray-900 text-right max-w-[60%]">{str(row.purpose)}</span>
+            </div>}
+            <div className="flex items-center gap-4 py-2.5 border-b border-gray-100">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5"><Navigation className="w-3.5 h-3.5" /> Options</span>
+              <div className="flex items-center gap-2 flex-wrap justify-end flex-1">
+                {Boolean(row.wheelchairNeeded) && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold"><Accessibility className="w-3 h-3" /> Wheelchair</span>}
+                {Boolean(row.escortRequired) && <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[10px] font-semibold">Escort: {str(row.escortRole)}</span>}
+                <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-semibold">{row.returnRequired ? "Round Trip" : "One-Way"}</span>
+              </div>
+            </div>
+            {row.source && <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
+              <span className="text-xs text-gray-500">Source</span>
+              <span className="text-xs font-medium text-gray-700">{str(row.source)}</span>
+            </div>}
+            {row.notes && <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+              <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide mb-1">Notes</p>
+              <p className="text-sm text-blue-900 whitespace-pre-wrap">{str(row.notes)}</p>
+            </div>}
+          </div>
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+            <button onClick={onClose} className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-xl transition text-sm">Close</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (type === "appointment") {
+    const name = str(row.name ?? row.visitorName ?? "Guest");
+    const initials = name.split(" ").map(w => w.charAt(0)).join("").slice(0, 2).toUpperCase();
+    const status = str(row.status ?? "");
+    const statusPill = status === "Scheduled" ? "bg-blue-100 text-blue-700" : status === "Completed" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700";
+    const avatarColors: Record<string, string> = { S: "from-blue-500 to-indigo-500", A: "from-amber-500 to-orange-500", M: "from-emerald-500 to-teal-500", R: "from-rose-500 to-pink-500" };
+    const gradient = avatarColors[name.charAt(0).toUpperCase()] ?? "from-purple-500 to-violet-500";
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className={`bg-gradient-to-r ${gradient} px-6 py-5 text-white flex items-center justify-between`}>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-lg font-black shrink-0">{initials}</div>
+              <div className="min-w-0">
+                <p className="text-white/70 text-xs font-medium">Visit Appointment</p>
+                <h2 className="font-bold text-lg truncate">{name}</h2>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition shrink-0"><X className="w-5 h-5" /></button>
+          </div>
+          <div className="p-6 space-y-3 overflow-y-auto flex-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</span>
+              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${statusPill}`}>{status}</span>
+            </div>
+            {row.relationship && <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5"><User className="w-3.5 h-3.5" /> Relationship</span>
+              <span className="text-sm font-semibold text-gray-900">{str(row.relationship)}</span>
+            </div>}
+            {(row.inTs || row.checkInTime) && <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Date & Time</span>
+              <span className="text-sm font-semibold text-gray-900">{fmtDT(str(new Date(num(row.inTs) || str(row.checkInTime)).toISOString()))}</span>
+            </div>}
+            {row.purpose && <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Purpose</span>
+              <span className="text-sm text-gray-900 text-right max-w-[60%]">{str(row.purpose)}</span>
+            </div>}
+            {row.phone && <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" /> Phone</span>
+              <span className="text-sm text-gray-900">{str(row.phone)}</span>
+            </div>}
+            {row.durationMin ? <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
+              <span className="text-xs text-gray-500 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Duration</span>
+              <span className="text-sm font-semibold text-gray-900">{num(row.durationMin)} min</span>
+            </div> : null}
+            {row.notes && <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+              <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide mb-1">Notes</p>
+              <p className="text-sm text-blue-900 whitespace-pre-wrap">{str(row.notes)}</p>
+            </div>}
+          </div>
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+            <button onClick={onClose} className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-xl transition text-sm">Close</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (type === "announcement") {
+    const priority = str(row.priority);
+    const pill = ANNOUNCEMENT_PRIORITY_PILL[priority] ?? ANNOUNCEMENT_PRIORITY_PILL.NORMAL;
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-5 text-white flex items-center justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                <Megaphone className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="font-bold text-lg truncate">{str(row.title)}</h2>
+                <p className="text-white/70 text-xs">{str(row.authorName ?? "")}{row.publishedAt ? ` · ${fmtShort(str(row.publishedAt))}` : ""}</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition shrink-0"><X className="w-5 h-5" /></button>
+          </div>
+          <div className="p-6 space-y-4 overflow-y-auto flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              {Boolean(row.pinned) && <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold"><Pin className="w-3 h-3" /> Pinned</span>}
+              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${pill}`}>{priority}</span>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{str(row.body || "No content.")}</p>
+            </div>
+            {row.publishedAt && <p className="text-xs text-gray-400 text-right">Published {fmtDT(str(row.publishedAt))}</p>}
+          </div>
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+            <button onClick={onClose} className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-xl transition text-sm">Close</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (type === "event") {
+    const cat = EVENT_CATEGORY_META[str(row.category)] ?? EVENT_CATEGORY_META.SOCIAL;
+    const CatIcon = cat.icon;
+    const att = str((row as Row & { _attStatus?: string })._attStatus ?? "");
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+          {row.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={str(row.imageUrl)} alt="" className="w-full h-40 object-cover" />
+          ) : (
+            <div className={`w-full h-40 flex items-center justify-center ${cat.cls}`}><CatIcon className="w-16 h-16 opacity-30" /></div>
+          )}
+          <div className="p-6 space-y-4 overflow-y-auto flex-1">
+            <div>
+              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${cat.cls}`}><CatIcon className="w-3 h-3" /> {cat.label}</span>
+              <h2 className="text-xl font-bold text-gray-900 mt-2">{str(row.title)}</h2>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+                <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide">Date & Time</p>
+                <p className="text-sm font-semibold text-blue-900 mt-0.5">{fmtDT(str(row.startTime))}</p>
+              </div>
+              {row.location && <div className="bg-purple-50 rounded-xl p-3 border border-purple-100">
+                <p className="text-[10px] font-semibold text-purple-500 uppercase tracking-wide">Location</p>
+                <p className="text-sm font-semibold text-purple-900 mt-0.5 flex items-center gap-1"><MapPin className="w-3 h-3" /> {str(row.location)}</p>
+              </div>}
+              {row.capacity && <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+                <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wide">Capacity</p>
+                <p className="text-sm font-semibold text-emerald-900 mt-0.5">{str(row.capacity)} spots</p>
+              </div>}
+              {row.host && <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
+                <p className="text-[10px] font-semibold text-amber-500 uppercase tracking-wide">Host</p>
+                <p className="text-sm font-semibold text-amber-900 mt-0.5">{str(row.host)}</p>
+              </div>}
+            </div>
+            {row.description && <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Description</p>
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{str(row.description)}</p>
+            </div>}
+            {att && <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Your RSVP:</span>
+              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${RSVP_PILL[att] ?? "bg-gray-100 text-gray-600"}`}>{att}</span>
+            </div>}
+          </div>
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+            <button onClick={onClose} className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-xl transition text-sm">Close</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (type === "dining") {
+    const status = str(row.status);
+    const pill = DINING_STATUS_PILL[status] ?? "bg-gray-100 text-gray-700";
+    const mealColors: Record<string, string> = { BREAKFAST: "from-amber-400 to-orange-500", LUNCH: "from-emerald-400 to-teal-500", DINNER: "from-indigo-400 to-purple-500" };
+    const gradient = mealColors[str(row.mealType)] ?? "from-blue-400 to-indigo-500";
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className={`bg-gradient-to-r ${gradient} px-6 py-5 text-white flex items-center justify-between`}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center"><UtensilsCrossed className="w-5 h-5" /></div>
+              <div>
+                <h2 className="font-bold text-lg">{str(row.mealType)}</h2>
+                <p className="text-white/70 text-xs">{str(row.venue ?? "Dining")}</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition"><X className="w-5 h-5" /></button>
+          </div>
+          <div className="p-6 space-y-3 overflow-y-auto flex-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</span>
+              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${pill}`}>{status}</span>
+            </div>
+            {row.reservedAt && <div className="flex items-center justify-between py-2 border-b border-gray-100">
+              <span className="text-xs text-gray-500">When</span>
+              <span className="text-sm font-semibold text-gray-900">{fmtDT(str(row.reservedAt))}</span>
+            </div>}
+            <div className="flex items-center justify-between py-2 border-b border-gray-100">
+              <span className="text-xs text-gray-500">Party Size</span>
+              <span className="text-sm font-semibold text-gray-900">{str(row.partySize ?? 1)} guests</span>
+            </div>
+            {row.guestNames && <div className="flex items-center justify-between py-2 border-b border-gray-100">
+              <span className="text-xs text-gray-500">Guests</span>
+              <span className="text-sm text-gray-900 text-right max-w-[60%]">{str(row.guestNames)}</span>
+            </div>}
+            {row.specialRequests && <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
+              <p className="text-[10px] font-semibold text-amber-500 uppercase tracking-wide mb-1">Special Requests</p>
+              <p className="text-sm text-amber-900 whitespace-pre-wrap">{str(row.specialRequests)}</p>
+            </div>}
+          </div>
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+            <button onClick={onClose} className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-xl transition text-sm">Close</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (type === "preference") {
+    const catColors: Record<string, string> = { Dining: "from-orange-400 to-amber-500", "Room Comfort": "from-blue-400 to-indigo-500", Activities: "from-purple-400 to-pink-500", "Wake-Up": "from-emerald-400 to-teal-500", Communication: "from-cyan-400 to-blue-500" };
+    const gradient = catColors[str(row.category)] ?? "from-gray-400 to-gray-500";
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className={`bg-gradient-to-r ${gradient} px-6 py-5 text-white flex items-center justify-between`}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center"><SlidersHorizontal className="w-5 h-5" /></div>
+              <div>
+                <p className="text-white/70 text-xs font-medium">{str(row.category)}</p>
+                <h2 className="font-bold text-lg">{str(row.preference)}</h2>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition"><X className="w-5 h-5" /></button>
+          </div>
+          <div className="p-6 space-y-4 overflow-y-auto flex-1">
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-center">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Value</p>
+              <p className="text-2xl font-black text-gray-900">{str(row.value)}</p>
+            </div>
+            {row.notes && <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+              <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide mb-1">Notes</p>
+              <p className="text-sm text-blue-900 whitespace-pre-wrap">{str(row.notes)}</p>
+            </div>}
+          </div>
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+            <button onClick={onClose} className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-xl transition text-sm">Close</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* Generic fallback */
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between z-10">
           <h2 className="font-bold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl transition"><X className="w-5 h-5" /></button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="p-5 space-y-3">
+          {Object.entries(row).filter(([k]) => !k.startsWith("_") && k !== "raw").map(([k, v]) => (
+            <div key={k} className="flex justify-between gap-3 text-sm border-b border-gray-100 pb-2">
+              <span className="text-gray-500 font-medium capitalize">{k.replace(/([A-Z])/g, " $1").trim()}</span>
+              <span className="text-gray-900 text-right max-w-[60%] break-words">{v == null ? "—" : String(v)}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -114,16 +412,7 @@ export default function ResidentHub({ initialTab = "report" }: ResidentHubProps)
       {activeTab === "community" && <CommunityTab onView={openView} />}
 
       {/* View Modal */}
-      {viewRow && <ViewModal title={viewTitle} onClose={() => setViewRow(null)}>
-        <div className="space-y-3">
-          {Object.entries(viewRow).filter(([k]) => !k.startsWith("_") && k !== "raw").map(([k, v]) => (
-            <div key={k} className="flex justify-between gap-3 text-sm border-b border-gray-100 pb-2">
-              <span className="text-gray-500 font-medium capitalize">{k.replace(/([A-Z])/g, " $1").trim()}</span>
-              <span className="text-gray-900 text-right max-w-[60%] break-words">{v == null ? "—" : String(v)}</span>
-            </div>
-          ))}
-        </div>
-      </ViewModal>}
+      {viewRow && <ViewModal title={viewTitle} row={viewRow} onClose={() => setViewRow(null)} />}
     </div>
   );
 }
@@ -351,7 +640,7 @@ function AppointmentsTab({ onView }: { onView: (r: Row, title: string) => void }
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none" />
         </div>
         <button onClick={() => { setForm({ visitorName: "", relationship: "", purpose: "", date: "", phone: "", notes: "" }); setShowForm(true); }}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm whitespace-nowrap">
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm whitespace-nowrap">
           <Plus className="w-4 h-4" /> Request Visit
         </button>
       </div>
@@ -416,25 +705,48 @@ function AppointmentsTab({ onView }: { onView: (r: Row, title: string) => void }
 
       {/* Request Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between">
-              <h2 className="text-xl font-bold">Request a Visit</h2>
-              <button onClick={() => setShowForm(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5" /></button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowForm(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-purple-500 to-violet-600 px-6 py-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center"><Calendar className="w-5 h-5" /></div>
+                <h2 className="text-xl font-bold">Request a Visit</h2>
+              </div>
+              <button onClick={() => setShowForm(false)} className="p-2 hover:bg-white/20 rounded-xl transition"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label className="block text-sm font-semibold text-gray-700 mb-1">Visitor Name *</label><input type="text" value={form.visitorName} onChange={e => setForm(f => ({ ...f, visitorName: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-                <div><label className="block text-sm font-semibold text-gray-700 mb-1">Relationship</label><input type="text" value={form.relationship} onChange={e => setForm(f => ({ ...f, relationship: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Visitor Name *</label>
+                  <input type="text" value={form.visitorName} onChange={e => setForm(f => ({ ...f, visitorName: e.target.value }))} placeholder="Full name" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none transition placeholder:text-gray-400" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Relationship</label>
+                  <input type="text" value={form.relationship} onChange={e => setForm(f => ({ ...f, relationship: e.target.value }))} placeholder="e.g. Daughter, Son" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none transition placeholder:text-gray-400" />
+                </div>
               </div>
-              <div><label className="block text-sm font-semibold text-gray-700 mb-1">Date & Time *</label><input type="datetime-local" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-              <div><label className="block text-sm font-semibold text-gray-700 mb-1">Purpose</label><input type="text" value={form.purpose} onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-              <div><label className="block text-sm font-semibold text-gray-700 mb-1">Phone</label><input type="text" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-              <div><label className="block text-sm font-semibold text-gray-700 mb-1">Notes</label><textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none resize-y" /></div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Date & Time *</label>
+                <input type="datetime-local" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none transition" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Purpose</label>
+                <input type="text" value={form.purpose} onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))} placeholder="e.g. Birthday celebration" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none transition placeholder:text-gray-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Phone</label>
+                <input type="text" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="Contact number" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none transition placeholder:text-gray-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Notes <span className="text-gray-400 normal-case">(optional)</span></label>
+                <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} placeholder="Any additional details…" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none transition placeholder:text-gray-400 resize-none" />
+              </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
-              <button onClick={() => setShowForm(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition text-sm">Cancel</button>
-              <button onClick={() => void createVisit()} disabled={saving} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-60 text-sm"><Plus className="w-4 h-4" /> {saving ? "Saving…" : "Request Visit"}</button>
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
+              <button onClick={() => setShowForm(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-200 rounded-xl transition text-sm font-semibold">Cancel</button>
+              <button onClick={() => void createVisit()} disabled={saving} className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-500 to-violet-600 text-white font-semibold rounded-xl hover:shadow-lg transition active:scale-95 disabled:opacity-60 text-sm">
+                {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : <><Plus className="w-4 h-4" /> Request Visit</>}
+              </button>
             </div>
           </div>
         </div>
@@ -591,7 +903,7 @@ function TransportTab({ onView }: { onView: (r: Row, title: string) => void }) {
           <input type="text" placeholder="Search destination, type…" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none" />
         </div>
-        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm whitespace-nowrap">
+        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm whitespace-nowrap">
           <Plus className="w-4 h-4" /> Request Transport
         </button>
       </div>
@@ -666,48 +978,65 @@ function TransportTab({ onView }: { onView: (r: Row, title: string) => void }) {
 
       {/* Request Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between z-10">
-              <h2 className="text-xl font-bold">Request Transport</h2>
-              <button onClick={() => setShowForm(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowForm(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center"><Bus className="w-5 h-5" /></div>
+                <h2 className="text-xl font-bold">Request Transport</h2>
+              </div>
+              <button onClick={() => setShowForm(false)} className="p-2 hover:bg-white/20 rounded-xl transition"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-6 space-y-4">
               {residents.length > 1 && (
-                <div><label className="block text-sm font-semibold text-gray-700 mb-1">Resident</label>
-                  <select value={resolvedResidentId} onChange={e => setResidentId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Resident</label>
+                  <select value={resolvedResidentId} onChange={e => setResidentId(e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition">
                     {residents.map(r => <option key={str(r.id)} value={str(r.id)}>{str(r.firstName)} {str(r.lastName)} — Room {str(r.roomNumber)}</option>)}
-                  </select></div>
+                  </select>
+                </div>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label className="block text-sm font-semibold text-gray-700 mb-1">Trip Type</label>
-                  <select value={form.type} onChange={e => set("type", e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Trip Type</label>
+                  <select value={form.type} onChange={e => set("type", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition">
                     {Object.entries(TYPE_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                  </select></div>
-                <div><label className="block text-sm font-semibold text-gray-700 mb-1">Date & Time</label>
-                  <input type="datetime-local" value={form.requestedDate} onChange={e => set("requestedDate", e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-                <div className="sm:col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-1">Destination</label>
-                  <input type="text" value={form.destination} onChange={e => set("destination", e.target.value)} placeholder="e.g. St. Luke's Medical Center" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-                <div className="sm:col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-1">Purpose</label>
-                  <input type="text" value={form.purpose} onChange={e => set("purpose", e.target.value)} placeholder="e.g. Cardiology follow-up" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Date & Time</label>
+                  <input type="datetime-local" value={form.requestedDate} onChange={e => set("requestedDate", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Destination</label>
+                  <input type="text" value={form.destination} onChange={e => set("destination", e.target.value)} placeholder="e.g. St. Luke's Medical Center" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition placeholder:text-gray-400" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Purpose</label>
+                  <input type="text" value={form.purpose} onChange={e => set("purpose", e.target.value)} placeholder="e.g. Cardiology follow-up" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition placeholder:text-gray-400" />
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <label className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer text-sm select-none"><input type="checkbox" checked={form.returnRequired} onChange={e => set("returnRequired", e.target.checked)} className="rounded" />Round trip</label>
-                <label className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer text-sm select-none"><input type="checkbox" checked={form.wheelchairNeeded} onChange={e => set("wheelchairNeeded", e.target.checked)} className="rounded" /><Accessibility className="w-4 h-4 text-blue-500" /> Wheelchair</label>
-                <label className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer text-sm select-none"><input type="checkbox" checked={form.escortRequired} onChange={e => set("escortRequired", e.target.checked)} className="rounded" />Escort</label>
+                <label className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer text-sm select-none transition hover:bg-gray-100"><input type="checkbox" checked={form.returnRequired} onChange={e => set("returnRequired", e.target.checked)} className="rounded" />Round trip</label>
+                <label className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer text-sm select-none transition hover:bg-gray-100"><input type="checkbox" checked={form.wheelchairNeeded} onChange={e => set("wheelchairNeeded", e.target.checked)} className="rounded" /><Accessibility className="w-4 h-4 text-blue-500" /> Wheelchair</label>
+                <label className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer text-sm select-none transition hover:bg-gray-100"><input type="checkbox" checked={form.escortRequired} onChange={e => set("escortRequired", e.target.checked)} className="rounded" />Escort</label>
               </div>
               {form.escortRequired && (
-                <div><label className="block text-sm font-semibold text-gray-700 mb-1">Escort</label>
-                  <select value={form.escortRole} onChange={e => set("escortRole", e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Escort Role</label>
+                  <select value={form.escortRole} onChange={e => set("escortRole", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition">
                     <option value="NURSE">Nurse</option><option value="CAREGIVER">Caregiver</option>
-                  </select></div>
+                  </select>
+                </div>
               )}
-              <div><label className="block text-sm font-semibold text-gray-700 mb-1">Notes</label>
-                <textarea value={form.notes} onChange={e => set("notes", e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Notes <span className="text-gray-400 normal-case">(optional)</span></label>
+                <textarea value={form.notes} onChange={e => set("notes", e.target.value)} rows={2} placeholder="Any additional details…" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition placeholder:text-gray-400 resize-none" />
+              </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
-              <button onClick={() => setShowForm(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition text-sm">Cancel</button>
-              <button onClick={handleSubmit} className="px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Send Request</button>
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
+              <button onClick={() => setShowForm(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-200 rounded-xl transition text-sm font-semibold">Cancel</button>
+              <button onClick={handleSubmit} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-xl hover:shadow-lg transition active:scale-95 text-sm">Send Request</button>
             </div>
           </div>
         </div>
@@ -938,7 +1267,7 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
       {showRequest && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
               <h2 className="text-xl font-bold">Request {CATEGORY_META[reqForm.category]?.label ?? "a Service"}</h2>
               <button onClick={() => setShowRequest(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
@@ -959,7 +1288,7 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
               <button onClick={() => setShowRequest(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition text-sm">Cancel</button>
-              <button onClick={submitRequest} className="px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Send Request</button>
+              <button onClick={submitRequest} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Send Request</button>
             </div>
           </div>
         </div>
@@ -969,7 +1298,7 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
       {showBooking && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
               <h2 className="text-xl font-bold">Book {CONCIERGE_CATALOG[bookForm.category]?.label ?? "a Service"}</h2>
               <button onClick={() => setShowBooking(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
@@ -985,7 +1314,7 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
               <button onClick={() => setShowBooking(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition text-sm">Cancel</button>
-              <button onClick={submitBooking} className="px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Request Booking</button>
+              <button onClick={submitBooking} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Request Booking</button>
             </div>
           </div>
         </div>
@@ -1175,7 +1504,7 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
                           past && status === "ATTENDED" && !att?.rating ? <button onClick={() => rateEvent(str(att.id))} className="w-full px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition inline-flex items-center justify-center gap-1"><Star className="w-3.5 h-3.5" /> Rate</button> :
                             att?.rating ? <span className="inline-flex items-center gap-0.5 text-amber-500 font-semibold text-xs">{num(att.rating)} <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" /></span> :
                               status === "GOING" ? <div className="flex items-center gap-2"><span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${RSVP_PILL.GOING}`}>Going</span><button onClick={() => rsvp(str(e.id), "DECLINED")} className="text-xs text-red-500 hover:underline">Cancel</button></div> :
-                                !past ? <button onClick={() => rsvp(str(e.id), "GOING")} className="w-full px-3 py-1.5 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black text-xs font-semibold rounded-lg transition inline-flex items-center justify-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> RSVP</button> :
+                                !past ? <button onClick={() => rsvp(str(e.id), "GOING")} className="w-full px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-black text-xs font-semibold rounded-lg transition inline-flex items-center justify-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> RSVP</button> :
                                   <span className="text-[11px] text-gray-400">Event ended</span>}
                       </div>
                     </div>
@@ -1192,7 +1521,7 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
       <div className="bg-white rounded-lg border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-1.5"><UtensilsCrossed className="w-4 h-4 text-yellow-500" /><h3 className="font-semibold text-gray-900 text-sm">Dining Reservations</h3></div>
-          <button onClick={() => { setDiningForm(commDiningForm0); setShowDining(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black text-xs font-semibold rounded-lg hover:shadow-md transition"><Plus className="w-3.5 h-3.5" /> Reserve</button>
+          <button onClick={() => { setDiningForm(commDiningForm0); setShowDining(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-black text-xs font-semibold rounded-lg hover:shadow-md transition"><Plus className="w-3.5 h-3.5" /> Reserve</button>
         </div>
         {diningQ.data.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">No dining reservations yet.</p> : (
           <div className="space-y-2">
@@ -1219,7 +1548,7 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
       <div className="bg-white rounded-lg border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-1.5"><SlidersHorizontal className="w-4 h-4 text-yellow-500" /><h3 className="font-semibold text-gray-900 text-sm">My Preference Profile</h3></div>
-          <button onClick={() => { setPrefForm(commPrefForm0); setShowPref(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black text-xs font-semibold rounded-lg hover:shadow-md transition"><Plus className="w-3.5 h-3.5" /> Add</button>
+          <button onClick={() => { setPrefForm(commPrefForm0); setShowPref(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-black text-xs font-semibold rounded-lg hover:shadow-md transition"><Plus className="w-3.5 h-3.5" /> Add</button>
         </div>
         {prefsQ.data.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">No preferences set yet.</p> : (
           <div className="space-y-3">
@@ -1245,35 +1574,50 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
 
       {/* Dining Modal */}
       {showDining && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between z-10">
-              <h2 className="text-xl font-bold">Reserve Dining</h2>
-              <button onClick={() => setShowDining(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowDining(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-amber-400 to-orange-500 px-6 py-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center"><UtensilsCrossed className="w-5 h-5" /></div>
+                <h2 className="text-xl font-bold">Reserve Dining</h2>
+              </div>
+              <button onClick={() => setShowDining(false)} className="p-2 hover:bg-white/20 rounded-xl transition"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-semibold text-gray-700 mb-1">Meal</label>
-                  <select value={diningForm.mealType} onChange={e => setDiningForm(f => ({ ...f, mealType: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none">
-                    {MEAL_TYPES.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select></div>
-                <div><label className="block text-sm font-semibold text-gray-700 mb-1">Venue</label>
-                  <select value={diningForm.venue} onChange={e => setDiningForm(f => ({ ...f, venue: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Meal Type</label>
+                  <select value={diningForm.mealType} onChange={e => setDiningForm(f => ({ ...f, mealType: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition">
+                    {MEAL_TYPES.map(m => <option key={m} value={m}>{m.charAt(0) + m.slice(1).toLowerCase()}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Venue</label>
+                  <select value={diningForm.venue} onChange={e => setDiningForm(f => ({ ...f, venue: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition">
                     {DINING_VENUES.map(v => <option key={v} value={v}>{v}</option>)}
-                  </select></div>
-                <div><label className="block text-sm font-semibold text-gray-700 mb-1">Date & Time</label>
-                  <input type="datetime-local" value={diningForm.reservedAt} onChange={e => setDiningForm(f => ({ ...f, reservedAt: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-                <div><label className="block text-sm font-semibold text-gray-700 mb-1">Party Size</label>
-                  <input type="number" min="1" value={diningForm.partySize} onChange={e => setDiningForm(f => ({ ...f, partySize: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-                <div className="col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-1">Guests (optional)</label>
-                  <input type="text" value={diningForm.guestNames} onChange={e => setDiningForm(f => ({ ...f, guestNames: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-                <div className="col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-1">Special Requests</label>
-                  <textarea value={diningForm.specialRequests} onChange={e => setDiningForm(f => ({ ...f, specialRequests: e.target.value }))} rows={2} placeholder="Dietary needs, seating…" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Date & Time</label>
+                  <input type="datetime-local" value={diningForm.reservedAt} onChange={e => setDiningForm(f => ({ ...f, reservedAt: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Party Size</label>
+                  <input type="number" min="1" value={diningForm.partySize} onChange={e => setDiningForm(f => ({ ...f, partySize: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Guests <span className="text-gray-400 normal-case">(optional)</span></label>
+                  <input type="text" value={diningForm.guestNames} onChange={e => setDiningForm(f => ({ ...f, guestNames: e.target.value }))} placeholder="Names of guests joining" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition placeholder:text-gray-400" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Special Requests <span className="text-gray-400 normal-case">(optional)</span></label>
+                  <textarea value={diningForm.specialRequests} onChange={e => setDiningForm(f => ({ ...f, specialRequests: e.target.value }))} rows={2} placeholder="Dietary needs, seating preference…" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none transition placeholder:text-gray-400 resize-none" />
+                </div>
               </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
-              <button onClick={() => setShowDining(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition text-sm">Cancel</button>
-              <button onClick={submitDining} className="px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Request Reservation</button>
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
+              <button onClick={() => setShowDining(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-200 rounded-xl transition text-sm font-semibold">Cancel</button>
+              <button onClick={submitDining} className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl hover:shadow-lg transition active:scale-95 text-sm">Request Reservation</button>
             </div>
           </div>
         </div>
@@ -1281,27 +1625,38 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
 
       {/* Preference Modal */}
       {showPref && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between z-10">
-              <h2 className="text-xl font-bold">Add Preference</h2>
-              <button onClick={() => setShowPref(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowPref(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-purple-400 to-pink-500 px-6 py-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center"><SlidersHorizontal className="w-5 h-5" /></div>
+                <h2 className="text-xl font-bold">Add Preference</h2>
+              </div>
+              <button onClick={() => setShowPref(false)} className="p-2 hover:bg-white/20 rounded-xl transition"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-6 space-y-4">
-              <div><label className="block text-sm font-semibold text-gray-700 mb-1">Category</label>
-                <select value={prefForm.category} onChange={e => setPrefForm(f => ({ ...f, category: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Category</label>
+                <select value={prefForm.category} onChange={e => setPrefForm(f => ({ ...f, category: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none transition">
                   {PREFERENCE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select></div>
-              <div><label className="block text-sm font-semibold text-gray-700 mb-1">Preference</label>
-                <input type="text" value={prefForm.preference} onChange={e => setPrefForm(f => ({ ...f, preference: e.target.value }))} placeholder="e.g. Preferred wake-up time" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-              <div><label className="block text-sm font-semibold text-gray-700 mb-1">Value</label>
-                <input type="text" value={prefForm.value} onChange={e => setPrefForm(f => ({ ...f, value: e.target.value }))} placeholder="e.g. 6:30 AM" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-              <div><label className="block text-sm font-semibold text-gray-700 mb-1">Notes (optional)</label>
-                <textarea value={prefForm.notes} onChange={e => setPrefForm(f => ({ ...f, notes: e.target.value }))} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Preference</label>
+                <input type="text" value={prefForm.preference} onChange={e => setPrefForm(f => ({ ...f, preference: e.target.value }))} placeholder="e.g. Preferred wake-up time" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none transition placeholder:text-gray-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Value</label>
+                <input type="text" value={prefForm.value} onChange={e => setPrefForm(f => ({ ...f, value: e.target.value }))} placeholder="e.g. 6:30 AM" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none transition placeholder:text-gray-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Notes <span className="text-gray-400 normal-case">(optional)</span></label>
+                <textarea value={prefForm.notes} onChange={e => setPrefForm(f => ({ ...f, notes: e.target.value }))} rows={2} placeholder="Any additional details…" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none transition placeholder:text-gray-400 resize-none" />
+              </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
-              <button onClick={() => setShowPref(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition text-sm">Cancel</button>
-              <button onClick={savePref} className="px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Save Preference</button>
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
+              <button onClick={() => setShowPref(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-200 rounded-xl transition text-sm font-semibold">Cancel</button>
+              <button onClick={savePref} className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl hover:shadow-lg transition active:scale-95 text-sm">Save Preference</button>
             </div>
           </div>
         </div>

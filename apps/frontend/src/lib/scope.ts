@@ -185,9 +185,9 @@ function getDemoNotificationsForRole(role: string): Row[] {
       ];
     case "FLEET_MANAGEMENT":
       return [
-        { id: "fl_n1", type: "TRANSPORT_UPDATE", title: "New Transport Request", message: "Arthur Pendelton requested a dialysis run for tomorrow 8:00 AM — pending dispatcher review.", isRead: false, createdAt: iso(12 * 1000) },
-        { id: "fl_n2", type: "SYSTEM_ALERT", title: "Registration Expiring", message: "Wheelchair Van WV-001 registration expires in 14 days. Renew to stay compliant.", isRead: false, createdAt: iso(3 * H) },
-        { id: "fl_n3", type: "TASK_ASSIGNMENT", title: "Preventive Maintenance Due", message: "Shuttle SH-001 hits its 5,000 km service interval this week.", isRead: true, createdAt: iso(1 * D) },
+        { id: "fl_n1", type: "TRANSPORT_UPDATE", title: "New Transport Request", message: "Arthur Pendelton requested a medical appointment transport to St. Luke's Medical Center for an Endocrinology consult — pending dispatcher review.", isRead: false, createdAt: iso(12 * 1000) },
+        { id: "fl_n2", type: "SYSTEM_ALERT", title: "Registration Expiring", message: "Wheelchair Van WV-001 registration expires in 14 days. File for renewal to maintain road compliance.", isRead: false, createdAt: iso(3 * H) },
+        { id: "fl_n3", type: "TASK_ASSIGNMENT", title: "Preventive Maintenance Overdue", message: "Sedan Escort SD-001 is 410 km overdue for its scheduled 88,000 km preventive service.", isRead: true, createdAt: iso(1 * D) },
       ];
     case "RESIDENT":
       return [
@@ -197,7 +197,7 @@ function getDemoNotificationsForRole(role: string): Row[] {
       ];
     default:
       return [
-        { id: "def_n1", type: "SYSTEM_ALERT", title: "Welcome to Golden Hearth", message: "Logged in successfully to your portal workspace.", isRead: false, createdAt: iso(1 * H) }
+        { id: "def_n1", type: "SYSTEM_ALERT", title: "Welcome to LifeCare CMS", message: "Logged in successfully to your portal workspace.", isRead: false, createdAt: iso(1 * H) }
       ];
   }
 }

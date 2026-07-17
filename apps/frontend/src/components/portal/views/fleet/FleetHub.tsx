@@ -383,7 +383,7 @@ function MaintenanceTab({ onView }: { onView: (r: Record<string, unknown>) => vo
           <div className="flex gap-2">
             <button onClick={() => void refreshAll()} className="flex items-center gap-2 px-3 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm"><RefreshCw className="w-4 h-4" /></button>
             <button onClick={() => { setCreateForm({ vehicleId: "", type: "PREVENTIVE", status: "SCHEDULED", title: "", description: "", scheduledDate: "", vendor: "", odometerAt: "", cost: "", downtimeHours: "", notes: "" }); setShowCreate(true); }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm active:scale-95">
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm active:scale-95">
               <ClipboardList className="w-4 h-4" /> New
             </button>
           </div>
@@ -565,7 +565,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
         <div className="flex gap-2">
           <button onClick={() => void refreshAll()} className="flex items-center gap-2 px-3 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm"><RefreshCw className="w-4 h-4" /></button>
           <button onClick={() => { setForm({ vehicleId: "", driverId: "", logDate: toLocalInputValue(new Date()), odometer: "", liters: "", cost: "", fuelType: "Diesel", notes: "" }); setShowCreate(true); }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm active:scale-95">
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm active:scale-95">
             <Fuel className="w-4 h-4" /> Log Fuel-Up
           </button>
         </div>
@@ -635,7 +635,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
               <h2 className="text-xl font-bold">Log Fuel-Up</h2>
               <button onClick={() => setShowCreate(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
@@ -661,7 +661,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
               <button onClick={() => setShowCreate(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
-              <button onClick={handleCreate} className="px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Log Fuel-Up</button>
+              <button onClick={handleCreate} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Log Fuel-Up</button>
             </div>
           </div>
         </div>
@@ -1032,7 +1032,7 @@ function ViewModal({ row, onClose }: { row: Record<string, unknown>; onClose: ()
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold">{title}</h2>
           <button onClick={onClose} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
@@ -1212,7 +1212,7 @@ function MaintFormModal({ title, form, onChange, onSave, onCancel, vehicles }: {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold">{title}</h2>
           <button onClick={onCancel} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
@@ -1244,7 +1244,7 @@ function MaintFormModal({ title, form, onChange, onSave, onCancel, vehicles }: {
         </div>
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
           <button onClick={onCancel} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
-          <button onClick={onSave} className="px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">{title.includes("Edit") ? "Save Changes" : "Create"}</button>
+          <button onClick={onSave} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">{title.includes("Edit") ? "Save Changes" : "Create"}</button>
         </div>
       </div>
     </div>

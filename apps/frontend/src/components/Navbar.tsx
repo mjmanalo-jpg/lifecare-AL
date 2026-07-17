@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sun, Moon, Menu, X, User } from "lucide-react";
 import Link from "next/link";
+import LcmsLogo from "@/components/LcmsLogo";
 
 interface NavLink {
   name: string;
@@ -74,37 +75,7 @@ export default function Navbar() {
     >
       {/* Brand Logo */}
       <Link href="/" className="flex items-center gap-3 group z-55">
-        <div 
-          className="relative flex items-center justify-center w-10 h-10 rounded-xl border transition-transform duration-300"
-          style={{
-            background: "linear-gradient(to top right, var(--lp-accent-20, rgba(245,158,11,0.2)), var(--lp-accent-10, rgba(245,158,11,0.1)))",
-            borderColor: "var(--lp-accent-30, rgba(245,158,11,0.3))",
-            boxShadow: "0 0 15px var(--lp-accent-20, rgba(245,158,11,0.2))"
-          }}
-        >
-          {/* Custom SVG logo representing AI synapse and caring curves */}
-          <svg 
-            className="w-6 h-6" 
-            style={{ color: "var(--lp-accent, #f59e0b)" }}
-            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-          >
-            <circle cx="12" cy="12" r="3" style={{ fill: "var(--lp-accent-10, rgba(245,158,11,0.1))" }} />
-            <path d="M12 5V9M12 15V19M5 12H9M15 12H19" strokeLinecap="round" />
-            <circle cx="12" cy="5" r="1.2" style={{ fill: "var(--lp-accent, #f59e0b)" }} />
-            <circle cx="12" cy="19" r="1.2" style={{ fill: "var(--lp-accent, #f59e0b)" }} />
-            <circle cx="5" cy="12" r="1.2" style={{ fill: "var(--lp-accent, #f59e0b)" }} />
-            <circle cx="19" cy="12" r="1.2" style={{ fill: "var(--lp-accent, #f59e0b)" }} />
-            <path d="M4 16C4 16 8 20 12 20C16 20 20 16 20 16M4 8C4 8 8 4 12 4C16 4 20 8 20 8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
-        <div className="flex flex-col">
-          <span className="text-lg font-bold tracking-tight text-foreground leading-none group-hover:text-[var(--lp-accent,#f59e0b)] transition-colors">
-            Golden Hearth
-          </span>
-          <span className="text-[9px] text-muted-foreground font-semibold tracking-wide uppercase mt-1">
-            AI Powered Assisted Living
-          </span>
-        </div>
+        <LcmsLogo />
       </Link>
 
       <div className="hidden md:flex items-center gap-8">

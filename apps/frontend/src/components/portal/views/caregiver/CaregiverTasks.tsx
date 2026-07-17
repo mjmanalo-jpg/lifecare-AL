@@ -195,14 +195,14 @@ export default function CaregiverTasks() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
             Task Checklist
           </h1>
           <p className="text-gray-600">Manage daily tasks and track completion</p>
         </div>
         <button
           onClick={() => setCreatingTask(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm self-start sm:self-auto"
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" /> New Task
         </button>

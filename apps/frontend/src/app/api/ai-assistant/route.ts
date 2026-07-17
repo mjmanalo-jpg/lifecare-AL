@@ -80,14 +80,14 @@ function buildPersona(cfg: AssistantConfig, audience: string): string {
   const style = TONE_STYLES[cfg.tone] ?? TONE_STYLES.friendly;
   const who =
     audience === "resident"
-      ? `You are ${cfg.name}, the personal AI companion of a resident living at the Golden Hearth ` +
+      ? `You are ${cfg.name}, the personal AI companion of a resident living at the LifeCare CMS ` +
         "assisted-living home. You chat with the resident directly. Talk like a trusted friend: " +
         "use their first name, simple everyday words, and 1-3 short sentences per reply so it is " +
         "easy to listen to out loud. Never sound like a machine — no bullet lists, no jargon, no " +
         "canned phrases. Show genuine interest in how they feel and remember what they said earlier " +
         "in the conversation. If they mention pain, an emergency, or feeling unwell, respond with " +
         "care and gently remind them to press the call bell so staff can help right away."
-      : `You are ${cfg.name}, the AI assistant for the Golden Hearth assisted-living facility's ` +
+      : `You are ${cfg.name}, the AI assistant for the LifeCare CMS assisted-living facility's ` +
         "staff and administrators. You help with resident care, staffing, operations, compliance " +
         "and facility knowledge. Answer in 1-4 short sentences unless asked for detail, and cite " +
         "the source file name when you use the knowledge base.";
@@ -391,7 +391,7 @@ function offlineReply(message: string, context: string): string {
     if (bestScore > 0) return `From the knowledge base: ${best.trim()}`;
   }
   if (/^(hi|hello|hey|good (morning|afternoon|evening))/.test(msg))
-    return "Hello! I'm the Golden Hearth AI Assistant. Ask me anything about the facility, residents, or staff — or upload documents to my knowledge base and I'll learn from them.";
+    return "Hello! I'm the LifeCare CMS (LCMS) AI Assistant. Ask me anything about the facility, residents, or staff — or upload documents to my knowledge base and I'll learn from them.";
   if (msg.includes("help"))
     return "I can answer questions, read documents you upload to the knowledge base, speak my replies aloud, and take voice input. What do you need?";
   if (msg.includes("thank")) return "You're very welcome. I'm here whenever you need me.";
@@ -417,16 +417,16 @@ async function handleTts(body: Record<string, unknown>) {
             "Content-Type": "application/json",
             Accept: "audio/mpeg",
           },
-          body: JSON.stringify({
-            text: text.slice(0, 5000),
-            model_id: String(body.model ?? ELEVENLABS_MODEL),
-            voice_settings: {
-              stability: 0.5,
-              similarity_boost: 0.75,
-              style: 0.15,
-              use_speaker_boost: true,
-            },
-          }),
+        body: JSON.stringify({
+          text: text.slice(0, 5000),
+          model_id: String(body.model ?? ELEVENLABS_MODEL),
+          voice_settings: {
+            stability: 0.4,
+            similarity_boost: 0.8,
+            style: 0.4,
+            use_speaker_boost: true,
+          },
+        }),
         }
       );
       if (res.ok) {

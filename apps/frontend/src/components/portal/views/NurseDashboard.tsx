@@ -257,7 +257,7 @@ export default function NurseDashboard() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
             <ShiftIcon className="w-6 h-6 text-yellow-500 flex-shrink-0" />
-            <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">{shift.greeting} — Clinical Dashboard</span>
+            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">{shift.greeting} — Clinical Dashboard</span>
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm mt-1">
             <span className="inline-flex items-center gap-1 text-green-600">
@@ -397,7 +397,7 @@ export default function NurseDashboard() {
       <div className="border-t border-gray-200 pt-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <div>
-            <h2 className="text-xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent flex items-center gap-2">
+            <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-yellow-500 flex-shrink-0" /> Vitals Trends
             </h2>
             <p className="text-gray-600 text-sm mt-1">Analyze vital sign trends, spot anomalies, and track patient health trajectories</p>

@@ -143,7 +143,7 @@ export default function NurseRecordsWithCallBells() {
             >
               ← Back to Residents
             </button>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
               {selectedResidentData.firstName} {selectedResidentData.lastName}
             </h1>
             <p className="text-gray-600 mt-1">Room {selectedResidentData.roomNumber}</p>
@@ -259,7 +259,7 @@ export default function NurseRecordsWithCallBells() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2">
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
           Resident Records & Call Bells
         </h1>
         <p className="text-gray-600">View resident records with active call bells highlighted</p>

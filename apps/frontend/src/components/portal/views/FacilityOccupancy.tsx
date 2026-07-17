@@ -189,7 +189,7 @@ export default function FacilityOccupancy() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
             Facility Occupancy
           </h1>
           <p className="text-gray-600">Real-time occupancy management &mdash; beds, rooms, wings, and floors</p>

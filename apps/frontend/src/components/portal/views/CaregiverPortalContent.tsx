@@ -9,6 +9,16 @@ import CaregiverReports from "@/components/portal/views/caregiver/CaregiverRepor
 import CaregiverCareTeam from "@/components/portal/views/caregiver/CaregiverCareTeam";
 import CaregiverMonitoring from "@/components/portal/views/caregiver/CaregiverMonitoring";
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
+import PhysicianCarePlans from "@/components/portal/views/physician/PhysicianCarePlans";
+import NurseMedications from "@/components/portal/views/NurseMedications";
+import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
+import CarePlanBoard from "@/components/portal/views/clinical/CarePlanBoard";
+import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
+import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
+import MARBoard from "@/components/portal/views/clinical/MARBoard";
+import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker";
+import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
+import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 
 interface CaregiverPortalContentProps {
   tab: string;
@@ -24,6 +34,8 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
   switch (tab) {
     case "tasks":
       return <CaregiverTasks />;
+    case "dailyrounds":
+      return <DailyRoundsBoard clinicianRole="CAREGIVER" />;
     case "callbells":
       return <CaregiverCallBells />;
     case "residents":
@@ -38,6 +50,22 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
       return <CaregiverMonitoring />;
     case "escalations":
       return <EscalationsBoard role="CAREGIVER" />;
+    case "rounds":
+      return <AssessmentAcuityBoard clinicianRole="CAREGIVER" />;
+    case "careplans":
+      return <CarePlanBoard />;
+    case "medications":
+      return <NurseMedications />;
+    case "documentation":
+      return <DailyDocumentation clinicianRole="CAREGIVER" />;
+    case "vaccinations":
+      return <VaccinationTracker />;
+    case "documents":
+      return <ResidentDocuments />;
+    case "mar":
+      return <MARBoard />;
+    case "followups":
+      return <FollowUpTracker />;
     default:
       return <CaregiverDashboard />;
   }

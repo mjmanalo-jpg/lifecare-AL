@@ -2,6 +2,16 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import ResidentHub from "./resident/ResidentHub";
+import FamilyRelative from "@/components/portal/views/family/FamilyRelative";
+import FamilyTimeline from "@/components/portal/views/family/FamilyTimeline";
+import FamilyCareGoals from "@/components/portal/views/family/FamilyCareGoals";
+import FamilyDailyReport from "@/components/portal/views/family/FamilyDailyReport";
+import FamilyAlerts from "@/components/portal/views/family/FamilyAlerts";
+import FamilyMessages from "@/components/portal/views/family/FamilyMessages";
+import NurseMedications from "@/components/portal/views/NurseMedications";
+import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
+import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
+import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
 import {
   Heart,
   Activity,
@@ -128,6 +138,7 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
   const [menuModalOpen, setMenuModalOpen] = useState(false);
   const [goalsModalOpen, setGoalsModalOpen] = useState(false);
   const [vitalsModalOpen, setVitalsModalOpen] = useState(false);
+  const [stepsModalOpen, setStepsModalOpen] = useState(false);
   const [callBellModalOpen, setCallBellModalOpen] = useState(false);
   const [callBellTarget, setCallBellTarget] = useState<"Nurse" | "Caregiver" | "Nurse & Caregiver">("Nurse & Caregiver");
   const [callBellReason, setCallBellReason] = useState("");
@@ -775,7 +786,7 @@ Vitals:
       const res = await fetch("/api/ai-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "tts", text, provider: "gemini", voiceId: voice }),
+        body: JSON.stringify({ action: "tts", text, provider: "auto", voiceId: voice }),
       });
       const data = await res.json();
       if (!data.fallback && data.audio) {
@@ -975,6 +986,38 @@ Vitals:
     }
   };
 
+
+  // Core LCMS Modules Aligned
+  if (tab === "records") {
+    return <FamilyRelative />;
+  }
+  if (tab === "rounds") {
+    return <FamilyTimeline />;
+  }
+  if (tab === "careplans") {
+    return <FamilyCareGoals />;
+  }
+  if (tab === "reports") {
+    return <FamilyDailyReport />;
+  }
+  if (tab === "medications") {
+    return <NurseMedications />;
+  }
+  if (tab === "escalations") {
+    return <FamilyAlerts />;
+  }
+  if (tab === "messages") {
+    return <FamilyMessages />;
+  }
+  if (tab === "vaccinations") {
+    return <VaccinationTracker />;
+  }
+  if (tab === "documents") {
+    return <ResidentDocuments />;
+  }
+  if (tab === "clinicalreports") {
+    return <ClinicalReports />;
+  }
 
   // Loading state skeleton
   if (tab && tab !== "dashboard") {
@@ -1186,7 +1229,7 @@ Vitals:
 
             {/* Activity Steps */}
             <div 
-              onClick={() => setVitalsModalOpen(true)}
+              onClick={() => setStepsModalOpen(true)}
               className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:border-blue-400 hover:shadow-md transition cursor-pointer"
             >
               <div className="flex items-center gap-2 pb-2">
@@ -1800,6 +1843,109 @@ Vitals:
                 className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition"
               >
                 Close Logs
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 5b. ACTIVITY STEPS DETAIL VIEW MODAL ── */}
+      {stepsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 bg-gradient-to-r from-indigo-500 to-violet-600 text-white flex items-center justify-between flex-shrink-0">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <StepIcon className="w-5 h-5 text-white" /> Activity Steps Tracker
+              </h3>
+              <button onClick={() => setStepsModalOpen(false)} className="p-1 hover:bg-white/20 rounded transition">
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+              {/* Hero stats */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-indigo-50 rounded-xl p-4 text-center border border-indigo-100">
+                  <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wider mb-1">Today</p>
+                  <p className="text-3xl font-black text-indigo-900">{activitySteps.replace(" Steps", "")}</p>
+                  <p className="text-[10px] text-indigo-400 mt-1">steps recorded</p>
+                </div>
+                <div className="bg-violet-50 rounded-xl p-4 text-center border border-violet-100">
+                  <p className="text-xs font-semibold text-violet-500 uppercase tracking-wider mb-1">Goal</p>
+                  <p className="text-3xl font-black text-violet-900">{activityGoalPct}%</p>
+                  <p className="text-[10px] text-violet-400 mt-1">completion</p>
+                </div>
+                <div className="bg-emerald-50 rounded-xl p-4 text-center border border-emerald-100">
+                  <p className="text-xs font-semibold text-emerald-500 uppercase tracking-wider mb-1">Goals Done</p>
+                  <p className="text-3xl font-black text-emerald-900">{goalRows.filter(g => g.isCompleted).length}<span className="text-lg">/{goalRows.length}</span></p>
+                  <p className="text-[10px] text-emerald-400 mt-1">of daily goals</p>
+                </div>
+              </div>
+
+              {/* Goal progress bar */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-bold text-gray-800">Daily Goal Progress</h4>
+                  <span className="text-xs font-semibold text-indigo-600">{activityGoalPct}%</span>
+                </div>
+                <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-700"
+                    style={{ width: `${Math.min(activityGoalPct, 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Steps history from vitals */}
+              <div>
+                <h4 className="text-sm font-bold text-gray-800 mb-3">Steps History</h4>
+                {vitals.filter(v => v.type === "STEPS" || v.type === "ACTIVITY_STEPS").length === 0 ? (
+                  <div className="text-center py-8 text-gray-400 italic text-sm">No step records logged yet.</div>
+                ) : (
+                  <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                    <table className="w-full text-left border-collapse text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3">Date</th>
+                          <th className="px-4 py-3">Steps</th>
+                          <th className="px-4 py-3">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 text-gray-800">
+                        {vitals
+                          .filter(v => v.type === "STEPS" || v.type === "ACTIVITY_STEPS")
+                          .map((v) => {
+                            const count = Number(v.value);
+                            const reached = count >= 4000;
+                            return (
+                              <tr key={v.id} className="hover:bg-gray-50 transition">
+                                <td className="px-4 py-3 text-xs text-gray-500">
+                                  {new Date(v.recordedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                </td>
+                                <td className="px-4 py-3 font-black text-gray-900">{count.toLocaleString()}</td>
+                                <td className="px-4 py-3">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    reached ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                                  }`}>
+                                    {reached ? "Goal Reached" : "In Progress"}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
+              <button
+                onClick={() => setStepsModalOpen(false)}
+                className="px-5 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold rounded-lg transition"
+              >
+                Close
               </button>
             </div>
           </div>

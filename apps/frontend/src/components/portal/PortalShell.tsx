@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ReactNode, useEffect } from "react";
+import { useState, ReactNode, useEffect, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -29,6 +29,7 @@ import {
   Bus,
 } from "lucide-react";
 import Link from "next/link";
+import LcmsLogo from "@/components/LcmsLogo";
 import { motion, AnimatePresence } from "framer-motion";
 import { Role, RoleDetails, ROLES } from "@/constants/roleConfig";
 
@@ -133,13 +134,40 @@ export default function PortalShell({
 
   const roleDetails: RoleDetails = ROLES[userRole];
 
-  // The sidebar is the role's own comprehensive feature set — fixed and
-  // consistent. It was previously derived from the polled `portal_matrix`
-  // app-setting, which caused two bugs: a load→loaded flip that made the nav
-  // items blink on every mount, and injection of cross-role features that mapped
-  // to routes the portal can't render (an inconsistent, bloated sidebar). Each
-  // role's sidebarLinks in roleConfig is now the single source of truth.
-  const filteredLinks = roleDetails.sidebarLinks;
+  // Dynamic sidebar filtering matching Portal Feature Matrix settings with localStorage cache to prevent blinking
+  const { data: settingRows } = useLiveQuery<{
+    id: string;
+    value: string;
+  }>("app-settings", { tables: ["AppSetting"] });
+
+  const filteredLinks = useMemo(() => {
+    const rawLinks = roleDetails.sidebarLinks;
+    
+    // 1. Try to read from localStorage synchronously to avoid mount blinking
+    let storedValue: string | null = null;
+    if (typeof window !== "undefined") {
+      storedValue = localStorage.getItem("portal_matrix_cache");
+    }
+    
+    // 2. Update cache and use fresh value when database settings load
+    const dbStored = settingRows?.find((s) => s.id === "portal_matrix")?.value;
+    if (dbStored) {
+      storedValue = dbStored;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("portal_matrix_cache", dbStored);
+      }
+    }
+    
+    if (!storedValue) return rawLinks;
+    try {
+      const parsed = JSON.parse(storedValue);
+      const roleMatrix = parsed[userRole];
+      if (!roleMatrix) return rawLinks;
+      return rawLinks.filter((link) => roleMatrix[link.name] !== false);
+    } catch {
+      return rawLinks;
+    }
+  }, [settingRows, roleDetails, userRole]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -225,23 +253,25 @@ export default function PortalShell({
         {/* Brand Header */}
         <div className={`p-4 border-b flex items-center justify-between transition-colors duration-300 ${
           theme === "dark"
-            ? "bg-gradient-to-r from-black to-gray-950 border-yellow-500/10"
-            : "bg-gradient-to-r from-white to-gray-50 border-yellow-200"
+            ? "bg-gradient-to-r from-black to-gray-950 border-blue-500/10"
+            : "bg-gradient-to-r from-white to-gray-50 border-blue-200"
         }`}>
-          {sidebarOpen && (
+          {sidebarOpen ? (
             <div className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-lg flex items-center justify-center text-black font-bold text-lg">
-                ♥
-              </div>
-              <div className="text-sm">
-                <div className={`font-black text-lg leading-tight ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{facilityName || "Care Portal"}</div>
-                <div className={`text-xs font-bold ${theme === "dark" ? "text-yellow-300" : "text-yellow-700"}`}>{roleDetails.badge}</div>
+              <LcmsLogo />
+              <div className="text-left border-l border-gray-200 dark:border-gray-800 pl-2">
+                <div className={`font-black text-xs leading-none uppercase tracking-wider ${theme === "dark" ? "text-blue-400" : "text-blue-600"}`}>{roleDetails.badge}</div>
+                <div className="text-[9px] text-gray-400 dark:text-gray-500 font-bold truncate max-w-[80px] mt-0.5" title={facilityName || "Care Portal"}>
+                  {facilityName || "Care Portal"}
+                </div>
               </div>
             </div>
+          ) : (
+            <LcmsLogo iconOnly />
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className={`p-2 rounded-lg transition text-yellow-400 active:bg-gray-600 ${
+            className={`p-2 rounded-lg transition text-blue-400 active:bg-gray-600 ${
               theme === "dark"
                 ? "hover:bg-gray-700"
                 : "hover:bg-gray-200"
@@ -269,8 +299,8 @@ export default function PortalShell({
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition ${
                   isActive
                     ? theme === "dark"
-                      ? "bg-gradient-to-r from-yellow-500/20 to-yellow-400/10 text-yellow-300 border-l-2 border-yellow-400"
-                      : "bg-yellow-100 text-yellow-700 border-l-2 border-yellow-500"
+                      ? "bg-gradient-to-r from-blue-500/20 to-blue-400/10 text-blue-300 border-l-2 border-blue-400"
+                      : "bg-blue-100 text-blue-700 border-l-2 border-blue-500"
                     : theme === "dark"
                     ? "text-gray-300 hover:bg-gray-700/50 hover:text-white"
                     : "text-gray-700 hover:bg-gray-200 hover:text-gray-900"
@@ -286,12 +316,12 @@ export default function PortalShell({
         {/* Footer */}
         <div className={`p-4 border-t transition-colors duration-300 ${
           theme === "dark"
-            ? "bg-gradient-to-r from-black to-gray-950 border-yellow-500/10"
-            : "bg-gradient-to-r from-white to-gray-50 border-yellow-200"
+            ? "bg-gradient-to-r from-black to-gray-950 border-blue-500/10"
+            : "bg-gradient-to-r from-white to-gray-50 border-blue-200"
         }`}>
           {sidebarOpen && (
             <p className={`text-xs text-center leading-snug ${
-              theme === "dark" ? "text-yellow-100/70" : "text-yellow-700"
+              theme === "dark" ? "text-blue-100/70" : "text-blue-700"
             }`}>
               {roleDetails.footerText}
             </p>
@@ -304,8 +334,8 @@ export default function PortalShell({
         {/* Topbar */}
         <header className={`border-b px-4 md:px-6 py-4 flex items-center justify-between shadow-sm transition-colors duration-300 ${
           theme === "dark"
-            ? "bg-gradient-to-r from-gray-900 to-black border-yellow-500/20 text-white"
-            : "bg-gradient-to-r from-white to-gray-50 border-yellow-200 text-gray-900"
+            ? "bg-gradient-to-r from-gray-900 to-black border-blue-500/20 text-white"
+            : "bg-gradient-to-r from-white to-gray-50 border-blue-200 text-gray-900"
         }`}>
           <div className="flex items-center gap-4">
             {/* Mobile Menu Toggle */}
@@ -314,7 +344,7 @@ export default function PortalShell({
               className={`md:hidden p-2 rounded-lg transition active:scale-95 ${
                 theme === "dark"
                   ? "hover:bg-gray-800 text-gray-300 active:bg-gray-700"
-                  : "hover:bg-yellow-100 text-gray-700 active:bg-yellow-200"
+                  : "hover:bg-blue-100 text-gray-700 active:bg-blue-200"
               }`}
               title={mobileMenuOpen ? "Close menu" : "Open menu"}
             >
@@ -336,8 +366,8 @@ export default function PortalShell({
               onClick={toggleTheme}
               className={`p-2 rounded-lg transition active:scale-95 ${
                 theme === "dark"
-                  ? "hover:bg-gray-800 text-yellow-400 active:bg-gray-700"
-                  : "hover:bg-yellow-100 text-yellow-600 active:bg-yellow-200"
+                  ? "hover:bg-gray-800 text-blue-400 active:bg-gray-700"
+                  : "hover:bg-blue-100 text-blue-600 active:bg-blue-200"
               }`}
               title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
             >
@@ -355,7 +385,7 @@ export default function PortalShell({
                 className={`p-2 rounded-lg relative transition active:scale-95 ${
                   theme === "dark"
                     ? "hover:bg-gray-800 text-gray-300 active:bg-gray-700"
-                    : "hover:bg-yellow-100 text-gray-700 active:bg-yellow-200"
+                    : "hover:bg-blue-100 text-gray-700 active:bg-blue-200"
                 }`}
                 title="Notifications"
               >
@@ -372,24 +402,24 @@ export default function PortalShell({
 
               {/* Notification dropdown card */}
               {bellDropdownOpen && (
-                <div className={`fixed inset-x-4 top-16 sm:absolute sm:inset-auto sm:right-0 sm:mt-3 sm:w-96 rounded-2xl shadow-2xl border z-50 overflow-hidden transition-all duration-200 ${
-                  theme === "dark"
-                    ? "bg-gray-900 border-gray-700 text-white"
-                    : "bg-white border-yellow-100 text-gray-900"
-                }`}>
-                  {/* Dropdown Header */}
-                  <div className={`px-4 py-3 flex items-center justify-between border-b ${
-                    theme === "dark" ? "border-gray-800 bg-gray-950/50" : "border-yellow-50 bg-yellow-50/30"
+                  <div className={`fixed inset-x-4 top-16 sm:absolute sm:inset-auto sm:right-0 sm:mt-3 sm:w-96 rounded-2xl shadow-2xl border z-50 overflow-hidden transition-all duration-200 ${
+                    theme === "dark"
+                      ? "bg-gray-900 border-gray-700 text-white"
+                      : "bg-white border-blue-200 text-gray-900"
                   }`}>
-                    <div className="flex items-center gap-2">
-                      <Bell className="w-4 h-4 text-yellow-500" />
-                      <span className="font-bold text-sm">Notifications</span>
-                    </div>
-                    {unreadCount > 0 && (
-                      <button
-                        onClick={handleMarkAllRead}
-                        className="text-xs font-semibold text-yellow-600 hover:text-yellow-700 transition"
-                      >
+                    {/* Dropdown Header */}
+                    <div className={`px-4 py-3 flex items-center justify-between border-b ${
+                      theme === "dark" ? "border-gray-800 bg-gray-950/50" : "border-blue-50 bg-blue-50/30"
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <Bell className="w-4 h-4 text-blue-500" />
+                        <span className="font-bold text-sm">Notifications</span>
+                      </div>
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={handleMarkAllRead}
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition"
+                        >
                         Mark all as read
                       </button>
                     )}
@@ -466,8 +496,8 @@ export default function PortalShell({
                           <div
                             key={n.id}
                             onClick={() => !n.isRead && handleMarkSingleRead(n.id)}
-                            className={`p-4 flex gap-3 transition cursor-pointer hover:bg-yellow-50/10 ${
-                              !n.isRead ? "bg-yellow-50/5 dark:bg-yellow-500/5 font-medium" : ""
+                            className={`p-4 flex gap-3 transition cursor-pointer hover:bg-blue-50/10 ${
+                              !n.isRead ? "bg-blue-50/5 dark:bg-blue-500/5 font-medium" : ""
                             }`}
                           >
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${getNotificationBg(n.type)}`}>
@@ -508,10 +538,10 @@ export default function PortalShell({
                   setProfileDropdownOpen(!profileDropdownOpen)
                 }
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
-                  theme === "dark" ? "hover:bg-gray-800" : "hover:bg-yellow-100"
+                  theme === "dark" ? "hover:bg-gray-800" : "hover:bg-blue-100"
                 }`}
               >
-                <div className="w-8 h-8 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center text-black text-sm font-bold">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
                   {roleDetails.profileName.charAt(0)}
                 </div>
                 <div className="text-sm text-left hidden sm:block">
@@ -529,7 +559,7 @@ export default function PortalShell({
                 <div className={`absolute right-0 mt-2 w-48 border rounded-lg shadow-xl z-50 ${
                   theme === "dark" 
                     ? "bg-gray-900 border-gray-700" 
-                    : "bg-white border-yellow-200"
+                    : "bg-white border-blue-200"
                 }`}>
                   <button
                     onClick={() => {
@@ -539,7 +569,7 @@ export default function PortalShell({
                     className={`w-full text-left px-4 py-2 flex items-center gap-2 border-b transition-colors ${
                       theme === "dark"
                         ? "hover:bg-gray-800 border-gray-700 text-gray-200"
-                        : "hover:bg-yellow-50 border-yellow-100 text-gray-700"
+                        : "hover:bg-blue-50 border-blue-100 text-gray-700"
                     }`}
                   >
                     <Settings className="w-4 h-4" />
@@ -588,16 +618,14 @@ export default function PortalShell({
               >
                 <div className={`p-4 border-b transition-colors duration-300 ${
                   theme === "dark"
-                    ? "bg-gradient-to-r from-black to-gray-950 border-yellow-500/10"
-                    : "bg-gradient-to-r from-white to-gray-50 border-yellow-200"
+                    ? "bg-gradient-to-b from-black to-gray-950 border-blue-500/10"
+                    : "bg-gradient-to-b from-white to-gray-100 border-blue-200"
                 }`}>
                   <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-lg flex items-center justify-center text-black font-bold text-lg">
-                      ♥
-                    </div>
+                    <LcmsLogo />
                     <div className="text-sm">
                       <div className={`font-black text-lg leading-tight ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{facilityName || "Care Portal"}</div>
-                      <div className={`text-xs font-bold ${theme === "dark" ? "text-yellow-300" : "text-yellow-700"}`}>
+                      <div className={`text-xs font-bold ${theme === "dark" ? "text-blue-300" : "text-blue-700"}`}>
                         {roleDetails.badge}
                       </div>
                     </div>
@@ -616,8 +644,8 @@ export default function PortalShell({
                         className={`flex items-center gap-3 px-3 py-2 rounded-lg transition ${
                           isActive
                             ? theme === "dark"
-                              ? "bg-gradient-to-r from-yellow-500/20 to-yellow-400/10 text-yellow-300 border-l-2 border-yellow-400"
-                              : "bg-yellow-100 text-yellow-700 border-l-2 border-yellow-500"
+                              ? "bg-gradient-to-r from-blue-500/20 to-blue-400/10 text-blue-300 border-l-2 border-blue-400"
+                              : "bg-blue-100 text-blue-700 border-l-2 border-blue-500"
                             : theme === "dark"
                             ? "text-gray-300 hover:bg-gray-700/50 hover:text-white"
                             : "text-gray-700 hover:bg-gray-200 hover:text-gray-900"
@@ -647,7 +675,7 @@ export default function PortalShell({
             theme === "dark" ? "bg-gray-900" : "bg-white"
           }`}>
             {/* Header */}
-            <div className="sticky top-0 bg-gradient-to-r from-gray-900 to-black text-white p-6 flex items-center justify-between border-b border-yellow-300">
+            <div className="sticky top-0 bg-gradient-to-r from-gray-900 to-black text-white p-6 flex items-center justify-between border-b border-blue-300">
               <h1 className="text-2xl font-bold">Settings</h1>
               <button
                 onClick={() => setShowSettingsModal(false)}
@@ -662,8 +690,8 @@ export default function PortalShell({
               {/* Profile Section */}
               <div className="space-y-4">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-yellow-100 rounded-lg">
-                    <UserIcon className="w-5 h-5 text-yellow-600" />
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <UserIcon className="w-5 h-5 text-blue-600" />
                   </div>
                   <h2 className={`text-xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Profile</h2>
                 </div>
@@ -675,7 +703,7 @@ export default function PortalShell({
                     <input
                       type="text"
                       defaultValue={roleDetails.profileName}
-                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none ${
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none ${
                         theme === "dark"
                           ? "bg-gray-800 border-gray-700 text-white"
                           : "bg-white border-gray-300 text-gray-900"
@@ -742,7 +770,7 @@ export default function PortalShell({
                   <select
                     value={language}
                     onChange={(e) => setLanguage(e.target.value)}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none ${
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none ${
                       theme === "dark"
                         ? "bg-gray-800 border-gray-700 text-white"
                         : "bg-white border-gray-300 text-gray-900"
@@ -799,7 +827,7 @@ export default function PortalShell({
               >
                 Close
               </button>
-              <button className="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition">
+              <button className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-lg hover:shadow-lg transition">
                 Save Changes
               </button>
             </div>

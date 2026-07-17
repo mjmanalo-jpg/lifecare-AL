@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   Users, Search, X, AlertTriangle, Pill, HeartPulse, Activity, RefreshCw,
   ListChecks, BarChart3, Trash2, Pencil, Heart, Droplets, Wind, Thermometer,
@@ -275,7 +275,7 @@ export default function NurseRecords() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <Users className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Resident Records
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -479,7 +479,7 @@ export default function NurseRecords() {
           </div>
           <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex items-center justify-between">
             <button onClick={() => setEditing(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
-            <button onClick={() => void saveEdit()} disabled={saving} className="px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-60">{saving ? "Saving…" : "Save Changes"}</button>
+            <button onClick={() => void saveEdit()} disabled={saving} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-60">{saving ? "Saving…" : "Save Changes"}</button>
           </div>
         </Modal>
       )}
@@ -674,6 +674,8 @@ function CallBellsModal({ r, onClose, refetchCallBells }: { r: RecordVM; onClose
 
 function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number; onClose: () => void; onEdit: () => void }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const basePrefix = pathname.split("/")[1] || "nurse";
   const [selectedBell, setSelectedBell] = useState<CallBellVM | null>(null);
   const [bellModalMode, setBellModalMode] = useState<"respond" | "resolve">("respond");
 
@@ -841,14 +843,14 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
           <button onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
           <button
             onClick={() => {
-              router.push(`/nurse/monitoring?resident=${encodeURIComponent(r.name)}&room=${encodeURIComponent(r.room)}&residentId=${encodeURIComponent(r.id)}`);
+              router.push(`/${basePrefix}/monitoring?resident=${encodeURIComponent(r.name)}&room=${encodeURIComponent(r.room)}&residentId=${encodeURIComponent(r.id)}`);
             }}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-400 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
           >
             <Camera className="w-4 h-4" /> View Monitoring
           </button>
         </div>
-        <button onClick={onEdit} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition"><Pencil className="w-4 h-4" /> Edit Record</button>
+        <button onClick={onEdit} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition"><Pencil className="w-4 h-4" /> Edit Record</button>
       </div>
     </Modal>
 
@@ -856,7 +858,7 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
     {selectedBell && bellModalMode === "respond" && (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-          <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-6 flex items-center justify-between">
+          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-6 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold">Respond to Call Bell</h2>
               <p className="text-sm text-gray-900">{r.name} • Room {r.room}</p>

@@ -203,7 +203,7 @@ export default function FacilityResidents() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <Users className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Resident Directory
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -225,7 +225,7 @@ export default function FacilityResidents() {
           <button onClick={() => { void refetch(); void refetchVitals(); }} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
             <RefreshCw className="w-4 h-4" /> Refresh
           </button>
-          <button onClick={() => setAdmitting(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+          <button onClick={() => setAdmitting(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
             <UserPlus className="w-4 h-4" /> Admit Resident
           </button>
         </div>
@@ -568,7 +568,7 @@ function AdmitResidentModal({ takenRooms, onClose, onAdmitted }: {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 sm:p-6 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 sm:p-6 flex items-center justify-between z-10">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
               <UserPlus className="w-6 h-6" /> Admit New Resident
@@ -668,7 +668,7 @@ function AdmitResidentModal({ takenRooms, onClose, onAdmitted }: {
 
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-200">
               <button type="button" onClick={onClose} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Cancel</button>
-              <button type="submit" disabled={!valid || saving} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100">
+              <button type="submit" disabled={!valid || saving} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
                 {saving ? "Admitting…" : "Admit Resident"}
               </button>

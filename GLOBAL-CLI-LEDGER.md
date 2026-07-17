@@ -5,7 +5,7 @@
 
 ## Project: Assisted Living Platform
 **Root:** `C:\Users\ResolutAI\Documents\assisted-living`
-**Last verified:** 2026-07-13 — TypeScript 0 errors, ESLint 0 errors, all 11 routes 200 OK, build passes
+**Last verified:** 2026-07-17 — TypeScript 0 errors, ESLint 0 errors, build passes, 12 seed users with password auth
 
 ---
 
@@ -13,14 +13,15 @@
 - **Frontend:** Next.js + Prisma ORM + React + TypeScript
 - **Backend:** FastAPI (async SQLAlchemy + asyncpg) + Supabase PostgreSQL
 - **Realtime:** `useLiveQuery` hook (Supabase subscriptions + polling fallback)
+- **Auth:** Email/password (bcryptjs) + demo role bypass. Default password: `LifeCare@2026`
 - **DB URL:** `postgresql://` (sync for Prisma); backend converts to `postgresql+asyncpg://`
 - **Supabase pooler password** contains `@`: `0933016007@Paul`
 
 ## Key Files
 | File | Purpose |
 |------|---------|
-| `apps/frontend/prisma/schema.prisma` | Canonical DB schema (38+ models) |
-| `apps/frontend/src/lib/models.ts` | Prisma model whitelist for API routes |
+| `apps/frontend/prisma/schema.prisma` | Canonical DB schema (68+ models) |
+| `apps/frontend/src/lib/models.ts` | Prisma model whitelist for API routes (50+ models) |
 | `apps/frontend/src/lib/useLiveQuery.ts` | Realtime data hook |
 | `apps/frontend/src/lib/useFacilityConfig.ts` | Facility settings from AppSetting table |
 | `apps/frontend/src/lib/api.ts` | `createRecord`, `updateRecord`, `deleteRecord` |
@@ -33,7 +34,7 @@
 | `apps/.env` | DATABASE_URL, SUPABASE keys |
 
 ## Architecture Rules
-1. **Auth:** Server-side only via signed cookie. No client-side `useAuth` hook exists.
+1. **Auth:** Server-side only via signed cookie. Email/password login with bcryptjs + demo role bypass. No client-side `useAuth` hook exists.
 2. **Facility Config:** `AppSetting` table keys: `facility_name`, `facility_address`, `facility_phone`, `facility_email`, `facility_subtitle`, `facility_footer`, `facility_map_url`. Use `useFacilityConfig()` hook.
 3. **Site Content:** Landing page copy in `SiteContent` table. Edited via LandingCustomizer.
 4. **Rooms:** `Room` table. Never hardcode room pools.
@@ -82,3 +83,41 @@ Zero instances of hardcoded data in portal components:
 - SQLAlchemy models in `app/models/portal.py` (14 models) — 1:1 mapping to Prisma tables (camelCase)
 - Pydantic schemas in `app/schemas/portal.py` (30+ schemas)
 - Auto-migration on startup via lifespan
+
+## Daily Rounds Module + Feature Matrix (2026-07-17)
+LCMS Module 4 — Comprehensive Daily Rounds (10-area bedside documentation):
+- Schema: 8 new enums (Shift, DailyRoundStatus, EdemaSeverity, MoodState, ConcernCategory, ConcernSeverity, MealType, AppetiteLevel, AssistanceLevel) + 11 models (DailyRound master + BowelRecord, UrineRecord, EdemaRecord, ConcernRecord, PainRecord, MoodRecord, SleepRecord, MobilityRecord, MealRecord, VitalSigns) — pushed to Supabase
+- models.ts: all 11 registered (`daily-rounds`, `bowel-records`, `urine-records`, `edema-records`, `concern-records`, `pain-records`, `mood-records`, `round-sleep-records`, `mobility-records`, `meal-records`, `vital-signs`)
+- `DailyRoundsBoard` (clinical/): resident picker → shift-based round lifecycle (start/complete) → 10 tabbed record types with add/delete forms; child queries filtered via `f_dailyRoundId` (generic API `f_` filter syntax — `where=` is NOT supported)
+- `FeatureMatrixDashboard` (superadmin/): live system stats (12 models), 16 feature categories w/ model keys, role-access matrix, tech-stack panel
+- Wired into 5 portals: superadmin (`dailyrounds` + `featurematrix`), nurse, caregiver, physician, facility_admin (each passes its own clinicianRole)
+- Seed: 5 daily rounds across DAY/EVENING/NIGHT for rooms 302/305/310/312/308 covering all 10 areas (incl. escalated concerns, fall event, cardiac monitoring)
+- Fixes along the way: missing `Droplets` import; SleepQuality form options matched to enum (RESTFUL/FAIR/POOR/RESTLESS/INSOMNIA); datetime-local → ISO; FeatureMatrix stats `take=1` → `take=1000`
+- Build: ✓ compiled + type-checked clean
+
+## Assessment & Level of Care — Real Acuity Engine (2026-07-17)
+Root cause: /caregiver/rounds ("Assessment & Level of Care") rendered PhysicianRounds (a daily-rounding+vitals board). The real Assessment/AcuityScore models existed but had 0 rows, 0 UI, and 0 communities (Assessment.communityId is a required FK).
+Fix — built the real engine:
+- `AssessmentAcuityBoard` (clinical/): resident picker → 9-dimension scoring (ADL, cognition, mobility, medical, behavioral, nutrition, hydration, skin integrity, social engagement; 1–5 each) → live-computed acuity index %, AcuityLevel (LOW/MODERATE/HIGH/CRITICAL), CareLevel (INDEPENDENT/ASSISTED/MEMORY/SKILLED), daily care minutes + day/eve/night shift split + nurse/caregiver staffing demand + confidence. Saves Assessment + linked AcuityScore; shows per-resident history with score bars.
+- Acuity math shared verbatim between seed.mjs and the component so data + UI agree. careLevel rule: cognition≥4 or behavioral≥4 → MEMORY; else pct<30 INDEPENDENT, <65 ASSISTED, else SKILLED.
+- Repointed the `rounds` tab from PhysicianRounds → AssessmentAcuityBoard across ALL portals (caregiver/nurse/superadmin/facility_admin/physician-legacy/driver/fleet); removed now-unused PhysicianRounds imports. Physician "Assessment & Level of Care" stays on `casereview` → PhysicianCaseReview. PhysicianRounds.tsx now orphaned (kept on disk).
+- Seed: created Organization + Community, backfilled all residents.communityId, seeded 4 assessments (rooms 310/302/312/305) spanning LOW→HIGH acuity, and synced resident.careLevel to the computed level.
+- Gotcha: `prisma generate` throws EPERM on the query-engine DLL while the dev server holds it locked → run `npx next build` directly to skip regeneration when schema is unchanged. Build verified clean.
+
+## Resident Registration — 7-step with credentials + facial enrollment (2026-07-17)
+New self-service resident enrollment wizard modeled on the Admissions 7-step flow, adding auth + biometrics:
+- Steps: (1) Account — email + password + confirm; (2) Personal; (3) Facial Enrollment — live webcam capture of 4 poses (left/right/up/down) with per-pose retake + file-upload fallback; (4) Medical; (5) Care & Room (careLevel + room required, auto-picks first available); (6) Care Plan; (7) Review & Register.
+- Component: `components/portal/views/ResidentRegistration.tsx` — realtime via useLiveQuery (residents + rooms); list of registered resident logins with face-enrolled badge; getUserMedia camera lifecycle bound to step 3; canvas snapshot → mirrored JPEG data URL.
+- Server route: `POST /api/register/resident` — bcrypt-hashes password, creates User(role RESIDENT) + Resident(linked userId, photoUrl) + 4 ResidentDocument rows (documentType FACE_ENROLLMENT, isConfidential) for the poses. Validates email/password/name/careLevel/room; 409 on duplicate email or occupied room.
+- Face images uploaded client-side via existing /api/upload (writes to public/uploads/residents/faces, returns URL); falls back to inline data URL if upload fails.
+- Wired into SuperAdmin: tab `registration` → "Resident Registration" (sidebar link w/ ScanFace icon, ROUTE_TO_TAB + GLOBAL_FEATURES entries). No schema change — reused Resident.photoUrl + ResidentDocument.
+- Build: npx next build clean (exit 0); new route shows as ƒ /api/register/resident.
+
+## Public /register + login link (2026-07-17)
+The login page had no path to registration; the wizard lived only behind the SuperAdmin login. Added a public entry point:
+- New public route `/register` (app/register/page.tsx) renders `<ResidentRegistration variant="public" />` on a gradient full-page.
+- `ResidentRegistration` now takes `variant` ("admin" | "public"). Public mode: hides the admin list/stats, opens the wizard immediately, disables the residents/rooms useLiveQuery (`enabled:false` — pre-auth would 401), defaults careLevel to INDEPENDENT, skips the room-selection step (shows "assigned by facility"), and routes to /login on close/success.
+- `/api/register/resident` now auto-assigns the first unoccupied room when `roomNumber` is omitted (public path); admin path still passes an explicit room. 409 if no rooms free.
+- Login page (`app/login/page.tsx`): added "New resident? Create an account" → /register link under the Sign In button.
+- Build: npx next build clean (exit 0); routes now include ○ /register.
+Note: /register + /api/register/resident are intentionally public (no auth) so prospective residents can self-enroll. Flag if this should instead be staff-gated.

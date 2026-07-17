@@ -119,7 +119,7 @@ export async function POST(
   // Self-service roles (FAMILY/RESIDENT) may only create the records their portal
   // legitimately produces (messages to staff, visit requests). Rest is staff-only.
   const SELF_SERVICE = role === "FAMILY" || role === "RESIDENT";
-  const SELF_WRITABLE = new Set(["messages", "visits", "call-bells", "tasks", "transport-requests", "resident-goals", "medication-logs", "service-requests", "concierge-bookings", "resident-preferences", "event-attendances", "dining-reservations"]);
+  const SELF_WRITABLE = new Set(["messages", "notifications", "visits", "call-bells", "tasks", "transport-requests", "resident-goals", "medication-logs", "service-requests", "concierge-bookings", "resident-preferences", "event-attendances", "dining-reservations"]);
   if (SELF_SERVICE && !SELF_WRITABLE.has(model)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -352,7 +352,7 @@ function getSeedsForRole(role: string, userId: string) {
           userId,
           type: "TRANSPORT_UPDATE" as const,
           title: "New Transport Request",
-          message: "Arthur Pendelton requested a dialysis run for tomorrow 8:00 AM — pending dispatcher review.",
+          message: "Arthur Pendelton requested a medical appointment transport to St. Luke's Medical Center for an Endocrinology consult — pending dispatcher review.",
           isRead: false,
           createdAt: getPastTime(12 * 1000),
           updatedAt: getPastTime(12 * 1000),
@@ -361,7 +361,7 @@ function getSeedsForRole(role: string, userId: string) {
           userId,
           type: "SYSTEM_ALERT" as const,
           title: "Registration Expiring",
-          message: "Wheelchair Van WV-001 registration expires in 14 days. Renew to stay compliant.",
+          message: "Wheelchair Van WV-001 registration expires in 14 days. File for renewal to maintain road compliance.",
           isRead: false,
           createdAt: getPastTime(3 * H),
           updatedAt: getPastTime(3 * H),
@@ -369,8 +369,8 @@ function getSeedsForRole(role: string, userId: string) {
         {
           userId,
           type: "TASK_ASSIGNMENT" as const,
-          title: "Preventive Maintenance Due",
-          message: "Shuttle SH-001 hits its 5,000 km service interval this week.",
+          title: "Preventive Maintenance Overdue",
+          message: "Sedan Escort SD-001 is 410 km overdue for its scheduled 88,000 km preventive service.",
           isRead: true,
           createdAt: getPastTime(1 * D),
           updatedAt: getPastTime(1 * D),

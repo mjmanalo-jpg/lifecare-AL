@@ -378,7 +378,7 @@ export default function FacilityBilling() {
       {/* Portal Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-extrabold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent mb-1">
+          <h1 className="text-4xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1">
             Billing &amp; Finance Control Center
           </h1>
           <p className="text-gray-600 font-medium">Real-time ledger audit, insurance validation gateway, and payment processing hub</p>
@@ -390,7 +390,7 @@ export default function FacilityBilling() {
           <button onClick={() => setShowVerifyInsurance(true)} className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-yellow-400 border border-yellow-400/20 font-bold rounded-lg hover:bg-gray-800 transition active:scale-95 text-sm shadow">
             <ShieldCheck className="w-4 h-4" /> Validate Insurance
           </button>
-          <button onClick={() => setShowCreateInvoice(true)} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-extrabold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+          <button onClick={() => setShowCreateInvoice(true)} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-extrabold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
             <Plus className="w-4 h-4" /> New Invoice
           </button>
         </div>
@@ -993,7 +993,7 @@ export default function FacilityBilling() {
       {showCreateInvoice && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between">
               <h2 className="text-xl font-bold">Generate Invoice</h2>
               <button onClick={() => setShowCreateInvoice(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5" /></button>
             </div>
@@ -1048,7 +1048,7 @@ export default function FacilityBilling() {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
               <button onClick={() => setShowCreateInvoice(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-semibold transition">Cancel</button>
-              <button onClick={handleCreateInvoice} className="px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-extrabold rounded-lg hover:shadow-lg transition">Generate Draft Invoice</button>
+              <button onClick={handleCreateInvoice} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-extrabold rounded-lg hover:shadow-lg transition">Generate Draft Invoice</button>
             </div>
           </div>
         </div>
@@ -1058,7 +1058,7 @@ export default function FacilityBilling() {
       {showRecordCharge && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between">
               <h2 className="text-xl font-bold">Record Service Charge</h2>
               <button onClick={() => setShowRecordCharge(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5" /></button>
             </div>
@@ -1104,7 +1104,7 @@ export default function FacilityBilling() {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
               <button onClick={() => setShowRecordCharge(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-semibold transition">Cancel</button>
-              <button onClick={handleRecordCharge} className="px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-extrabold rounded-lg hover:shadow-lg transition">Record Charge</button>
+              <button onClick={handleRecordCharge} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-extrabold rounded-lg hover:shadow-lg transition">Record Charge</button>
             </div>
           </div>
         </div>
@@ -1114,7 +1114,7 @@ export default function FacilityBilling() {
       {showVerifyInsurance && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between">
               <h2 className="text-xl font-bold">Validate Insurance</h2>
               <button onClick={() => setShowVerifyInsurance(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5" /></button>
             </div>
@@ -1151,7 +1151,7 @@ export default function FacilityBilling() {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
               <button onClick={() => setShowVerifyInsurance(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-semibold transition">Cancel</button>
-              <button onClick={handleRecordInsurance} className="px-5 py-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black font-extrabold rounded-lg hover:shadow-lg transition">Submit Policy</button>
+              <button onClick={handleRecordInsurance} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-extrabold rounded-lg hover:shadow-lg transition">Submit Policy</button>
             </div>
           </div>
         </div>
@@ -1161,7 +1161,7 @@ export default function FacilityBilling() {
       {showRecordPayment && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black p-5 flex items-center justify-between">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between">
               <h2 className="text-xl font-bold">Process Payment</h2>
               <button onClick={() => setShowRecordPayment(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5" /></button>
             </div>
