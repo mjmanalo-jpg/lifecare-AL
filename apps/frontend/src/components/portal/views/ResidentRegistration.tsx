@@ -56,7 +56,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 const inputCls =
-  "w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-amber-400 focus:border-transparent outline-none text-sm";
+  "w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-gray-400 focus:border-transparent outline-none text-sm";
 
 async function uploadDataUrl(dataUrl: string, filename: string): Promise<string> {
   const blob = await (await fetch(dataUrl)).blob();
@@ -69,7 +69,7 @@ async function uploadDataUrl(dataUrl: string, filename: string): Promise<string>
   return data.url as string;
 }
 
-export default function ResidentRegistration({ variant = "admin" }: { variant?: "admin" | "public" }) {
+export default function ResidentRegistration({ variant = "admin", accent = "#f59e0b" }: { variant?: "admin" | "public"; accent?: string }) {
   const isPublic = variant === "public";
   const router = useRouter();
   // Public (pre-auth) visitors can't read the authenticated residents/rooms
@@ -276,13 +276,13 @@ export default function ResidentRegistration({ variant = "admin" }: { variant?: 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-amber-500 to-yellow-600 bg-clip-text text-transparent">Resident Registration</h1>
+          <h1 className="text-3xl font-bold" style={{ color: accent }}>Resident Registration</h1>
           <p className="text-gray-600 text-sm mt-1 flex items-center gap-2">
             <span className="inline-flex items-center gap-1 text-green-600"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Live</span>
             {STEP_COUNT}-step self-service enrollment with credentials &amp; facial recognition
           </p>
         </div>
-        <button onClick={openNew} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-600 text-white font-semibold hover:shadow-lg transition self-start">
+        <button onClick={openNew} style={{ background: accent }} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-white font-semibold hover:shadow-lg transition self-start">
           <Plus className="w-4 h-4" /> Register Resident
         </button>
       </div>
@@ -313,7 +313,7 @@ export default function ResidentRegistration({ variant = "admin" }: { variant?: 
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={s(r.photoUrl)} alt="" className="w-12 h-12 rounded-full object-cover border border-gray-200" />
               ) : (
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-white font-bold">{s(r.firstName).charAt(0)}</div>
+                <div style={{ background: accent }} className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold">{s(r.firstName).charAt(0)}</div>
               )}
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-gray-900 truncate">{s(r.firstName)} {s(r.lastName)}</p>
@@ -333,10 +333,10 @@ export default function ResidentRegistration({ variant = "admin" }: { variant?: 
 
       {/* Wizard */}
       {wizardOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className={isPublic ? "relative z-10 min-h-screen flex items-center justify-center p-4" : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="bg-gradient-to-r from-amber-500 to-yellow-600 text-white px-6 py-4 flex items-center justify-between">
+            <div style={{ background: accent }} className="text-white px-6 py-4 flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold">{form.firstName || form.lastName ? `${form.firstName} ${form.lastName}`.trim() : "New Resident"}</h2>
                 <p className="text-white/80 text-xs">Step {step} of {STEP_COUNT} — {STEPS[step - 1].label}</p>
@@ -354,10 +354,10 @@ export default function ResidentRegistration({ variant = "admin" }: { variant?: 
                 return (
                   <button key={st.n} onClick={() => reachable && setStep(st.n)} disabled={!reachable}
                     className={`flex flex-col items-center gap-1 px-2 min-w-[62px] group ${reachable ? "" : "opacity-40 cursor-not-allowed"}`}>
-                    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition ${active ? "border-amber-500 bg-amber-500 text-white" : isDone ? "border-green-500 bg-green-500 text-white" : "border-gray-300 text-gray-400 group-hover:border-amber-300"}`}>
+                    <span style={active ? { background: accent, borderColor: accent } : undefined} className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition ${active ? "text-white" : isDone ? "border-green-500 bg-green-500 text-white" : "border-gray-300 text-gray-400 group-hover:border-gray-400"}`}>
                       {isDone && !active ? <Check className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
                     </span>
-                    <span className={`text-[10px] text-center leading-tight ${active ? "text-amber-600 font-semibold" : "text-gray-500"}`}>
+                    <span style={active ? { color: accent } : undefined} className={`text-[10px] text-center leading-tight ${active ? "font-semibold" : "text-gray-500"}`}>
                       {st.label}{st.required && <span className="text-red-400">*</span>}
                     </span>
                   </button>
@@ -434,7 +434,7 @@ export default function ResidentRegistration({ variant = "admin" }: { variant?: 
                         <span className="text-gray-500 inline-flex items-center gap-1">
                           {camState === "on" ? <span className="inline-flex items-center gap-1 text-green-600"><span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Camera live</span> : "Camera idle"}
                         </span>
-                        <span className="font-semibold text-amber-600">{facesDone}/4 captured</span>
+                        <span className="font-semibold" style={{ color: accent }}>{facesDone}/4 captured</span>
                       </div>
                     </div>
 
@@ -460,7 +460,8 @@ export default function ResidentRegistration({ variant = "admin" }: { variant?: 
                                 type="button"
                                 onClick={() => captureFace(d.key)}
                                 disabled={camState !== "on"}
-                                className="flex-1 inline-flex items-center justify-center gap-1 px-2 py-1 rounded-md bg-amber-500 text-white text-[11px] font-semibold hover:bg-amber-600 disabled:opacity-40"
+                                style={{ background: accent }}
+                                className="flex-1 inline-flex items-center justify-center gap-1 px-2 py-1 rounded-md text-white text-[11px] font-semibold hover:brightness-95 disabled:opacity-40"
                                 title={camState === "on" ? d.hint : "Enable the camera first"}
                               >
                                 {shot ? <RefreshCw className="w-3 h-3" /> : <Camera className="w-3 h-3" />}{shot ? "Retake" : "Capture"}
@@ -496,7 +497,7 @@ export default function ResidentRegistration({ variant = "admin" }: { variant?: 
                     <Field label="Mobility"><input className={inputCls} value={form.mobility} onChange={(e) => set({ mobility: e.target.value })} placeholder="Independent / Walker / Wheelchair" /></Field>
                   </div>
                   {isPublic ? (
-                    <div className="rounded-lg border border-amber-100 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 flex items-center gap-2">
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 flex items-center gap-2">
                       <BedDouble className="w-4 h-4" /> A room will be assigned automatically by the facility on registration.
                     </div>
                   ) : (
@@ -560,7 +561,7 @@ export default function ResidentRegistration({ variant = "admin" }: { variant?: 
             <div className="border-t border-gray-100 px-6 py-4 flex items-center justify-between bg-gray-50">
               <button onClick={() => setStep((n) => Math.max(1, n - 1))} disabled={step === 1} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 disabled:opacity-40 text-sm font-medium"><ChevronLeft className="w-4 h-4" /> Back</button>
               {step < STEP_COUNT ? (
-                <button onClick={next} disabled={!!stepError(step)} title={stepError(step) ?? ""} className="inline-flex items-center gap-1 px-5 py-2 rounded-lg bg-amber-500 text-white font-semibold hover:bg-amber-600 text-sm disabled:opacity-50 disabled:cursor-not-allowed">Continue <ChevronRight className="w-4 h-4" /></button>
+                <button onClick={next} disabled={!!stepError(step)} title={stepError(step) ?? ""} style={{ background: accent }} className="inline-flex items-center gap-1 px-5 py-2 rounded-lg text-white font-semibold hover:brightness-95 text-sm disabled:opacity-50 disabled:cursor-not-allowed">Continue <ChevronRight className="w-4 h-4" /></button>
               ) : (
                 <button onClick={register} disabled={saving || missing.length > 0} title={missing.length ? `Missing: ${missing.join(", ")}` : ""} className="inline-flex items-center gap-1 px-5 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 text-sm disabled:opacity-50">
                   {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Registering…</> : <><CheckCircle2 className="w-4 h-4" /> Register Resident</>}
