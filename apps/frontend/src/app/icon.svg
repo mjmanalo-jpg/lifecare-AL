@@ -1,0 +1,32 @@
+<svg width="64" height="64" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Main Blue Heart Container with premium gradient -->
+  <defs>
+    <linearGradient id="lcmsGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+  </defs>
+  <path
+    d="M50 88C50 88 15 58 15 36C15 19 28 8 44 8C50 8 50 14 50 14C50 14 50 8 56 8C72 8 85 19 85 36C85 58 50 88 50 88Z"
+    fill="url(#lcmsGradient)"
+  />
+  <!-- Inner Heart Layer for Depth -->
+  <path
+    d="M50 80C50 80 23 54 23 36C23 23 33 14 46 14C50 14 50 18 50 18C50 18 50 14 54 14C67 14 77 23 77 36C77 54 50 80 50 80Z"
+    fill="white"
+    opacity="0.95"
+  />
+  <!-- Center Cross Care Icon -->
+  <g transform="translate(10, 5)" fill="#1d4ed8">
+    <path
+      d="M40 28h-6v-6c0-1.1-.9-2-2-2s-2 .9-2 2v6h-6c-1.1 0-2 .9-2 2s.9 2 2 2h6v6c0 1.1.9 2 2 2s2-.9 2-2v-6h6c1.1 0 2-.9 2-2s-.9-2-2-2z"
+    />
+  </g>
+  <!-- Mini pulse circle -->
+  <circle cx="50" cy="35" r="3" fill="#1d4ed8" />
+  <!-- Mini heart in center -->
+  <path
+    d="M45 48 C 45 42, 55 42, 55 48 C 55 52, 50 55, 50 57 C 50 55, 45 52, 45 48 Z"
+    fill="#1d4ed8"
+  />
+</svg>
