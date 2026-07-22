@@ -253,7 +253,7 @@ export default function FacilityRooms() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
             Room Management
           </h1>
           <p className="text-gray-600">Manage facility rooms, assignments, and maintenance</p>
@@ -317,13 +317,13 @@ export default function FacilityRooms() {
             const isExpanded = expandedFloors.has(floor);
             return (
               <div key={floor} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <button onClick={() => toggleFloor(floor)} className="w-full flex items-center justify-between px-6 py-4 bg-gray-50 hover:bg-gray-100 transition border-b border-gray-200">
+                <button onClick={() => toggleFloor(floor)} className="w-full flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-4 bg-gray-50 hover:bg-gray-100 transition border-b border-gray-200">
                   <div className="flex items-center gap-3">
                     {isExpanded ? <ChevronDown className="w-5 h-5 text-gray-500" /> : <ChevronRight className="w-5 h-5 text-gray-500" />}
                     <span className="font-bold text-gray-900">{floor}</span>
                     <span className="text-sm text-gray-500">({floorRooms.length} rooms)</span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {["OCCUPIED", "AVAILABLE", "MAINTENANCE", "RESERVED"].map((s) => {
                       const c = floorRooms.filter((r) => r.status === s).length;
                       return c > 0 ? (
@@ -346,7 +346,7 @@ export default function FacilityRooms() {
         <>
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[900px] text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr className="text-left text-gray-600 font-semibold">
                     <th className="px-6 py-4">Room</th>
@@ -410,12 +410,12 @@ export default function FacilityRooms() {
 
       {viewing && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-400 to-blue-500 text-white p-6 flex items-center justify-between border-b border-blue-600">
-              <h2 className="text-2xl font-bold">Room {viewing.roomNumber}</h2>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90dvh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-400 to-blue-500 text-white p-4 sm:p-6 flex items-center justify-between border-b border-blue-600">
+              <h2 className="text-xl sm:text-2xl font-bold">Room {viewing.roomNumber}</h2>
               <button onClick={() => setViewing(null)} className="p-2 hover:bg-blue-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
-            <div className="p-8 space-y-6">
+            <div className="p-4 sm:p-8 space-y-6">
               <div className="flex items-center gap-4 mb-4">
                 <div className={`w-4 h-4 rounded-full ${viewing.status === "AVAILABLE" ? "bg-green-500" : viewing.status === "OCCUPIED" ? "bg-blue-500" : viewing.status === "MAINTENANCE" ? "bg-yellow-500" : "bg-purple-500"}`} />
                 <div>
@@ -424,7 +424,7 @@ export default function FacilityRooms() {
                   </span>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div><label className="block text-sm font-semibold text-gray-600 mb-2">Room Number</label><p className="text-lg font-medium text-gray-900">{viewing.roomNumber}</p></div>
                 <div><label className="block text-sm font-semibold text-gray-600 mb-2">Floor</label><p className="text-lg text-gray-900">{viewing.floor}</p></div>
                 <div><label className="block text-sm font-semibold text-gray-600 mb-2">Wing</label><p className="text-lg text-gray-900">{viewing.wing}</p></div>
@@ -451,7 +451,7 @@ export default function FacilityRooms() {
                 })()}
               </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-8 py-4 flex items-center justify-between">
               <button onClick={() => setViewing(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
               <button onClick={() => { startEditing(viewing); setViewing(null); }} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Edit</button>
             </div>
@@ -461,13 +461,13 @@ export default function FacilityRooms() {
 
       {editing && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-6 flex items-center justify-between border-b border-yellow-600">
-              <h2 className="text-2xl font-bold">Edit Room {editForm.roomNumber}</h2>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90dvh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-4 sm:p-6 flex items-center justify-between border-b border-yellow-600">
+              <h2 className="text-xl sm:text-2xl font-bold">Edit Room {editForm.roomNumber}</h2>
               <button onClick={() => setEditing(null)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
-            <div className="p-8 space-y-6">
-              <div className="grid grid-cols-2 gap-6">
+            <div className="p-4 sm:p-8 space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div><label className="block text-sm font-semibold text-gray-700 mb-2">Room Number</label><input type="text" value={editForm.roomNumber} onChange={(e) => setEditForm({ ...editForm, roomNumber: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
                 <div><label className="block text-sm font-semibold text-gray-700 mb-2">Floor</label><input type="number" value={editForm.floor} onChange={(e) => setEditForm({ ...editForm, floor: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
                 <div><label className="block text-sm font-semibold text-gray-700 mb-2">Wing</label><input type="text" value={editForm.wing} onChange={(e) => setEditForm({ ...editForm, wing: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
@@ -489,7 +489,7 @@ export default function FacilityRooms() {
                 <div className="col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-2">Notes</label><textarea value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
               </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-8 py-4 flex items-center justify-between">
               <button onClick={() => setEditing(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
               <button onClick={handleSaveEdit} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Save Changes</button>
             </div>
@@ -513,7 +513,7 @@ function StatBox({ label, value, icon: Icon, color }: { label: string; value: st
         <p className="text-xs font-semibold text-gray-600">{label}</p>
         <Icon className={`w-4 h-4 ${COLORS[color]?.split(" ")[0] || "text-blue-600"}`} />
       </div>
-      <p className={`text-2xl font-bold mt-1 ${COLORS[color]?.split(" ")[0] || "text-blue-600"}`}>{value}</p>
+      <p className={`text-xl sm:text-2xl font-bold mt-1 ${COLORS[color]?.split(" ")[0] || "text-blue-600"}`}>{value}</p>
     </div>
   );
 }

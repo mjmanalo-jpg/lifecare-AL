@@ -158,15 +158,15 @@ export default function CaregiverDashboard() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
-            <ShiftIcon className="w-6 h-6 text-yellow-500 flex-shrink-0" />
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2">
+            <ShiftIcon className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-500 flex-shrink-0" />
             {shift.greeting} — {shift.label}
           </h1>
-          <p className="text-gray-600 flex items-center gap-2 text-sm mt-1">
+          <p className="text-gray-600 flex items-center gap-2 text-xs sm:text-sm mt-1">
             <span className="inline-flex items-center gap-1 text-green-600">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Live
             </span>
@@ -182,7 +182,7 @@ export default function CaregiverDashboard() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3 lg:gap-4">
         <StatCard title="Assigned Residents" value={String(stats?.residents ?? residents.length)} icon={Users}
           backgroundColor="bg-blue-50" textColor="text-blue-900" iconColor="text-blue-500" />
         <StatCard title="Open Tasks" value={String(stats?.openTasks ?? taskSummary.pending)} icon={ClipboardList}
@@ -196,7 +196,7 @@ export default function CaregiverDashboard() {
       </div>
 
       {/* Task completion progress */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold text-gray-900 flex items-center gap-2">
             <Activity className="w-4 h-4 text-yellow-500" /> Today&apos;s Task Progress
@@ -211,7 +211,7 @@ export default function CaregiverDashboard() {
       </div>
 
       {/* Main grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 sm:gap-4">
         {/* Priority tasks */}
         <Panel title="Priority Tasks" icon={ClipboardList} className="xl:col-span-2" count={priorityTasks.length}>
           {priorityTasks.length > 0 ? (
@@ -308,7 +308,7 @@ function Panel({ title, icon: Icon, count, className, children }: {
   title: string; icon: LucideIcon; count?: number; className?: string; children: React.ReactNode;
 }) {
   return (
-    <div className={`bg-white rounded-lg border border-gray-200 p-4 ${className ?? ""}`}>
+    <div className={`bg-white rounded-lg border border-gray-200 p-3 sm:p-4 ${className ?? ""}`}>
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-gray-900 flex items-center gap-2">
           <Icon className="w-4 h-4 text-yellow-500" /> {title}

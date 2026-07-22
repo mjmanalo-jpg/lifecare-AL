@@ -378,7 +378,7 @@ export default function FacilityBilling() {
       {/* Portal Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1">
+          <h1 className="text-3xl sm:text-4xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1">
             Billing &amp; Finance Control Center
           </h1>
           <p className="text-gray-600 font-medium">Real-time ledger audit, insurance validation gateway, and payment processing hub</p>
@@ -430,7 +430,7 @@ export default function FacilityBilling() {
           </div>
 
           {/* Simple Beautiful Bar/Line Analytics Charts */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-gray-900">Collections Summary</h3>
@@ -731,13 +731,13 @@ export default function FacilityBilling() {
       {/* ── VIEW TAB 5: PAYMENT PROCESSING ── */}
       {activeTab === "payments" && (
         <div className="space-y-4 animate-fadeIn">
-          <div className="flex justify-between items-center gap-3">
-            <div className="relative flex-1">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+            <div className="relative flex-1 w-full">
               <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
               <input type="text" placeholder="Search by txn ID, invoice, or resident name..." value={search} onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 bg-white" />
             </div>
-            <button onClick={() => setShowRecordPayment(true)} className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-sm transition">
+            <button onClick={() => setShowRecordPayment(true)} className="flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-sm transition">
               <CreditCard className="w-4 h-4" /> Record Payment
             </button>
           </div>
@@ -823,7 +823,7 @@ export default function FacilityBilling() {
       {/* ── MODAL: VIEW INVOICE DETAIL ── */}
       {viewingInvoice && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92dvh] overflow-y-auto">
             <div className="p-6 sm:p-8 space-y-6" id="printable-invoice">
               {/* Invoice Branding Header */}
               <div className="flex justify-between items-start border-b border-gray-200 pb-6 gap-4">
@@ -942,8 +942,8 @@ export default function FacilityBilling() {
       {/* ── MODAL: VIEW RECEIPTS DETAIL ── */}
       {viewingReceipt && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-            <div className="p-8 space-y-6 relative overflow-hidden" id="printable-receipt">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92dvh] overflow-y-auto">
+            <div className="p-4 sm:p-8 space-y-6 relative overflow-hidden" id="printable-receipt">
               {/* PAID Watermark */}
               <div className="absolute top-24 left-1/2 -translate-x-1/2 rotate-12 border-4 border-green-500/20 text-green-500/20 font-extrabold text-6xl px-6 py-2 tracking-widest pointer-events-none select-none rounded-xl">
                 PAID
@@ -992,12 +992,12 @@ export default function FacilityBilling() {
       {/* ── MODAL: CREATE INVOICE ── */}
       {showCreateInvoice && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92dvh] overflow-y-auto">
             <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between">
               <h2 className="text-xl font-bold">Generate Invoice</h2>
               <button onClick={() => setShowCreateInvoice(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Resident *</label>
                 <select value={invoiceForm.residentId} onChange={(e) => setInvoiceForm({ ...invoiceForm, residentId: e.target.value })}
@@ -1057,12 +1057,12 @@ export default function FacilityBilling() {
       {/* ── MODAL: RECORD SERVICE CHARGE ── */}
       {showRecordCharge && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92dvh] overflow-y-auto">
             <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between">
               <h2 className="text-xl font-bold">Record Service Charge</h2>
               <button onClick={() => setShowRecordCharge(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Resident *</label>
                 <select value={chargeForm.residentId} onChange={(e) => setChargeForm({ ...chargeForm, residentId: e.target.value })}
@@ -1113,12 +1113,12 @@ export default function FacilityBilling() {
       {/* ── MODAL: VALIDATE INSURANCE ── */}
       {showVerifyInsurance && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92dvh] overflow-y-auto">
             <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between">
               <h2 className="text-xl font-bold">Validate Insurance</h2>
               <button onClick={() => setShowVerifyInsurance(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Resident *</label>
                 <select value={insuranceForm.residentId} onChange={(e) => setInsuranceForm({ ...insuranceForm, residentId: e.target.value })}
@@ -1160,12 +1160,12 @@ export default function FacilityBilling() {
       {/* ── MODAL: RECORD PAYMENT ── */}
       {showRecordPayment && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92dvh] overflow-y-auto">
             <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between">
               <h2 className="text-xl font-bold">Process Payment</h2>
               <button onClick={() => setShowRecordPayment(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Select Unpaid/Sent Invoice *</label>
                 <select value={paymentForm.invoiceId} onChange={(e) => {
@@ -1242,7 +1242,7 @@ function StatBox({ label, value, icon: Icon, color }: { label: string; value: st
         <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">{label}</p>
         <Icon className={`w-5 h-5 ${ICON_COLORS[color] || "text-blue-500"}`} />
       </div>
-      <p className="text-3xl font-black mt-2 tracking-tight">{value}</p>
+      <p className="text-2xl sm:text-3xl font-black mt-2 tracking-tight">{value}</p>
     </div>
   );
 }

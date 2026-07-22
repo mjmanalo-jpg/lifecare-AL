@@ -44,12 +44,12 @@ export default function VitalsPanel({
 }: VitalsPanelProps) {
   if (isLoading) {
     return (
-      <div className="bg-surface rounded-lg p-6 border border-border shadow-sm">
-        <div className="animate-pulse space-y-4">
-          <div className="h-4 bg-gray-200 rounded w-24"></div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="bg-surface rounded-lg p-3 sm:p-5 md:p-6 border border-border shadow-sm">
+        <div className="animate-pulse space-y-3 sm:space-y-4">
+          <div className="h-3 sm:h-4 bg-gray-200 rounded w-24"></div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-20 bg-gray-200 rounded"></div>
+              <div key={i} className="h-16 sm:h-20 bg-gray-200 rounded"></div>
             ))}
           </div>
         </div>
@@ -58,15 +58,15 @@ export default function VitalsPanel({
   }
 
   return (
-    <div className="bg-surface rounded-lg p-6 border border-border shadow-sm">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-foreground">Vital Signs</h3>
+    <div className="bg-surface rounded-lg p-3 sm:p-5 md:p-6 border border-border shadow-sm container-type-[inline-size]">
+      <div className="flex items-center justify-between mb-3 sm:mb-4 gap-2">
+        <h3 className="text-sm sm:text-base md:text-lg font-semibold text-foreground">Vital Signs</h3>
         {resident && (
-          <span className="text-sm text-gray-600">{resident}</span>
+          <span className="text-xs sm:text-sm text-gray-600 truncate">{resident}</span>
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
         {vitals.map((vital) => {
           const config = vitalConfig[vital.type];
           const Icon = config.icon;
@@ -77,28 +77,28 @@ export default function VitalsPanel({
           return (
             <div
               key={vital.type}
-              className={`${statusColor} border rounded-lg p-4 transition hover:shadow-md`}
+              className={`${statusColor} border rounded-lg p-2.5 sm:p-3 md:p-4 transition hover:shadow-md`}
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className={`p-2 rounded-lg bg-background ${config.color}`}>
-                  <Icon className="w-4.5 h-4.5" />
+              <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                <div className={`p-1.5 sm:p-2 rounded-lg bg-background ${config.color}`}>
+                  <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-4.5 md:h-4.5" />
                 </div>
                 {!vital.normal && (
-                  <AlertCircle className="w-4 h-4 text-red-600" />
+                  <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600" />
                 )}
               </div>
 
-              <div className="mt-3">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-2xl font-bold text-foreground">
+              <div className="mt-2 sm:mt-3">
+                <div className="flex items-baseline gap-0.5 sm:gap-1">
+                  <span className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">
                     {vital.value}
                   </span>
-                  <span className="text-sm text-muted-foreground ml-1">{vital.unit}</span>
+                  <span className="text-xs sm:text-sm text-muted-foreground ml-0.5 sm:ml-1">{vital.unit}</span>
                 </div>
-                <p className="text-xs text-gray-600 mt-1">
+                <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1">
                   {vital.type.replace("_", " ")}
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
                   {new Date(vital.lastUpdated).toLocaleTimeString()}
                 </p>
               </div>

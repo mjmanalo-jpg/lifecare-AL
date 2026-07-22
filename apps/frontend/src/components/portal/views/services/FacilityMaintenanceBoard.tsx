@@ -264,7 +264,7 @@ export default function FacilityMaintenanceBoard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
             Facility Maintenance
           </h1>
           <p className="text-gray-600">Preventive calendar — HVAC quarterly · generator monthly · elevator · fire &amp; safety · pest control</p>

@@ -63,17 +63,17 @@ export default function CarePlanBoard() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2"><Target className="w-5 h-5 text-yellow-500" /> Care Plans</h2>
           <p className="text-sm text-gray-500">Formal care plans with goals, interventions, and reviews</p>
         </div>
-        <button onClick={() => setCreating(true)} className="px-4 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 flex items-center gap-1.5">
+        <button onClick={() => setCreating(true)} className="w-full sm:w-auto px-4 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 flex items-center justify-center gap-1.5">
           <Plus className="w-4 h-4" /> New Care Plan
         </button>
       </div>
 
-      <div className="flex gap-3 items-center">
+      <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by resident or diagnosis..." className={`${inputCls} pl-9`} />
@@ -93,57 +93,46 @@ export default function CarePlanBoard() {
           <p className="text-sm mt-1">Create a new care plan to get started</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {filtered.map((plan: any) => {
-            const rName = resMap.get(plan.residentId)?.name || "Unknown";
-            const items = itemsByPlan[plan.id] || [];
-            return (
-              <div key={plan.id} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-sm transition">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-gray-900">{rName}</h3>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[plan.status] || "bg-gray-100 text-gray-600"}`}>
-                        {plan.status?.replace("_", " ")}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600">Diagnosis: {plan.diagnosis || "—"}</p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {items.length} goal(s) &middot; Review: {plan.reviewFrequency || "QUARTERLY"} &middot; Created {plan.createdAt ? new Date(plan.createdAt).toLocaleDateString() : "—"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {plan.status === "DRAFT" && (
-                      <button onClick={() => handleStatusChange(plan.id, "ACTIVE")} className="p-1.5 text-green-500 hover:bg-green-50 rounded cursor-pointer" title="Activate">
-                        <CheckCircle className="w-4 h-4" />
-                      </button>
-                    )}
-                    {plan.status === "ACTIVE" && (
-                      <button onClick={() => handleStatusChange(plan.id, "COMPLETED")} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded cursor-pointer" title="Complete">
-                        <CheckCircle className="w-4 h-4" />
-                      </button>
-                    )}
-                    <button onClick={() => setEditing(plan)} className="p-1.5 text-yellow-500 hover:bg-yellow-50 rounded cursor-pointer" title="Edit">
-                      <FileText className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => handleDelete(plan.id)} className="p-1.5 text-red-400 hover:text-red-500 hover:bg-red-50 rounded cursor-pointer" title="Delete">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-                {items.length > 0 && (
-                  <div className="mt-3 pl-3 border-l-2 border-yellow-300 space-y-1">
-                    {items.slice(0, 3).map((item: any) => (
-                      <p key={item.id} className="text-xs text-gray-600">
-                        <span className="font-medium">{item.goalType || "Goal"}:</span> {item.goal || item.description || "—"}
-                      </p>
-                    ))}
-                    {items.length > 3 && <p className="text-xs text-gray-400">+{items.length - 3} more goals</p>}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[700px]">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Resident</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Diagnosis</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Status</th>
+                  <th className="px-4 py-3 text-center font-semibold text-gray-600">Goals</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Review</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Created</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filtered.map((plan: any) => {
+                  const rName = resMap.get(plan.residentId)?.name || "Unknown";
+                  const items = itemsByPlan[plan.id] || [];
+                  return (
+                    <tr key={plan.id} className="hover:bg-gray-50 transition">
+                      <td className="px-4 py-3 font-medium text-gray-900">{rName}</td>
+                      <td className="px-4 py-3 text-gray-700 max-w-[200px] truncate">{plan.diagnosis || "—"}</td>
+                      <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[plan.status] || "bg-gray-100 text-gray-600"}`}>{plan.status?.replace("_", " ")}</span></td>
+                      <td className="px-4 py-3 text-center text-gray-700">{items.length}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{plan.reviewFrequency || "QUARTERLY"}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{plan.createdAt ? new Date(plan.createdAt).toLocaleDateString() : "—"}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {plan.status === "DRAFT" && <button onClick={() => handleStatusChange(plan.id, "ACTIVE")} className="p-1.5 text-green-500 hover:bg-green-50 rounded cursor-pointer" title="Activate"><CheckCircle className="w-4 h-4" /></button>}
+                          {plan.status === "ACTIVE" && <button onClick={() => handleStatusChange(plan.id, "COMPLETED")} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded cursor-pointer" title="Complete"><CheckCircle className="w-4 h-4" /></button>}
+                          <button onClick={() => setEditing(plan)} className="p-1.5 text-yellow-500 hover:bg-yellow-50 rounded cursor-pointer" title="Edit"><FileText className="w-4 h-4" /></button>
+                          <button onClick={() => handleDelete(plan.id)} className="p-1.5 text-red-400 hover:text-red-500 hover:bg-red-50 rounded cursor-pointer" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

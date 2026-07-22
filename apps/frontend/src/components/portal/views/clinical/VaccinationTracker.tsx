@@ -48,17 +48,17 @@ export default function VaccinationTracker() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2"><Syringe className="w-5 h-5 text-yellow-500" /> Vaccination Tracker</h2>
           <p className="text-sm text-gray-500">Manage immunization records and schedules</p>
         </div>
-        <button onClick={() => setCreating(true)} className="px-4 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 flex items-center gap-1.5">
+        <button onClick={() => setCreating(true)} className="w-full sm:w-auto px-4 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 flex items-center justify-center gap-1.5">
           <Plus className="w-4 h-4" /> Add Record
         </button>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: "Total", value: stats.total, color: "text-gray-900" },
           { label: "Completed", value: stats.completed, color: "text-green-600" },
@@ -72,12 +72,12 @@ export default function VaccinationTracker() {
         ))}
       </div>
 
-      <div className="flex gap-3 items-center">
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input value={search} onChange={e => { setSearch(e.target.value); }} placeholder="Search by resident or vaccine..." className={`${inputCls} pl-9`} />
         </div>
-        <select value={filter} onChange={e => setFilter(e.target.value)} className={`${inputCls} w-auto`}>
+        <select value={filter} onChange={e => setFilter(e.target.value)} className={`${inputCls} sm:w-auto`}>
           <option value="ALL">All Status</option>
           {Object.keys(statusColors).map(s => <option key={s} value={s}>{s}</option>)}
         </select>
@@ -93,7 +93,7 @@ export default function VaccinationTracker() {
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
                   <th className="px-4 py-3 text-left font-semibold text-gray-600">Resident</th>
@@ -167,7 +167,7 @@ function VaccinationModal({ residents, onClose, onSaved }: { residents: any[]; o
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4 rounded-t-xl flex items-center justify-between">
           <h3 className="text-white font-bold text-lg">Add Vaccination</h3>
           <button onClick={onClose} className="text-white/80 hover:text-white cursor-pointer"><X className="w-5 h-5" /></button>

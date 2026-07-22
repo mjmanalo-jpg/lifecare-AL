@@ -260,7 +260,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
             {scopedResidents.map((rv) => (
               <div key={`${rv.name}||${rv.room}`} className="divide-y divide-gray-100">
                 {/* Profile Header */}
-                <div className="bg-gradient-to-br from-yellow-50/50 to-amber-50/50 p-6 flex items-center justify-between">
+                <div className="bg-gradient-to-br from-yellow-50/50 to-amber-50/50 p-4 sm:p-6 flex items-center justify-between">
                   <div>
                     <h3 className="text-xl font-bold text-slate-800">{rv.name}</h3>
                     <p className="text-xs text-slate-500 font-semibold mt-0.5">Room {rv.room} &bull; Live Telemetry Feed</p>
@@ -272,7 +272,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
                 </div>
 
                  {/* Explanatory Notice */}
-                <div className="bg-sky-50/50 border-b border-sky-100 px-6 py-3.5 flex gap-2.5 items-start">
+                <div className="bg-sky-50/50 border-b border-sky-100 px-4 sm:px-6 py-3.5 flex gap-2.5 items-start">
                   <Activity className="w-4 h-4 text-sky-500 mt-0.5 flex-shrink-0 animate-pulse" />
                   <p className="text-[10px] leading-relaxed text-sky-700 font-medium">
                     <strong>Telemetry Source:</strong> Vitals marked with <span className="text-sky-800 font-extrabold bg-sky-100/60 px-1 py-0.5 rounded text-[9px] uppercase tracking-wider">AI Vision</span> represent real-time optical estimates from camera movement. Vitals marked <span className="text-emerald-800 font-extrabold bg-emerald-100/60 px-1 py-0.5 rounded text-[9px] uppercase tracking-wider">Charted</span> are loaded from database logs.
@@ -280,7 +280,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
                 </div>
 
                 {/* Vitals Readings */}
-                <div className="p-6 space-y-4">
+                <div className="p-4 sm:p-6 space-y-4">
                   {VITAL_DEFS.slice(0, 4).map(({ key, label, icon: Icon }) => {
                     const v = rv.vitals[key];
                     const abnormalVal = v?.abnormal;
@@ -318,7 +318,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
                 </div>
 
                 {/* Footer status */}
-                <div className="px-6 py-4 bg-gray-50 flex items-center justify-between text-xs text-gray-500">
+                <div className="px-4 sm:px-6 py-4 bg-gray-50 flex items-center justify-between text-xs text-gray-500">
                   <span className="flex items-center gap-1.5 font-medium"><Clock className="w-3.5 h-3.5 text-gray-400" /> Sensor Status: Online</span>
                   <span className="font-semibold text-green-600">Latest: Just Now</span>
                 </div>
@@ -374,12 +374,12 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
 
       {viewingResident && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-6 flex items-center justify-between">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-4 sm:p-6 flex items-center justify-between">
               <h2 className="text-xl font-bold">{viewingResident.split("||")[0]} — All Vitals</h2>
               <button onClick={() => setViewingResident(null)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               {viewingVitals.length > 0 ? (
                 <div className="space-y-2">
                   {viewingVitals.map((v) => (
@@ -405,7 +405,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
                 <p className="text-gray-500 text-center py-8">No vital readings recorded.</p>
               )}
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-6 py-4 flex justify-end">
               <button onClick={() => setViewingResident(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
             </div>
           </div>
@@ -419,7 +419,7 @@ function StatBox({ label, value, color, bg }: { label: string; value: number; co
   return (
     <div className={`${bg} p-4 rounded-lg border border-gray-200`}>
       <p className="text-sm text-gray-600 font-semibold">{label}</p>
-      <p className={`text-3xl font-bold mt-1 ${color}`}>{value}</p>
+      <p className={`text-2xl sm:text-3xl font-bold mt-1 ${color}`}>{value}</p>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { getSession, validateSession } from "@/lib/auth";
 import { DEMO } from "@/lib/demoData";
 import { prisma } from "@/lib/prisma";
 import { residentBelongsToSession } from "@/lib/scope";
+import { logAudit, snapshot } from "@/lib/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -198,7 +199,25 @@ export async function PATCH(
   }
 
   try {
+    // Capture before state for audit
+    const beforeRecord = await def.delegate.findUnique({ where: { id } });
+    const beforeSnap = beforeRecord ? snapshot(beforeRecord as Record<string, unknown>) : null;
+
     const data = await def.delegate.update({ where: { id }, data: body });
+
+    // Audit log — fire-and-forget
+    logAudit({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: "UPDATE",
+      entityType: model,
+      entityId: id,
+      before: beforeSnap,
+      after: snapshot(data as Record<string, unknown>),
+      ipAddress: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || undefined,
+      userAgent: req.headers.get("user-agent") || undefined,
+    });
+
     // Staff completed a service ticket → ask the resident (and sponsor) live to
     // confirm & rate. Fire-and-forget so the API response is never blocked.
     if (model === "service-requests" && body.status === "COMPLETED") {
@@ -284,7 +303,25 @@ export async function DELETE(
   }
 
   try {
+    // Capture before state for audit
+    const beforeRecord = await def.delegate.findUnique({ where: { id } });
+    const beforeSnap = beforeRecord ? snapshot(beforeRecord as Record<string, unknown>) : null;
+
+    // Resolve actor info — DELETE uses validateSession which returns only role
+    const session = await getSession();
+
     await def.delegate.delete({ where: { id } });
+
+    // Audit log — fire-and-forget
+    logAudit({
+      actorId: session?.userId,
+      actorRole: role,
+      action: "DELETE",
+      entityType: model,
+      entityId: id,
+      before: beforeSnap,
+    });
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Delete failed";

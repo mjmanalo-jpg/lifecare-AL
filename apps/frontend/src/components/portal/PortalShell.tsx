@@ -14,6 +14,7 @@ import {
   Moon,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Bell,
   Globe,
   Lock,
@@ -31,7 +32,13 @@ import {
 import Link from "next/link";
 import LcmsLogo from "@/components/LcmsLogo";
 import { motion, AnimatePresence } from "framer-motion";
-import { Role, RoleDetails, ROLES } from "@/constants/roleConfig";
+import {
+  Role,
+  RoleDetails,
+  ROLES,
+  SidebarLink,
+  groupSidebarLinks,
+} from "@/constants/roleConfig";
 
 interface PortalShellProps {
   userRole: Role;
@@ -169,10 +176,91 @@ export default function PortalShell({
     }
   }, [settingRows, roleDetails, userRole]);
 
+  // Group links into matrix-based collapsible sections
+  const groupedLinks = useMemo(
+    () => groupSidebarLinks(filteredLinks),
+    [filteredLinks]
+  );
+
+  // Per-group collapse state (all groups start expanded)
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const toggleGroup = (group: string) =>
+    setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }));
+
+  // Renders a single nav link (label optional for the collapsed rail)
+  const renderLink = (link: SidebarLink, showLabel: boolean) => {
+    const isActive = pathname.includes(link.route);
+    const Icon = link.icon;
+    return (
+      <Link
+        key={`${link.name}-${link.route}`}
+        href={link.route}
+        onClick={() => setMobileMenuOpen(false)}
+        title={showLabel ? undefined : link.name}
+        className={`flex items-center gap-3 px-3 py-2 rounded-lg transition ${
+          isActive
+            ? theme === "dark"
+              ? "bg-gradient-to-r from-blue-500/20 to-blue-400/10 text-blue-300 border-l-2 border-blue-400"
+              : "bg-blue-100 text-blue-700 border-l-2 border-blue-500"
+            : theme === "dark"
+            ? "text-gray-300 hover:bg-gray-700/50 hover:text-white"
+            : "text-gray-700 hover:bg-gray-200 hover:text-gray-900"
+        } ${showLabel ? "" : "justify-center"}`}
+      >
+        <Icon className="flex-shrink-0 w-5 h-5" />
+        {showLabel && <span className="text-sm font-semibold">{link.name}</span>}
+      </Link>
+    );
+  };
+
+  // Renders the full nav as collapsible group sections
+  const renderGroupedNav = () =>
+    groupedLinks.map(({ group, links }) => {
+      const collapsed = !!collapsedGroups[group];
+      return (
+        <div key={group} className="space-y-1">
+          <button
+            onClick={() => toggleGroup(group)}
+            className={`w-full flex items-center justify-between px-3 pt-3 pb-1 group ${
+              theme === "dark" ? "text-gray-500 hover:text-gray-300" : "text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            <span className="text-[10px] font-bold uppercase tracking-wider">{group}</span>
+            <ChevronDown
+              className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                collapsed ? "-rotate-90" : ""
+              }`}
+            />
+          </button>
+          {!collapsed && (
+            <div className="space-y-1">{links.map((link) => renderLink(link, true))}</div>
+          )}
+        </div>
+      );
+    });
+
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  // Lock body scroll when mobile drawer is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+      document.body.style.position = "fixed";
+      document.body.style.inset = "0";
+    } else {
+      document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.inset = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.inset = "";
+    };
+  }, [mobileMenuOpen]);
 
 
 
@@ -240,11 +328,11 @@ export default function PortalShell({
 
   return (
     <div className={`flex h-screen ${theme === "dark" ? "bg-black text-white" : "bg-gray-50 text-gray-900"}`}>
-      {/* Sidebar */}
+      {/* Sidebar — visible on md+, collapsed rail on lg when sidebarOpen, full width on md when sidebarOpen */}
       <aside
         className={`${
-          sidebarOpen ? "w-64" : "w-20"
-        } transition-all duration-300 flex flex-col shadow-2xl hidden md:flex ${
+          sidebarOpen ? "w-20 lg:w-64" : "w-20"
+        } transition-all duration-300 flex flex-col shadow-2xl hidden md:flex overflow-hidden ${
           theme === "dark"
             ? "bg-gradient-to-b from-black to-gray-950 text-white"
             : "bg-gradient-to-b from-white to-gray-100 text-gray-900 border-r border-gray-200"
@@ -257,17 +345,26 @@ export default function PortalShell({
             : "bg-gradient-to-r from-white to-gray-50 border-blue-200"
         }`}>
           {sidebarOpen ? (
-            <div className="flex items-center gap-2">
-              <LcmsLogo />
-              <div className="text-left border-l border-gray-200 dark:border-gray-800 pl-2">
-                <div className={`font-black text-xs leading-none uppercase tracking-wider ${theme === "dark" ? "text-blue-400" : "text-blue-600"}`}>{roleDetails.badge}</div>
-                <div className="text-[9px] text-gray-400 dark:text-gray-500 font-bold truncate max-w-[80px] mt-0.5" title={facilityName || "Care Portal"}>
-                  {facilityName || "Care Portal"}
+            <>
+              {/* Full brand — visible when expanded on lg+ */}
+              <div className="hidden lg:flex items-center gap-2 min-w-0 flex-1">
+                <LcmsLogo />
+                <div className="text-left border-l border-gray-200 dark:border-gray-800 pl-2 min-w-0 flex-1">
+                  <div className={`font-black text-xs leading-none uppercase tracking-wider ${theme === "dark" ? "text-blue-400" : "text-blue-600"}`}>{roleDetails.badge}</div>
+                  <div className="text-[9px] text-gray-400 dark:text-gray-500 font-bold truncate mt-0.5" title={facilityName || "Care Portal"}>
+                    {facilityName || "Care Portal"}
+                  </div>
                 </div>
               </div>
-            </div>
+              {/* Icon-only at md rail */}
+              <div className="lg:hidden flex items-center justify-center w-full">
+                <LcmsLogo iconOnly />
+              </div>
+            </>
           ) : (
-            <LcmsLogo iconOnly />
+            <div className="flex items-center justify-center w-full">
+              <LcmsLogo iconOnly />
+            </div>
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -286,31 +383,20 @@ export default function PortalShell({
           </button>
         </div>
 
-        {/* Navigation Links */}
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          {filteredLinks.map((link) => {
-            const isActive = pathname.includes(link.route);
-            const Icon = link.icon;
-            return (
-              <Link
-                key={`${link.name}-${link.route}`}
-                href={link.route}
-                onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition ${
-                  isActive
-                    ? theme === "dark"
-                      ? "bg-gradient-to-r from-blue-500/20 to-blue-400/10 text-blue-300 border-l-2 border-blue-400"
-                      : "bg-blue-100 text-blue-700 border-l-2 border-blue-500"
-                    : theme === "dark"
-                    ? "text-gray-300 hover:bg-gray-700/50 hover:text-white"
-                    : "text-gray-700 hover:bg-gray-200 hover:text-gray-900"
-                }`}
-              >
-                <Icon className="flex-shrink-0 w-5 h-5" />
-                {sidebarOpen && <span className="text-sm font-semibold">{link.name}</span>}
-              </Link>
-            );
-          })}
+        {/* Navigation Links — grouped by LCMS matrix module when expanded */}
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto min-h-0 scrollbar-thin">
+          {sidebarOpen
+            ? (
+              <>
+                {/* Full labels only on lg+ expanded */}
+                <div className="hidden lg:block">{renderGroupedNav()}</div>
+                {/* Rail mode at md: icon-only links */}
+                <div className="lg:hidden space-y-1">
+                  {filteredLinks.map((link) => renderLink(link, false))}
+                </div>
+              </>
+            )
+            : filteredLinks.map((link) => renderLink(link, false))}
         </nav>
 
         {/* Footer */}
@@ -319,25 +405,25 @@ export default function PortalShell({
             ? "bg-gradient-to-r from-black to-gray-950 border-blue-500/10"
             : "bg-gradient-to-r from-white to-gray-50 border-blue-200"
         }`}>
-          {sidebarOpen && (
-            <p className={`text-xs text-center leading-snug ${
+          {sidebarOpen ? (
+            <p className={`text-xs text-center leading-snug hidden lg:block ${
               theme === "dark" ? "text-blue-100/70" : "text-blue-700"
             }`}>
               {roleDetails.footerText}
             </p>
-          )}
+          ) : null}
         </div>
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* Topbar */}
-        <header className={`border-b px-4 md:px-6 py-4 flex items-center justify-between shadow-sm transition-colors duration-300 ${
+        <header className={`border-b px-3 sm:px-4 md:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 shadow-sm transition-colors duration-300 ${
           theme === "dark"
             ? "bg-gradient-to-r from-gray-900 to-black border-blue-500/20 text-white"
             : "bg-gradient-to-r from-white to-gray-50 border-blue-200 text-gray-900"
         }`}>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             {/* Mobile Menu Toggle */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -351,8 +437,8 @@ export default function PortalShell({
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
 
-            {/* Clock */}
-            <div className={`text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
+            {/* Clock — hidden on smallest screens */}
+            <div className={`text-sm hidden sm:block ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
               <div id="current-time">
                 {new Date(now).toLocaleTimeString()}
               </div>
@@ -360,7 +446,7 @@ export default function PortalShell({
           </div>
 
           {/* Right Section: Theme + Profile */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 sm:gap-3 md:gap-4">
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
@@ -402,7 +488,7 @@ export default function PortalShell({
 
               {/* Notification dropdown card */}
               {bellDropdownOpen && (
-                  <div className={`fixed inset-x-4 top-16 sm:absolute sm:inset-auto sm:right-0 sm:mt-3 sm:w-96 rounded-2xl shadow-2xl border z-50 overflow-hidden transition-all duration-200 ${
+                  <div className={`fixed inset-x-3 top-14 sm:absolute sm:inset-auto sm:right-0 sm:mt-3 sm:w-96 w-[calc(100vw-1.5rem)] rounded-2xl shadow-2xl border z-50 overflow-hidden transition-all duration-200 ${
                     theme === "dark"
                       ? "bg-gray-900 border-gray-700 text-white"
                       : "bg-white border-blue-200 text-gray-900"
@@ -609,84 +695,87 @@ export default function PortalShell({
                 initial={{ x: -300 }}
                 animate={{ x: 0 }}
                 exit={{ x: -300 }}
-                className={`w-64 h-full shadow-2xl transition-colors duration-300 ${
+                className={`w-[min(256px,85vw)] max-w-[256px] h-full shadow-2xl transition-colors duration-300 flex flex-col ${
                   theme === "dark"
                     ? "bg-gradient-to-b from-black to-gray-950 text-white"
                     : "bg-gradient-to-b from-white to-gray-100 text-gray-900"
                 }`}
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className={`p-4 border-b transition-colors duration-300 ${
+                {/* Mobile Sidebar Header */}
+                <div className={`p-4 border-b flex items-center gap-2 transition-colors duration-300 ${
                   theme === "dark"
                     ? "bg-gradient-to-b from-black to-gray-950 border-blue-500/10"
                     : "bg-gradient-to-b from-white to-gray-100 border-blue-200"
                 }`}>
-                  <div className="flex items-center gap-2">
-                    <LcmsLogo />
-                    <div className="text-sm">
-                      <div className={`font-black text-lg leading-tight ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{facilityName || "Care Portal"}</div>
-                      <div className={`text-xs font-bold ${theme === "dark" ? "text-blue-300" : "text-blue-700"}`}>
-                        {roleDetails.badge}
-                      </div>
+                  <LcmsLogo />
+                  <div className="min-w-0 flex-1">
+                    <div className={`font-black text-sm leading-tight truncate ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+                      {facilityName || "Care Portal"}
+                    </div>
+                    <div className={`text-[10px] font-bold truncate ${theme === "dark" ? "text-blue-300" : "text-blue-700"}`}>
+                      {roleDetails.badge}
                     </div>
                   </div>
+                  <button
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`p-1.5 rounded-lg transition flex-shrink-0 ${
+                      theme === "dark" ? "hover:bg-gray-800 text-gray-400" : "hover:bg-gray-200 text-gray-500"
+                    }`}
+                    title="Close menu"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
 
-                <nav className="p-4 space-y-2">
-                  {filteredLinks.map((link) => {
-                    const isActive = pathname.includes(link.route);
-                    const Icon = link.icon;
-                    return (
-                      <Link
-                        key={`${link.name}-${link.route}`}
-                        href={link.route}
-                        onClick={() => setMobileMenuOpen(false)}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-lg transition ${
-                          isActive
-                            ? theme === "dark"
-                              ? "bg-gradient-to-r from-blue-500/20 to-blue-400/10 text-blue-300 border-l-2 border-blue-400"
-                              : "bg-blue-100 text-blue-700 border-l-2 border-blue-500"
-                            : theme === "dark"
-                            ? "text-gray-300 hover:bg-gray-700/50 hover:text-white"
-                            : "text-gray-700 hover:bg-gray-200 hover:text-gray-900"
-                        }`}
-                      >
-                        <Icon className="flex-shrink-0 w-5 h-5" />
-                        <span className="text-sm font-semibold">{link.name}</span>
-                      </Link>
-                    );
-                  })}
+                {/* Mobile Sidebar Nav */}
+                <nav className="flex-1 p-4 space-y-1 overflow-y-auto min-h-0 scrollbar-thin"
+                  style={{ maxHeight: "calc(100dvh - 56px - 3rem)" }}>
+                  {renderGroupedNav()}
                 </nav>
+
+                {/* Mobile Sidebar Footer */}
+                <div className={`p-4 border-t transition-colors duration-300 flex-shrink-0 ${
+                  theme === "dark"
+                    ? "bg-gradient-to-r from-black to-gray-950 border-blue-500/10"
+                    : "bg-gradient-to-r from-white to-gray-50 border-blue-200"
+                }`}>
+                  <p className={`text-[10px] text-center leading-snug ${
+                    theme === "dark" ? "text-blue-100/70" : "text-blue-700"
+                  }`}>
+                    {roleDetails.footerText}
+                  </p>
+                </div>
               </motion.aside>
             </motion.div>
           )}
         </AnimatePresence>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-auto p-4 md:p-6">
+        <main className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6" style={{ height: 0 }}>
           {children}
         </main>
       </div>
 
       {/* Settings Modal */}
       {showSettingsModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className={`rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto ${
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-4">
+          <div className={`rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-2xl max-h-[92dvh] sm:max-h-[90dvh] overflow-y-auto scrollbar-thin ${
             theme === "dark" ? "bg-gray-900" : "bg-white"
           }`}>
             {/* Header */}
-            <div className="sticky top-0 bg-gradient-to-r from-gray-900 to-black text-white p-6 flex items-center justify-between border-b border-blue-300">
-              <h1 className="text-2xl font-bold">Settings</h1>
+            <div className="sticky top-0 bg-gradient-to-r from-gray-900 to-black text-white p-4 sm:p-6 flex items-center justify-between border-b border-blue-300">
+              <h1 className="text-lg sm:text-2xl font-bold">Settings</h1>
               <button
                 onClick={() => setShowSettingsModal(false)}
                 className="p-2 hover:bg-gray-700 rounded-lg transition"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </div>
 
             {/* Content */}
-            <div className="p-8 space-y-8">
+            <div className="p-4 sm:p-8 space-y-6 sm:space-y-8">
               {/* Profile Section */}
               <div className="space-y-4">
                 <div className="flex items-center gap-3 mb-4">
@@ -812,14 +901,14 @@ export default function PortalShell({
             </div>
 
             {/* Footer */}
-            <div className={`sticky bottom-0 px-8 py-4 flex items-center justify-between border-t ${
+            <div className={`sticky bottom-0 px-4 sm:px-8 py-3 sm:py-4 flex items-center justify-between border-t ${
               theme === "dark"
                 ? "bg-gray-800 border-gray-700"
                 : "bg-gray-50 border-gray-200"
             }`}>
               <button
                 onClick={() => setShowSettingsModal(false)}
-                className={`px-6 py-2 rounded-lg transition ${
+                className={`px-4 sm:px-6 py-2 rounded-lg transition ${
                   theme === "dark"
                     ? "text-gray-300 hover:bg-gray-700"
                     : "text-gray-700 hover:bg-gray-100"
@@ -827,7 +916,7 @@ export default function PortalShell({
               >
                 Close
               </button>
-              <button className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-lg hover:shadow-lg transition">
+              <button className="px-4 sm:px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-lg hover:shadow-lg transition">
                 Save Changes
               </button>
             </div>

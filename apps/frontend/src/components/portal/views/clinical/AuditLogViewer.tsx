@@ -30,10 +30,10 @@ export default function AuditLogViewer() {
       if (entityFilter !== "ALL" && a.entityType !== entityFilter) return false;
       if (search) {
         const q = search.toLowerCase();
-        return (a.userName || "").toLowerCase().includes(q) || (a.entityType || "").toLowerCase().includes(q) || (a.description || "").toLowerCase().includes(q);
+        return (a.actorName || "").toLowerCase().includes(q) || (a.entityType || "").toLowerCase().includes(q) || (a.reason || "").toLowerCase().includes(q);
       }
       return true;
-    }).sort((a: any, b: any) => new Date(b.timestamp || b.createdAt || 0).getTime() - new Date(a.timestamp || a.createdAt || 0).getTime());
+    }).sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
   }, [auditRows, actionFilter, entityFilter, search]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -57,11 +57,11 @@ export default function AuditLogViewer() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search user, entity, or description..." className={`${inputCls} pl-9`} />
         </div>
-        <select value={actionFilter} onChange={e => { setActionFilter(e.target.value); setPage(1); }} className={`${inputCls} w-auto`}>
+        <select value={actionFilter} onChange={e => { setActionFilter(e.target.value); setPage(1); }} className={`${inputCls} w-full sm:w-auto`}>
           <option value="ALL">All Actions</option>
           {uniqueActions.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
-        <select value={entityFilter} onChange={e => { setEntityFilter(e.target.value); setPage(1); }} className={`${inputCls} w-auto`}>
+        <select value={entityFilter} onChange={e => { setEntityFilter(e.target.value); setPage(1); }} className={`${inputCls} w-full sm:w-auto`}>
           <option value="ALL">All Entities</option>
           {uniqueEntities.map(e => <option key={e} value={e}>{e}</option>)}
         </select>
@@ -78,7 +78,7 @@ export default function AuditLogViewer() {
         <>
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">Timestamp</th>
@@ -92,19 +92,20 @@ export default function AuditLogViewer() {
                   {paged.map((log: any) => (
                     <tr key={log.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
-                        {log.timestamp || log.createdAt ? new Date(log.timestamp || log.createdAt).toLocaleString() : "—"}
+                        {log.createdAt ? new Date(log.createdAt).toLocaleString() : "—"}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <User className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-900 font-medium">{log.userName || log.performedBy || "System"}</span>
+                          <span className="text-gray-900 font-medium">{log.actorName || "System"}</span>
+                          {log.actorRole && <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{log.actorRole}</span>}
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${actionColors[log.action] || "bg-gray-100 text-gray-600"}`}>{log.action}</span>
                       </td>
                       <td className="px-4 py-3 text-gray-700">{log.entityType || "—"} {log.entityId && <span className="text-xs text-gray-400">({log.entityId.slice(0, 8)}...)</span>}</td>
-                      <td className="px-4 py-3 text-gray-500 text-xs max-w-xs truncate">{log.description || "—"}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs max-w-xs truncate">{log.reason || "—"}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -123,7 +123,7 @@ export default function PhysicianConsults() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Stat label="Open Consults" value={stats.openConsults} icon={Inbox} tone="teal" />
         <Stat label="Open Referrals" value={stats.openReferrals} icon={Send} tone="indigo" />
         <Stat label="Resolved" value={stats.resolved} icon={CheckCircle2} tone="green" />

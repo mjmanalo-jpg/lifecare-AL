@@ -360,7 +360,7 @@ export default function FleetMaintenance() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
             Fleet Maintenance
           </h1>
           <p className="text-gray-600">Preventive schedule · repair work orders · garage &amp; vendor service</p>
@@ -622,8 +622,8 @@ function WorkOrderFormModal({ title, form, onChange, onSave, onCancel, saveLabel
           <button onClick={onCancel} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
         <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
               <label className="block text-sm font-semibold text-gray-700 mb-1">Vehicle</label>
               <select value={form.vehicleId} onChange={set("vehicleId")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none">
                 <option value="">Select vehicle…</option>
@@ -642,11 +642,11 @@ function WorkOrderFormModal({ title, form, onChange, onSave, onCancel, saveLabel
                 {STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
               </select>
             </div>
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <label className="block text-sm font-semibold text-gray-700 mb-1">Title</label>
               <input type="text" value={form.title} onChange={set("title")} placeholder="e.g. Brake pad replacement" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
             </div>
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <label className="block text-sm font-semibold text-gray-700 mb-1">Description</label>
               <textarea value={form.description} onChange={set("description")} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
             </div>
@@ -670,7 +670,7 @@ function WorkOrderFormModal({ title, form, onChange, onSave, onCancel, saveLabel
               <label className="block text-sm font-semibold text-gray-700 mb-1">Downtime Hours</label>
               <input type="number" min="0" step="0.5" value={form.downtimeHours} onChange={set("downtimeHours")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
             </div>
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <label className="block text-sm font-semibold text-gray-700 mb-1">Notes</label>
               <textarea value={form.notes} onChange={set("notes")} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
             </div>

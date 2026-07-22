@@ -89,19 +89,19 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
     const status = str(row.status);
     const statusPill = REQUEST_STATUS_COLORS[status] ?? "bg-gray-100 text-gray-600";
     return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-          <div className={`bg-gradient-to-r ${meta.gradient} px-6 py-5 text-white flex items-center justify-between`}>
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0"><TypeIcon className="w-5 h-5" /></div>
+          <div className={`bg-gradient-to-r ${meta.gradient} px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between`}>
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0"><TypeIcon className="w-5 h-5" /></div>
               <div className="min-w-0">
                 <p className="text-white/70 text-xs font-medium">{meta.label}</p>
-                <h2 className="font-bold text-lg truncate">{str(row.destination)}</h2>
+                <h2 className="font-bold text-base sm:text-lg truncate">{str(row.destination)}</h2>
               </div>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition shrink-0"><X className="w-5 h-5" /></button>
           </div>
-          <div className="p-6 space-y-3 overflow-y-auto flex-1">
+          <div className="p-4 sm:p-6 space-y-3 overflow-y-auto flex-1">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</span>
               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${statusPill}`}>{status}</span>
@@ -131,7 +131,7 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
               <p className="text-sm text-blue-900 whitespace-pre-wrap">{str(row.notes)}</p>
             </div>}
           </div>
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
             <button onClick={onClose} className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-xl transition text-sm">Close</button>
           </div>
         </div>
@@ -147,19 +147,19 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
     const avatarColors: Record<string, string> = { S: "from-blue-500 to-indigo-500", A: "from-amber-500 to-orange-500", M: "from-emerald-500 to-teal-500", R: "from-rose-500 to-pink-500" };
     const gradient = avatarColors[name.charAt(0).toUpperCase()] ?? "from-purple-500 to-violet-500";
     return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-          <div className={`bg-gradient-to-r ${gradient} px-6 py-5 text-white flex items-center justify-between`}>
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-lg font-black shrink-0">{initials}</div>
+          <div className={`bg-gradient-to-r ${gradient} px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between`}>
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-2xl bg-white/20 flex items-center justify-center text-sm sm:text-lg font-black shrink-0">{initials}</div>
               <div className="min-w-0">
                 <p className="text-white/70 text-xs font-medium">Visit Appointment</p>
-                <h2 className="font-bold text-lg truncate">{name}</h2>
+                <h2 className="font-bold text-base sm:text-lg truncate">{name}</h2>
               </div>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition shrink-0"><X className="w-5 h-5" /></button>
           </div>
-          <div className="p-6 space-y-3 overflow-y-auto flex-1">
+          <div className="p-4 sm:p-6 space-y-3 overflow-y-auto flex-1">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</span>
               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${statusPill}`}>{status}</span>
@@ -189,7 +189,7 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
               <p className="text-sm text-blue-900 whitespace-pre-wrap">{str(row.notes)}</p>
             </div>}
           </div>
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
             <button onClick={onClose} className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-xl transition text-sm">Close</button>
           </div>
         </div>
@@ -201,21 +201,21 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
     const priority = str(row.priority);
     const pill = ANNOUNCEMENT_PRIORITY_PILL[priority] ?? ANNOUNCEMENT_PRIORITY_PILL.NORMAL;
     return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-          <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-5 text-white flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
                 <Megaphone className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <h2 className="font-bold text-lg truncate">{str(row.title)}</h2>
+                <h2 className="font-bold text-base sm:text-lg truncate">{str(row.title)}</h2>
                 <p className="text-white/70 text-xs">{str(row.authorName ?? "")}{row.publishedAt ? ` · ${fmtShort(str(row.publishedAt))}` : ""}</p>
               </div>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition shrink-0"><X className="w-5 h-5" /></button>
           </div>
-          <div className="p-6 space-y-4 overflow-y-auto flex-1">
+          <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               {Boolean(row.pinned) && <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold"><Pin className="w-3 h-3" /> Pinned</span>}
               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${pill}`}>{priority}</span>
@@ -225,7 +225,7 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
             </div>
             {row.publishedAt && <p className="text-xs text-gray-400 text-right">Published {fmtDT(str(row.publishedAt))}</p>}
           </div>
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
             <button onClick={onClose} className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-xl transition text-sm">Close</button>
           </div>
         </div>
@@ -238,15 +238,15 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
     const CatIcon = cat.icon;
     const att = str((row as Row & { _attStatus?: string })._attStatus ?? "");
     return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
           {row.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={str(row.imageUrl)} alt="" className="w-full h-40 object-cover" />
+            <img src={str(row.imageUrl)} alt="" className="w-full h-32 sm:h-40 object-cover" />
           ) : (
-            <div className={`w-full h-40 flex items-center justify-center ${cat.cls}`}><CatIcon className="w-16 h-16 opacity-30" /></div>
+            <div className={`w-full h-32 sm:h-40 flex items-center justify-center ${cat.cls}`}><CatIcon className="w-12 h-12 sm:w-16 sm:h-16 opacity-30" /></div>
           )}
-          <div className="p-6 space-y-4 overflow-y-auto flex-1">
+          <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
             <div>
               <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${cat.cls}`}><CatIcon className="w-3 h-3" /> {cat.label}</span>
               <h2 className="text-xl font-bold text-gray-900 mt-2">{str(row.title)}</h2>
@@ -278,7 +278,7 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${RSVP_PILL[att] ?? "bg-gray-100 text-gray-600"}`}>{att}</span>
             </div>}
           </div>
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
             <button onClick={onClose} className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-xl transition text-sm">Close</button>
           </div>
         </div>
@@ -292,19 +292,19 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
     const mealColors: Record<string, string> = { BREAKFAST: "from-amber-400 to-orange-500", LUNCH: "from-emerald-400 to-teal-500", DINNER: "from-indigo-400 to-purple-500" };
     const gradient = mealColors[str(row.mealType)] ?? "from-blue-400 to-indigo-500";
     return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-          <div className={`bg-gradient-to-r ${gradient} px-6 py-5 text-white flex items-center justify-between`}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center"><UtensilsCrossed className="w-5 h-5" /></div>
+          <div className={`bg-gradient-to-r ${gradient} px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between`}>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 flex items-center justify-center"><UtensilsCrossed className="w-5 h-5" /></div>
               <div>
-                <h2 className="font-bold text-lg">{str(row.mealType)}</h2>
+                <h2 className="font-bold text-base sm:text-lg">{str(row.mealType)}</h2>
                 <p className="text-white/70 text-xs">{str(row.venue ?? "Dining")}</p>
               </div>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition"><X className="w-5 h-5" /></button>
           </div>
-          <div className="p-6 space-y-3 overflow-y-auto flex-1">
+          <div className="p-4 sm:p-6 space-y-3 overflow-y-auto flex-1">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</span>
               <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${pill}`}>{status}</span>
@@ -326,7 +326,7 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
               <p className="text-sm text-amber-900 whitespace-pre-wrap">{str(row.specialRequests)}</p>
             </div>}
           </div>
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
             <button onClick={onClose} className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-xl transition text-sm">Close</button>
           </div>
         </div>
@@ -338,29 +338,29 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
     const catColors: Record<string, string> = { Dining: "from-orange-400 to-amber-500", "Room Comfort": "from-blue-400 to-indigo-500", Activities: "from-purple-400 to-pink-500", "Wake-Up": "from-emerald-400 to-teal-500", Communication: "from-cyan-400 to-blue-500" };
     const gradient = catColors[str(row.category)] ?? "from-gray-400 to-gray-500";
     return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-          <div className={`bg-gradient-to-r ${gradient} px-6 py-5 text-white flex items-center justify-between`}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center"><SlidersHorizontal className="w-5 h-5" /></div>
+          <div className={`bg-gradient-to-r ${gradient} px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between`}>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 flex items-center justify-center"><SlidersHorizontal className="w-5 h-5" /></div>
               <div>
                 <p className="text-white/70 text-xs font-medium">{str(row.category)}</p>
-                <h2 className="font-bold text-lg">{str(row.preference)}</h2>
+                <h2 className="font-bold text-base sm:text-lg">{str(row.preference)}</h2>
               </div>
             </div>
             <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition"><X className="w-5 h-5" /></button>
           </div>
-          <div className="p-6 space-y-4 overflow-y-auto flex-1">
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 text-center">
+          <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+            <div className="bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100 text-center">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Value</p>
-              <p className="text-2xl font-black text-gray-900">{str(row.value)}</p>
+              <p className="text-xl sm:text-2xl font-black text-gray-900">{str(row.value)}</p>
             </div>
             {row.notes && <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
               <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide mb-1">Notes</p>
               <p className="text-sm text-blue-900 whitespace-pre-wrap">{str(row.notes)}</p>
             </div>}
           </div>
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
             <button onClick={onClose} className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-xl transition text-sm">Close</button>
           </div>
         </div>
@@ -370,13 +370,13 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
 
   /* Generic fallback */
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between z-10">
-          <h2 className="font-bold text-gray-900">{title}</h2>
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-4 sm:px-5 py-3 sm:py-4 flex items-center justify-between z-10">
+          <h2 className="font-bold text-gray-900 text-sm sm:text-base">{title}</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl transition"><X className="w-5 h-5" /></button>
         </div>
-        <div className="p-5 space-y-3">
+        <div className="p-4 sm:p-5 space-y-3">
           {Object.entries(row).filter(([k]) => !k.startsWith("_") && k !== "raw").map(([k, v]) => (
             <div key={k} className="flex justify-between gap-3 text-sm border-b border-gray-100 pb-2">
               <span className="text-gray-500 font-medium capitalize">{k.replace(/([A-Z])/g, " $1").trim()}</span>
@@ -474,8 +474,8 @@ function ReportTab() {
   return (
     <div className="space-y-5">
       {/* Summary */}
-      <div className="bg-gradient-to-br from-green-50 to-blue-50 border border-green-200 rounded-lg p-5">
-        <p className="text-gray-800 text-sm">
+      <div className="bg-gradient-to-br from-green-50 to-blue-50 border border-green-200 rounded-lg p-3 sm:p-5">
+        <p className="text-gray-800 text-xs sm:text-sm">
           {displayName} has <span className="font-bold">{vitalsToday}</span> vital reading{vitalsToday === 1 ? "" : "s"} today,
           <span className="font-bold"> {rawMeds.length}</span> active medication{rawMeds.length === 1 ? "" : "s"}, and
           {openAlerts > 0 ? <span className="font-bold text-red-600"> {openAlerts} open alert{openAlerts === 1 ? "" : "s"}</span> : <span className="font-bold text-green-600"> no open alerts</span>}.
@@ -483,7 +483,7 @@ function ReportTab() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         <StatBox label="Vitals Today" value={vitalsToday} icon={HeartPulse} color="rose" />
         <StatBox label="Medications" value={rawMeds.length} icon={Pill} color="blue" />
         <StatBox label="Open Alerts" value={openAlerts} icon={AlertTriangle} color={openAlerts > 0 ? "amber" : "green"} />
@@ -493,22 +493,22 @@ function ReportTab() {
       {/* Vitals Snapshot */}
       <div>
         <h3 className="font-semibold text-gray-900 mb-3 text-sm">Vitals Snapshot</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
           {SNAPSHOT.map(({ key, label, icon: Icon, color }) => {
             const v = latestVital(key);
             return (
-              <div key={key} className="bg-white p-4 rounded-lg border border-gray-200">
+              <div key={key} className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
                 <p className="text-xs text-gray-600 font-semibold flex items-center gap-1"><Icon className={`w-3.5 h-3.5 ${color}`} /> {label}</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{v ? str(v.value) : "—"}<span className="text-sm font-medium text-gray-500 ml-1">{v?.unit ? str(v.unit) : ""}</span></p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">{v ? str(v.value) : "—"}<span className="text-xs sm:text-sm font-medium text-gray-500 ml-1">{v?.unit ? str(v.unit) : ""}</span></p>
               </div>
             );
           })}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
         {/* Timeline */}
-        <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-5">
+        <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-3 sm:p-5">
           <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2 text-sm"><Activity className="w-4 h-4 text-blue-500" /> Activity Timeline</h3>
           {events.length > 0 ? (
             <ol className="relative border-l-2 border-gray-100 ml-2 space-y-4">
@@ -517,9 +517,9 @@ function ReportTab() {
                 return (
                   <li key={i} className="ml-4">
                     <span className="absolute -left-[9px] flex items-center justify-center w-4 h-4 bg-white rounded-full ring-2 ring-gray-100"><Icon className={`w-3 h-3 ${e.color}`} /></span>
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start justify-between gap-2 sm:gap-3">
                       <div className="min-w-0">
-                        <p className="font-medium text-gray-900 text-sm">{e.title}</p>
+                        <p className="font-medium text-gray-900 text-xs sm:text-sm">{e.title}</p>
                         {e.detail && <p className="text-xs text-gray-600 truncate">{e.detail}</p>}
                       </div>
                       <span className="text-xs text-gray-400 flex-shrink-0">{e.when}</span>
@@ -532,7 +532,7 @@ function ReportTab() {
         </div>
 
         {/* Medications */}
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
+        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-5">
           <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2 text-sm"><Pill className="w-4 h-4 text-blue-500" /> Medications</h3>
           {rawMeds.length > 0 ? (
             <div className="space-y-2">
@@ -705,16 +705,16 @@ function AppointmentsTab({ onView }: { onView: (r: Row, title: string) => void }
 
       {/* Request Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowForm(false)}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={() => setShowForm(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-purple-500 to-violet-600 px-6 py-5 text-white flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center"><Calendar className="w-5 h-5" /></div>
-                <h2 className="text-xl font-bold">Request a Visit</h2>
+            <div className="bg-gradient-to-r from-purple-500 to-violet-600 px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 flex items-center justify-center"><Calendar className="w-5 h-5" /></div>
+                <h2 className="text-lg sm:text-xl font-bold">Request a Visit</h2>
               </div>
               <button onClick={() => setShowForm(false)} className="p-2 hover:bg-white/20 rounded-xl transition"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Visitor Name *</label>
@@ -742,7 +742,7 @@ function AppointmentsTab({ onView }: { onView: (r: Row, title: string) => void }
                 <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} placeholder="Any additional details…" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none transition placeholder:text-gray-400 resize-none" />
               </div>
             </div>
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
               <button onClick={() => setShowForm(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-200 rounded-xl transition text-sm font-semibold">Cancel</button>
               <button onClick={() => void createVisit()} disabled={saving} className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-500 to-violet-600 text-white font-semibold rounded-xl hover:shadow-lg transition active:scale-95 disabled:opacity-60 text-sm">
                 {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : <><Plus className="w-4 h-4" /> Request Visit</>}
@@ -978,16 +978,16 @@ function TransportTab({ onView }: { onView: (r: Row, title: string) => void }) {
 
       {/* Request Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowForm(false)}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={() => setShowForm(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-5 text-white flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center"><Bus className="w-5 h-5" /></div>
-                <h2 className="text-xl font-bold">Request Transport</h2>
+            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 flex items-center justify-center"><Bus className="w-5 h-5" /></div>
+                <h2 className="text-lg sm:text-xl font-bold">Request Transport</h2>
               </div>
               <button onClick={() => setShowForm(false)} className="p-2 hover:bg-white/20 rounded-xl transition"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               {residents.length > 1 && (
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Resident</label>
@@ -1034,7 +1034,7 @@ function TransportTab({ onView }: { onView: (r: Row, title: string) => void }) {
                 <textarea value={form.notes} onChange={e => set("notes", e.target.value)} rows={2} placeholder="Any additional details…" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition placeholder:text-gray-400 resize-none" />
               </div>
             </div>
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
               <button onClick={() => setShowForm(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-200 rounded-xl transition text-sm font-semibold">Cancel</button>
               <button onClick={handleSubmit} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-xl hover:shadow-lg transition active:scale-95 text-sm">Send Request</button>
             </div>
@@ -1081,6 +1081,7 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const paginated = filtered.slice((page - 1) * perPage, page * perPage);
   const awaitingConfirm = tickets.filter(t => str(t.status) === "COMPLETED");
+  const hasAwaiting = awaitingConfirm.length > 0;
 
   const submitRequest = async () => {
     if (!reqForm.details) { Swal.fire({ title: "Missing Details", text: "Please describe what you need.", icon: "warning" }); return; }
@@ -1142,12 +1143,12 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
   return (
     <div className="space-y-5">
       {/* Confirm & rate banner */}
-      {awaitingConfirm.length > 0 && (
+      {hasAwaiting && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-2"><CheckCircle2 className="w-5 h-5 text-green-600" /><h3 className="font-semibold text-green-900 text-sm">Service done — please confirm & rate</h3></div>
           <div className="space-y-2">
             {awaitingConfirm.map(t => (
-              <div key={str(t.id)} className="flex items-center justify-between gap-3 bg-white border border-green-200 rounded-lg px-3 py-2">
+              <div key={str(t.id)} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white border border-green-200 rounded-lg px-3 py-2">
                 <div className="min-w-0"><p className="text-sm font-medium text-gray-900 truncate">{CATEGORY_META[str(t.category)]?.label ?? str(t.category)}{t.subType ? ` — ${str(t.subType)}` : ""}</p></div>
                 {busyId === str(t.id) ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> :
                   <button onClick={() => confirmAndRate(t)} className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition whitespace-nowrap"><Star className="w-3.5 h-3.5" /> Confirm & Rate</button>}
@@ -1197,23 +1198,28 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
               const Icon = meta.icon;
               const status = str(t.status);
               const rating = num(t.rating ?? 0);
+              const hasCharge = num(t.charge ?? 0) > 0;
               return (
-                <div key={str(t.id)} className="border border-gray-200 rounded-lg p-3 flex items-start gap-3">
-                  <div className={`p-2 rounded-lg border ${meta.cls}`}><Icon className="w-4 h-4" /></div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-semibold text-gray-900">{meta.label}{t.subType ? ` — ${str(t.subType)}` : ""}</p>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${REQUEST_STATUS_PILL[status] ?? "bg-gray-100 text-gray-700"}`}>{status.replace(/_/g, " ")}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${PRIORITY_PILL[str(t.priority)] ?? PRIORITY_PILL.ROUTINE}`}>{str(t.priority)}</span>
+                <div key={str(t.id)} className="border border-gray-200 rounded-lg p-3 flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div className={`p-2 rounded-lg border flex-shrink-0 ${meta.cls}`}><Icon className="w-4 h-4" /></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-semibold text-gray-900">{meta.label}{t.subType ? ` — ${str(t.subType)}` : ""}</p>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${REQUEST_STATUS_PILL[status] ?? "bg-gray-100 text-gray-700"}`}>{status.replace(/_/g, " ")}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${PRIORITY_PILL[str(t.priority)] ?? PRIORITY_PILL.ROUTINE}`}>{str(t.priority)}</span>
+                      </div>
+                      {str(t.details ?? "") && <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{str(t.details)}</p>}
+                      <p className="text-[11px] text-gray-400 mt-0.5">
+                        {t.assignedTeam ? `${TEAM_LABEL[str(t.assignedTeam)] ?? t.assignedTeam} · ` : ""}{timeAgo(str(t.createdAt ?? ""))}
+                        {hasCharge && ` · ₱${num(t.charge).toLocaleString()}${t.billed ? " (on invoice)" : ""}`}
+                      </p>
                     </div>
-                    {str(t.details ?? "") && <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{str(t.details)}</p>}
-                    <p className="text-[11px] text-gray-400 mt-0.5">
-                      {t.assignedTeam ? `${TEAM_LABEL[str(t.assignedTeam)] ?? t.assignedTeam} · ` : ""}{timeAgo(str(t.createdAt ?? ""))}
-                      {num(t.charge ?? 0) > 0 && ` · ₱${num(t.charge).toLocaleString()}${t.billed ? " (on invoice)" : ""}`}
-                    </p>
                   </div>
-                  {rating >= 1 && <span className="inline-flex items-center gap-0.5 text-amber-500 font-semibold text-xs whitespace-nowrap">{rating} <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" /></span>}
-                  {status === "COMPLETED" && <button onClick={() => confirmAndRate(t)} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition whitespace-nowrap">Confirm & Rate</button>}
+                  <div className="flex items-center gap-2 sm:flex-col sm:items-end flex-shrink-0">
+                    {rating >= 1 && <span className="inline-flex items-center gap-0.5 text-amber-500 font-semibold text-xs whitespace-nowrap">{rating} <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" /></span>}
+                    {status === "COMPLETED" && <button onClick={() => confirmAndRate(t)} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition whitespace-nowrap">Confirm & Rate</button>}
+                  </div>
                 </div>
               );
             })}
@@ -1244,6 +1250,7 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
               const cat = CONCIERGE_CATALOG[str(b.category)];
               const Icon = cat?.icon ?? ConciergeBell;
               const status = str(b.status);
+              const hasPrice = num(b.price ?? 0) > 0;
               return (
                 <div key={str(b.id)} className="border border-gray-200 rounded-lg p-3 flex items-center gap-3">
                   <div className={`p-2 rounded-lg border ${cat?.cls ?? "text-gray-600 bg-gray-50 border-gray-200"}`}><Icon className="w-4 h-4" /></div>
@@ -1252,7 +1259,7 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
                       <p className="text-sm font-semibold text-gray-900">{str(b.serviceName)}</p>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${BOOKING_STATUS_PILL[status] ?? "bg-gray-100 text-gray-700"}`}>{status.replace(/_/g, " ")}</span>
                     </div>
-                    <p className="text-[11px] text-gray-400 mt-0.5">{b.scheduledAt ? fmtDT(str(b.scheduledAt)) : ""}{num(b.price ?? 0) > 0 ? ` · ₱${num(b.price).toLocaleString()}` : " · Complimentary"}</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">{b.scheduledAt ? fmtDT(str(b.scheduledAt)) : ""}{hasPrice ? ` · ₱${num(b.price).toLocaleString()}` : " · Complimentary"}</p>
                   </div>
                   {["REQUESTED", "CONFIRMED"].includes(status) && (busyId === str(b.id) ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> :
                     <button onClick={() => cancelBooking(b)} className="p-1.5 rounded hover:bg-red-100 text-red-500 transition" title="Cancel"><Trash2 className="w-4 h-4" /></button>)}
@@ -1265,13 +1272,13 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
 
       {/* Request Modal */}
       {showRequest && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
-              <h2 className="text-xl font-bold">Request {CATEGORY_META[reqForm.category]?.label ?? "a Service"}</h2>
-              <button onClick={() => setShowRequest(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black px-4 sm:px-5 py-4 sm:py-5 flex items-center justify-between z-10">
+              <h2 className="text-lg sm:text-xl font-bold">Request {CATEGORY_META[reqForm.category]?.label ?? "a Service"}</h2>
+              <button onClick={() => setShowRequest(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5 sm:w-6 sm:h-6" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="block text-sm font-semibold text-gray-700 mb-1">Type</label>
                   <select value={reqForm.subType} onChange={e => setReqForm(f => ({ ...f, subType: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none">
@@ -1286,7 +1293,7 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
                 <div className="col-span-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-xs text-yellow-800">Goes to: <strong>{TEAM_LABEL[autoAssignTeam(reqForm.category, reqForm.subType)]}</strong> · Room {str(resident?.roomNumber ?? "—")}</div>
               </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
               <button onClick={() => setShowRequest(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition text-sm">Cancel</button>
               <button onClick={submitRequest} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Send Request</button>
             </div>
@@ -1296,13 +1303,13 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
 
       {/* Booking Modal */}
       {showBooking && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
-              <h2 className="text-xl font-bold">Book {CONCIERGE_CATALOG[bookForm.category]?.label ?? "a Service"}</h2>
-              <button onClick={() => setShowBooking(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black px-4 sm:px-5 py-4 sm:py-5 flex items-center justify-between z-10">
+              <h2 className="text-lg sm:text-xl font-bold">Book {CONCIERGE_CATALOG[bookForm.category]?.label ?? "a Service"}</h2>
+              <button onClick={() => setShowBooking(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5 sm:w-6 sm:h-6" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <p className="text-sm text-gray-600">{CONCIERGE_CATALOG[bookForm.category]?.desc}</p>
               <div><label className="block text-sm font-semibold text-gray-700 mb-1">Preferred Date & Time</label>
                 <input type="datetime-local" value={bookForm.scheduledAt} onChange={e => setBookForm(f => ({ ...f, scheduledAt: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
@@ -1312,7 +1319,7 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-xs text-yellow-800">Billable — from <strong>₱{CONCIERGE_CATALOG[bookForm.category].defaultPrice}</strong>, posted to monthly invoice.</div>
               )}
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
               <button onClick={() => setShowBooking(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition text-sm">Cancel</button>
               <button onClick={submitBooking} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Request Booking</button>
             </div>
@@ -1528,13 +1535,13 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
             {diningQ.data.map(d => {
               const status = str(d.status);
               return (
-                <div key={str(d.id)} className="flex items-center justify-between gap-3 border border-gray-100 rounded-lg px-3 py-2">
+                <div key={str(d.id)} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border border-gray-100 rounded-lg px-3 py-2">
                   <div className="min-w-0 cursor-pointer hover:bg-gray-50 rounded px-2 py-1 transition flex-1" onClick={() => onView(d, `Dining — ${str(d.mealType)}`)}>
                     <p className="text-sm font-medium text-gray-900">{str(d.mealType)} · {str(d.venue ?? "Dining")}</p>
                     <p className="text-xs text-gray-500">{d.reservedAt ? fmtDT(str(d.reservedAt)) : ""} · party of {str(d.partySize ?? 1)}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${DINING_STATUS_PILL[status] ?? "bg-gray-100 text-gray-700"}`}>{status}</span>
+                  <div className="flex items-center gap-2 px-2">
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold flex-shrink-0 ${DINING_STATUS_PILL[status] ?? "bg-gray-100 text-gray-700"}`}>{status}</span>
                     {["REQUESTED", "CONFIRMED"].includes(status) && (busyId === str(d.id) ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : <button onClick={() => cancelDining(str(d.id))} className="text-xs text-red-500 hover:underline">Cancel</button>)}
                   </div>
                 </div>
@@ -1557,7 +1564,7 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{cat}</p>
                 <div className="space-y-1">
                   {items.map(p => (
-                    <div key={str(p.id)} className="flex items-center justify-between gap-3 border border-gray-100 rounded-lg px-3 py-2">
+                    <div key={str(p.id)} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border border-gray-100 rounded-lg px-3 py-2">
                       <div className="min-w-0 cursor-pointer hover:bg-gray-50 rounded px-2 py-1 transition flex-1" onClick={() => onView(p, `Preference — ${str(p.preference)}`)}>
                         <p className="text-sm text-gray-900">{str(p.preference)}: <span className="font-semibold">{str(p.value)}</span></p>
                         {p.notes ? <p className="text-xs text-gray-400">{str(p.notes)}</p> : null}
@@ -1574,16 +1581,16 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
 
       {/* Dining Modal */}
       {showDining && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowDining(false)}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={() => setShowDining(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-amber-400 to-orange-500 px-6 py-5 text-white flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center"><UtensilsCrossed className="w-5 h-5" /></div>
-                <h2 className="text-xl font-bold">Reserve Dining</h2>
+            <div className="bg-gradient-to-r from-amber-400 to-orange-500 px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 flex items-center justify-center"><UtensilsCrossed className="w-5 h-5" /></div>
+                <h2 className="text-lg sm:text-xl font-bold">Reserve Dining</h2>
               </div>
               <button onClick={() => setShowDining(false)} className="p-2 hover:bg-white/20 rounded-xl transition"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Meal Type</label>
@@ -1615,7 +1622,7 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
               <button onClick={() => setShowDining(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-200 rounded-xl transition text-sm font-semibold">Cancel</button>
               <button onClick={submitDining} className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl hover:shadow-lg transition active:scale-95 text-sm">Request Reservation</button>
             </div>
@@ -1625,16 +1632,16 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
 
       {/* Preference Modal */}
       {showPref && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowPref(false)}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={() => setShowPref(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-purple-400 to-pink-500 px-6 py-5 text-white flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center"><SlidersHorizontal className="w-5 h-5" /></div>
-                <h2 className="text-xl font-bold">Add Preference</h2>
+            <div className="bg-gradient-to-r from-purple-400 to-pink-500 px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 flex items-center justify-center"><SlidersHorizontal className="w-5 h-5" /></div>
+                <h2 className="text-lg sm:text-xl font-bold">Add Preference</h2>
               </div>
               <button onClick={() => setShowPref(false)} className="p-2 hover:bg-white/20 rounded-xl transition"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Category</label>
                 <select value={prefForm.category} onChange={e => setPrefForm(f => ({ ...f, category: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none transition">
@@ -1654,7 +1661,7 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
                 <textarea value={prefForm.notes} onChange={e => setPrefForm(f => ({ ...f, notes: e.target.value }))} rows={2} placeholder="Any additional details…" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-purple-400 focus:border-purple-400 outline-none transition placeholder:text-gray-400 resize-none" />
               </div>
             </div>
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
               <button onClick={() => setShowPref(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-200 rounded-xl transition text-sm font-semibold">Cancel</button>
               <button onClick={savePref} className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl hover:shadow-lg transition active:scale-95 text-sm">Save Preference</button>
             </div>

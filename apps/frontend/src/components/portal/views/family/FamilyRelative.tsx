@@ -110,14 +110,14 @@ export default function FamilyRelative() {
 
       {/* Vitals */}
       <div>
-        <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><HeartPulse className="w-4 h-4 text-red-500" /> Latest Vital Signs</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm sm:text-base"><HeartPulse className="w-4 h-4 text-red-500" /> Latest Vital Signs</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
           {VITALS.map(({ key, label, icon: Icon, color }) => {
             const v = latestVitalOf(relVitals, key);
             return (
-              <div key={key} className="bg-white p-4 rounded-lg border border-gray-200">
+              <div key={key} className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
                 <p className="text-xs text-gray-600 font-semibold flex items-center gap-1"><Icon className={`w-3.5 h-3.5 ${color}`} /> {label}</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{v ? String(v.value) : "—"}<span className="text-sm font-medium text-gray-500 ml-1">{v?.unit ? String(v.unit) : ""}</span></p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1">{v ? String(v.value) : "—"}<span className="text-xs sm:text-sm font-medium text-gray-500 ml-1">{v?.unit ? String(v.unit) : ""}</span></p>
                 <p className="text-xs text-gray-400 mt-0.5">{v?.recordedAt ? new Date(String(v.recordedAt)).toLocaleString() : "No reading"}</p>
               </div>
             );
@@ -126,25 +126,25 @@ export default function FamilyRelative() {
       </div>
 
       {/* HR trend */}
-      <div className="bg-white rounded-lg p-4 border border-gray-200">
-        <ChartContainer title="Heart Rate Trend" type="area" data={relHrTrend.length ? relHrTrend : EMPTY_VITALS_TREND} dataKey="value" xAxisKey="name" colors={["#ef4444"]} height={220} />
+      <div className="bg-white rounded-lg p-3 sm:p-4 border border-gray-200">
+        <ChartContainer title="Heart Rate Trend" type="area" data={relHrTrend.length ? relHrTrend : EMPTY_VITALS_TREND} dataKey="value" xAxisKey="name" colors={["#ef4444"]} height={200} />
       </div>
 
       {/* Medications + Conditions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white rounded-lg p-6 border border-gray-200">
-          <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Pill className="w-4 h-4 text-blue-500" /> Medications ({rawMeds.length})</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+        <div className="bg-white rounded-lg p-3 sm:p-4 md:p-6 border border-gray-200">
+          <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm"><Pill className="w-4 h-4 text-blue-500" /> Medications ({rawMeds.length})</h4>
           <div className="space-y-2">
             {rawMeds.length ? rawMeds.map((m, i) => (
               <div key={i} className="flex items-center justify-between gap-2 p-2 bg-blue-50 rounded border border-blue-100">
-                <span className="text-gray-900 text-sm">💊 {String(m.name ?? "")} <span className="text-gray-500">{String(m.dosage ?? "")}</span></span>
-                <span className="text-xs text-gray-600">{String(m.frequency ?? "")}</span>
+                <span className="text-gray-900 text-sm truncate">{String(m.name ?? "")} <span className="text-gray-500">{String(m.dosage ?? "")}</span></span>
+                <span className="text-xs text-gray-600 flex-shrink-0">{String(m.frequency ?? "")}</span>
               </div>
             )) : <p className="text-sm text-gray-500">No active medications recorded.</p>}
           </div>
         </div>
-        <div className="bg-white rounded-lg p-6 border border-gray-200">
-          <h4 className="font-semibold text-gray-900 mb-3">Conditions &amp; Allergies</h4>
+        <div className="bg-white rounded-lg p-3 sm:p-4 md:p-6 border border-gray-200">
+          <h4 className="font-semibold text-gray-900 mb-3 text-sm">Conditions &amp; Allergies</h4>
           {relative.allergies && (
             <div className="mb-3 p-2 bg-red-50 border-l-4 border-red-400 rounded">
               <p className="text-xs font-semibold text-red-700 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Allergies</p>
@@ -161,16 +161,16 @@ export default function FamilyRelative() {
 
       {/* Recent incidents */}
       {rawIncidents.length > 0 && (
-        <div className="bg-white rounded-lg p-6 border border-gray-200">
-          <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-orange-500" /> Recent Incidents</h4>
+        <div className="bg-white rounded-lg p-3 sm:p-4 md:p-6 border border-gray-200">
+          <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm"><AlertTriangle className="w-4 h-4 text-orange-500" /> Recent Incidents</h4>
           <div className="space-y-2">
             {rawIncidents.slice(0, 5).map((i, idx) => (
-              <div key={idx} className={`p-3 rounded-lg border ${i.resolvedAt ? "bg-gray-50 border-gray-200" : "bg-red-50 border-red-100"}`}>
+              <div key={idx} className={`p-2.5 sm:p-3 rounded-lg border ${i.resolvedAt ? "bg-gray-50 border-gray-200" : "bg-red-50 border-red-100"}`}>
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <span className="font-medium text-gray-900 text-sm">{humanize(String(i.incidentType ?? "")) || "Incident"}</span>
-                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${sevBadge(String(i.severity ?? ""))}`}>{humanize(String(i.severity ?? "")) || "—"}</span>
+                  <span className={`px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0 ${sevBadge(String(i.severity ?? ""))}`}>{humanize(String(i.severity ?? "")) || "—"}</span>
                 </div>
-                <p className="text-xs text-gray-600">{String(i.description ?? "")}</p>
+                <p className="text-xs text-gray-600 line-clamp-2">{String(i.description ?? "")}</p>
                 <p className="text-xs text-gray-400 mt-1">{i.incidentDate ? new Date(String(i.incidentDate)).toLocaleString() : "—"} • {i.resolvedAt ? "Resolved" : "Open"}</p>
               </div>
             ))}
@@ -180,8 +180,8 @@ export default function FamilyRelative() {
 
       {/* Care notes */}
       {relative.notes && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded p-6">
-          <h4 className="font-semibold text-gray-900 mb-2">Care Notes</h4>
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded p-3 sm:p-4 md:p-6">
+          <h4 className="font-semibold text-gray-900 mb-2 text-sm">Care Notes</h4>
           <p className="text-gray-700 text-sm">{relative.notes}</p>
         </div>
       )}

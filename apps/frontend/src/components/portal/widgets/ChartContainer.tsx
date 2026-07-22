@@ -41,8 +41,8 @@ export default function ChartContainer({
   height = 300,
 }: ChartContainerProps) {
   return (
-    <div className="bg-surface rounded-lg p-6 border border-border shadow-sm">
-      <h3 className="text-lg font-semibold text-foreground mb-4">{title}</h3>
+    <div className="bg-surface rounded-lg p-3 sm:p-5 md:p-6 border border-border shadow-sm container-type-[inline-size]">
+      <h3 className="text-sm sm:text-base md:text-lg font-semibold text-foreground mb-3 sm:mb-4">{title}</h3>
 
       <ResponsiveContainer width="100%" height={height}>
         {type === "line" && (

@@ -399,7 +399,7 @@ export default function FleetRequests() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
             Transport Requests
           </h1>
           <p className="text-gray-600">Dispatcher review, priority &amp; approval</p>
@@ -418,7 +418,7 @@ export default function FleetRequests() {
       </div>
 
       {/* Stat Boxes */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
         <StatBox label="Pending" value={String(stats.pending)} icon={Clock} color="amber" />
         <StatBox label="Approved" value={String(stats.approved)} icon={Check} color="blue" />
         <StatBox label="Scheduled" value={String(stats.scheduled)} icon={Truck} color="purple" />
@@ -605,7 +605,7 @@ export default function FleetRequests() {
       {/* Assignment Modal */}
       {assigning && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto">
             <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
               <div>
                 <h2 className="text-xl font-bold">Assign Vehicle &amp; Driver</h2>
@@ -613,9 +613,9 @@ export default function FleetRequests() {
               </div>
               <button onClick={() => setAssigning(null)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               {/* Request summary */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                 <DetailField icon={User} label="Resident" value={`${assigning.residentName} · Rm ${assigning.roomNumber}`} />
                 <DetailField icon={ClipboardList} label="Type" value={(TYPE_META[assigning.type] || TYPE_META.OTHER).label} />
                 <DetailField icon={Calendar} label="Requested" value={fmtDT(assigning.requestedDate)} />
@@ -683,7 +683,7 @@ export default function FleetRequests() {
 
               {/* Escort */}
               {assigning.escortRequired && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1">Escort Name</label>
                     <input type="text" value={assignForm.escortName} onChange={e => setAssignForm(f => ({ ...f, escortName: e.target.value }))}
@@ -697,7 +697,7 @@ export default function FleetRequests() {
                       <option value="CAREGIVER">Caregiver</option>
                     </select>
                   </div>
-                  <p className="col-span-2 text-xs text-gray-500 -mt-2">Nurse / Caregiver if required</p>
+                  <p className="sm:col-span-2 text-xs text-gray-500 -mt-2">Nurse / Caregiver if required</p>
                 </div>
               )}
 
@@ -783,14 +783,14 @@ function RequestFormModal({ title, form, residents, onChange, onSave, onCancel }
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90dvh] overflow-y-auto">
         <div className={`sticky top-0 bg-gradient-to-r ${isEmergency ? "from-red-500 to-red-600 text-white" : "from-blue-500 to-indigo-600 text-black"} p-5 flex items-center justify-between z-10`}>
           <h2 className="text-xl font-bold flex items-center gap-2">{isEmergency && <Siren className="w-5 h-5" />}{title}</h2>
           <button onClick={onCancel} className={`p-2 rounded-lg transition ${isEmergency ? "hover:bg-white/20" : "hover:bg-yellow-600/20"}`}><X className="w-6 h-6" /></button>
         </div>
-        <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
+        <div className="p-4 sm:p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
               <label className="block text-sm font-semibold text-gray-700 mb-1">Resident</label>
               <select value={form.residentId} onChange={set("residentId")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none">
                 <option value="">Select resident…</option>
@@ -820,15 +820,15 @@ function RequestFormModal({ title, form, residents, onChange, onSave, onCancel }
               <label className="block text-sm font-semibold text-gray-700 mb-1">Drop-off Location</label>
               <input type="text" value={form.dropoffLocation} onChange={set("dropoffLocation")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="e.g. St. Luke's Medical Center" />
             </div>
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <label className="block text-sm font-semibold text-gray-700 mb-1">Purpose</label>
               <input type="text" value={form.purpose} onChange={set("purpose")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="e.g. Cardiology follow-up" />
             </div>
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <label className="block text-sm font-semibold text-gray-700 mb-1">Requested Date &amp; Time</label>
               <input type="datetime-local" value={form.requestedDate} onChange={set("requestedDate")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
             </div>
-            <div className="col-span-2 flex flex-wrap gap-3">
+            <div className="sm:col-span-2 flex flex-wrap gap-3">
               <label className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 transition text-sm select-none">
                 <input type="checkbox" checked={form.returnRequired} onChange={setBool("returnRequired")} className="rounded" />
                 <Repeat className="w-4 h-4 text-green-500" /> Return trip required
@@ -851,7 +851,7 @@ function RequestFormModal({ title, form, residents, onChange, onSave, onCancel }
                 </select>
               </div>
             )}
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <label className="block text-sm font-semibold text-gray-700 mb-1">Notes</label>
               <textarea value={form.notes} onChange={set("notes")} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
             </div>

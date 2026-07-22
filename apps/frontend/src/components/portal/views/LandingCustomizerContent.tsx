@@ -244,7 +244,7 @@ export default function LandingCustomizerContent() {
             Customize the public landing page — themes, backgrounds, and imagery. Changes apply live.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <a
             href="/"
             target="_blank"
@@ -1466,7 +1466,7 @@ function PagesManager() {
       ) : (
         <div className="space-y-3">
           {pages.map((p) => (
-            <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-4 flex items-start gap-4 hover:shadow-md hover:border-yellow-300 transition">
+            <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-4 flex items-start gap-4 flex-wrap hover:shadow-md hover:border-yellow-300 transition">
               <GripVertical className="w-5 h-5 text-gray-300 flex-shrink-0 mt-1" />
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-gray-900 truncate">{p.title}</h3>

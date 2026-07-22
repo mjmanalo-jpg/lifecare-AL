@@ -261,7 +261,7 @@ export default function FrontDeskBoard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
             Front Desk
           </h1>
           <p className="text-gray-600">Guest management — arrivals · check-in (ID &amp; pass) · ancillary payments · check-out &amp; receipt</p>

@@ -51,22 +51,22 @@ export default function FollowUpTracker() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2"><CalendarCheck className="w-5 h-5 text-yellow-500" /> Follow-up Tracker</h2>
           <p className="text-sm text-gray-500">Hospital referrals, specialist appointments, and care follow-ups</p>
         </div>
-        <button onClick={() => setCreating(true)} className="px-4 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 flex items-center gap-1.5">
+        <button onClick={() => setCreating(true)} className="w-full sm:w-auto justify-center px-4 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 flex items-center gap-1.5">
           <Plus className="w-4 h-4" /> New Follow-up
         </button>
       </div>
 
-      <div className="flex gap-3 items-center">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by resident or type..." className={`${inputCls} pl-9`} />
         </div>
-        <select value={filter} onChange={e => setFilter(e.target.value)} className={`${inputCls} w-auto`}>
+        <select value={filter} onChange={e => setFilter(e.target.value)} className={`${inputCls} w-full sm:w-auto`}>
           <option value="ALL">All Status</option>
           {Object.keys(statusColors).map(s => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
         </select>

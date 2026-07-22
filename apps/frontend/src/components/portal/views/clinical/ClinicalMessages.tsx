@@ -375,7 +375,7 @@ export default function ClinicalMessages({ clinicianRole = "PHYSICIAN" }: { clin
                   {users.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Priority</label>
                   <select value={messageType} onChange={(e) => setMessageType(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none">

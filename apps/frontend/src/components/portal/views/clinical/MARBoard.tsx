@@ -70,17 +70,17 @@ export default function MARBoard() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2"><Pill className="w-5 h-5 text-yellow-500" /> Medication Administration Record</h2>
           <p className="text-sm text-gray-500">MAR tracking with dose, route, witness, and refusal logging</p>
         </div>
-        <button onClick={() => setCreating(true)} className="px-4 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 flex items-center gap-1.5">
+        <button onClick={() => setCreating(true)} className="w-full sm:w-auto px-4 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 flex items-center justify-center gap-1.5">
           <Plus className="w-4 h-4" /> Log Administration
         </button>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: "Administered", value: stats.administered, icon: CheckCircle, color: "text-green-600" },
           { label: "Refused", value: stats.refused, icon: AlertOctagon, color: "text-red-600" },
@@ -119,7 +119,7 @@ export default function MARBoard() {
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
                   <th className="px-4 py-3 text-left font-semibold text-gray-600">Resident</th>

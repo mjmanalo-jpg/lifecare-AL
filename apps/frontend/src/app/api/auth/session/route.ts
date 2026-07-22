@@ -4,6 +4,7 @@ import { Role } from "@/constants/roleConfig";
 import { prisma } from "@/lib/prisma";
 import { isDbConfigured } from "@/lib/models";
 import bcrypt from "bcryptjs";
+import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -74,6 +75,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Audit log — fire-and-forget
+    logAudit({
+      actorId: user.id,
+      actorRole: sessionRole,
+      action: "LOGIN",
+      entityType: "auth",
+      entityId: user.id,
+      reason: `User logged in as ${sessionRole}`,
+      ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || undefined,
+      userAgent: request.headers.get("user-agent") || undefined,
+    });
+
     return NextResponse.json({
       success: true,
       role: sessionRole,
@@ -95,12 +108,29 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
+    // Capture session info before clearing
+    const session = await getSession();
+
     const success = await clearSession();
     if (!success) {
       return NextResponse.json(
         { error: "Failed to clear session" },
         { status: 500 }
       );
+    }
+
+    // Audit log — fire-and-forget
+    if (session) {
+      logAudit({
+        actorId: session.userId,
+        actorRole: session.role,
+        action: "LOGOUT",
+        entityType: "auth",
+        entityId: session.userId || "unknown",
+        reason: `User logged out (${session.role})`,
+        ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || undefined,
+        userAgent: request.headers.get("user-agent") || undefined,
+      });
     }
 
     return NextResponse.json(

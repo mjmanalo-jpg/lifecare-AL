@@ -1038,28 +1038,45 @@ Vitals:
   const dayName = now.toLocaleDateString("en-US", { weekday: "long" });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-8 select-none relative">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 space-y-6 sm:space-y-8 select-none relative">
       
       {/* ── TOP GREETING HEADER ── */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-blue-50/50 to-amber-50/30 p-6 rounded-2xl border border-blue-100/50 shadow-sm">
-        <div className="space-y-2">
-          <h1 className="text-3xl md:text-4xl font-extrabold text-blue-900 tracking-tight">
-            Good Morning, {resident?.firstName || ""}
-          </h1>
-          <p className="text-gray-600 text-sm md:text-base max-w-xl leading-relaxed">
-            It&apos;s a beautiful {dayName}. You have <span className="font-semibold text-blue-900">{todayTasks.filter(t => t.status !== "COMPLETED").length} activities</span> left scheduled today, and your wellness score is looking {wellnessScore >= 90 ? "optimal" : wellnessScore >= 80 ? "good" : "steady"}.
-          </p>
+      <div className="bg-gradient-to-r from-blue-50/50 to-amber-50/30 p-4 sm:p-6 rounded-2xl border border-blue-100/50 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="space-y-1 min-w-0">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-blue-900 tracking-tight truncate">
+              Good Morning, {resident?.firstName || ""}
+            </h1>
+            <p className="text-gray-600 text-xs sm:text-sm md:text-base leading-relaxed">
+              It&apos;s a beautiful {dayName}. You have <span className="font-semibold text-blue-900">{todayTasks.filter(t => t.status !== "COMPLETED").length} activities</span> left scheduled today, and your wellness score is looking {wellnessScore >= 90 ? "optimal" : wellnessScore >= 80 ? "good" : "steady"}.
+            </p>
+          </div>
+          {/* Quick-action icons: theme, notifs, profile */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+            <Link href="/resident/messages" className="p-2 rounded-lg hover:bg-blue-100 text-blue-600 transition active:scale-95" title="Messages">
+              <MessageSquare className="w-5 h-5" />
+            </Link>
+            <Link href="/resident/documents" className="p-2 rounded-lg hover:bg-blue-100 text-blue-600 transition active:scale-95" title="Documents">
+              <FileText className="w-5 h-5" />
+            </Link>
+            <Link href="/resident/medications" className="p-2 rounded-lg hover:bg-blue-100 text-blue-600 transition active:scale-95" title="Medications">
+              <Pill className="w-5 h-5" />
+            </Link>
+            <Link href="/resident/records" className="p-2 rounded-lg hover:bg-blue-100 text-blue-600 transition active:scale-95" title="My Profile">
+              <User className="w-5 h-5" />
+            </Link>
+          </div>
         </div>
         
         {/* Wellness Score Widget */}
-        <div className="flex items-center gap-4 bg-white p-4 rounded-xl border border-gray-100 shadow-md w-full md:w-auto md:min-w-[200px] hover:shadow-lg transition">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-            <TrendingUp className="w-6 h-6 text-blue-600" />
+        <div className="flex items-center gap-3 sm:gap-4 bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-md w-full sm:w-auto sm:min-w-[200px] hover:shadow-lg transition">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+            <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
           </div>
-          <div>
+          <div className="flex-1 sm:flex-initial">
             <div className="text-[10px] uppercase font-black text-gray-400 tracking-wider">Wellness Score</div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-blue-900">{wellnessScore}</span>
+              <span className="text-2xl sm:text-3xl font-black text-blue-900">{wellnessScore}</span>
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${wellnessLabel(wellnessScore).color}`}>
                 {wellnessLabel(wellnessScore).text}
               </span>
@@ -1069,12 +1086,12 @@ Vitals:
       </div>
 
       {/* ── GRID LAYOUT (Mockup style) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start">
         
         {/* ── COL 1: Today's Schedule (span 4) ── */}
-        <div 
+        <div
           onClick={() => setScheduleModalOpen(true)}
-          className="lg:col-span-4 bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col h-[600px] hover:border-blue-400 hover:shadow-md transition cursor-pointer"
+          className="lg:col-span-4 bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 shadow-sm flex flex-col h-auto lg:h-[600px] hover:border-blue-400 hover:shadow-md transition cursor-pointer"
         >
           <div className="flex items-center justify-between pb-4 border-b border-gray-100">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
@@ -1147,12 +1164,12 @@ Vitals:
         </div>
 
         {/* ── COL 2: Medications & Vitals & SOS (span 5) ── */}
-        <div className="lg:col-span-5 space-y-6 flex flex-col h-[600px] justify-between">
+        <div className="lg:col-span-5 space-y-4 sm:space-y-6 flex flex-col h-auto lg:h-[600px] justify-between">
           
           {/* Medications Card */}
           <div 
             onClick={() => setMedsModalOpen(true)}
-            className="bg-blue-600 rounded-2xl p-6 text-white shadow-md flex-1 flex flex-col justify-between mb-2 hover:bg-blue-700 hover:shadow-lg transition cursor-pointer border border-blue-500"
+            className="bg-blue-600 rounded-2xl p-4 sm:p-6 text-white shadow-md flex-1 flex flex-col justify-between mb-2 hover:bg-blue-700 hover:shadow-lg transition cursor-pointer border border-blue-500"
           >
             <div>
               <div className="flex items-center justify-between pb-3 border-b border-blue-500/30">
@@ -1210,18 +1227,18 @@ Vitals:
           </div>
 
           {/* Vitals Grid */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
             
             {/* Heart Rate */}
             <div 
               onClick={() => setVitalsModalOpen(true)}
-              className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:border-red-400 hover:shadow-md transition cursor-pointer"
+              className="bg-white border border-gray-200 rounded-2xl p-3 sm:p-5 shadow-sm hover:border-red-400 hover:shadow-md transition cursor-pointer"
             >
               <div className="flex items-center gap-2 pb-2">
-                <Heart className="w-5 h-5 text-red-500 fill-red-50" />
-                <span className="text-xs font-semibold text-gray-500">Heart Rate</span>
+                <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 fill-red-50" />
+                <span className="text-[10px] sm:text-xs font-semibold text-gray-500">Heart Rate</span>
               </div>
-              <div className="text-3xl font-black text-gray-900">{heartRate}</div>
+              <div className="text-2xl sm:text-3xl font-black text-gray-900">{heartRate}</div>
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full mt-2 inline-block ${heartRateStatus.color}`}>
                 {heartRateStatus.text}
               </span>
@@ -1230,13 +1247,13 @@ Vitals:
             {/* Activity Steps */}
             <div 
               onClick={() => setStepsModalOpen(true)}
-              className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:border-blue-400 hover:shadow-md transition cursor-pointer"
+              className="bg-white border border-gray-200 rounded-2xl p-3 sm:p-5 shadow-sm hover:border-blue-400 hover:shadow-md transition cursor-pointer"
             >
               <div className="flex items-center gap-2 pb-2">
-                <Activity className="w-5 h-5 text-blue-500" />
-                <span className="text-xs font-semibold text-gray-500">Activity</span>
+                <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
+                <span className="text-[10px] sm:text-xs font-semibold text-gray-500">Activity</span>
               </div>
-              <div className="text-3xl font-black text-gray-900">{activitySteps}</div>
+              <div className="text-2xl sm:text-3xl font-black text-gray-900">{activitySteps}</div>
               <span className="text-[10px] text-blue-600 font-bold px-2 py-0.5 bg-blue-50 rounded-full mt-2 inline-block">
                 Daily Goal: {activityGoalPct}%
               </span>
@@ -1278,33 +1295,33 @@ Vitals:
           )}
 
           {/* Quick Action buttons at bottom */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
             
             {/* CALL BELL BUTTON — opens modal */}
             <button
               onClick={() => setCallBellModalOpen(true)}
-              className="py-3 bg-red-50 border border-red-200 hover:bg-red-100 active:scale-95 text-red-700 font-black rounded-xl text-center shadow-sm transition flex flex-col items-center justify-center gap-1"
+              className="py-2.5 sm:py-3 bg-red-50 border border-red-200 hover:bg-red-100 active:scale-95 text-red-700 font-black rounded-xl text-center shadow-sm transition flex flex-col items-center justify-center gap-0.5 sm:gap-1"
             >
-              <Bell className="w-5 h-5 mb-1" />
-              <span className="text-[10px] uppercase">Call Bell</span>
+              <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="text-[9px] sm:text-[10px] uppercase">Call Bell</span>
             </button>
 
             {/* CALL FAMILY */}
             <button
               onClick={() => setFamilyModalOpen(true)}
-              className="py-3 bg-blue-50 border border-blue-200 hover:bg-blue-100 active:scale-95 text-blue-700 font-black rounded-xl text-center shadow-sm transition flex flex-col items-center justify-center gap-1"
+              className="py-2.5 sm:py-3 bg-blue-50 border border-blue-200 hover:bg-blue-100 active:scale-95 text-blue-700 font-black rounded-xl text-center shadow-sm transition flex flex-col items-center justify-center gap-0.5 sm:gap-1"
             >
-              <PhoneCall className="w-5 h-5 mb-1" />
-              <span className="text-[10px] uppercase">Call Family</span>
+              <PhoneCall className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="text-[9px] sm:text-[10px] uppercase">Call Family</span>
             </button>
 
             {/* ROOM SERVICE */}
             <button
               onClick={() => setRoomServiceModalOpen(true)}
-              className="py-3 bg-amber-50 border border-amber-200 hover:bg-amber-100 active:scale-95 text-amber-700 font-black rounded-xl text-center shadow-sm transition flex flex-col items-center justify-center gap-1"
+              className="py-2.5 sm:py-3 bg-amber-50 border border-amber-200 hover:bg-amber-100 active:scale-95 text-amber-700 font-black rounded-xl text-center shadow-sm transition flex flex-col items-center justify-center gap-0.5 sm:gap-1"
             >
-              <Coffee className="w-5 h-5 mb-1" />
-              <span className="text-[10px] uppercase">Room Service</span>
+              <Coffee className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="text-[9px] sm:text-[10px] uppercase">Room Service</span>
             </button>
 
           </div>
@@ -1312,12 +1329,12 @@ Vitals:
         </div>
 
         {/* ── COL 3: Dining Menu & Daily Goals (span 3) ── */}
-        <div className="lg:col-span-3 space-y-6 flex flex-col h-[600px] justify-between">
+        <div className="lg:col-span-3 space-y-4 sm:space-y-6 flex flex-col h-auto lg:h-[600px] justify-between">
           
           {/* Today's Menu */}
           <div 
             onClick={() => setMenuModalOpen(true)}
-            className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm flex-1 overflow-y-auto custom-scrollbar flex flex-col justify-between mb-2 hover:border-amber-400 hover:shadow-md transition cursor-pointer"
+            className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5 shadow-sm flex-1 overflow-y-auto custom-scrollbar flex flex-col justify-between mb-2 hover:border-amber-400 hover:shadow-md transition cursor-pointer"
           >
             <div>
               <h3 className="text-sm font-bold text-gray-900 pb-3 border-b border-gray-100 flex items-center gap-2">
@@ -1365,7 +1382,7 @@ Vitals:
           {/* Daily Goals */}
           <div 
             onClick={() => setGoalsModalOpen(true)}
-            className="bg-teal-800 rounded-2xl p-5 text-white shadow-md flex flex-col justify-between h-[210px] hover:bg-teal-900 hover:shadow-lg transition cursor-pointer border border-teal-700"
+            className="bg-teal-800 rounded-2xl p-4 sm:p-5 text-white shadow-md flex flex-col justify-between h-auto lg:h-[210px] hover:bg-teal-900 hover:shadow-lg transition cursor-pointer border border-teal-700"
           >
             <div>
               <h3 className="text-sm font-bold flex items-center gap-2 pb-2 border-b border-teal-700/50 text-white">
@@ -1414,8 +1431,8 @@ Vitals:
       {scheduleModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-            <div className="px-6 py-4 bg-blue-600 text-white flex items-center justify-between flex-shrink-0">
-              <h3 className="font-bold text-lg flex items-center gap-2">
+            <div className="px-4 sm:px-6 py-4 bg-blue-600 text-white flex items-center justify-between flex-shrink-0">
+              <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <Calendar className="w-5 h-5" /> Today&apos;s Complete Schedule
               </h3>
               <button onClick={() => setScheduleModalOpen(false)} className="p-1 hover:bg-blue-700 rounded transition">
@@ -1423,7 +1440,7 @@ Vitals:
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
               <p className="text-sm text-gray-500">Below are your scheduled activities and checklists for today. Tap the checkbox to check them off as completed.</p>
               
               <div className="space-y-3 mt-4">
@@ -1478,10 +1495,10 @@ Vitals:
               </div>
             </div>
             
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
+            <div className="px-4 sm:px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
               <button
                 onClick={() => setScheduleModalOpen(false)}
-                className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition"
+                className="px-4 sm:px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition text-sm"
               >
                 Close Schedule
               </button>
@@ -1494,8 +1511,8 @@ Vitals:
       {medsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-            <div className="px-6 py-4 bg-blue-700 text-white flex items-center justify-between flex-shrink-0">
-              <h3 className="font-bold text-lg flex items-center gap-2">
+            <div className="px-4 sm:px-6 py-4 bg-blue-700 text-white flex items-center justify-between flex-shrink-0">
+              <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <Pill className="w-5 h-5" /> Active Medications & Prescriptions
               </h3>
               <button onClick={() => setMedsModalOpen(false)} className="p-1 hover:bg-blue-800 rounded transition">
@@ -1503,7 +1520,7 @@ Vitals:
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
               <p className="text-sm text-gray-500">Your doctor-approved prescription list. If you take your medication, mark it below to log compliance for today.</p>
               
               <div className="space-y-4 mt-2">
@@ -1549,7 +1566,7 @@ Vitals:
               </div>
             </div>
             
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
               <button
                 onClick={() => setMedsModalOpen(false)}
                 className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition"
@@ -1565,8 +1582,8 @@ Vitals:
       {menuModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-            <div className="px-6 py-4 bg-amber-500 text-white flex items-center justify-between flex-shrink-0">
-              <h3 className="font-bold text-lg flex items-center gap-2">
+            <div className="px-4 sm:px-6 py-4 bg-amber-500 text-white flex items-center justify-between flex-shrink-0">
+              <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <Utensils className="w-5 h-5" /> Today&apos;s Dining & Substitutions
               </h3>
               <button onClick={() => setMenuModalOpen(false)} className="p-1 hover:bg-amber-600 rounded transition">
@@ -1574,7 +1591,7 @@ Vitals:
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {todayMenuItems.length === 0 ? (
                   <div className="col-span-3 text-center py-8 text-gray-400">
@@ -1606,7 +1623,7 @@ Vitals:
               <div className="border-t border-gray-100 pt-5 space-y-3">
                 <h4 className="text-sm font-bold text-gray-900">Request Meal Substitution</h4>
                 <p className="text-xs text-gray-500">Not feeling like having salmon or salad? Type your dietary preference below to alert the chef.</p>
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <input
                     type="text"
                     value={menuSubText}
@@ -1617,7 +1634,7 @@ Vitals:
                   <button
                     onClick={handleMenuSubstitution}
                     disabled={submittingMenuSub}
-                    className="px-5 py-2 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 transition text-sm flex items-center gap-1.5"
+                    className="px-5 py-2 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 transition text-sm flex items-center justify-center gap-1.5"
                   >
                     {submittingMenuSub && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
                     Submit
@@ -1626,7 +1643,7 @@ Vitals:
               </div>
             </div>
             
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
               <button
                 onClick={() => setMenuModalOpen(false)}
                 className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition"
@@ -1642,8 +1659,8 @@ Vitals:
       {goalsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-            <div className="px-6 py-4 bg-teal-800 text-white flex items-center justify-between flex-shrink-0">
-              <h3 className="font-bold text-lg flex items-center gap-2">
+            <div className="px-4 sm:px-6 py-4 bg-teal-800 text-white flex items-center justify-between flex-shrink-0">
+              <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-teal-300" /> Daily Health Goals Planner
               </h3>
               <button onClick={() => setGoalsModalOpen(false)} className="p-1 hover:bg-teal-900 rounded transition">
@@ -1651,7 +1668,7 @@ Vitals:
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
               <div>
                 <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Native Goals</h4>
                 <div className="space-y-2">
@@ -1743,7 +1760,7 @@ Vitals:
               </div>
             </div>
             
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
               <button
                 onClick={() => setGoalsModalOpen(false)}
                 className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition"
@@ -1759,8 +1776,8 @@ Vitals:
       {vitalsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-            <div className="px-6 py-4 bg-blue-600 text-white flex items-center justify-between flex-shrink-0">
-              <h3 className="font-bold text-lg flex items-center gap-2">
+            <div className="px-4 sm:px-6 py-4 bg-blue-600 text-white flex items-center justify-between flex-shrink-0">
+              <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <HeartPulse className="w-5 h-5 text-white" /> Vitals History Logs
               </h3>
               <button onClick={() => setVitalsModalOpen(false)} className="p-1 hover:bg-blue-700 rounded transition">
@@ -1768,11 +1785,11 @@ Vitals:
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
               <p className="text-sm text-gray-500">Your recent health measurements. Clinical staff records these logs during checkups.</p>
               
-              <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                <table className="w-full text-left border-collapse text-sm">
+              <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm overflow-x-auto">
+                <table className="w-full min-w-[480px] text-left border-collapse text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
                       <th className="px-4 py-3">Measurement</th>
@@ -1837,7 +1854,7 @@ Vitals:
               </div>
             </div>
             
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
               <button
                 onClick={() => setVitalsModalOpen(false)}
                 className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition"
@@ -1853,8 +1870,8 @@ Vitals:
       {stepsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-            <div className="px-6 py-4 bg-gradient-to-r from-indigo-500 to-violet-600 text-white flex items-center justify-between flex-shrink-0">
-              <h3 className="font-bold text-lg flex items-center gap-2">
+            <div className="px-4 sm:px-6 py-4 bg-gradient-to-r from-indigo-500 to-violet-600 text-white flex items-center justify-between flex-shrink-0">
+              <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <StepIcon className="w-5 h-5 text-white" /> Activity Steps Tracker
               </h3>
               <button onClick={() => setStepsModalOpen(false)} className="p-1 hover:bg-white/20 rounded transition">
@@ -1862,22 +1879,22 @@ Vitals:
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
               {/* Hero stats */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="bg-indigo-50 rounded-xl p-4 text-center border border-indigo-100">
-                  <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wider mb-1">Today</p>
-                  <p className="text-3xl font-black text-indigo-900">{activitySteps.replace(" Steps", "")}</p>
+                  <p className="text-[10px] sm:text-xs font-semibold text-indigo-500 uppercase tracking-wider mb-1">Today</p>
+                  <p className="text-2xl sm:text-3xl font-black text-indigo-900">{activitySteps.replace(" Steps", "")}</p>
                   <p className="text-[10px] text-indigo-400 mt-1">steps recorded</p>
                 </div>
                 <div className="bg-violet-50 rounded-xl p-4 text-center border border-violet-100">
-                  <p className="text-xs font-semibold text-violet-500 uppercase tracking-wider mb-1">Goal</p>
-                  <p className="text-3xl font-black text-violet-900">{activityGoalPct}%</p>
+                  <p className="text-[10px] sm:text-xs font-semibold text-violet-500 uppercase tracking-wider mb-1">Goal</p>
+                  <p className="text-2xl sm:text-3xl font-black text-violet-900">{activityGoalPct}%</p>
                   <p className="text-[10px] text-violet-400 mt-1">completion</p>
                 </div>
-                <div className="bg-emerald-50 rounded-xl p-4 text-center border border-emerald-100">
-                  <p className="text-xs font-semibold text-emerald-500 uppercase tracking-wider mb-1">Goals Done</p>
-                  <p className="text-3xl font-black text-emerald-900">{goalRows.filter(g => g.isCompleted).length}<span className="text-lg">/{goalRows.length}</span></p>
+                <div className="col-span-2 bg-emerald-50 rounded-xl p-4 text-center border border-emerald-100">
+                  <p className="text-[10px] sm:text-xs font-semibold text-emerald-500 uppercase tracking-wider mb-1">Goals Done</p>
+                  <p className="text-2xl sm:text-3xl font-black text-emerald-900">{goalRows.filter(g => g.isCompleted).length}<span className="text-lg">/{goalRows.length}</span></p>
                   <p className="text-[10px] text-emerald-400 mt-1">of daily goals</p>
                 </div>
               </div>
@@ -1902,8 +1919,8 @@ Vitals:
                 {vitals.filter(v => v.type === "STEPS" || v.type === "ACTIVITY_STEPS").length === 0 ? (
                   <div className="text-center py-8 text-gray-400 italic text-sm">No step records logged yet.</div>
                 ) : (
-                  <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                    <table className="w-full text-left border-collapse text-sm">
+                  <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm overflow-x-auto">
+                    <table className="w-full min-w-[360px] text-left border-collapse text-sm">
                       <thead>
                         <tr className="bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
                           <th className="px-4 py-3">Date</th>
@@ -1940,7 +1957,7 @@ Vitals:
               </div>
             </div>
             
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
               <button
                 onClick={() => setStepsModalOpen(false)}
                 className="px-5 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold rounded-lg transition"
@@ -1956,8 +1973,8 @@ Vitals:
       {familyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="px-6 py-4 bg-blue-600 text-white flex items-center justify-between">
-              <h3 className="font-bold flex items-center gap-2">
+            <div className="px-4 sm:px-6 py-4 bg-blue-600 text-white flex items-center justify-between">
+              <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <Phone className="w-5 h-5" /> Family Contact Details
               </h3>
               <button onClick={() => setFamilyModalOpen(false)} className="p-1 hover:bg-blue-700 rounded transition">
@@ -1965,7 +1982,7 @@ Vitals:
               </button>
             </div>
             
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               {resident?.sponsor ? (
                 <div className="space-y-4">
                   <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-center gap-4">
@@ -2006,7 +2023,7 @@ Vitals:
               )}
             </div>
             
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
               <button
                 onClick={() => setFamilyModalOpen(false)}
                 className="px-5 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition"
@@ -2022,8 +2039,8 @@ Vitals:
       {roomServiceModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="px-6 py-4 bg-amber-500 text-white flex items-center justify-between">
-              <h3 className="font-bold flex items-center gap-2">
+            <div className="px-4 sm:px-6 py-4 bg-amber-500 text-white flex items-center justify-between">
+              <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <Coffee className="w-5 h-5 text-white" /> Request Room Service
               </h3>
               <button onClick={() => setRoomServiceModalOpen(false)} className="p-1 hover:bg-amber-600 rounded transition">
@@ -2031,7 +2048,7 @@ Vitals:
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
                   What do you need help with?
@@ -2046,7 +2063,7 @@ Vitals:
               </div>
             </div>
 
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
               <button
                 onClick={() => setRoomServiceModalOpen(false)}
                 className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm"
@@ -2070,8 +2087,8 @@ Vitals:
       {callBellModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="px-6 py-4 bg-red-600 text-white flex items-center justify-between">
-              <h3 className="font-bold flex items-center gap-2">
+            <div className="px-4 sm:px-6 py-4 bg-red-600 text-white flex items-center justify-between">
+              <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <Bell className="w-5 h-5 text-white" /> Call for Help
               </h3>
               <button onClick={() => setCallBellModalOpen(false)} className="p-1 hover:bg-red-700 rounded transition">
@@ -2079,7 +2096,7 @@ Vitals:
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <p className="text-sm text-gray-600">Select who you need and the reason. The nearest available staff member will be notified immediately.</p>
 
               {/* Target selection */}
@@ -2145,7 +2162,7 @@ Vitals:
               </div>
             </div>
 
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
               <button
                 onClick={() => setCallBellModalOpen(false)}
                 className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm"

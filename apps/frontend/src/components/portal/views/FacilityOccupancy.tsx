@@ -189,7 +189,7 @@ export default function FacilityOccupancy() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
             Facility Occupancy
           </h1>
           <p className="text-gray-600">Real-time occupancy management &mdash; beds, rooms, wings, and floors</p>
@@ -320,7 +320,7 @@ export default function FacilityOccupancy() {
       ) : (
         /* ── Table View ── */
         <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[720px]">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="text-left px-4 py-3 font-semibold text-gray-700">Room</th>

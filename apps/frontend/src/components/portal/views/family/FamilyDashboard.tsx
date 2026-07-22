@@ -102,20 +102,20 @@ export default function FamilyDashboard() {
   const latestHR = liveVitals.find((v) => v.type === "HEART_RATE");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
-          <Heart className="w-6 h-6 text-red-500 flex-shrink-0" /> Welcome — {displayName}
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2">
+          <Heart className="w-5 h-5 sm:w-6 sm:h-6 text-red-500 flex-shrink-0" /> Welcome — {displayName}
         </h1>
-        <p className="text-gray-600 flex items-center gap-2 text-sm mt-1">
+        <p className="text-gray-600 flex items-center gap-2 text-xs sm:text-sm mt-1">
           <LiveBadge />
           {relative ? `Room ${relative.room} • ${humanize(relative.careLevel)} Care${relative.age != null ? ` • Age ${relative.age}` : ""}` : "Your family member's care overview"}
         </p>
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 lg:gap-4">
         <StatCard
           title="Care Status"
           value={relative && relative.alertsCount > 0 ? `${relative.alertsCount} alert${relative.alertsCount === 1 ? "" : "s"}` : "Stable"}
@@ -159,15 +159,15 @@ export default function FamilyDashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
         {/* Left column: relative + vitals + trend */}
-        <div className="xl:col-span-2 space-y-6">
+        <div className="xl:col-span-2 space-y-4 sm:space-y-6">
           {relative && (
-            <div className="bg-white rounded-lg p-6 border border-gray-200">
+            <div className="bg-white rounded-lg p-4 sm:p-6 border border-gray-200">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">{relative.name}</h3>
-                  <p className="text-gray-600 text-sm mt-1">Room {relative.room} • {humanize(relative.careLevel)} Care{relative.age != null ? ` • Age ${relative.age}` : ""}</p>
+                <div className="min-w-0">
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900">{relative.name}</h3>
+                  <p className="text-gray-600 text-xs sm:text-sm mt-1">Room {relative.room} • {humanize(relative.careLevel)} Care{relative.age != null ? ` • Age ${relative.age}` : ""}</p>
                 </div>
                 {relative.alertsCount > 0 && (
                   <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-semibold flex-shrink-0">
@@ -196,7 +196,7 @@ export default function FamilyDashboard() {
             <VitalsPanel vitals={liveVitals} resident={displayName} />
           )}
 
-          <div className="bg-white rounded-lg p-4 border border-gray-200">
+          <div className="bg-white rounded-lg p-3 sm:p-4 border border-gray-200">
             <ChartContainer
               title="Heart Rate Trend"
               type="area"
@@ -210,7 +210,7 @@ export default function FamilyDashboard() {
         </div>
 
         {/* Right column: alerts, care team, messages, appointments */}
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           <Panel title="Recent Alerts" icon={AlertTriangle} count={incidents.length}>
             {topAlerts.length > 0 ? (
               <div className="space-y-2">

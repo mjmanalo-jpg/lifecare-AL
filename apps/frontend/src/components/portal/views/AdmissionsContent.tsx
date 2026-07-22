@@ -399,7 +399,7 @@ export default function AdmissionsContent() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-amber-500 to-yellow-600 bg-clip-text text-transparent">Admissions &amp; Onboarding</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-amber-500 to-yellow-600 bg-clip-text text-transparent">Admissions &amp; Onboarding</h1>
           <p className="text-gray-600 text-sm mt-1 flex items-center gap-2">
             <span className="inline-flex items-center gap-1 text-green-600"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Live</span>
             {STEP_COUNT}-step resident onboarding pipeline

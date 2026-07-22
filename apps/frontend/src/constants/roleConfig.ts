@@ -429,6 +429,116 @@ export const ROLES: Record<Role, RoleDetails> = {
   },
 };
 
+// ─────────────────────────────────────────────────────────────
+// Sidebar grouping — mirrors the LCMS Feature Matrix modules so the
+// nav renders as collapsible "group selections" instead of one long
+// flat list. SIDEBAR_GROUP_ORDER defines the order groups appear in.
+// ─────────────────────────────────────────────────────────────
+export const SIDEBAR_GROUP_ORDER = [
+  "Overview",
+  "Resident Care",
+  "Medication",
+  "Coordination & Comms",
+  "Operations",
+  "Hospitality & Services",
+  "Fleet & Transport",
+  "Administration",
+] as const;
+
+export type SidebarGroup = (typeof SIDEBAR_GROUP_ORDER)[number];
+
+const LINK_GROUP_MAP: Record<string, SidebarGroup> = {
+  // Overview
+  "Reporting & Care Intelligence": "Overview",
+  "Fleet Dashboard": "Overview",
+  "Shift Dashboard": "Overview",
+  // Resident Care (Modules 1–4)
+  "Resident Profile & Care Record": "Resident Care",
+  "Daily Rounds (10-Area Bedside)": "Resident Care",
+  "Assessment & Level of Care": "Resident Care",
+  "Care Planning": "Resident Care",
+  "Daily Care Documentation & Monitoring": "Resident Care",
+  "Vaccinations": "Resident Care",
+  "Resident Documents": "Resident Care",
+  // Medication (Module 6)
+  "Medication Management & Inventory": "Medication",
+  "Medication Administration Record": "Medication",
+  "Orders & Prescriptions": "Medication",
+  "Inventory Alerts": "Medication",
+  // Coordination & Comms (Modules 5, 7)
+  "Clinical Coordination": "Coordination & Comms",
+  "Care Team": "Coordination & Comms",
+  "Call Bells": "Coordination & Comms",
+  "Shift Endorsement & Continuity": "Coordination & Comms",
+  "Consults & Referrals": "Coordination & Comms",
+  "Follow-up Tracker": "Coordination & Comms",
+  "Clinical Notes": "Coordination & Comms",
+  "Secure Messages": "Coordination & Comms",
+  "Messages": "Coordination & Comms",
+  "Alerts": "Coordination & Comms",
+  "Appointments": "Coordination & Comms",
+  // Operations (facility, staff, incidents, billing, reports)
+  "Staff Registry": "Operations",
+  "Staff": "Operations",
+  "Time Clock": "Operations",
+  "Admissions & Registration": "Operations",
+  "Rooms": "Operations",
+  "Occupancy": "Operations",
+  "Incidents": "Operations",
+  "Incident Review": "Operations",
+  "Incident Medical Review": "Operations",
+  "Billing": "Operations",
+  "Clinical Reports": "Operations",
+  // Hospitality & Services (Module 14 — PMS)
+  "Dining & Compliance": "Hospitality & Services",
+  "Resident Services": "Hospitality & Services",
+  "Hotel Services": "Hospitality & Services",
+  "Concierge": "Hospitality & Services",
+  "Front Desk": "Hospitality & Services",
+  "Unit Turnover": "Hospitality & Services",
+  "Community & Events": "Hospitality & Services",
+  "Facility Maintenance": "Hospitality & Services",
+  "Transport": "Hospitality & Services",
+  // Fleet & Transport (Module 13)
+  "Transport Requests": "Fleet & Transport",
+  "Trip Board": "Fleet & Transport",
+  "Vehicles": "Fleet & Transport",
+  "Drivers": "Fleet & Transport",
+  "Fleet Maintenance": "Fleet & Transport",
+  "Fuel & Odometer": "Fleet & Transport",
+  "Inspection Checklist": "Fleet & Transport",
+  // Administration (governance, system tools)
+  "LCMS Feature Matrix": "Administration",
+  "AI Assistant": "Administration",
+  "Landing Studio": "Administration",
+  "Portal Matrix": "Administration",
+  "Audit Log": "Administration",
+};
+
+export const getSidebarGroup = (linkName: string): SidebarGroup =>
+  LINK_GROUP_MAP[linkName] || "Overview";
+
+/**
+ * Group an ordered list of sidebar links into matrix-based sections,
+ * preserving each link's original order within its group and dropping
+ * any group that has no links for the current role/matrix.
+ */
+export const groupSidebarLinks = (
+  links: SidebarLink[]
+): { group: SidebarGroup; links: SidebarLink[] }[] => {
+  const buckets = new Map<SidebarGroup, SidebarLink[]>();
+  for (const link of links) {
+    const g = getSidebarGroup(link.name);
+    const bucket = buckets.get(g);
+    if (bucket) bucket.push(link);
+    else buckets.set(g, [link]);
+  }
+  return SIDEBAR_GROUP_ORDER.filter((g) => buckets.has(g)).map((g) => ({
+    group: g,
+    links: buckets.get(g)!,
+  }));
+};
+
 export const getRoleDetails = (role: Role): RoleDetails => {
   return ROLES[role] || ROLES.FAMILY;
 };

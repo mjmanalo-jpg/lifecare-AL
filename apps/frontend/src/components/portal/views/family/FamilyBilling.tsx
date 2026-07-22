@@ -172,7 +172,7 @@ export default function FamilyBilling() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900 flex items-center gap-2 tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 flex items-center gap-2 tracking-tight">
             <Receipt className="w-6 h-6 text-yellow-500 flex-shrink-0" /> Billing &amp; Finance
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm mt-1">
@@ -211,7 +211,7 @@ export default function FamilyBilling() {
       {billView === "list" && (
         <div className="space-y-6">
           {/* Sub Tabs: Invoices, Service Charges, Insurance */}
-          <div className="flex border-b border-gray-200 gap-4 text-sm font-semibold">
+          <div className="flex border-b border-gray-200 gap-4 text-sm font-semibold overflow-x-auto whitespace-nowrap">
             <button onClick={() => setBillSubTab("invoices")} className={`pb-2 border-b-2 transition ${billSubTab === "invoices" ? "border-yellow-500 text-yellow-600 font-bold" : "border-transparent text-gray-500 hover:text-gray-900"}`}>
               Invoices &amp; Receipts
             </button>
@@ -317,7 +317,7 @@ export default function FamilyBilling() {
           {billSubTab === "charges" && (
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
+                <table className="w-full min-w-[640px] text-sm text-left">
                   <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
                     <tr>
                       <th className="px-6 py-4">Service Date</th>

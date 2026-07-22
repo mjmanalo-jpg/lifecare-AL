@@ -45,22 +45,22 @@ export default function ResidentDocuments() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2"><FileText className="w-5 h-5 text-yellow-500" /> Resident Documents</h2>
           <p className="text-sm text-gray-500">Admission papers, insurance, consent forms, advance directives</p>
         </div>
-        <button onClick={() => setCreating(true)} className="px-4 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 flex items-center gap-1.5">
+        <button onClick={() => setCreating(true)} className="w-full sm:w-auto px-4 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 flex items-center justify-center gap-1.5">
           <Plus className="w-4 h-4" /> Upload Document
         </button>
       </div>
 
-      <div className="flex gap-3 items-center">
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by resident or document title..." className={`${inputCls} pl-9`} />
         </div>
-        <select value={filter} onChange={e => setFilter(e.target.value)} className={`${inputCls} w-auto`}>
+        <select value={filter} onChange={e => setFilter(e.target.value)} className={`${inputCls} sm:w-auto`}>
           <option value="ALL">All Types</option>
           {Object.keys(typeColors).map(t => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}
         </select>
@@ -110,7 +110,7 @@ export default function ResidentDocuments() {
 
       {creating && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4 rounded-t-xl flex items-center justify-between">
               <h3 className="text-white font-bold text-lg">Upload Document</h3>
               <button onClick={() => setCreating(false)} className="text-white/80 hover:text-white cursor-pointer"><X className="w-5 h-5" /></button>

@@ -21,12 +21,12 @@ import InventoryAlertsPanel from "@/components/portal/views/clinical/InventoryAl
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import FeatureMatrixDashboard from "@/components/portal/views/superadmin/FeatureMatrixDashboard";
-import { Trash2, Search, Eye, Edit, X } from "lucide-react";
+import { Trash2, Search, Eye, Edit, X, UserPlus } from "lucide-react";
 import { useState, useMemo } from "react";
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptStaff } from "@/lib/adapters";
-import { updateRecord, deleteRecord } from "@/lib/api";
+import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 
 interface SuperAdminPortalContentProps {
   tab: string;
@@ -58,6 +58,19 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     documents: [] as { name: string; url: string; type: string }[],
   });
   const [uploading, setUploading] = useState(false);
+
+  // Add Staff modal state
+  const [creatingStaff, setCreatingStaff] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    position: "",
+    department: "",
+    active: "Active" as "Active" | "Inactive",
+    approved: "Approved" as "Approved" | "Disapproved",
+    experience: "",
+  });
 
   const filteredStaff = useMemo(() => {
     return staff.filter((s) =>
@@ -193,6 +206,58 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     }
   };
 
+  const handleCreateStaff = async () => {
+    if (!createForm.name.trim() || !createForm.email.trim()) {
+      Swal.fire({ title: "Missing Fields", text: "Name and email are required.", icon: "warning" });
+      return;
+    }
+    const result = await Swal.fire({
+      title: "Add Staff Member?",
+      text: `Create a new staff record for ${createForm.name}?`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#fbbf24",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Create",
+      cancelButtonText: "Cancel",
+    });
+    if (!result.isConfirmed) return;
+    try {
+      // Create the user first
+      const newUser = await createRecord("users", {
+        name: createForm.name,
+        email: createForm.email,
+        phone: createForm.phone,
+        role: "CAREGIVER",
+      });
+      // Then create the staff record linked to the user
+      await createRecord("staff", {
+        userId: newUser.id,
+        position: createForm.position,
+        department: createForm.department,
+        isActive: createForm.active === "Active",
+        isApproved: createForm.approved === "Approved",
+        experience: createForm.experience || null,
+      });
+      await refetch();
+      setCreatingStaff(false);
+      setCreateForm({ name: "", email: "", phone: "", position: "", department: "", active: "Active", approved: "Approved", experience: "" });
+      Swal.fire({
+        title: "Staff Created",
+        text: `${createForm.name} has been added to the registry.`,
+        icon: "success",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      Swal.fire({
+        title: "Create Failed",
+        text: err instanceof Error ? err.message : "Could not create staff record.",
+        icon: "error",
+      });
+    }
+  };
+
   // Combined onboarding hub: Admissions + Resident Registration as tabs.
   if (tab === "admissions") {
     return <OnboardingHub initialTab="admissions" />;
@@ -270,15 +335,24 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
             </h1>
             <p className="text-gray-600">Manage facility staff members, positions, and status</p>
           </div>
-          {selectedStaff.size > 0 && (
+          <div className="flex items-center gap-3">
+            {selectedStaff.size > 0 && (
+              <button
+                onClick={handleDeleteSelected}
+                className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition border border-red-200 font-medium"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Selected ({selectedStaff.size})
+              </button>
+            )}
             <button
-              onClick={handleDeleteSelected}
-              className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition border border-red-200 font-medium"
+              onClick={() => setCreatingStaff(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:shadow-lg rounded-lg transition font-medium active:scale-95"
             >
-              <Trash2 className="w-4 h-4" />
-              Delete Selected ({selectedStaff.size})
+              <UserPlus className="w-4 h-4" />
+              Add Staff
             </button>
-          )}
+          </div>
         </div>
 
         {/* Search Bar */}
@@ -829,6 +903,128 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                   className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
                 >
                   Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Staff Modal */}
+        {creatingStaff && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              {/* Modal Header */}
+              <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-6 flex items-center justify-between border-b border-yellow-600">
+                <h2 className="text-2xl font-bold">Add Staff Member</h2>
+                <button
+                  onClick={() => setCreatingStaff(false)}
+                  className="p-2 hover:bg-yellow-600/20 rounded-lg transition"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Form */}
+              <div className="p-8 space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name *</label>
+                    <input
+                      type="text"
+                      value={createForm.name}
+                      onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                      placeholder="e.g. Jane Smith"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Email *</label>
+                    <input
+                      type="email"
+                      value={createForm.email}
+                      onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                      placeholder="e.g. jane@example.com"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Phone</label>
+                    <input
+                      type="tel"
+                      value={createForm.phone}
+                      onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                      placeholder="e.g. (555) 123-4567"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Position</label>
+                    <input
+                      type="text"
+                      value={createForm.position}
+                      onChange={(e) => setCreateForm({ ...createForm, position: e.target.value })}
+                      placeholder="e.g. Registered Nurse"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Department</label>
+                    <input
+                      type="text"
+                      value={createForm.department}
+                      onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })}
+                      placeholder="e.g. Nursing"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Employment Status</label>
+                    <select
+                      value={createForm.active}
+                      onChange={(e) => setCreateForm({ ...createForm, active: e.target.value as "Active" | "Inactive" })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
+                    >
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Approval Status</label>
+                    <select
+                      value={createForm.approved}
+                      onChange={(e) => setCreateForm({ ...createForm, approved: e.target.value as "Approved" | "Disapproved" })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
+                    >
+                      <option value="Approved">Approved</option>
+                      <option value="Disapproved">Disapproved</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Experience (optional)</label>
+                    <textarea
+                      value={createForm.experience}
+                      onChange={(e) => setCreateForm({ ...createForm, experience: e.target.value })}
+                      rows={3}
+                      placeholder="e.g. 10 years as registered nurse, specialized in geriatric care..."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none resize-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex items-center justify-between">
+                <button
+                  onClick={() => setCreatingStaff(false)}
+                  className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateStaff}
+                  className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
+                >
+                  Create Staff
                 </button>
               </div>
             </div>

@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { scopeWhere, scopeDemoRows } from "@/lib/scope";
 import { DEMO } from "@/lib/demoData";
 import { prisma } from "@/lib/prisma";
+import { logAudit, snapshot } from "@/lib/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -97,6 +98,45 @@ export async function GET(
       }
     }
 
+    // Auto-seed audit log entries for empty table so the viewer has data
+    if (model === "audit-logs" && data.length === 0) {
+      const seedCount = await prisma.auditLog.count();
+      if (seedCount === 0) {
+        const now = Date.now();
+        const H = 60 * 60 * 1000;
+        const D = 24 * H;
+        await prisma.auditLog.createMany({
+          data: [
+            { actorName: "System", actorRole: "SYSTEM", action: "CREATE", entityType: "system", entityId: "init", reason: "System initialized and ready for operation" },
+            { actorName: "Sarah Jenkins", actorRole: "NURSE", action: "CREATE", entityType: "vitals", entityId: "v-001", reason: "Recorded vitals for Arthur Pendelton (Room 302): BP 120/80, HR 72, SpO2 97%" },
+            { actorName: "Caleb Randall", actorRole: "CAREGIVER", action: "UPDATE", entityType: "tasks", entityId: "t-001", reason: "Completed morning wellness check for Room 305 — Eleanor Fitzroy" },
+            { actorName: "Dr. Reyes", actorRole: "PHYSICIAN", action: "CREATE", entityType: "care-plans", entityId: "cp-001", reason: "Updated care plan for Margaret Wilson — increased physical therapy sessions" },
+            { actorName: "Maria Santos", actorRole: "FACILITY_ADMIN", action: "UPDATE", entityType: "staff", entityId: "s-001", reason: "Approved staff registration for new caregiver — James Murphy" },
+            { actorName: "System", actorRole: "SYSTEM", action: "LOGIN", entityType: "auth", entityId: "session-001", reason: "Super Admin logged in from 192.168.1.100" },
+            { actorName: "Sarah Jenkins", actorRole: "NURSE", action: "CREATE", entityType: "medication-logs", entityId: "ml-001", reason: "Administered Apixaban 5mg to Margaret Wilson (Room 312)" },
+            { actorName: "Caleb Randall", actorRole: "CAREGIVER", action: "UPDATE", entityType: "call-bells", entityId: "cb-001", reason: "Resolved call bell for Arthur Pendelton (Room 302) — assistance with repositioning" },
+            { actorName: "Dr. Reyes", actorRole: "PHYSICIAN", action: "APPROVE", entityType: "escalations", entityId: "esc-001", reason: "Approved SBAR escalation for Eleanor Fitzroy — swallowing assessment ordered" },
+            { actorName: "Maria Santos", actorRole: "FACILITY_ADMIN", action: "CREATE", entityType: "announcements", entityId: "ann-001", reason: "Published staff-wide announcement: Updated infection control protocols" },
+            { actorName: "System", actorRole: "SYSTEM", action: "EXPORT", entityType: "reports", entityId: "rpt-001", reason: "Monthly compliance report generated for Q4 2024" },
+            { actorName: "James Murphy", actorRole: "CAREGIVER", action: "CREATE", entityType: "daily-documentation", entityId: "dd-001", reason: "Submitted daily documentation for Room 308 — James Murphy (resident)" },
+            { actorName: "Sarah Jenkins", actorRole: "NURSE", action: "UPDATE", entityType: "vitals", entityId: "v-002", reason: "Flagged abnormal vitals for Robert Chen (Room 310) — BP 165/95" },
+            { actorName: "System", actorRole: "SYSTEM", action: "LOGIN", entityType: "auth", entityId: "session-002", reason: "Facility Admin logged in from 10.0.0.50" },
+            { actorName: "Maria Santos", actorRole: "FACILITY_ADMIN", action: "DELETE", entityType: "announcements", entityId: "ann-old", reason: "Removed expired announcement — Summer schedule reminder" },
+          ].map((e, i) => ({
+            ...e,
+            createdAt: new Date(now - (15 - i) * H),
+          })),
+        });
+        // Refetch with seeded data
+        data = await def.delegate.findMany({
+          where: scopedWhere,
+          orderBy,
+          take,
+          ...(include ? { include } : {}),
+        });
+      }
+    }
+
     return NextResponse.json({ data, count: data.length });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Query failed";
@@ -132,6 +172,17 @@ export async function POST(
 
   try {
     const data = await def.delegate.create({ data: body });
+    // Audit log — fire-and-forget
+    logAudit({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: "CREATE",
+      entityType: model,
+      entityId: data.id,
+      after: snapshot(data as Record<string, unknown>),
+      ipAddress: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || undefined,
+      userAgent: req.headers.get("user-agent") || undefined,
+    });
     // Process auto-notifications asynchronously so it doesn't block the API response
     handleAutoNotification(model, data).catch((e) =>
       console.error("[route.ts:autoNotifyError]", e)

@@ -276,7 +276,7 @@ export default function ResidentRegistration({ variant = "admin", accent = "#f59
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold" style={{ color: accent }}>Resident Registration</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold" style={{ color: accent }}>Resident Registration</h1>
           <p className="text-gray-600 text-sm mt-1 flex items-center gap-2">
             <span className="inline-flex items-center gap-1 text-green-600"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Live</span>
             {STEP_COUNT}-step self-service enrollment with credentials &amp; facial recognition

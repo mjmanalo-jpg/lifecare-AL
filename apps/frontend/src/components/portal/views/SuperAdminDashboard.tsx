@@ -166,29 +166,29 @@ export default function SuperAdminDashboard() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
-            <Settings className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Admin Dashboard
+          <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+            <Settings className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-yellow-500 flex-shrink-0" /> Admin Dashboard
           </h1>
-          <p className="text-gray-600 flex items-center gap-2 text-sm">
+          <p className="text-gray-600 flex items-center gap-2 text-xs sm:text-sm">
             <span className="inline-flex items-center gap-1 text-green-600">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Live
             </span>
             Platform governance — users, approvals, portals &amp; system telemetry
           </p>
         </div>
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border self-start sm:self-auto ${
+        <span className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs sm:text-sm font-semibold border self-start sm:self-auto ${
           demoMode ? "bg-amber-50 text-amber-700 border-amber-300" : "bg-green-50 text-green-700 border-green-300"
         }`}>
-          <Database className="w-4 h-4" /> {demoMode ? "Demo Mode — no database connected" : "Live Database"}
+          <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> {demoMode ? "Demo Mode — no database connected" : "Live Database"}
         </span>
       </div>
 
       {/* Platform stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
         <Stat label="User Accounts" value={userRows.length} icon={Users} tone="gray" />
         <Stat label="Pending Approvals" value={pendingStaff.length} icon={UserCheck} tone={pendingStaff.length > 0 ? "red" : "green"} />
         <Stat label="Configured Portals" value={ALL_ROLES.length} icon={ShieldCheck} tone="blue" />
@@ -198,7 +198,7 @@ export default function SuperAdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left column — user administration & telemetry */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-yellow-500" /> User Accounts by Portal Role
             </h3>
@@ -219,25 +219,25 @@ export default function SuperAdminDashboard() {
             )}
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <Activity className="w-4 h-4 text-yellow-500" /> Operations Snapshot — Live Across All Portals
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
               {OPS_TILES.map(({ label, value, icon: Icon, color }) => (
-                <div key={label} className={`p-3 rounded-lg border ${color.split(" ").slice(1).join(" ")}`}>
+                <div key={label} className={`p-2.5 sm:p-3 rounded-lg border ${color.split(" ").slice(1).join(" ")}`}>
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-gray-600 font-semibold">{label}</p>
-                    <Icon className={`w-4 h-4 ${color.split(" ")[0]}`} />
+                    <p className="text-[10px] sm:text-xs text-gray-600 font-semibold">{label}</p>
+                    <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${color.split(" ")[0]}`} />
                   </div>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mt-1">{value}</p>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Recent platform activity */}
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <Bell className="w-4 h-4 text-yellow-500" /> Recent Platform Activity
             </h3>
@@ -262,7 +262,7 @@ export default function SuperAdminDashboard() {
 
         {/* Right column — approvals & portal matrix */}
         <div className="space-y-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                 <UserCheck className="w-4 h-4 text-yellow-500" /> Staff Approval Queue
@@ -302,7 +302,7 @@ export default function SuperAdminDashboard() {
             </button>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-yellow-500" /> Portal Matrix Coverage
             </h3>
@@ -344,12 +344,12 @@ const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
 function Stat({ label, value, icon: Icon, tone }: { label: string; value: number; icon: LucideIcon; tone: keyof typeof TONES }) {
   const t = TONES[tone];
   return (
-    <div className={`p-4 rounded-lg border ${t.wrap}`}>
+    <div className={`p-3 sm:p-4 rounded-lg border ${t.wrap}`}>
       <div className="flex items-center justify-between">
-        <p className="text-xs sm:text-sm text-gray-600 font-semibold">{label}</p>
-        <Icon className={`w-4 h-4 ${t.icon}`} />
+        <p className="text-[10px] sm:text-xs sm:text-sm text-gray-600 font-semibold">{label}</p>
+        <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${t.icon}`} />
       </div>
-      <p className={`text-2xl sm:text-3xl font-bold mt-1 ${t.value}`}>{value}</p>
+      <p className={`text-xl sm:text-2xl md:text-3xl font-bold mt-1 ${t.value}`}>{value}</p>
     </div>
   );
 }

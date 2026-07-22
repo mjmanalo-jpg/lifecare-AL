@@ -78,12 +78,12 @@ export default function DailyDocumentation({ clinicianRole = "NURSE" }: { clinic
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold">Daily Care Documentation</h2>
           <p className="text-sm text-gray-500">Track elimination, pain, wounds, sleep, and mobility</p>
         </div>
-        <button onClick={() => setCreating(true)} className="px-4 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 flex items-center gap-1.5">
+        <button onClick={() => setCreating(true)} className="w-full sm:w-auto justify-center px-4 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 flex items-center gap-1.5">
           <Plus className="w-4 h-4" /> Log Entry
         </button>
       </div>
@@ -120,7 +120,7 @@ export default function DailyDocumentation({ clinicianRole = "NURSE" }: { clinic
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="px-4 py-3 text-left font-semibold text-gray-600">Resident</th>

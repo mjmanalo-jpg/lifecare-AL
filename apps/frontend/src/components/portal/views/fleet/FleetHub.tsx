@@ -347,7 +347,7 @@ function MaintenanceTab({ onView }: { onView: (r: Record<string, unknown>) => vo
   return (
     <div className="space-y-4">
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
         <StatBox label="Open Orders" value={String(stats.open)} icon={Wrench} color="blue" />
         <StatBox label="In Progress" value={String(stats.inProgress)} icon={Play} color="amber" />
         <StatBox label="Completed (30d)" value={String(stats.completed30)} icon={CheckCircle2} color="green" />
@@ -548,7 +548,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
   return (
     <div className="space-y-4">
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
         <StatBox label="Liters (Month)" value={stats.liters.toLocaleString(undefined, { maximumFractionDigits: 1 })} icon={Droplets} color="blue" />
         <StatBox label="Cost (Month)" value={fmtCurrency(stats.cost)} icon={CircleDollarSign} color="amber" />
         <StatBox label="Avg ₱/L" value={stats.avgPerLiter > 0 ? `₱${stats.avgPerLiter.toFixed(2)}` : "—"} icon={Fuel} color="purple" />
@@ -634,13 +634,13 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
       {/* Create Modal */}
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90dvh] overflow-y-auto">
             <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
               <h2 className="text-xl font-bold">Log Fuel-Up</h2>
               <button onClick={() => setShowCreate(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 sm:p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className="block text-sm font-semibold text-gray-700 mb-1">Vehicle</label>
                   <select value={form.vehicleId} onChange={setField("vehicleId")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none"><option value="">Select…</option>{vehicles.map(v => <option key={v.id} value={v.id}>{v.name} ({v.licensePlate})</option>)}</select></div>
                 <div><label className="block text-sm font-semibold text-gray-700 mb-1">Driver</label>
@@ -655,7 +655,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
                   <input type="number" min="0" step="0.01" value={form.cost} onChange={setField("cost")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
                 <div><label className="block text-sm font-semibold text-gray-700 mb-1">Fuel Type</label>
                   <select value={form.fuelType} onChange={setField("fuelType")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none"><option>Diesel</option><option>Gasoline</option><option>Electric kWh</option></select></div>
-                <div className="col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-1">Notes</label>
+                <div className="sm:col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-1">Notes</label>
                   <textarea value={form.notes} onChange={setField("notes")} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
               </div>
             </div>
@@ -731,7 +731,7 @@ function RequestsTab({ onView }: { onView: (r: Record<string, unknown>) => void 
   return (
     <div className="space-y-4">
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
         <StatBox label="Pending" value={String(stats.pending)} icon={Clock} color="amber" />
         <StatBox label="Approved" value={String(stats.approved)} icon={Check} color="blue" />
         <StatBox label="Scheduled" value={String(stats.scheduled)} icon={Truck} color="purple" />
@@ -925,7 +925,7 @@ function TripsTab({ onView }: { onView: (r: Record<string, unknown>) => void }) 
   return (
     <div className="space-y-4">
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
         <StatBox label="Scheduled" value={String(stats.scheduled)} icon={Calendar} color="blue" />
         <StatBox label="In Transit" value={String(stats.inTransit)} icon={Navigation} color="amber" />
         <StatBox label="Completed Today" value={String(stats.completedToday)} icon={CheckCircle2} color="green" />
@@ -1031,12 +1031,12 @@ function ViewModal({ row, onClose }: { row: Record<string, unknown>; onClose: ()
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold">{title}</h2>
           <button onClick={onClose} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4">
           {tab === "maintenance" && <MaintenanceDetail row={row} />}
           {tab === "fuel" && <FuelDetail row={row} />}
           {tab === "requests" && <RequestDetail row={row} />}
@@ -1211,22 +1211,22 @@ function MaintFormModal({ title, form, onChange, onSave, onCancel, vehicles }: {
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => onChange({ ...form, [field]: e.target.value });
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90dvh] overflow-y-auto">
         <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold">{title}</h2>
           <button onClick={onCancel} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
-        <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-1">Vehicle</label>
+        <div className="p-4 sm:p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-1">Vehicle</label>
               <select value={form.vehicleId} onChange={set("vehicleId")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none"><option value="">Select…</option>{vehicles.map(v => <option key={v.id} value={v.id}>{v.name} ({v.licensePlate})</option>)}</select></div>
             <div><label className="block text-sm font-semibold text-gray-700 mb-1">Type</label>
               <select value={form.type} onChange={set("type")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none">{MAINT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
             <div><label className="block text-sm font-semibold text-gray-700 mb-1">Status</label>
               <select value={form.status} onChange={set("status")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none">{MAINT_STATUSES.map(s => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}</select></div>
-            <div className="col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-1">Title</label>
+            <div className="sm:col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-1">Title</label>
               <input type="text" value={form.title} onChange={set("title")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="e.g. Brake pad replacement" /></div>
-            <div className="col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-1">Description</label>
+            <div className="sm:col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-1">Description</label>
               <textarea value={form.description} onChange={set("description")} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
             <div><label className="block text-sm font-semibold text-gray-700 mb-1">Scheduled Date</label>
               <input type="date" value={form.scheduledDate} onChange={set("scheduledDate")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
@@ -1238,7 +1238,7 @@ function MaintFormModal({ title, form, onChange, onSave, onCancel, vehicles }: {
               <input type="number" min="0" step="0.01" value={form.cost} onChange={set("cost")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
             <div><label className="block text-sm font-semibold text-gray-700 mb-1">Downtime Hours</label>
               <input type="number" min="0" step="0.5" value={form.downtimeHours} onChange={set("downtimeHours")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-            <div className="col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-1">Notes</label>
+            <div className="sm:col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-1">Notes</label>
               <textarea value={form.notes} onChange={set("notes")} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
           </div>
         </div>

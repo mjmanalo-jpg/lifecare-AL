@@ -47,7 +47,7 @@ export default function InventoryAlertsPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2"><Bell className="w-5 h-5 text-yellow-500" /> Inventory Alerts</h2>
           <p className="text-sm text-gray-500">Low stock, expiry warnings, and medication inventory alerts</p>
@@ -62,12 +62,12 @@ export default function InventoryAlertsPanel() {
         </div>
       </div>
 
-      <div className="flex gap-3 items-center">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search alerts..." className={`${inputCls} pl-9`} />
         </div>
-        <select value={filter} onChange={e => setFilter(e.target.value)} className={`${inputCls} w-auto`}>
+        <select value={filter} onChange={e => setFilter(e.target.value)} className={`${inputCls} w-full sm:w-auto`}>
           <option value="ALL">All Severity</option>
           {Object.keys(severityColors).map(s => <option key={s} value={s}>{s}</option>)}
         </select>
@@ -154,7 +154,7 @@ function AlertForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
     <form onSubmit={handleSubmit} className="p-6 space-y-4">
       <div><label className={labelCls}>Item Name *</label><input value={form.itemName} onChange={e => set("itemName", e.target.value)} className={inputCls} required placeholder="e.g., Gloves, Insulin, Bandages" /></div>
       <div><label className={labelCls}>Message</label><input value={form.message} onChange={e => set("message", e.target.value)} className={inputCls} placeholder="Alert description" /></div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div><label className={labelCls}>Severity</label><select value={form.severity} onChange={e => set("severity", e.target.value)} className={inputCls}>
           {Object.keys(severityColors).map(s => <option key={s} value={s}>{s}</option>)}
         </select></div>

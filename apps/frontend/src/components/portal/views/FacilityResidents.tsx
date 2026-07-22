@@ -88,7 +88,7 @@ export default function FacilityResidents() {
   const [careFilter, setCareFilter] = useState<"all" | CareLevel>("all");
   const [alertsOnly, setAlertsOnly] = useState(false);
   const [sort, setSort] = useState<"name" | "room" | "alerts">("name");
-  const [perPage, setPerPage] = useState(9);
+  const [perPage, setPerPage] = useState(25);
   const [page, setPage] = useState(1);
   const [viewing, setViewing] = useState<ResidentVM | null>(null);
   const [admitting, setAdmitting] = useState(false);
@@ -311,44 +311,54 @@ export default function FacilityResidents() {
           ) : error ? (
             <div className="bg-white rounded-lg border border-red-200 p-10 text-center text-red-600">Failed to load: {error}</div>
           ) : paginated.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {paginated.map((r) => (
-                <div key={r.id} className="bg-white rounded-lg border border-gray-200 hover:border-yellow-300 hover:shadow-lg transition overflow-hidden flex flex-col">
-                  <div className={`p-4 ${r.alertsCount > 0 ? "bg-red-50 border-b-2 border-red-300" : "bg-gray-50 border-b border-gray-200"}`}>
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="min-w-0">
-                        <h3 className="text-lg font-bold text-gray-900 truncate">{r.name}</h3>
-                        <p className="text-sm text-gray-600">Room {r.room} • Age {r.age}</p>
-                      </div>
-                      {r.alertsCount > 0 && <span className="px-2 py-1 bg-red-500 text-white rounded-full text-xs font-bold flex-shrink-0">🚨 {r.alertsCount}</span>}
-                    </div>
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${CARE_BADGE[r.careLevel]}`}>{humanize(r.careLevel)}</span>
-                  </div>
-                  <div className="p-4 border-b border-gray-200">
-                    <p className="text-xs font-semibold text-gray-600 mb-3">LATEST VITALS</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {CARD_VITALS.map(({ key, label, icon: Icon, color }) => (
-                        <div key={key} className="flex items-center gap-2 bg-gray-50 p-2 rounded">
-                          <Icon className={`w-4 h-4 ${color}`} />
-                          <div className="min-w-0">
-                            <p className="text-xs text-gray-600">{label}</p>
-                            <p className="font-bold text-gray-900 text-sm truncate">{vital(r, key)}</p>
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[900px]">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-4 py-3 text-left font-semibold text-gray-600">Resident</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-600">Room</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-600">Age</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-600">Care Level</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-600">HR</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-600">BP</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-600">Temp</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-600">O₂</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-600">Alerts</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-600">Meds</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-600">Last Check-in</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-600">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {paginated.map((r) => (
+                      <tr key={r.id} className={`hover:bg-gray-50 transition ${r.alertsCount > 0 ? "bg-red-50/50" : ""}`}>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {r.alertsCount > 0 && <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />}
+                            <span className="font-medium text-gray-900 truncate">{r.name}</span>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="px-4 py-3 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
-                    <p className="text-xs text-blue-700 font-semibold flex items-center gap-1"><Clock className="w-3 h-3" /> {relTime(r.lastCheckIn, nowTs)}</p>
-                    <p className="text-xs text-gray-600 flex items-center gap-1"><Pill className="w-3 h-3" /> {r.meds.length} meds</p>
-                  </div>
-                  <div className="p-4 mt-auto">
-                    <button onClick={() => setViewing(r)} className="w-full px-4 py-2 bg-gradient-to-r from-blue-400 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
-                      View Details
-                    </button>
-                  </div>
-                </div>
-              ))}
+                        </td>
+                        <td className="px-4 py-3 text-gray-700">{r.room}</td>
+                        <td className="px-4 py-3 text-gray-700">{r.age}</td>
+                        <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-xs font-semibold ${CARE_BADGE[r.careLevel]}`}>{humanize(r.careLevel)}</span></td>
+                        <td className="px-4 py-3 text-center text-gray-700">{vital(r, "HEART_RATE")}</td>
+                        <td className="px-4 py-3 text-center text-gray-700">{vital(r, "BLOOD_PRESSURE")}</td>
+                        <td className="px-4 py-3 text-center text-gray-700">{vital(r, "TEMPERATURE")}</td>
+                        <td className="px-4 py-3 text-center text-gray-700">{vital(r, "OXYGEN")}</td>
+                        <td className="px-4 py-3 text-center">
+                          {r.alertsCount > 0 ? <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-bold">{r.alertsCount}</span> : <span className="text-gray-400">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-center text-gray-700">{r.meds.length}</td>
+                        <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{relTime(r.lastCheckIn, nowTs)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button onClick={() => setViewing(r)} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition">View</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
             <div className="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-500">No residents match your filters.</div>
@@ -377,15 +387,15 @@ export default function FacilityResidents() {
 
       {viewing && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-400 to-blue-500 text-white p-5 sm:p-6 flex items-center justify-between z-10">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92dvh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-400 to-blue-500 text-white p-4 sm:p-6 flex items-center justify-between z-10">
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold">{viewing.name}</h2>
                 <p className="text-blue-100 text-sm">Room {viewing.room} • Age {viewing.age} • {humanize(viewing.careLevel)}</p>
               </div>
               <button onClick={() => setViewing(null)} className="p-2 hover:bg-blue-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
-            <div className="p-6 sm:p-8 space-y-6">
+            <div className="p-4 sm:p-8 space-y-6">
               {viewing.allergies && (
                 <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
                   <p className="text-sm font-semibold text-red-700 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Allergies</p>
@@ -468,7 +478,7 @@ export default function FacilityResidents() {
                 </div>
               )}
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-8 py-4 flex items-center justify-between gap-2 flex-wrap">
               <button
                 onClick={() => {
                   router.push(`/facility_admin/monitoring?resident=${encodeURIComponent(viewing.name)}&room=${encodeURIComponent(viewing.room)}`);
@@ -567,8 +577,8 @@ function AdmitResidentModal({ takenRooms, onClose, onAdmitted }: {
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 sm:p-6 flex items-center justify-between z-10">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92dvh] overflow-y-auto">
+        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-4 sm:p-6 flex items-center justify-between z-10">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
               <UserPlus className="w-6 h-6" /> Admit New Resident
@@ -585,7 +595,7 @@ function AdmitResidentModal({ takenRooms, onClose, onAdmitted }: {
             <p className="text-sm text-gray-600">{form.firstName} {form.lastName} has been added to Room {form.roomNumber}.</p>
           </div>
         ) : (
-          <form onSubmit={submit} className="p-6 sm:p-8 space-y-6">
+          <form onSubmit={submit} className="p-4 sm:p-8 space-y-6">
             {error && (
               <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded text-sm text-red-700 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 flex-shrink-0" /> {error}

@@ -107,7 +107,7 @@ export default function NurseRecords() {
   const [careFilter, setCareFilter] = useState<"all" | CareLevel>("all");
   const [sort, setSort] = useState<"name" | "room" | "alerts">("name");
   const [alertsOnly, setAlertsOnly] = useState(false);
-  const [perPage, setPerPage] = useState(9);
+  const [perPage, setPerPage] = useState(25);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [viewing, setViewing] = useState<RecordVM | null>(null);
@@ -341,95 +341,74 @@ export default function NurseRecords() {
             </div>
           </div>
 
-          {/* Bulk Selection Header */}
-          <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3.5 mb-4">
-            <div className="flex items-center gap-2">
-              <input type="checkbox" checked={pageAllSelected} onChange={toggleAll} className="w-4 h-4 rounded cursor-pointer" />
-              <span className="text-sm font-semibold text-gray-700">Select All Residents on Page</span>
-            </div>
-            {selected.size > 0 && (
-              <span className="text-xs text-gray-500 font-medium">{selected.size} selected for bulk actions</span>
-            )}
-          </div>
-
-          {/* Card-based grid */}
+          {/* Table */}
           {loading && records.length === 0 ? (
             <div className="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-500">Loading records…</div>
           ) : error ? (
             <div className="bg-white rounded-lg border border-red-200 p-10 text-center text-red-600">Failed to load: {error}</div>
           ) : paginated.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {paginated.map((r) => (
-                <div key={r.id} className="bg-white rounded-lg border border-gray-200 hover:border-yellow-300 hover:shadow-lg transition overflow-hidden flex flex-col">
-                  <div className={`p-4 ${r.alertsCount > 0 || r.callBells.some(cb => cb.status === "PENDING") ? "bg-red-50 border-b-2 border-red-300" : "bg-gray-50 border-b border-gray-200"}`}>
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(r.id)}
-                          onChange={() => toggleOne(r.id)}
-                          className="w-4 h-4 rounded cursor-pointer flex-shrink-0"
-                        />
-                        <div className="min-w-0">
-                          <h3 className="text-lg font-bold text-gray-900 truncate">{r.name}</h3>
-                          <p className="text-sm text-gray-600">Room {r.room} • Age {r.age}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
-                        {r.callBells.some(cb => cb.status === "PENDING") && <span className="px-2 py-1 bg-orange-500 text-white rounded-full text-xs font-bold">☎️ {r.callBells.filter(cb => cb.status === "PENDING").length}</span>}
-                        {r.alertsCount > 0 && <span className="px-2 py-1 bg-red-500 text-white rounded-full text-xs font-bold">🚨 {r.alertsCount}</span>}
-                      </div>
-                    </div>
-                    <span className={`ml-8 px-2 py-1 rounded text-xs font-semibold ${CARE_BADGE[r.careLevel]}`}>{humanize(r.careLevel)}</span>
-                  </div>
-                  
-                  <div className="p-4 border-b border-gray-200">
-                    <p className="text-xs font-semibold text-gray-600 mb-3">LATEST VITALS</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {CARD_VITALS.map(({ key, label, icon: Icon, color }) => (
-                        <div key={key} className="flex items-center gap-2 bg-gray-50 p-2 rounded">
-                          <Icon className={`w-4 h-4 ${color}`} />
-                          <div className="min-w-0">
-                            <p className="text-xs text-gray-600">{label}</p>
-                            <p className="font-bold text-gray-900 text-sm truncate">{vital(r, key)}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  <div className="px-4 py-3 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
-                    <p className="text-xs text-blue-700 font-semibold flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> {relTime(r.lastCheckIn, nowTs)}
-                    </p>
-                    <p className="text-xs text-gray-600 flex items-center gap-1">
-                      <Pill className="w-3 h-3" /> {r.meds.length} meds
-                    </p>
-                  </div>
-
-                  {r.callBells.length > 0 && (
-                    <div className={`px-4 py-3 border-b flex items-center justify-between ${r.callBells.some(cb => cb.status === "PENDING") ? "bg-orange-50 border-orange-200" : "bg-yellow-50 border-yellow-200"}`}>
-                      <p className={`text-xs font-semibold flex items-center gap-1 ${r.callBells.some(cb => cb.status === "PENDING") ? "text-orange-700" : "text-yellow-700"}`}>
-                        <Phone className="w-3 h-3" /> {r.callBells.length} active
-                      </p>
-                      <p className="text-xs text-gray-600">
-                        {r.callBells.filter(cb => cb.status === "PENDING").length} pending
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="p-4 mt-auto space-y-2">
-                    {r.callBells.length > 0 && (
-                      <button onClick={() => setBellsViewing(r)} className="w-full px-4 py-2 bg-gradient-to-r from-orange-400 to-orange-500 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95 flex items-center justify-center gap-2">
-                        <Phone className="w-4 h-4" /> Call Bells ({r.callBells.length})
-                      </button>
-                    )}
-                    <button onClick={() => setViewing(r)} className="w-full px-4 py-2 bg-gradient-to-r from-blue-400 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
-                      View Details
-                    </button>
-                  </div>
-                </div>
-              ))}
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[1000px]">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-4 py-3 text-left font-semibold text-gray-600 w-10">
+                        <input type="checkbox" checked={pageAllSelected} onChange={toggleAll} className="w-4 h-4 rounded cursor-pointer" />
+                      </th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-600">Resident</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-600">Room</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-600">Care Level</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-600">HR</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-600">BP</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-600">Temp</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-600">O₂</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-600">Alerts</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-600">Call Bells</th>
+                      <th className="px-4 py-3 text-center font-semibold text-gray-600">Meds</th>
+                      <th className="px-4 py-3 text-left font-semibold text-gray-600">Last Check-in</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-600">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {paginated.map((r) => {
+                      const hasPendingBell = r.callBells.some(cb => cb.status === "PENDING");
+                      return (
+                        <tr key={r.id} className={`hover:bg-gray-50 transition ${r.alertsCount > 0 || hasPendingBell ? "bg-red-50/50" : ""}`}>
+                          <td className="px-4 py-3">
+                            <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleOne(r.id)} className="w-4 h-4 rounded cursor-pointer" />
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              {(r.alertsCount > 0 || hasPendingBell) && <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />}
+                              <span className="font-medium text-gray-900 truncate">{r.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-gray-700">{r.room}</td>
+                          <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-xs font-semibold ${CARE_BADGE[r.careLevel]}`}>{humanize(r.careLevel)}</span></td>
+                          <td className="px-4 py-3 text-center text-gray-700">{vital(r, "HEART_RATE")}</td>
+                          <td className="px-4 py-3 text-center text-gray-700">{vital(r, "BLOOD_PRESSURE")}</td>
+                          <td className="px-4 py-3 text-center text-gray-700">{vital(r, "TEMPERATURE")}</td>
+                          <td className="px-4 py-3 text-center text-gray-700">{vital(r, "OXYGEN")}</td>
+                          <td className="px-4 py-3 text-center">
+                            {r.alertsCount > 0 ? <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-bold">{r.alertsCount}</span> : <span className="text-gray-400">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {hasPendingBell ? <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-bold">{r.callBells.filter(cb => cb.status === "PENDING").length}</span> : <span className="text-gray-400">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center text-gray-700">{r.meds.length}</td>
+                          <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{relTime(r.lastCheckIn, nowTs)}</td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {r.callBells.length > 0 && <button onClick={() => setBellsViewing(r)} className="px-2 py-1 bg-orange-500 text-white rounded text-xs font-semibold hover:bg-orange-600 transition">Bells</button>}
+                              <button onClick={() => setViewing(r)} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition">View</button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
             <div className="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-500">No records match your filters.</div>

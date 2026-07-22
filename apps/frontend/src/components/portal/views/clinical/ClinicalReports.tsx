@@ -97,8 +97,8 @@ export default function ClinicalReports() {
       </div>
 
       {selectedReport && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-          <div className="flex items-center gap-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">From</label>
               <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={inputCls} />
@@ -115,7 +115,7 @@ export default function ClinicalReports() {
               {"count" in report && <p className="text-3xl font-bold text-yellow-600">{report.count} <span className="text-sm font-medium text-gray-500">records</span></p>}
 
               {"bySeverity" in report && report.bySeverity && (
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   {Object.entries(report.bySeverity).map(([k, v]) => (
                     <div key={k} className="bg-gray-50 rounded-lg p-3 text-center">
                       <p className="text-xs text-gray-500">{k}</p>
@@ -126,7 +126,7 @@ export default function ClinicalReports() {
               )}
 
               {"byStatus" in report && report.byStatus && (
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {Object.entries(report.byStatus).map(([k, v]) => (
                     <div key={k} className="bg-gray-50 rounded-lg p-3 text-center">
                       <p className="text-xs text-gray-500">{k.replace(/_/g, " ")}</p>

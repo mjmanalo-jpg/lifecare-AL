@@ -135,7 +135,7 @@ export default function FacilityReports() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
             Reports & Analytics
           </h1>
           <p className="text-gray-600">Generate, filter, and export facility reports with real-time data</p>
@@ -234,7 +234,7 @@ function IncidentsReport({ incidents, search: _s }: { incidents: Incident[]; sea
         <StatBox label="Resolved" value={String(stats.resolved)} icon={AlertTriangle} color="green" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-4">
         <ChartCard title="Incidents by Type" icon={FileText}>
           {byType.length > 0 ? (
             <ResponsiveContainer width="100%" height={240}>
@@ -282,7 +282,7 @@ function IncidentsReport({ incidents, search: _s }: { incidents: Incident[]; sea
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 font-semibold text-sm text-gray-700">Incident Records</div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[560px] text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Type</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Resident</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Severity</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Status</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Date</th></tr>
               </thead>
@@ -360,7 +360,7 @@ function StaffReport({ staff, search: _s }: { staff: Staff[]; search: string }) 
         <StatBox label="Departments" value={String(stats.depts)} icon={Users} color="purple" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 sm:gap-4">
         <ChartCard title="Staff by Department" icon={Users}>
           {byDept.length > 0 ? (
             <ResponsiveContainer width="100%" height={240}>
@@ -404,7 +404,7 @@ function StaffReport({ staff, search: _s }: { staff: Staff[]; search: string }) 
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 font-semibold text-sm text-gray-700">Staff Records</div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[560px] text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Name</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Position</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Department</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Status</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Approved</th></tr>
               </thead>
@@ -482,7 +482,7 @@ function ResidentsReport({ residents, search: _s }: { residents: Resident[]; sea
         <StatBox label="Skilled" value={String(stats.skilled)} icon={Activity} color="red" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-4">
         <ChartCard title="Care Level Distribution" icon={Activity}>
           {careData.length > 0 ? (
             <ResponsiveContainer width="100%" height={240}>
@@ -514,7 +514,7 @@ function ResidentsReport({ residents, search: _s }: { residents: Resident[]; sea
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 font-semibold text-sm text-gray-700">Resident Records</div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[560px] text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Name</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Room</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Care Level</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Age</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Gender</th></tr>
               </thead>
@@ -589,7 +589,7 @@ function BillingReport({ invoices, search: _s }: { invoices: Record<string, unkn
         <StatBox label="Collected" value={`$${stats.collected.toLocaleString()}`} icon={CreditCard} color="green" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-4">
         <ChartCard title="Invoice Status Distribution" icon={CreditCard}>
           {statusDist.length > 0 ? (
             <ResponsiveContainer width="100%" height={240}>
@@ -628,7 +628,7 @@ function BillingReport({ invoices, search: _s }: { invoices: Record<string, unkn
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 font-semibold text-sm text-gray-700">Invoice Records</div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[560px] text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Invoice</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Resident</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Amount</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Status</th><th className="text-left px-4 py-2.5 font-semibold text-gray-600">Due</th></tr>
               </thead>
@@ -686,7 +686,7 @@ function StatBox({ label, value, icon: Icon, color }: { label: string; value: st
         <p className="text-xs font-semibold text-gray-600">{label}</p>
         <Icon className={`w-4 h-4 ${c.split(" ")[0]}`} />
       </div>
-      <p className={`text-2xl font-bold ${c.split(" ")[0]}`}>{value}</p>
+      <p className={`text-xl sm:text-2xl font-bold ${c.split(" ")[0]}`}>{value}</p>
     </div>
   );
 }

@@ -320,10 +320,10 @@ export default function FacilityDining() {
   return (
     <div className="space-y-6">
       {/* Title & Navigation Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-yellow-50 to-amber-100 p-6 rounded-2xl border border-amber-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-yellow-50 to-amber-100 p-4 sm:p-6 rounded-2xl border border-amber-200">
         <div>
-          <h1 className="text-3xl font-extrabold bg-gradient-to-r from-amber-700 to-amber-950 bg-clip-text text-transparent flex items-center gap-2">
-            <Utensils className="w-8 h-8 text-amber-600" /> Dining &amp; Food Compliance
+          <h1 className="text-2xl sm:text-3xl font-extrabold bg-gradient-to-r from-amber-700 to-amber-950 bg-clip-text text-transparent flex items-center gap-2">
+            <Utensils className="w-7 h-7 sm:w-8 sm:h-8 text-amber-600 flex-shrink-0" /> Dining &amp; Food Compliance
           </h1>
           <p className="text-amber-800 text-sm font-semibold mt-1">
             Oversee facility dietary operations, safety audits, menus, and dietitian reviews.
@@ -331,22 +331,22 @@ export default function FacilityDining() {
         </div>
 
         {/* Tab Controls */}
-        <div className="bg-white/80 p-1.5 rounded-xl border border-amber-300 flex items-center gap-1.5">
+        <div className="bg-white/80 p-1.5 rounded-xl border border-amber-300 flex items-center gap-1.5 overflow-x-auto flex-nowrap">
           <button 
             onClick={() => setActiveSubTab("compliance")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition active:scale-95 ${activeSubTab === "compliance" ? "bg-amber-500 text-white shadow-sm" : "text-amber-900 hover:bg-amber-100"}`}
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition active:scale-95 whitespace-nowrap flex-shrink-0 ${activeSubTab ==="compliance" ? "bg-amber-500 text-white shadow-sm" : "text-amber-900 hover:bg-amber-100"}`}
           >
             <ShieldCheck className="w-4 h-4" /> Food Compliance
           </button>
           <button 
             onClick={() => setActiveSubTab("dietitian")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition active:scale-95 ${activeSubTab === "dietitian" ? "bg-amber-500 text-white shadow-sm" : "text-amber-900 hover:bg-amber-100"}`}
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition active:scale-95 whitespace-nowrap flex-shrink-0 ${activeSubTab ==="dietitian" ? "bg-amber-500 text-white shadow-sm" : "text-amber-900 hover:bg-amber-100"}`}
           >
             <Users className="w-4 h-4" /> Dietitians
           </button>
           <button 
             onClick={() => setActiveSubTab("menus")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition active:scale-95 ${activeSubTab === "menus" ? "bg-amber-500 text-white shadow-sm" : "text-amber-900 hover:bg-amber-100"}`}
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition active:scale-95 whitespace-nowrap flex-shrink-0 ${activeSubTab ==="menus" ? "bg-amber-500 text-white shadow-sm" : "text-amber-900 hover:bg-amber-100"}`}
           >
             <ClipboardList className="w-4 h-4" /> Menus &amp; Cuisine
           </button>
@@ -355,7 +355,7 @@ export default function FacilityDining() {
 
       {/* ────────────────── 1. FOOD COMPLIANCE SUBTAB ────────────────── */}
       {activeSubTab === "compliance" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-6">
           
           {/* Daily Kitchen Temp Logging */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-4">
@@ -468,7 +468,7 @@ export default function FacilityDining() {
 
       {/* ────────────────── 2. DIETITIANS & CONSULTS SUBTAB ────────────────── */}
       {activeSubTab === "dietitian" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-6">
           
           {/* Dietitian Registry & Policy */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-4">
@@ -569,7 +569,7 @@ export default function FacilityDining() {
 
       {/* ────────────────── 3. MENUS & CUISINE SUBTAB ────────────────── */}
       {activeSubTab === "menus" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-6">
           
           {/* Daily Menu Planner */}
           <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-4">
@@ -666,14 +666,14 @@ export default function FacilityDining() {
       {/* 1. Add Compliance Audit Modal */}
       {showAddCompliance && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90dvh] overflow-y-auto">
             <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
               <h2 className="text-xl font-extrabold flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-amber-800" /> Log HACCP Compliance Audit
               </h2>
               <button onClick={() => setShowAddCompliance(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1.5">Audit Title</label>
                 <input 
@@ -777,14 +777,14 @@ export default function FacilityDining() {
       {/* 2. Request Consult Modal */}
       {showAddConsult && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90dvh] overflow-y-auto">
             <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
               <h2 className="text-xl font-extrabold flex items-center gap-2">
                 <Users className="w-5 h-5 text-amber-800" /> Request Dietitian Consultation
               </h2>
               <button onClick={() => setShowAddConsult(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1.5">Select Resident</label>
                 <select 
@@ -832,14 +832,14 @@ export default function FacilityDining() {
       {/* 3. Add Menu Item Modal */}
       {showAddMenu && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90dvh] overflow-y-auto">
             <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
               <h2 className="text-xl font-extrabold flex items-center gap-2">
                 <ClipboardList className="w-5 h-5 text-amber-800" /> Schedule Cuisine Menu Item
               </h2>
               <button onClick={() => setShowAddMenu(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5">Meal Type</label>

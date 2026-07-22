@@ -263,7 +263,7 @@ export default function FeatureMatrixDashboard({ initialTab = "overview" }: { in
           <ShieldCheck className="w-5 h-5 text-purple-600" />
           LCMS Feature Matrix &amp; Access Control
         </h2>
-        <div className="flex items-center gap-1 border-b border-gray-200">
+        <div className="flex items-center gap-1 border-b border-gray-200 overflow-x-auto">
           <button
             onClick={() => setView("overview")}
             className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${view === "overview" ? "border-purple-600 text-purple-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}
@@ -339,7 +339,7 @@ export default function FeatureMatrixDashboard({ initialTab = "overview" }: { in
       {/* Role Access Matrix */}
       <div className="bg-white rounded-xl border p-4 overflow-x-auto">
         <h3 className="font-semibold text-gray-800 text-sm mb-4">Role-Based Feature Access Matrix</h3>
-        <table className="w-full text-xs">
+        <table className="w-full min-w-[640px] text-xs">
           <thead>
             <tr className="border-b">
               <th className="text-left py-2 pr-4 font-semibold text-gray-600">Role</th>

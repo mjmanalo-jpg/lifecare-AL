@@ -121,3 +121,48 @@ html.theme-light .custom-bg-scrim {
 html.theme-light:not(.light) .custom-bg-scrim {
   opacity: 1;
 }
+
+/* Modern Scrollbar — standard properties with WebKit fallback */
+.scrollbar-thin {
+  --scrollbar-thumb: rgba(156, 163, 175, 0.5);
+  --scrollbar-track: transparent;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  overscroll-behavior: contain;
+}
+
+.dark .scrollbar-thin {
+  --scrollbar-thumb: rgba(75, 85, 99, 0.5);
+}
+
+/* WebKit fallback for browsers without scrollbar-color support */
+@supports not (scrollbar-color: auto) {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--scrollbar-thumb) 100%, black 20%);
+  }
+}
+
+/* Modern text-wrap for headings and paragraphs */
+h1, h2, h3, h4, h5, h6 {
+  text-wrap: balance;
+}
+
+p, blockquote, li {
+  text-wrap: pretty;
+}
+
+/* Prevent scroll chaining on all scrollable areas */
+.scrollable {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}

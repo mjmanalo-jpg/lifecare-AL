@@ -1184,7 +1184,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
                   {vehicleRows.map(v => <option key={str(v.id)} value={str(v.id)}>{str(v.name)} ({str(v.licensePlate)})</option>)}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className="block text-sm font-semibold text-gray-700 mb-1">Odometer (km)</label><input type="number" required value={form.odometer} onChange={e => setForm(p => ({ ...p, odometer: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
                 <div><label className="block text-sm font-semibold text-gray-700 mb-1">Liters</label><input type="number" step="0.01" required value={form.liters} onChange={e => setForm(p => ({ ...p, liters: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
                 <div><label className="block text-sm font-semibold text-gray-700 mb-1">Cost (₱)</label><input type="number" required value={form.cost} onChange={e => setForm(p => ({ ...p, cost: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
