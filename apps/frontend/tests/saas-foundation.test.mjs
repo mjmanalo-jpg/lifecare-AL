@@ -55,7 +55,7 @@ test("platform customer provisioning is separated from legacy super admin", () =
   assert.match(organizations, /context\?\.platformRole !== "PLATFORM_ADMIN"/);
   assert.doesNotMatch(read("src/components/portal/views/SuperAdminDashboard.tsx"), /SaasPlatformConsole/);
   assert.match(read("src/components/portal/views/PlatformAdminPortalContent.tsx"), /Platform Admin Portal/);
-  assert.match(read("src/app/api/auth/session/route.ts"), /platform_admin\/dashboard/);
+  assert.match(read("src/app/api/auth/session/route.ts"), /user\.platformRole === "PLATFORM_ADMIN"[\s\S]*?\? "PLATFORM_ADMIN"/);
   assert.match(read("src/app\/[role\]\/layout.tsx"), /urlRole === "PLATFORM_ADMIN"/);
 });
 
@@ -76,4 +76,7 @@ test("the sample platform administrator is distinct and keeps its password out o
   assert.match(seed, /platformRole: "PLATFORM_ADMIN"/);
   assert.match(seed, /SAMPLE_PLATFORM_ADMIN_PASSWORD/);
   assert.doesNotMatch(seed, /SunriseTestHolding_2026/);
+  const session = read("src/app/api/auth/session/route.ts");
+  assert.match(session, /user\.platformRole === "PLATFORM_ADMIN"[\s\S]*?\? "PLATFORM_ADMIN"/);
+  assert.match(session, /redirectUrl: `\/\$\{String\(role\)\.toLowerCase\(\)\}\/dashboard`/);
 });

@@ -62,7 +62,11 @@ export async function POST(request: NextRequest) {
     const organization = workspaces?.organizations[0];
     const community = organization?.communities[0];
     const databaseRole = community?.role || user.role;
-    const role = (["OWNER", "ADMIN"].includes(organization?.role || "") ? "ORGANIZATION_ADMIN" : databaseRole) as PortalRole;
+    const role = (user.platformRole === "PLATFORM_ADMIN"
+      ? "PLATFORM_ADMIN"
+      : ["OWNER", "ADMIN"].includes(organization?.role || "")
+        ? "ORGANIZATION_ADMIN"
+        : databaseRole) as PortalRole;
     const success = await createSession(role, user.id, {
       authUserId,
       authAssuranceLevel: assuranceLevel(tokens?.access_token),
@@ -87,7 +91,7 @@ export async function POST(request: NextRequest) {
         activeOrganizationId: organization?.id,
         activeCommunityId: community?.id,
       },
-      redirectUrl: user.platformRole ? "/platform_admin/dashboard" : `/${String(role).toLowerCase()}/dashboard`,
+      redirectUrl: `/${String(role).toLowerCase()}/dashboard`,
     });
   } catch (error) {
     console.error("Session creation failed", error instanceof Error ? error.message : "unknown");
