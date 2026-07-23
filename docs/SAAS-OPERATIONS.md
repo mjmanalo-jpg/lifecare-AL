@@ -14,6 +14,8 @@ Never apply `supabase/migrations/0001_rls_setup.sql`; it is a stale pre-Prisma d
 
 Demo account seeding is never part of a production deployment. For an isolated staging/demo tenant only, set `SEED_ACCOUNT_PASSWORD` to a strong temporary value before running `npx prisma db seed`. Production additionally requires the deliberate `ALLOW_PRODUCTION_DEMO_SEED=true` override. Do not store the seed password in source control or deployment documentation.
 
+The isolated demo seed provisions `platform.admin@lifecarecms.test` as the sample `PLATFORM_ADMIN`. Override its email with `SAMPLE_PLATFORM_ADMIN_EMAIL` and its password with the required server-only `SAMPLE_PLATFORM_ADMIN_PASSWORD`. When the platform-specific password is omitted, the seed uses `SEED_ACCOUNT_PASSWORD`. Never expose either password as a public or `NEXT_PUBLIC_*` variable.
+
 ## Applying the Prisma SaaS migrations to Supabase
 
 Perform this procedure against a restored staging or test Supabase project first. Do not begin until a current backup exists and its restoration procedure has been verified.

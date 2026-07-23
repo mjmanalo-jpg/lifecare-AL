@@ -11,6 +11,7 @@ if (process.env.NODE_ENV === "production" && process.env.ALLOW_PRODUCTION_DEMO_S
 }
 
 const ACCOUNT_DEFINITIONS = [
+  { email: process.env.SAMPLE_PLATFORM_ADMIN_EMAIL || "platform.admin@lifecarecms.test", password: process.env.SAMPLE_PLATFORM_ADMIN_PASSWORD, name: "Sample Platform Administrator", role: "SUPERADMIN", platformRole: "PLATFORM_ADMIN", firstName: "Sample", lastName: "Administrator" },
   { email: "admin@goldenhearth.com", name: "System Admin", role: "SUPERADMIN", phone: "555-0100", firstName: "System", lastName: "Admin" },
   { email: "facility.admin@goldenhearth.com", name: "Facility Admin", role: "FACILITY_ADMIN", phone: "555-0150", firstName: "Facility", lastName: "Admin" },
   { email: "alan.reyes@goldenhearth.com", name: "Dr. Alan Reyes", role: "PHYSICIAN", phone: "555-0160", firstName: "Alan", lastName: "Reyes" },
@@ -46,7 +47,6 @@ function adminClient() {
 
 export async function seedSaasAccounts(prisma) {
   const tenant = await ensureTenant(prisma);
-  const passwordHash = await bcrypt.hash(SEEDED_PASSWORD, 10);
   const admin = adminClient();
   const listed = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
   if (listed.error) throw listed.error;
@@ -55,8 +55,10 @@ export async function seedSaasAccounts(prisma) {
 
   for (const definition of ACCOUNT_DEFINITIONS) {
     const email = definition.email.toLowerCase();
+    const accountPassword = definition.password || SEEDED_PASSWORD;
+    const passwordHash = await bcrypt.hash(accountPassword, 10);
     let authUser = authByEmail.get(email);
-    const authInput = { password: SEEDED_PASSWORD, email_confirm: true, user_metadata: { name: definition.name, role: definition.role } };
+    const authInput = { password: accountPassword, email_confirm: true, user_metadata: { name: definition.name, role: definition.platformRole || definition.role } };
     if (authUser) {
       const result = await admin.auth.admin.updateUserById(authUser.id, authInput);
       if (result.error) throw result.error;
@@ -71,12 +73,12 @@ export async function seedSaasAccounts(prisma) {
     const isActive = definition.active !== false;
     const user = await prisma.user.upsert({
       where: { email },
-      update: { name: definition.name, firstName: definition.firstName, lastName: definition.lastName, phone: definition.phone, role: definition.role, passwordHash, authUserId: authUser.id, platformRole: definition.role === "SUPERADMIN" ? "PLATFORM_ADMIN" : null, isActive },
-      create: { email, name: definition.name, firstName: definition.firstName, lastName: definition.lastName, phone: definition.phone, role: definition.role, passwordHash, authUserId: authUser.id, platformRole: definition.role === "SUPERADMIN" ? "PLATFORM_ADMIN" : null, isActive },
+      update: { name: definition.name, firstName: definition.firstName, lastName: definition.lastName, phone: definition.phone, role: definition.role, passwordHash, authUserId: authUser.id, platformRole: definition.platformRole || null, isActive },
+      create: { email, name: definition.name, firstName: definition.firstName, lastName: definition.lastName, phone: definition.phone, role: definition.role, passwordHash, authUserId: authUser.id, platformRole: definition.platformRole || null, isActive },
     });
     users[email] = user;
 
-    if (definition.role !== "SUPERADMIN") {
+    if (!definition.platformRole && definition.role !== "SUPERADMIN") {
       const membershipStatus = !isActive ? "SUSPENDED" : definition.approved === false ? "INVITED" : "ACTIVE";
       await prisma.organizationMembership.upsert({
         where: { userId_organizationId: { userId: user.id, organizationId: tenant.organization.id } },

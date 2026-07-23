@@ -69,3 +69,11 @@ test("facility administrators can invite staff only within their active communit
   assert.match(facilityPortal, /\/api\/organizations\/\$\{organizationId\}\/invitations/);
   assert.doesNotMatch(facilityPortal, /createRecord\("users"/);
 });
+
+test("the sample platform administrator is distinct and keeps its password out of source", () => {
+  const seed = read("prisma/seed-auth.mjs");
+  assert.match(seed, /platform\.admin@lifecarecms\.test/);
+  assert.match(seed, /platformRole: "PLATFORM_ADMIN"/);
+  assert.match(seed, /SAMPLE_PLATFORM_ADMIN_PASSWORD/);
+  assert.doesNotMatch(seed, /SunriseTestHolding_2026/);
+});
