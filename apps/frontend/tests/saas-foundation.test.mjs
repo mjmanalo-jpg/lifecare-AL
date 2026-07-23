@@ -52,10 +52,12 @@ test("production auth cannot fall back to local passwords or a default session s
 });
 test("platform customer provisioning is separated from legacy super admin", () => {
   const organizations = read("src/app/api/platform/organizations/route.ts");
+  const auth = read("src/lib/auth.ts");
   assert.match(organizations, /context\?\.platformRole !== "PLATFORM_ADMIN"/);
   assert.doesNotMatch(read("src/components/portal/views/SuperAdminDashboard.tsx"), /SaasPlatformConsole/);
   assert.match(read("src/components/portal/views/PlatformAdminPortalContent.tsx"), /Platform Admin Portal/);
   assert.match(read("src/app/api/auth/session/route.ts"), /user\.platformRole === "PLATFORM_ADMIN"[\s\S]*?\? "PLATFORM_ADMIN"/);
+  assert.match(auth, /const VALID_ROLES: Role\[\] = \[[\s\S]*?"PLATFORM_ADMIN"/);
   assert.match(read("src/app\/[role\]\/layout.tsx"), /urlRole === "PLATFORM_ADMIN"/);
 });
 
