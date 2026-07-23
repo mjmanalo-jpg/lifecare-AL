@@ -64,7 +64,7 @@ export async function GET(
     });
 
     const data = await def.delegate.findMany({
-      where,
+      where: { AND: [where, { organizationId: null, communityId: null }] },
       orderBy: def.orderBy,
       take,
     });

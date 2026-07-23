@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
+import { requireTenantContext } from "@/lib/tenant";
+import { assertMutationEntitled } from "@/lib/entitlements";
 
 // CCTV Access Configuration from .env.local
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 // NOTE: "*-live-preview" models are Live API (websocket) only — they 404 on the
 // generateContent REST endpoint. Use a real vision-capable REST model here.
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-const GEMINI_TTS_MODEL = process.env.GEMINI_TTS_MODEL || "gemini-2.5-flash";
-const GEMINI_TTS_VOICE = process.env.GEMINI_TTS_VOICE || "Kore";
 
 export async function POST(req) {
+  const context = await requireTenantContext({ requireCommunity: true });
+  if (!context) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
+    if (!context.organizationId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    await assertMutationEntitled(context, "ai-assistant");
     const body = await req.json();
     const { action, message, text, imageBase64, mimeType } = body;
 
@@ -44,7 +48,7 @@ export async function POST(req) {
         } else {
           throw new Error("Empty response from Gemini");
         }
-      } catch (err) {
+      } catch {
         // --- OFFLINE NLP FALLBACK ENGINE ---
         // Since the cloud API key is revoked/leaked, we generate a highly dynamic, friendly response locally.
         const msg = message.toLowerCase();
@@ -150,7 +154,7 @@ Return a valid JSON object matching the following structure:
       try {
         const parsed = JSON.parse(textResponse.trim());
         return NextResponse.json(parsed);
-      } catch (parseErr) {
+      } catch {
         return NextResponse.json({ fallback: true, reason: "Unparseable Gemini JSON" });
       }
     }
@@ -161,7 +165,7 @@ Return a valid JSON object matching the following structure:
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

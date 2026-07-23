@@ -53,6 +53,7 @@ Thumbs.db
 # Temporary
 *.tmp
 temp/
+login.txt
 
 # Python (backend)
 __pycache__/

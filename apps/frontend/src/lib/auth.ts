@@ -2,150 +2,149 @@ import { cookies } from "next/headers";
 import crypto from "node:crypto";
 import { Role } from "@/constants/roleConfig";
 
-const SESSION_COOKIE_NAME = "golden_hearth_session";
-const SESSION_COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
+const SESSION_COOKIE_NAME = "lcms_session";
+const LEGACY_COOKIE_NAME = "golden_hearth_session";
+const ACCESS_TOKEN_COOKIE = "lcms_sb_access";
+const REFRESH_TOKEN_COOKIE = "lcms_sb_refresh";
+const SESSION_COOKIE_MAX_AGE = 8 * 60 * 60;
+const SESSION_SECRET = process.env.SESSION_SECRET || "golden-hearth-dev-secret-change-me";
 
-/**
- * Secret used to HMAC-sign the session cookie so the client can't forge a role
- * or a userId. Set SESSION_SECRET in the environment for production; the dev
- * fallback keeps local/demo flows working but is intentionally not secret.
- */
-const SESSION_SECRET =
-  process.env.SESSION_SECRET || "golden-hearth-dev-secret-change-me";
-if (
-  process.env.NODE_ENV === "production" &&
-  SESSION_SECRET === "golden-hearth-dev-secret-change-me"
-) {
-  console.warn(
-    "[auth] SESSION_SECRET is unset in production — set it to a strong random value."
-  );
+if (process.env.NODE_ENV === "production" && SESSION_SECRET.endsWith("change-me")) {
+  throw new Error("SESSION_SECRET must be configured in production");
 }
 
 export interface SessionData {
   role: Role;
-  /** The signed-in User.id. Present for FAMILY (their sponsor id); optional for staff roles. */
   userId?: string;
+  authUserId?: string;
+  authAssuranceLevel?: "aal1" | "aal2";
+  platformRole?: "PLATFORM_ADMIN" | "PLATFORM_SUPPORT" | "PLATFORM_AUDITOR";
+  organizationRole?: "OWNER" | "ADMIN" | "BILLING_ADMIN" | "VIEWER";
+  activeOrganizationId?: string;
+  activeCommunityId?: string;
   createdAt: number;
+  expiresAt: number;
 }
 
 const VALID_ROLES: Role[] = [
-  "SUPERADMIN",
-  "FACILITY_ADMIN",
-  "PHYSICIAN",
-  "NURSE",
-  "CAREGIVER",
-  "FAMILY",
-  "RESIDENT",
-  "FLEET_MANAGEMENT",
-  "DRIVER",
+  "ORGANIZATION_ADMIN", "SUPERADMIN", "FACILITY_ADMIN", "PHYSICIAN", "NURSE", "CAREGIVER",
+  "FAMILY", "RESIDENT", "FLEET_MANAGEMENT", "DRIVER",
 ];
 
-// URL-safe base64 helpers (btoa/atob exist in the Node runtime used by route handlers).
 function b64url(input: string): string {
   return Buffer.from(input, "utf8").toString("base64url");
 }
 function unb64url(input: string): string {
   return Buffer.from(input, "base64url").toString("utf8");
 }
-
 function sign(payload: string): string {
   return crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url");
 }
-
-/** Constant-time comparison to avoid signature-timing leaks. */
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a);
   const bb = Buffer.from(b);
-  if (ab.length !== bb.length) return false;
-  return crypto.timingSafeEqual(ab, bb);
+  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+}
+function encodeSession(session: SessionData): string {
+  const payload = b64url(JSON.stringify(session));
+  return `${payload}.${sign(payload)}`;
 }
 
-/**
- * Create a server-side session by setting a signed HTTP-only cookie.
- * The payload is HMAC-signed so the role/userId can't be spoofed by the client.
- */
-export async function createSession(role: Role, userId?: string): Promise<boolean> {
+async function writeSession(session: SessionData): Promise<void> {
+  const store = await cookies();
+  store.set(SESSION_COOKIE_NAME, encodeSession(session), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: SESSION_COOKIE_MAX_AGE,
+    path: "/",
+  });
+}
+
+export async function createSession(
+  role: Role,
+  userId?: string,
+  context: Partial<Omit<SessionData, "role" | "userId" | "createdAt" | "expiresAt">> = {}
+): Promise<boolean> {
   try {
-    const cookieStore = await cookies();
-
-    const sessionData: SessionData = { role, userId, createdAt: Date.now() };
-    const payload = b64url(JSON.stringify(sessionData));
-    const sessionValue = `${payload}.${sign(payload)}`;
-
-    cookieStore.set(SESSION_COOKIE_NAME, sessionValue, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: SESSION_COOKIE_MAX_AGE,
-      path: "/",
+    const now = Date.now();
+    await writeSession({
+      role,
+      userId,
+      ...context,
+      createdAt: now,
+      expiresAt: now + SESSION_COOKIE_MAX_AGE * 1000,
     });
-
     return true;
   } catch (error) {
-    console.error("Failed to create session:", error);
+    console.error("Failed to create session", error instanceof Error ? error.message : "unknown");
     return false;
   }
 }
 
-/**
- * Validate and retrieve the full session (role + userId), verifying the signature.
- * Returns null if the cookie is missing, tampered with, or malformed.
- */
+export async function updateWorkspaceSession(
+  current: SessionData,
+  context: Pick<SessionData, "activeOrganizationId" | "activeCommunityId"> &
+    Partial<Pick<SessionData, "role" | "organizationRole">>
+): Promise<void> {
+  const now = Date.now();
+  await writeSession({ ...current, ...context, createdAt: now, expiresAt: now + SESSION_COOKIE_MAX_AGE * 1000 });
+}
+
+export async function elevateSessionMfa(current: SessionData): Promise<void> {
+  await writeSession({ ...current, authAssuranceLevel: "aal2" });
+}
+export async function setSupabaseTokens(accessToken: string, refreshToken: string, expiresIn: number): Promise<void> {
+  const store = await cookies();
+  const options = { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, path: "/" };
+  store.set(ACCESS_TOKEN_COOKIE, accessToken, { ...options, maxAge: Math.max(60, expiresIn) });
+  store.set(REFRESH_TOKEN_COOKIE, refreshToken, { ...options, maxAge: 30 * 24 * 60 * 60 });
+}
+
+export async function getSupabaseTokens(): Promise<{ accessToken?: string; refreshToken?: string }> {
+  const store = await cookies();
+  return {
+    accessToken: store.get(ACCESS_TOKEN_COOKIE)?.value,
+    refreshToken: store.get(REFRESH_TOKEN_COOKIE)?.value,
+  };
+}
+
 export async function getSession(): Promise<SessionData | null> {
   try {
-    const cookieStore = await cookies();
-    const sessionValue = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-    if (!sessionValue) return null;
-
-    const dot = sessionValue.lastIndexOf(".");
+    const store = await cookies();
+    const value = store.get(SESSION_COOKIE_NAME)?.value;
+    if (!value) return null;
+    const dot = value.lastIndexOf(".");
     if (dot < 0) return null;
-    const payload = sessionValue.slice(0, dot);
-    const signature = sessionValue.slice(dot + 1);
-
-    // Reject any cookie whose signature doesn't match our secret (forgery/tamper).
+    const payload = value.slice(0, dot);
+    const signature = value.slice(dot + 1);
     if (!safeEqual(signature, sign(payload))) return null;
-
-    const sessionData = JSON.parse(unb64url(payload)) as SessionData;
-    if (!VALID_ROLES.includes(sessionData.role)) return null;
-
-    return sessionData;
-  } catch (error) {
-    console.error("Failed to validate session:", error);
+    const session = JSON.parse(unb64url(payload)) as SessionData;
+    if (!VALID_ROLES.includes(session.role) || !session.userId || session.expiresAt <= Date.now()) return null;
+    return session;
+  } catch {
     return null;
   }
 }
 
-/**
- * Validate and retrieve the current session role.
- * Returns the role if valid, null otherwise. (Back-compat wrapper over getSession.)
- */
 export async function validateSession(): Promise<Role | null> {
-  const session = await getSession();
-  return session?.role ?? null;
+  return (await getSession())?.role ?? null;
 }
 
-/**
- * Clear the session (logout).
- */
 export async function clearSession(): Promise<boolean> {
   try {
-    const cookieStore = await cookies();
-    cookieStore.delete(SESSION_COOKIE_NAME);
+    const store = await cookies();
+    for (const name of [SESSION_COOKIE_NAME, LEGACY_COOKIE_NAME, ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE]) {
+      store.delete(name);
+    }
     return true;
-  } catch (error) {
-    console.error("Failed to clear session:", error);
+  } catch {
     return false;
   }
 }
 
-/**
- * Server-side wrapper to protect API routes.
- * Returns role if authenticated, throws 401 otherwise.
- */
 export async function requireSession(): Promise<Role> {
   const role = await validateSession();
-  if (!role) {
-    throw new Error("Unauthorized");
-  }
+  if (!role) throw new Error("Unauthorized");
   return role;
 }

@@ -1,6 +1,10 @@
 import { PrismaClient } from "@prisma/client";
 
 // Clean up environment variables to resolve Vercel double quotes or spaces issues
+if (process.env.APP_DATABASE_URL) {
+  process.env.DATABASE_URL = process.env.APP_DATABASE_URL;
+}
+
 if (process.env.DATABASE_URL) {
   let url = process.env.DATABASE_URL.trim();
   if ((url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'"))) {

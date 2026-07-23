@@ -102,7 +102,7 @@ export default function SuperAdminDashboard() {
   /* Portal-matrix coverage per role (same storage the Matrix editor writes). */
   const matrixCoverage = useMemo(() => {
     const total = Object.keys(GLOBAL_FEATURES).length;
-    const stored = settingRows.find((s) => String(s.id) === "portal_matrix")?.value;
+    const stored = settingRows.find((s) => String(s.key || s.id) === "portal_matrix")?.value;
     let parsed: Record<string, Record<string, boolean>> = {};
     try {
       parsed = stored ? JSON.parse(String(stored)) : {};

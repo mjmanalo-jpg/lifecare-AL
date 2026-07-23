@@ -25,7 +25,6 @@ import {
   Timer,
   ClipboardList,
   BookOpen,
-  TrendingUp,
   PenTool,
   Target,
   Bus,
@@ -46,9 +45,16 @@ import {
   Shield,
   ClipboardCheck,
   Bell,
+  LayoutDashboard,
+  Gauge,
+  Mail,
+  ServerCog,
+  CircleDollarSign,
 } from "lucide-react";
 
 export type Role =
+  | "PLATFORM_ADMIN"
+  | "ORGANIZATION_ADMIN"
   | "SUPERADMIN"
   | "FACILITY_ADMIN"
   | "PHYSICIAN"
@@ -143,9 +149,25 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   taskboard: "Daily Care Documentation & Monitoring",
   dailyrounds: "Daily Rounds — Bedside Documentation",
   featurematrix: "LCMS Feature Matrix & System Overview",
+  workspaces: "Customer Workspaces",
+  plans: "Plans & Entitlements",
+  usage: "Usage & Capacity",
+  access: "Invitations & Access",
+  security: "Security & Audit",
+  health: "System Health",
+  platformsettings: "Platform Settings",
+  communities: "Communities",
+  people: "People & Access",
+  approvals: "Pending Approvals",
+  invitations: "Staff Invitations",
+  subscription: "Usage & Subscription",
+  branding: "Organization Branding",
+  audit: "Organization Audit",
 };
 
 export const PATH_TO_ROLE: Record<string, Role> = {
+  platform_admin: "PLATFORM_ADMIN",
+  organization_admin: "ORGANIZATION_ADMIN",
   nurse: "NURSE",
   superadmin: "SUPERADMIN",
   caregiver: "CAREGIVER",
@@ -158,6 +180,44 @@ export const PATH_TO_ROLE: Record<string, Role> = {
 };
 
 export const ROLES: Record<Role, RoleDetails> = {
+  PLATFORM_ADMIN: {
+    name: "Platform Admin",
+    badge: "Platform Admin",
+    desc: "Provision and govern SaaS customer organizations, communities, plans, and subscriptions.",
+    icon: ShieldCheck,
+    profileName: "Platform Administrator",
+    basePath: "/platform_admin",
+    footerText: "Platform Admin Portal",
+    sidebarLinks: [
+      { name: "Overview", icon: LayoutDashboard, route: "/platform_admin/dashboard" },
+      { name: "Customer Workspaces", icon: Building2, route: "/platform_admin/workspaces" },
+      { name: "Plans & Entitlements", icon: CircleDollarSign, route: "/platform_admin/plans" },
+      { name: "Usage & Capacity", icon: Gauge, route: "/platform_admin/usage" },
+      { name: "Invitations & Access", icon: Mail, route: "/platform_admin/access" },
+      { name: "Security & Audit", icon: Shield, route: "/platform_admin/security" },
+      { name: "System Health", icon: Activity, route: "/platform_admin/health" },
+      { name: "Platform Settings", icon: ServerCog, route: "/platform_admin/platformsettings" },
+    ],
+  },
+  ORGANIZATION_ADMIN: {
+    name: "Organization Admin",
+    badge: "Organization Admin",
+    desc: "Manage company communities, people, invitations, access, subscription usage, and tenant configuration.",
+    icon: Building2,
+    profileName: "Organization Administrator",
+    basePath: "/organization_admin",
+    footerText: "Organization Admin Portal",
+    sidebarLinks: [
+      { name: "Organization Overview", icon: LayoutDashboard, route: "/organization_admin/dashboard" },
+      { name: "Communities", icon: Building2, route: "/organization_admin/communities" },
+      { name: "People & Access", icon: Users, route: "/organization_admin/people" },
+      { name: "Pending Approvals", icon: ClipboardCheck, route: "/organization_admin/approvals" },
+      { name: "Staff Invitations", icon: Mail, route: "/organization_admin/invitations" },
+      { name: "Usage & Subscription", icon: Gauge, route: "/organization_admin/subscription" },
+      { name: "Organization Branding", icon: Palette, route: "/organization_admin/branding" },
+      { name: "Organization Audit", icon: Shield, route: "/organization_admin/audit" },
+    ],
+  },
   SUPERADMIN: {
     name: "Super Admin",
     badge: "Operations",
@@ -452,6 +512,22 @@ const LINK_GROUP_MAP: Record<string, SidebarGroup> = {
   "Reporting & Care Intelligence": "Overview",
   "Fleet Dashboard": "Overview",
   "Shift Dashboard": "Overview",
+  "Overview": "Overview",
+  "Customer Workspaces": "Operations",
+  "Plans & Entitlements": "Administration",
+  "Usage & Capacity": "Operations",
+  "Invitations & Access": "Administration",
+  "Security & Audit": "Administration",
+  "System Health": "Administration",
+  "Platform Settings": "Administration",
+  "Organization Overview": "Overview",
+  "Communities": "Operations",
+  "People & Access": "Operations",
+  "Pending Approvals": "Administration",
+  "Staff Invitations": "Administration",
+  "Usage & Subscription": "Administration",
+  "Organization Branding": "Administration",
+  "Organization Audit": "Administration",
   // Resident Care (Modules 1–4)
   "Resident Profile & Care Record": "Resident Care",
   "Daily Rounds (10-Area Bedside)": "Resident Care",

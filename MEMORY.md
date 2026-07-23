@@ -27,7 +27,7 @@
 - **Dietitian names:** Queried from `Staff` table with position containing "DIETITIAN"/"NUTRITION".
 - **No hardcoded data rule:** All facility names, addresses, phone numbers, emails, room numbers, person names, scores, GPS coordinates must come from DB or env vars. Never hardcode.
 - **Application Control policy** blocks `uvicorn.exe` — must use `.\.venv\Scripts\python.exe -m uvicorn`.
-- **Supabase pooler password** contains `@`: `0933016007@Paul`
+- **Supabase pooler credentials:** stored only in local/deployment secret managers; URL-encode reserved characters.
 
 ## Verified Working (as of 2026-07-13)
 - TypeScript build: **0 errors**

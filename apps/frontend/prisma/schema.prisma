@@ -29,6 +29,54 @@ enum Role {
   DRIVER
 }
 
+enum PlatformRole {
+  PLATFORM_ADMIN
+  PLATFORM_SUPPORT
+  PLATFORM_AUDITOR
+}
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  BILLING_ADMIN
+  VIEWER
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELED
+}
+
+enum UsageMetric {
+  ACTIVE_COMMUNITIES
+  ACTIVE_RESIDENTS
+  ACTIVE_STAFF
+  STORAGE_BYTES
+}
+
 enum CareLevel {
   INDEPENDENT
   ASSISTED
@@ -451,7 +499,9 @@ enum ReportFormat {
 
 model User {
   id           String   @id @default(uuid())
+  authUserId   String?  @unique
   role         Role     @default(FAMILY)
+  platformRole PlatformRole?
   email        String   @unique
   passwordHash String?
   pinHash      String?  // PIN-based login (4-6 digit)
@@ -474,11 +524,16 @@ model User {
   sponsoredResidents Resident[] @relation("Sponsor")
   // A RESIDENT user is linked 1-1 to their own resident record.
   residentProfile    Resident?  @relation("ResidentSelf")
+  organizationMemberships OrganizationMembership[]
+  communityMemberships    CommunityMembership[]
+  residentAccesses         ResidentAccess[]
+  invitationsCreated       Invitation[] @relation("InvitationCreator")
 
   @@index([role])
   @@index([email])
   @@index([isActive])
   @@index([createdAt])
+  @@index([platformRole])
 }
 
 model Resident {
@@ -489,7 +544,7 @@ model Resident {
   gender              String?
   phone               String?
   email               String?
-  roomNumber          String         @unique
+  roomNumber          String
   careLevel           CareLevel
   admissionDate       DateTime
   emergencyContact    String?
@@ -508,6 +563,7 @@ model Resident {
   communityId         String?
   community           Community?     @relation(fields: [communityId], references: [id], onDelete: SetNull)
   organizationId      String?
+  organization        Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   buildingId          String?
   building            Building?      @relation(fields: [buildingId], references: [id], onDelete: SetNull)
   unitId              String?
@@ -590,13 +646,17 @@ model Resident {
   careTimeline        CareTimelineEntry[]
   medicationAdministrations MedicationAdministration[]
   dailyRounds            DailyRound[]
+  authorizedUsers        ResidentAccess[]
+  invitations           Invitation[]
 
   @@index([careLevel])
   @@index([roomNumber])
+  @@unique([communityId, roomNumber])
   @@index([admissionDate])
   @@index([sponsorId])
   @@index([createdAt])
   @@index([communityId])
+  @@index([organizationId])
   @@index([currentAcuityLevel])
   @@index([careDependencyLevel])
 }
@@ -618,6 +678,8 @@ model Staff {
   // V2.1 — Multi-tenant
   communityId   String?
   community     Community? @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -634,11 +696,14 @@ model Staff {
   @@index([position])
   @@index([isActive])
   @@index([communityId])
+  @@index([organizationId])
 }
 
 // Health monitoring
 model VitalsLog {
   id         String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId String
   resident   Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
   type       VitalType
@@ -654,10 +719,15 @@ model VitalsLog {
   @@index([recordedAt])
   @@index([type])
   @@index([residentId, type, recordedAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model Incident {
   id                  String             @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId          String
   resident            Resident           @relation(fields: [residentId], references: [id], onDelete: Cascade)
   incidentType        IncidentType
@@ -681,10 +751,15 @@ model Incident {
   @@index([severity])
   @@index([reportedById])
   @@index([incidentDate])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model Medication {
   id                String            @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId        String
   resident          Resident          @relation(fields: [residentId], references: [id], onDelete: Cascade)
   name              String
@@ -707,11 +782,16 @@ model Medication {
   @@index([residentId])
   @@index([status])
   @@index([startDate])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Resident self-care goals (daily checklist + custom goals)
 model ResidentGoal {
   id            String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId    String
   resident      Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
   title         String
@@ -725,11 +805,16 @@ model ResidentGoal {
 
   @@index([residentId, goalDate])
   @@index([isCompleted])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Medication compliance log (tracks when resident confirms taking medication)
 model MedicationLog {
   id            String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId    String
   resident      Resident   @relation(fields: [residentId], references: [id], onDelete: Cascade)
   medicationId  String
@@ -749,11 +834,15 @@ model MedicationLog {
   @@index([residentId, takenAt])
   @@index([medicationId])
   @@index([marStatus])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Task management
 model Task {
   id            String       @id @default(uuid())
+  organizationId String?
   residentId    String
   resident      Resident     @relation(fields: [residentId], references: [id], onDelete: Cascade)
   title         String
@@ -787,11 +876,15 @@ model Task {
   @@index([assignedToId])
   @@index([dueDate])
   @@index([communityId])
+
+  @@index([organizationId])
 }
 
 // Communication
 model Message {
   id          String      @id @default(uuid())
+  organizationId String?
+  communityId    String?
   senderId    String
   sender      User        @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
   recipientId String
@@ -808,11 +901,16 @@ model Message {
   @@index([recipientId])
   @@index([isRead])
   @@index([createdAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Time and attendance
 model TimeTracking {
   id             String           @id @default(uuid())
+  organizationId String?
+  communityId    String?
   staffId        String
   staff          Staff            @relation(fields: [staffId], references: [id], onDelete: Cascade)
   shiftType      ShiftType
@@ -828,11 +926,16 @@ model TimeTracking {
   @@index([startTime])
   @@index([shiftType])
   @@index([status])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Medical notes
 model MedicalNote {
   id        String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId String
   resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
   title     String?
@@ -854,11 +957,16 @@ model MedicalNote {
   @@index([residentId])
   @@index([noteType])
   @@index([createdAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Emergency system
 model CallBell {
   id           String         @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId   String
   resident     Resident       @relation(fields: [residentId], references: [id], onDelete: Cascade)
   status       CallBellStatus @default(PENDING)
@@ -872,11 +980,16 @@ model CallBell {
   @@index([residentId])
   @@index([status])
   @@index([createdAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Shift reports
 model ShiftReport {
   id                    String    @id @default(uuid())
+  organizationId String?
+  communityId    String?
   staffId               String
   staff                 Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
   userId                String
@@ -898,11 +1011,16 @@ model ShiftReport {
   @@index([userId])
   @@index([date])
   @@index([shiftType])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Notifications
 model Notification {
   id                String           @id @default(uuid())
+  organizationId String?
+  communityId    String?
   userId            String
   user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   type              NotificationType
@@ -919,11 +1037,16 @@ model Notification {
   @@index([type])
   @@index([isRead])
   @@index([createdAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Visits
 model Visit {
   id           String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId   String
   resident     Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
   visitorName  String
@@ -938,11 +1061,16 @@ model Visit {
 
   @@index([residentId])
   @@index([checkInTime])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Billing
 model Invoice {
   id                 String        @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId         String
   resident           Resident      @relation(fields: [residentId], references: [id], onDelete: Cascade)
   invoiceNumber      String        @unique
@@ -965,11 +1093,16 @@ model Invoice {
   @@index([status])
   @@index([dueDate])
   @@index([invoiceNumber])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Resident care notes
 model ResidentNote {
   id        String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId String
   resident  Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
   title     String?
@@ -984,6 +1117,9 @@ model ResidentNote {
   @@index([category])
   @@index([isPinned])
   @@index([createdAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -995,6 +1131,8 @@ model ResidentNote {
 // plain text is stored here for retrieval-augmented chat. Realtime-enabled.
 model KnowledgeDoc {
   id        String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   name      String
   type      String   @default("unknown")
   size      Int      @default(0)
@@ -1004,14 +1142,26 @@ model KnowledgeDoc {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Generic key/value application settings (e.g. the assistant's default voice).
 // `id` holds the setting key, e.g. "assistantVoice". Realtime-enabled.
 model AppSetting {
-  id        String   @id
-  value     String   @db.Text
-  updatedAt DateTime @updatedAt
+  id             String        @id
+  key            String        @default("")
+  value          String        @db.Text
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  communityId    String?
+  community      Community?    @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([organizationId, communityId, key])
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -1034,7 +1184,8 @@ enum RoomType {
 
 model Room {
   id                String     @id @default(uuid())
-  roomNumber        String     @unique
+  organizationId String?
+  roomNumber        String
   floor             Int?
   wing              String?
   roomType          RoomType   @default(SEMI_PRIVATE)
@@ -1064,10 +1215,13 @@ model Room {
   @@index([housekeepingStatus])
   @@index([wing])
   @@index([roomType])
+  @@unique([communityId, roomNumber])
   @@index([communityId])
   @@index([buildingId])
   @@index([floorId])
   @@index([unitId])
+
+  @@index([organizationId])
 }
 
 // ============================================================================
@@ -1075,22 +1229,36 @@ model Room {
 // ============================================================================
 
 model Organization {
-  id        String   @id @default(uuid())
-  name      String
-  legalName String?
-  taxId     String?
-  address   String?
-  phone     String?
-  email     String?
-  website   String?
-  logoUrl   String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String             @id @default(uuid())
+  slug           String?            @unique
+  name           String
+  legalName      String?
+  taxId          String?
+  address        String?
+  phone          String?
+  email          String?
+  website        String?
+  logoUrl        String?
+  primaryColor   String?
+  secondaryColor String?
+  emailFromName  String?
+  branding       Json?
+  status         OrganizationStatus @default(ACTIVE)
+  isActive       Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
-  communities Community[]
+  communities   Community[]
+  residents     Resident[]
+  staff         Staff[]
+  memberships   OrganizationMembership[]
+  invitations   Invitation[]
+  subscription  Subscription?
+  usageSnapshots UsageSnapshot[]
+  settings      AppSetting[]
 
   @@index([isActive])
+  @@index([status])
 }
 
 model Community {
@@ -1098,6 +1266,7 @@ model Community {
   organizationId   String
   organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name             String
+  code             String?
   address          String?
   city             String?
   state            String?
@@ -1113,6 +1282,10 @@ model Community {
   bedsTotal        Int?
   bedsAvailable    Int?
   isActive         Boolean       @default(true)
+  logoUrl          String?
+  primaryColor     String?
+  secondaryColor   String?
+  configuration    Json?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
@@ -1135,14 +1308,159 @@ model Community {
   rooms                Room[]
   staffCompetencies    StaffCompetency[]
   residentQualityScores ResidentQualityScore[]
+  memberships           CommunityMembership[]
+  invitations           Invitation[]
+  usageSnapshots        UsageSnapshot[]
+  settings              AppSetting[]
 
   @@index([organizationId])
+  @@unique([organizationId, code])
   @@index([communityType])
   @@index([isActive])
 }
 
+// ============================================================================
+// SAAS IDENTITY, PROVISIONING & ENTITLEMENTS
+// ============================================================================
+
+model OrganizationMembership {
+  id             String           @id @default(uuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           OrganizationRole
+  status         MembershipStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([userId, organizationId])
+  @@index([organizationId, status])
+}
+
+model CommunityMembership {
+  id          String           @id @default(uuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  communityId String
+  community   Community        @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  role        Role
+  status      MembershipStatus @default(ACTIVE)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([userId, communityId])
+  @@index([communityId, status])
+}
+
+model ResidentAccess {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  residentId String
+  resident   Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  accessRole Role
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, residentId])
+  @@index([residentId, isActive])
+}
+
+model Invitation {
+  id               String           @id @default(uuid())
+  tokenHash        String           @unique
+  email            String
+  organizationId   String
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  communityId      String?
+  community        Community?       @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  organizationRole OrganizationRole?
+  communityRole    Role?
+  residentId       String?
+  resident         Resident?        @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  status           InvitationStatus @default(PENDING)
+  expiresAt        DateTime
+  acceptedAt       DateTime?
+  createdById      String?
+  createdBy        User?            @relation("InvitationCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([organizationId, status])
+  @@index([email, status])
+  @@index([residentId])
+}
+
+model Plan {
+  id                 String   @id @default(uuid())
+  key                String   @unique
+  name               String
+  description        String?
+  maxCommunities     Int?
+  maxActiveResidents Int?
+  maxStaffSeats      Int?
+  maxStorageBytes    BigInt?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  entitlements  PlanEntitlement[]
+  subscriptions Subscription[]
+
+  @@index([isActive])
+}
+
+model PlanEntitlement {
+  id         String  @id @default(uuid())
+  planId     String
+  plan       Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  featureKey String
+  enabled    Boolean @default(true)
+  limit      Int?
+  config     Json?
+
+  @@unique([planId, featureKey])
+}
+
+model Subscription {
+  id               String             @id @default(uuid())
+  organizationId   String             @unique
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  planId           String
+  plan             Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+  status           SubscriptionStatus @default(TRIALING)
+  startsAt         DateTime           @default(now())
+  trialEndsAt      DateTime?
+  currentPeriodEnd DateTime?
+  suspendedAt      DateTime?
+  canceledAt       DateTime?
+  overrides        Json?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([planId, status])
+}
+
+model UsageSnapshot {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  communityId    String?
+  community      Community?   @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  metric         UsageMetric
+  value          BigInt
+  periodStart    DateTime
+  periodEnd      DateTime
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, communityId, metric, periodStart])
+  @@index([organizationId, metric, periodEnd])
+}
 model Building {
   id          String    @id @default(uuid())
+  organizationId String?
   communityId String
   community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
   name        String
@@ -1158,10 +1476,13 @@ model Building {
   residents Resident[]
 
   @@index([communityId])
+
+  @@index([organizationId])
 }
 
 model Floor {
   id          String    @id @default(uuid())
+  organizationId String?
   buildingId  String
   building    Building  @relation(fields: [buildingId], references: [id], onDelete: Cascade)
   communityId String
@@ -1177,10 +1498,13 @@ model Floor {
 
   @@index([buildingId])
   @@index([communityId])
+
+  @@index([organizationId])
 }
 
 model Unit {
   id          String           @id @default(uuid())
+  organizationId String?
   floorId     String
   floor       Floor            @relation(fields: [floorId], references: [id], onDelete: Cascade)
   communityId String
@@ -1201,6 +1525,8 @@ model Unit {
   @@index([floorId])
   @@index([communityId])
   @@index([unitType])
+
+  @@index([organizationId])
 }
 
 // ============================================================================
@@ -1209,6 +1535,7 @@ model Unit {
 
 model Assessment {
   id              String           @id @default(uuid())
+  organizationId String?
   residentId      String
   resident        Resident         @relation(fields: [residentId], references: [id], onDelete: Cascade)
   communityId     String
@@ -1252,10 +1579,13 @@ model Assessment {
   @@index([assessmentType])
   @@index([completedAt])
   @@index([residentId, completedAt])
+
+  @@index([organizationId])
 }
 
 model AcuityScore {
   id             String      @id @default(uuid())
+  organizationId String?
   assessmentId   String      @unique
   assessment     Assessment  @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
   residentId     String
@@ -1293,6 +1623,8 @@ model AcuityScore {
   @@index([careLevel])
   @@index([isCurrent])
   @@index([validUntil])
+
+  @@index([organizationId])
 }
 
 // ============================================================================
@@ -1301,6 +1633,7 @@ model AcuityScore {
 
 model ServiceCatalog {
   id          String          @id @default(uuid())
+  organizationId String?
   communityId String
   community   Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
   name        String
@@ -1328,10 +1661,13 @@ model ServiceCatalog {
   @@index([communityId])
   @@index([category])
   @@index([isActive])
+
+  @@index([organizationId])
 }
 
 model CarePackage {
   id              String    @id @default(uuid())
+  organizationId String?
   communityId     String
   community       Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
   name            String
@@ -1350,10 +1686,14 @@ model CarePackage {
   @@index([communityId])
   @@index([careLevel])
   @@index([isActive])
+
+  @@index([organizationId])
 }
 
 model CarePackageItem {
   id               String        @id @default(uuid())
+  organizationId String?
+  communityId    String?
   carePackageId    String
   carePackage      CarePackage   @relation(fields: [carePackageId], references: [id], onDelete: Cascade)
   serviceCatalogId String
@@ -1371,6 +1711,9 @@ model CarePackageItem {
   @@index([carePackageId])
   @@index([serviceCatalogId])
   @@unique([carePackageId, serviceCatalogId])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -1379,6 +1722,7 @@ model CarePackageItem {
 
 model CommunitySop {
   id                String      @id @default(uuid())
+  organizationId String?
   communityId       String
   community         Community   @relation(fields: [communityId], references: [id], onDelete: Cascade)
   title             String
@@ -1401,10 +1745,13 @@ model CommunitySop {
   @@index([communityId])
   @@index([category])
   @@index([status])
+
+  @@index([organizationId])
 }
 
 model Competency {
   id             String    @id @default(uuid())
+  organizationId String?
   communityId    String
   community      Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
   name           String
@@ -1419,10 +1766,13 @@ model Competency {
 
   @@index([communityId])
   @@index([category])
+
+  @@index([organizationId])
 }
 
 model StaffCompetency {
   id             String    @id @default(uuid())
+  organizationId String?
   staffId        String
   staff          Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
   competencyId   String
@@ -1441,6 +1791,9 @@ model StaffCompetency {
   @@index([competencyId])
   @@index([expiryDate])
   @@unique([staffId, competencyId])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -1449,6 +1802,7 @@ model StaffCompetency {
 
 model ResidentQualityScore {
   id              String    @id @default(uuid())
+  organizationId String?
   residentId      String
   resident        Resident  @relation(fields: [residentId], references: [id], onDelete: Cascade)
   communityId     String
@@ -1480,10 +1834,13 @@ model ResidentQualityScore {
   @@index([residentId])
   @@index([communityId])
   @@index([periodType])
+
+  @@index([organizationId])
 }
 
 model CommunityQualityDashboard {
   id          String    @id @default(uuid())
+  organizationId String?
   communityId String
   community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
   snapshotDate DateTime
@@ -1510,10 +1867,13 @@ model CommunityQualityDashboard {
 
   @@index([communityId])
   @@index([snapshotDate])
+
+  @@index([organizationId])
 }
 
 model KpiRecord {
   id          String    @id @default(uuid())
+  organizationId String?
   communityId String
   community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
   category    KpiCategory
@@ -1534,6 +1894,8 @@ model KpiRecord {
   @@index([category])
   @@index([period])
   @@index([communityId, category, periodStart])
+
+  @@index([organizationId])
 }
 
 // ============================================================================
@@ -1541,8 +1903,9 @@ model KpiRecord {
 // ============================================================================
 
 model AuditLog {
-  id          String   @id @default(uuid())
-  communityId String?
+  id             String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   actorId     String?
   actorName   String
   actorRole   String
@@ -1557,6 +1920,7 @@ model AuditLog {
   reason      String?
   createdAt   DateTime @default(now())
 
+  @@index([organizationId])
   @@index([communityId])
   @@index([actorId])
   @@index([entityType])
@@ -1567,6 +1931,7 @@ model AuditLog {
 
 model Observation {
   id              String          @id @default(uuid())
+  organizationId String?
   residentId      String
   resident        Resident        @relation(fields: [residentId], references: [id], onDelete: Cascade)
   communityId     String
@@ -1591,6 +1956,8 @@ model Observation {
   @@index([communityId])
   @@index([observationType])
   @@index([residentId, observationType, observedAt])
+
+  @@index([organizationId])
 }
 
 // ============================================================================
@@ -1599,6 +1966,7 @@ model Observation {
 
 model StaffingPlan {
   id               String            @id @default(uuid())
+  organizationId String?
   communityId      String
   community        Community         @relation(fields: [communityId], references: [id], onDelete: Cascade)
   unitId           String?
@@ -1626,6 +1994,8 @@ model StaffingPlan {
   @@index([unitId])
   @@index([planDate])
   @@index([communityId, planDate, shiftType])
+
+  @@index([organizationId])
 }
 
 // ============================================================================
@@ -1634,6 +2004,8 @@ model StaffingPlan {
 
 model Vaccination {
   id            String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId    String
   resident      Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
   vaccineName   String
@@ -1653,6 +2025,9 @@ model Vaccination {
   @@index([residentId])
   @@index([vaccineType])
   @@index([dateGiven])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -1661,6 +2036,8 @@ model Vaccination {
 
 model ResidentDocument {
   id            String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId    String
   resident      Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
   documentType  String   // CONSENT_FORM, INSURANCE, IDENTIFICATION, PHYSICIAN_ORDER, ADVANCE_DIRECTIVE, OTHER
@@ -1678,6 +2055,9 @@ model ResidentDocument {
   @@index([residentId])
   @@index([documentType])
   @@index([isConfidential])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -1686,6 +2066,8 @@ model ResidentDocument {
 
 model EliminationLog {
   id              String           @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId      String
   resident        Resident         @relation(fields: [residentId], references: [id], onDelete: Cascade)
   type            EliminationType
@@ -1705,6 +2087,9 @@ model EliminationLog {
   @@index([type])
   @@index([time])
   @@index([residentId, type, time])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -1713,6 +2098,8 @@ model EliminationLog {
 
 model PainAssessment {
   id            String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId    String
   resident      Resident   @relation(fields: [residentId], references: [id], onDelete: Cascade)
   painScale     PainScale
@@ -1734,6 +2121,9 @@ model PainAssessment {
   @@index([painScale])
   @@index([assessedAt])
   @@index([residentId, assessedAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -1742,6 +2132,8 @@ model PainAssessment {
 
 model WoundCare {
   id            String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId    String
   resident      Resident   @relation(fields: [residentId], references: [id], onDelete: Cascade)
   woundType     String     // PRESSURE_ULCER, SURGICAL, SKIN_TEAR, IV_SITE, OTHER
@@ -1771,6 +2163,9 @@ model WoundCare {
   @@index([woundType])
   @@index([stage])
   @@index([assessedAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -1779,6 +2174,8 @@ model WoundCare {
 
 model SleepLog {
   id            String       @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId    String
   resident      Resident     @relation(fields: [residentId], references: [id], onDelete: Cascade)
   date          DateTime
@@ -1798,6 +2195,9 @@ model SleepLog {
   @@index([date])
   @@index([quality])
   @@index([residentId, date])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -1806,6 +2206,8 @@ model SleepLog {
 
 model MobilityLog {
   id            String       @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId    String
   resident      Resident     @relation(fields: [residentId], references: [id], onDelete: Cascade)
   type          MobilityType
@@ -1825,6 +2227,9 @@ model MobilityLog {
   @@index([type])
   @@index([startTime])
   @@index([residentId, type, startTime])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -1833,6 +2238,8 @@ model MobilityLog {
 
 model CarePlan {
   id              String             @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId      String
   resident        Resident           @relation(fields: [residentId], references: [id], onDelete: Cascade)
   title           String
@@ -1863,10 +2270,15 @@ model CarePlan {
   @@index([startDate])
   @@index([nextReviewDate])
   @@index([residentId, status])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model CarePlanItem {
   id            String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   carePlanId    String
   carePlan      CarePlan   @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
   category      String     // GOAL, INTERVENTION, RESPONSIBILITY, REVIEW_NOTE
@@ -1882,10 +2294,15 @@ model CarePlanItem {
   @@index([carePlanId])
   @@index([category])
   @@index([status])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model CarePlanReview {
   id            String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   carePlanId    String
   carePlan      CarePlan   @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
   reviewDate    DateTime   @default(now())
@@ -1898,6 +2315,9 @@ model CarePlanReview {
 
   @@index([carePlanId])
   @@index([reviewDate])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -1906,6 +2326,8 @@ model CarePlanReview {
 
 model HospitalReferral {
   id              String         @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId      String
   resident        Resident       @relation(fields: [residentId], references: [id], onDelete: Cascade)
   facilityName    String
@@ -1934,6 +2356,9 @@ model HospitalReferral {
   @@index([status])
   @@index([urgency])
   @@index([createdAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -1942,6 +2367,8 @@ model HospitalReferral {
 
 model FollowUp {
   id              String          @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId      String
   resident        Resident        @relation(fields: [residentId], references: [id], onDelete: Cascade)
   title           String
@@ -1966,6 +2393,9 @@ model FollowUp {
   @@index([dueDate])
   @@index([type])
   @@index([residentId, status])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -1974,6 +2404,8 @@ model FollowUp {
 
 model CareTimelineEntry {
   id            String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId    String
   resident      Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
   entryType     String   // ADMISSION, ASSESSMENT, INCIDENT, MEDICATION, CARE_UPDATE, DISCHARGE, TRANSFER, DEATH, NOTE
@@ -1993,6 +2425,9 @@ model CareTimelineEntry {
   @@index([entryDate])
   @@index([residentId, entryType, entryDate])
   @@index([isImportant])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -2001,6 +2436,7 @@ model CareTimelineEntry {
 
 model GeneratedReport {
   id            String     @id @default(uuid())
+  organizationId String?
   reportType    ReportType
   title         String
   description   String?
@@ -2020,6 +2456,8 @@ model GeneratedReport {
   @@index([reportType])
   @@index([communityId])
   @@index([createdAt])
+
+  @@index([organizationId])
 }
 
 // ============================================================================
@@ -2028,6 +2466,8 @@ model GeneratedReport {
 
 model InventoryAlert {
   id            String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   inventoryItemId String
   inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
   itemName      String
@@ -2044,6 +2484,9 @@ model InventoryAlert {
   @@index([alertType])
   @@index([acknowledged])
   @@index([createdAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -2052,6 +2495,8 @@ model InventoryAlert {
 
 model MedicationAdministration {
   id            String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   medicationId  String
   medication    Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
   residentId    String
@@ -2075,6 +2520,9 @@ model MedicationAdministration {
   @@index([status])
   @@index([scheduledTime])
   @@index([residentId, scheduledTime])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -2083,6 +2531,8 @@ model MedicationAdministration {
 
 model MedicationChangeLog {
   id            String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   medicationId  String
   medication    Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
   changeType    String     // STARTED, DOSE_CHANGED, FREQUENCY_CHANGED, ROUTE_CHANGED, DISCONTINUED, RESTARTED
@@ -2096,6 +2546,9 @@ model MedicationChangeLog {
   @@index([medicationId])
   @@index([changeType])
   @@index([changedAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -2117,6 +2570,8 @@ enum InventoryCategory {
 
 model InventoryItem {
   id           String             @id @default(uuid())
+  organizationId String?
+  communityId    String?
   itemName     String
   category     InventoryCategory  @default(OTHER)
   quantity     Int                @default(0)
@@ -2138,6 +2593,9 @@ model InventoryItem {
   @@index([itemName])
   @@index([expiryDate])
   @@index([batchNumber])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -2149,6 +2607,8 @@ model InventoryItem {
 // On completion the captured data is used to create the real Resident record.
 model Admission {
   id                    String          @id @default(uuid())
+  organizationId String?
+  communityId    String?
 
   // Step 1 — Registration
   firstName             String
@@ -2209,6 +2669,9 @@ model Admission {
   @@index([status])
   @@index([currentStep])
   @@index([createdAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -2217,6 +2680,8 @@ model Admission {
 
 model ServiceCharge {
   id           String    @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId   String
   resident     Resident  @relation(fields: [residentId], references: [id], onDelete: Cascade)
   description  String
@@ -2231,10 +2696,15 @@ model ServiceCharge {
   @@index([residentId])
   @@index([invoiceId])
   @@index([serviceDate])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model InsuranceValidation {
   id               String    @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId       String
   resident         Resident  @relation(fields: [residentId], references: [id], onDelete: Cascade)
   provider         String
@@ -2250,10 +2720,15 @@ model InsuranceValidation {
 
   @@index([residentId])
   @@index([status])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model Payment {
   id             String    @id @default(uuid())
+  organizationId String?
+  communityId    String?
   invoiceId      String
   invoice        Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   amount         Float
@@ -2266,6 +2741,9 @@ model Payment {
 
   @@index([invoiceId])
   @@index([paymentDate])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -2275,6 +2753,8 @@ model Payment {
 // Blog posts managed by the Super Admin and displayed on the public landing page.
 model BlogPost {
   id          String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   title       String
   description String   @db.Text
   content     String?  @db.Text
@@ -2287,6 +2767,9 @@ model BlogPost {
 
   @@index([publishedAt])
   @@index([published])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Editable key/value text content for the public landing page (hero title,
@@ -2294,8 +2777,13 @@ model BlogPost {
 // key, e.g. "hero_title". Realtime-enabled.
 model SiteContent {
   id        String   @id           // e.g. "hero_title", "hero_subtitle"
+  organizationId String?
+  communityId    String?
   value     String   @db.Text
   updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -2372,6 +2860,8 @@ enum MaintenanceStatus {
 
 model Vehicle {
   id                    String        @id @default(uuid())
+  organizationId String?
+  communityId    String?
   name                  String
   licensePlate          String        @unique
   type                  VehicleType   @default(SHUTTLE)
@@ -2405,10 +2895,15 @@ model Vehicle {
   @@index([licensePlate])
   @@index([insuranceExpiry])
   @@index([registrationExpiry])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model Driver {
   id                  String    @id @default(uuid())
+  organizationId String?
+  communityId    String?
   name                String
   phone               String?
   email               String?
@@ -2432,10 +2927,15 @@ model Driver {
 
   @@index([isActive])
   @@index([licenseExpiry])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model TransportRequest {
   id              String                 @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId      String
   resident        Resident               @relation(fields: [residentId], references: [id], onDelete: Cascade)
   type            TransportRequestType   @default(MEDICAL_APPOINTMENT)
@@ -2467,10 +2967,15 @@ model TransportRequest {
   @@index([status])
   @@index([priority])
   @@index([requestedDate])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model Trip {
   id                  String            @id @default(uuid())
+  organizationId String?
+  communityId    String?
   requestId           String?           @unique
   request             TransportRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
   residentId          String
@@ -2513,10 +3018,15 @@ model Trip {
   @@index([driverId])
   @@index([status])
   @@index([scheduledAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model VehicleMaintenance {
   id            String            @id @default(uuid())
+  organizationId String?
+  communityId    String?
   vehicleId     String
   vehicle       Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   type          MaintenanceType   @default(PREVENTIVE)
@@ -2537,10 +3047,15 @@ model VehicleMaintenance {
   @@index([status])
   @@index([type])
   @@index([scheduledDate])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model FuelLog {
   id        String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   vehicleId String
   vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   driverId  String?
@@ -2556,12 +3071,17 @@ model FuelLog {
 
   @@index([vehicleId])
   @@index([logDate])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Custom navigation pages created by the Super Admin. Published pages appear
 // in the landing-page navbar and are routed to /page/:slug.
 model CustomPage {
   id           String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   title        String
   slug         String   @unique
   content      String   @db.Text
@@ -2578,11 +3098,16 @@ model CustomPage {
   @@index([published])
   @@index([pagePurpose])
   @@index([parcelType])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Daily dining menu (breakfast/lunch/dinner)
 model DailyMenu {
   id            String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   mealType      String            // BREAKFAST, LUNCH, DINNER
   name          String
   description   String?  @db.Text
@@ -2594,10 +3119,15 @@ model DailyMenu {
 
   @@index([menuDate])
   @@index([mealType])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model DietitianConsult {
   id              String           @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId      String
   resident        Resident         @relation(fields: [residentId], references: [id], onDelete: Cascade)
   dietitianName   String
@@ -2610,10 +3140,15 @@ model DietitianConsult {
 
   @@index([residentId])
   @@index([status])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model FoodComplianceLog {
   id            String             @id @default(uuid())
+  organizationId String?
+  communityId    String?
   title         String
   category      String             // TEMPERATURE | SANITATION | ALLERGEN | SOURCING
   status        String             // COMPLIANT | NON_COMPLIANT | WARNING
@@ -2628,6 +3163,9 @@ model FoodComplianceLog {
   @@index([category])
   @@index([status])
   @@index([auditDate])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -2713,6 +3251,8 @@ enum ConciergeBookingStatus {
 
 model ServiceRequest {
   id            String                 @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId    String
   resident      Resident               @relation(fields: [residentId], references: [id], onDelete: Cascade)
   roomNumber    String?
@@ -2743,12 +3283,17 @@ model ServiceRequest {
   @@index([priority])
   @@index([assignedTeam])
   @@index([createdAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Preventive facility maintenance calendar. Completing a PREVENTIVE entry
 // auto-schedules the next occurrence from `frequency`.
 model FacilityMaintenance {
   id            String               @id @default(uuid())
+  organizationId String?
+  communityId    String?
   title         String
   system        FacilitySystem       @default(OTHER)
   type          MaintenanceType      @default(PREVENTIVE)
@@ -2770,10 +3315,15 @@ model FacilityMaintenance {
   @@index([status])
   @@index([scheduledDate])
   @@index([nextDueDate])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model ConciergeBooking {
   id          String                 @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId  String
   resident    Resident               @relation(fields: [residentId], references: [id], onDelete: Cascade)
   category    ConciergeCategory      @default(CONCIERGE_DESK)
@@ -2794,6 +3344,9 @@ model ConciergeBooking {
   @@index([status])
   @@index([category])
   @@index([scheduledAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -2872,6 +3425,8 @@ enum AnnouncementAudience {
 // charges (guest dining / salon), and check-out receipts.
 model FrontDeskVisit {
   id             String             @id @default(uuid())
+  organizationId String?
+  communityId    String?
   visitType      FrontDeskVisitType @default(GUEST_VISIT)
   status         FrontDeskStatus    @default(ARRIVED)
   visitorName    String
@@ -2898,12 +3453,17 @@ model FrontDeskVisit {
   @@index([visitType])
   @@index([residentId])
   @@index([arrivalTime])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Apartment/Room turnover lifecycle log — one record per changeover cycle;
 // powers the Unit Turnover Time KPI (readyAt − startedAt).
 model RoomTurnover {
   id               String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   roomNumber       String
   stage            UnitStatus @default(MOVE_OUT)
   status           String     @default("IN_PROGRESS") // IN_PROGRESS | COMPLETED | CANCELLED
@@ -2922,12 +3482,17 @@ model RoomTurnover {
   @@index([stage])
   @@index([status])
   @@index([startedAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Preference profiles — resident-set (or staff-captured) comfort/dining/
 // activity/communication preferences that personalize hospitality delivery.
 model ResidentPreference {
   id         String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId String
   resident   Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
   category   String   // Dining · Room Comfort · Activities · Wake-Up · Communication
@@ -2939,11 +3504,16 @@ model ResidentPreference {
 
   @@index([residentId])
   @@index([category])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Community calendar events.
 model CommunityEvent {
   id          String        @id @default(uuid())
+  organizationId String?
+  communityId    String?
   title       String
   category    EventCategory @default(SOCIAL)
   description String?       @db.Text
@@ -2962,12 +3532,17 @@ model CommunityEvent {
   @@index([startTime])
   @@index([category])
   @@index([published])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Event RSVP / attendance — resident-scoped; post-event rating feeds the
 // Resident Satisfaction KPI.
 model EventAttendance {
   id          String         @id @default(uuid())
+  organizationId String?
+  communityId    String?
   eventId     String
   event       CommunityEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
   residentId  String
@@ -2983,11 +3558,16 @@ model EventAttendance {
   @@index([eventId])
   @@index([residentId])
   @@index([status])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Dining reservations.
 model DiningReservation {
   id              String                  @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId      String
   resident        Resident                @relation(fields: [residentId], references: [id], onDelete: Cascade)
   mealType        String                  // BREAKFAST · LUNCH · DINNER
@@ -3003,12 +3583,17 @@ model DiningReservation {
   @@index([residentId])
   @@index([status])
   @@index([reservedAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // Automated announcements broadcast to a target audience; on create with
 // autoNotify, fans out Notification rows to the audience.
 model Announcement {
   id          String               @id @default(uuid())
+  organizationId String?
+  communityId    String?
   title       String
   body        String               @db.Text
   audience    AnnouncementAudience @default(ALL)
@@ -3025,10 +3610,15 @@ model Announcement {
   @@index([published])
   @@index([pinned])
   @@index([publishedAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model CameraMonitoringLog {
   id              String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId      String?
   resident        Resident? @relation(fields: [residentId], references: [id], onDelete: SetNull)
   residentName    String?
@@ -3058,6 +3648,9 @@ model CameraMonitoringLog {
   @@index([logType])
   @@index([createdAt])
   @@index([alert])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================================
@@ -3087,6 +3680,8 @@ enum EscalationStatus {
 
 model Escalation {
   id             String             @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId     String
   resident       Resident           @relation(fields: [residentId], references: [id], onDelete: Cascade)
   // SBAR
@@ -3117,6 +3712,9 @@ model Escalation {
   @@index([priority])
   @@index([assignedToRole])
   @@index([createdAt])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 // ============================================================
@@ -3203,6 +3801,8 @@ enum AssistanceLevel {
 
 model DailyRound {
   id              String            @id @default(uuid())
+  organizationId String?
+  communityId    String?
   residentId      String
   resident        Resident          @relation(fields: [residentId], references: [id], onDelete: Cascade)
   caregiverId     String?
@@ -3232,10 +3832,15 @@ model DailyRound {
   @@index([shift])
   @@index([status])
   @@index([residentId, roundDate, shift])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model BowelRecord {
   id              String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   dailyRoundId    String
   dailyRound      DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
   time            DateTime
@@ -3252,10 +3857,15 @@ model BowelRecord {
 
   @@index([dailyRoundId])
   @@index([time])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model UrineRecord {
   id              String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   dailyRoundId    String
   dailyRound      DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
   time            DateTime
@@ -3273,10 +3883,15 @@ model UrineRecord {
 
   @@index([dailyRoundId])
   @@index([time])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model EdemaRecord {
   id              String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   dailyRoundId    String
   dailyRound      DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
   time            DateTime
@@ -3290,10 +3905,15 @@ model EdemaRecord {
 
   @@index([dailyRoundId])
   @@index([location])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model ConcernRecord {
   id              String          @id @default(uuid())
+  organizationId String?
+  communityId    String?
   dailyRoundId    String
   dailyRound      DailyRound      @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
   time            DateTime
@@ -3308,10 +3928,15 @@ model ConcernRecord {
   @@index([dailyRoundId])
   @@index([category])
   @@index([severity])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model PainRecord {
   id                  String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   dailyRoundId        String
   dailyRound          DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
   time                DateTime
@@ -3328,10 +3953,15 @@ model PainRecord {
 
   @@index([dailyRoundId])
   @@index([score])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model MoodRecord {
   id               String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   dailyRoundId     String
   dailyRound       DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
   time             DateTime
@@ -3347,10 +3977,15 @@ model MoodRecord {
 
   @@index([dailyRoundId])
   @@index([mood])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model SleepRecord {
   id                   String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   dailyRoundId         String     @unique
   dailyRound           DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
   bedtime              DateTime?
@@ -3368,10 +4003,15 @@ model SleepRecord {
 
   @@index([dailyRoundId])
   @@index([quality])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model MobilityRecord {
   id                String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   dailyRoundId      String
   dailyRound        DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
   time              DateTime
@@ -3391,10 +4031,15 @@ model MobilityRecord {
   @@index([dailyRoundId])
   @@index([activityType])
   @@index([fallOccurred])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model MealRecord {
   id              String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   dailyRoundId    String
   dailyRound      DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
   time            DateTime
@@ -3413,10 +4058,15 @@ model MealRecord {
 
   @@index([dailyRoundId])
   @@index([mealType])
+
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model VitalSigns {
   id              String     @id @default(uuid())
+  organizationId String?
+  communityId    String?
   dailyRoundId    String
   dailyRound      DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
   time            DateTime
@@ -3436,4 +4086,7 @@ model VitalSigns {
 
   @@index([dailyRoundId])
   @@index([time])
+
+  @@index([organizationId])
+  @@index([communityId])
 }

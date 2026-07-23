@@ -1468,7 +1468,7 @@ START: Admission or Reassessment Trigger
 - TypeScript strict mode OFF
 - Application Control blocks uvicorn.exe -- use `python -m uvicorn`
 - No npm exec -- use npx
-- Supabase pooler password: `0933016007@Paul`
+- Supabase pooler password: stored only in the deployment secret manager; never document or commit it
 - Next.js 16 breaking changes -- see node_modules docs
 - Build requires prisma generate first
 - Vercel: `npm install --include=optional && npm rebuild lightningcss`

@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { requireTenantContext } from "@/lib/tenant";
 
 // Sleep detection logic
 export async function POST(req) {
+  const context = await requireTenantContext({ requireCommunity: true });
+  if (!context) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const body = await req.json();
     const { imageBase64, poseData } = body;
@@ -59,7 +62,6 @@ function detectPosition(poseData) {
   // Check if lying down
   const headY = keypoints.head?.y || 0;
   const torsoY = keypoints.torso?.y || 0;
-  const legsY = keypoints.legs?.y || 0;
 
   if (Math.abs(headY - torsoY) < 20) return "lying";
   if (headY > torsoY + 50) return "slouched";

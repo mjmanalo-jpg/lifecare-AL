@@ -11,7 +11,7 @@ load_dotenv(dotenv_path=_frontend_env, override=True)
 
 
 def _async_database_url() -> str:
-    url = os.getenv("DATABASE_URL", "")
+    url = os.getenv("APP_DATABASE_URL") or os.getenv("ASYNC_DATABASE_URL") or os.getenv("DATABASE_URL", "")
     if not url:
         return ""
     
@@ -58,7 +58,7 @@ def _async_database_url() -> str:
 
 
 DATABASE_URL = _async_database_url()
-SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SERVICE_ROLE_KEY", "")
-SUPABASE_ANON_KEY = os.getenv("ANON_KEY_PUBLIC", "")
-SUPABASE_JWKS_URL = os.getenv("SUPABASE_JWKS_URL", "")
+SUPABASE_URL = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL", "")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SERVICE_ROLE_KEY", "")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY") or os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY") or os.getenv("ANON_KEY_PUBLIC", "")
+SUPABASE_JWKS_URL = os.getenv("SUPABASE_JWKS_URL") or (f"{SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json" if SUPABASE_URL else "")

@@ -32,7 +32,7 @@ npx prisma studio    # visual DB browser
 - **TypeScript strict mode is OFF** (`apps/frontend/tsconfig.json`). All strict checks disabled. Don't expect type safety to catch errors.
 - **Application Control policy** blocks `uvicorn.exe` on this machine. Always use `.\.venv\Scripts\python.exe -m uvicorn` instead.
 - **No npm `exec`** — use `npx` directly.
-- **Supabase pooler password** contains `@` (`0933016007@Paul`), which needs careful URL encoding in connection strings.
+- **Supabase pooler credentials** belong in local/deployment secrets only. URL-encode reserved password characters in connection strings.
 - **`apps/backend/.env`** has live credentials (Supabase keys, DB URLs). Never commit this file.
 - **Next.js 16 has breaking changes** from earlier versions. See `apps/frontend/node_modules/next/dist/docs/` before writing Next.js code.
 - **Build requires Prisma generate first** — the `build` script runs `prisma generate && next build`.

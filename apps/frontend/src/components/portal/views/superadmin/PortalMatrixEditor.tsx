@@ -22,6 +22,8 @@ const ALL_ROLES: Role[] = [
 
 /** Friendly labels for the role keys. */
 const ROLE_LABELS: Record<Role, string> = {
+  PLATFORM_ADMIN: "Platform Admin",
+  ORGANIZATION_ADMIN: "Organization Admin",
   SUPERADMIN: "Super Admin",
   FACILITY_ADMIN: "Facility Admin",
   PHYSICIAN: "Physician",
@@ -35,6 +37,8 @@ const ROLE_LABELS: Record<Role, string> = {
 
 /** Colour accents per role row for the left badge. */
 const ROLE_COLORS: Record<Role, string> = {
+  PLATFORM_ADMIN: "from-slate-700 to-blue-800",
+  ORGANIZATION_ADMIN: "from-violet-600 to-indigo-700",
   SUPERADMIN: "from-blue-600 to-indigo-600",
   FACILITY_ADMIN: "from-blue-400 to-blue-600",
   PHYSICIAN: "from-teal-400 to-teal-600",

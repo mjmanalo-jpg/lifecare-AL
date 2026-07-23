@@ -1,70 +1,62 @@
 import { NextResponse } from "next/server";
+import { requireTenantContext, tenantWhere } from "@/lib/tenant";
+import { withTenantDb } from "@/lib/tenantDb";
+import { assertMutationEntitled } from "@/lib/entitlements";
 
-// Mock data
-const mockResidents = [
-  { id: "1", name: "John Doe", careLevel: "ASSISTED", roomNumber: "101", sponsorId: "s1" },
-  { id: "2", name: "Jane Smith", careLevel: "MEMORY", roomNumber: "102", sponsorId: "s2" },
-  { id: "3", name: "Bob Wilson", careLevel: "SKILLED", roomNumber: "103", sponsorId: "s3" }
-];
+const READ_ONLY_ROLES = new Set(["FAMILY", "RESIDENT", "VIEWER"]);
+const EDITABLE_FIELDS = ["firstName", "lastName", "dateOfBirth", "gender", "phone", "email", "roomNumber", "careLevel", "admissionDate", "emergencyContact", "emergencyContactPhone", "medicalHistory", "allergies", "notes"];
+
+function pickResidentInput(body) {
+  return Object.fromEntries(EDITABLE_FIELDS.filter((key) => body[key] !== undefined).map((key) => [key, body[key]]));
+}
 
 export async function GET(req) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const id = searchParams.get("id");
-    const limit = parseInt(searchParams.get("limit") || "100");
-    const offset = parseInt(searchParams.get("offset") || "0");
-
-    if (id) {
-      const resident = mockResidents.find(r => r.id === id);
-      return NextResponse.json(resident || { error: "Not found" }, { status: resident ? 200 : 404 });
-    }
-
-    return NextResponse.json({
-      data: mockResidents.slice(offset, offset + limit),
-      pagination: { total: mockResidents.length, limit, offset, hasMore: offset + limit < mockResidents.length }
-    });
-  } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+  const context = await requireTenantContext({ requireCommunity: true });
+  if (!context) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  const limit = Math.min(Math.max(Number(searchParams.get("limit")) || 100, 1), 200);
+  const offset = Math.max(Number(searchParams.get("offset")) || 0, 0);
+  const scope = tenantWhere("residents", context);
+  const where = id ? { AND: [scope, { id }] } : scope;
+  const [data, total] = await withTenantDb(context, (tx) => Promise.all([
+    tx.resident.findMany({ where, take: id ? 1 : limit, skip: id ? 0 : offset, orderBy: [{ lastName: "asc" }, { firstName: "asc" }] }),
+    tx.resident.count({ where }),
+  ]));
+  if (id && data.length === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (id) return NextResponse.json(data[0]);
+  return NextResponse.json({ data, pagination: { total, limit, offset, hasMore: offset + limit < total } });
 }
 
 export async function POST(req) {
-  try {
-    const body = await req.json();
-    const newResident = { id: Date.now().toString(), ...body };
-    mockResidents.push(newResident);
-    return NextResponse.json(newResident, { status: 201 });
-  } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+  const context = await requireTenantContext({ requireCommunity: true });
+  if (!context?.organizationId || !context.communityId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (READ_ONLY_ROLES.has(context.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  await assertMutationEntitled(context, "residents");
+  const body = await req.json();
+  const data = pickResidentInput(body);
+  if (!data.firstName || !data.lastName || !data.roomNumber || !data.careLevel || !data.admissionDate) return NextResponse.json({ error: "Missing required resident fields" }, { status: 400 });
+  const created = await withTenantDb(context, (tx) => tx.resident.create({ data: { ...data, organizationId: context.organizationId, communityId: context.communityId } }));
+  return NextResponse.json(created, { status: 201 });
 }
 
 export async function PUT(req) {
-  try {
-    const body = await req.json();
-    const { id, ...updateData } = body;
-
-    const index = mockResidents.findIndex(r => r.id === id);
-    if (index === -1) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-    mockResidents[index] = { ...mockResidents[index], ...updateData };
-    return NextResponse.json(mockResidents[index]);
-  } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+  const context = await requireTenantContext({ requireCommunity: true });
+  if (!context || READ_ONLY_ROLES.has(context.role)) return NextResponse.json({ error: context ? "Forbidden" : "Unauthorized" }, { status: context ? 403 : 401 });
+  const body = await req.json();
+  const id = String(body.id || "");
+  const existing = await withTenantDb(context, (tx) => tx.resident.findFirst({ where: { AND: [tenantWhere("residents", context), { id }] }, select: { id: true } }));
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const updated = await withTenantDb(context, (tx) => tx.resident.update({ where: { id }, data: pickResidentInput(body) }));
+  return NextResponse.json(updated);
 }
 
 export async function DELETE(req) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const id = searchParams.get("id");
-
-    const index = mockResidents.findIndex(r => r.id === id);
-    if (index === -1) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-    mockResidents.splice(index, 1);
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+  const context = await requireTenantContext({ requireCommunity: true });
+  if (!context || READ_ONLY_ROLES.has(context.role)) return NextResponse.json({ error: context ? "Forbidden" : "Unauthorized" }, { status: context ? 403 : 401 });
+  const id = new URL(req.url).searchParams.get("id");
+  const existing = id ? await withTenantDb(context, (tx) => tx.resident.findFirst({ where: { AND: [tenantWhere("residents", context), { id }] }, select: { id: true } })) : null;
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  await withTenantDb(context, (tx) => tx.resident.delete({ where: { id } }));
+  return NextResponse.json({ success: true });
 }

@@ -1,53 +1,21 @@
 /**
  * Idempotent seed for the assisted-living database.
- * Run after DATABASE_URL/DIRECT_URL are set in .env.local:
+ * Run after database and server-only Supabase Auth variables are set in .env.local:
  *   npx prisma db seed
  *
- * Safe to re-run: users/residents/staff/invoices upsert on their unique keys;
+ * Safe to re-run: Supabase identities, memberships, users, residents, staff, and invoices are idempotent;
  * high-volume child tables (vitals, incidents, tasks, …) only seed when empty.
  */
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs";
+import { linkSeedResidentAccess, seedSaasAccounts } from "./seed-auth.mjs";
 
 const prisma = new PrismaClient();
-
-const DEFAULT_PASSWORD = "LifeCare@2026";
-const SALT_ROUNDS = 10;
 
 const daysAgo = (n) => new Date(Date.now() - n * 24 * 3600 * 1000);
 const hoursAgo = (n) => new Date(Date.now() - n * 3600 * 1000);
 const inDays = (n) => new Date(Date.now() + n * 24 * 3600 * 1000);
 
-async function seedUsers() {
-  const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, SALT_ROUNDS);
-  const users = [
-    { email: "admin@goldenhearth.com", name: "System Admin", role: "SUPERADMIN", phone: "555-0100", firstName: "System", lastName: "Admin" },
-    { email: "facility.admin@goldenhearth.com", name: "Facility Admin", role: "FACILITY_ADMIN", phone: "555-0150", firstName: "Facility", lastName: "Admin" },
-    { email: "alan.reyes@goldenhearth.com", name: "Dr. Alan Reyes", role: "PHYSICIAN", phone: "555-0160", firstName: "Alan", lastName: "Reyes" },
-    { email: "sarah.jenkins@goldenhearth.com", name: "Sarah Jenkins", role: "NURSE", phone: "555-0101", firstName: "Sarah", lastName: "Jenkins" },
-    { email: "rebecca.wilson@goldenhearth.com", name: "Rebecca Wilson", role: "NURSE", phone: "555-0105", firstName: "Rebecca", lastName: "Wilson" },
-    { email: "caleb.randall@goldenhearth.com", name: "Caleb Randall", role: "CAREGIVER", phone: "555-0102", firstName: "Caleb", lastName: "Randall" },
-    { email: "james.mitchell@goldenhearth.com", name: "James Mitchell", role: "CAREGIVER", phone: "555-0104", firstName: "James", lastName: "Mitchell" },
-    { email: "maria.santos@goldenhearth.com", name: "Maria Santos", role: "CAREGIVER", phone: "555-0103", firstName: "Maria", lastName: "Santos" },
-    { email: "john.pendelton@family.com", name: "John Pendelton", role: "FAMILY", phone: "555-0200", firstName: "John", lastName: "Pendelton" },
-    { email: "arthur.pendelton@resident.com", name: "Arthur Pendelton", role: "RESIDENT", phone: "555-0201", firstName: "Arthur", lastName: "Pendelton" },
-    { email: "fleet.manager@goldenhearth.com", name: "Marcus Dela Cruz", role: "FLEET_MANAGEMENT", phone: "555-0400", firstName: "Marcus", lastName: "Dela Cruz" },
-    { email: "james.miguel@goldenhearth.com", name: "James Miguel", role: "DRIVER", phone: "555-0401", firstName: "James", lastName: "Miguel" },
-  ];
-  const out = {};
-  for (const u of users) {
-    const rec = await prisma.user.upsert({
-      where: { email: u.email },
-      update: { name: u.name, role: u.role, phone: u.phone, passwordHash },
-      create: { ...u, passwordHash },
-    });
-    out[u.email] = rec;
-  }
-  console.log(`  • Users: ${users.length} accounts seeded (password: ${DEFAULT_PASSWORD})`);
-  return out;
-}
-
-async function seedStaff(users) {
+async function seedStaff(users, tenant) {
   const rows = [
     { email: "alan.reyes@goldenhearth.com", position: "Physician", department: "Medical", hireDate: daysAgo(1000), isApproved: true },
     { email: "sarah.jenkins@goldenhearth.com", position: "Head Nurse", department: "Clinical Care", hireDate: daysAgo(1200), isApproved: true },
@@ -62,15 +30,15 @@ async function seedStaff(users) {
     if (!user) continue;
     const rec = await prisma.staff.upsert({
       where: { userId: user.id },
-      update: { position: r.position, department: r.department, isActive: r.isActive ?? true, isApproved: r.isApproved ?? true },
-      create: { userId: user.id, position: r.position, department: r.department, hireDate: r.hireDate, isActive: r.isActive ?? true, isApproved: r.isApproved ?? true },
+      update: { position: r.position, department: r.department, organizationId: tenant.organization.id, communityId: tenant.community.id, isActive: r.isActive ?? true, isApproved: r.isApproved ?? true },
+      create: { userId: user.id, position: r.position, department: r.department, organizationId: tenant.organization.id, communityId: tenant.community.id, hireDate: r.hireDate, isActive: r.isActive ?? true, isApproved: r.isApproved ?? true },
     });
     out.push(rec);
   }
   return out;
 }
 
-async function seedResidents() {
+async function seedResidents(tenant) {
   const rows = [
     { firstName: "Arthur", lastName: "Pendelton", roomNumber: "302", careLevel: "ASSISTED", admissionDate: daysAgo(400), dateOfBirth: daysAgo(78 * 365), allergies: "Penicillin, Sulfa drugs", medicalHistory: "Hypertension, Type 2 Diabetes", notes: "Stable condition. Regular monitoring." },
     { firstName: "Eleanor", lastName: "Fitzroy", roomNumber: "305", careLevel: "MEMORY", admissionDate: daysAgo(620), dateOfBirth: daysAgo(85 * 365), allergies: "None known", medicalHistory: "Alzheimer's, Arthritis", notes: "Memory decline noted. Increase supervision." },
@@ -81,9 +49,9 @@ async function seedResidents() {
   const out = {};
   for (const r of rows) {
     const rec = await prisma.resident.upsert({
-      where: { roomNumber: r.roomNumber },
-      update: { firstName: r.firstName, lastName: r.lastName, careLevel: r.careLevel, allergies: r.allergies, medicalHistory: r.medicalHistory, notes: r.notes },
-      create: r,
+      where: { communityId_roomNumber: { communityId: tenant.community.id, roomNumber: r.roomNumber } },
+      update: { firstName: r.firstName, lastName: r.lastName, careLevel: r.careLevel, allergies: r.allergies, medicalHistory: r.medicalHistory, notes: r.notes, organizationId: tenant.organization.id, communityId: tenant.community.id },
+      create: { ...r, organizationId: tenant.organization.id, communityId: tenant.community.id },
     });
     out[r.roomNumber] = rec;
   }
@@ -104,9 +72,9 @@ async function seedIfEmpty(model, makeRows) {
 
 async function main() {
   console.log("Seeding database…");
-  const users = await seedUsers();
-  const staff = await seedStaff(users);
-  const residents = await seedResidents();
+  const { users, tenant } = await seedSaasAccounts(prisma);
+  const staff = await seedStaff(users, tenant);
+  const residents = await seedResidents(tenant);
 
   const R = residents;
   const nurse = staff.find((s) => s.position === "Head Nurse");
@@ -119,7 +87,7 @@ async function main() {
   // both the Family and Resident portals are scoped to exactly that record.
   if (R["302"]) {
     await prisma.resident.update({
-      where: { roomNumber: "302" },
+      where: { id: R["302"].id },
       data: {
         ...(familyUser ? { sponsorId: familyUser.id } : {}),
         ...(residentUser ? { userId: residentUser.id } : {}),
@@ -127,6 +95,8 @@ async function main() {
     });
     console.log("  • linked family sponsor + resident self-login → Room 302");
   }
+
+  await linkSeedResidentAccess(prisma, users, R["302"], tenant);
 
   await seedIfEmpty("vitalsLog", () => [
     { residentId: R["302"].id, type: "HEART_RATE", value: "78", unit: "bpm", recordedAt: hoursAgo(1) },

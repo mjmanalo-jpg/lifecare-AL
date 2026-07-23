@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isDbConfigured } from "@/lib/models";
 import { getSession } from "@/lib/auth";
+import { requireTenantContext } from "@/lib/tenant";
+import { withTenantDb } from "@/lib/tenantDb";
+import { getEntitlements } from "@/lib/entitlements";
 import {
   ASSISTANT_CONFIG_KEY,
   TONE_STYLES,
@@ -69,7 +72,9 @@ const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 async function loadAssistantConfig(): Promise<AssistantConfig> {
   if (!isDbConfigured()) return parseAssistantConfig(null);
   try {
-    const row = await prisma.appSetting.findUnique({ where: { id: ASSISTANT_CONFIG_KEY } });
+    const context = await requireTenantContext({ allowPlatform: true });
+    if (!context) return parseAssistantConfig(null);
+    const row = await withTenantDb(context, (tx) => tx.appSetting.findFirst({ where: { key: ASSISTANT_CONFIG_KEY, organizationId: context.organizationId || null, communityId: context.communityId || null } }));
     return parseAssistantConfig(row?.value);
   } catch {
     return parseAssistantConfig(null);
@@ -233,6 +238,12 @@ async function executeResidentTool(
 }
 
 export async function POST(req: NextRequest) {
+  const tenantContext = await requireTenantContext({ allowPlatform: true });
+  if (!tenantContext) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (tenantContext.organizationId) {
+    const entitlements = await getEntitlements(tenantContext.organizationId);
+    if (entitlements?.features.ai_assistant?.enabled === false) return NextResponse.json({ error: "AI Assistant is not enabled for this plan" }, { status: 403 });
+  }
   let body: Record<string, unknown>;
   try {
     body = await req.json();

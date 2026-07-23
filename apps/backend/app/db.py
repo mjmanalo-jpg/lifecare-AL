@@ -4,10 +4,22 @@ Async connection pool using asyncpg for FastAPI
 """
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy import event
 from sqlalchemy import pool
 from app.config import DATABASE_URL
 
+
+@event.listens_for(Session, "before_flush")
+def inject_tenant_ownership(session, _flush_context, _instances):
+    """Never trust request payloads for tenant ownership on new ORM rows."""
+    organization_id = session.info.get("organization_id")
+    community_id = session.info.get("community_id")
+    for instance in session.new:
+        if hasattr(instance, "organizationId"):
+            instance.organizationId = organization_id
+        if hasattr(instance, "communityId"):
+            instance.communityId = community_id
 # Create async engine with connection pooling
 engine = create_async_engine(
     DATABASE_URL,

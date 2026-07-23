@@ -38,7 +38,7 @@ export function useFacilityConfig(): FacilityConfig {
     if (!rows.length) return DEFAULTS;
     const map = new Map<string, string>();
     for (const r of rows) {
-      map.set(String(r.id), String(r.value ?? ""));
+      map.set(String(r.key || r.id), String(r.value ?? ""));
     }
     return {
       facilityName: map.get("facility_name") || DEFAULTS.facilityName,

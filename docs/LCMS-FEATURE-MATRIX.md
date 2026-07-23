@@ -37,7 +37,7 @@
 
 | LCMS Feature | Status | Details |
 |-------------|--------|---------|
-| Secure Login | ✅ | Email + bcrypt password auth (default: `LifeCare@2026`) |
+| Secure Login | ✅ | Supabase Auth; isolated demo credentials come from `SEED_ACCOUNT_PASSWORD` |
 | Role-Based Access Control | ✅ | 9 roles, sidebar scoped per role, API-level role checks |
 | PIN Login | 🔴 | Not implemented — email/password only |
 | Session Management | ✅ | HMAC-signed HTTP-only cookie, 30-day expiry |
@@ -590,17 +590,17 @@ All 12 portal accounts share the same default password.
 
 | Email | Password | Role | Name |
 |-------|----------|------|------|
-| `admin@goldenhearth.com` | `LifeCare@2026` | SUPERADMIN | System Admin |
-| `facility.admin@goldenhearth.com` | `LifeCare@2026` | FACILITY_ADMIN | Facility Admin |
-| `alan.reyes@goldenhearth.com` | `LifeCare@2026` | PHYSICIAN | Dr. Alan Reyes |
-| `sarah.jenkins@goldenhearth.com` | `LifeCare@2026` | NURSE | Sarah Jenkins |
-| `rebecca.wilson@goldenhearth.com` | `LifeCare@2026` | NURSE | Rebecca Wilson |
-| `caleb.randall@goldenhearth.com` | `LifeCare@2026` | CAREGIVER | Caleb Randall |
-| `james.mitchell@goldenhearth.com` | `LifeCare@2026` | CAREGIVER | James Mitchell |
-| `maria.santos@goldenhearth.com` | `LifeCare@2026` | CAREGIVER | Maria Santos |
-| `john.pendelton@family.com` | `LifeCare@2026` | FAMILY | John Pendelton |
-| `arthur.pendelton@resident.com` | `LifeCare@2026` | RESIDENT | Arthur Pendelton |
-| `fleet.manager@goldenhearth.com` | `LifeCare@2026` | FLEET_MANAGEMENT | Marcus Dela Cruz |
-| `james.miguel@goldenhearth.com` | `LifeCare@2026` | DRIVER | James Miguel |
+| `admin@goldenhearth.com` | `SEED_ACCOUNT_PASSWORD` | SUPERADMIN | System Admin |
+| `facility.admin@goldenhearth.com` | `SEED_ACCOUNT_PASSWORD` | FACILITY_ADMIN | Facility Admin |
+| `alan.reyes@goldenhearth.com` | `SEED_ACCOUNT_PASSWORD` | PHYSICIAN | Dr. Alan Reyes |
+| `sarah.jenkins@goldenhearth.com` | `SEED_ACCOUNT_PASSWORD` | NURSE | Sarah Jenkins |
+| `rebecca.wilson@goldenhearth.com` | `SEED_ACCOUNT_PASSWORD` | NURSE | Rebecca Wilson |
+| `caleb.randall@goldenhearth.com` | `SEED_ACCOUNT_PASSWORD` | CAREGIVER | Caleb Randall |
+| `james.mitchell@goldenhearth.com` | `SEED_ACCOUNT_PASSWORD` | CAREGIVER | James Mitchell |
+| `maria.santos@goldenhearth.com` | `SEED_ACCOUNT_PASSWORD` | CAREGIVER | Maria Santos |
+| `john.pendelton@family.com` | `SEED_ACCOUNT_PASSWORD` | FAMILY | John Pendelton |
+| `arthur.pendelton@resident.com` | `SEED_ACCOUNT_PASSWORD` | RESIDENT | Arthur Pendelton |
+| `fleet.manager@goldenhearth.com` | `SEED_ACCOUNT_PASSWORD` | FLEET_MANAGEMENT | Marcus Dela Cruz |
+| `james.miguel@goldenhearth.com` | `SEED_ACCOUNT_PASSWORD` | DRIVER | James Miguel |
 
 **Demo Mode**: Available as alternative login — bypasses password, picks first user of selected role.

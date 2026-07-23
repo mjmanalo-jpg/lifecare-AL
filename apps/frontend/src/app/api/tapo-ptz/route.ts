@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateSession } from "@/lib/auth";
+import { backendAuthHeaders } from "@/lib/backendAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,8 +14,8 @@ export const dynamic = "force-dynamic";
  */
 
 export async function POST(request: NextRequest) {
-  const role = await validateSession();
-  if (!role) {
+  const authHeaders = await backendAuthHeaders();
+  if (!authHeaders) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     try {
       const response = await fetch(`${backendUrl}/api/v1/camera/move_position`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...authHeaders, "Content-Type": "application/json" },
         body: JSON.stringify({
           pan: clampedPan,
           tilt: clampedTilt,

@@ -134,6 +134,7 @@ export default function Home() {
   } as const;
 
   const [activeIndex, setActiveIndex] = useState(0);
+  const [invitationCallback, setInvitationCallback] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Dynamic CMS content
@@ -144,6 +145,26 @@ export default function Home() {
   }>>([]);
 
   useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const accessToken = hash.get("access_token");
+    const refreshToken = hash.get("refresh_token");
+    const callbackType = hash.get("type");
+    if (accessToken && refreshToken && ["invite", "signup"].includes(callbackType || "")) {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      void Promise.resolve().then(() => {
+        setInvitationCallback("Completing your secure workspace invitation…");
+        return fetch("/api/auth/invitation-callback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accessToken, refreshToken }),
+        });
+      }).then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Invitation could not be completed");
+        window.location.replace(result.redirectUrl);
+      }).catch((error) => setInvitationCallback(error instanceof Error ? error.message : "Invitation could not be completed"));
+    }
+
     // Fetch site content
     fetch("/api/public/site-content", { cache: "no-store" })
       .then((r) => r.json())
@@ -191,6 +212,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen relative overflow-hidden flex flex-col items-center pt-24">
+      {invitationCallback && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-6 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-blue-400/20 bg-slate-900 p-6 text-center text-white shadow-2xl"><ShieldCheck className="mx-auto h-8 w-8 text-blue-400"/><h2 className="mt-3 text-xl font-bold">Secure workspace invitation</h2><p className="mt-2 text-sm text-slate-300">{invitationCallback}</p></div></div>}
       <LandingBackground />
       <Navbar />
       {/* Golden Hearth Background Element */}

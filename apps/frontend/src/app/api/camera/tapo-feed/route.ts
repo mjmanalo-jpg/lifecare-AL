@@ -1,4 +1,4 @@
-import { validateSession } from "@/lib/auth";
+import { backendAuthHeaders } from "@/lib/backendAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,8 +12,8 @@ const BACKEND_URL = process.env.BACKEND_API_URL || "http://localhost:8000";
  * needs to consume the local backend's HTTP stream.
  */
 export async function GET() {
-  const role = await validateSession();
-  if (!role) {
+  const authHeaders = await backendAuthHeaders();
+  if (!authHeaders) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },
@@ -22,7 +22,7 @@ export async function GET() {
 
   try {
     const res = await fetch(`${BACKEND_URL}/api/v1/camera/tapo_feed`, {
-      headers: { Accept: "multipart/x-mixed-replace" },
+      headers: { ...authHeaders, Accept: "multipart/x-mixed-replace" },
     });
 
     if (!res.ok) {

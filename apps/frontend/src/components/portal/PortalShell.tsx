@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import LcmsLogo from "@/components/LcmsLogo";
+import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Role,
@@ -49,12 +50,12 @@ interface PortalShellProps {
 
 export default function PortalShell({
   userRole,
-  activeTab,
   children,
   onLogout,
 }: PortalShellProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const roleDetails: RoleDetails = ROLES[userRole];
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -63,6 +64,9 @@ export default function PortalShell({
   const [notifications, setNotifications] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [language, setLanguage] = useState("en");
+  const [profileName, setProfileName] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const { facilityName } = useFacilityConfig();
 
@@ -74,11 +78,20 @@ export default function PortalShell({
       .then((res) => res.json())
       .then((data) => {
         if (data.authenticated) {
-          setSessionUserId(data.userId || "demo-user");
+          const userId = data.session?.userId || "demo-user";
+          setSessionUserId(userId);
+          setProfileName(data.workspaces?.user?.name || roleDetails.profileName);
+          setProfileEmail(data.workspaces?.user?.email || "");
+          try {
+            const preferences = JSON.parse(localStorage.getItem(`lcms_preferences_${userId}`) || "{}");
+            if (typeof preferences.notifications === "boolean") setNotifications(preferences.notifications);
+            if (typeof preferences.emailAlerts === "boolean") setEmailAlerts(preferences.emailAlerts);
+            if (typeof preferences.language === "string") setLanguage(preferences.language);
+          } catch { /* Ignore malformed device preferences. */ }
         }
       })
       .catch((err) => console.warn("Failed to get session:", err));
-  }, []);
+  }, [roleDetails.profileName]);
 
   // Fetch notifications in real-time
   const { data: notificationsData, refetch: refetchNotifications } = useLiveQuery<{
@@ -139,11 +152,12 @@ export default function PortalShell({
   };
 
 
-  const roleDetails: RoleDetails = ROLES[userRole];
+  const portalScopeName = userRole === "PLATFORM_ADMIN" ? "SaaS Control Plane" : userRole === "ORGANIZATION_ADMIN" ? "Organization Control Center" : (facilityName || "Care Portal");
 
   // Dynamic sidebar filtering matching Portal Feature Matrix settings with localStorage cache to prevent blinking
   const { data: settingRows } = useLiveQuery<{
     id: string;
+    key?: string;
     value: string;
   }>("app-settings", { tables: ["AppSetting"] });
 
@@ -157,7 +171,7 @@ export default function PortalShell({
     }
     
     // 2. Update cache and use fresh value when database settings load
-    const dbStored = settingRows?.find((s) => s.id === "portal_matrix")?.value;
+    const dbStored = settingRows?.find((s) => (s.key || s.id) === "portal_matrix")?.value;
     if (dbStored) {
       storedValue = dbStored;
       if (typeof window !== "undefined") {
@@ -326,6 +340,76 @@ export default function PortalShell({
     }
   };
 
+  const handleMfaSetup = async () => {
+    const enrollmentResponse = await fetch("/api/auth/mfa/enroll", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    const enrollment = await enrollmentResponse.json();
+    if (!enrollmentResponse.ok) {
+      await Swal.fire({ title: "MFA setup failed", text: enrollment.error || "Unable to start enrollment", icon: "error" });
+      return;
+    }
+    const existingFactor = Boolean(enrollment.requiresVerification);
+    const result = await Swal.fire({
+      title: existingFactor ? "Verify authenticator MFA" : "Set up authenticator MFA",
+      text: existingFactor
+        ? "This account already has MFA. Enter the current code from its authenticator app."
+        : enrollment.secret ? `Scan the QR code or enter secret: ${enrollment.secret}` : "Scan the QR code with your authenticator app.",
+      ...(enrollment.qrCode ? { imageUrl: enrollment.qrCode } : {}),
+      imageWidth: 220,
+      input: "text",
+      inputLabel: "Six-digit verification code",
+      inputAttributes: { inputmode: "numeric", maxlength: "6", autocomplete: "one-time-code" },
+      showCancelButton: true,
+      confirmButtonText: "Verify",
+      preConfirm: (value) => /^\d{6}$/.test(String(value || "")) ? value : Swal.showValidationMessage("Enter a six-digit code"),
+    });
+    if (!result.isConfirmed) return;
+    const verifyResponse = await fetch("/api/auth/mfa/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ factorId: enrollment.id, code: result.value }) });
+    const verified = await verifyResponse.json();
+    await Swal.fire(verifyResponse.ok ? { title: "MFA enabled", icon: "success" } : { title: "Verification failed", text: verified.error, icon: "error" });
+    if (verifyResponse.ok) window.location.reload();
+  };
+
+  const handleSaveSettings = async () => {
+    const cleanName = profileName.trim();
+    if (cleanName.length < 2) {
+      await Swal.fire({ title: "Name required", text: "Enter at least two characters.", icon: "warning" });
+      return;
+    }
+    setSettingsSaving(true);
+    try {
+      const response = await fetch("/api/auth/account", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: cleanName }) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Unable to save settings");
+      setProfileName(body.user?.name || cleanName);
+      if (sessionUserId) localStorage.setItem(`lcms_preferences_${sessionUserId}`, JSON.stringify({ notifications, emailAlerts, language }));
+      document.documentElement.lang = language;
+      setShowSettingsModal(false);
+      await Swal.fire({ title: "Settings saved", icon: "success", timer: 1400, showConfirmButton: false });
+    } catch (error) {
+      await Swal.fire({ title: "Save failed", text: error instanceof Error ? error.message : "Unable to save settings", icon: "error" });
+    } finally { setSettingsSaving(false); }
+  };
+
+  const handleChangePassword = async () => {
+    const result = await Swal.fire({
+      title: "Change password",
+      html: '<input id="new-password" type="password" autocomplete="new-password" class="swal2-input" placeholder="New password"><input id="confirm-password" type="password" autocomplete="new-password" class="swal2-input" placeholder="Confirm password">',
+      text: "Use at least 12 characters with uppercase, lowercase, number, and symbol.",
+      showCancelButton: true,
+      confirmButtonText: "Update password",
+      preConfirm: () => {
+        const password = (document.getElementById("new-password") as HTMLInputElement | null)?.value || "";
+        const confirmation = (document.getElementById("confirm-password") as HTMLInputElement | null)?.value || "";
+        if (password !== confirmation) return Swal.showValidationMessage("Passwords do not match");
+        if (password.length < 12 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) return Swal.showValidationMessage("Password does not meet the security requirements");
+        return password;
+      },
+    });
+    if (!result.isConfirmed) return;
+    const response = await fetch("/api/auth/account", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: result.value }) });
+    const body = await response.json();
+    await Swal.fire(response.ok ? { title: "Password updated", text: "Use the new password the next time you sign in.", icon: "success" } : { title: "Password change failed", text: body.error, icon: "error" });
+  };
   return (
     <div className={`flex h-screen ${theme === "dark" ? "bg-black text-white" : "bg-gray-50 text-gray-900"}`}>
       {/* Sidebar — visible on md+, collapsed rail on lg when sidebarOpen, full width on md when sidebarOpen */}
@@ -351,8 +435,8 @@ export default function PortalShell({
                 <LcmsLogo />
                 <div className="text-left border-l border-gray-200 dark:border-gray-800 pl-2 min-w-0 flex-1">
                   <div className={`font-black text-xs leading-none uppercase tracking-wider ${theme === "dark" ? "text-blue-400" : "text-blue-600"}`}>{roleDetails.badge}</div>
-                  <div className="text-[9px] text-gray-400 dark:text-gray-500 font-bold truncate mt-0.5" title={facilityName || "Care Portal"}>
-                    {facilityName || "Care Portal"}
+                  <div className="text-[9px] text-gray-400 dark:text-gray-500 font-bold truncate mt-0.5" title={portalScopeName}>
+                    {portalScopeName}
                   </div>
                 </div>
               </div>
@@ -436,6 +520,8 @@ export default function PortalShell({
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
+
+            {userRole !== "PLATFORM_ADMIN" && <WorkspaceSwitcher />}
 
             {/* Clock — hidden on smallest screens */}
             <div className={`text-sm hidden sm:block ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
@@ -628,11 +714,11 @@ export default function PortalShell({
                 }`}
               >
                 <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                  {roleDetails.profileName.charAt(0)}
+                  {(profileName || roleDetails.profileName).charAt(0)}
                 </div>
                 <div className="text-sm text-left hidden sm:block">
                   <div className={`font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                    {roleDetails.profileName.split(" ")[0]}
+                    {(profileName || roleDetails.profileName).split(" ")[0]}
                   </div>
                   <div className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
                     {roleDetails.badge}
@@ -711,7 +797,7 @@ export default function PortalShell({
                   <LcmsLogo />
                   <div className="min-w-0 flex-1">
                     <div className={`font-black text-sm leading-tight truncate ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-                      {facilityName || "Care Portal"}
+                      {portalScopeName}
                     </div>
                     <div className={`text-[10px] font-bold truncate ${theme === "dark" ? "text-blue-300" : "text-blue-700"}`}>
                       {roleDetails.badge}
@@ -759,166 +845,49 @@ export default function PortalShell({
 
       {/* Settings Modal */}
       {showSettingsModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-4">
-          <div className={`rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-2xl max-h-[92dvh] sm:max-h-[90dvh] overflow-y-auto scrollbar-thin ${
-            theme === "dark" ? "bg-gray-900" : "bg-white"
-          }`}>
-            {/* Header */}
-            <div className="sticky top-0 bg-gradient-to-r from-gray-900 to-black text-white p-4 sm:p-6 flex items-center justify-between border-b border-blue-300">
-              <h1 className="text-lg sm:text-2xl font-bold">Settings</h1>
-              <button
-                onClick={() => setShowSettingsModal(false)}
-                className="p-2 hover:bg-gray-700 rounded-lg transition"
-              >
-                <X className="w-5 h-5 sm:w-6 sm:h-6" />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowSettingsModal(false); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="settings-title" className={`flex h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl shadow-2xl sm:h-[88dvh] sm:max-h-[760px] sm:max-w-3xl sm:rounded-2xl ${theme === "dark" ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-900"}`}>
+            <div className="flex flex-none items-center justify-between border-b border-white/10 bg-gradient-to-r from-slate-950 to-slate-900 px-5 py-4 text-white sm:px-6">
+              <div><h1 id="settings-title" className="text-xl font-black sm:text-2xl">Account settings</h1><p className="mt-0.5 text-xs text-slate-400">Profile, preferences, and account security</p></div>
+              <button aria-label="Close settings" onClick={() => setShowSettingsModal(false)} className="rounded-xl p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"><X className="h-5 w-5" /></button>
             </div>
 
-            {/* Content */}
-            <div className="p-4 sm:p-8 space-y-6 sm:space-y-8">
-              {/* Profile Section */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <UserIcon className="w-5 h-5 text-blue-600" />
+            <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain p-4 scrollbar-thin sm:p-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <section className={`rounded-2xl border p-4 sm:p-5 md:col-span-2 ${theme === "dark" ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
+                  <div className="mb-4 flex items-center gap-3"><span className="rounded-xl bg-blue-100 p-2.5 text-blue-600"><UserIcon className="h-5 w-5" /></span><div><h2 className="font-bold">Profile</h2><p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Your name is shared across authorized LCMS workspaces.</p></div></div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="text-sm font-medium">Full name<input value={profileName} onChange={(event) => setProfileName(event.target.value)} maxLength={100} className={`mt-2 w-full rounded-xl border px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${theme === "dark" ? "border-slate-700 bg-slate-950" : "border-slate-300 bg-white"}`} /></label>
+                    <label className="text-sm font-medium">Email address<input value={profileEmail} disabled className={`mt-2 w-full rounded-xl border px-3 py-2.5 ${theme === "dark" ? "border-slate-700 bg-slate-800 text-slate-400" : "border-slate-200 bg-slate-100 text-slate-500"}`} /></label>
+                    <label className="text-sm font-medium">Effective portal role<input value={roleDetails.name} disabled className={`mt-2 w-full rounded-xl border px-3 py-2.5 ${theme === "dark" ? "border-slate-700 bg-slate-800 text-slate-400" : "border-slate-200 bg-slate-100 text-slate-500"}`} /></label>
+                    <div className="flex items-end"><p className={`rounded-xl p-3 text-xs ${theme === "dark" ? "bg-slate-950 text-slate-400" : "bg-blue-50 text-blue-700"}`}>Roles and workspace access are managed by an authorized administrator and cannot be changed here.</p></div>
                   </div>
-                  <h2 className={`text-xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Profile</h2>
-                </div>
-                <div className="space-y-4 pl-11">
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
-                      Full Name
-                    </label>
-                    <input
-                      type="text"
-                      defaultValue={roleDetails.profileName}
-                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none ${
-                        theme === "dark"
-                          ? "bg-gray-800 border-gray-700 text-white"
-                          : "bg-white border-gray-300 text-gray-900"
-                      }`}
-                    />
-                  </div>
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
-                      Role
-                    </label>
-                    <input
-                      type="text"
-                      defaultValue={roleDetails.name}
-                      disabled
-                      className={`w-full px-4 py-2 border rounded-lg outline-none ${
-                        theme === "dark"
-                          ? "bg-gray-700 border-gray-600 text-gray-400"
-                          : "bg-gray-50 border-gray-300 text-gray-600"
-                      }`}
-                    />
-                  </div>
-                </div>
-              </div>
+                </section>
 
-              {/* Notifications Section */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Bell className="w-5 h-5 text-blue-600" />
+                <section className={`rounded-2xl border p-4 sm:p-5 ${theme === "dark" ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
+                  <div className="mb-4 flex items-center gap-3"><span className="rounded-xl bg-blue-100 p-2.5 text-blue-600"><Bell className="h-5 w-5" /></span><div><h2 className="font-bold">Notifications</h2><p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Choose how this device alerts you.</p></div></div>
+                  <div className="space-y-3">
+                    <label className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 ${theme === "dark" ? "border-slate-700" : "border-slate-200"}`}><span><b className="block text-sm">Push notifications</b><span className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Browser alerts on this device</span></span><input type="checkbox" checked={notifications} onChange={(event) => setNotifications(event.target.checked)} className="h-5 w-5 accent-blue-600" /></label>
+                    <label className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 ${theme === "dark" ? "border-slate-700" : "border-slate-200"}`}><span><b className="block text-sm">Critical email alerts</b><span className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>High-priority account events</span></span><input type="checkbox" checked={emailAlerts} onChange={(event) => setEmailAlerts(event.target.checked)} className="h-5 w-5 accent-blue-600" /></label>
                   </div>
-                  <h2 className={`text-xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Notifications</h2>
-                </div>
-                <div className="space-y-4 pl-11">
-                  <label className={`flex items-center gap-3 cursor-pointer ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
-                    <input
-                      type="checkbox"
-                      checked={notifications}
-                      onChange={(e) => setNotifications(e.target.checked)}
-                      className="w-5 h-5 rounded"
-                    />
-                    <span className="text-sm">Enable push notifications</span>
-                  </label>
-                  <label className={`flex items-center gap-3 cursor-pointer ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
-                    <input
-                      type="checkbox"
-                      checked={emailAlerts}
-                      onChange={(e) => setEmailAlerts(e.target.checked)}
-                      className="w-5 h-5 rounded"
-                    />
-                    <span className="text-sm">Email alerts for critical events</span>
-                  </label>
-                </div>
-              </div>
+                </section>
 
-              {/* Language Section */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <Globe className="w-5 h-5 text-green-600" />
-                  </div>
-                  <h2 className={`text-xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Language</h2>
-                </div>
-                <div className="space-y-4 pl-11">
-                  <select
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none ${
-                      theme === "dark"
-                        ? "bg-gray-800 border-gray-700 text-white"
-                        : "bg-white border-gray-300 text-gray-900"
-                    }`}
-                  >
-                    <option value="en">English</option>
-                    <option value="es">Spanish</option>
-                    <option value="fr">French</option>
-                    <option value="de">German</option>
-                  </select>
-                </div>
-              </div>
+                <section className={`rounded-2xl border p-4 sm:p-5 ${theme === "dark" ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
+                  <div className="mb-4 flex items-center gap-3"><span className="rounded-xl bg-emerald-100 p-2.5 text-emerald-600"><Globe className="h-5 w-5" /></span><div><h2 className="font-bold">Language</h2><p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Set your interface preference.</p></div></div>
+                  <label className="text-sm font-medium">Preferred language<select value={language} onChange={(event) => setLanguage(event.target.value)} className={`mt-2 w-full rounded-xl border px-3 py-2.5 outline-none focus:border-blue-500 ${theme === "dark" ? "border-slate-700 bg-slate-950" : "border-slate-300 bg-white"}`}><option value="en">English</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option></select></label>
+                  <p className={`mt-3 text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>This records your preference; translated application content will be introduced progressively.</p>
+                </section>
 
-              {/* Security Section */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-red-100 rounded-lg">
-                    <Lock className="w-5 h-5 text-red-600" />
-                  </div>
-                  <h2 className={`text-xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Security</h2>
-                </div>
-                <div className="space-y-4 pl-11">
-                  <button className={`w-full px-4 py-2 font-medium rounded-lg transition ${
-                    theme === "dark"
-                      ? "bg-gray-800 hover:bg-gray-700 text-white"
-                      : "bg-gray-100 hover:bg-gray-200 text-gray-900"
-                  }`}>
-                    Change Password
-                  </button>
-                  <button className={`w-full px-4 py-2 font-medium rounded-lg transition ${
-                    theme === "dark"
-                      ? "bg-gray-800 hover:bg-gray-700 text-white"
-                      : "bg-gray-100 hover:bg-gray-200 text-gray-900"
-                  }`}>
-                    Two-Factor Authentication
-                  </button>
-                </div>
+                <section className={`rounded-2xl border p-4 sm:p-5 md:col-span-2 ${theme === "dark" ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
+                  <div className="mb-4 flex items-center gap-3"><span className="rounded-xl bg-rose-100 p-2.5 text-rose-600"><Lock className="h-5 w-5" /></span><div><h2 className="font-bold">Security</h2><p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Manage credentials for your own account.</p></div></div>
+                  <div className="grid gap-3 sm:grid-cols-2"><button onClick={() => void handleChangePassword()} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>Change password</button><button onClick={() => void handleMfaSetup()} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>Authenticator MFA</button></div>
+                </section>
               </div>
             </div>
 
-            {/* Footer */}
-            <div className={`sticky bottom-0 px-4 sm:px-8 py-3 sm:py-4 flex items-center justify-between border-t ${
-              theme === "dark"
-                ? "bg-gray-800 border-gray-700"
-                : "bg-gray-50 border-gray-200"
-            }`}>
-              <button
-                onClick={() => setShowSettingsModal(false)}
-                className={`px-4 sm:px-6 py-2 rounded-lg transition ${
-                  theme === "dark"
-                    ? "text-gray-300 hover:bg-gray-700"
-                    : "text-gray-700 hover:bg-gray-100"
-                }`}
-              >
-                Close
-              </button>
-              <button className="px-4 sm:px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-lg hover:shadow-lg transition">
-                Save Changes
-              </button>
+            <div className={`flex flex-none items-center justify-between gap-3 border-t px-4 py-3 sm:px-6 ${theme === "dark" ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
+              <button onClick={() => setShowSettingsModal(false)} className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${theme === "dark" ? "text-slate-300 hover:bg-slate-800" : "text-slate-600 hover:bg-slate-100"}`}>Cancel</button>
+              <button disabled={settingsSaving} onClick={() => void handleSaveSettings()} className="inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:shadow-lg disabled:opacity-60">{settingsSaving && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />}Save changes</button>
             </div>
           </div>
         </div>

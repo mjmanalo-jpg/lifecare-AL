@@ -21,6 +21,8 @@ class User(Base):
     __tablename__ = "User"
 
     id: Mapped[str] = mapped_column("id", String(36), primary_key=True, default=_uuid)
+    authUserId: Mapped[str | None] = mapped_column("authUserId", String(36), unique=True)
+    platformRole: Mapped[str | None] = mapped_column("platformRole", String(30))
     role: Mapped[str] = mapped_column("role", String(25), default="FAMILY")
     email: Mapped[str] = mapped_column("email", String(255), unique=True, nullable=False)
     name: Mapped[str] = mapped_column("name", String(255), nullable=False)
@@ -44,13 +46,15 @@ class Resident(Base):
     __tablename__ = "Resident"
 
     id: Mapped[str] = mapped_column("id", String(36), primary_key=True, default=_uuid)
+    organizationId: Mapped[str | None] = mapped_column("organizationId", String(36), index=True)
+    communityId: Mapped[str | None] = mapped_column("communityId", String(36), index=True)
     firstName: Mapped[str] = mapped_column("firstName", String(100), nullable=False)
     lastName: Mapped[str] = mapped_column("lastName", String(100), nullable=False)
     dateOfBirth: Mapped[datetime | None] = mapped_column("dateOfBirth", DateTime)
     gender: Mapped[str | None] = mapped_column("gender", String(20))
     phone: Mapped[str | None] = mapped_column("phone", String(30))
     email: Mapped[str | None] = mapped_column("email", String(255))
-    roomNumber: Mapped[str] = mapped_column("roomNumber", String(20), unique=True, nullable=False)
+    roomNumber: Mapped[str] = mapped_column("roomNumber", String(20), nullable=False)
     careLevel: Mapped[str] = mapped_column("careLevel", String(20), nullable=False)
     admissionDate: Mapped[datetime] = mapped_column("admissionDate", DateTime, nullable=False)
     emergencyContact: Mapped[str | None] = mapped_column("emergencyContact", String(255))
@@ -83,6 +87,8 @@ class Staff(Base):
     __tablename__ = "Staff"
 
     id: Mapped[str] = mapped_column("id", String(36), primary_key=True, default=_uuid)
+    organizationId: Mapped[str | None] = mapped_column("organizationId", String(36), index=True)
+    communityId: Mapped[str | None] = mapped_column("communityId", String(36), index=True)
     userId: Mapped[str] = mapped_column("userId", String(36), ForeignKey("User.id"), unique=True)
     position: Mapped[str] = mapped_column("position", String(100), nullable=False)
     department: Mapped[str | None] = mapped_column("department", String(100))
@@ -101,6 +107,8 @@ class VitalsLog(Base):
     __tablename__ = "VitalsLog"
 
     id: Mapped[str] = mapped_column("id", String(36), primary_key=True, default=_uuid)
+    organizationId: Mapped[str | None] = mapped_column("organizationId", String(36), index=True)
+    communityId: Mapped[str | None] = mapped_column("communityId", String(36), index=True)
     residentId: Mapped[str] = mapped_column("residentId", String(36), ForeignKey("Resident.id"), nullable=False)
     type: Mapped[str] = mapped_column("type", String(30), nullable=False)
     value: Mapped[str] = mapped_column("value", String(100), nullable=False)
@@ -127,6 +135,8 @@ class Medication(Base):
     __tablename__ = "Medication"
 
     id: Mapped[str] = mapped_column("id", String(36), primary_key=True, default=_uuid)
+    organizationId: Mapped[str | None] = mapped_column("organizationId", String(36), index=True)
+    communityId: Mapped[str | None] = mapped_column("communityId", String(36), index=True)
     residentId: Mapped[str] = mapped_column("residentId", String(36), ForeignKey("Resident.id"), nullable=False)
     name: Mapped[str] = mapped_column("name", String(255), nullable=False)
     dosage: Mapped[str] = mapped_column("dosage", String(100), nullable=False)
@@ -156,6 +166,8 @@ class CallBell(Base):
     __tablename__ = "CallBell"
 
     id: Mapped[str] = mapped_column("id", String(36), primary_key=True, default=_uuid)
+    organizationId: Mapped[str | None] = mapped_column("organizationId", String(36), index=True)
+    communityId: Mapped[str | None] = mapped_column("communityId", String(36), index=True)
     residentId: Mapped[str] = mapped_column("residentId", String(36), ForeignKey("Resident.id"), nullable=False)
     status: Mapped[str] = mapped_column("status", String(20), default="PENDING")
     reason: Mapped[str | None] = mapped_column("reason", Text)
@@ -180,6 +192,8 @@ class Task(Base):
     __tablename__ = "Task"
 
     id: Mapped[str] = mapped_column("id", String(36), primary_key=True, default=_uuid)
+    organizationId: Mapped[str | None] = mapped_column("organizationId", String(36), index=True)
+    communityId: Mapped[str | None] = mapped_column("communityId", String(36), index=True)
     residentId: Mapped[str] = mapped_column("residentId", String(36), ForeignKey("Resident.id"), nullable=False)
     title: Mapped[str] = mapped_column("title", String(255), nullable=False)
     description: Mapped[str | None] = mapped_column("description", Text)
@@ -206,6 +220,8 @@ class Message(Base):
     __tablename__ = "Message"
 
     id: Mapped[str] = mapped_column("id", String(36), primary_key=True, default=_uuid)
+    organizationId: Mapped[str | None] = mapped_column("organizationId", String(36), index=True)
+    communityId: Mapped[str | None] = mapped_column("communityId", String(36), index=True)
     senderId: Mapped[str] = mapped_column("senderId", String(36), ForeignKey("User.id"), nullable=False)
     recipientId: Mapped[str] = mapped_column("recipientId", String(36), ForeignKey("User.id"), nullable=False)
     subject: Mapped[str | None] = mapped_column("subject", String(255))
@@ -233,6 +249,8 @@ class Notification(Base):
     __tablename__ = "Notification"
 
     id: Mapped[str] = mapped_column("id", String(36), primary_key=True, default=_uuid)
+    organizationId: Mapped[str | None] = mapped_column("organizationId", String(36), index=True)
+    communityId: Mapped[str | None] = mapped_column("communityId", String(36), index=True)
     userId: Mapped[str] = mapped_column("userId", String(36), ForeignKey("User.id"), nullable=False)
     type: Mapped[str] = mapped_column("type", String(30), nullable=False)
     title: Mapped[str] = mapped_column("title", String(255), nullable=False)
@@ -253,7 +271,9 @@ class Room(Base):
     __tablename__ = "Room"
 
     id: Mapped[str] = mapped_column("id", String(36), primary_key=True, default=_uuid)
-    roomNumber: Mapped[str] = mapped_column("roomNumber", String(20), unique=True, nullable=False)
+    organizationId: Mapped[str | None] = mapped_column("organizationId", String(36), index=True)
+    communityId: Mapped[str | None] = mapped_column("communityId", String(36), index=True)
+    roomNumber: Mapped[str] = mapped_column("roomNumber", String(20), nullable=False)
     floor: Mapped[int | None] = mapped_column("floor", Integer)
     wing: Mapped[str | None] = mapped_column("wing", String(50))
     roomType: Mapped[str] = mapped_column("roomType", String(20), default="SEMI_PRIVATE")
@@ -272,6 +292,8 @@ class Visit(Base):
     __tablename__ = "Visit"
 
     id: Mapped[str] = mapped_column("id", String(36), primary_key=True, default=_uuid)
+    organizationId: Mapped[str | None] = mapped_column("organizationId", String(36), index=True)
+    communityId: Mapped[str | None] = mapped_column("communityId", String(36), index=True)
     residentId: Mapped[str] = mapped_column("residentId", String(36), ForeignKey("Resident.id"), nullable=False)
     visitorName: Mapped[str] = mapped_column("visitorName", String(255), nullable=False)
     visitorPhone: Mapped[str | None] = mapped_column("visitorPhone", String(30))
@@ -292,6 +314,8 @@ class TransportRequest(Base):
     __tablename__ = "TransportRequest"
 
     id: Mapped[str] = mapped_column("id", String(36), primary_key=True, default=_uuid)
+    organizationId: Mapped[str | None] = mapped_column("organizationId", String(36), index=True)
+    communityId: Mapped[str | None] = mapped_column("communityId", String(36), index=True)
     residentId: Mapped[str] = mapped_column("residentId", String(36), ForeignKey("Resident.id"), nullable=False)
     type: Mapped[str] = mapped_column("type", String(30), default="MEDICAL_APPOINTMENT")
     destination: Mapped[str] = mapped_column("destination", String(255), nullable=False)
@@ -326,6 +350,8 @@ class KnowledgeDoc(Base):
     __tablename__ = "KnowledgeDoc"
 
     id: Mapped[str] = mapped_column("id", String(36), primary_key=True, default=_uuid)
+    organizationId: Mapped[str | None] = mapped_column("organizationId", String(36), index=True)
+    communityId: Mapped[str | None] = mapped_column("communityId", String(36), index=True)
     name: Mapped[str] = mapped_column("name", String(255), nullable=False)
     type: Mapped[str] = mapped_column("type", String(50), default="unknown")
     size: Mapped[int] = mapped_column("size", Integer, default=0)
@@ -341,6 +367,8 @@ class ServiceCharge(Base):
     __tablename__ = "ServiceCharge"
 
     id: Mapped[str] = mapped_column("id", String(36), primary_key=True, default=_uuid)
+    organizationId: Mapped[str | None] = mapped_column("organizationId", String(36), index=True)
+    communityId: Mapped[str | None] = mapped_column("communityId", String(36), index=True)
     residentId: Mapped[str] = mapped_column("residentId", String(36), ForeignKey("Resident.id"), nullable=False)
     description: Mapped[str] = mapped_column("description", String(255), nullable=False)
     amount: Mapped[float] = mapped_column("amount", Float, nullable=False)
@@ -359,6 +387,8 @@ class AiChatMessage(Base):
     __tablename__ = "AiChatMessage"
 
     id: Mapped[str] = mapped_column("id", String(36), primary_key=True, default=_uuid)
+    organizationId: Mapped[str | None] = mapped_column("organizationId", String(36), index=True)
+    communityId: Mapped[str | None] = mapped_column("communityId", String(36), index=True)
     residentId: Mapped[str] = mapped_column("residentId", String(36), ForeignKey("Resident.id"), nullable=False)
     role: Mapped[str] = mapped_column("role", String(20), nullable=False)
     content: Mapped[str] = mapped_column("content", Text, nullable=False)

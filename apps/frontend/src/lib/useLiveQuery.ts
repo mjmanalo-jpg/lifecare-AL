@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getSupabase } from "./supabaseClient";
+import { getTenantRealtime } from "./supabaseClient";
+import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 
 // Monotonic counter so every hook instance gets a UNIQUE realtime channel
 // topic. Supabase throws if two channels share a topic and `.on()` is called
@@ -72,28 +73,24 @@ export function useLiveQuery<T = Record<string, unknown>>(
     run(); // initial load
     const interval = setInterval(run, pollMs); // polling fallback
 
-    // Realtime: refetch on any change to the watched tables.
-    const supabase = getSupabase();
-    const watch = tablesKey ? tablesKey.split(",") : [];
-    const channel =
-      supabase && watch.length
-        ? supabase.channel(`live:${model}:${(channelSeq += 1)}`)
-        : null;
-    if (channel) {
-      watch.forEach((table) =>
-        channel.on(
-          "postgres_changes",
-          { event: "*", schema: "public", table },
-          run
-        )
-      );
+    // Realtime is opt-in and authenticated. The channel is filtered to the
+    // active workspace; polling remains the safe fallback.
+    let realtimeClient: SupabaseClient | null = null;
+    let channel: RealtimeChannel | null = null;
+    void getTenantRealtime().then((realtime) => {
+      if (!realtime || cancelled) return;
+      realtimeClient = realtime.client;
+      const watch = tablesKey ? tablesKey.split(",") : [];
+      if (!watch.length) return;
+      channel = realtime.client.channel(`live:${model}:${(channelSeq += 1)}`);
+      watch.forEach((table) => channel!.on("postgres_changes", { event: "*", schema: "public", table, filter: `communityId=eq.${realtime.communityId}` }, run));
       channel.subscribe();
-    }
+    });
 
     return () => {
       cancelled = true;
       clearInterval(interval);
-      if (supabase && channel) supabase.removeChannel(channel);
+      if (realtimeClient && channel) realtimeClient.removeChannel(channel);
     };
   }, [fetchData, enabled, pollMs, model, tablesKey]);
 

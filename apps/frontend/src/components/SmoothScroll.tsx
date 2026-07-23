@@ -3,7 +3,7 @@
 import { ReactNode, useEffect } from "react";
 import { usePathname } from "next/navigation";
 
-const PORTAL_PATH_RE = /^\/(nurse|physician|caregiver|family|resident|superadmin|facility_admin|fleet_management|driver)(\/|$)/i;
+const PORTAL_PATH_RE = /^\/(platform_admin|organization_admin|nurse|physician|caregiver|family|resident|superadmin|facility_admin|fleet_management|driver)(\/|$)/i;
 
 export default function SmoothScroll({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -12,7 +12,7 @@ export default function SmoothScroll({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isPortal) return;
 
-    let lenis: any = null;
+    let lenis: { raf: (time: number) => void; destroy: () => void } | null = null;
     let rafId = 0;
 
     import("lenis").then(({ default: Lenis }) => {

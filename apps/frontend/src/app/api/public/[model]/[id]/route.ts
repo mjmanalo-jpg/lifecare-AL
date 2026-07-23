@@ -37,7 +37,7 @@ export async function GET(
   }
 
   try {
-    const data = await def.delegate.findUnique({ where: { id } });
+    const data = await def.delegate.findFirst({ where: { id, organizationId: null, communityId: null } });
     if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ data });
   } catch (err) {

@@ -2,53 +2,34 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-/**
- * Lazily-created browser Supabase client used ONLY for realtime subscriptions
- * (postgres_changes). All reads/writes go through the /api/db routes + Prisma,
- * so the anon key never needs table privileges beyond realtime.
- *
- * Returns null when the public env vars are absent — callers then rely purely
- * on the polling fallback in useLiveQuery.
- */
 let client: SupabaseClient | null = null;
 let initFailed = false;
 
-/** A usable value: present, not an unfilled `<PLACEHOLDER>`, and a valid URL. */
 function validUrl(value: string | undefined): value is string {
-  if (!value || value.includes("<")) return false;
-  try {
-    const u = new URL(value);
-    return u.protocol === "https:" || u.protocol === "http:";
-  } catch {
-    return false;
-  }
+  if (!value || value.includes("<") || value.includes("[")) return false;
+  try { return ["https:", "http:"].includes(new URL(value).protocol); } catch { return false; }
 }
+function validKey(value: string | undefined): value is string { return Boolean(value) && !value!.includes("<") && !value!.includes("["); }
 
-function validKey(value: string | undefined): value is string {
-  return Boolean(value) && !value!.includes("<");
-}
-
-export function getSupabase(): SupabaseClient | null {
-  if (typeof window === "undefined" || initFailed) return null;
+export async function getTenantRealtime(): Promise<{ client: SupabaseClient; communityId: string } | null> {
+  if (typeof window === "undefined" || initFailed || process.env.NEXT_PUBLIC_ENABLE_TENANT_REALTIME !== "true") return null;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!validUrl(url) || !validKey(key)) return null; // → polling fallback
-  if (!client) {
-    try {
-      client = createClient(url, key, {
-        auth: { persistSession: false },
-        realtime: { params: { eventsPerSecond: 5 } },
-      });
-    } catch (err) {
-      // Bad config should never crash the app — just disable realtime.
-      initFailed = true;
-      console.warn("Supabase realtime disabled (invalid config):", err);
-      return null;
-    }
+  if (!validUrl(url) || !validKey(key)) return null;
+  try {
+    const response = await fetch("/api/auth/realtime-token", { cache: "no-store" });
+    if (!response.ok) return null;
+    const { accessToken, communityId } = await response.json();
+    if (!accessToken || !communityId) return null;
+    if (!client) client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    client.realtime.setAuth(accessToken);
+    return { client, communityId };
+  } catch {
+    initFailed = true;
+    return null;
   }
-  return client;
 }
 
 export function realtimeEnabled(): boolean {
-  return validUrl(process.env.NEXT_PUBLIC_SUPABASE_URL) && validKey(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  return process.env.NEXT_PUBLIC_ENABLE_TENANT_REALTIME === "true" && validUrl(process.env.NEXT_PUBLIC_SUPABASE_URL) && validKey(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 }

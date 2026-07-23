@@ -1,78 +1,37 @@
 import { NextResponse } from "next/server";
+import { requireTenantContext, tenantWhere } from "@/lib/tenant";
+import { withTenantDb } from "@/lib/tenantDb";
+import { assertMutationEntitled } from "@/lib/entitlements";
 
-// Mock residents with sleep data
-const residents = [
-  {
-    id: "1",
-    name: "John Doe",
-    room: "101",
-    sleeping: false,
-    sleepScore: 0.1,
-    position: "sitting",
-    lastUpdate: new Date().toISOString(),
-    alerts: 0
-  },
-  {
-    id: "2",
-    name: "Jane Smith",
-    room: "102",
-    sleeping: true,
-    sleepScore: 0.85,
-    position: "lying",
-    lastUpdate: new Date(Date.now() - 5000).toISOString(),
-    alerts: 0
-  },
-  {
-    id: "3",
-    name: "Bob Wilson",
-    room: "103",
-    sleeping: false,
-    sleepScore: 0.2,
-    position: "sitting",
-    lastUpdate: new Date().toISOString(),
-    alerts: 1
-  }
-];
-
-export async function GET(req) {
-  try {
-    return NextResponse.json({
-      residents: residents,
-      summary: {
-        total: residents.length,
-        sleeping: residents.filter(r => r.sleeping).length,
-        awake: residents.filter(r => !r.sleeping).length,
-        alerts: residents.reduce((sum, r) => sum + r.alerts, 0)
-      }
-    });
-  } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+export async function GET() {
+  const context = await requireTenantContext({ requireCommunity: true });
+  if (!context?.communityId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const residents = await withTenantDb(context, (tx) => tx.resident.findMany({
+    where: tenantWhere("residents", context),
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      roomNumber: true,
+      cameraMonitoringLogs: { orderBy: { createdAt: "desc" }, take: 1, select: { behavior: true, posture: true, alert: true, createdAt: true } },
+    },
+    orderBy: { roomNumber: "asc" },
+  }));
+  const data = residents.map((resident) => {
+    const latest = resident.cameraMonitoringLogs[0];
+    return { id: resident.id, name: `${resident.firstName} ${resident.lastName}`, room: resident.roomNumber, sleeping: latest?.behavior === "SLEEPING", position: latest?.posture || "unknown", lastUpdate: latest?.createdAt || null, alerts: latest?.alert ? 1 : 0 };
+  });
+  return NextResponse.json({ residents: data, summary: { total: data.length, sleeping: data.filter((item) => item.sleeping).length, awake: data.filter((item) => !item.sleeping).length, alerts: data.reduce((sum, item) => sum + item.alerts, 0) } });
 }
 
 export async function POST(req) {
-  try {
-    const body = await req.json();
-    const { residentId, sleeping, sleepScore, position } = body;
-
-    const resident = residents.find(r => r.id === residentId);
-    if (!resident) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    // Update resident data
-    resident.sleeping = sleeping;
-    resident.sleepScore = sleepScore;
-    resident.position = position;
-    resident.lastUpdate = new Date().toISOString();
-
-    // Alert if unexpected sleep
-    if (sleeping && resident.alerts === 0) {
-      resident.alerts = 1;
-    }
-
-    return NextResponse.json(resident);
-  } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+  const context = await requireTenantContext({ requireCommunity: true });
+  if (!context?.organizationId || !context.communityId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  await assertMutationEntitled(context, "camera-monitoring-logs");
+  const body = await req.json();
+  const residentId = String(body.residentId || "");
+  const resident = await withTenantDb(context, (tx) => tx.resident.findFirst({ where: { AND: [tenantWhere("residents", context), { id: residentId }] }, select: { id: true, firstName: true, lastName: true, roomNumber: true } }));
+  if (!resident) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const created = await withTenantDb(context, (tx) => tx.cameraMonitoringLog.create({ data: { organizationId: context.organizationId, communityId: context.communityId, residentId, residentName: `${resident.firstName} ${resident.lastName}`, roomNumber: resident.roomNumber, behavior: body.sleeping ? "SLEEPING" : "AWAKE", posture: String(body.position || "unknown"), alert: Boolean(body.sleeping), logType: "ANALYSIS" } }));
+  return NextResponse.json(created, { status: 201 });
 }

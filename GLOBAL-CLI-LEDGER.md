@@ -13,9 +13,9 @@
 - **Frontend:** Next.js + Prisma ORM + React + TypeScript
 - **Backend:** FastAPI (async SQLAlchemy + asyncpg) + Supabase PostgreSQL
 - **Realtime:** `useLiveQuery` hook (Supabase subscriptions + polling fallback)
-- **Auth:** Email/password (bcryptjs) + demo role bypass. Default password: `LifeCare@2026`
+- **Auth:** Supabase Auth for deployed environments; isolated demo seeds require `SEED_ACCOUNT_PASSWORD`.
 - **DB URL:** `postgresql://` (sync for Prisma); backend converts to `postgresql+asyncpg://`
-- **Supabase pooler password** contains `@`: `0933016007@Paul`
+- **Supabase pooler credentials:** stored only in local/deployment secret managers.
 
 ## Key Files
 | File | Purpose |

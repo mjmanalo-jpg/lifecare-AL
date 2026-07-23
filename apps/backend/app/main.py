@@ -1,6 +1,7 @@
 import uvicorn
+import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import camera, voice, ehr
 from app.api.v1 import (
@@ -9,12 +10,16 @@ from app.api.v1 import (
 )
 from app.db import engine, close_db
 from app.models.portal import Base
+from app.auth import get_current_user
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Prisma migrations are the production schema authority. create_all remains
+    # an explicit local-development escape hatch only.
+    if os.getenv("AUTO_CREATE_SCHEMA", "false").lower() == "true" and os.getenv("PYTHON_ENV") != "production":
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
     yield
     await close_db()
 
@@ -28,30 +33,27 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://assisted-living-delta.vercel.app",
-    ],
+    allow_origins=[origin.strip() for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",") if origin.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Existing routers
-app.include_router(camera.router, prefix="/api/v1/camera", tags=["Camera"])
-app.include_router(voice.router, prefix="/api/v1/voice", tags=["Voice"])
-app.include_router(ehr.router, prefix="/api/v1/ehr", tags=["EHR"])
+app.include_router(camera.router, prefix="/api/v1/camera", tags=["Camera"], dependencies=[Depends(get_current_user)])
+app.include_router(voice.router, prefix="/api/v1/voice", tags=["Voice"], dependencies=[Depends(get_current_user)])
+app.include_router(ehr.router, prefix="/api/v1/ehr", tags=["EHR"], dependencies=[Depends(get_current_user)])
 
 # Resident Portal routers
-app.include_router(ai_companion.router, prefix="/api/v1/ai", tags=["AI Companion"])
-app.include_router(call_bell.router, prefix="/api/v1/call-bell", tags=["Call Bell & SOS"])
-app.include_router(vitals.router, prefix="/api/v1/vitals", tags=["Vitals"])
-app.include_router(medications.router, prefix="/api/v1/medications", tags=["Medications"])
-app.include_router(schedule.router, prefix="/api/v1/schedule", tags=["Daily Goals & Schedule"])
-app.include_router(messages.router, prefix="/api/v1/messages", tags=["Messages"])
-app.include_router(room_service.router, prefix="/api/v1/room-service", tags=["Room & Hotel Services"])
-app.include_router(family.router, prefix="/api/v1/family", tags=["Family Portal"])
-app.include_router(appointments.router, prefix="/api/v1/appointments", tags=["Appointments"])
+app.include_router(ai_companion.router, prefix="/api/v1/ai", tags=["AI Companion"], dependencies=[Depends(get_current_user)])
+app.include_router(call_bell.router, prefix="/api/v1/call-bell", tags=["Call Bell & SOS"], dependencies=[Depends(get_current_user)])
+app.include_router(vitals.router, prefix="/api/v1/vitals", tags=["Vitals"], dependencies=[Depends(get_current_user)])
+app.include_router(medications.router, prefix="/api/v1/medications", tags=["Medications"], dependencies=[Depends(get_current_user)])
+app.include_router(schedule.router, prefix="/api/v1/schedule", tags=["Daily Goals & Schedule"], dependencies=[Depends(get_current_user)])
+app.include_router(messages.router, prefix="/api/v1/messages", tags=["Messages"], dependencies=[Depends(get_current_user)])
+app.include_router(room_service.router, prefix="/api/v1/room-service", tags=["Room & Hotel Services"], dependencies=[Depends(get_current_user)])
+app.include_router(family.router, prefix="/api/v1/family", tags=["Family Portal"], dependencies=[Depends(get_current_user)])
+app.include_router(appointments.router, prefix="/api/v1/appointments", tags=["Appointments"], dependencies=[Depends(get_current_user)])
 
 
 @app.get("/")

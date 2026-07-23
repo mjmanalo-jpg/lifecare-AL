@@ -10,6 +10,8 @@ import CaregiverPortalContent from "@/components/portal/views/CaregiverPortalCon
 import FamilyPortalContent from "@/components/portal/views/FamilyPortalContent";
 import ResidentPortalContent from "@/components/portal/views/ResidentPortalContent";
 import SuperAdminPortalContent from "@/components/portal/views/SuperAdminPortalContent";
+import PlatformAdminPortalContent from "@/components/portal/views/PlatformAdminPortalContent";
+import OrganizationAdminPortalContent from "@/components/portal/views/OrganizationAdminPortalContent";
 import FacilityAdminPortalContent from "@/components/portal/views/FacilityAdminPortalContent";
 import FleetManagementPortalContent from "@/components/portal/views/FleetManagementPortalContent";
 import DriverPortalContent from "@/components/portal/views/DriverPortalContent";
@@ -57,6 +59,8 @@ export default function RolePortalPage() {
       {/* Resident/Patient sees the customized resident dashboard, family sees family view */}
       {userRole === "FAMILY" && <FamilyPortalContent tab={tabParam || "dashboard"} />}
       {userRole === "RESIDENT" && <ResidentPortalContent tab={tabParam || "dashboard"} />}
+      {userRole === "PLATFORM_ADMIN" && <PlatformAdminPortalContent tab={tabParam || "dashboard"} />}
+      {userRole === "ORGANIZATION_ADMIN" && <OrganizationAdminPortalContent tab={tabParam || "dashboard"} />}
       {/* Super Admin sees the full operations portal. */}
       {userRole === "SUPERADMIN" && (
         <SuperAdminPortalContent tab={tabParam || "dashboard"} />

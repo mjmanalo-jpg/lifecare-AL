@@ -1,55 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { isDbConfigured } from "@/lib/models";
-import { validateSession } from "@/lib/auth";
+import { canManageOrganization, requireTenantContext } from "@/lib/tenant";
+import { withTenantDb } from "@/lib/tenantDb";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/**
- * Key/value application settings backed by the Prisma `AppSetting` model.
- *   GET  /api/settings           → { data: { key: value, ... } }
- *   POST /api/settings  {key,value} → upsert one setting
- *
- * Realtime reads go through /api/db/app-settings (useLiveQuery). This route
- * exists only to give writes proper upsert semantics. Degrades to a no-op echo
- * when no database is configured, so the UI keeps working.
- */
-
 export async function GET() {
-  const role = await validateSession();
-  if (!role) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+  const context = await requireTenantContext({ requireCommunity: true });
+  if (!context?.organizationId || !context.communityId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!isDbConfigured()) return NextResponse.json({ data: {}, demo: true });
-
-  try {
-    const rows = await prisma.appSetting.findMany();
-    const data = Object.fromEntries(rows.map((r) => [r.id, r.value]));
-    return NextResponse.json({ data });
-  } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
-  }
+  const rows = await withTenantDb(context, (tx) => tx.appSetting.findMany({ where: { OR: [{ organizationId: context.organizationId, communityId: null }, { organizationId: context.organizationId, communityId: context.communityId }] } }));
+  return NextResponse.json({ data: Object.fromEntries(rows.map((row) => [row.key || row.id, row.value])) });
 }
 
-export async function POST(req: NextRequest) {
-  const role = await validateSession();
-  if (!role) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { key, value } = await req.json().catch(() => ({}));
-  if (!key) return NextResponse.json({ error: "Missing key" }, { status: 400 });
-
-  if (!isDbConfigured()) {
-    return NextResponse.json({ data: { id: key, value }, demo: true });
-  }
-
-  try {
-    const data = await prisma.appSetting.upsert({
-      where: { id: String(key) },
-      update: { value: String(value) },
-      create: { id: String(key), value: String(value) },
-    });
-    return NextResponse.json({ data });
-  } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 400 });
-  }
+export async function POST(request: NextRequest) {
+  const context = await requireTenantContext({ requireCommunity: true });
+  if (!context?.organizationId || !context.communityId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!canManageOrganization(context) && context.role !== "FACILITY_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const body = await request.json().catch(() => ({}));
+  const key = String(body.key || "").trim();
+  if (!key || key.length > 100) return NextResponse.json({ error: "Invalid setting key" }, { status: 400 });
+  if (!isDbConfigured()) return NextResponse.json({ data: { key, value: body.value }, demo: true });
+  const id = `${context.organizationId}:${context.communityId}:${key}`;
+  const data = await withTenantDb(context, (tx) => tx.appSetting.upsert({ where: { id }, update: { value: String(body.value ?? "") }, create: { id, key, value: String(body.value ?? ""), organizationId: context.organizationId, communityId: context.communityId } }));
+  return NextResponse.json({ data });
 }

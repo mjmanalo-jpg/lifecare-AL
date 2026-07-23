@@ -6,7 +6,7 @@ import { Trash2, Search, Eye, Edit, X, Plus, Check, XCircle, Camera, Activity, A
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptStaff } from "@/lib/adapters";
-import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
+import { updateRecord, deleteRecord } from "@/lib/api";
 import FacilityDashboard from "@/components/portal/views/FacilityDashboard";
 import FacilityResidents from "@/components/portal/views/FacilityResidents";
 import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
@@ -63,7 +63,6 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
   const [addForm, setAddForm] = useState({
     name: "", email: "", phone: "", position: "", department: "",
     role: "CAREGIVER" as string, hireDate: new Date().toISOString().slice(0, 10),
-    isActive: true, isApproved: true,
   });
 
   const approvalLabel = (s: StaffMember) => s.approved;
@@ -158,24 +157,37 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
       return;
     }
     const result = await Swal.fire({
-      title: "Add Staff Member?", text: `Create staff record for ${addForm.name}?`, icon: "question",
+      title: "Invite Staff Member?", text: `Send a secure account invitation to ${addForm.email}?`, icon: "question",
       showCancelButton: true, confirmButtonColor: "#fbbf24", cancelButtonColor: "#6b7280",
       confirmButtonText: "Add", cancelButtonText: "Cancel",
     });
     if (result.isConfirmed) {
       try {
-        const user = await createRecord("users", {
-          name: addForm.name, email: addForm.email, phone: addForm.phone, role: addForm.role,
+        const sessionResponse = await fetch("/api/auth/session", { cache: "no-store" });
+        const sessionBody = await sessionResponse.json();
+        const organizationId = sessionBody.session?.activeOrganizationId;
+        const communityId = sessionBody.session?.activeCommunityId;
+        if (!sessionResponse.ok || !organizationId || !communityId) throw new Error("Select an active organization and community before inviting staff");
+        const response = await fetch(`/api/organizations/${organizationId}/invitations`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: addForm.name,
+            email: addForm.email,
+            phone: addForm.phone,
+            position: addForm.position,
+            department: addForm.department || undefined,
+            hireDate: addForm.hireDate,
+            communityId,
+            communityRole: addForm.role,
+          }),
         });
-        const userId = user.data?.id || user.id;
-        await createRecord("staff", {
-          userId, position: addForm.position, department: addForm.department || null,
-          hireDate: new Date(addForm.hireDate).toISOString(), isActive: addForm.isActive, isApproved: addForm.isApproved,
-        });
+        const invitation = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(invitation.error || "Could not send staff invitation");
         await refetch();
         setShowAddStaff(false);
-        setAddForm({ name: "", email: "", phone: "", position: "", department: "", role: "CAREGIVER", hireDate: new Date().toISOString().slice(0, 10), isActive: true, isApproved: true });
-        Swal.fire({ title: "Added", text: `${addForm.name} has been added to staff.`, icon: "success", timer: 1500, showConfirmButton: false });
+        setAddForm({ name: "", email: "", phone: "", position: "", department: "", role: "CAREGIVER", hireDate: new Date().toISOString().slice(0, 10) });
+        Swal.fire({ title: "Invitation sent", text: `${addForm.email} can now accept the Supabase invitation and create a password.`, icon: "success", timer: 2500, showConfirmButton: false });
       } catch (err) {
         Swal.fire({ title: "Add Failed", text: err instanceof Error ? err.message : "Could not add staff member.", icon: "error" });
       }
@@ -485,7 +497,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
               <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-6 flex items-center justify-between border-b border-yellow-600">
-                <h2 className="text-2xl font-bold">Add New Staff</h2>
+                <h2 className="text-2xl font-bold">Invite New Staff</h2>
                 <button onClick={() => setShowAddStaff(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
               </div>
               <div className="p-8 space-y-6">
@@ -500,30 +512,19 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                       <option value="NURSE">Nurse</option>
                       <option value="CAREGIVER">Caregiver</option>
                       <option value="PHYSICIAN">Physician</option>
-                      <option value="FACILITY_ADMIN">Facility Admin</option>
-                      <option value="STAFF">General Staff</option>
+                      <option value="FLEET_MANAGEMENT">Fleet Manager</option>
+                      <option value="DRIVER">Driver</option>
                     </select>
                   </div>
                   <div><label className="block text-sm font-semibold text-gray-700 mb-2">Hire Date</label><input type="date" value={addForm.hireDate} onChange={(e) => setAddForm({ ...addForm, hireDate: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-                  <div className="col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Employment Status</label>
-                    <select value={addForm.isActive ? "active" : "inactive"} onChange={(e) => setAddForm({ ...addForm, isActive: e.target.value === "active" })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none bg-white">
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Approval Status</label>
-                    <select value={addForm.isApproved ? "approved" : "disapproved"} onChange={(e) => setAddForm({ ...addForm, isApproved: e.target.value === "approved" })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none bg-white">
-                      <option value="approved">Approved</option>
-                      <option value="disapproved">Disapproved</option>
-                    </select>
+                  <div className="col-span-2 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
+                    This invitation is pre-approved for the selected facility. The recipient must verify the invited email and create a password before access becomes active.
                   </div>
                 </div>
               </div>
               <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex items-center justify-between">
                 <button onClick={() => setShowAddStaff(false)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
-                <button onClick={handleAddStaff} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Add Staff Member</button>
+                <button onClick={handleAddStaff} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Send Account Invitation</button>
               </div>
             </div>
           </div>

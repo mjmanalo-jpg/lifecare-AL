@@ -1,28 +1,25 @@
-import { validateSession } from "@/lib/auth";
+import { requireTenantContext } from "@/lib/tenant";
 import { redirect } from "next/navigation";
 import { PATH_TO_ROLE } from "@/constants/roleConfig";
 import React from "react";
 
-interface RoleLayoutProps {
-  children: React.ReactNode;
-  params: Promise<{ role: string }>;
-}
-
-export default async function RoleLayout({ children, params }: RoleLayoutProps) {
-  // Await params since it's a Promise in Next.js 16
+export default async function RoleLayout({ children, params }: { children: React.ReactNode; params: Promise<{ role: string }> }) {
   const { role } = await params;
-
-  // Validate session exists
-  const userRole = await validateSession();
-  if (!userRole) {
-    redirect("/login");
-  }
-
-  // Validate that the URL role matches the session role
+  const context = await requireTenantContext({ allowPlatform: true });
+  if (!context) redirect("/");
   const urlRole = PATH_TO_ROLE[role.toLowerCase()];
-  if (!urlRole || urlRole !== userRole) {
-    redirect(`/${userRole.toLowerCase()}/dashboard`);
+  if (context.isPlatform) {
+    if (urlRole === "PLATFORM_ADMIN") return <>{children}</>;
+    redirect("/platform_admin/dashboard");
   }
-
+  if (urlRole === "PLATFORM_ADMIN") redirect("/");
+  const organizationAdmin = ["OWNER", "ADMIN"].includes(context.organizationRole || "");
+  if (urlRole === "ORGANIZATION_ADMIN") {
+    if (organizationAdmin) return <>{children}</>;
+    redirect(`/${context.role.toLowerCase()}/dashboard`);
+  }
+  if (urlRole === "FACILITY_ADMIN" && organizationAdmin) return <>{children}</>;
+  if (!context.communityId) redirect("/");
+  if (!urlRole || urlRole !== context.role) redirect(`/${context.role.toLowerCase()}/dashboard`);
   return <>{children}</>;
 }
