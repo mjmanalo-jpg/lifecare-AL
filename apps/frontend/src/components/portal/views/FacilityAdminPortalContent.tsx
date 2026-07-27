@@ -60,9 +60,10 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
   });
   const [uploading, setUploading] = useState(false);
   const [showAddStaff, setShowAddStaff] = useState(false);
+  const [showAddPassword, setShowAddPassword] = useState(false);
   const [addForm, setAddForm] = useState({
     name: "", email: "", phone: "", position: "", department: "",
-    role: "CAREGIVER" as string, hireDate: new Date().toISOString().slice(0, 10),
+    role: "CAREGIVER" as string, hireDate: new Date().toISOString().slice(0, 10), password: "",
   });
 
   const approvalLabel = (s: StaffMember) => s.approved;
@@ -156,10 +157,14 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
       Swal.fire({ title: "Missing Fields", text: "Name, email, position, and phone are required.", icon: "warning" });
       return;
     }
+    if (addForm.password.length < 8) {
+      Swal.fire({ title: "Password too short", text: "Set a password of at least 8 characters for the staff member.", icon: "warning" });
+      return;
+    }
     const result = await Swal.fire({
-      title: "Invite Staff Member?", text: `Send a secure account invitation to ${addForm.email}?`, icon: "question",
+      title: "Create Staff Account?", text: `${addForm.email} will be able to sign in immediately with the password you set.`, icon: "question",
       showCancelButton: true, confirmButtonColor: "#fbbf24", cancelButtonColor: "#6b7280",
-      confirmButtonText: "Add", cancelButtonText: "Cancel",
+      confirmButtonText: "Create", cancelButtonText: "Cancel",
     });
     if (result.isConfirmed) {
       try {
@@ -167,8 +172,8 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
         const sessionBody = await sessionResponse.json();
         const organizationId = sessionBody.session?.activeOrganizationId;
         const communityId = sessionBody.session?.activeCommunityId;
-        if (!sessionResponse.ok || !organizationId || !communityId) throw new Error("Select an active organization and community before inviting staff");
-        const response = await fetch(`/api/organizations/${organizationId}/invitations`, {
+        if (!sessionResponse.ok || !organizationId || !communityId) throw new Error("Select an active organization and community before adding staff");
+        const response = await fetch(`/api/organizations/${organizationId}/staff`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -180,14 +185,17 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
             hireDate: addForm.hireDate,
             communityId,
             communityRole: addForm.role,
+            password: addForm.password,
           }),
         });
-        const invitation = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(invitation.error || "Could not send staff invitation");
+        const created = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(created.error || "Could not create staff account");
         await refetch();
         setShowAddStaff(false);
-        setAddForm({ name: "", email: "", phone: "", position: "", department: "", role: "CAREGIVER", hireDate: new Date().toISOString().slice(0, 10) });
-        Swal.fire({ title: "Invitation sent", text: `${addForm.email} can now accept the Supabase invitation and create a password.`, icon: "success", timer: 2500, showConfirmButton: false });
+        setShowAddPassword(false);
+        const createdEmail = addForm.email;
+        setAddForm({ name: "", email: "", phone: "", position: "", department: "", role: "CAREGIVER", hireDate: new Date().toISOString().slice(0, 10), password: "" });
+        Swal.fire({ title: "Staff account created", text: `${createdEmail} can now sign in with the password you set and change it later in Settings.`, icon: "success", timer: 2800, showConfirmButton: false });
       } catch (err) {
         Swal.fire({ title: "Add Failed", text: err instanceof Error ? err.message : "Could not add staff member.", icon: "error" });
       }
@@ -497,7 +505,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
               <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-6 flex items-center justify-between border-b border-yellow-600">
-                <h2 className="text-2xl font-bold">Invite New Staff</h2>
+                <h2 className="text-2xl font-bold">Add New Staff</h2>
                 <button onClick={() => setShowAddStaff(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
               </div>
               <div className="p-8 space-y-6">
@@ -517,14 +525,21 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                     </select>
                   </div>
                   <div><label className="block text-sm font-semibold text-gray-700 mb-2">Hire Date</label><input type="date" value={addForm.hireDate} onChange={(e) => setAddForm({ ...addForm, hireDate: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-                  <div className="col-span-2 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
-                    This invitation is pre-approved for the selected facility. The recipient must verify the invited email and create a password before access becomes active.
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Temporary Password</label>
+                    <div className="relative">
+                      <input type={showAddPassword ? "text" : "password"} value={addForm.password} onChange={(e) => setAddForm({ ...addForm, password: e.target.value })} placeholder="Set a password (min 8 characters)" autoComplete="new-password" className="w-full px-4 py-2 pr-16 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" />
+                      <button type="button" onClick={() => setShowAddPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-500 hover:text-gray-800">{showAddPassword ? "Hide" : "Show"}</button>
+                    </div>
+                  </div>
+                  <div className="col-span-2 rounded-lg border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-800">
+                    No invitation email is sent. The staff member is pre-approved for this facility and can sign in immediately with this email and password — they can change their password anytime under Settings.
                   </div>
                 </div>
               </div>
               <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex items-center justify-between">
                 <button onClick={() => setShowAddStaff(false)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
-                <button onClick={handleAddStaff} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Send Account Invitation</button>
+                <button onClick={handleAddStaff} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Create Staff Account</button>
               </div>
             </div>
           </div>
