@@ -686,7 +686,8 @@ model Staff {
 
   // Relations
   user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assignedTasks     Task[]
+  assignedTasks     Task[]            @relation("TaskAssignee")
+  createdTasks      Task[]            @relation("TaskCreator")
   timeTracking      TimeTracking[]
   incidentsReported Incident[]        @relation("StaffReporter")
   shiftReports      ShiftReport[]
@@ -850,7 +851,10 @@ model Task {
   status        TaskStatus   @default(PENDING)
   priority      TaskPriority @default(MEDIUM)
   assignedToId  String?
-  assignedTo    Staff?       @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedTo    Staff?       @relation("TaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  // Who delegated this task (supervisor). Null for self-created caregiver tasks.
+  createdById   String?
+  createdBy     Staff?       @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
   dueDate       DateTime
   completedAt   DateTime?
 
@@ -874,6 +878,7 @@ model Task {
   @@index([status])
   @@index([priority])
   @@index([assignedToId])
+  @@index([createdById])
   @@index([dueDate])
   @@index([communityId])
 

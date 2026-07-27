@@ -46,6 +46,17 @@ export default function CaregiverTasks() {
   } = useLiveQuery("tasks", { query: "include=resident&take=300", tables: ["Task", "Resident"] });
   const tasks = useMemo<CaregiverTask[]>(() => taskRows.map(adaptTask), [taskRows]);
 
+  // Staff directory → resolve assignee / delegator names (relations aren't nested-included by the API).
+  const { data: staffRows } = useLiveQuery<{ id: string; user?: { name?: string } }>(
+    "staff", { query: "include=user&take=300", tables: ["Staff"] }
+  );
+  const staffNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    staffRows.forEach((s) => map.set(s.id, s.user?.name ?? "Staff"));
+    return map;
+  }, [staffRows]);
+  const nameOf = (id: unknown) => (typeof id === "string" ? staffNameById.get(id) ?? null : null);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -288,6 +299,12 @@ export default function CaregiverTasks() {
                       <p className="text-xs sm:text-sm text-gray-600 mt-1">
                         {task.resident} • Room {task.room}
                       </p>
+                      {(nameOf(task.raw?.assignedToId) || nameOf(task.raw?.createdById)) && (
+                        <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5">
+                          {nameOf(task.raw?.assignedToId) && <>👤 Assigned to <span className="font-medium text-gray-700">{nameOf(task.raw?.assignedToId)}</span></>}
+                          {nameOf(task.raw?.createdById) && <> · by {nameOf(task.raw?.createdById)}</>}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                       <span
@@ -425,6 +442,14 @@ export default function CaregiverTasks() {
                   <span className={`px-3 py-1 rounded-full text-sm font-bold ${viewingTask.completed ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>
                     {viewingTask.completed ? "COMPLETED" : "PENDING"}
                   </span>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-600 mb-2">Assigned To</label>
+                  <p className="text-lg text-gray-900">{nameOf(viewingTask.raw?.assignedToId) ?? "Unassigned"}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-600 mb-2">Assigned By</label>
+                  <p className="text-lg text-gray-900">{nameOf(viewingTask.raw?.createdById) ?? "—"}</p>
                 </div>
               </div>
 
