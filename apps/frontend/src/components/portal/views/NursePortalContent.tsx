@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, Suspense } from "react";
+import { useState, useMemo, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import VitalsPanel, { VitalReading } from "@/components/portal/widgets/VitalsPanel";
 import CameraVisionFeed from "@/components/CameraVisionFeed";
@@ -165,6 +165,30 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     });
   };
 
+  // Preventive pre-fall risk — logged as a lower-severity WARNING so staff can act
+  // before a fall, without polluting the log with false CRITICAL fall incidents.
+  const preFallCooldownRef = useRef(0);
+  const handleMonitoringPreFallRisk = async (
+    analysis: MonitoringAnalysis & { resident?: string; room?: string },
+    reason: string,
+  ) => {
+    // The feed already debounces (60s); guard again here against duplicate incidents.
+    const now = Date.now();
+    if (now - preFallCooldownRef.current < 60_000) return;
+    preFallCooldownRef.current = now;
+
+    try {
+      await createRecord("incidents", {
+        incidentType: "BEHAVIORAL",
+        severity: "MODERATE",
+        description: `PRE-FALL RISK (PREVENTIVE ALERT)\n\n${reason}`,
+        notes: `AI Vision early warning — Emotion: ${analysis.globalEmotion || "Unknown"}; Behavior: ${analysis.globalBehavior || "Unknown"}; Posture: ${analysis.globalPosture || "Unknown"}. Check the resident before a fall occurs.`,
+        incidentDate: new Date().toISOString(),
+      });
+      await refetchIncidents();
+    } catch { /* non-critical — the on-camera banner + monitoring log still fired */ }
+  };
+
   const handleDeleteIncident = async (id: string) => {
     const result = await Swal.fire({
       title: "Delete Incident?",
@@ -252,6 +276,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
       <NurseMonitoringView
         monitoringFallAlert={monitoringFallAlert}
         handleMonitoringFallTriggered={handleMonitoringFallTriggered}
+        handleMonitoringPreFallRisk={handleMonitoringPreFallRisk}
         setMonitoringFallAlert={setMonitoringFallAlert}
       />
     );
@@ -709,11 +734,14 @@ function NurseMonitoringViewFallback() {
 function NurseMonitoringViewInner({
   monitoringFallAlert,
   handleMonitoringFallTriggered,
+  handleMonitoringPreFallRisk,
   setMonitoringFallAlert,
 }: {
   monitoringFallAlert: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handleMonitoringFallTriggered: (analysis: any) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handleMonitoringPreFallRisk?: (analysis: any, reason: string) => void;
   setMonitoringFallAlert: (val: boolean) => void;
 }) {
   const searchParams = useSearchParams();
@@ -767,6 +795,7 @@ function NurseMonitoringViewInner({
             residentId={residentId || undefined}
             isFallen={monitoringFallAlert}
             onFallTriggered={(analysis: any) => handleMonitoringFallTriggered({ ...analysis, resident: resident || "", room: room || "" })} // eslint-disable-line @typescript-eslint/no-explicit-any
+            onPreFallRisk={(analysis: any, reason: string) => handleMonitoringPreFallRisk?.({ ...analysis, resident: resident || "", room: room || "" }, reason)} // eslint-disable-line @typescript-eslint/no-explicit-any
             onFallCleared={() => setMonitoringFallAlert(false)}
           />
         </div>
@@ -819,11 +848,14 @@ function NurseMonitoringViewInner({
 export function NurseMonitoringView({
   monitoringFallAlert,
   handleMonitoringFallTriggered,
+  handleMonitoringPreFallRisk,
   setMonitoringFallAlert,
 }: {
   monitoringFallAlert: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handleMonitoringFallTriggered: (analysis: any) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handleMonitoringPreFallRisk?: (analysis: any, reason: string) => void;
   setMonitoringFallAlert: (val: boolean) => void;
 }) {
   return (
@@ -831,6 +863,7 @@ export function NurseMonitoringView({
       <NurseMonitoringViewInner
         monitoringFallAlert={monitoringFallAlert}
         handleMonitoringFallTriggered={handleMonitoringFallTriggered}
+        handleMonitoringPreFallRisk={handleMonitoringPreFallRisk}
         setMonitoringFallAlert={setMonitoringFallAlert}
       />
     </Suspense>

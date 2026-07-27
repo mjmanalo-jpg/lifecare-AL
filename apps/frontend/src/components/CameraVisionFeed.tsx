@@ -54,6 +54,8 @@ interface Props {
   isFallen?: boolean;
   onFallTriggered?: (analysis: VisionAnalysis) => void;
   onFallCleared?: () => void;
+  /** Fires when pre-fall risk indicators (agitation/startle or a near-fall stumble) appear BEFORE a fall. */
+  onPreFallRisk?: (analysis: VisionAnalysis, reason: string) => void;
   cameraMode?: "local" | "tapo" | "hybrid";
   residentName?: string;
   residentRoom?: string;
@@ -200,6 +202,15 @@ const RAPID_DROP_WINDOW_MS = 2000; // a drop counts toward a fall if it was this
 // "active"). No rapid drop required.
 const LYING_CONFIRM_MS = 1000;
 const CLEAR_CONFIRM_MS = 1500;
+
+// ── Preventive pre-fall risk ────────────────────────────────────────────────
+// Warn staff BEFORE a fall when a resident shows agitation/startle or a near-fall
+// stumble. This is Mila's "catch the near-falls" differentiator — preventive, not
+// reactive. Signals come from the same emotion/motion pipeline used for falls.
+const PREFALL_EVAL_INTERVAL_MS = 1000;   // how often risk is scored
+const PREFALL_DEBOUNCE_MS = 60_000;      // minimum gap between preventive alerts
+const PREFALL_BANNER_MS = 10_000;        // how long the on-screen warning stays up
+const AGITATION_STREAK_TRIGGER = 3;      // consecutive agitated reads before alerting
 
 const INIT: VisionAnalysis = {
   globalEmotion:"Neutral", emotionConfidence:0, globalBehavior:"Initializing",
@@ -378,7 +389,7 @@ function captureSnapshot(videoEl: HTMLVideoElement | null, imgEl: HTMLImageEleme
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallCleared, cameraMode = "hybrid", residentName, residentRoom, residentId }: Props) {
+export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallCleared, onPreFallRisk, cameraMode = "hybrid", residentName, residentRoom, residentId }: Props) {
   // Camera Mode State (Local | Tapo IP | Hybrid)
   const [activeCamera, setActiveCamera] = useState<"local" | "tapo">(
     cameraMode === "tapo" ? "tapo" : "local"
@@ -497,11 +508,20 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   const prevTimeRef     = useRef(0);                   // timestamp of that frame
   const rapidDropTimeRef = useRef(0);                  // when the last rapid drop was seen
 
+  // Preventive pre-fall risk tracking
+  const lastRiskEvalRef    = useRef(0);   // throttles risk scoring
+  const agitationStreakRef = useRef(0);   // consecutive agitated/startled reads
+  const lastPreFallAlertRef = useRef(0);  // debounce between preventive alerts
+  const preFallTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onPreFallRiskRef   = useRef(onPreFallRisk);
+  useEffect(() => { onPreFallRiskRef.current = onPreFallRisk; }, [onPreFallRisk]); // keep fresh for the long-lived render loop
+
   // FPS
   const fpsTimesRef = useRef<number[]>([]);
 
   // React UI state
   const [selfFallen, setSelfFallen] = useState(false); // drives the EMERGENCY render when this component detects a fall itself
+  const [preFallRisk, setPreFallRisk] = useState<{ active: boolean; reason: string }>({ active: false, reason: "" });
   const [camActive,  setCamActive]  = useState(false);
   // A fall is active if the parent says so OR this component detected one itself.
   const fallen = (isFallen ?? false) || selfFallen;
@@ -1474,6 +1494,41 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
           fallClearStartRef.current = null;
         }
       }
+
+      // ── Preventive pre-fall risk — fire BEFORE a confirmed fall ────────────
+      // Two early-warning signals from the existing pipeline:
+      //   1. A near-fall stumble: a rapid downward drop that has NOT (yet) become
+      //      a confirmed lying-on-floor fall — i.e. a wobble/loss of balance.
+      //   2. Sustained agitation/startle on the face (Angry/Fear/Surprised) —
+      //      the "confused / agitated before getting up" pattern Mila described.
+      if (!selfFallenRef.current && now - lastRiskEvalRef.current > PREFALL_EVAL_INTERVAL_MS) {
+        lastRiskEvalRef.current = now;
+        const a = analysisRef.current;
+        const emo = a.globalEmotion;
+        const conf = a.emotionConfidence ?? 0;
+        const agitated = (emo === "Angry" || emo === "Fear" || emo === "Fearful") && conf >= 55;
+        const startled = emo === "Surprised" && conf >= 60;
+        if (agitated || startled) agitationStreakRef.current += 1;
+        else agitationStreakRef.current = Math.max(0, agitationStreakRef.current - 1);
+
+        const nearFall = now - rapidDropTimeRef.current < RAPID_DROP_WINDOW_MS;
+
+        let reason: string | null = null;
+        if (nearFall) reason = "Sudden loss of balance / near-fall motion detected — check resident now.";
+        else if (agitationStreakRef.current >= AGITATION_STREAK_TRIGGER)
+          reason = `Sustained agitation/distress (${emo}, ${conf}%) — resident may be about to get up and fall.`;
+
+        if (reason && now - lastPreFallAlertRef.current > PREFALL_DEBOUNCE_MS) {
+          lastPreFallAlertRef.current = now;
+          agitationStreakRef.current = 0;
+          const pre: VisionAnalysis = { ...a, alert: true, alertReason: reason };
+          saveMonitoringLog("PRE_FALL_RISK", pre);
+          onPreFallRiskRef.current?.(pre, reason);
+          setPreFallRisk({ active: true, reason });
+          if (preFallTimerRef.current) clearTimeout(preFallTimerRef.current);
+          preFallTimerRef.current = setTimeout(() => setPreFallRisk({ active: false, reason: "" }), PREFALL_BANNER_MS);
+        }
+      }
     }
 
     drawFrame();
@@ -1720,6 +1775,17 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       {/* Alert border */}
       {fallen && (
         <div className="absolute inset-0 z-40 pointer-events-none border-4 border-red-500 rounded-2xl animate-pulse"/>
+      )}
+
+      {/* PRE-FALL RISK: amber preventive warning shown BEFORE a fall (hidden once a real fall fires) */}
+      {preFallRisk.active && !fallen && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex items-center gap-2 max-w-[90%] px-3 py-2 rounded-xl bg-amber-500/95 text-black shadow-lg border border-amber-300 animate-pulse">
+          <AlertTriangle className="w-5 h-5 shrink-0"/>
+          <div className="leading-tight">
+            <p className="font-black text-[11px] uppercase tracking-widest">Pre-Fall Risk</p>
+            <p className="font-semibold text-[11px]">{preFallRisk.reason}</p>
+          </div>
+        </div>
       )}
 
       {/* ── TOP-LEFT: status badges ── */}
