@@ -4,8 +4,9 @@ import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ShieldCheck,
-  Activity,
-  Mic,
+  Building2,
+  Home,
+  User,
   ArrowLeft,
   Moon,
   Sun,
@@ -14,7 +15,7 @@ import {
   Lock,
   Eye,
   EyeOff,
-  LogIn,
+  UserPlus,
 } from "lucide-react";
 import Link from "next/link";
 import LcmsLogo from "@/components/LcmsLogo";
@@ -35,14 +36,17 @@ function accentRgba(hex: string, opacity: number): string {
   return `rgba(${rgb.r},${rgb.g},${rgb.b},${opacity})`;
 }
 
-export default function LoginPage() {
+export default function SignupPage() {
   const router = useRouter();
   const config = useLiveLandingConfig();
   const loginConfig = config.login;
   const accent = loginConfig.accent;
   const loginBg = loginConfig.background;
 
-  // ── Email/password state ──
+  // ── Signup form state ──
+  const [companyName, setCompanyName] = useState("");
+  const [communityName, setCommunityName] = useState("");
+  const [ownerName, setOwnerName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -57,8 +61,7 @@ export default function LoginPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const savedTheme = localStorage.getItem("theme") as "dark" | "light" | null;
-    const initialTheme = savedTheme || loginConfig.baseTheme;
-    setTheme(initialTheme);
+    setTheme(savedTheme || loginConfig.baseTheme);
   }, [loginConfig.baseTheme]);
 
   useEffect(() => {
@@ -73,41 +76,30 @@ export default function LoginPage() {
     const nextTheme = theme === "dark" ? "light" : "dark";
     setTheme(nextTheme);
     localStorage.setItem("theme", nextTheme);
-    if (nextTheme === "light") {
-      document.documentElement.classList.add("light");
-    } else {
-      document.documentElement.classList.remove("light");
-    }
+    if (nextTheme === "light") document.documentElement.classList.add("light");
+    else document.documentElement.classList.remove("light");
   };
 
-  // ── Email/password login ──
-  const handleCredentialsLogin = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
-
     try {
-      const response = await fetch("/api/auth/session", {
+      const response = await fetch("/api/register/organization", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ companyName, communityName, ownerName, email, password }),
       });
-
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Login failed");
-      }
-
+      if (!response.ok) throw new Error(data.error || "Signup failed");
       router.push(data.redirectUrl);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : "Signup failed");
       setIsLoading(false);
     }
   };
 
   const bgPaintStyle = useMemo(() => backgroundStyle(loginBg), [loginBg]);
-
   const isCustomBg = loginBg.type !== "default";
 
   return (
@@ -128,9 +120,7 @@ export default function LoginPage() {
               src="/sanctuary_exterior.png"
               alt="Facility Background"
               fill
-              className={`object-cover transition-opacity duration-300 ${
-                theme === "light" ? "opacity-25" : "opacity-35"
-              }`}
+              className={`object-cover transition-opacity duration-300 ${theme === "light" ? "opacity-25" : "opacity-35"}`}
               priority
             />
             <div
@@ -145,7 +135,7 @@ export default function LoginPage() {
         )}
       </div>
 
-      {/* Floating Back Button & Theme Toggle on Top Right */}
+      {/* Floating Back Button & Theme Toggle */}
       <div className="absolute top-6 left-6 z-50">
         <Link href="/" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors font-medium">
           <ArrowLeft className="w-3.5 h-3.5" /> Back Home
@@ -168,7 +158,7 @@ export default function LoginPage() {
 
       <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch rounded-3xl glass-panel p-2 min-h-[550px] shadow-2xl border-white/5 light:border-black/5 relative z-10">
 
-        {/* Left Column - Branding & Walkthrough Info */}
+        {/* Left Column - Branding */}
         <div
           className="hidden lg:flex flex-col justify-between p-8 rounded-2xl text-white relative overflow-hidden"
           style={{
@@ -188,31 +178,31 @@ export default function LoginPage() {
             </div>
 
             <h1 className="text-4xl font-extrabold tracking-tight leading-tight mb-4">
-              Empathetic Care, <br />
-              <span className="font-light" style={{ color: accent }}>AI Assisted Efficiency.</span>
+              Launch your facility <br />
+              <span className="font-light" style={{ color: accent }}>on LifeCare CMS.</span>
             </h1>
             <p className="text-zinc-400 text-sm font-light mb-8 max-w-md">
-              LifeCare CMS (LCMS) — the digital care operating system for assisted living facilities. Sign in with your portal credentials.
+              Create your organization in seconds — no invitation required. Your workspace, first community, and a 30-day trial are set up instantly.
             </p>
 
             <div className="space-y-6">
               <div className="flex items-start gap-4">
                 <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center border border-white/10 shrink-0">
-                  <Activity className="w-4 h-4" style={{ color: accent }} />
+                  <Building2 className="w-4 h-4" style={{ color: accent }} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold">Optical Matrix Fall Detection</h3>
-                  <p className="text-xs text-zinc-400 font-light mt-0.5">Real-time edge computer vision logs alerts without video feeds leaving the room.</p>
+                  <h3 className="text-sm font-semibold">Your own tenant workspace</h3>
+                  <p className="text-xs text-zinc-400 font-light mt-0.5">Fully isolated data for your organization and communities.</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-4">
                 <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center border border-white/10 shrink-0">
-                  <Mic className="w-4 h-4" style={{ color: accent }} />
+                  <UserPlus className="w-4 h-4" style={{ color: accent }} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold">AI Voice Charting Assistant</h3>
-                  <p className="text-xs text-zinc-400 font-light mt-0.5">Listen to nurse commands, parse telemetry values, and log records instantly.</p>
+                  <h3 className="text-sm font-semibold">Invite your team afterwards</h3>
+                  <p className="text-xs text-zinc-400 font-light mt-0.5">Add facility admins, nurses, caregivers, and families from your dashboard.</p>
                 </div>
               </div>
 
@@ -221,8 +211,8 @@ export default function LoginPage() {
                   <ShieldCheck className="w-4 h-4" style={{ color: accent }} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold">Secure Family Dashboards</h3>
-                  <p className="text-xs text-zinc-400 font-light mt-0.5">Keep family in the loop with transparent real-time updates and invoices.</p>
+                  <h3 className="text-sm font-semibold">Secure by default</h3>
+                  <p className="text-xs text-zinc-400 font-light mt-0.5">You become the organization owner with full administrative control.</p>
                 </div>
               </div>
             </div>
@@ -233,17 +223,16 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Right Column - Login Form */}
+        {/* Right Column - Signup Form */}
         <div className="flex flex-col justify-center p-6 md:p-12 relative">
           <div className="max-w-md w-full mx-auto text-left">
             <div className="mb-6">
-              <h2 className="text-3xl font-bold tracking-tight mb-2">Gate Entry</h2>
+              <h2 className="text-3xl font-bold tracking-tight mb-2">Register your organization</h2>
               <p className="text-muted-foreground text-sm font-light">
-                Sign in to access your care portal.
+                Set up your company workspace and become the owner.
               </p>
             </div>
 
-            {/* Error Message */}
             <AnimatePresence mode="wait">
               {error && (
                 <motion.div
@@ -257,11 +246,65 @@ export default function LoginPage() {
               )}
             </AnimatePresence>
 
-            <form onSubmit={handleCredentialsLogin} className="space-y-4">
+            <form onSubmit={handleSignup} className="space-y-4">
+              {/* Company name */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                  Company / Organization Name
+                </label>
+                <div className="relative">
+                  <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="Golden Hearth Care Group"
+                    required
+                    className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Community name */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                  First Community <span className="normal-case font-normal opacity-70">(optional)</span>
+                </label>
+                <div className="relative">
+                  <Home className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={communityName}
+                    onChange={(e) => setCommunityName(e.target.value)}
+                    placeholder="Main Community"
+                    className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Owner name */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                  Your Full Name
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={ownerName}
+                    onChange={(e) => setOwnerName(e.target.value)}
+                    placeholder="Jane Administrator"
+                    required
+                    className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors"
+                    autoComplete="name"
+                  />
+                </div>
+              </div>
+
               {/* Email */}
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                  Email Address
+                  Work Email
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -269,7 +312,7 @@ export default function LoginPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@goldenhearth.com"
+                    placeholder="you@yourcompany.com"
                     required
                     className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors"
                     autoComplete="email"
@@ -280,7 +323,7 @@ export default function LoginPage() {
               {/* Password */}
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                  Password
+                  Password <span className="normal-case font-normal opacity-70">(min 8 characters)</span>
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -288,10 +331,11 @@ export default function LoginPage() {
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
+                    placeholder="Create a strong password"
                     required
+                    minLength={8}
                     className="w-full pl-11 pr-12 py-3.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors"
-                    autoComplete="current-password"
+                    autoComplete="new-password"
                   />
                   <button
                     type="button"
@@ -307,34 +351,25 @@ export default function LoginPage() {
               {/* Submit */}
               <button
                 type="submit"
-                disabled={isLoading || !email || !password}
+                disabled={isLoading || !companyName || !ownerName || !email || password.length < 8}
                 className="w-full py-4 rounded-xl font-bold bg-foreground text-background hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <>
                     <Loader className="w-4 h-4 animate-spin" />
-                    Signing in...
+                    Creating your workspace...
                   </>
                 ) : (
                   <>
-                    Sign In <LogIn className="w-4 h-4" />
+                    Create Organization <UserPlus className="w-4 h-4" />
                   </>
                 )}
               </button>
 
-              {/* Resident self-registration */}
               <p className="text-center text-sm text-muted-foreground pt-1">
-                New resident?{" "}
-                <Link href="/register" className="font-semibold hover:underline" style={{ color: accent }}>
-                  Create an account
-                </Link>
-              </p>
-
-              {/* Organization self-signup */}
-              <p className="text-center text-sm text-muted-foreground">
-                Setting up a new company?{" "}
-                <Link href="/signup" className="font-semibold hover:underline" style={{ color: accent }}>
-                  Register your organization
+                Already have an account?{" "}
+                <Link href="/login" className="font-semibold hover:underline" style={{ color: accent }}>
+                  Sign in
                 </Link>
               </p>
             </form>

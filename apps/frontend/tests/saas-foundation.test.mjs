@@ -82,3 +82,27 @@ test("the sample platform administrator is distinct and keeps its password out o
   assert.match(session, /user\.platformRole === "PLATFORM_ADMIN"[\s\S]*?\? "PLATFORM_ADMIN"/);
   assert.match(session, /redirectUrl: `\/\$\{String\(role\)\.toLowerCase\(\)\}\/dashboard`/);
 });
+
+test("self-serve organization signup provisions a tenant without an SMTP invitation", () => {
+  const route = read("src/app/api/register/organization/route.ts");
+  // Identity is created directly (confirmed) rather than via an emailed invite.
+  assert.match(route, /createSupabaseUser\(/);
+  assert.doesNotMatch(route, /createInvitation|sendSupabaseInvitation/);
+  // Feature is gated and defaults ON (only an explicit "false" disables it).
+  assert.match(route, /ENABLE_PUBLIC_ORG_SIGNUP === "false"/);
+  // Duplicate accounts are rejected before any provisioning.
+  assert.match(route, /user\.findUnique\(\{ where: \{ email \}[\s\S]*?409/);
+  // Owner membership + trial subscription are created for the new organization.
+  assert.match(route, /role: "OWNER", status: "ACTIVE"/);
+  assert.match(route, /status: "TRIALING"/);
+  // Auto sign-in follows the same role/redirect derivation as the login route.
+  assert.match(route, /createSession\(role, provisioned\.userId/);
+  assert.match(route, /redirectUrl: `\/\$\{role\.toLowerCase\(\)\}\/dashboard`/);
+});
+
+test("the confirmed-user helper never triggers Supabase email delivery", () => {
+  const helper = read("src/lib/supabaseAuth.ts");
+  assert.match(helper, /export async function createSupabaseUser/);
+  assert.match(helper, /\/admin\/users/);
+  assert.match(helper, /email_confirm: true/);
+});

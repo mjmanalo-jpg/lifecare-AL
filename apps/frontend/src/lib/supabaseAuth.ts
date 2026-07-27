@@ -97,6 +97,46 @@ export async function sendSupabaseInvitation(email: string, redirectTo: string):
     headers: { Authorization: `Bearer ${serviceKey}` },
   }, serviceKey);
 }
+
+export class SupabaseUserExistsError extends Error {
+  constructor(message = "A user with this email already exists") {
+    super(message);
+    this.name = "SupabaseUserExistsError";
+  }
+}
+
+// Creates an already-confirmed Supabase Auth user via the admin API. No email
+// (no SMTP) is ever sent — this powers self-serve signup where the account is
+// usable immediately. Requires the server-only service role key.
+export async function createSupabaseUser(email: string, password: string): Promise<{ id: string }> {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) throw new Error("Supabase account provisioning is not configured. Set SUPABASE_SERVICE_ROLE_KEY and restart the application.");
+  try {
+    const user = await authRequest("/admin/users", {
+      method: "POST",
+      body: JSON.stringify({ email, password, email_confirm: true }),
+      headers: { Authorization: `Bearer ${serviceKey}` },
+    }, serviceKey);
+    return { id: String(user.id) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : "";
+    if (message.includes("already") && (message.includes("registered") || message.includes("exists"))) {
+      throw new SupabaseUserExistsError();
+    }
+    throw error;
+  }
+}
+
+// Best-effort compensation used when tenant provisioning fails after the auth
+// user has been created, so a failed signup does not orphan a Supabase user.
+export async function deleteSupabaseUser(id: string): Promise<void> {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) return;
+  await authRequest(`/admin/users/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${serviceKey}` },
+  }, serviceKey);
+}
 export async function enrollTotpFactor(accessToken: string, friendlyName = "LifeCare CMS") {
   return authRequest("/factors", { method: "POST", headers: { Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ factor_type: "totp", friendly_name: friendlyName }) });
 }

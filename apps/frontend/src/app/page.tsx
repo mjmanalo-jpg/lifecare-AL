@@ -263,8 +263,8 @@ export default function Home() {
           transition={{ delay: 0.6 }}
           className="flex flex-col sm:flex-row gap-4"
         >
-          <Link href="/login" className="px-8 py-4 rounded-xl bg-foreground text-background font-semibold tracking-wide hover:scale-105 transition-transform flex items-center gap-2 shadow-lg dark:shadow-[0_0_40px_rgba(255,255,255,0.15)] cursor-pointer">
-            Get Started <ChevronRight className="w-4 h-4" />
+          <Link href="/signup" className="px-8 py-4 rounded-xl bg-foreground text-background font-semibold tracking-wide hover:scale-105 transition-transform flex items-center gap-2 shadow-lg dark:shadow-[0_0_40px_rgba(255,255,255,0.15)] cursor-pointer">
+            Register Your Company <ChevronRight className="w-4 h-4" />
           </Link>
           <Link href="/login" className="px-8 py-4 rounded-xl glass-panel text-foreground hover:bg-foreground/5 transition-all flex items-center gap-2 cursor-pointer">
             <User className="w-4 h-4 text-[var(--lp-accent,#f59e0b)]" /> Log In
