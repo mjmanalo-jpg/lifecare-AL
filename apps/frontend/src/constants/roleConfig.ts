@@ -146,7 +146,7 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   auditlog: "Audit Log",
   "inventory-alerts": "Inventory Alerts",
   clinicalreports: "Clinical Reports",
-  taskboard: "Daily Care Documentation & Monitoring",
+  taskboard: "Task Assignment",
   dailyrounds: "Daily Rounds — Bedside Documentation",
   featurematrix: "LCMS Feature Matrix & System Overview",
   workspaces: "Customer Workspaces",
@@ -261,6 +261,7 @@ export const ROLES: Record<Role, RoleDetails> = {
     footerText: "Nurse Clinical Portal",
     sidebarLinks: [
       { name: "Reporting & Care Intelligence", icon: Grid, route: "/nurse/dashboard" },
+      { name: "Task Assignment", icon: ClipboardList, route: "/nurse/taskboard" },
       { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/nurse/dailyrounds" },
       { name: "Assessment & Level of Care", icon: ClipboardList, route: "/nurse/rounds" },
       { name: "Resident Profile & Care Record", icon: ShieldCheck, route: "/nurse/records" },
@@ -534,6 +535,7 @@ const LINK_GROUP_MAP: Record<string, SidebarGroup> = {
   "Assessment & Level of Care": "Resident Care",
   "Care Planning": "Resident Care",
   "Daily Care Documentation & Monitoring": "Resident Care",
+  "Task Assignment": "Resident Care",
   "Vaccinations": "Resident Care",
   "Resident Documents": "Resident Care",
   // Medication (Module 6)

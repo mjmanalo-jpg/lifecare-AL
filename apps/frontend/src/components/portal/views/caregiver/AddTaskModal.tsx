@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X, Plus, ClipboardList } from "lucide-react";
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -9,13 +9,51 @@ import { createRecord } from "@/lib/api";
 
 type TaskPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 
-/** Shared create-task dialog for the caregiver checklist. */
+// Roles allowed to delegate a task to another staff member (a supervisor).
+const SUPERVISOR_ROLES = new Set([
+  "NURSE", "FACILITY_ADMIN", "PHYSICIAN", "SUPERADMIN", "ORGANIZATION_ADMIN",
+]);
+
+type StaffRow = { id: string; userId?: string; user?: { name?: string; role?: string } };
+
+/** Shared create-task dialog. Caregivers self-create; supervisors delegate to a caregiver. */
 export default function AddTaskModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const { data: residentRows } = useLiveQuery<Record<string, unknown>>(
     "residents", { query: "take=300", tables: ["Resident"] }
   );
   const residents = useMemo(() => residentRows.map(adaptResident), [residentRows]);
 
+  // Staff directory (with linked user for name + role) powers the assignee picker.
+  const { data: staffRows } = useLiveQuery<StaffRow>(
+    "staff", { query: "include=user&take=300", tables: ["Staff"] }
+  );
+
+  // Current session — decides whether the assignee picker is shown and who is recorded as creator.
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+  const [sessionRole, setSessionRole] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.authenticated) {
+          setSessionUserId(data.session?.userId ?? null);
+          setSessionRole(data.session?.role ?? null);
+        }
+      })
+      .catch(() => { /* Non-fatal: falls back to self-created task. */ });
+  }, []);
+
+  const isSupervisor = sessionRole ? SUPERVISOR_ROLES.has(sessionRole) : false;
+  const myStaffId = useMemo(
+    () => staffRows.find((s) => s.userId === sessionUserId)?.id ?? null,
+    [staffRows, sessionUserId]
+  );
+  const caregiverStaff = useMemo(
+    () => staffRows.filter((s) => s.user?.role === "CAREGIVER"),
+    [staffRows]
+  );
+
+  const [assigneeId, setAssigneeId] = useState("");
   const [residentId, setResidentId] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -28,7 +66,8 @@ export default function AddTaskModal({ onClose, onSaved }: { onClose: () => void
   });
   const [saving, setSaving] = useState(false);
 
-  const valid = residentId && title.trim() && dueDate;
+  // Supervisors must pick a caregiver; caregivers self-assign implicitly.
+  const valid = residentId && title.trim() && dueDate && (!isSupervisor || assigneeId);
   const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none text-sm";
 
   const submit = async (e: React.FormEvent) => {
@@ -36,6 +75,8 @@ export default function AddTaskModal({ onClose, onSaved }: { onClose: () => void
     if (!valid || saving) return;
     setSaving(true);
     try {
+      // Supervisor delegates to the chosen caregiver; a caregiver's own task is self-assigned.
+      const assignedToId = isSupervisor ? assigneeId : (myStaffId || null);
       await createRecord("tasks", {
         residentId,
         title: title.trim(),
@@ -43,6 +84,8 @@ export default function AddTaskModal({ onClose, onSaved }: { onClose: () => void
         priority,
         status: "PENDING",
         dueDate: new Date(dueDate).toISOString(),
+        assignedToId,
+        createdById: myStaffId,
       });
       Swal.fire({ title: "Task Added", icon: "success", timer: 1300, showConfirmButton: false });
       onSaved();
@@ -68,6 +111,16 @@ export default function AddTaskModal({ onClose, onSaved }: { onClose: () => void
                 {residents.map((r) => <option key={r.id} value={r.id}>{r.name} — Room {r.room}</option>)}
               </select>
             </div>
+            {isSupervisor && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Assign to Caregiver <span className="text-red-500">*</span></label>
+                <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className={inputCls}>
+                  <option value="">Select caregiver…</option>
+                  {caregiverStaff.map((c) => <option key={c.id} value={c.id}>{c.user?.name ?? "Caregiver"}</option>)}
+                </select>
+                {caregiverStaff.length === 0 && <p className="mt-1 text-xs text-gray-500">No caregivers found in this community.</p>}
+              </div>
+            )}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Task Title <span className="text-red-500">*</span></label>
               <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Assist with breakfast" className={inputCls} />
