@@ -24,6 +24,9 @@
   "workspaces": [
     "apps/frontend"
   ],
+  "overrides": {
+    "react-is": "^19.0.0"
+  },
   "engines": {
     "node": ">=20.9.0",
     "npm": ">=9.0.0"
