@@ -83,7 +83,25 @@ export default function CaregiverDashboard() {
   );
   const { stats, refetch: refetchStats } = useStats();
 
+  // Resolve the signed-in caregiver so the dashboard shows THEIR assigned work.
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((d) => { if (d?.authenticated) setSessionUserId(d.session?.userId ?? null); })
+      .catch(() => { /* falls back to showing no assigned tasks */ });
+  }, []);
+  const { data: staffRows } = useLiveQuery<{ id: string; userId?: string }>(
+    "staff", { query: "include=user&take=300", tables: ["Staff"] }
+  );
+  const myStaffId = useMemo(() => staffRows.find((s) => s.userId === sessionUserId)?.id ?? null, [staffRows, sessionUserId]);
+
   const tasks = useMemo<Task[]>(() => taskRows.map(adaptTask), [taskRows]);
+  // Tasks assigned to THIS caregiver — self-created or delegated by a supervisor.
+  const myTasks = useMemo(
+    () => (myStaffId ? tasks.filter((t) => (t.raw as { assignedToId?: string } | null | undefined)?.assignedToId === myStaffId) : []),
+    [tasks, myStaffId]
+  );
   const residents = useMemo<ResidentVM[]>(
     () => residentRows.map((row) => {
       const r = adaptResident(row);
@@ -120,17 +138,19 @@ export default function CaregiverDashboard() {
   const ShiftIcon = shift.icon;
 
   const taskSummary = useMemo(() => {
-    const completed = tasks.filter((t) => t.completed).length;
-    const total = tasks.length;
+    const completed = myTasks.filter((t) => t.completed).length;
+    const total = myTasks.length;
     return { total, completed, pending: total - completed, pct: total ? Math.round((completed / total) * 100) : 0 };
-  }, [tasks]);
+  }, [myTasks]);
 
+  // The caregiver's own outstanding tasks, highest priority first — this is where
+  // a supervisor-assigned task must appear (any priority, not just critical/high).
   const priorityTasks = useMemo(
-    () => tasks
-      .filter((t) => !t.completed && (t.priority === "critical" || t.priority === "high"))
+    () => myTasks
+      .filter((t) => !t.completed)
       .sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority])
-      .slice(0, 6),
-    [tasks]
+      .slice(0, 8),
+    [myTasks]
   );
   const attentionResidents = useMemo(
     () => residents.filter((r) => r.alertsCount > 0).sort((a, b) => b.alertsCount - a.alertsCount).slice(0, 6),
@@ -233,7 +253,7 @@ export default function CaregiverDashboard() {
               ))}
             </div>
           ) : (
-            <Empty text="No critical or high-priority tasks pending. 🎉" />
+            <Empty text="No tasks assigned to you right now. 🎉" />
           )}
         </Panel>
 
