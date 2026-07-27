@@ -23,6 +23,7 @@ async function seedStaff(users, tenant) {
     { email: "caleb.randall@goldenhearth.com", position: "Caregiver", department: "Daily Assistance", hireDate: daysAgo(560), isApproved: true },
     { email: "james.mitchell@goldenhearth.com", position: "Caregiver", department: "Daily Assistance", hireDate: daysAgo(300), isApproved: false },
     { email: "maria.santos@goldenhearth.com", position: "Nurse Aide", department: "Clinical Support", hireDate: daysAgo(1500), isActive: false, isApproved: false },
+    { email: "security.guard@goldenhearth.com", position: "Security Guard", department: "Safety & Security", hireDate: daysAgo(400), isApproved: true },
   ];
   const out = [];
   for (const r of rows) {

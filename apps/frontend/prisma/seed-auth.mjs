@@ -24,6 +24,7 @@ const ACCOUNT_DEFINITIONS = [
   { email: "arthur.pendelton@resident.com", name: "Arthur Pendelton", role: "RESIDENT", phone: "555-0201", firstName: "Arthur", lastName: "Pendelton" },
   { email: "fleet.manager@goldenhearth.com", name: "Marcus Dela Cruz", role: "FLEET_MANAGEMENT", phone: "555-0400", firstName: "Marcus", lastName: "Dela Cruz" },
   { email: "james.miguel@goldenhearth.com", name: "James Miguel", role: "DRIVER", phone: "555-0401", firstName: "James", lastName: "Miguel" },
+  { email: "security.guard@goldenhearth.com", name: "Ramon Bautista", role: "SECURITY", phone: "555-0500", firstName: "Ramon", lastName: "Bautista" },
 ];
 
 async function ensureTenant(prisma) {
