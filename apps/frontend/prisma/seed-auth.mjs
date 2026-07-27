@@ -14,6 +14,9 @@ const ACCOUNT_DEFINITIONS = [
   { email: process.env.SAMPLE_PLATFORM_ADMIN_EMAIL || "platform.admin@lifecarecms.test", password: process.env.SAMPLE_PLATFORM_ADMIN_PASSWORD, name: "Sample Platform Administrator", role: "SUPERADMIN", platformRole: "PLATFORM_ADMIN", firstName: "Sample", lastName: "Administrator" },
   { email: "admin@goldenhearth.com", name: "System Admin", role: "SUPERADMIN", phone: "555-0100", firstName: "System", lastName: "Admin" },
   { email: "facility.admin@goldenhearth.com", name: "Facility Admin", role: "FACILITY_ADMIN", phone: "555-0150", firstName: "Facility", lastName: "Admin" },
+  // Facility Management — resolves to the FACILITY_ADMIN portal (org role VIEWER
+  // keeps it out of the Organization Admin portal, community role drives the login).
+  { email: "facility.management@goldenhearth.com", name: "Golden Hearth Facility Management", role: "FACILITY_ADMIN", phone: "555-0155", firstName: "Facility", lastName: "Management", orgRole: "VIEWER" },
   { email: "alan.reyes@goldenhearth.com", name: "Dr. Alan Reyes", role: "PHYSICIAN", phone: "555-0160", firstName: "Alan", lastName: "Reyes" },
   { email: "sarah.jenkins@goldenhearth.com", name: "Sarah Jenkins", role: "NURSE", phone: "555-0101", firstName: "Sarah", lastName: "Jenkins" },
   { email: "rebecca.wilson@goldenhearth.com", name: "Rebecca Wilson", role: "NURSE", phone: "555-0105", firstName: "Rebecca", lastName: "Wilson" },
@@ -79,12 +82,17 @@ export async function seedSaasAccounts(prisma) {
     });
     users[email] = user;
 
-    if (!definition.platformRole && definition.role !== "SUPERADMIN") {
+    // Every non-platform account (including the facility SUPERADMIN) gets a
+    // tenant membership so it has an active community — the portal layout
+    // redirects community-less tenant roles back to the landing page.
+    if (!definition.platformRole) {
       const membershipStatus = !isActive ? "SUSPENDED" : definition.approved === false ? "INVITED" : "ACTIVE";
+      // Explicit orgRole override wins; otherwise Facility Admin defaults to org ADMIN.
+      const orgRole = definition.orgRole || (definition.role === "FACILITY_ADMIN" ? "ADMIN" : "VIEWER");
       await prisma.organizationMembership.upsert({
         where: { userId_organizationId: { userId: user.id, organizationId: tenant.organization.id } },
-        update: { role: definition.role === "FACILITY_ADMIN" ? "ADMIN" : "VIEWER", status: membershipStatus },
-        create: { userId: user.id, organizationId: tenant.organization.id, role: definition.role === "FACILITY_ADMIN" ? "ADMIN" : "VIEWER", status: membershipStatus },
+        update: { role: orgRole, status: membershipStatus },
+        create: { userId: user.id, organizationId: tenant.organization.id, role: orgRole, status: membershipStatus },
       });
       await prisma.communityMembership.upsert({
         where: { userId_communityId: { userId: user.id, communityId: tenant.community.id } },
