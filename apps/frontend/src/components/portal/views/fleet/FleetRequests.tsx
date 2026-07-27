@@ -78,6 +78,7 @@ function adaptDriver(row: Record<string, unknown>) {
   return {
     id: str(row.id),
     name: str(row.name, "Driver"),
+    phone: str(row.phone),
     licenseNumber: str(row.licenseNumber, "—"),
     licenseExpiry: str(row.licenseExpiry),
     certifications: str(row.certifications),
@@ -384,8 +385,24 @@ export default function FleetRequests() {
       // Vehicle stays AVAILABLE until the trip actually departs.
       await refetch();
       await refetchVehicles();
+
+      // Best-effort SMS to the assigned driver (who may not be a system user).
+      // No-op when no SMS provider is configured; never blocks the dispatch.
+      if (selectedDriver?.phone) {
+        const when = new Date(assignForm.scheduledAt).toLocaleString();
+        void fetch("/api/sms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            to: selectedDriver.phone,
+            message: `Transport booked: bring ${assigning.residentName} to ${assigning.dropoffLocation || assigning.destination} on ${when}. — ${facilityName || "Facility"}`,
+          }),
+        }).catch(() => { /* SMS is best-effort */ });
+      }
+
       setAssigning(null);
-      Swal.fire({ title: "Trip Scheduled", text: "Trip scheduled — family notified.", icon: "success", timer: 2000, showConfirmButton: false });
+      Swal.fire({ title: "Trip Scheduled", text: `Trip scheduled — family notified${selectedDriver?.phone ? " and driver texted" : ""}.`, icon: "success", timer: 2000, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ title: "Scheduling Failed", text: err instanceof Error ? err.message : "Could not schedule trip.", icon: "error" });
     }

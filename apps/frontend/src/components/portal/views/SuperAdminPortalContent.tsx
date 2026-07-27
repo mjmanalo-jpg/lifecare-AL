@@ -19,6 +19,7 @@ import AuditLogViewer from "@/components/portal/views/clinical/AuditLogViewer";
 import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
 import InventoryAlertsPanel from "@/components/portal/views/clinical/InventoryAlertsPanel";
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
+import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import FeatureMatrixDashboard from "@/components/portal/views/superadmin/FeatureMatrixDashboard";
 import { Trash2, Search, Eye, Edit, X, UserPlus } from "lucide-react";
@@ -288,6 +289,9 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
 
   if (tab === "dailyrounds") {
     return <DailyRoundsBoard clinicianRole="FACILITY_ADMIN" />;
+  }
+  if (tab === "cameralogs") {
+    return <CameraActivityLog />;
   }
 
   // Core LCMS Modules Aligned

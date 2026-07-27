@@ -63,7 +63,8 @@ export type Role =
   | "FAMILY"
   | "RESIDENT"
   | "FLEET_MANAGEMENT"
-  | "DRIVER";
+  | "DRIVER"
+  | "SECURITY";
 
 export interface SidebarLink {
   name: string;
@@ -147,6 +148,10 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   "inventory-alerts": "Inventory Alerts",
   clinicalreports: "Clinical Reports",
   taskboard: "Task Assignment",
+  securitylog: "Security & Incident Log",
+  cameralogs: "Camera Activity Log",
+  dietorders: "Diet & Nutrition Orders",
+  kitchen: "Kitchen — Cook List",
   dailyrounds: "Daily Rounds — Bedside Documentation",
   featurematrix: "LCMS Feature Matrix & System Overview",
   workspaces: "Customer Workspaces",
@@ -177,6 +182,7 @@ export const PATH_TO_ROLE: Record<string, Role> = {
   resident: "RESIDENT",
   fleet_management: "FLEET_MANAGEMENT",
   driver: "DRIVER",
+  security: "SECURITY",
 };
 
 export const ROLES: Record<Role, RoleDetails> = {
@@ -230,6 +236,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Reporting & Care Intelligence", icon: Grid, route: "/superadmin/dashboard" },
       { name: "LCMS Feature Matrix", icon: ShieldCheck, route: "/superadmin/featurematrix" },
       { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/superadmin/dailyrounds" },
+      { name: "Camera Activity Log", icon: Activity, route: "/superadmin/cameralogs" },
       // "Portal Matrix" is merged into "LCMS Feature Matrix" as its Access Control tab.
       { name: "Admissions & Registration", icon: UserPlus, route: "/superadmin/admissions" },
       { name: "Staff Registry", icon: Users, route: "/superadmin/staff" },
@@ -262,6 +269,7 @@ export const ROLES: Record<Role, RoleDetails> = {
     sidebarLinks: [
       { name: "Reporting & Care Intelligence", icon: Grid, route: "/nurse/dashboard" },
       { name: "Task Assignment", icon: ClipboardList, route: "/nurse/taskboard" },
+      { name: "Camera Activity Log", icon: Activity, route: "/nurse/cameralogs" },
       { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/nurse/dailyrounds" },
       { name: "Assessment & Level of Care", icon: ClipboardList, route: "/nurse/rounds" },
       { name: "Resident Profile & Care Record", icon: ShieldCheck, route: "/nurse/records" },
@@ -362,6 +370,9 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Shift Endorsement & Continuity", icon: FileText, route: "/facility_admin/reports" },
       { name: "Billing", icon: DollarSign, route: "/facility_admin/billing" },
       { name: "Dining & Compliance", icon: Utensils, route: "/facility_admin/dining" },
+      { name: "Diet & Nutrition Orders", icon: Utensils, route: "/facility_admin/dietorders" },
+      { name: "Kitchen — Cook List", icon: Utensils, route: "/facility_admin/kitchen" },
+      { name: "Camera Activity Log", icon: Activity, route: "/facility_admin/cameralogs" },
       { name: "Resident Services", icon: Ticket, route: "/facility_admin/services" },
       { name: "Facility Maintenance", icon: Wrench, route: "/facility_admin/maintenance" },
       { name: "Concierge", icon: ConciergeBell, route: "/facility_admin/concierge" },
@@ -488,6 +499,21 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Clinical Coordination", icon: Siren, route: "/driver/escalations" },
     ],
   },
+  SECURITY: {
+    name: "Security Guard",
+    badge: "Safety & Security",
+    desc: "Log patrols and shift activity, file incident reports (e.g. a resident near the gate), and watch camera alerts.",
+    icon: Shield,
+    profileName: "Security Officer",
+    basePath: "/security",
+    footerText: "Security Command Portal",
+    sidebarLinks: [
+      { name: "Security Command", icon: Grid, route: "/security/dashboard" },
+      { name: "Security & Incident Log", icon: AlertTriangle, route: "/security/securitylog" },
+      { name: "Camera Activity Log", icon: Activity, route: "/security/cameralogs" },
+      { name: "Time Clock", icon: Timer, route: "/security/timeclock" },
+    ],
+  },
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -538,6 +564,13 @@ const LINK_GROUP_MAP: Record<string, SidebarGroup> = {
   "Task Assignment": "Resident Care",
   "Vaccinations": "Resident Care",
   "Resident Documents": "Resident Care",
+  "Camera Activity Log": "Resident Care",
+  // Guard / Security
+  "Security Command": "Overview",
+  "Security & Incident Log": "Operations",
+  // Kitchen / Diet & Nutrition
+  "Diet & Nutrition Orders": "Hospitality & Services",
+  "Kitchen — Cook List": "Hospitality & Services",
   // Medication (Module 6)
   "Medication Management & Inventory": "Medication",
   "Medication Administration Record": "Medication",

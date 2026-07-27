@@ -17,6 +17,7 @@ import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoar
 import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
 import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
+import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import CarePlanBoard from "@/components/portal/views/clinical/CarePlanBoard";
 import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
@@ -75,6 +76,23 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     () => incidentRows.map(adaptIncident) as NurseIncident[],
     [incidentRows]
   );
+
+  // On-duty clinical staff — recipients for fall / pre-fall push alerts.
+  const { data: staffRows } = useLiveQuery<{ id: string; userId?: string; isActive?: boolean; user?: { role?: string } }>(
+    "staff", { query: "include=user&take=300", tables: ["Staff"] }
+  );
+  const clinicalUserIds = useMemo(
+    () => staffRows
+      .filter((s) => s.isActive !== false && (s.user?.role === "NURSE" || s.user?.role === "CAREGIVER") && !!s.userId)
+      .map((s) => s.userId as string),
+    [staffRows]
+  );
+  const notifyClinicalStaff = async (type: "INCIDENT_REPORT" | "VITAL_ALERT", title: string, message: string) => {
+    // Best-effort fan-out to on-duty nurses/caregivers' notification bell.
+    await Promise.allSettled(
+      clinicalUserIds.map((userId) => createRecord("notifications", { userId, type, title, message }))
+    );
+  };
 
   const [monitoringFallAlert, setMonitoringFallAlert] = useState(false);
 
@@ -144,6 +162,11 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
         incidentDate: new Date().toISOString(),
       });
       await refetchIncidents();
+      await notifyClinicalStaff(
+        "INCIDENT_REPORT",
+        "🚨 Fall detected",
+        `Camera detected a fall for ${analysis.resident || "a resident"}${analysis.room ? ` (Room ${analysis.room})` : ""}. Respond immediately.`,
+      );
     } catch { /* non-critical — local fallback below */ }
 
     // Also keep local state for immediate UI update
@@ -186,6 +209,11 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
         incidentDate: new Date().toISOString(),
       });
       await refetchIncidents();
+      await notifyClinicalStaff(
+        "VITAL_ALERT",
+        "⚠️ Pre-fall risk",
+        `${analysis.resident || "A resident"}${analysis.room ? ` (Room ${analysis.room})` : ""} may be at risk of a fall — ${reason}`,
+      );
     } catch { /* non-critical — the on-camera banner + monitoring log still fired */ }
   };
 
@@ -686,6 +714,9 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   }
   if (tab === "taskboard") {
     return <CaregiverTasks />;
+  }
+  if (tab === "cameralogs") {
+    return <CameraActivityLog />;
   }
   if (tab === "careplans") {
     return <CarePlanBoard />;

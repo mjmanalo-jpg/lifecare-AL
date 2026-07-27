@@ -110,61 +110,76 @@ export default function FamilyBilling() {
 
   const submitOnlinePayment = async () => {
     if (!payingInvoice) return;
-    if (!payForm.cardName || !payForm.cardNumber || !payForm.cardExpiry || !payForm.cardCvv) {
-      Swal.fire("Missing Fields", "Please populate card details.", "warning");
-      return;
-    }
     setProcessingPayment(true);
     const invoice = payingInvoice;
 
-    // Simulate real-time stripe payment gateway latency
-    setTimeout(async () => {
-      try {
-        const txnId = `TXN-ONL-${Date.now()}`;
-        // 1. Record payment
-        await createRecord("payments", {
-          invoiceId: invoice.id,
+    try {
+      // Ask the backend to create a checkout. When a real provider (PayMongo/
+      // Stripe) is configured it returns a hosted checkout URL; otherwise it
+      // returns a simulated result so the demo flow still completes locally.
+      const res = await fetch("/api/payments/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
           amount: invoice.balance,
-          paymentMethod: "CARD",
-          transactionId: txnId,
-          notes: `Authorized via Online Sponsor Portal. Cardholder: ${payForm.cardName}`,
-        });
+          currency: "PHP",
+          description: `Invoice ${invoice.invoiceNumber} — ${invoice.residentName}`,
+          referenceId: invoice.invoiceNumber,
+        }),
+      });
+      const { result } = await res.json().catch(() => ({ result: null }));
+      if (!res.ok || !result) throw new Error(result?.error || "Could not start checkout.");
 
-        // 2. Mark Invoice PAID
-        await updateRecord("invoices", invoice.id, {
-          amountPaid: invoice.totalAmount,
-          status: "PAID",
-          paidAt: new Date().toISOString(),
-        });
-
-        await refetchInvoices();
-        await refetchPayments();
-        await refetchCharges();
-
-        const newPaymentMock = {
-          transactionId: txnId,
-          invoiceNumber: invoice.invoiceNumber,
-          residentName: invoice.residentName,
-          amount: invoice.balance,
-          paymentDate: new Date(),
-          paymentMethod: "CARD (ONLINE)",
-        };
-
+      // Live provider → hand off to the hosted GCash/card checkout page.
+      if (result.checkoutUrl) {
         setProcessingPayment(false);
         setPayingInvoice(null);
-        Swal.fire({
-          title: "Payment Authorized",
-          text: `Transaction ${txnId} captured. Thank you for your payment.`,
-          icon: "success",
-        }).then(() => {
-          setViewingReceipt(newPaymentMock);
-        });
-      } catch (err: unknown) {
-        setProcessingPayment(false);
-        const msg = err instanceof Error ? err.message : "Online authorization failed.";
-        Swal.fire("Gateway Error", msg, "error");
+        window.location.href = result.checkoutUrl;
+        return;
       }
-    }, 1800);
+
+      // Simulated (no gateway configured) → record the payment locally so the
+      // billing flow still works end-to-end in demo mode.
+      const txnId = result.referenceId || `SIM-${Date.now()}`;
+      await createRecord("payments", {
+        invoiceId: invoice.id,
+        amount: invoice.balance,
+        paymentMethod: "CARD",
+        transactionId: txnId,
+        notes: `Online sponsor payment (demo mode — no live gateway configured).${payForm.cardName ? ` Cardholder: ${payForm.cardName}` : ""}`,
+      });
+      await updateRecord("invoices", invoice.id, {
+        amountPaid: invoice.totalAmount,
+        status: "PAID",
+        paidAt: new Date().toISOString(),
+      });
+      await refetchInvoices();
+      await refetchPayments();
+      await refetchCharges();
+
+      const newPaymentMock = {
+        transactionId: txnId,
+        invoiceNumber: invoice.invoiceNumber,
+        residentName: invoice.residentName,
+        amount: invoice.balance,
+        paymentDate: new Date(),
+        paymentMethod: "CARD (ONLINE)",
+      };
+      setProcessingPayment(false);
+      setPayingInvoice(null);
+      Swal.fire({
+        title: "Payment Recorded",
+        text: `Transaction ${txnId} captured (demo mode — configure a payment provider to take live payments).`,
+        icon: "success",
+      }).then(() => {
+        setViewingReceipt(newPaymentMock);
+      });
+    } catch (err: unknown) {
+      setProcessingPayment(false);
+      const msg = err instanceof Error ? err.message : "Online authorization failed.";
+      Swal.fire("Gateway Error", msg, "error");
+    }
   };
 
   return (

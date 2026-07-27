@@ -15,6 +15,7 @@ import OrganizationAdminPortalContent from "@/components/portal/views/Organizati
 import FacilityAdminPortalContent from "@/components/portal/views/FacilityAdminPortalContent";
 import FleetManagementPortalContent from "@/components/portal/views/FleetManagementPortalContent";
 import DriverPortalContent from "@/components/portal/views/DriverPortalContent";
+import SecurityPortalContent from "@/components/portal/views/SecurityPortalContent";
 import { useEffect, useState } from "react";
 
 export default function RolePortalPage() {
@@ -76,6 +77,10 @@ export default function RolePortalPage() {
       {/* Driver sees the driver dispatch portal. */}
       {userRole === "DRIVER" && (
         <DriverPortalContent tab={tabParam || "dashboard"} />
+      )}
+      {/* Security Guard sees the security command portal. */}
+      {userRole === "SECURITY" && (
+        <SecurityPortalContent tab={tabParam || "dashboard"} />
       )}
     </PortalShell>
   );
