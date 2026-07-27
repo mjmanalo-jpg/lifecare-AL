@@ -13,10 +13,11 @@ if (process.env.NODE_ENV === "production" && process.env.ALLOW_PRODUCTION_DEMO_S
 const ACCOUNT_DEFINITIONS = [
   { email: process.env.SAMPLE_PLATFORM_ADMIN_EMAIL || "platform.admin@lifecarecms.test", password: process.env.SAMPLE_PLATFORM_ADMIN_PASSWORD, name: "Sample Platform Administrator", role: "SUPERADMIN", platformRole: "PLATFORM_ADMIN", firstName: "Sample", lastName: "Administrator" },
   { email: "admin@goldenhearth.com", name: "System Admin", role: "SUPERADMIN", phone: "555-0100", firstName: "System", lastName: "Admin" },
-  { email: "facility.admin@goldenhearth.com", name: "Facility Admin", role: "FACILITY_ADMIN", phone: "555-0150", firstName: "Facility", lastName: "Admin" },
-  // Facility Management — resolves to the FACILITY_ADMIN portal (org role VIEWER
-  // keeps it out of the Organization Admin portal, community role drives the login).
-  { email: "facility.management@goldenhearth.com", name: "Golden Hearth Facility Management", role: "FACILITY_ADMIN", phone: "555-0155", firstName: "Facility", lastName: "Management", orgRole: "VIEWER" },
+  // Facility Admin → the Facility Management portal. org role VIEWER keeps it out
+  // of the Organization Admin portal; the community role drives the login.
+  { email: "facility.admin@goldenhearth.com", name: "Golden Hearth Facility Management", role: "FACILITY_ADMIN", phone: "555-0150", firstName: "Facility", lastName: "Management", orgRole: "VIEWER" },
+  // Dedicated Organization Admin login (SaaS tenant-management portal).
+  { email: "org.admin@goldenhearth.com", name: "Golden Hearth Organization Admin", role: "FACILITY_ADMIN", phone: "555-0156", firstName: "Organization", lastName: "Admin", orgRole: "ADMIN" },
   { email: "alan.reyes@goldenhearth.com", name: "Dr. Alan Reyes", role: "PHYSICIAN", phone: "555-0160", firstName: "Alan", lastName: "Reyes" },
   { email: "sarah.jenkins@goldenhearth.com", name: "Sarah Jenkins", role: "NURSE", phone: "555-0101", firstName: "Sarah", lastName: "Jenkins" },
   { email: "rebecca.wilson@goldenhearth.com", name: "Rebecca Wilson", role: "NURSE", phone: "555-0105", firstName: "Rebecca", lastName: "Wilson" },
