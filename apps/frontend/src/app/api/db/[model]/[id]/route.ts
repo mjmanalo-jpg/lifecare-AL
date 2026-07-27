@@ -5,6 +5,7 @@ import { requireTenantContext, isDeniedWhere, sanitizeTenantWrite, tenantWhere }
 import { assertMutationEntitled, EntitlementError } from "@/lib/entitlements";
 import { logAudit, snapshot } from "@/lib/audit";
 import { transactionDelegate, withTenantDb } from "@/lib/tenantDb";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -78,6 +79,19 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     if (context.organizationId) await assertMutationEntitled(context, model);
     const updated = await withTenantDb(context, async (tx) => transactionDelegate(definition, tx).update({ where: { id }, data }));
+
+    // Approving/disapproving a staff member must also flip their login access:
+    // the login gate + tenant context key off membership STATUS, not Staff.isApproved.
+    // Without this, an "Approved" staff member is still told the account is pending.
+    if (model === "staff" && "isApproved" in data) {
+      const status = data.isApproved === true ? "ACTIVE" : "INVITED";
+      const staffUserId = (updated as { userId?: string }).userId;
+      if (staffUserId) {
+        if (context.communityId) await prisma.communityMembership.updateMany({ where: { userId: staffUserId, communityId: context.communityId }, data: { status } });
+        if (context.organizationId) await prisma.organizationMembership.updateMany({ where: { userId: staffUserId, organizationId: context.organizationId }, data: { status } });
+      }
+    }
+
     logAudit({ actorId: context.userId, actorRole: context.role, action: "UPDATE", entityType: model, entityId: id, organizationId: context.organizationId, communityId: context.communityId, before: snapshot(existing), after: snapshot(updated) });
     return NextResponse.json({ data: updated });
   } catch (error) {
