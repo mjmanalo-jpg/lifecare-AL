@@ -27,6 +27,7 @@ enum Role {
   RESIDENT
   FLEET_MANAGEMENT
   DRIVER
+  SECURITY
 }
 
 enum PlatformRole {
@@ -4094,4 +4095,60 @@ model VitalSigns {
 
   @@index([organizationId])
   @@index([communityId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Guard / Security module — guard shift logs, patrol notes, and
+// incident reports (e.g. a resident seen near the gate). Scalar
+// FKs (like CameraMonitoringLog) keep the model self-contained.
+// ─────────────────────────────────────────────────────────────
+model SecurityLog {
+  id             String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
+  guardStaffId   String?
+  guardName      String?
+  logType        String   @default("PATROL") // PATROL | INCIDENT | GATE_EVENT | VISITOR | HAZARD
+  title          String
+  description    String?  @db.Text
+  location       String?
+  severity       String   @default("MINOR")  // MINOR | MODERATE | SEVERE | CRITICAL
+  residentId     String?
+  residentName   String?
+  status         String   @default("OPEN")   // OPEN | RESOLVED
+  occurredAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([communityId])
+  @@index([organizationId])
+  @@index([logType])
+  @@index([occurredAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Kitchen / Diet & Nutrition — per-resident standing diet orders
+// set by the nutritionist. The kitchen reads today's active orders
+// as its "cook list" (low sodium / low sugar / more vegetables / …).
+// ─────────────────────────────────────────────────────────────
+model DietOrder {
+  id             String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
+  residentId     String?
+  residentName   String?
+  roomNumber     String?
+  dietType       String   @default("REGULAR") // REGULAR | LOW_SODIUM | LOW_SUGAR | DIABETIC | SOFT | PUREED | HIGH_FIBER | RENAL | HIGH_PROTEIN
+  restrictions   String?  // free text, e.g. "no nuts, no shellfish"
+  mealType       String   @default("ALL")     // ALL | BREAKFAST | LUNCH | DINNER | SNACK
+  notes          String?  @db.Text
+  active         Boolean  @default(true)
+  orderedBy      String?  // nutritionist name
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([communityId])
+  @@index([organizationId])
+  @@index([residentId])
+  @@index([active])
 }

@@ -67,6 +67,8 @@ export const MODELS: Record<string, ModelDef> = {
   "dietitian-consults": { delegate: prisma.dietitianConsult, table: "DietitianConsult", orderBy: { consultDate: "desc" } },
   "food-compliance-logs": { delegate: prisma.foodComplianceLog, table: "FoodComplianceLog", orderBy: { auditDate: "desc" } },
   "camera-monitoring-logs": { delegate: prisma.cameraMonitoringLog, table: "CameraMonitoringLog", orderBy: { createdAt: "desc" } },
+  "security-logs": { delegate: prisma.securityLog, table: "SecurityLog", orderBy: { occurredAt: "desc" } },
+  "diet-orders": { delegate: prisma.dietOrder, table: "DietOrder", orderBy: { createdAt: "desc" } },
 
   // V2.1 — Multi-tenant hierarchy
   organizations: { delegate: prisma.organization, table: "Organization", orderBy: { name: "asc" } },
