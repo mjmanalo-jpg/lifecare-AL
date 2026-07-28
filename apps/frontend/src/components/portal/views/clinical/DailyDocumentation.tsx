@@ -195,23 +195,27 @@ function CreateModal({ tab, residents, clinicianName, onClose, onSaved }: { tab:
     setSaving(true);
     try {
       const now = new Date().toISOString();
-      const base = { residentId: form.residentId, notes: form.notes, observedById: null, observedByName: clinicianName };
+      const base = { residentId: form.residentId, notes: form.notes };
+      // The observation logs use observedBy*; PainAssessment/WoundCare use assessedBy*.
+      // Spreading the wrong pair fails the Prisma create silently (unknown field).
+      const observer = { observedById: null, observedByName: clinicianName };
+      const assessor = { assessedById: null, assessedByName: clinicianName };
 
       switch (tab) {
         case "elimination":
-          await createRecord("eliminations", { ...base, type: form.type || "URINATION", time: now, continenceStatus: form.continenceStatus || "CONTINENT", volume: form.volume, consistency: form.consistency, color: form.color });
+          await createRecord("eliminations", { ...base, ...observer, type: form.type || "URINATION", time: now, continenceStatus: form.continenceStatus || "CONTINENT", volume: form.volume, consistency: form.consistency, color: form.color });
           break;
         case "pain":
-          await createRecord("pain-assessments", { ...base, painScale: form.painScale || "MILD", numericScore: form.numericScore ? parseInt(form.numericScore) : null, location: form.location, type: form.painType, duration: form.duration, assessedAt: now });
+          await createRecord("pain-assessments", { ...base, ...assessor, painScale: form.painScale || "MILD", numericScore: form.numericScore ? parseInt(form.numericScore) : null, location: form.location, type: form.painType, duration: form.duration, assessedAt: now });
           break;
         case "wound":
-          await createRecord("wound-cares", { ...base, woundType: form.woundType || "PRESSURE_ULCER", location: form.woundLocation || "", stage: form.stage || "EPISODE", sizeLength: form.sizeLength ? parseFloat(form.sizeLength) : null, sizeWidth: form.sizeWidth ? parseFloat(form.sizeWidth) : null, dressingType: form.dressingType, treatment: form.treatment, assessedAt: now });
+          await createRecord("wound-cares", { ...base, ...assessor, woundType: form.woundType || "PRESSURE_ULCER", location: form.woundLocation || "", stage: form.stage || "EPISODE", sizeLength: form.sizeLength ? parseFloat(form.sizeLength) : null, sizeWidth: form.sizeWidth ? parseFloat(form.sizeWidth) : null, dressingType: form.dressingType, treatment: form.treatment, assessedAt: now });
           break;
         case "sleep":
-          await createRecord("sleep-logs", { ...base, date: new Date().toISOString().split("T")[0], bedtime: form.bedtime || now, wakeTime: form.wakeTime, totalHours: form.totalHours ? parseFloat(form.totalHours) : null, quality: form.quality || "FAIR", interruptions: form.interruptions ? parseInt(form.interruptions) : 0 });
+          await createRecord("sleep-logs", { ...base, ...observer, date: new Date().toISOString().split("T")[0], bedtime: form.bedtime || now, wakeTime: form.wakeTime, totalHours: form.totalHours ? parseFloat(form.totalHours) : null, quality: form.quality || "FAIR", interruptions: form.interruptions ? parseInt(form.interruptions) : 0 });
           break;
         case "mobility":
-          await createRecord("mobility-logs", { ...base, type: form.mobilityType || "WALKING", startTime: now, duration: form.duration ? parseInt(form.duration) : null, assistanceLevel: form.assistanceLevel || "INDEPENDENT", assistiveDevice: form.assistiveDevice });
+          await createRecord("mobility-logs", { ...base, ...observer, type: form.mobilityType || "WALKING", startTime: now, duration: form.duration ? parseInt(form.duration) : null, assistanceLevel: form.assistanceLevel || "INDEPENDENT", assistiveDevice: form.assistiveDevice });
           break;
       }
       onSaved();
