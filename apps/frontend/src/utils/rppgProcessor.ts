@@ -33,6 +33,7 @@ class RppgProcessor {
   private readonly WINDOW_MS = 12_000; // ~12s rolling window
   private readonly MIN_MS = 6_000;     // need >=6s before a first estimate
   private lastEstimate: VitalEstimate | null = null;
+  private lastAtMs = 0; // wall-clock time of the last successful estimate (for freshness)
 
   /** Push one per-frame ROI color sample with its capture timestamp (ms). */
   addSample(value: number, tMs: number): void {
@@ -132,6 +133,7 @@ class RppgProcessor {
       signal: sig.slice(-90),
     };
     this.lastEstimate = est;
+    this.lastAtMs = Date.now();
     return est;
   }
 
@@ -146,9 +148,10 @@ class RppgProcessor {
     return { systolic, diastolic };
   }
 
-  reset(): void { this.values = []; this.times = []; this.lastEstimate = null; }
+  reset(): void { this.values = []; this.times = []; this.lastEstimate = null; this.lastAtMs = 0; }
   getSignal(): number[] { return this.values.slice(); }
   get last(): VitalEstimate | null { return this.lastEstimate; }
+  get lastAt(): number { return this.lastAtMs; }
 }
 
 export const rppgProcessor = new RppgProcessor();

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { residentName, humanize } from "@/lib/adapters";
+import { rppgProcessor } from "@/utils/rppgProcessor";
 
 interface VitalReading {
   id: string; type: string; value: string; unit: string;
@@ -65,26 +66,23 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
   const [abnormalOnly, setAbnormalOnly] = useState(false);
   const [viewingResident, setViewingResident] = useState<string | null>(null);
 
-  const [offsets, setOffsets] = useState<Record<string, number>>({
-    HEART_RATE: 0,
-    OXYGEN: 0,
-    TEMPERATURE: 0,
-    SYS: 0,
-    DIA: 0,
-  });
+  // Charted values are shown as-is (no cosmetic jitter).
+  const offsets: Record<string, number> = { HEART_RATE: 0, OXYGEN: 0, TEMPERATURE: 0, SYS: 0, DIA: 0 };
 
+  // Live rPPG bridge: when this popup is scoped to the resident currently on the
+  // monitoring camera, pull the REAL heart rate + BP from the shared processor —
+  // but only while it's fresh (camera actively running), else fall back to charted.
+  const [live, setLive] = useState<{ hr: number; sys: number; dia: number; confidence: number } | null>(null);
   useEffect(() => {
-    if (!residentFilter) return;
-    const interval = setInterval(() => {
-      setOffsets((prev) => ({
-        HEART_RATE: Math.random() > 0.6 ? (Math.random() > 0.5 ? 1 : -1) : prev.HEART_RATE,
-        OXYGEN: Math.random() > 0.8 ? (Math.random() > 0.5 ? 1 : -1) : prev.OXYGEN,
-        TEMPERATURE: Math.random() > 0.7 ? (Math.random() > 0.5 ? 0.1 : -0.1) : prev.TEMPERATURE,
-        SYS: Math.random() > 0.7 ? (Math.random() > 0.5 ? 1 : -1) : prev.SYS,
-        DIA: Math.random() > 0.7 ? (Math.random() > 0.5 ? 1 : -1) : prev.DIA,
-      }));
-    }, 2000);
-    return () => clearInterval(interval);
+    if (!residentFilter) { setLive(null); return; }
+    const read = () => {
+      const e = rppgProcessor.last;
+      const fresh = e && Date.now() - rppgProcessor.lastAt < 6000;
+      setLive(fresh && e ? { hr: e.heartRate, sys: e.systolicBP, dia: e.diastolicBP, confidence: e.confidence } : null);
+    };
+    read();
+    const t = setInterval(read, 1500);
+    return () => clearInterval(t);
   }, [residentFilter]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -283,7 +281,13 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
                 <div className="p-4 sm:p-6 space-y-4">
                   {VITAL_DEFS.slice(0, 4).map(({ key, label, icon: Icon }) => {
                     const v = rv.vitals[key];
-                    const abnormalVal = v?.abnormal;
+                    // Live rPPG overrides HR + BP for the monitored resident (real measurement).
+                    const liveKey = live && (key === "HEART_RATE" || key === "BLOOD_PRESSURE");
+                    const liveValue = !liveKey ? null
+                      : key === "HEART_RATE" ? `${live!.hr} bpm` : `${live!.sys}/${live!.dia} mmHg`;
+                    const abnormalVal = liveKey
+                      ? (key === "HEART_RATE" ? (live!.hr < 60 || live!.hr > 100) : (live!.sys >= 140 || live!.dia >= 90))
+                      : v?.abnormal;
                     return (
                       <div key={key} className={`flex items-center justify-between p-3.5 rounded-xl border transition-all ${abnormalVal ? "bg-red-50/30 border-red-200" : "bg-gray-50/50 border-gray-100 hover:border-gray-200"}`}>
                         <div className="flex items-center gap-3">
@@ -293,13 +297,17 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
                           <div>
                             <span className="flex items-center gap-1.5 text-xs font-bold text-gray-500">
                               {label}
-                              {v ? (
+                              {liveKey ? (
+                                <span className="px-1 py-0.5 rounded bg-sky-50 text-sky-600 text-[8px] font-extrabold border border-sky-100 uppercase tracking-wider">
+                                  AI Vision · {live!.confidence}%
+                                </span>
+                              ) : v ? (
                                 <span className="px-1 py-0.5 rounded bg-emerald-50 text-emerald-600 text-[8px] font-extrabold border border-emerald-100 uppercase tracking-wider">
                                   Charted
                                 </span>
                               ) : (
-                                <span className="px-1 py-0.5 rounded bg-sky-50 text-sky-600 text-[8px] font-extrabold border border-sky-100 uppercase tracking-wider">
-                                  AI Vision
+                                <span className="px-1 py-0.5 rounded bg-gray-100 text-gray-400 text-[8px] font-extrabold border border-gray-200 uppercase tracking-wider">
+                                  No data
                                 </span>
                               )}
                             </span>
@@ -308,7 +316,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
                         </div>
                         <div className="flex items-center gap-2">
                           <span className={`font-mono text-base font-bold ${abnormalVal ? "text-red-600 animate-pulse" : "text-slate-800"}`}>
-                            {getDisplayValue(rv, key)}
+                            {liveValue ?? getDisplayValue(rv, key)}
                           </span>
                           {abnormalVal && <AlertTriangle className="w-4 h-4 text-red-500 animate-bounce" />}
                         </div>
