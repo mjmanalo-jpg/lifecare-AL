@@ -35,22 +35,25 @@ export const REQUEST_STATUS_PILL: Record<string, string> = {
 };
 
 export const TEAM_LABEL: Record<string, string> = {
-  HOUSEKEEPING_TEAM: "Housekeeping Team",
-  MAINTENANCE_ENGINEER: "Maintenance Engineer",
+  HOUSEKEEPING_TEAM: "Housekeeping",
+  MAINTENANCE_ENGINEER: "Maintenance",
   KITCHEN: "Kitchen",
   IT_SUPPORT: "IT Support",
   CONCIERGE: "Concierge",
 };
 
-/** Ticket auto-assign routing: category (+ subType for repairs) → team. */
-export function autoAssignTeam(category: string, subType?: string): string {
-  if (category === "REPAIRS" && subType === "Wi-Fi/TV") return "IT_SUPPORT";
+/**
+ * Ticket auto-assign routing → the crew portal that works it.
+ *   Maintenance  ← all Repairs (incl. Wi-Fi/TV) + Aircon/HVAC
+ *   Housekeeping ← Housekeeping + Laundry + Room Service
+ */
+export function autoAssignTeam(category: string, _subType?: string): string {
   const map: Record<string, string> = {
     AIRCON_HVAC: "MAINTENANCE_ENGINEER",
-    HOUSEKEEPING: "HOUSEKEEPING_TEAM",
-    ROOM_SERVICE: "KITCHEN",
-    LAUNDRY: "HOUSEKEEPING_TEAM",
     REPAIRS: "MAINTENANCE_ENGINEER",
+    HOUSEKEEPING: "HOUSEKEEPING_TEAM",
+    LAUNDRY: "HOUSEKEEPING_TEAM",
+    ROOM_SERVICE: "HOUSEKEEPING_TEAM",
   };
   return map[category] ?? "MAINTENANCE_ENGINEER";
 }
