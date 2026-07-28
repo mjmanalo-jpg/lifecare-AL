@@ -148,6 +148,43 @@ export default function FacilityDashboard() {
       .slice(0, 6),
     [serviceRows]
   );
+  // Tickets resolved per day over the last 7 days (by completedAt).
+  const resolvedTrend = useMemo(() => {
+    const rows = serviceRows as Array<Record<string, unknown>>;
+    const now = new Date();
+    const days: { name: string; resolved: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now); d.setDate(now.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const resolved = rows.filter((r) => {
+        const st = String(r.status ?? "");
+        const done = st === "COMPLETED" || st === "CONFIRMED";
+        const ca = r.completedAt ? String(r.completedAt).slice(0, 10) : null;
+        return done && ca === key;
+      }).length;
+      days.push({ name: d.toLocaleDateString(undefined, { weekday: "short" }), resolved });
+    }
+    return days;
+  }, [serviceRows]);
+
+  // Average time from ticket creation → completion (completed tickets only).
+  const avgResolution = useMemo(() => {
+    const rows = serviceRows as Array<Record<string, unknown>>;
+    const durs: number[] = [];
+    rows.forEach((r) => {
+      const st = String(r.status ?? "");
+      if ((st === "COMPLETED" || st === "CONFIRMED") && r.completedAt && r.createdAt) {
+        const ms = new Date(String(r.completedAt)).getTime() - new Date(String(r.createdAt)).getTime();
+        if (ms > 0) durs.push(ms);
+      }
+    });
+    if (!durs.length) return { label: "—", count: 0 };
+    const avgMs = durs.reduce((a, b) => a + b, 0) / durs.length;
+    const h = avgMs / 3_600_000;
+    const label = h < 1 ? `${Math.round(avgMs / 60_000)}m` : h < 24 ? `${h.toFixed(1)}h` : `${(h / 24).toFixed(1)}d`;
+    return { label, count: durs.length };
+  }, [serviceRows]);
+
   const shift = shiftFor(nowTs ? new Date(nowTs).getHours() : 9);
   const ShiftIcon = shift.icon;
 
@@ -332,6 +369,35 @@ export default function FacilityDashboard() {
               </PieChart>
             </ResponsiveContainer>
           ) : <Empty text="No tickets." />}
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card title="Tickets Resolved — Last 7 Days" icon={CalendarClock} className="lg:col-span-2">
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={resolvedTrend} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+              <defs>
+                <linearGradient id="resolvedFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#22c55e" stopOpacity={0.4} />
+                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
+              <YAxis allowDecimals={false} fontSize={12} tickLine={false} axisLine={false} width={28} />
+              <Tooltip />
+              <Area type="monotone" dataKey="resolved" name="Resolved" stroke="#22c55e" strokeWidth={2} fill="url(#resolvedFill)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </Card>
+
+        <Card title="Avg Resolution Time" icon={Timer}>
+          <div className="flex flex-col items-center justify-center text-center" style={{ height: 220 }}>
+            <p className="text-5xl font-bold text-emerald-600">{avgResolution.label}</p>
+            <p className="text-sm text-gray-500 mt-2">
+              {avgResolution.count > 0 ? `across ${avgResolution.count} completed ticket${avgResolution.count === 1 ? "" : "s"}` : "no completed tickets yet"}
+            </p>
+          </div>
         </Card>
       </div>
 
