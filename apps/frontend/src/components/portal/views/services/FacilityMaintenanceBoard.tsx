@@ -277,9 +277,13 @@ export default function FacilityMaintenanceBoard({ canManage = false }: { canMan
           <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
             <RefreshCw className="w-4 h-4" /> Refresh
           </button>
-          <button onClick={() => { setCreateForm(emptyForm); setShowCreate(true); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
-            <Plus className="w-4 h-4" /> Schedule Maintenance
-          </button>
+          {/* Scheduling preventive maintenance is a Facility Admin task; the crew
+              portal (canManage) only works the jobs. */}
+          {!canManage && (
+            <button onClick={() => { setCreateForm(emptyForm); setShowCreate(true); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+              <Plus className="w-4 h-4" /> Schedule Maintenance
+            </button>
+          )}
         </div>
       </div>
 
