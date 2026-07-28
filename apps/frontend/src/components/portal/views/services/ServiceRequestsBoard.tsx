@@ -419,7 +419,9 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
                 <th className="text-left px-4 py-3 font-semibold text-gray-700">Status</th>
                 <th className="text-right px-4 py-3 font-semibold text-gray-700">Charge</th>
                 <th className="text-center px-4 py-3 font-semibold text-gray-700">Rating</th>
-                <th className="text-center px-4 py-3 font-semibold text-gray-700">Actions</th>
+                {/* Actions only for crew portals (Housekeeping/Maintenance); Facility
+                    Admin front desk submits tickets but doesn't work them. */}
+                {categories && <th className="text-center px-4 py-3 font-semibold text-gray-700">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -473,6 +475,7 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
                         <span className="text-[10px] text-gray-400">awaiting</span>
                       ) : "—"}
                     </td>
+                    {categories && (
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1 flex-wrap">
                         {busy ? (
@@ -496,6 +499,7 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
                         )}
                       </div>
                     </td>
+                    )}
                   </tr>
                 );
               })}

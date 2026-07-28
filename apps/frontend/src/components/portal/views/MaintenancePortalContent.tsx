@@ -10,6 +10,6 @@ import FacilityMaintenanceBoard from "@/components/portal/views/services/Facilit
  *   - maintenance: preventative facility-system schedules (HVAC, generator, …).
  */
 export default function MaintenancePortalContent({ tab }: { tab?: string }) {
-  if (tab === "maintenance") return <FacilityMaintenanceBoard />;
+  if (tab === "maintenance") return <FacilityMaintenanceBoard canManage />;
   return <ServiceRequestsBoard categories={["REPAIRS", "AIRCON_HVAC"]} />;
 }

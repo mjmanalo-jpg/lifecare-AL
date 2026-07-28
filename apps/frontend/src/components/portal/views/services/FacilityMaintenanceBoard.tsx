@@ -59,7 +59,9 @@ const emptyForm = {
   assignedTo: "", vendor: "", cost: "", notes: "",
 };
 
-export default function FacilityMaintenanceBoard() {
+// canManage: the Maintenance crew portal can work jobs (Actions column). Facility
+// Admin submits/schedules but has no per-row actions.
+export default function FacilityMaintenanceBoard({ canManage = false }: { canManage?: boolean } = {}) {
   const { data: rows, loading, error, refetch } = useLiveQuery<Row>(
     "facility-maintenance", { query: "take=400", tables: ["FacilityMaintenance"] }
   );
@@ -309,7 +311,7 @@ export default function FacilityMaintenanceBoard() {
                       Due {e.scheduledDate ? new Date(e.scheduledDate).toLocaleDateString() : "—"}
                     </p>
                   </div>
-                  {["SCHEDULED", "OPEN"].includes(e.status) && (
+                  {canManage && ["SCHEDULED", "OPEN"].includes(e.status) && (
                     <button onClick={() => handleStart(e)} className="px-3 py-1.5 text-xs font-semibold bg-yellow-400 hover:bg-yellow-500 text-black rounded-lg transition whitespace-nowrap">
                       Start
                     </button>
@@ -369,7 +371,7 @@ export default function FacilityMaintenanceBoard() {
                 <th className="text-left px-4 py-3 font-semibold text-gray-700">Vendor / Assigned</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-700">Status</th>
                 <th className="text-right px-4 py-3 font-semibold text-gray-700">Cost</th>
-                <th className="text-center px-4 py-3 font-semibold text-gray-700">Actions</th>
+                {canManage && <th className="text-center px-4 py-3 font-semibold text-gray-700">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -397,6 +399,7 @@ export default function FacilityMaintenanceBoard() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right text-gray-900 font-medium">{e.cost ? `₱${e.cost.toLocaleString()}` : "—"}</td>
+                    {canManage && (
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1 flex-wrap">
                         {busy ? (
@@ -419,6 +422,7 @@ export default function FacilityMaintenanceBoard() {
                         )}
                       </div>
                     </td>
+                    )}
                   </tr>
                 );
               })}

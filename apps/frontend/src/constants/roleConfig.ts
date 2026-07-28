@@ -377,9 +377,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Medication Management & Inventory", icon: Package, route: "/facility_admin/inventory" },
       { name: "Shift Endorsement & Continuity", icon: FileText, route: "/facility_admin/reports" },
       { name: "Billing", icon: DollarSign, route: "/facility_admin/billing" },
-      { name: "Dining & Compliance", icon: Utensils, route: "/facility_admin/dining" },
-      { name: "Diet & Nutrition Orders", icon: Utensils, route: "/facility_admin/dietorders" },
-      { name: "Kitchen — Cook List", icon: Utensils, route: "/facility_admin/kitchen" },
+      // Dining / Diet Orders / Kitchen moved to the Nutritionist & Kitchen portals.
       { name: "Camera Activity Log", icon: Activity, route: "/facility_admin/cameralogs" },
       { name: "Resident Services", icon: Ticket, route: "/facility_admin/services" },
       { name: "Facility Maintenance", icon: Wrench, route: "/facility_admin/maintenance" },
