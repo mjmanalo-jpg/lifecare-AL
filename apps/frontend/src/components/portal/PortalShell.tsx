@@ -32,6 +32,8 @@ import {
 import Link from "next/link";
 import LcmsLogo from "@/components/LcmsLogo";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
+import ChangePasswordDialog from "@/components/portal/ChangePasswordDialog";
+import LogoutDialog from "@/components/portal/LogoutDialog";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Role,
@@ -61,6 +63,8 @@ export default function PortalShell({
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showLogout, setShowLogout] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [language, setLanguage] = useState("en");
@@ -292,37 +296,25 @@ export default function PortalShell({
     }
   }, []);
 
-  const handleLogout = async () => {
-    const result = await Swal.fire({
-      title: "Logout Confirmation",
-      text: "Are you sure you want to logout?",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#dc2626",
-      cancelButtonColor: "#6b7280",
-      confirmButtonText: "Yes, Logout",
-      cancelButtonText: "Cancel",
+  const handleLogout = () => setShowLogout(true);
+
+  const handleConfirmLogout = () => {
+    setShowLogout(false);
+    if (onLogout) {
+      onLogout();
+    } else {
+      router.push("/login");
+    }
+
+    Swal.fire({
+      title: "Logged Out",
+      text: "You have been successfully logged out.",
+      icon: "success",
+      timer: 1500,
+      showConfirmButton: false,
       background: theme === "dark" ? "#1f2937" : "#ffffff",
       color: theme === "dark" ? "#ffffff" : "#000000",
     });
-
-    if (result.isConfirmed) {
-      if (onLogout) {
-        onLogout();
-      } else {
-        router.push("/login");
-      }
-
-      Swal.fire({
-        title: "Logged Out",
-        text: "You have been successfully logged out.",
-        icon: "success",
-        timer: 1500,
-        showConfirmButton: false,
-        background: theme === "dark" ? "#1f2937" : "#ffffff",
-        color: theme === "dark" ? "#ffffff" : "#000000",
-      });
-    }
   };
 
   const toggleTheme = () => {
@@ -390,26 +382,7 @@ export default function PortalShell({
     } finally { setSettingsSaving(false); }
   };
 
-  const handleChangePassword = async () => {
-    const result = await Swal.fire({
-      title: "Change password",
-      html: '<input id="new-password" type="password" autocomplete="new-password" class="swal2-input" placeholder="New password"><input id="confirm-password" type="password" autocomplete="new-password" class="swal2-input" placeholder="Confirm password">',
-      text: "Use at least 12 characters with uppercase, lowercase, number, and symbol.",
-      showCancelButton: true,
-      confirmButtonText: "Update password",
-      preConfirm: () => {
-        const password = (document.getElementById("new-password") as HTMLInputElement | null)?.value || "";
-        const confirmation = (document.getElementById("confirm-password") as HTMLInputElement | null)?.value || "";
-        if (password !== confirmation) return Swal.showValidationMessage("Passwords do not match");
-        if (password.length < 12 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) return Swal.showValidationMessage("Password does not meet the security requirements");
-        return password;
-      },
-    });
-    if (!result.isConfirmed) return;
-    const response = await fetch("/api/auth/account", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: result.value }) });
-    const body = await response.json();
-    await Swal.fire(response.ok ? { title: "Password updated", text: "Use the new password the next time you sign in.", icon: "success" } : { title: "Password change failed", text: body.error, icon: "error" });
-  };
+  const handleChangePassword = () => setShowChangePassword(true);
   return (
     <div className={`flex h-screen ${theme === "dark" ? "bg-black text-white" : "bg-gray-50 text-gray-900"}`}>
       {/* Sidebar — visible on md+, collapsed rail on lg when sidebarOpen, full width on md when sidebarOpen */}
@@ -892,6 +865,9 @@ export default function PortalShell({
           </div>
         </div>
       )}
+
+      <ChangePasswordDialog open={showChangePassword} onOpenChange={setShowChangePassword} />
+      <LogoutDialog open={showLogout} onOpenChange={setShowLogout} onConfirm={handleConfirmLogout} />
     </div>
   );
 }

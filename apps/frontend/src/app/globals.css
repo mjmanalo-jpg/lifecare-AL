@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 @import "leaflet/dist/leaflet.css";
 
 @theme {
@@ -11,6 +12,16 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-card-bg: var(--card-bg);
   --color-card-border: var(--card-border);
+  /* shadcn/ui primitive tokens (components/ui) */
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --font-sans: "Inter", system-ui, sans-serif;
 }
 
@@ -26,6 +37,16 @@
     --card-border: rgba(255, 255, 255, 0.06);
     --heading-from: #ffffff;
     --heading-to: #6b7280;
+    /* shadcn primitive tokens — dark */
+    --primary-foreground: #ffffff;
+    --secondary: #27272a;
+    --secondary-foreground: #fafafa;
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
+    --accent: #27272a;
+    --accent-foreground: #fafafa;
+    --input: rgba(255, 255, 255, 0.14);
+    --ring: #3b82f6;
   }
   
   :root.light {
@@ -39,6 +60,16 @@
     --card-border: rgba(0, 0, 0, 0.06);
     --heading-from: #18181b;
     --heading-to: #52525b;
+    /* shadcn primitive tokens — light */
+    --primary-foreground: #ffffff;
+    --secondary: #f4f4f5;
+    --secondary-foreground: #18181b;
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
+    --accent: #f4f4f5;
+    --accent-foreground: #18181b;
+    --input: #e4e4e7;
+    --ring: #3b82f6;
   }
   
   html, body {
