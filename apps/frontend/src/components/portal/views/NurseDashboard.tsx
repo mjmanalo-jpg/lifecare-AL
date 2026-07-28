@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect } from "react";
 import {
   Users, AlertTriangle, HeartPulse, BellRing, Activity, RefreshCw,
   Sun, Sunset, Moon, CheckCircle2, Clock, ShieldAlert, ChevronRight, Heart,
-  TrendingUp, Droplets, Wind, Thermometer, Search,
+  TrendingUp, Droplets, Wind, Thermometer, Search, Inbox,
   type LucideIcon,
 } from "lucide-react";
 import Swal from "sweetalert2";
@@ -13,7 +13,7 @@ import {
   PieChart, Pie, Cell, Legend,
 } from "recharts";
 import { useLiveQuery, useStats } from "@/lib/useLiveQuery";
-import { adaptResident, adaptIncident, residentName } from "@/lib/adapters";
+import { adaptResident, adaptIncident, adaptTask, residentName } from "@/lib/adapters";
 import { updateRecord } from "@/lib/api";
 
 /* ── Types ───────────────────────────────────────────────────────────── */
@@ -95,6 +95,9 @@ export default function NurseDashboard() {
   const { data: bellRows } = useLiveQuery<Record<string, unknown>>(
     "call-bells", { query: "include=resident&take=100", tables: ["CallBell"] }
   );
+  const { data: taskRows } = useLiveQuery<Record<string, unknown>>(
+    "tasks", { query: "include=resident&take=300", tables: ["Task"] }
+  );
 
   const [nowTs, setNowTs] = useState(0);
   useEffect(() => {
@@ -145,6 +148,18 @@ export default function NurseDashboard() {
   );
 
   /* ── Derived: incidents / bells ─────────────────────────────────────── */
+
+  // Unassigned open tasks — where resident-submitted requests (room service,
+  // diet substitution) land; they arrive with no assignee and otherwise never
+  // surface on a dashboard (only in the Task Assignment board).
+  const openRequests = useMemo(
+    () => taskRows
+      .map(adaptTask)
+      .filter((t) => !t.completed && !(t.raw as { assignedToId?: string } | null | undefined)?.assignedToId)
+      .sort((a, b) => new Date(String((b.raw as { createdAt?: string } | null)?.createdAt ?? 0)).getTime() - new Date(String((a.raw as { createdAt?: string } | null)?.createdAt ?? 0)).getTime())
+      .slice(0, 5),
+    [taskRows],
+  );
 
   const openIncidents = useMemo(() => incidents.filter((i) => !i.resolved), [incidents]);
   const criticalIncidents = useMemo(
@@ -361,6 +376,20 @@ export default function NurseDashboard() {
           ) : <Empty text="All recorded vitals within range." />}
         </Card>
       </div>
+
+      {/* Incoming resident requests (unassigned tasks — e.g. room service / diet) */}
+      <Card title="Incoming Requests" icon={Inbox} count={openRequests.length}>
+        {openRequests.length > 0 ? (
+          <div className="space-y-2">
+            {openRequests.map((t) => (
+              <div key={t.id} className="p-2.5 rounded-lg bg-amber-50 border border-amber-100">
+                <p className="font-medium text-gray-900 text-sm truncate">{t.title}</p>
+                <p className="text-xs text-gray-600 truncate">{t.resident} • Room {t.room} • Unassigned</p>
+              </div>
+            ))}
+          </div>
+        ) : <Empty text="No new requests." />}
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         <Card title="Pending Call Bells" icon={BellRing} count={pendingBells.length}>

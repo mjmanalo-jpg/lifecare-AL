@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import {
   Users, CheckCircle2, ClipboardList, AlertTriangle, BellRing, RefreshCw,
-  Clock, Heart, Sun, Sunset, Moon, ChevronRight, Activity,
+  Clock, Heart, Sun, Sunset, Moon, ChevronRight, Activity, Inbox,
   type LucideIcon,
 } from "lucide-react";
 import Swal from "sweetalert2";
@@ -167,6 +167,17 @@ export default function CaregiverDashboard() {
   );
   const pendingBells = useMemo(() => bells.filter((b) => b.status === "PENDING"), [bells]);
 
+  // Unassigned, still-open tasks — this is where resident-submitted requests
+  // (room service, diet substitution) land: they arrive with no assignee and
+  // otherwise never surface on a dashboard (only in the Task Assignment board).
+  const openRequests = useMemo(
+    () => tasks
+      .filter((t) => !t.completed && !(t.raw as { assignedToId?: string } | null | undefined)?.assignedToId)
+      .sort((a, b) => new Date(String((b.raw as { createdAt?: string } | null)?.createdAt ?? 0)).getTime() - new Date(String((a.raw as { createdAt?: string } | null)?.createdAt ?? 0)).getTime())
+      .slice(0, 5),
+    [tasks],
+  );
+
   const refreshAll = () => {
     void refetchTasks();
     void refetchBells();
@@ -267,6 +278,21 @@ export default function CaregiverDashboard() {
 
         {/* Right column */}
         <div className="space-y-4">
+          <Panel title="Incoming Requests" icon={Inbox} count={openRequests.length}>
+            {openRequests.length > 0 ? (
+              <div className="space-y-2">
+                {openRequests.map((t) => (
+                  <div key={t.id} className="p-2.5 rounded-lg bg-amber-50 border border-amber-100">
+                    <p className="font-medium text-gray-900 text-sm truncate">{t.title}</p>
+                    <p className="text-xs text-gray-600 truncate">{t.resident} • Room {t.room} • Unassigned</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Empty text="No new requests." />
+            )}
+          </Panel>
+
           <Panel title="Needs Attention" icon={Heart} count={attentionResidents.length}>
             {attentionResidents.length > 0 ? (
               <div className="space-y-2">
