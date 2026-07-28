@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Camera, AlertTriangle, Activity, Shield, Brain, Cpu, Volume2, VolumeX, Heart, History, RefreshCw, X } from "lucide-react";
 import { analyzeEmotionFromLandmarks, loadFaceAPI } from "@/utils/emotionDetector";
-import { rppgProcessor, type VitalEstimate } from "@/utils/rppgProcessor";
+import { rppgProcessor, RppgProcessor, type VitalEstimate } from "@/utils/rppgProcessor";
 
 // Suppress TensorFlow.js and WebGL verbose logging
 if (typeof window !== "undefined") {
@@ -44,6 +44,8 @@ interface VisionAnalysis {
   emotionConfidence: number;
   globalBehavior: string;
   globalPosture: string;
+  sleepState: string;   // Awake | Drowsy | Sleeping
+  confused: boolean;    // sustained disoriented/agitated affect
   alert: boolean;
   alertReason: string | null;
   summary: string;
@@ -214,7 +216,7 @@ const AGITATION_STREAK_TRIGGER = 3;      // consecutive agitated reads before al
 
 const INIT: VisionAnalysis = {
   globalEmotion:"Neutral", emotionConfidence:0, globalBehavior:"Initializing",
-  globalPosture:"Detecting", alert:false, alertReason:null,
+  globalPosture:"Detecting", sleepState:"Awake", confused:false, alert:false, alertReason:null,
   summary:"AI Vision loading models...", objects:[],
 };
 
@@ -466,6 +468,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   // not just the 30s heartbeat. Debounced so momentary flicker doesn't spam the log.
   const lastBehaviorLogRef = useRef<{ key: string; at: number }>({ key: "", at: 0 });
   const BEHAVIOR_LOG_MIN_MS = 5_000;
+  const stillSinceRef = useRef(0); // last time the resident showed movement (drives sleep state)
   const saveMonitoringLog = useCallback(async (logType: string, analysis: VisionAnalysis) => {
     try {
       await fetch("/api/db/camera-monitoring-logs", {
@@ -481,6 +484,8 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
           emotionConfidence: analysis.emotionConfidence,
           behavior: analysis.globalBehavior,
           posture: analysis.globalPosture,
+          sleepState: analysis.sleepState,
+          confused: analysis.confused,
           alert: analysis.alert,
           alertReason: analysis.alertReason,
           summary: analysis.summary,
@@ -1061,6 +1066,8 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
             emotionConfidence: 0,
             globalBehavior: "Detecting face...",
             globalPosture: "Unknown",
+            sleepState: "Awake",
+            confused: false,
             alert: false,
             alertReason: null,
             summary: "Waiting for face detection",
@@ -1069,47 +1076,9 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         }
       }
 
-      // RPPG Blood Pressure Extraction: Extract facial color variation for BP estimation
-      if (canvasRef.current && captureRef.current) {
-        const ctx = captureRef.current.getContext("2d", { willReadFrequently: true });
-        if (ctx) {
-          // Get the current video frame (capture latest)
-          const src = activeCamera === "tapo" ? tapoImgRef.current : imgRef.current;
-          if (src && src.complete && src.naturalHeight > 0) {
-            try {
-              const tempCtx = captureRef.current.getContext("2d", { willReadFrequently: true });
-              if (tempCtx) {
-                tempCtx.drawImage(src, 0, 0, captureRef.current.width, captureRef.current.height);
-
-                // Estimate face ROI from person detection (use center of frame as approximation)
-                const faceBox = {
-                  x: captureRef.current.width * 0.25,
-                  y: captureRef.current.height * 0.15,
-                  width: captureRef.current.width * 0.5,
-                  height: captureRef.current.height * 0.6,
-                };
-
-                // Extract PPG signal from facial region
-                const ppgSignal = rppgProcessor.extractFacialROI(
-                  captureRef.current,
-                  tempCtx,
-                  faceBox
-                );
-
-                if (ppgSignal) {
-                  rppgProcessor.addPPGValue(ppgSignal.signal[0]);
-                  const vitalEstimate = rppgProcessor.processSignal();
-                  if (vitalEstimate) {
-                    setBpEstimate(vitalEstimate);
-                  }
-                }
-              }
-            } catch (error) {
-              // Silent fail - RPPG is auxiliary to main vision system
-            }
-          }
-        }
-      }
+      // rPPG is now sampled every animation frame from the zoomed face crop (see the
+      // pose block below) and estimated in the throttled UI update — a 2s cadence here
+      // was far too slow to ever measure a ~1 Hz pulse.
 
       const ms = Math.round(performance.now() - t0);
       console.log("[AI Vision] Cycle time:", ms, "ms");
@@ -1366,8 +1335,21 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
           // When we have a pose, feed emotion a ZOOMED crop of the face (accurate at
           // distance); otherwise fall back to the full frame. The face CNN reads the
           // expression from the image, so this works even when the body is partly out.
-          const faceSrc = pose0 ? (buildFaceCrop(source, pose0, srcW, srcH) ?? source) : source;
+          const faceCanvas = pose0 ? buildFaceCrop(source, pose0, srcW, srcH) : null;
+          const faceSrc = faceCanvas ?? source;
           const localAnalysis = analyzeEmotionFromLandmarks(pose0 ?? [], analysisRef.current, faceSrc) as VisionAnalysis;
+
+          // rPPG: sample the zoomed face-crop skin colour EVERY tick (~real-time) so
+          // heart rate & respiration can be recovered from the pulse waveform.
+          if (faceCanvas && faceCanvas.width > 4) {
+            try {
+              const fctx = faceCanvas.getContext("2d", { willReadFrequently: true });
+              if (fctx) {
+                const img = fctx.getImageData(0, 0, faceCanvas.width, faceCanvas.height);
+                rppgProcessor.addSample(RppgProcessor.roiValue(img.data), now);
+              }
+            } catch { /* rPPG is auxiliary to the vision system */ }
+          }
 
           // Merge real-time telemetry into the ref at FULL rate (drives the canvas)
           // WITHOUT wiping out AI Vision's dynamic summary. The React state is pushed
@@ -1451,15 +1433,33 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         saveMonitoringLog("ANALYSIS", analysisRef.current);
       }
 
-      // Event-driven: log whenever the detected emotion OR behavior changes so
-      // every activity behind the camera (waving, happy, sad, angry, …) is captured.
+      // ── Sleep / alertness + confusion (recorded for the care log) ──
+      // Heuristic from existing signals (no eye-mesh available): sustained stillness
+      // (no Moving/Waving behavior) → Drowsy/Sleeping (Sleeping when also reclined);
+      // sustained agitation/startle affect → Confused.
+      {
+        const a = analysisRef.current;
+        const moving = a.globalBehavior === "Moving" || a.globalBehavior === "Waving" || waveRef.current;
+        if (moving || selfFallenRef.current || !stillSinceRef.current) stillSinceRef.current = now;
+        const stillMs = now - stillSinceRef.current;
+        const reclined = /lying|reclin|down|slouch|lean/i.test(a.globalPosture || "");
+        let sleepState = "Awake";
+        if (stillMs > 90_000) sleepState = reclined ? "Sleeping" : "Drowsy";
+        else if (stillMs > 40_000 && reclined) sleepState = "Drowsy";
+        const confused = agitationStreakRef.current >= AGITATION_STREAK_TRIGGER && !selfFallenRef.current;
+        analysisRef.current = { ...a, sleepState, confused };
+      }
+
+      // Event-driven: log whenever the detected emotion, behavior, sleep state OR
+      // confusion changes so every activity behind the camera (waving, happy, sad,
+      // angry, sleeping, awake, confused, …) is captured.
       {
         const a = analysisRef.current;
         const emo = a.globalEmotion || "";
         const beh = a.globalBehavior || "";
         // Skip startup placeholders — they aren't real observations.
         const isPlaceholder = /Initializing|Detecting|^$/.test(emo) || /Initializing|Detecting|^$/.test(beh);
-        const key = `${emo}|${beh}`;
+        const key = `${emo}|${beh}|${a.sleepState}|${a.confused}`;
         if (!isPlaceholder &&
             key !== lastBehaviorLogRef.current.key &&
             now - lastBehaviorLogRef.current.at > BEHAVIOR_LOG_MIN_MS) {
@@ -1570,15 +1570,18 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       setDetCount(detsRef.current.length);
       setAnalysis(analysisRef.current);
       
-      // Fluctuate AI vitals realistically
+      // Heart rate & respiration from the REAL rPPG signal (per-frame facial pulse).
+      // Confidence-gated: a noisy window holds the last good reading instead of
+      // inventing numbers. Temp & SpO2 can't be measured from RGB video — they stay
+      // as clearly-labelled ("est.") plausible values, NOT measurements.
+      const est = rppgProcessor.estimate();
+      if (est && est.confidence >= 40) setBpEstimate(est);
       setAiVitals(prev => {
-        const changeHr = Math.random() > 0.85 ? (Math.random() > 0.5 ? 1 : -1) : 0;
-        const changeRr = Math.random() > 0.92 ? (Math.random() > 0.5 ? 1 : -1) : 0;
-        const nextHr = Math.max(68, Math.min(88, prev.heartRate + changeHr));
-        const nextRr = Math.max(14, Math.min(20, prev.respirationRate + changeRr));
-        const nextTemp = +(36.7 + (Math.sin(now / 18000) * 0.25) + (Math.random() * 0.04)).toFixed(1);
-        const nextO2 = Math.random() > 0.95 ? Math.max(95, Math.min(99, prev.oxygen + (Math.random() > 0.5 ? 1 : -1))) : prev.oxygen;
-        return { heartRate: nextHr, respirationRate: nextRr, temperature: nextTemp, oxygen: nextO2 };
+        const measured = est && est.confidence >= 40;
+        const nextHr = measured ? Math.round(prev.heartRate * 0.7 + est!.heartRate * 0.3) : prev.heartRate;
+        const nextRr = measured ? Math.round(prev.respirationRate * 0.7 + est!.respirationRate * 0.3) : prev.respirationRate;
+        const nextTemp = +(36.7 + Math.sin(now / 18000) * 0.2).toFixed(1); // est. only
+        return { heartRate: nextHr, respirationRate: nextRr, temperature: nextTemp, oxygen: prev.oxygen };
       });
     }
 
@@ -1924,11 +1927,11 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
                 <span className="font-bold text-purple-400">{aiVitals.respirationRate} rpm</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-500">Temp:</span>
+                <span className="text-zinc-500">Temp <span className="text-zinc-600 text-[7px]">est.</span>:</span>
                 <span className="font-bold text-orange-400">{aiVitals.temperature}°C</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-500">SpO₂:</span>
+                <span className="text-zinc-500">SpO₂ <span className="text-zinc-600 text-[7px]">est.</span>:</span>
                 <span className="font-bold text-emerald-400">{aiVitals.oxygen}%</span>
               </div>
               {bpEstimate && (

@@ -33,6 +33,8 @@ const adaptLog = (r: Row) => ({
   emotionConfidence: asNum(r.emotionConfidence),
   behavior: asStr(r.behavior),
   posture: asStr(r.posture),
+  sleepState: asStr(r.sleepState),
+  confused: Boolean(r.confused),
   alert: Boolean(r.alert),
   alertReason: asStr(r.alertReason),
   summary: asStr(r.summary),
@@ -247,7 +249,9 @@ export default function CameraActivityLog() {
                       )}
                       {l.behavior && <p>Behavior: {l.behavior}</p>}
                       {l.posture && <p>Posture: {l.posture}</p>}
-                      {!l.emotion && !l.behavior && !l.posture && <span className="text-gray-400">—</span>}
+                      {l.sleepState && <p>State: <span className={l.sleepState === "Sleeping" ? "text-indigo-600 font-medium" : l.sleepState === "Drowsy" ? "text-amber-600" : "text-gray-900"}>{l.sleepState}</span></p>}
+                      {l.confused && <p className="text-red-600 font-semibold">⚠ Confused / disoriented</p>}
+                      {!l.emotion && !l.behavior && !l.posture && !l.sleepState && <span className="text-gray-400">—</span>}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-600">
                       <div className="flex flex-col gap-0.5">

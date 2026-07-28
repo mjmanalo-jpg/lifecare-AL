@@ -3641,6 +3641,8 @@ model CameraMonitoringLog {
   emotionConfidence Float?
   behavior        String?
   posture         String?
+  sleepState      String?  // Awake | Drowsy | Sleeping
+  confused        Boolean  @default(false)
   alert           Boolean  @default(false)
   alertReason     String?
   summary         String?  @db.Text

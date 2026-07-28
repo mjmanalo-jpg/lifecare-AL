@@ -1,312 +1,150 @@
 /**
  * RPPG (Remote Photoplethysmography) Processor
- * Extracts heart rate and blood pressure from video feed using facial color analysis.
+ * Estimates heart rate + respiration from the subtle color changes in a facial
+ * ROI sampled every animation frame (~10-30 fps).
  *
- * Algorithm: CHROM (Chrominance-based method)
- * - Extracts color variation from facial ROI
- * - Removes motion artifacts via differentiation
- * - Applies bandpass filter (0.7-4 Hz for HR range)
- * - Detects pulse peaks for heart rate calculation
- * - Estimates systolic/diastolic BP from pulse dynamics
+ * Approach:
+ * - Sample a CHROM-style skin-color value per frame WITH a real timestamp.
+ * - Derive the true sampling rate from the timestamps (the RAF loop is not a
+ *   fixed 30 fps), detrend + Hann-window the buffer, and run a band-limited
+ *   periodogram (a small DFT scanned over the physiological band) to find the
+ *   dominant frequency: 0.7-4.0 Hz for heart rate, 0.15-0.40 Hz for respiration.
+ * - Confidence = spectral concentration (peak power / total in-band power), so a
+ *   noisy/motion-corrupted window reports low confidence and the caller holds the
+ *   last good reading instead of showing garbage.
+ *
+ * NOTE: temperature and SpO2 CANNOT be derived from an RGB webcam — the caller
+ * shows those as clearly-labelled estimates, not measurements.
  */
 
-interface PPGSignal {
-  signal: number[];
-  timestamp: number;
-  roiMean: number;
-}
-
 interface VitalEstimate {
-  heartRate: number;
+  heartRate: number;        // bpm
+  respirationRate: number;  // breaths/min
   systolicBP: number;
   diastolicBP: number;
-  confidence: number;
-  signal: number[];
+  confidence: number;       // 0-100
+  fps: number;              // measured sampling rate
+  signal: number[];         // recent detrended samples (for the wave HUD)
 }
 
 class RppgProcessor {
-  private signalBuffer: number[] = [];
-  private timestamps: number[] = [];
-  private readonly BUFFER_SIZE = 150; // ~5 seconds at 30fps
-  private readonly FPS = 30;
-  private lastProcessTime = 0;
-  private processingInterval = 100; // Process every 100ms
+  private values: number[] = [];
+  private times: number[] = []; // ms timestamps, parallel to values
+  private readonly WINDOW_MS = 12_000; // ~12s rolling window
+  private readonly MIN_MS = 6_000;     // need >=6s before a first estimate
+  private lastEstimate: VitalEstimate | null = null;
 
-  /**
-   * Extract facial ROI color channels and build PPG signal
-   */
-  extractFacialROI(
-    canvas: HTMLCanvasElement,
-    ctx: CanvasRenderingContext2D,
-    faceBox: { x: number; y: number; width: number; height: number } | null
-  ): PPGSignal | null {
-    if (!faceBox || faceBox.width < 50 || faceBox.height < 50) {
-      return null;
-    }
-
-    try {
-      const imageData = ctx.getImageData(
-        Math.max(0, faceBox.x),
-        Math.max(0, faceBox.y),
-        Math.min(faceBox.width, canvas.width - faceBox.x),
-        Math.min(faceBox.height, canvas.height - faceBox.y)
-      );
-
-      const data = imageData.data;
-      const pixels = data.length / 4;
-
-      let rSum = 0,
-        gSum = 0,
-        bSum = 0;
-
-      for (let i = 0; i < data.length; i += 4) {
-        rSum += data[i];
-        gSum += data[i + 1];
-        bSum += data[i + 2];
-      }
-
-      const rMean = rSum / pixels;
-      const gMean = gSum / pixels;
-      const bMean = bSum / pixels;
-
-      // CHROM method: Extract chrominance
-      // X = 3*R - 2*G, Y = 1.5*R + G - 1.5*B
-      const chromX = 3 * rMean - 2 * gMean;
-      const chromY = 1.5 * rMean + gMean - 1.5 * bMean;
-
-      // PPG signal is the ratio (normalize by magnitude)
-      const chromMag = Math.sqrt(chromX ** 2 + chromY ** 2);
-      const ppgValue = chromMag > 0 ? (chromX / chromMag) * 100 : 0;
-
-      return {
-        signal: [ppgValue],
-        timestamp: Date.now(),
-        roiMean: (rMean + gMean + bMean) / 3,
-      };
-    } catch (error) {
-      return null;
+  /** Push one per-frame ROI color sample with its capture timestamp (ms). */
+  addSample(value: number, tMs: number): void {
+    if (!isFinite(value)) return;
+    this.values.push(value);
+    this.times.push(tMs);
+    const cutoff = tMs - this.WINDOW_MS;
+    while (this.times.length && this.times[0] < cutoff) {
+      this.times.shift();
+      this.values.shift();
     }
   }
 
-  /**
-   * Bandpass filter (IIR) for PPG signal
-   * Isolates heart rate frequencies (0.7-4 Hz = 42-240 bpm)
-   */
-  private appliBandpassFilter(signal: number[]): number[] {
-    if (signal.length < 3) return signal;
-
-    // Simple first-order IIR bandpass approximation
-    const alpha = 0.15; // Smoothing factor
-    const filtered: number[] = [];
-
-    for (let i = 0; i < signal.length; i++) {
-      if (i === 0) {
-        filtered.push(signal[i]);
-      } else if (i === 1) {
-        filtered.push(alpha * signal[i] + (1 - alpha) * filtered[i - 1]);
-      } else {
-        // Differentiate to remove DC component
-        const diff = signal[i] - signal[i - 1];
-        filtered.push(alpha * diff + (1 - alpha) * (filtered[i - 1] || 0));
-      }
-    }
-
-    return filtered;
+  /** Backward-compatible single-value push (assumes "now"). */
+  addPPGValue(value: number): void {
+    this.addSample(value, Date.now());
   }
 
-  /**
-   * Detect peaks in PPG signal for heart rate calculation
-   */
-  private detectPeaks(signal: number[]): number[] {
-    const peaks: number[] = [];
-    const threshold = this.calculateThreshold(signal);
-
-    for (let i = 1; i < signal.length - 1; i++) {
-      if (
-        signal[i] > signal[i - 1] &&
-        signal[i] > signal[i + 1] &&
-        signal[i] > threshold
-      ) {
-        peaks.push(i);
-      }
-    }
-
-    return peaks;
+  /** Mean CHROM-ish skin signal from a face ROI's RGBA pixel buffer. */
+  static roiValue(data: Uint8ClampedArray): number {
+    let r = 0, g = 0, b = 0;
+    const px = data.length / 4;
+    if (px === 0) return NaN;
+    for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; }
+    r /= px; g /= px; b /= px;
+    // CHROM chrominance X-signal: robust to luminance/motion vs raw green.
+    const x = 3 * r - 2 * g;
+    const y = 1.5 * r + g - 1.5 * b;
+    const mag = Math.hypot(x, y);
+    return mag > 0 ? (x / mag) * 100 : 0;
   }
 
-  /**
-   * Calculate adaptive threshold for peak detection
-   */
-  private calculateThreshold(signal: number[]): number {
-    const mean = signal.reduce((a, b) => a + b, 0) / signal.length;
-    const variance =
-      signal.reduce((sum, val) => sum + (val - mean) ** 2, 0) / signal.length;
-    return mean + Math.sqrt(variance) * 0.5;
+  private detrendWindowed(): number[] {
+    const n = this.values.length;
+    const mean = this.values.reduce((a, b) => a + b, 0) / n;
+    const out = new Array<number>(n);
+    for (let i = 0; i < n; i++) {
+      // remove DC + apply a Hann window to reduce spectral leakage
+      const w = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1));
+      out[i] = (this.values[i] - mean) * w;
+    }
+    return out;
   }
 
-  /**
-   * Process buffered signal and estimate vitals
-   */
-  processSignal(): VitalEstimate | null {
-    if (this.signalBuffer.length < 60) {
-      // Need at least 2 seconds of data
-      return null;
+  /** Return { freq, power, concentration } for the dominant bin in [fLo,fHi]. */
+  private bandPeak(sig: number[], fs: number, fLo: number, fHi: number, stepHz: number) {
+    const n = sig.length;
+    let best = { freq: 0, power: 0 };
+    let total = 0;
+    for (let f = fLo; f <= fHi; f += stepHz) {
+      let re = 0, im = 0;
+      const w = (2 * Math.PI * f) / fs;
+      for (let k = 0; k < n; k++) { re += sig[k] * Math.cos(w * k); im -= sig[k] * Math.sin(w * k); }
+      const power = re * re + im * im;
+      total += power;
+      if (power > best.power) best = { freq: f, power };
     }
-
-    const now = Date.now();
-    if (now - this.lastProcessTime < this.processingInterval) {
-      return null;
-    }
-    this.lastProcessTime = now;
-
-    try {
-      // Apply bandpass filter
-      const filtered = this.appliBandpassFilter(this.signalBuffer);
-
-      // Detect peaks
-      const peaks = this.detectPeaks(filtered);
-
-      if (peaks.length < 2) {
-        return null;
-      }
-
-      // Calculate heart rate from peak intervals
-      const intervals = [];
-      for (let i = 1; i < peaks.length; i++) {
-        intervals.push(peaks[i] - peaks[i - 1]);
-      }
-
-      const avgInterval =
-        intervals.reduce((a, b) => a + b, 0) / intervals.length;
-      const heartRate = Math.round((60 * this.FPS) / avgInterval);
-
-      // HR validity check
-      if (heartRate < 40 || heartRate > 160) {
-        return null;
-      }
-
-      // Estimate BP from PPG pulse dynamics
-      // Pulse pressure proxy: amplitude variation indicates vascular resistance
-      const amplitudes = this.calculateAmplitudes(peaks, filtered);
-      const { systolic, diastolic } = this.estimateBPFromPulse(
-        heartRate,
-        amplitudes
-      );
-
-      // Calculate confidence based on signal quality
-      const confidence = Math.min(
-        100,
-        Math.round(
-          (peaks.length / (this.signalBuffer.length / 30)) * 100 * 0.7 + 30
-        )
-      );
-
-      return {
-        heartRate,
-        systolicBP: systolic,
-        diastolicBP: diastolic,
-        confidence,
-        signal: filtered.slice(-60), // Last 2 seconds
-      };
-    } catch (error) {
-      console.warn("[RPPG] Processing error:", error);
-      return null;
-    }
+    return { ...best, concentration: total > 0 ? best.power / total : 0 };
   }
 
-  /**
-   * Calculate pulse amplitudes from peak indices
-   */
-  private calculateAmplitudes(peaks: number[], signal: number[]): number[] {
-    const amplitudes: number[] = [];
+  /** Compute vitals from the current window, or null if not enough clean signal. */
+  estimate(): VitalEstimate | null {
+    const n = this.values.length;
+    if (n < 24) return null;
+    const spanMs = this.times[n - 1] - this.times[0];
+    if (spanMs < this.MIN_MS) return null;
 
-    for (let i = 0; i < peaks.length; i++) {
-      const peakIdx = peaks[i];
-      const leftIdx = Math.max(0, peakIdx - 10);
-      const rightIdx = Math.min(signal.length - 1, peakIdx + 10);
+    const fps = ((n - 1) / spanMs) * 1000;
+    if (fps < 5 || fps > 60) return null; // implausible sampling rate
 
-      const baseline =
-        (Math.min(...signal.slice(leftIdx, rightIdx)) +
-          Math.max(...signal.slice(leftIdx, rightIdx))) /
-        2;
-      const amplitude = signal[peakIdx] - baseline;
-      amplitudes.push(amplitude);
-    }
+    const sig = this.detrendWindowed();
+    const hr = this.bandPeak(sig, fps, 0.7, 4.0, 0.05);   // 42-240 bpm
+    const rr = this.bandPeak(sig, fps, 0.15, 0.45, 0.01); // 9-27 br/min
+    if (hr.power === 0) return null;
 
-    return amplitudes;
-  }
+    const heartRate = Math.round(hr.freq * 60);
+    const respirationRate = rr.power > 0 ? Math.round(rr.freq * 60) : 16;
+    if (heartRate < 42 || heartRate > 200) return null;
 
-  /**
-   * Estimate systolic/diastolic BP from pulse characteristics
-   * Based on pulse wave analysis: wider pulse = higher pressure
-   */
-  private estimateBPFromPulse(
-    heartRate: number,
-    amplitudes: number[]
-  ): { systolic: number; diastolic: number } {
-    if (amplitudes.length === 0) {
-      return { systolic: 120, diastolic: 80 };
-    }
-
-    const avgAmplitude =
-      amplitudes.reduce((a, b) => a + b, 0) / amplitudes.length;
-    const amplitudeVariance = Math.sqrt(
-      amplitudes.reduce((sum, a) => sum + (a - avgAmplitude) ** 2, 0) /
-        amplitudes.length
+    // Confidence from how concentrated the HR peak is + how much window we have.
+    const confidence = Math.max(
+      5,
+      Math.min(99, Math.round(hr.concentration * 130 + Math.min(1, spanMs / this.WINDOW_MS) * 20)),
     );
 
-    // HR-based baseline (higher HR typically correlates with higher BP)
-    const hrFactor = Math.max(0, (heartRate - 60) * 0.3);
+    const { systolic, diastolic } = this.estimateBP(heartRate);
+    const est: VitalEstimate = {
+      heartRate, respirationRate,
+      systolicBP: systolic, diastolicBP: diastolic,
+      confidence, fps: Math.round(fps),
+      signal: sig.slice(-90),
+    };
+    this.lastEstimate = est;
+    return est;
+  }
 
-    // Amplitude-based adjustment (larger pulse = higher vascular resistance = higher BP)
-    const amplitudeFactor = amplitudeVariance * 15;
-
-    // Estimate systolic: baseline + HR effect + amplitude effect
-    let systolic = Math.round(115 + hrFactor + amplitudeFactor);
-    systolic = Math.max(90, Math.min(180, systolic)); // Clamp to realistic range
-
-    // Diastolic: lower baseline, less HR-dependent
-    let diastolic = Math.round(70 + hrFactor * 0.4 + amplitudeFactor * 0.4);
-    diastolic = Math.max(60, Math.min(120, diastolic));
-
-    // Ensure systolic > diastolic
-    if (systolic <= diastolic) {
-      systolic = diastolic + 10;
-    }
-
+  /** Rough BP proxy from HR (NOT clinical — a heuristic baseline). */
+  private estimateBP(heartRate: number): { systolic: number; diastolic: number } {
+    const hrFactor = (heartRate - 65) * 0.4;
+    let systolic = Math.round(118 + hrFactor);
+    let diastolic = Math.round(76 + hrFactor * 0.35);
+    systolic = Math.max(95, Math.min(165, systolic));
+    diastolic = Math.max(60, Math.min(105, diastolic));
+    if (systolic <= diastolic) systolic = diastolic + 12;
     return { systolic, diastolic };
   }
 
-  /**
-   * Add PPG value to buffer
-   */
-  addPPGValue(ppgValue: number): void {
-    this.signalBuffer.push(ppgValue);
-    this.timestamps.push(Date.now());
-
-    // Keep buffer at fixed size
-    if (this.signalBuffer.length > this.BUFFER_SIZE) {
-      this.signalBuffer.shift();
-      this.timestamps.shift();
-    }
-  }
-
-  /**
-   * Reset processor state
-   */
-  reset(): void {
-    this.signalBuffer = [];
-    this.timestamps = [];
-    this.lastProcessTime = 0;
-  }
-
-  /**
-   * Get current signal for visualization
-   */
-  getSignal(): number[] {
-    return this.signalBuffer.slice();
-  }
+  reset(): void { this.values = []; this.times = []; this.lastEstimate = null; }
+  getSignal(): number[] { return this.values.slice(); }
+  get last(): VitalEstimate | null { return this.lastEstimate; }
 }
 
 export const rppgProcessor = new RppgProcessor();
-export type { VitalEstimate, PPGSignal };
+export { RppgProcessor };
+export type { VitalEstimate };
