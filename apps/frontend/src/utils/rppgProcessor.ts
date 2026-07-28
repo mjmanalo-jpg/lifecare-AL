@@ -77,20 +77,23 @@ class RppgProcessor {
     return out;
   }
 
-  /** Return { freq, power, concentration } for the dominant bin in [fLo,fHi]. */
+  /** Return the dominant bin in [fLo,fHi] plus its SNR (peak power / mean band power). */
   private bandPeak(sig: number[], fs: number, fLo: number, fHi: number, stepHz: number) {
     const n = sig.length;
     let best = { freq: 0, power: 0 };
-    let total = 0;
+    let total = 0, count = 0;
     for (let f = fLo; f <= fHi; f += stepHz) {
       let re = 0, im = 0;
       const w = (2 * Math.PI * f) / fs;
       for (let k = 0; k < n; k++) { re += sig[k] * Math.cos(w * k); im -= sig[k] * Math.sin(w * k); }
       const power = re * re + im * im;
-      total += power;
+      total += power; count++;
       if (power > best.power) best = { freq: f, power };
     }
-    return { ...best, concentration: total > 0 ? best.power / total : 0 };
+    // SNR = how far the peak stands above the average bin. A clean pulse is a
+    // sharp spike (high SNR); noise spreads power evenly (SNR ~1).
+    const meanPower = count > 0 ? total / count : 0;
+    return { ...best, snr: meanPower > 0 ? best.power / meanPower : 0 };
   }
 
   /** Compute vitals from the current window, or null if not enough clean signal. */
@@ -112,10 +115,13 @@ class RppgProcessor {
     const respirationRate = rr.power > 0 ? Math.round(rr.freq * 60) : 16;
     if (heartRate < 42 || heartRate > 200) return null;
 
-    // Confidence from how concentrated the HR peak is + how much window we have.
+    // Confidence from the HR peak's SNR (peak vs average band power) + how much of
+    // the window we've filled. Tuned so a clean, dominant pulse reaches the green
+    // (>=70%) band: SNR ~2 is noise (~low), SNR >=14 is a crisp lock (~high).
+    const snrScore = Math.min(1, Math.max(0, (hr.snr - 2) / 12));
     const confidence = Math.max(
       5,
-      Math.min(99, Math.round(hr.concentration * 130 + Math.min(1, spanMs / this.WINDOW_MS) * 20)),
+      Math.min(99, Math.round(snrScore * 80 + Math.min(1, spanMs / this.WINDOW_MS) * 20)),
     );
 
     const { systolic, diastolic } = this.estimateBP(heartRate);
