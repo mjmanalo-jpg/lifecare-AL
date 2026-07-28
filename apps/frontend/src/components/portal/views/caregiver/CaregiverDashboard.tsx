@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Users, CheckCircle2, ClipboardList, AlertTriangle, BellRing, RefreshCw,
   Clock, Heart, Sun, Sunset, Moon, ChevronRight, Activity, Inbox,
@@ -69,6 +70,7 @@ function relTime(iso: string | null, nowTs: number): string {
 /* ── Component ───────────────────────────────────────────────────────── */
 
 export default function CaregiverDashboard() {
+  const router = useRouter();
   const { data: taskRows, refetch: refetchTasks } = useLiveQuery<Record<string, unknown>>(
     "tasks", { query: "include=resident&take=300", tables: ["Task", "Resident"] }
   );
@@ -334,11 +336,21 @@ export default function CaregiverDashboard() {
             )}
           </Panel>
 
-          <Panel title="Active Call Bells" icon={BellRing} count={activeBells.length}>
+          <Panel
+            title="Active Call Bells"
+            icon={BellRing}
+            count={activeBells.length}
+            onTitleClick={() => router.push("/caregiver/callbells")}
+          >
             {activeBells.length > 0 ? (
               <div className="space-y-2">
                 {activeBells.map((b) => (
-                  <div key={b.id} className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-purple-50 border border-purple-100">
+                  <button
+                    type="button"
+                    key={b.id}
+                    onClick={() => router.push("/caregiver/callbells")}
+                    className="w-full text-left flex items-center justify-between gap-2 p-2.5 rounded-lg bg-purple-50 border border-purple-100 hover:bg-purple-100 hover:border-purple-200 transition-colors cursor-pointer"
+                  >
                     <div className="min-w-0">
                       <p className="font-medium text-gray-900 truncate">{b.resident}</p>
                       <p className="text-xs text-gray-600 truncate">Room {b.room} • {b.reason}</p>
@@ -346,7 +358,7 @@ export default function CaregiverDashboard() {
                     <span className="text-xs text-purple-700 font-medium flex-shrink-0 flex items-center gap-1">
                       <Clock className="w-3 h-3" /> {relTime(b.createdAt, nowTs)}
                     </span>
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : (
@@ -361,15 +373,28 @@ export default function CaregiverDashboard() {
 
 /* ── Sub-components ──────────────────────────────────────────────────── */
 
-function Panel({ title, icon: Icon, count, className, children }: {
-  title: string; icon: LucideIcon; count?: number; className?: string; children: React.ReactNode;
+function Panel({ title, icon: Icon, count, className, onTitleClick, children }: {
+  title: string; icon: LucideIcon; count?: number; className?: string;
+  onTitleClick?: () => void; children: React.ReactNode;
 }) {
   return (
     <div className={`bg-white rounded-lg border border-gray-200 p-3 sm:p-4 ${className ?? ""}`}>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-          <Icon className="w-4 h-4 text-yellow-500" /> {title}
-        </h3>
+        {onTitleClick ? (
+          <button
+            type="button"
+            onClick={onTitleClick}
+            className="font-semibold text-gray-900 flex items-center gap-2 group hover:text-purple-700 transition-colors"
+            title={`Go to ${title}`}
+          >
+            <Icon className="w-4 h-4 text-yellow-500" /> {title}
+            <ChevronRight className="w-4 h-4 opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+          </button>
+        ) : (
+          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+            <Icon className="w-4 h-4 text-yellow-500" /> {title}
+          </h3>
+        )}
         {typeof count === "number" && (
           <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs font-bold">{count}</span>
         )}
