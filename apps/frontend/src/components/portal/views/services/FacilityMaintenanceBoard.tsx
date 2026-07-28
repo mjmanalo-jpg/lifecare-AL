@@ -6,10 +6,12 @@ import {
   CheckCircle2, Ban, AlertTriangle, Loader2, CircleDollarSign, Building2,
   ClipboardCheck, ChevronLeft, ChevronRight, Eye,
 } from "lucide-react";
-import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useWheelToPage } from "@/lib/useWheelToPage";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
+import { useToast, Toaster } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import CompleteMaintenanceDialog from "@/components/portal/views/services/CompleteMaintenanceDialog";
 import { SYSTEM_META, FREQUENCY_DAYS, FREQUENCY_LABEL } from "./serviceMeta";
 
 /**
@@ -78,8 +80,13 @@ export default function FacilityMaintenanceBoard({ canManage = false }: { canMan
   const [editForm, setEditForm] = useState(emptyForm);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [completing, setCompleting] = useState<MaintEntry | null>(null);
   const perPage = 12;
   const tableScrollRef = useWheelToPage<HTMLDivElement>();
+
+  // shadcn feedback: toasts (success/error) + promise-based confirm dialog.
+  const { toasts, toast, dismiss } = useToast();
+  const { confirm, confirmDialog } = useConfirm();
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -128,7 +135,7 @@ export default function FacilityMaintenanceBoard({ canManage = false }: { canMan
 
   const handleCreate = async () => {
     if (!createForm.title) {
-      Swal.fire({ title: "Missing Fields", text: "A title is required.", icon: "warning" });
+      toast("error", "Missing Fields", "A title is required.");
       return;
     }
     try {
@@ -136,9 +143,9 @@ export default function FacilityMaintenanceBoard({ canManage = false }: { canMan
       await refetch();
       setShowCreate(false);
       setCreateForm(emptyForm);
-      Swal.fire({ title: "Scheduled", text: `"${createForm.title}" added to the maintenance calendar.`, icon: "success", timer: 1500, showConfirmButton: false });
+      toast("success", "Scheduled", `"${createForm.title}" added to the maintenance calendar.`);
     } catch (err) {
-      Swal.fire({ title: "Create Failed", text: err instanceof Error ? err.message : "Could not schedule maintenance.", icon: "error" });
+      toast("error", "Create Failed", err instanceof Error ? err.message : "Could not schedule maintenance.");
     }
   };
 
@@ -159,9 +166,9 @@ export default function FacilityMaintenanceBoard({ canManage = false }: { canMan
       await updateRecord("facility-maintenance", editing.id, buildPayload(editForm));
       await refetch();
       setEditing(null);
-      Swal.fire({ title: "Saved", text: "Maintenance entry updated.", icon: "success", timer: 1500, showConfirmButton: false });
+      toast("success", "Saved", "Maintenance entry updated.");
     } catch (err) {
-      Swal.fire({ title: "Save Failed", text: err instanceof Error ? err.message : "Could not update entry.", icon: "error" });
+      toast("error", "Save Failed", err instanceof Error ? err.message : "Could not update entry.");
     }
   };
 
@@ -171,25 +178,19 @@ export default function FacilityMaintenanceBoard({ canManage = false }: { canMan
       await updateRecord("facility-maintenance", e.id, { status: "IN_PROGRESS" });
       await refetch();
     } catch (err) {
-      Swal.fire({ title: "Update Failed", text: err instanceof Error ? err.message : "Could not start work.", icon: "error" });
+      toast("error", "Update Failed", err instanceof Error ? err.message : "Could not start work.");
     } finally {
       setBusyId(null);
     }
   };
 
-  const handleComplete = async (e: MaintEntry) => {
-    const result = await Swal.fire({
-      title: "Complete Maintenance",
-      html:
-        `<p style="font-size:14px;margin-bottom:10px">"${e.title}" — final cost:</p>` +
-        `<input id="swal-cost" type="number" min="0" step="0.01" class="swal2-input" placeholder="Cost (₱)" value="${e.cost || ""}">`,
-      icon: "question", showCancelButton: true,
-      confirmButtonColor: "#22c55e", cancelButtonColor: "#6b7280",
-      confirmButtonText: e.type === "PREVENTIVE" ? "Complete & Schedule Next" : "Complete",
-      preConfirm: () => Number((document.getElementById("swal-cost") as HTMLInputElement | null)?.value ?? 0) || 0,
-    });
-    if (!result.isConfirmed) return;
-    const cost = Number(result.value ?? 0);
+  // Opens the shadcn Complete Maintenance dialog; the update runs in submitComplete.
+  const handleComplete = (e: MaintEntry) => setCompleting(e);
+
+  const submitComplete = async (cost: number) => {
+    const e = completing;
+    if (!e) return;
+    setCompleting(null);
     setBusyId(e.id);
     try {
       const now = new Date();
@@ -218,48 +219,50 @@ export default function FacilityMaintenanceBoard({ canManage = false }: { canMan
         });
       }
       await refetch();
-      Swal.fire({
-        title: "Completed",
-        text: e.type === "PREVENTIVE"
+      toast(
+        "success",
+        "Completed",
+        e.type === "PREVENTIVE"
           ? `Next ${FREQUENCY_LABEL[e.frequency]?.toLowerCase() ?? ""} occurrence scheduled for ${nextDue.toLocaleDateString()}.`
           : "Maintenance entry closed.",
-        icon: "success", timer: 2200, showConfirmButton: false,
-      });
+      );
     } catch (err) {
-      Swal.fire({ title: "Complete Failed", text: err instanceof Error ? err.message : "Could not complete entry.", icon: "error" });
+      toast("error", "Complete Failed", err instanceof Error ? err.message : "Could not complete entry.");
     } finally {
       setBusyId(null);
     }
   };
 
   const handleCancel = async (e: MaintEntry) => {
-    const confirmed = await Swal.fire({
-      title: "Cancel Entry?", text: `Cancel "${e.title}"?`, icon: "warning",
-      showCancelButton: true, confirmButtonColor: "#ef4444", cancelButtonColor: "#6b7280", confirmButtonText: "Cancel Entry",
-    });
-    if (!confirmed.isConfirmed) return;
+    if (!(await confirm({
+      title: "Cancel Entry?",
+      description: `Cancel "${e.title}"?`,
+      confirmText: "Cancel Entry",
+      destructive: true,
+    }))) return;
     setBusyId(e.id);
     try {
       await updateRecord("facility-maintenance", e.id, { status: "CANCELLED" });
       await refetch();
     } catch (err) {
-      Swal.fire({ title: "Cancel Failed", text: err instanceof Error ? err.message : "Could not cancel entry.", icon: "error" });
+      toast("error", "Cancel Failed", err instanceof Error ? err.message : "Could not cancel entry.");
     } finally {
       setBusyId(null);
     }
   };
 
   const handleDelete = async (e: MaintEntry) => {
-    const confirmed = await Swal.fire({
-      title: "Delete Entry?", text: `Remove "${e.title}"?`, icon: "warning",
-      showCancelButton: true, confirmButtonColor: "#ef4444", cancelButtonColor: "#6b7280", confirmButtonText: "Delete",
-    });
-    if (!confirmed.isConfirmed) return;
+    if (!(await confirm({
+      title: "Delete Entry?",
+      description: `Remove "${e.title}"?`,
+      confirmText: "Delete",
+      destructive: true,
+    }))) return;
     try {
       await deleteRecord("facility-maintenance", e.id);
       await refetch();
     } catch (err) {
-      Swal.fire({ title: "Delete Failed", text: err instanceof Error ? err.message : "Could not delete entry.", icon: "error" });
+      toast("error", "Delete Failed", err instanceof Error ? err.message : "Could not delete entry.");
     }
   };
 
@@ -461,6 +464,18 @@ export default function FacilityMaintenanceBoard({ canManage = false }: { canMan
       {viewing && (
         <MaintenanceViewModal entry={viewing} onClose={() => setViewing(null)} />
       )}
+
+      {/* shadcn complete dialog + confirm + toasts (replace the old SweetAlert2 popups) */}
+      <CompleteMaintenanceDialog
+        open={!!completing}
+        onOpenChange={(o) => { if (!o) setCompleting(null); }}
+        entryTitle={completing?.title}
+        defaultCost={completing?.cost || 0}
+        confirmLabel={completing?.type === "PREVENTIVE" ? "Complete & Schedule Next" : "Complete"}
+        onSubmit={submitComplete}
+      />
+      {confirmDialog}
+      <Toaster toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }

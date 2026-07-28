@@ -9,10 +9,13 @@ import {
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
-import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useWheelToPage } from "@/lib/useWheelToPage";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
+import { useToast, Toaster } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import CompleteTicketDialog from "@/components/portal/views/services/CompleteTicketDialog";
+import StartWorkDialog from "@/components/portal/views/services/StartWorkDialog";
 import {
   CATEGORY_META, PRIORITY_PILL, REQUEST_STATUS_PILL, TEAM_LABEL,
   SOURCE_LABEL, autoAssignTeam,
@@ -102,8 +105,14 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
   const [form, setForm] = useState(emptyForm);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [starting, setStarting] = useState<ServiceTicket | null>(null);
+  const [completing, setCompleting] = useState<ServiceTicket | null>(null);
   const perPage = 12;
   const tableScrollRef = useWheelToPage<HTMLDivElement>();
+
+  // shadcn feedback: toasts (success/error) + promise-based confirm dialog.
+  const { toasts, toast, dismiss } = useToast();
+  const { confirm, confirmDialog } = useConfirm();
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -143,17 +152,15 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
 
   const handleCreate = async () => {
     if (!form.residentId || !form.details) {
-      Swal.fire({ title: "Missing Fields", text: "Resident and request details are required.", icon: "warning" });
+      toast("error", "Missing Fields", "Resident and request details are required.");
       return;
     }
     const team = autoAssignTeam(form.category, form.subType);
-    const confirmed = await Swal.fire({
+    if (!(await confirm({
       title: "Create Service Ticket?",
-      text: `Auto-assigns to ${TEAM_LABEL[team]}.`,
-      icon: "question", showCancelButton: true,
-      confirmButtonColor: "#fbbf24", cancelButtonColor: "#6b7280", confirmButtonText: "Create Ticket",
-    });
-    if (!confirmed.isConfirmed) return;
+      description: `Auto-assigns to ${TEAM_LABEL[team]}.`,
+      confirmText: "Create Ticket",
+    }))) return;
     try {
       const resident = residents.find(r => r.id === form.residentId);
       await createRecord("service-requests", {
@@ -172,89 +179,41 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
       await refetch();
       setShowCreate(false);
       setForm(emptyForm);
-      Swal.fire({ title: "Ticket Created", text: `Assigned to ${TEAM_LABEL[team]}.`, icon: "success", timer: 1600, showConfirmButton: false });
+      toast("success", "Ticket Created", `Assigned to ${TEAM_LABEL[team]}.`);
     } catch (err) {
-      Swal.fire({ title: "Create Failed", text: err instanceof Error ? err.message : "Could not create ticket.", icon: "error" });
+      toast("error", "Create Failed", err instanceof Error ? err.message : "Could not create ticket.");
     }
   };
 
-  const handleStart = async (t: ServiceTicket) => {
-    const result = await Swal.fire({
-      title: "Start Work Order?",
-      html:
-        `<p style="font-size:14px;margin-bottom:10px">${CATEGORY_META[t.category]?.label ?? t.category} — ${t.residentName} (Room ${t.roomNumber})</p>` +
-        `<input id="swal-worker" class="swal2-input" placeholder="Staff member working the ticket" value="${t.assignedTo || ""}">`,
-      icon: "question", showCancelButton: true,
-      confirmButtonColor: "#f59e0b", cancelButtonColor: "#6b7280", confirmButtonText: "Start Work",
-      preConfirm: () => (document.getElementById("swal-worker") as HTMLInputElement | null)?.value ?? "",
-    });
-    if (!result.isConfirmed) return;
+  // Opens the shadcn Start Work dialog; the update runs in submitStart.
+  const handleStart = (t: ServiceTicket) => setStarting(t);
+
+  const submitStart = async (worker: string) => {
+    const t = starting;
+    if (!t) return;
+    setStarting(null);
     setBusyId(t.id);
     try {
       await updateRecord("service-requests", t.id, {
         status: "IN_PROGRESS",
-        assignedTo: String(result.value || "") || null,
+        assignedTo: worker || null,
         startedAt: new Date().toISOString(),
       });
       await refetch();
     } catch (err) {
-      Swal.fire({ title: "Update Failed", text: err instanceof Error ? err.message : "Could not start work.", icon: "error" });
+      toast("error", "Update Failed", err instanceof Error ? err.message : "Could not start work.");
     } finally {
       setBusyId(null);
     }
   };
 
-  const handleComplete = async (t: ServiceTicket) => {
-    // Holds the uploaded photo as a downscaled JPEG data URL (or an existing URL).
-    let photoData = t.photoProofUrl || "";
-    // Read a device photo, downscale it (max 1000px, JPEG q0.7) so the payload stays small.
-    const fileToDataUrl = (file: File) => new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const img = new Image();
-        img.onload = () => {
-          const max = 1000;
-          let w = img.width, h = img.height;
-          if (w > max || h > max) { const s = max / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
-          const canvas = document.createElement("canvas");
-          canvas.width = w; canvas.height = h;
-          canvas.getContext("2d")?.drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL("image/jpeg", 0.7));
-        };
-        img.src = String(reader.result);
-      };
-      reader.readAsDataURL(file);
-    });
-    const result = await Swal.fire({
-      title: "Complete with Photo Proof",
-      html:
-        `<p style="font-size:14px;margin-bottom:10px">Attach a photo of the finished work and the final billing:</p>` +
-        `<input id="swal-file" type="file" accept="image/*" capture="environment" class="swal2-file" style="margin:0 auto 8px">` +
-        `<img id="swal-preview" src="${t.photoProofUrl || ""}" style="display:${t.photoProofUrl ? "block" : "none"};max-height:140px;margin:0 auto 8px;border-radius:8px;border:1px solid #e5e7eb" />` +
-        `<input id="swal-photo" class="swal2-input" placeholder="…or paste a photo URL" value="${/^https?:/.test(t.photoProofUrl || "") ? t.photoProofUrl : ""}">` +
-        `<input id="swal-charge" type="number" min="0" step="0.01" class="swal2-input" placeholder="Billable charge (₱, 0 = free)" value="${t.charge || ""}">`,
-      showCancelButton: true,
-      confirmButtonColor: "#22c55e", cancelButtonColor: "#6b7280", confirmButtonText: "Complete Ticket",
-      didOpen: () => {
-        const fileEl = document.getElementById("swal-file") as HTMLInputElement | null;
-        fileEl?.addEventListener("change", async () => {
-          const f = fileEl.files?.[0];
-          if (!f) return;
-          photoData = await fileToDataUrl(f);
-          const prev = document.getElementById("swal-preview") as HTMLImageElement | null;
-          if (prev) { prev.src = photoData; prev.style.display = "block"; }
-        });
-      },
-      preConfirm: () => {
-        const url = (document.getElementById("swal-photo") as HTMLInputElement | null)?.value?.trim() || "";
-        return {
-          photo: photoData || url,
-          charge: Number((document.getElementById("swal-charge") as HTMLInputElement | null)?.value ?? 0) || 0,
-        };
-      },
-    });
-    if (!result.isConfirmed) return;
-    const { photo, charge } = (result.value as { photo: string; charge: number }) ?? { photo: "", charge: 0 };
+  // Opens the shadcn Complete-with-Photo-Proof dialog; the update runs in submitComplete.
+  const handleComplete = (t: ServiceTicket) => setCompleting(t);
+
+  const submitComplete = async (photo: string, charge: number) => {
+    const t = completing;
+    if (!t) return;
+    setCompleting(null);
     setBusyId(t.id);
     try {
       const billable = charge > 0;
@@ -277,49 +236,50 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
         });
       }
       await refetch();
-      Swal.fire({
-        title: "Ticket Completed",
-        text: billable
+      toast(
+        "success",
+        "Ticket Completed",
+        billable
           ? `₱${charge.toLocaleString()} posted to the resident's invoice pipeline. Resident notified to confirm & rate.`
           : "Resident notified to confirm & rate the service.",
-        icon: "success", timer: 2200, showConfirmButton: false,
-      });
+      );
     } catch (err) {
-      Swal.fire({ title: "Complete Failed", text: err instanceof Error ? err.message : "Could not complete ticket.", icon: "error" });
+      toast("error", "Complete Failed", err instanceof Error ? err.message : "Could not complete ticket.");
     } finally {
       setBusyId(null);
     }
   };
 
   const handleCancel = async (t: ServiceTicket) => {
-    const confirmed = await Swal.fire({
-      title: "Cancel Ticket?", text: `Cancel this ${CATEGORY_META[t.category]?.label ?? t.category} request for ${t.residentName}?`,
-      icon: "warning", showCancelButton: true,
-      confirmButtonColor: "#ef4444", cancelButtonColor: "#6b7280", confirmButtonText: "Cancel Ticket",
-    });
-    if (!confirmed.isConfirmed) return;
+    if (!(await confirm({
+      title: "Cancel Ticket?",
+      description: `Cancel this ${CATEGORY_META[t.category]?.label ?? t.category} request for ${t.residentName}?`,
+      confirmText: "Cancel Ticket",
+      destructive: true,
+    }))) return;
     setBusyId(t.id);
     try {
       await updateRecord("service-requests", t.id, { status: "CANCELLED" });
       await refetch();
     } catch (err) {
-      Swal.fire({ title: "Cancel Failed", text: err instanceof Error ? err.message : "Could not cancel ticket.", icon: "error" });
+      toast("error", "Cancel Failed", err instanceof Error ? err.message : "Could not cancel ticket.");
     } finally {
       setBusyId(null);
     }
   };
 
   const handleDelete = async (t: ServiceTicket) => {
-    const confirmed = await Swal.fire({
-      title: "Delete Ticket?", text: "Remove this ticket permanently?", icon: "warning",
-      showCancelButton: true, confirmButtonColor: "#ef4444", cancelButtonColor: "#6b7280", confirmButtonText: "Delete",
-    });
-    if (!confirmed.isConfirmed) return;
+    if (!(await confirm({
+      title: "Delete Ticket?",
+      description: "Remove this ticket permanently?",
+      confirmText: "Delete",
+      destructive: true,
+    }))) return;
     try {
       await deleteRecord("service-requests", t.id);
       await refetch();
     } catch (err) {
-      Swal.fire({ title: "Delete Failed", text: err instanceof Error ? err.message : "Could not delete ticket.", icon: "error" });
+      toast("error", "Delete Failed", err instanceof Error ? err.message : "Could not delete ticket.");
     }
   };
 
@@ -605,6 +565,25 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
           </div>
         </div>
       )}
+
+      {/* shadcn work-order dialogs (replace the old SweetAlert2 popups) */}
+      <StartWorkDialog
+        open={!!starting}
+        onOpenChange={(o) => { if (!o) setStarting(null); }}
+        context={starting ? `${CATEGORY_META[starting.category]?.label ?? starting.category} — ${starting.residentName} (Room ${starting.roomNumber})` : undefined}
+        defaultWorker={starting?.assignedTo || ""}
+        onSubmit={submitStart}
+      />
+      <CompleteTicketDialog
+        open={!!completing}
+        onOpenChange={(o) => { if (!o) setCompleting(null); }}
+        defaultPhotoUrl={completing?.photoProofUrl || ""}
+        defaultCharge={completing?.charge || 0}
+        onSubmit={submitComplete}
+      />
+
+      {confirmDialog}
+      <Toaster toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }

@@ -5,9 +5,10 @@ import {
   RefreshCw, Loader2, ArrowRight, ClipboardCheck, DoorOpen, Repeat,
   BadgeCheck, Sparkles, Search, CheckCircle2, Circle, ChevronLeft, ChevronRight, Eye, X,
 } from "lucide-react";
-import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord } from "@/lib/api";
+import { useToast, Toaster } from "@/components/ui/toast";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { UNIT_STATUS_META, UNIT_STATUS_ORDER } from "./pmsMeta";
 
 /**
@@ -76,6 +77,10 @@ export default function UnitTurnoverBoard() {
   const [viewingRoom, setViewingRoom] = useState<RoomCard | null>(null);
   const [viewingChecklists, setViewingChecklists] = useState(false);
   const [page, setPage] = useState(1);
+
+  // shadcn feedback: toasts (success/error) + promise-based confirm dialog.
+  const { toasts, toast, dismiss } = useToast();
+  const { confirm, confirmDialog } = useConfirm();
   const perPage = 12;
 
   const refreshAll = async () => { await roomsQ.refetch(); await turnoversQ.refetch(); };
@@ -108,13 +113,11 @@ export default function UnitTurnoverBoard() {
   const advance = async (room: RoomCard) => {
     const from = room.housekeepingStatus;
     const to = nextStatus(from);
-    const confirmed = await Swal.fire({
+    if (!(await confirm({
       title: `Advance Room ${room.roomNumber}?`,
-      html: `<p style="font-size:14px">${UNIT_STATUS_META[from].label} <b>→</b> ${UNIT_STATUS_META[to].label}</p>`,
-      icon: "question", showCancelButton: true,
-      confirmButtonColor: "#fbbf24", cancelButtonColor: "#6b7280", confirmButtonText: "Advance",
-    });
-    if (!confirmed.isConfirmed) return;
+      description: `${UNIT_STATUS_META[from].label} → ${UNIT_STATUS_META[to].label}`,
+      confirmText: "Advance",
+    }))) return;
     setBusyId(room.id);
     try {
       await updateRecord("rooms", room.id, { housekeepingStatus: to, status: roomStatusFor(to) });
@@ -136,7 +139,7 @@ export default function UnitTurnoverBoard() {
       }
       await refreshAll();
     } catch (err) {
-      Swal.fire({ title: "Failed", text: err instanceof Error ? err.message : "Could not advance the unit.", icon: "error" });
+      toast("error", "Failed", err instanceof Error ? err.message : "Could not advance the unit.");
     } finally {
       setBusyId(null);
     }
@@ -214,7 +217,6 @@ export default function UnitTurnoverBoard() {
             {paginated.map(room => {
             const m = UNIT_STATUS_META[room.housekeepingStatus] ?? UNIT_STATUS_META.READY;
             const Icon = m.icon;
-            const to = nextStatus(room.housekeepingStatus);
             const busy = busyId === room.id;
             return (
               <div key={room.id} className="bg-white rounded-lg border border-gray-200 p-4">
@@ -269,7 +271,10 @@ export default function UnitTurnoverBoard() {
           <Eye className="w-4 h-4 text-gray-400" />
         </button>
       )}
-      {viewingChecklists && <ChecklistsModal turnovers={activeTurnovers} onClose={() => setViewingChecklists(false)} />}
+      {viewingChecklists && <ChecklistsModal turnovers={activeTurnovers} onClose={() => setViewingChecklists(false)} toast={toast} />}
+
+      {confirmDialog}
+      <Toaster toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }
@@ -358,7 +363,11 @@ function TurnoverViewModal({ room, turnover, onClose }: { room: RoomCard; turnov
   );
 }
 
-function ChecklistsModal({ turnovers, onClose }: { turnovers: Turnover[]; onClose: () => void }) {
+function ChecklistsModal({ turnovers, onClose, toast }: {
+  turnovers: Turnover[];
+  onClose: () => void;
+  toast: (variant: "success" | "error", title: string, description?: string) => void;
+}) {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const toggleChecklistItem = async (t: Turnover, idx: number) => {
@@ -367,7 +376,7 @@ function ChecklistsModal({ turnovers, onClose }: { turnovers: Turnover[]; onClos
       const checklist = t.checklist.map((c, i) => (i === idx ? { ...c, ok: !c.ok } : c));
       await updateRecord("room-turnovers", t.id, { checklist: JSON.stringify(checklist) });
     } catch (err) {
-      Swal.fire({ title: "Failed", text: err instanceof Error ? err.message : "Could not update checklist.", icon: "error" });
+      toast("error", "Failed", err instanceof Error ? err.message : "Could not update checklist.");
     } finally {
       setBusyId(null);
     }
