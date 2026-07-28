@@ -208,9 +208,18 @@ function CreateModal({ tab, residents, clinicianName, onClose, onSaved }: { tab:
         case "pain":
           await createRecord("pain-assessments", { ...base, ...assessor, painScale: form.painScale || "MILD", numericScore: form.numericScore ? parseInt(form.numericScore) : null, location: form.location, type: form.painType, duration: form.duration, assessedAt: now });
           break;
-        case "wound":
-          await createRecord("wound-cares", { ...base, ...assessor, woundType: form.woundType || "PRESSURE_ULCER", location: form.woundLocation || "", stage: form.stage || "EPISODE", sizeLength: form.sizeLength ? parseFloat(form.sizeLength) : null, sizeWidth: form.sizeWidth ? parseFloat(form.sizeWidth) : null, dressingType: form.dressingType, treatment: form.treatment, assessedAt: now });
+        case "wound": {
+          // WoundCare has no `notes` column (unlike the other logs) — fold any
+          // note the nurse typed into `treatment` so nothing is lost and Prisma
+          // doesn't reject an unknown field.
+          const treatmentText = (form.treatment || "").trim();
+          const woundNote = (form.notes || "").trim();
+          const treatment = woundNote
+            ? (treatmentText ? `${treatmentText}\n\nNotes: ${woundNote}` : woundNote)
+            : treatmentText;
+          await createRecord("wound-cares", { residentId: form.residentId, ...assessor, woundType: form.woundType || "PRESSURE_ULCER", location: form.woundLocation || "", stage: form.stage || "EPISODE", sizeLength: form.sizeLength ? parseFloat(form.sizeLength) : null, sizeWidth: form.sizeWidth ? parseFloat(form.sizeWidth) : null, dressingType: form.dressingType, treatment: treatment || null, assessedAt: now });
           break;
+        }
         case "sleep":
           await createRecord("sleep-logs", { ...base, ...observer, date: new Date().toISOString().split("T")[0], bedtime: form.bedtime || now, wakeTime: form.wakeTime, totalHours: form.totalHours ? parseFloat(form.totalHours) : null, quality: form.quality || "FAIR", interruptions: form.interruptions ? parseInt(form.interruptions) : 0 });
           break;
@@ -222,7 +231,7 @@ function CreateModal({ tab, residents, clinicianName, onClose, onSaved }: { tab:
       onClose();
       Swal.fire({ icon: "success", title: "Logged!", timer: 1500, showConfirmButton: false });
     } catch (err) {
-      Swal.fire("Error", "Failed to save", "error");
+      Swal.fire("Error", err instanceof Error ? err.message : "Failed to save", "error");
     } finally {
       setSaving(false);
     }
