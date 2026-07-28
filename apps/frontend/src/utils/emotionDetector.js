@@ -27,8 +27,10 @@ export async function loadFaceAPI() {
 
   await faceapi.nets.tinyFaceDetector.loadFromUri('/models/face-api');
   await faceapi.nets.faceExpressionNet.loadFromUri('/models/face-api');
-  // 68-pt landmarks (tiny) give the eyelid points → eye-closure via EAR (sleep detection).
-  await faceapi.nets.faceLandmark68TinyNet.loadFromUri('/models/face-api');
+  // Full 68-pt landmarks give the eyelid points → eye-closure via EAR (sleep detection).
+  // Full (not tiny) tracks the eyelids far more accurately, so closing the eyes
+  // produces a clear EAR drop.
+  await faceapi.nets.faceLandmark68Net.loadFromUri('/models/face-api');
 
   // Restore previous debug mode
   if (typeof global !== 'undefined') {
@@ -97,7 +99,7 @@ function triggerFaceCNN(videoElement) {
     // "surprised" — the exact bug we're killing here. inputSize 448 still reaches
     // a moderately distant face on a room camera.
     .detectSingleFace(videoElement, new faceapi.TinyFaceDetectorOptions({ inputSize: 448, scoreThreshold: 0.5 }))
-    .withFaceLandmarks(true)
+    .withFaceLandmarks()
     .withFaceExpressions()
     .then(detection => {
       if (detection && detection.detection && detection.detection.score >= 0.5) {
@@ -112,7 +114,14 @@ function triggerFaceCNN(videoElement) {
             // scale AND to posture (upright works too). Fixed floor as a backstop.
             if (ear > earBaseline) earBaseline = ear;
             else earBaseline = earBaseline * 0.999 + ear * 0.001;
-            const closed = (earBaseline > 0.18 && ear < earBaseline * 0.72) || ear < 0.19;
+            // Hysteresis: enter "closed" on a clear drop (< base*0.75); once closed,
+            // stay closed until EAR clearly recovers (> base*0.85). This stops
+            // near-threshold flicker from resetting the closed timer so it can reach
+            // the 8s "Sleeping" mark.
+            const enterT = earBaseline * 0.75, exitT = earBaseline * 0.85;
+            const closed = earBaseline > 0.18
+              ? (eyesClosed ? ear < exitT : ear < enterT) || ear < 0.18
+              : ear < 0.18;
             const nowMs = Date.now();
             if (closed && !eyesClosed) eyesClosedSince = nowMs; // start the closed timer
             if (!closed) eyesClosedSince = 0;                   // opened → reset (blink-safe)
