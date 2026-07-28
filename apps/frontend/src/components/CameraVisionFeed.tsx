@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Camera, AlertTriangle, Activity, Shield, Brain, Cpu, Volume2, VolumeX, Heart, History, RefreshCw, X } from "lucide-react";
-import { analyzeEmotionFromLandmarks, loadFaceAPI, getEyeState } from "@/utils/emotionDetector";
+import { analyzeEmotionFromLandmarks, loadFaceAPI, getEyeState, setEyeBlink } from "@/utils/emotionDetector";
 import { rppgProcessor, RppgProcessor, type VitalEstimate } from "@/utils/rppgProcessor";
 
 // Suppress TensorFlow.js and WebGL verbose logging
@@ -142,6 +142,8 @@ let _mpVision: any = null;
 let _mpPose: any = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _mpDetector: any = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _mpFace: any = null; // MediaPipe FaceLandmarker (eyeBlink blendshape → sleep)
 let _mpLoading = false;
 let _mpReady = false;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -155,7 +157,7 @@ async function loadMediaPipeOnce(): Promise<{ pose: any; detector: any }> {
   _mpLoading = true;
   _mpPromise = (async () => {
     const mpv = await import("@mediapipe/tasks-vision");
-    const { PoseLandmarker, ObjectDetector, FilesetResolver } = mpv;
+    const { PoseLandmarker, ObjectDetector, FaceLandmarker, FilesetResolver } = mpv;
 
     // Load WASM runtime first (shared by all models)
     const vision = await FilesetResolver.forVisionTasks(
@@ -183,6 +185,16 @@ async function loadMediaPipeOnce(): Promise<{ pose: any; detector: any }> {
       maxResults: 12,
       runningMode: "VIDEO",
     }).then(d => { _mpDetector = d; });
+
+    // Face landmarker with blendshapes → accurate eyeBlink for sleep detection.
+    FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+        delegate: "GPU",
+      },
+      outputFaceBlendshapes: true,
+      runningMode: "VIDEO", numFaces: 1,
+    }).then((f: unknown) => { _mpFace = f; }).catch(() => { /* eye-blink is optional */ });
 
     _mpReady = true;
     _mpLoading = false;
@@ -434,6 +446,9 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   const handRef     = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const detectorRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const faceLmRef   = useRef<any>(null); // MediaPipe FaceLandmarker (eyeBlink)
+  const lastFaceLmRef = useRef(0);       // throttle timer for the face landmarker
   const rafRef      = useRef<number>(0);
 
   // Timing refs
@@ -777,15 +792,13 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         setModelsOk(true);
         setModelMsg("All systems online ✓");
 
-        // If detector was deferred, poll until it's ready
-        if (!detector) {
-          pollTimer = setInterval(() => {
-            if (_mpDetector && !dead) {
-              detectorRef.current = _mpDetector;
-              if (pollTimer) clearInterval(pollTimer);
-            }
-          }, 200);
-        }
+        // Detector + face landmarker load in the background — poll until both ready.
+        pollTimer = setInterval(() => {
+          if (dead) { if (pollTimer) clearInterval(pollTimer); return; }
+          if (_mpDetector) detectorRef.current = _mpDetector;
+          if (_mpFace) faceLmRef.current = _mpFace;
+          if (detectorRef.current && faceLmRef.current && pollTimer) clearInterval(pollTimer);
+        }, 200);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (e: any) {
         setModelMsg(`Model error: ${e?.message ?? "failed"}`);
@@ -1433,6 +1446,21 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         lastDetRef.current=now;
       }
 
+      // Eye-blink via MediaPipe FaceLandmarker blendshapes → sleep detection.
+      // Throttled to ~6/sec (plenty for sleep) to protect FPS on the already-busy feed.
+      if (faceLmRef.current && now - lastFaceLmRef.current > 160) {
+        lastFaceLmRef.current = now;
+        try {
+          const fr = faceLmRef.current.detectForVideo(source, now);
+          const cats = fr?.faceBlendshapes?.[0]?.categories;
+          if (cats && cats.length) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const score = (n: string) => (cats.find((c: any) => c.categoryName === n)?.score ?? 0) as number;
+            setEyeBlink((score("eyeBlinkLeft") + score("eyeBlinkRight")) / 2);
+          }
+        } catch { /* eye-blink is auxiliary */ }
+      }
+
       // AI Vision: every 2000ms for real-time safety & emotion analysis
       if (now-lastVisionRef.current>2000) {
         lastVisionRef.current=now; runVision();
@@ -1646,7 +1674,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   // Fall = full EMERGENCY state: every readout turns red.
   const emergency = fallen;
   // Live eye state (for the on-HUD debug readout so eye-closure tuning is observable).
-  const eyeDbg: { closed: boolean; ear: number; base: number; fresh: boolean } = getEyeState();
+  const eyeDbg: { closed: boolean; blink: number; fresh: boolean } = getEyeState();
   const emoColor = emergency ? "text-red-500 animate-pulse" : (emoMap[analysis.globalEmotion]??"text-zinc-300");
   const behColor = emergency ? "text-red-500 animate-pulse"
                  : waving ? "text-amber-400"
@@ -1943,7 +1971,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
             {analysis.sleepState === "Sleeping" ? "Sleeping 😴" : analysis.sleepState === "Drowsy" ? "Drowsy" : "Awake"}
           </p>
           <p className="text-[8px] text-zinc-600 mt-0.5">
-            EAR {eyeDbg.fresh ? eyeDbg.ear.toFixed(2) : "—"}{eyeDbg.fresh ? ` / base ${eyeDbg.base.toFixed(2)}` : ""}{eyeDbg.closed ? " · closed" : ""}
+            Blink {eyeDbg.fresh ? eyeDbg.blink.toFixed(2) : "—"}{eyeDbg.closed ? " · closed" : ""}
           </p>
           {analysis.confused && <p className="text-[8px] text-red-400 font-bold mt-0.5">⚠ Confused</p>}
         </div>

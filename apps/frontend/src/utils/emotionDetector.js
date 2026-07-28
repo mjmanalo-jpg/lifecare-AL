@@ -27,10 +27,8 @@ export async function loadFaceAPI() {
 
   await faceapi.nets.tinyFaceDetector.loadFromUri('/models/face-api');
   await faceapi.nets.faceExpressionNet.loadFromUri('/models/face-api');
-  // Full 68-pt landmarks give the eyelid points → eye-closure via EAR (sleep detection).
-  // Full (not tiny) tracks the eyelids far more accurately, so closing the eyes
-  // produces a clear EAR drop.
-  await faceapi.nets.faceLandmark68Net.loadFromUri('/models/face-api');
+  // (Eye-closure now comes from MediaPipe FaceLandmarker's eyeBlink blendshape,
+  // fed via setEyeBlink() — face-api handles emotion only.)
 
   // Restore previous debug mode
   if (typeof global !== 'undefined') {
@@ -57,27 +55,33 @@ let currentCNNEmotion = null;
 let currentCNNConfidence = 0;
 let isPredictingCNN = false;
 
-// Eye-closure state (from 68-pt landmark EAR) — powers sleep detection.
+// Eye-closure state — driven by MediaPipe FaceLandmarker's eyeBlink blendshape
+// (face-api's landmark EAR did not track eyelids). blink: 0 = open, 1 = closed.
 let eyesClosed = false;
 let eyesClosedSince = 0; // ms timestamp when eyes first went closed (0 = open)
-let lastEyeReadMs = 0;   // last time we got a face+landmarks read (for staleness)
-let lastEar = 0;         // most recent Eye Aspect Ratio (for live tuning/debug)
-let earBaseline = 0;     // adaptive per-person open-eye EAR baseline
+let lastEyeReadMs = 0;   // last time we got a face read (for staleness)
+let lastBlink = 0;       // most recent eyeBlink score (for the HUD readout)
 
-// Eye Aspect Ratio for a face-api 6-point eye: low EAR = closed.
-function eyeAspectRatio(eye) {
-  if (!eye || eye.length < 6) return 1;
-  const v1 = dist(eye[1], eye[5]);
-  const v2 = dist(eye[2], eye[4]);
-  const h = dist(eye[0], eye[3]) || 1e-6;
-  return (v1 + v2) / (2 * h);
+/**
+ * Feed the MediaPipe eyeBlink score (0=open, 1=closed). Hysteresis: enter closed
+ * above 0.55, only exit below 0.40 — so a steady closure isn't broken by jitter and
+ * the closed timer can run to the "Sleeping" threshold.
+ */
+export function setEyeBlink(score) {
+  lastBlink = score;
+  const now = Date.now();
+  const closed = eyesClosed ? score > 0.40 : score > 0.55;
+  if (closed && !eyesClosed) eyesClosedSince = now;
+  if (!closed) eyesClosedSince = 0;
+  eyesClosed = closed;
+  lastEyeReadMs = now;
 }
 
-/** Current eye state: { closed, closedForMs, ear, fresh }. Stale reads (no face >3s) read as open. */
+/** Current eye state: { closed, closedForMs, blink, fresh }. Stale reads (no face >3s) read as open. */
 export function getEyeState() {
   const fresh = Date.now() - lastEyeReadMs < 3000;
-  if (!fresh) return { closed: false, closedForMs: 0, ear: lastEar, base: earBaseline, fresh: false };
-  return { closed: eyesClosed, closedForMs: eyesClosed && eyesClosedSince ? Date.now() - eyesClosedSince : 0, ear: lastEar, base: earBaseline, fresh: true };
+  if (!fresh) return { closed: false, closedForMs: 0, blink: lastBlink, fresh: false };
+  return { closed: eyesClosed, closedForMs: eyesClosed && eyesClosedSince ? Date.now() - eyesClosedSince : 0, blink: lastBlink, fresh: true };
 }
 let emotionHistory = []; // rolling window of recent readings for majority-vote smoothing
 let lastCNNTime = 0;     // timestamp of last successful face reading (for staleness expiry)
@@ -99,32 +103,9 @@ function triggerFaceCNN(videoElement) {
     // "surprised" — the exact bug we're killing here. inputSize 448 still reaches
     // a moderately distant face on a room camera.
     .detectSingleFace(videoElement, new faceapi.TinyFaceDetectorOptions({ inputSize: 448, scoreThreshold: 0.5 }))
-    .withFaceLandmarks()
     .withFaceExpressions()
     .then(detection => {
       if (detection && detection.detection && detection.detection.score >= 0.5) {
-        // ── Eye-closure via Eye Aspect Ratio (drives sleep detection) ──
-        try {
-          const lm = detection.landmarks;
-          if (lm) {
-            const ear = (eyeAspectRatio(lm.getLeftEye()) + eyeAspectRatio(lm.getRightEye())) / 2;
-            lastEar = ear;
-            // Baseline = EWMA of the OPEN-eye EAR, clamped to a physiological range so a
-            // stray high reading can't inflate it (that inflation was making open eyes
-            // read as "closed"). Decide closed against the CURRENT baseline with
-            // hysteresis, THEN adapt the baseline toward the reading only when the eyes
-            // look open — so it tracks the real open level (up AND down).
-            if (earBaseline === 0) earBaseline = Math.min(0.40, Math.max(0.18, ear));
-            const enterT = earBaseline * 0.68, exitT = earBaseline * 0.80;
-            const closed = eyesClosed ? ear < exitT : ear < enterT;
-            if (!closed) earBaseline = Math.min(0.40, Math.max(0.18, earBaseline * 0.9 + ear * 0.1));
-            const nowMs = Date.now();
-            if (closed && !eyesClosed) eyesClosedSince = nowMs; // start the closed timer
-            if (!closed) eyesClosedSince = 0;                   // opened → reset (blink-safe)
-            eyesClosed = closed;
-            lastEyeReadMs = nowMs;
-          }
-        } catch { /* landmarks are best-effort */ }
         const sorted = Object.entries(detection.expressions).sort((a, b) => b[1] - a[1]);
         let [topEmotion, topScore] = sorted[0];
         const runnerUp = sorted[1] ? sorted[1][1] : 0;
