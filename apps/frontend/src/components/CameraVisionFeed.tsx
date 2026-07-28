@@ -1634,7 +1634,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   // Fall = full EMERGENCY state: every readout turns red.
   const emergency = fallen;
   // Live eye state (for the on-HUD debug readout so eye-closure tuning is observable).
-  const eyeDbg: { closed: boolean; ear: number; fresh: boolean } = getEyeState();
+  const eyeDbg: { closed: boolean; ear: number; base: number; fresh: boolean } = getEyeState();
   const emoColor = emergency ? "text-red-500 animate-pulse" : (emoMap[analysis.globalEmotion]??"text-zinc-300");
   const behColor = emergency ? "text-red-500 animate-pulse"
                  : waving ? "text-amber-400"
@@ -1931,7 +1931,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
             {analysis.sleepState === "Sleeping" ? "Sleeping 😴" : analysis.sleepState === "Drowsy" ? "Drowsy" : "Awake"}
           </p>
           <p className="text-[8px] text-zinc-600 mt-0.5">
-            EAR {eyeDbg.fresh ? eyeDbg.ear.toFixed(2) : "—"}{eyeDbg.closed ? " · closed" : ""}
+            EAR {eyeDbg.fresh ? eyeDbg.ear.toFixed(2) : "—"}{eyeDbg.fresh ? ` / base ${eyeDbg.base.toFixed(2)}` : ""}{eyeDbg.closed ? " · closed" : ""}
           </p>
           {analysis.confused && <p className="text-[8px] text-red-400 font-bold mt-0.5">⚠ Confused</p>}
         </div>

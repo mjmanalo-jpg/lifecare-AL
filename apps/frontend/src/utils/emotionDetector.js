@@ -60,7 +60,7 @@ let eyesClosed = false;
 let eyesClosedSince = 0; // ms timestamp when eyes first went closed (0 = open)
 let lastEyeReadMs = 0;   // last time we got a face+landmarks read (for staleness)
 let lastEar = 0;         // most recent Eye Aspect Ratio (for live tuning/debug)
-const EAR_CLOSED = 0.23; // below this = eyes closed (tiny landmark model runs a bit high)
+let earBaseline = 0;     // adaptive per-person open-eye EAR baseline
 
 // Eye Aspect Ratio for a face-api 6-point eye: low EAR = closed.
 function eyeAspectRatio(eye) {
@@ -74,8 +74,8 @@ function eyeAspectRatio(eye) {
 /** Current eye state: { closed, closedForMs, ear, fresh }. Stale reads (no face >3s) read as open. */
 export function getEyeState() {
   const fresh = Date.now() - lastEyeReadMs < 3000;
-  if (!fresh) return { closed: false, closedForMs: 0, ear: lastEar, fresh: false };
-  return { closed: eyesClosed, closedForMs: eyesClosed && eyesClosedSince ? Date.now() - eyesClosedSince : 0, ear: lastEar, fresh: true };
+  if (!fresh) return { closed: false, closedForMs: 0, ear: lastEar, base: earBaseline, fresh: false };
+  return { closed: eyesClosed, closedForMs: eyesClosed && eyesClosedSince ? Date.now() - eyesClosedSince : 0, ear: lastEar, base: earBaseline, fresh: true };
 }
 let emotionHistory = []; // rolling window of recent readings for majority-vote smoothing
 let lastCNNTime = 0;     // timestamp of last successful face reading (for staleness expiry)
@@ -107,7 +107,12 @@ function triggerFaceCNN(videoElement) {
           if (lm) {
             const ear = (eyeAspectRatio(lm.getLeftEye()) + eyeAspectRatio(lm.getRightEye())) / 2;
             lastEar = ear;
-            const closed = ear < EAR_CLOSED;
+            // Adaptive: learn THIS person's open-eye EAR (track the peak, decay slowly),
+            // then flag closed on a clear relative drop. Robust to the model's absolute
+            // scale AND to posture (upright works too). Fixed floor as a backstop.
+            if (ear > earBaseline) earBaseline = ear;
+            else earBaseline = earBaseline * 0.999 + ear * 0.001;
+            const closed = (earBaseline > 0.18 && ear < earBaseline * 0.72) || ear < 0.19;
             const nowMs = Date.now();
             if (closed && !eyesClosed) eyesClosedSince = nowMs; // start the closed timer
             if (!closed) eyesClosedSince = 0;                   // opened → reset (blink-safe)
