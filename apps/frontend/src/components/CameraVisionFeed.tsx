@@ -1920,7 +1920,12 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
             <div className="space-y-1 mt-1.5 text-[9px] font-mono text-zinc-300">
               <div className="flex justify-between">
                 <span className="text-zinc-500">Pulse:</span>
-                <span className="font-bold text-cyan-400">{aiVitals.heartRate} bpm</span>
+                <span className="font-bold text-cyan-400">
+                  {aiVitals.heartRate} bpm
+                  {bpEstimate
+                    ? <span className={`font-normal ml-1 ${bpEstimate.confidence >= 70 ? "text-emerald-400" : bpEstimate.confidence >= 50 ? "text-amber-400" : "text-zinc-500"}`}>· {bpEstimate.confidence}%</span>
+                    : <span className="font-normal ml-1 text-zinc-600 animate-pulse">· locking…</span>}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500">Resp:</span>
