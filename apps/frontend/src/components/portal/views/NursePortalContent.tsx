@@ -138,7 +138,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     setIncidentPage(1);
   }, [incidentSearch, incidentFilterSeverity, incidentFilterStatus]);
 
-  const handleMonitoringFallTriggered = async (analysis: MonitoringAnalysis & { resident?: string; room?: string }) => {
+  const handleMonitoringFallTriggered = async (analysis: MonitoringAnalysis & { resident?: string; room?: string; residentId?: string }) => {
     setMonitoringFallAlert(true);
 
     const hasOpenMonitoringFall = monitoringIncidents.some(
@@ -160,6 +160,8 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
         description: `AUTOMATED CAMERA FALL DETECTION\n\n${analysisSummary}`,
         notes: `AI Vision Analysis — Emotion: ${analysis.globalEmotion || "Unknown"}; Behavior: ${analysis.globalBehavior || "Unknown"}; Posture: ${analysis.globalPosture || "Unknown"}.`,
         incidentDate: new Date().toISOString(),
+        // Link to the monitored resident so the incident shows their name/room and ties to their record.
+        ...(analysis.residentId ? { residentId: analysis.residentId } : {}),
       });
       await refetchIncidents();
       await notifyClinicalStaff(
@@ -192,7 +194,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   // before a fall, without polluting the log with false CRITICAL fall incidents.
   const preFallCooldownRef = useRef(0);
   const handleMonitoringPreFallRisk = async (
-    analysis: MonitoringAnalysis & { resident?: string; room?: string },
+    analysis: MonitoringAnalysis & { resident?: string; room?: string; residentId?: string },
     reason: string,
   ) => {
     // The feed already debounces (60s); guard again here against duplicate incidents.
@@ -207,6 +209,8 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
         description: `PRE-FALL RISK (PREVENTIVE ALERT)\n\n${reason}`,
         notes: `AI Vision early warning — Emotion: ${analysis.globalEmotion || "Unknown"}; Behavior: ${analysis.globalBehavior || "Unknown"}; Posture: ${analysis.globalPosture || "Unknown"}. Check the resident before a fall occurs.`,
         incidentDate: new Date().toISOString(),
+        // Link to the monitored resident so the incident shows their name/room and ties to their record.
+        ...(analysis.residentId ? { residentId: analysis.residentId } : {}),
       });
       await refetchIncidents();
       await notifyClinicalStaff(
@@ -825,8 +829,8 @@ function NurseMonitoringViewInner({
             residentRoom={room || undefined}
             residentId={residentId || undefined}
             isFallen={monitoringFallAlert}
-            onFallTriggered={(analysis: any) => handleMonitoringFallTriggered({ ...analysis, resident: resident || "", room: room || "" })} // eslint-disable-line @typescript-eslint/no-explicit-any
-            onPreFallRisk={(analysis: any, reason: string) => handleMonitoringPreFallRisk?.({ ...analysis, resident: resident || "", room: room || "" }, reason)} // eslint-disable-line @typescript-eslint/no-explicit-any
+            onFallTriggered={(analysis: any) => handleMonitoringFallTriggered({ ...analysis, resident: resident || "", room: room || "", residentId: residentId || "" })} // eslint-disable-line @typescript-eslint/no-explicit-any
+            onPreFallRisk={(analysis: any, reason: string) => handleMonitoringPreFallRisk?.({ ...analysis, resident: resident || "", room: room || "", residentId: residentId || "" }, reason)} // eslint-disable-line @typescript-eslint/no-explicit-any
             onFallCleared={() => setMonitoringFallAlert(false)}
           />
         </div>

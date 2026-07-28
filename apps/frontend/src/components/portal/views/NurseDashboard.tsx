@@ -148,7 +148,10 @@ export default function NurseDashboard() {
 
   const openIncidents = useMemo(() => incidents.filter((i) => !i.resolved), [incidents]);
   const criticalIncidents = useMemo(
-    () => openIncidents.filter((i) => i.severity === "critical" || i.severity === "high"),
+    () => openIncidents
+      .filter((i) => i.severity === "critical" || i.severity === "high")
+      // Newest-first so the latest critical/high incident always shows in the top-6.
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
     [openIncidents]
   );
   const pendingBells = useMemo(() => bells.filter((b) => b.status === "PENDING"), [bells]);

@@ -156,7 +156,15 @@ export default function CaregiverDashboard() {
     () => residents.filter((r) => r.alertsCount > 0).sort((a, b) => b.alertsCount - a.alertsCount).slice(0, 6),
     [residents]
   );
-  const openIncidents = useMemo(() => incidents.filter((i) => !i.resolved).slice(0, 5), [incidents]);
+  // Newest-first so a freshly recorded risk (pre-fall/fall/etc.) always surfaces
+  // in the top-5 instead of being buried below stale, still-unresolved incidents.
+  const openIncidents = useMemo(
+    () => incidents
+      .filter((i) => !i.resolved)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 5),
+    [incidents],
+  );
   const pendingBells = useMemo(() => bells.filter((b) => b.status === "PENDING"), [bells]);
 
   const refreshAll = () => {
