@@ -461,6 +461,11 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   // Monitoring log persistence — save analysis snapshots to DB every 30s and fall events immediately
   const lastSaveRef = useRef(0);
   const SAVE_INTERVAL_MS = 30_000;
+  // Event-driven logging: capture EVERY distinct emotion/behavior change (waving,
+  // happy, sad, angry, …) so the activity log reflects everything behind the camera,
+  // not just the 30s heartbeat. Debounced so momentary flicker doesn't spam the log.
+  const lastBehaviorLogRef = useRef<{ key: string; at: number }>({ key: "", at: 0 });
+  const BEHAVIOR_LOG_MIN_MS = 5_000;
   const saveMonitoringLog = useCallback(async (logType: string, analysis: VisionAnalysis) => {
     try {
       await fetch("/api/db/camera-monitoring-logs", {
@@ -1440,10 +1445,28 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         lastVisionRef.current=now; runVision();
       }
 
-      // Persist monitoring log to DB every 30 seconds
+      // Persist monitoring log to DB every 30 seconds (heartbeat snapshot).
       if (now - lastSaveRef.current > SAVE_INTERVAL_MS) {
         lastSaveRef.current = now;
         saveMonitoringLog("ANALYSIS", analysisRef.current);
+      }
+
+      // Event-driven: log whenever the detected emotion OR behavior changes so
+      // every activity behind the camera (waving, happy, sad, angry, …) is captured.
+      {
+        const a = analysisRef.current;
+        const emo = a.globalEmotion || "";
+        const beh = a.globalBehavior || "";
+        // Skip startup placeholders — they aren't real observations.
+        const isPlaceholder = /Initializing|Detecting|^$/.test(emo) || /Initializing|Detecting|^$/.test(beh);
+        const key = `${emo}|${beh}`;
+        if (!isPlaceholder &&
+            key !== lastBehaviorLogRef.current.key &&
+            now - lastBehaviorLogRef.current.at > BEHAVIOR_LOG_MIN_MS) {
+          lastBehaviorLogRef.current = { key, at: now };
+          lastSaveRef.current = now; // the change log doubles as the heartbeat
+          saveMonitoringLog("ANALYSIS", a);
+        }
       }
 
       // Centralized Fall Detection — a person horizontal on the floor IS a fall.
