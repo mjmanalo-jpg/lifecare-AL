@@ -169,7 +169,9 @@ export default function NurseDashboard() {
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
     [openIncidents]
   );
-  const pendingBells = useMemo(() => bells.filter((b) => b.status === "PENDING"), [bells]);
+  // Active call bells = still needing action, matching the Call Bells "Queue":
+  // includes RESPONDED ("Responding"), not just PENDING.
+  const activeBells = useMemo(() => bells.filter((b) => b.status === "PENDING" || b.status === "RESPONDED"), [bells]);
   const attentionResidents = useMemo(
     () => residents.filter((r) => r.alertsCount > 0).sort((a, b) => b.alertsCount - a.alertsCount).slice(0, 6),
     [residents]
@@ -294,7 +296,7 @@ export default function NurseDashboard() {
         <Stat label="Active Residents" value={String(stats?.residents ?? residents.length)} icon={Users} tone="blue" />
         <Stat label="Open Incidents" value={String(stats?.activeIncidents ?? openIncidents.length)} icon={AlertTriangle} tone="amber" />
         <Stat label="Critical / High" value={String(criticalIncidents.length)} icon={ShieldAlert} tone="red" />
-        <Stat label="Call Bells" value={String(stats?.pendingCallBells ?? pendingBells.length)} icon={BellRing} tone="purple" />
+        <Stat label="Call Bells" value={String(stats?.pendingCallBells ?? activeBells.length)} icon={BellRing} tone="purple" />
         <Stat label="Avg Heart Rate" value={hr.avg ? String(hr.avg) : "—"} unit={hr.avg ? "bpm" : ""} icon={HeartPulse} tone="rose" />
       </div>
 
@@ -392,10 +394,10 @@ export default function NurseDashboard() {
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-        <Card title="Pending Call Bells" icon={BellRing} count={pendingBells.length}>
-          {pendingBells.length > 0 ? (
+        <Card title="Active Call Bells" icon={BellRing} count={activeBells.length}>
+          {activeBells.length > 0 ? (
             <div className="space-y-2">
-              {pendingBells.map((b) => (
+              {activeBells.map((b) => (
                 <div key={b.id} className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-purple-50 border border-purple-100">
                   <div className="min-w-0">
                     <p className="font-medium text-gray-900 truncate">{b.resident}</p>
@@ -405,7 +407,7 @@ export default function NurseDashboard() {
                 </div>
               ))}
             </div>
-          ) : <Empty text="No pending call bells." />}
+          ) : <Empty text="No active call bells." />}
         </Card>
 
         <Card title="Residents Needing Attention" icon={Users} count={attentionResidents.length}>

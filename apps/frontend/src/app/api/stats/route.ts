@@ -18,7 +18,7 @@ export async function GET() {
       tx.incident.count({ where: { resolvedAt: null, resident: { communityId } } }),
       tx.staff.count({ where: { communityId, isActive: true } }),
       tx.task.count({ where: { communityId, status: { in: ["PENDING", "IN_PROGRESS"] } } }),
-      tx.callBell.count({ where: { status: "PENDING", resident: { communityId } } }),
+      tx.callBell.count({ where: { status: { in: ["PENDING", "RESPONDED"] }, resident: { communityId } } }),
       tx.invoice.count({ where: { status: "OVERDUE", resident: { communityId } } }),
     ]));
     return NextResponse.json({ residents, activeIncidents, activeStaff, openTasks, pendingCallBells, overdueInvoices });

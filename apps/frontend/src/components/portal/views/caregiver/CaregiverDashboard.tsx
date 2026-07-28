@@ -165,7 +165,10 @@ export default function CaregiverDashboard() {
       .slice(0, 5),
     [incidents],
   );
-  const pendingBells = useMemo(() => bells.filter((b) => b.status === "PENDING"), [bells]);
+  // Active call bells = still needing action, matching the Call Bells "Queue":
+  // includes RESPONDED ("Responding"), not just PENDING — so a bell already being
+  // responded to still shows here instead of silently dropping off the dashboard.
+  const activeBells = useMemo(() => bells.filter((b) => b.status === "PENDING" || b.status === "RESPONDED"), [bells]);
 
   // Unassigned, still-open tasks — this is where resident-submitted requests
   // (room service, diet substitution) land: they arrive with no assignee and
@@ -230,7 +233,7 @@ export default function CaregiverDashboard() {
           backgroundColor="bg-green-50" textColor="text-green-900" iconColor="text-green-500" />
         <StatCard title="Active Incidents" value={String(stats?.activeIncidents ?? openIncidents.length)} icon={AlertTriangle}
           backgroundColor="bg-red-50" textColor="text-red-900" iconColor="text-red-500" />
-        <StatCard title="Call Bells" value={String(stats?.pendingCallBells ?? pendingBells.length)} icon={BellRing}
+        <StatCard title="Call Bells" value={String(stats?.pendingCallBells ?? activeBells.length)} icon={BellRing}
           backgroundColor="bg-purple-50" textColor="text-purple-900" iconColor="text-purple-500" />
       </div>
 
@@ -331,10 +334,10 @@ export default function CaregiverDashboard() {
             )}
           </Panel>
 
-          <Panel title="Pending Call Bells" icon={BellRing} count={pendingBells.length}>
-            {pendingBells.length > 0 ? (
+          <Panel title="Active Call Bells" icon={BellRing} count={activeBells.length}>
+            {activeBells.length > 0 ? (
               <div className="space-y-2">
-                {pendingBells.map((b) => (
+                {activeBells.map((b) => (
                   <div key={b.id} className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-purple-50 border border-purple-100">
                     <div className="min-w-0">
                       <p className="font-medium text-gray-900 truncate">{b.resident}</p>
@@ -347,7 +350,7 @@ export default function CaregiverDashboard() {
                 ))}
               </div>
             ) : (
-              <Empty text="No pending call bells." />
+              <Empty text="No active call bells." />
             )}
           </Panel>
         </div>

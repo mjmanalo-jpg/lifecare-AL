@@ -439,6 +439,6 @@ export const DEMO_STATS = {
   activeIncidents: incidents.filter((i) => !i.resolvedAt).length,
   activeStaff: staff.filter((s) => s.isActive).length,
   openTasks: tasks.filter((t) => t.status !== "COMPLETED").length,
-  pendingCallBells: callBells.filter((c) => c.status === "PENDING").length,
+  pendingCallBells: callBells.filter((c) => c.status === "PENDING" || c.status === "RESPONDED").length,
   overdueInvoices: invoices.filter((i) => i.status === "OVERDUE").length,
 };
