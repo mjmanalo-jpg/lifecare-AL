@@ -10,7 +10,7 @@ const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-
 const labelCls = "block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1";
 const statusColors: Record<string, string> = {
   PENDING: "bg-yellow-100 text-yellow-700",
-  IN_PROGRESS: "bg-blue-100 text-blue-700",
+  SCHEDULED: "bg-blue-100 text-blue-700",
   COMPLETED: "bg-green-100 text-green-700",
   CANCELLED: "bg-gray-100 text-gray-600",
   OVERDUE: "bg-red-100 text-red-700",
@@ -33,7 +33,7 @@ export default function FollowUpTracker() {
     }).filter((f: any) => {
       const name = resMap.get(f.residentId)?.name || "";
       if (filter !== "ALL" && f.status !== filter) return false;
-      if (search && !name.toLowerCase().includes(search.toLowerCase()) && !(f.followUpType || "").toLowerCase().includes(search.toLowerCase())) return false;
+      if (search && !name.toLowerCase().includes(search.toLowerCase()) && !(f.type || "").toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
   }, [fuRows, filter, search, resMap]);
@@ -89,11 +89,11 @@ export default function FollowUpTracker() {
                     <h3 className="font-medium text-gray-900">{resMap.get(fu.residentId)?.name || "Unknown"}</h3>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[fu.status] || "bg-gray-100 text-gray-600"}`}>{fu.status?.replace("_", " ")}</span>
                   </div>
-                  <p className="text-sm text-gray-600">{fu.followUpType || "Follow-up"} — {fu.description || "—"}</p>
+                  <p className="text-sm text-gray-600">{fu.type || "Follow-up"} — {fu.description || "—"}</p>
                   <p className="text-xs text-gray-500 mt-1">
                     Due: {fu.dueDate ? new Date(fu.dueDate).toLocaleDateString() : "—"}
                     {fu.completedDate && ` • Completed: ${new Date(fu.completedDate).toLocaleDateString()}`}
-                    {fu.assignedTo && ` • Assigned: ${fu.assignedTo}`}
+                    {fu.assignedToName && ` • Assigned: ${fu.assignedToName}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
@@ -117,7 +117,7 @@ export default function FollowUpTracker() {
 
 function FollowUpModal({ residents, onClose, onSaved }: { residents: any[]; onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ residentId: "", followUpType: "HOSPITAL_FOLLOW_UP", description: "", dueDate: "", assignedTo: "", notes: "" });
+  const [form, setForm] = useState({ residentId: "", title: "", type: "Hospital Follow-up", description: "", dueDate: "", assignedToName: "", notes: "" });
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -127,8 +127,8 @@ function FollowUpModal({ residents, onClose, onSaved }: { residents: any[]; onCl
     try {
       await createRecord("follow-ups", {
         ...form,
+        title: form.title.trim() || form.type,
         status: "PENDING",
-        createdAt: new Date().toISOString(),
       });
       onSaved();
       Swal.fire({ icon: "success", title: "Created!", timer: 1500, showConfirmButton: false });
@@ -150,13 +150,14 @@ function FollowUpModal({ residents, onClose, onSaved }: { residents: any[]; onCl
               {residents.map((r: any) => <option key={r.id} value={r.id}>{r.name} — Room {r.room}</option>)}
             </select>
           </div>
-          <div><label className={labelCls}>Type</label><select value={form.followUpType} onChange={e => set("followUpType", e.target.value)} className={inputCls}>
-            {["HOSPITAL_FOLLOW_UP", "SPECIALIST_APPOINTMENT", "LAB_RESULTS", "IMAGING", "THERAPY", "CARE_PLAN_REVIEW", "FAMILY_CONSULT", "OTHER"].map(t => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}
+          <div><label className={labelCls}>Title *</label><input value={form.title} onChange={e => set("title", e.target.value)} className={inputCls} required placeholder="e.g. Cardiology follow-up" /></div>
+          <div><label className={labelCls}>Type</label><select value={form.type} onChange={e => set("type", e.target.value)} className={inputCls}>
+            {["Hospital Follow-up", "Specialist Appointment", "Lab Results", "Imaging", "Therapy", "Care Plan Review", "Family Consult", "Other"].map(t => <option key={t} value={t}>{t}</option>)}
           </select></div>
           <div><label className={labelCls}>Description</label><textarea value={form.description} onChange={e => set("description", e.target.value)} className={inputCls} rows={2} placeholder="Details about the follow-up..." /></div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className={labelCls}>Due Date *</label><input type="date" value={form.dueDate} onChange={e => set("dueDate", e.target.value)} className={inputCls} required /></div>
-            <div><label className={labelCls}>Assigned To</label><input value={form.assignedTo} onChange={e => set("assignedTo", e.target.value)} className={inputCls} placeholder="Staff name or role" /></div>
+            <div><label className={labelCls}>Assigned To</label><input value={form.assignedToName} onChange={e => set("assignedToName", e.target.value)} className={inputCls} placeholder="Staff name or role" /></div>
           </div>
           <div><label className={labelCls}>Notes</label><textarea value={form.notes} onChange={e => set("notes", e.target.value)} className={inputCls} rows={2} /></div>
           <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-3 -mx-6 -mb-6 rounded-b-xl flex justify-end gap-2">

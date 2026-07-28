@@ -113,14 +113,14 @@ export default function VaccinationTracker() {
                     </td>
                     <td className="px-4 py-3 text-gray-700">{v.vaccineName || "—"}</td>
                     <td className="px-4 py-3 text-gray-700">{v.doseNumber || 1} of {v.totalDoses || "—"}</td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">{v.administeredDate ? new Date(v.administeredDate).toLocaleDateString() : v.scheduledDate ? `Scheduled: ${new Date(v.scheduledDate).toLocaleDateString()}` : "—"}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">{v.dateGiven ? new Date(v.dateGiven).toLocaleDateString() : v.scheduledDate ? `Scheduled: ${new Date(v.scheduledDate).toLocaleDateString()}` : "—"}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[v.status] || "bg-gray-100 text-gray-600"}`}>{v.status}</span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
                         {v.status === "SCHEDULED" && (
-                          <button onClick={() => updateRecord("vaccinations", v.id, { status: "COMPLETED", administeredDate: new Date().toISOString() }).then(refetch)} className="p-1.5 text-green-500 hover:bg-green-50 rounded cursor-pointer" title="Mark Complete">
+                          <button onClick={() => updateRecord("vaccinations", v.id, { status: "COMPLETED", dateGiven: new Date().toISOString() }).then(refetch)} className="p-1.5 text-green-500 hover:bg-green-50 rounded cursor-pointer" title="Mark Complete">
                             <CheckCircle className="w-4 h-4" />
                           </button>
                         )}
@@ -157,7 +157,7 @@ function VaccinationModal({ residents, onClose, onSaved }: { residents: any[]; o
         totalDoses: parseInt(String(form.totalDoses)) || 1,
         scheduledDate: form.scheduledDate || null,
         status: form.scheduledDate ? "SCHEDULED" : "COMPLETED",
-        administeredDate: form.scheduledDate ? null : new Date().toISOString(),
+        dateGiven: form.scheduledDate ? null : new Date().toISOString(),
         notes: form.notes || null,
       });
       onSaved();

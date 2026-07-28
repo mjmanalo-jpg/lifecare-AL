@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Pill, Plus, X, Trash2, Search, CheckCircle, Clock, AlertTriangle, AlertOctagon, Loader2 } from "lucide-react";
+import { Pill, Plus, X, Trash2, Search, CheckCircle, Clock, AlertOctagon, Loader2 } from "lucide-react";
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
@@ -8,13 +8,14 @@ import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 
 const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none text-sm";
 const labelCls = "block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1";
-const marStatusColors: Record<string, string> = {
+// Keys MUST match the Prisma MARStatus enum: GIVEN, REFUSED, HELD, MISSED, PARTIAL, SCHEDULED.
+const statusColors: Record<string, string> = {
   SCHEDULED: "bg-blue-100 text-blue-700",
-  ADMINISTERED: "bg-green-100 text-green-700",
+  GIVEN: "bg-green-100 text-green-700",
   REFUSED: "bg-red-100 text-red-700",
   HELD: "bg-yellow-100 text-yellow-700",
-  SKIPPED: "bg-gray-100 text-gray-600",
-  LATE: "bg-orange-100 text-orange-700",
+  MISSED: "bg-gray-100 text-gray-600",
+  PARTIAL: "bg-orange-100 text-orange-700",
 };
 
 export default function MARBoard() {
@@ -29,14 +30,19 @@ export default function MARBoard() {
   const [creating, setCreating] = useState(false);
   const [dateFilter, setDateFilter] = useState(new Date().toISOString().split("T")[0]);
 
+  // The time a dose was actually acted on (given/refused/held) is actualTime; fall
+  // back to the scheduled time for still-scheduled rows.
+  const rowTime = (m: any) => m.actualTime || m.scheduledTime || null;
+
   const today = new Date().toISOString().split("T")[0];
   const filtered = useMemo(() => {
     return (marRows || []).filter((m: any) => {
       const name = resMap.get(m.residentId)?.name || "";
       const medName = medMap.get(m.medicationId)?.name || "";
-      if (filter !== "ALL" && m.marStatus !== filter) return false;
+      if (filter !== "ALL" && m.status !== filter) return false;
       if (dateFilter) {
-        const mDate = m.administeredAt ? new Date(m.administeredAt).toISOString().split("T")[0] : null;
+        const t = rowTime(m);
+        const mDate = t ? new Date(t).toISOString().split("T")[0] : null;
         if (mDate && mDate !== dateFilter) return false;
       }
       if (search && !name.toLowerCase().includes(search.toLowerCase()) && !medName.toLowerCase().includes(search.toLowerCase())) return false;
@@ -46,14 +52,14 @@ export default function MARBoard() {
 
   const stats = useMemo(() => {
     const todays = (marRows || []).filter((m: any) => {
-      const d = m.administeredAt ? new Date(m.administeredAt).toISOString().split("T")[0] : null;
-      return d === today;
+      const t = rowTime(m);
+      return t && new Date(t).toISOString().split("T")[0] === today;
     });
     return {
-      administered: todays.filter((m: any) => m.marStatus === "ADMINISTERED").length,
-      refused: todays.filter((m: any) => m.marStatus === "REFUSED").length,
-      held: todays.filter((m: any) => m.marStatus === "HELD").length,
-      scheduled: todays.filter((m: any) => m.marStatus === "SCHEDULED").length,
+      given: todays.filter((m: any) => m.status === "GIVEN").length,
+      refused: todays.filter((m: any) => m.status === "REFUSED").length,
+      held: todays.filter((m: any) => m.status === "HELD").length,
+      scheduled: todays.filter((m: any) => m.status === "SCHEDULED").length,
     };
   }, [marRows, today]);
 
@@ -62,8 +68,8 @@ export default function MARBoard() {
     if (r.isConfirmed) { await deleteRecord("medication-administrations", id); refetch(); Swal.fire("Deleted", "", "success"); }
   };
 
-  const markAdministered = async (id: string) => {
-    await updateRecord("medication-administrations", id, { marStatus: "ADMINISTERED", administeredAt: new Date().toISOString() });
+  const markGiven = async (id: string) => {
+    await updateRecord("medication-administrations", id, { status: "GIVEN", actualTime: new Date().toISOString() });
     refetch();
     Swal.fire({ icon: "success", title: "Recorded", timer: 1200, showConfirmButton: false });
   };
@@ -82,7 +88,7 @@ export default function MARBoard() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: "Administered", value: stats.administered, icon: CheckCircle, color: "text-green-600" },
+          { label: "Given", value: stats.given, icon: CheckCircle, color: "text-green-600" },
           { label: "Refused", value: stats.refused, icon: AlertOctagon, color: "text-red-600" },
           { label: "Held", value: stats.held, icon: Clock, color: "text-yellow-600" },
           { label: "Scheduled", value: stats.scheduled, icon: Clock, color: "text-blue-600" },
@@ -105,7 +111,7 @@ export default function MARBoard() {
         <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className={`${inputCls} w-auto`} />
         <select value={filter} onChange={e => setFilter(e.target.value)} className={`${inputCls} w-auto`}>
           <option value="ALL">All Status</option>
-          {Object.keys(marStatusColors).map(s => <option key={s} value={s}>{s}</option>)}
+          {Object.keys(statusColors).map(s => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
 
@@ -141,21 +147,21 @@ export default function MARBoard() {
                         <p className="text-xs text-gray-500">Room {resMap.get(mar.residentId)?.room || "—"}</p>
                       </td>
                       <td className="px-4 py-3">
-                        <p className="text-gray-900">{med?.name || mar.medicationName || "—"}</p>
+                        <p className="text-gray-900">{med?.name || "—"}</p>
                         {med?.dosage && <p className="text-xs text-gray-500">{med.dosage}</p>}
                       </td>
                       <td className="px-4 py-3 text-gray-700">{mar.dosage || med?.dosage || "—"} / {mar.route || med?.route || "—"}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500">{mar.administeredAt ? new Date(mar.administeredAt).toLocaleString() : "—"}</td>
+                      <td className="px-4 py-3 text-xs text-gray-500">{rowTime(mar) ? new Date(rowTime(mar)).toLocaleString() : "—"}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${marStatusColors[mar.marStatus] || "bg-gray-100 text-gray-600"}`}>{mar.marStatus || "SCHEDULED"}</span>
-                        {mar.refusedReason && <p className="text-xs text-red-500 mt-0.5">Reason: {mar.refusedReason}</p>}
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[mar.status] || "bg-gray-100 text-gray-600"}`}>{mar.status || "SCHEDULED"}</span>
+                        {mar.reasonForRefusal && <p className="text-xs text-red-500 mt-0.5">Reason: {mar.reasonForRefusal}</p>}
                         {mar.heldReason && <p className="text-xs text-yellow-600 mt-0.5">Held: {mar.heldReason}</p>}
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-500">{mar.witnessName || "—"}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex justify-end gap-1">
-                          {mar.marStatus === "SCHEDULED" && (
-                            <button onClick={() => markAdministered(mar.id)} className="p-1.5 text-green-500 hover:bg-green-50 rounded cursor-pointer" title="Mark Administered">
+                          {mar.status === "SCHEDULED" && (
+                            <button onClick={() => markGiven(mar.id)} className="p-1.5 text-green-500 hover:bg-green-50 rounded cursor-pointer" title="Mark Given">
                               <CheckCircle className="w-4 h-4" />
                             </button>
                           )}
@@ -181,23 +187,24 @@ function MARModal({ residents, onClose, onSaved }: { residents: any[]; onClose: 
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     residentId: "", medicationId: "", dosage: "", route: "ORAL",
-    marStatus: "ADMINISTERED", refusedReason: "", heldReason: "", witnessName: "", notes: "",
+    status: "GIVEN", reasonForRefusal: "", heldReason: "", witnessName: "", notes: "",
   });
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.residentId) return;
+    if (!form.residentId || !form.medicationId) return;
     setSaving(true);
     try {
+      const now = new Date().toISOString();
       await createRecord("medication-administrations", {
         ...form,
-        administeredAt: new Date().toISOString(),
-        medicationName: (medRows || []).find((m: any) => m.id === form.medicationId)?.name || "",
+        scheduledTime: now,                                   // required by the model
+        actualTime: form.status === "SCHEDULED" ? null : now, // when it was actually acted on
       });
       onSaved();
       Swal.fire({ icon: "success", title: "Recorded!", timer: 1500, showConfirmButton: false });
-    } catch { Swal.fire("Error", "Failed", "error"); } finally { setSaving(false); }
+    } catch { Swal.fire("Error", "Could not save the MAR entry.", "error"); } finally { setSaving(false); }
   };
 
   const medsForResident = (medRows || []).filter((m: any) => !form.residentId || m.residentId === form.residentId);
@@ -218,8 +225,8 @@ function MARModal({ residents, onClose, onSaved }: { residents: any[]; onClose: 
             </select>
           </div>
           <div>
-            <label className={labelCls}>Medication</label>
-            <select value={form.medicationId} onChange={e => set("medicationId", e.target.value)} className={inputCls}>
+            <label className={labelCls}>Medication *</label>
+            <select value={form.medicationId} onChange={e => set("medicationId", e.target.value)} className={inputCls} required>
               <option value="">Select...</option>
               {medsForResident.map((m: any) => <option key={m.id} value={m.id}>{m.name} — {m.dosage || "—"}</option>)}
             </select>
@@ -232,17 +239,17 @@ function MARModal({ residents, onClose, onSaved }: { residents: any[]; onClose: 
           </div>
           <div>
             <label className={labelCls}>MAR Status *</label>
-            <select value={form.marStatus} onChange={e => set("marStatus", e.target.value)} className={inputCls} required>
-              {Object.keys(marStatusColors).map(s => <option key={s} value={s}>{s}</option>)}
+            <select value={form.status} onChange={e => set("status", e.target.value)} className={inputCls} required>
+              {Object.keys(statusColors).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
-          {form.marStatus === "REFUSED" && <div><label className={labelCls}>Refusal Reason *</label><input value={form.refusedReason} onChange={e => set("refusedReason", e.target.value)} className={inputCls} required placeholder="Why was the medication refused?" /></div>}
-          {form.marStatus === "HELD" && <div><label className={labelCls}>Hold Reason *</label><input value={form.heldReason} onChange={e => set("heldReason", e.target.value)} className={inputCls} required placeholder="Why is the medication being held?" /></div>}
+          {form.status === "REFUSED" && <div><label className={labelCls}>Refusal Reason *</label><input value={form.reasonForRefusal} onChange={e => set("reasonForRefusal", e.target.value)} className={inputCls} required placeholder="Why was the medication refused?" /></div>}
+          {form.status === "HELD" && <div><label className={labelCls}>Hold Reason *</label><input value={form.heldReason} onChange={e => set("heldReason", e.target.value)} className={inputCls} required placeholder="Why is the medication being held?" /></div>}
           <div><label className={labelCls}>Witness Name (for controlled substances)</label><input value={form.witnessName} onChange={e => set("witnessName", e.target.value)} className={inputCls} /></div>
           <div><label className={labelCls}>Notes</label><textarea value={form.notes} onChange={e => set("notes", e.target.value)} className={inputCls} rows={2} /></div>
           <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-3 -mx-6 -mb-6 rounded-b-xl flex justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 cursor-pointer">Cancel</button>
-            <button type="submit" disabled={saving || !form.residentId} className="px-5 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 disabled:opacity-50 cursor-pointer">
+            <button type="submit" disabled={saving || !form.residentId || !form.medicationId} className="px-5 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 disabled:opacity-50 cursor-pointer">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
             </button>
           </div>

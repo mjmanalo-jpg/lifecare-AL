@@ -2024,7 +2024,9 @@ model Vaccination {
   lotNumber     String?
   doseNumber    Int?
   totalDoses    Int?
-  dateGiven     DateTime
+  status        String   @default("COMPLETED") // SCHEDULED | COMPLETED | OVERDUE | DECLINED | EXEMPTED
+  scheduledDate DateTime?                       // set when a dose is scheduled (not yet given)
+  dateGiven     DateTime?                       // null until administered
   site          String?  // Left arm, Right arm, etc.
   administeredBy String?
   expirationDate DateTime?
@@ -2034,6 +2036,7 @@ model Vaccination {
 
   @@index([residentId])
   @@index([vaccineType])
+  @@index([status])
   @@index([dateGiven])
 
   @@index([organizationId])
