@@ -169,6 +169,16 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
         "🚨 Fall detected",
         `Camera detected a fall for ${analysis.resident || "a resident"}${analysis.room ? ` (Room ${analysis.room})` : ""}. Respond immediately.`,
       );
+      // Confirmed fall → raise a call bell so it enters the active response queue
+      // caregivers/nurses actively watch (needs a resident to attach to).
+      if (analysis.residentId) {
+        await createRecord("call-bells", {
+          residentId: analysis.residentId,
+          status: "PENDING",
+          reason: `🚨 AI FALL DETECTION${analysis.room ? ` — Room ${analysis.room}` : ""}`,
+          notes: "Auto-raised by AI camera monitoring — respond immediately.",
+        });
+      }
     } catch { /* non-critical — local fallback below */ }
 
     // Also keep local state for immediate UI update

@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Camera, Activity, X } from "lucide-react";
 import CameraVisionFeed from "@/components/CameraVisionFeed";
 import FacilityVitals from "@/components/portal/views/FacilityVitals";
 import { createRecord } from "@/lib/api";
+import { useLiveQuery } from "@/lib/useLiveQuery";
 
 export default function CaregiverMonitoring() {
   const searchParams = useSearchParams();
@@ -16,9 +17,26 @@ export default function CaregiverMonitoring() {
   const [showVitals, setShowVitals] = useState(false);
   const [isFallen, setIsFallen] = useState(false);
 
-  // Persist camera-detected events as real incidents so they surface in Active Incidents.
+  // On-duty clinical staff — recipients for fall / pre-fall push alerts (bell icon).
+  const { data: staffRows } = useLiveQuery<{ id: string; userId?: string; isActive?: boolean; user?: { role?: string } }>(
+    "staff", { query: "include=user&take=300", tables: ["Staff"] }
+  );
+  const clinicalUserIds = useMemo(
+    () => staffRows
+      .filter((s) => s.isActive !== false && (s.user?.role === "NURSE" || s.user?.role === "CAREGIVER") && !!s.userId)
+      .map((s) => s.userId as string),
+    [staffRows]
+  );
+  const notifyClinicalStaff = async (type: "INCIDENT_REPORT" | "VITAL_ALERT", title: string, message: string) => {
+    await Promise.allSettled(
+      clinicalUserIds.map((userId) => createRecord("notifications", { userId, type, title, message }))
+    );
+  };
+
+  // Persist camera-detected events as real incidents so they surface in Active Incidents,
+  // notify on-duty staff, and (for a confirmed fall) raise a call bell into the response queue.
   // Previously the caregiver feed only logged to the camera activity log and created NO
-  // incident (unlike the nurse portal), so falls/pre-falls never reached the dashboard.
+  // incident/notification (unlike the nurse portal), so falls/pre-falls never reached staff.
   const fallCooldownRef = useRef(0);
   const preFallCooldownRef = useRef(0);
   const recordIncident = async (
@@ -26,12 +44,13 @@ export default function CaregiverMonitoring() {
     analysis: { globalEmotion?: string; globalBehavior?: string; globalPosture?: string; summary?: string },
     reason?: string,
   ) => {
-    // Debounce so a sustained fall / repeated pre-fall signal doesn't spam duplicate incidents.
+    // Debounce so a sustained fall / repeated pre-fall signal doesn't spam duplicates.
     const now = Date.now();
     const ref = kind === "FALL" ? fallCooldownRef : preFallCooldownRef;
     if (now - ref.current < 60_000) return;
     ref.current = now;
     const vision = `Emotion: ${analysis.globalEmotion || "Unknown"}; Behavior: ${analysis.globalBehavior || "Unknown"}; Posture: ${analysis.globalPosture || "Unknown"}.`;
+    const who = `${resident || "A resident"}${room ? ` (Room ${room})` : ""}`;
     try {
       await createRecord("incidents", {
         incidentType: kind === "FALL" ? "FALL" : "BEHAVIORAL",
@@ -46,6 +65,24 @@ export default function CaregiverMonitoring() {
         // Link to the monitored resident so the incident shows their name/room and ties to their record.
         ...(residentId ? { residentId } : {}),
       });
+      // Notify on-duty nurses/caregivers via their notification bell.
+      await notifyClinicalStaff(
+        kind === "FALL" ? "INCIDENT_REPORT" : "VITAL_ALERT",
+        kind === "FALL" ? "🚨 Fall detected" : "⚠️ Pre-fall risk",
+        kind === "FALL"
+          ? `Camera detected a fall for ${who}. Respond immediately.`
+          : `${who} may be at risk of a fall — ${reason || "pre-fall indicators detected."}`,
+      );
+      // Confirmed fall → raise a call bell so it enters the active response queue
+      // (needs a resident to attach to; call bells require a residentId).
+      if (kind === "FALL" && residentId) {
+        await createRecord("call-bells", {
+          residentId,
+          status: "PENDING",
+          reason: `🚨 AI FALL DETECTION${room ? ` — Room ${room}` : ""}`,
+          notes: `Auto-raised by AI camera monitoring — respond immediately. ${vision}`,
+        });
+      }
     } catch { /* non-critical — the on-camera banner + activity log still fired */ }
   };
 
