@@ -29,6 +29,7 @@ export interface SessionData {
 const VALID_ROLES: Role[] = [
   "PLATFORM_ADMIN", "ORGANIZATION_ADMIN", "SUPERADMIN", "FACILITY_ADMIN", "PHYSICIAN", "NURSE", "CAREGIVER",
   "FAMILY", "RESIDENT", "FLEET_MANAGEMENT", "DRIVER", "SECURITY", "NUTRITIONIST", "KITCHEN",
+  "HOUSEKEEPING", "MAINTENANCE",
 ];
 
 function b64url(input: string): string {

@@ -79,13 +79,18 @@ const isLast30Days = (iso: string) => {
   return !isNaN(t) && Date.now() - t <= 30 * DAY_MS;
 };
 
-export default function ServiceRequestsBoard() {
+export default function ServiceRequestsBoard({ categories }: { categories?: string[] } = {}) {
   const { data: rows, loading, error, refetch } = useLiveQuery<Row>(
     "service-requests", { query: "include=resident&take=400", tables: ["ServiceRequest"] }
   );
   const residentsQ = useLiveQuery<Row>("residents", { query: "take=300", tables: ["Resident"] });
 
-  const tickets = useMemo<ServiceTicket[]>(() => rows.map(adaptTicket), [rows]);
+  // When a role-scoped portal (Housekeeping / Maintenance) passes `categories`,
+  // the whole board — tickets, stats, filters — is restricted to those categories.
+  const tickets = useMemo<ServiceTicket[]>(
+    () => rows.map(adaptTicket).filter((t) => !categories || categories.includes(t.category)),
+    [rows, categories]
+  );
   const residents = useMemo<ResidentOpt[]>(() => residentsQ.data.map(adaptResident), [residentsQ.data]);
 
   const [search, setSearch] = useState("");

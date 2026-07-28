@@ -18,6 +18,8 @@ import DriverPortalContent from "@/components/portal/views/DriverPortalContent";
 import SecurityPortalContent from "@/components/portal/views/SecurityPortalContent";
 import NutritionistPortalContent from "@/components/portal/views/NutritionistPortalContent";
 import KitchenPortalContent from "@/components/portal/views/KitchenPortalContent";
+import HousekeepingPortalContent from "@/components/portal/views/HousekeepingPortalContent";
+import MaintenancePortalContent from "@/components/portal/views/MaintenancePortalContent";
 import { useEffect, useState } from "react";
 
 export default function RolePortalPage() {
@@ -90,6 +92,13 @@ export default function RolePortalPage() {
       )}
       {userRole === "KITCHEN" && (
         <KitchenPortalContent tab={tabParam || "dashboard"} />
+      )}
+      {/* Housekeeping works cleaning/linen tickets + room turnover; Maintenance works repairs/HVAC + facility upkeep. */}
+      {userRole === "HOUSEKEEPING" && (
+        <HousekeepingPortalContent tab={tabParam || "dashboard"} />
+      )}
+      {userRole === "MAINTENANCE" && (
+        <MaintenancePortalContent tab={tabParam || "dashboard"} />
       )}
     </PortalShell>
   );

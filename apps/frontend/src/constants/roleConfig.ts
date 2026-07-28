@@ -66,7 +66,9 @@ export type Role =
   | "DRIVER"
   | "SECURITY"
   | "NUTRITIONIST"
-  | "KITCHEN";
+  | "KITCHEN"
+  | "HOUSEKEEPING"
+  | "MAINTENANCE";
 
 export interface SidebarLink {
   name: string;
@@ -187,6 +189,8 @@ export const PATH_TO_ROLE: Record<string, Role> = {
   security: "SECURITY",
   nutritionist: "NUTRITIONIST",
   kitchen: "KITCHEN",
+  housekeeping: "HOUSEKEEPING",
+  maintenance: "MAINTENANCE",
 };
 
 export const ROLES: Record<Role, RoleDetails> = {
@@ -544,6 +548,32 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Kitchen — Cook List", icon: Utensils, route: "/kitchen/kitchen" },
     ],
   },
+  HOUSEKEEPING: {
+    name: "Housekeeping",
+    badge: "Rooms & Cleaning",
+    desc: "Work the housekeeping & laundry queue from residents, and keep room-turnover status current (make-ready → occupied).",
+    icon: Sparkles,
+    profileName: "Housekeeping Staff",
+    basePath: "/housekeeping",
+    footerText: "Housekeeping Portal",
+    sidebarLinks: [
+      { name: "Housekeeping Requests", icon: Sparkles, route: "/housekeeping/dashboard" },
+      { name: "Unit Turnover", icon: BedDouble, route: "/housekeeping/turnover" },
+    ],
+  },
+  MAINTENANCE: {
+    name: "Maintenance",
+    badge: "Repairs & Engineering",
+    desc: "Work resident repair & HVAC tickets, and manage preventative facility-system maintenance schedules.",
+    icon: Wrench,
+    profileName: "Maintenance Staff",
+    basePath: "/maintenance",
+    footerText: "Maintenance Portal",
+    sidebarLinks: [
+      { name: "Maintenance Requests", icon: Wrench, route: "/maintenance/dashboard" },
+      { name: "Facility Maintenance", icon: Wrench, route: "/maintenance/maintenance" },
+    ],
+  },
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -601,6 +631,8 @@ const LINK_GROUP_MAP: Record<string, SidebarGroup> = {
   // Kitchen / Diet & Nutrition
   "Diet & Nutrition Orders": "Hospitality & Services",
   "Kitchen — Cook List": "Hospitality & Services",
+  "Housekeeping Requests": "Hospitality & Services",
+  "Maintenance Requests": "Hospitality & Services",
   // Medication (Module 6)
   "Medication Management & Inventory": "Medication",
   "Medication Administration Record": "Medication",

@@ -30,6 +30,8 @@ enum Role {
   SECURITY
   NUTRITIONIST
   KITCHEN
+  HOUSEKEEPING
+  MAINTENANCE
 }
 
 enum PlatformRole {
