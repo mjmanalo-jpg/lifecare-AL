@@ -158,7 +158,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
         incidentType: "FALL",
         severity: "CRITICAL",
         description: `AUTOMATED CAMERA FALL DETECTION\n\n${analysisSummary}`,
-        notes: `AI Vision Analysis — Emotion: ${analysis.globalEmotion || "Unknown"}; Behavior: ${analysis.globalBehavior || "Unknown"}; Posture: ${analysis.globalPosture || "Unknown"}.`,
+        followUpNotes: `AI Vision Analysis — Emotion: ${analysis.globalEmotion || "Unknown"}; Behavior: ${analysis.globalBehavior || "Unknown"}; Posture: ${analysis.globalPosture || "Unknown"}.`,
         incidentDate: new Date().toISOString(),
         // Link to the monitored resident so the incident shows their name/room and ties to their record.
         ...(analysis.residentId ? { residentId: analysis.residentId } : {}),
@@ -217,7 +217,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
         incidentType: "BEHAVIORAL",
         severity: "MODERATE",
         description: `PRE-FALL RISK (PREVENTIVE ALERT)\n\n${reason}`,
-        notes: `AI Vision early warning — Emotion: ${analysis.globalEmotion || "Unknown"}; Behavior: ${analysis.globalBehavior || "Unknown"}; Posture: ${analysis.globalPosture || "Unknown"}. Check the resident before a fall occurs.`,
+        followUpNotes: `AI Vision early warning — Emotion: ${analysis.globalEmotion || "Unknown"}; Behavior: ${analysis.globalBehavior || "Unknown"}; Posture: ${analysis.globalPosture || "Unknown"}. Check the resident before a fall occurs.`,
         incidentDate: new Date().toISOString(),
         // Link to the monitored resident so the incident shows their name/room and ties to their record.
         ...(analysis.residentId ? { residentId: analysis.residentId } : {}),

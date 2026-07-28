@@ -58,7 +58,7 @@ export default function CaregiverMonitoring() {
         description: kind === "FALL"
           ? `AUTOMATED CAMERA FALL DETECTION\n\n${analysis.summary || "Fall detected from monitoring camera."}`
           : `PRE-FALL RISK (PREVENTIVE ALERT)\n\n${reason || "Pre-fall risk indicators detected."}`,
-        notes: kind === "FALL"
+        followUpNotes: kind === "FALL"
           ? `AI Vision Analysis — ${vision}`
           : `AI Vision early warning — ${vision} Check the resident before a fall occurs.`,
         incidentDate: new Date().toISOString(),
