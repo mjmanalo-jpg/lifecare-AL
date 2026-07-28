@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { useWheelToPage } from "@/lib/useWheelToPage";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { SYSTEM_META, FREQUENCY_DAYS, FREQUENCY_LABEL } from "./serviceMeta";
 
@@ -78,6 +79,7 @@ export default function FacilityMaintenanceBoard({ canManage = false }: { canMan
   const [busyId, setBusyId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const perPage = 12;
+  const tableScrollRef = useWheelToPage<HTMLDivElement>();
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -359,7 +361,7 @@ export default function FacilityMaintenanceBoard({ canManage = false }: { canMan
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 p-12 text-center text-gray-500">No maintenance entries match your filters.</div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+        <div ref={tableScrollRef} className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
