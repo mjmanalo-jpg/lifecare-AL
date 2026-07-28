@@ -220,9 +220,18 @@ function CreateModal({ tab, residents, clinicianName, onClose, onSaved }: { tab:
           await createRecord("wound-cares", { residentId: form.residentId, ...assessor, woundType: form.woundType || "PRESSURE_ULCER", location: form.woundLocation || "", stage: form.stage || "EPISODE", sizeLength: form.sizeLength ? parseFloat(form.sizeLength) : null, sizeWidth: form.sizeWidth ? parseFloat(form.sizeWidth) : null, dressingType: form.dressingType, treatment: treatment || null, assessedAt: now });
           break;
         }
-        case "sleep":
-          await createRecord("sleep-logs", { ...base, ...observer, date: new Date().toISOString().split("T")[0], bedtime: form.bedtime || now, wakeTime: form.wakeTime, totalHours: form.totalHours ? parseFloat(form.totalHours) : null, quality: form.quality || "FAIR", interruptions: form.interruptions ? parseInt(form.interruptions) : 0 });
+        case "sleep": {
+          // Prisma DateTime fields need full ISO strings. `date` was a date-only
+          // "YYYY-MM-DD" (rejected), and the datetime-local inputs are partial
+          // ("YYYY-MM-DDTHH:mm") — normalise them all to ISO.
+          const toIso = (v?: string) => {
+            if (!v) return null;
+            const d = new Date(v);
+            return isNaN(d.getTime()) ? null : d.toISOString();
+          };
+          await createRecord("sleep-logs", { ...base, ...observer, date: now, bedtime: toIso(form.bedtime) ?? now, wakeTime: toIso(form.wakeTime), totalHours: form.totalHours ? parseFloat(form.totalHours) : null, quality: form.quality || "FAIR", interruptions: form.interruptions ? parseInt(form.interruptions) : 0 });
           break;
+        }
         case "mobility":
           await createRecord("mobility-logs", { ...base, ...observer, type: form.mobilityType || "WALKING", startTime: now, duration: form.duration ? parseInt(form.duration) : null, assistanceLevel: form.assistanceLevel || "INDEPENDENT", assistiveDevice: form.assistiveDevice });
           break;
