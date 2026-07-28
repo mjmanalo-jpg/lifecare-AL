@@ -1,18 +1,53 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Camera, Activity, X } from "lucide-react";
 import CameraVisionFeed from "@/components/CameraVisionFeed";
 import FacilityVitals from "@/components/portal/views/FacilityVitals";
+import { createRecord } from "@/lib/api";
 
 export default function CaregiverMonitoring() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const resident = searchParams.get("resident");
   const room = searchParams.get("room");
+  const residentId = searchParams.get("residentId");
   const [showVitals, setShowVitals] = useState(false);
   const [isFallen, setIsFallen] = useState(false);
+
+  // Persist camera-detected events as real incidents so they surface in Active Incidents.
+  // Previously the caregiver feed only logged to the camera activity log and created NO
+  // incident (unlike the nurse portal), so falls/pre-falls never reached the dashboard.
+  const fallCooldownRef = useRef(0);
+  const preFallCooldownRef = useRef(0);
+  const recordIncident = async (
+    kind: "FALL" | "PRE_FALL",
+    analysis: { globalEmotion?: string; globalBehavior?: string; globalPosture?: string; summary?: string },
+    reason?: string,
+  ) => {
+    // Debounce so a sustained fall / repeated pre-fall signal doesn't spam duplicate incidents.
+    const now = Date.now();
+    const ref = kind === "FALL" ? fallCooldownRef : preFallCooldownRef;
+    if (now - ref.current < 60_000) return;
+    ref.current = now;
+    const vision = `Emotion: ${analysis.globalEmotion || "Unknown"}; Behavior: ${analysis.globalBehavior || "Unknown"}; Posture: ${analysis.globalPosture || "Unknown"}.`;
+    try {
+      await createRecord("incidents", {
+        incidentType: kind === "FALL" ? "FALL" : "BEHAVIORAL",
+        severity: kind === "FALL" ? "CRITICAL" : "MODERATE",
+        description: kind === "FALL"
+          ? `AUTOMATED CAMERA FALL DETECTION\n\n${analysis.summary || "Fall detected from monitoring camera."}`
+          : `PRE-FALL RISK (PREVENTIVE ALERT)\n\n${reason || "Pre-fall risk indicators detected."}`,
+        notes: kind === "FALL"
+          ? `AI Vision Analysis — ${vision}`
+          : `AI Vision early warning — ${vision} Check the resident before a fall occurs.`,
+        incidentDate: new Date().toISOString(),
+        // Link to the monitored resident so the incident shows their name/room and ties to their record.
+        ...(residentId ? { residentId } : {}),
+      });
+    } catch { /* non-critical — the on-camera banner + activity log still fired */ }
+  };
 
   return (
     <div className="space-y-6">
@@ -55,8 +90,10 @@ export default function CaregiverMonitoring() {
             cameraMode="hybrid"
             residentName={resident || undefined}
             residentRoom={room || undefined}
+            residentId={residentId || undefined}
             isFallen={isFallen}
-            onFallTriggered={() => setIsFallen(true)}
+            onFallTriggered={(analysis) => { setIsFallen(true); void recordIncident("FALL", analysis); }}
+            onPreFallRisk={(analysis, reason) => { void recordIncident("PRE_FALL", analysis, reason); }}
             onFallCleared={() => setIsFallen(false)}
           />
         </div>

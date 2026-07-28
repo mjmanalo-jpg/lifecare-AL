@@ -522,7 +522,7 @@ function ResidentModal({ r, nowTs, onClose }: { r: ResidentVM; nowTs: number; on
           <button
             onClick={() => {
               onClose();
-              router.push(`/caregiver/monitoring?resident=${encodeURIComponent(r.name)}&room=${encodeURIComponent(r.room)}`);
+              router.push(`/caregiver/monitoring?resident=${encodeURIComponent(r.name)}&room=${encodeURIComponent(r.room)}&residentId=${encodeURIComponent(r.id)}`);
             }}
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
           >
