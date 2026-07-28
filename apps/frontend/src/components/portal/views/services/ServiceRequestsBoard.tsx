@@ -203,18 +203,53 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
   };
 
   const handleComplete = async (t: ServiceTicket) => {
+    // Holds the uploaded photo as a downscaled JPEG data URL (or an existing URL).
+    let photoData = t.photoProofUrl || "";
+    // Read a device photo, downscale it (max 1000px, JPEG q0.7) so the payload stays small.
+    const fileToDataUrl = (file: File) => new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const max = 1000;
+          let w = img.width, h = img.height;
+          if (w > max || h > max) { const s = max / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+          const canvas = document.createElement("canvas");
+          canvas.width = w; canvas.height = h;
+          canvas.getContext("2d")?.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", 0.7));
+        };
+        img.src = String(reader.result);
+      };
+      reader.readAsDataURL(file);
+    });
     const result = await Swal.fire({
       title: "Complete with Photo Proof",
       html:
-        `<p style="font-size:14px;margin-bottom:10px">Attach photo proof and final billing for this ticket:</p>` +
-        `<input id="swal-photo" class="swal2-input" placeholder="Photo proof URL" value="${t.photoProofUrl || ""}">` +
+        `<p style="font-size:14px;margin-bottom:10px">Attach a photo of the finished work and the final billing:</p>` +
+        `<input id="swal-file" type="file" accept="image/*" capture="environment" class="swal2-file" style="margin:0 auto 8px">` +
+        `<img id="swal-preview" src="${t.photoProofUrl || ""}" style="display:${t.photoProofUrl ? "block" : "none"};max-height:140px;margin:0 auto 8px;border-radius:8px;border:1px solid #e5e7eb" />` +
+        `<input id="swal-photo" class="swal2-input" placeholder="…or paste a photo URL" value="${/^https?:/.test(t.photoProofUrl || "") ? t.photoProofUrl : ""}">` +
         `<input id="swal-charge" type="number" min="0" step="0.01" class="swal2-input" placeholder="Billable charge (₱, 0 = free)" value="${t.charge || ""}">`,
-      icon: "question", showCancelButton: true,
+      showCancelButton: true,
       confirmButtonColor: "#22c55e", cancelButtonColor: "#6b7280", confirmButtonText: "Complete Ticket",
-      preConfirm: () => ({
-        photo: (document.getElementById("swal-photo") as HTMLInputElement | null)?.value ?? "",
-        charge: Number((document.getElementById("swal-charge") as HTMLInputElement | null)?.value ?? 0) || 0,
-      }),
+      didOpen: () => {
+        const fileEl = document.getElementById("swal-file") as HTMLInputElement | null;
+        fileEl?.addEventListener("change", async () => {
+          const f = fileEl.files?.[0];
+          if (!f) return;
+          photoData = await fileToDataUrl(f);
+          const prev = document.getElementById("swal-preview") as HTMLImageElement | null;
+          if (prev) { prev.src = photoData; prev.style.display = "block"; }
+        });
+      },
+      preConfirm: () => {
+        const url = (document.getElementById("swal-photo") as HTMLInputElement | null)?.value?.trim() || "";
+        return {
+          photo: photoData || url,
+          charge: Number((document.getElementById("swal-charge") as HTMLInputElement | null)?.value ?? 0) || 0,
+        };
+      },
     });
     if (!result.isConfirmed) return;
     const { photo, charge } = (result.value as { photo: string; charge: number }) ?? { photo: "", charge: 0 };
@@ -310,9 +345,13 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
           <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
             <RefreshCw className="w-4 h-4" /> Refresh
           </button>
-          <button onClick={() => { setForm(emptyForm); setShowCreate(true); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
-            <Plus className="w-4 h-4" /> New Ticket (Front Desk)
-          </button>
+          {/* Tickets originate from residents or the Facility Admin front desk — crew
+              portals (scoped via `categories`) work the queue but don't raise tickets. */}
+          {!categories && (
+            <button onClick={() => { setForm(emptyForm); setShowCreate(true); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+              <Plus className="w-4 h-4" /> New Ticket (Front Desk)
+            </button>
+          )}
         </div>
       </div>
 
