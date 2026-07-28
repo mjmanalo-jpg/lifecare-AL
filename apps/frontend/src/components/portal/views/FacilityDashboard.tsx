@@ -3,7 +3,8 @@
 import { useMemo, useState, useEffect } from "react";
 import {
   Users, AlertTriangle, Building2, UserPlus, RefreshCw, Sun, Sunset, Moon,
-  Activity, BedDouble, ClipboardList, ChevronRight,
+  Activity, BedDouble, ClipboardList, ChevronRight, Sparkles, Wrench, Ticket,
+  CheckCircle2, Timer, AlertCircle, Star, CalendarClock,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -12,6 +13,7 @@ import {
 } from "recharts";
 import { useLiveQuery, useStats } from "@/lib/useLiveQuery";
 import { adaptResident, adaptIncident, adaptStaff, humanize } from "@/lib/adapters";
+import { CATEGORY_META, REQUEST_STATUS_PILL } from "@/components/portal/views/services/serviceMeta";
 
 type Incident = ReturnType<typeof adaptIncident>;
 type Staff = ReturnType<typeof adaptStaff>;
@@ -22,6 +24,8 @@ const SEVERITY_BADGE: Record<string, string> = {
   medium: "bg-yellow-100 text-yellow-700", low: "bg-blue-100 text-blue-700",
 };
 const CARE_COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#ef4444"];
+const TICKET_STATUS_COLORS: Record<string, string> = { Pending: "#f59e0b", Ongoing: "#3b82f6", Completed: "#22c55e", Cancelled: "#9ca3af" };
+const CAT_COLORS = ["#0ea5e9", "#22c55e", "#f97316", "#8b5cf6", "#ef4444"];
 
 function shiftFor(hour: number) {
   if (hour >= 6 && hour < 14) return { label: "Day Shift", icon: Sun, greeting: "Good morning" };
@@ -52,6 +56,12 @@ export default function FacilityDashboard() {
   );
   const { data: admissionRows } = useLiveQuery<Record<string, unknown>>(
     "admissions", { query: "take=100", tables: ["Admission"] }
+  );
+  const { data: serviceRows } = useLiveQuery<Record<string, unknown>>(
+    "service-requests", { query: "include=resident&take=500", tables: ["ServiceRequest"] }
+  );
+  const { data: maintRows } = useLiveQuery<Record<string, unknown>>(
+    "facility-maintenance", { query: "take=400", tables: ["FacilityMaintenance"] }
   );
 
   const [nowTs, setNowTs] = useState(0);
@@ -105,6 +115,39 @@ export default function FacilityDashboard() {
     return rows.sort((a, b) => new Date(String(b.createdAt ?? 0)).getTime() - new Date(String(a.createdAt ?? 0)).getTime()).slice(0, 5);
   }, [admissionRows]);
 
+  // ── Service ticket analytics (Housekeeping / Laundry / Room Service + Repairs / HVAC) ──
+  const ticketStats = useMemo(() => {
+    const rows = serviceRows as Array<Record<string, unknown>>;
+    let pending = 0, ongoing = 0, completed = 0, cancelled = 0;
+    const byCat = new Map<string, number>();
+    rows.forEach((r) => {
+      const st = String(r.status ?? "OPEN");
+      if (st === "OPEN") pending++;
+      else if (st === "ASSIGNED" || st === "IN_PROGRESS") ongoing++;
+      else if (st === "COMPLETED" || st === "CONFIRMED") completed++;
+      else if (st === "CANCELLED") cancelled++;
+      const c = String(r.category ?? "HOUSEKEEPING");
+      byCat.set(c, (byCat.get(c) || 0) + 1);
+    });
+    const inList = (cats: string[]) => rows.filter((r) => cats.includes(String(r.category))).length;
+    return {
+      total: rows.length, pending, ongoing, completed,
+      housekeeping: inList(["HOUSEKEEPING", "LAUNDRY", "ROOM_SERVICE"]),
+      maintenance: inList(["REPAIRS", "AIRCON_HVAC"]),
+      statusData: [
+        { name: "Pending", value: pending }, { name: "Ongoing", value: ongoing },
+        { name: "Completed", value: completed }, { name: "Cancelled", value: cancelled },
+      ].filter((d) => d.value > 0),
+      catData: Array.from(byCat.entries()).map(([k, value]) => ({ name: CATEGORY_META[k]?.label ?? k, value })),
+    };
+  }, [serviceRows]);
+
+  const recentTickets = useMemo(
+    () => [...(serviceRows as Array<Record<string, unknown>>)]
+      .sort((a, b) => new Date(String(b.createdAt ?? 0)).getTime() - new Date(String(a.createdAt ?? 0)).getTime())
+      .slice(0, 6),
+    [serviceRows]
+  );
   const shift = shiftFor(nowTs ? new Date(nowTs).getHours() : 9);
   const ShiftIcon = shift.icon;
 
@@ -245,6 +288,76 @@ export default function FacilityDashboard() {
           ) : <Empty text="No recent admissions." />}
         </Card>
       </div>
+
+      {/* ── Service Tickets — Housekeeping & Maintenance analytics ── */}
+      <div>
+        <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+          <Ticket className="w-5 h-5 text-yellow-500" /> Service Tickets — Housekeeping &amp; Maintenance
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+          <Stat label="Total Tickets" value={String(ticketStats.total)} icon={Ticket} tone="blue" />
+          <Stat label="Pending" value={String(ticketStats.pending)} icon={AlertCircle} tone="amber" />
+          <Stat label="Ongoing" value={String(ticketStats.ongoing)} icon={Timer} tone="purple" />
+          <Stat label="Completed" value={String(ticketStats.completed)} icon={CheckCircle2} tone="green" />
+          <Stat label="Housekeeping" value={String(ticketStats.housekeeping)} icon={Sparkles} tone="blue" />
+          <Stat label="Maintenance" value={String(ticketStats.maintenance)} icon={Wrench} tone="rose" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card title="Tickets by Status" icon={Activity} className="lg:col-span-2">
+          {ticketStats.statusData.length ? (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={ticketStats.statusData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis allowDecimals={false} fontSize={12} tickLine={false} axisLine={false} width={28} />
+                <Tooltip cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                  {ticketStats.statusData.map((d, i) => <Cell key={i} fill={TICKET_STATUS_COLORS[d.name] ?? "#3b82f6"} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : <Empty text="No service tickets yet." />}
+        </Card>
+
+        <Card title="Tickets by Type" icon={Ticket}>
+          {ticketStats.catData.length ? (
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie data={ticketStats.catData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                  {ticketStats.catData.map((_, i) => <Cell key={i} fill={CAT_COLORS[i % CAT_COLORS.length]} />)}
+                </Pie>
+                <Tooltip /><Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : <Empty text="No tickets." />}
+        </Card>
+      </div>
+
+      <Card title="Recent Tickets" icon={ClipboardList} count={recentTickets.length}>
+        {recentTickets.length ? (
+          <div className="space-y-2">
+            {recentTickets.map((t, idx) => {
+              const res = t.resident as { firstName?: string; lastName?: string } | undefined;
+              const name = res ? `${res.firstName ?? ""} ${res.lastName ?? ""}`.trim() || "—" : "—";
+              const cat = String(t.category ?? "");
+              const st = String(t.status ?? "OPEN");
+              return (
+                <div key={idx} className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-gray-50 border border-gray-100">
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900 text-sm truncate">
+                      {CATEGORY_META[cat]?.label ?? cat}{t.subType ? ` — ${String(t.subType)}` : ""}
+                    </p>
+                    <p className="text-xs text-gray-600 truncate">{name} • Room {String(t.roomNumber ?? "—")} • {relTime(t.createdAt ? String(t.createdAt) : null, nowTs)}</p>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0 ${REQUEST_STATUS_PILL[st] ?? "bg-gray-100 text-gray-700"}`}>{st.replace("_", " ")}</span>
+                </div>
+              );
+            })}
+          </div>
+        ) : <Empty text="No recent tickets." />}
+      </Card>
 
       <div className="bg-white rounded-lg border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-3">
