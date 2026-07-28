@@ -1,12 +1,11 @@
 "use client";
 
-import { Search, X, Eye, Trash2, Plus } from "lucide-react";
+import { Search, X, Eye, Trash2 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import Swal from "sweetalert2";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptTask } from "@/lib/adapters";
 import { updateRecord, deleteRecord } from "@/lib/api";
-import AddTaskModal from "@/components/portal/views/caregiver/AddTaskModal";
 
 type CaregiverTask = ReturnType<typeof adaptTask>;
 
@@ -61,25 +60,32 @@ export default function CaregiverTasks() {
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [viewingTask, setViewingTask] = useState<CaregiverTask | null>(null);
-  const [creatingTask, setCreatingTask] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const allFilteredTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      const matchesSearch =
-        task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        task.resident.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        task.category.toLowerCase().includes(searchQuery.toLowerCase());
+    const createdTs = (task: CaregiverTask) => {
+      const raw = task.raw as { createdAt?: string } | undefined;
+      const t = raw?.createdAt ? new Date(raw.createdAt).getTime() : 0;
+      return Number.isNaN(t) ? 0 : t;
+    };
+    return tasks
+      .filter((task) => {
+        const matchesSearch =
+          task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          task.resident.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          task.category.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesPriority = filterPriority === "all" || task.priority === filterPriority;
-      const matchesStatus =
-        filterStatus === "all" ||
-        (filterStatus === "completed" && task.completed) ||
-        (filterStatus === "pending" && !task.completed);
+        const matchesPriority = filterPriority === "all" || task.priority === filterPriority;
+        const matchesStatus =
+          filterStatus === "all" ||
+          (filterStatus === "completed" && task.completed) ||
+          (filterStatus === "pending" && !task.completed);
 
-      return matchesSearch && matchesPriority && matchesStatus;
-    });
+        return matchesSearch && matchesPriority && matchesStatus;
+      })
+      // Latest task first, regardless of completion status.
+      .sort((a, b) => createdTs(b) - createdTs(a));
   }, [tasks, searchQuery, filterPriority, filterStatus]);
 
   const totalPages = Math.ceil(allFilteredTasks.length / itemsPerPage);
@@ -154,7 +160,7 @@ export default function CaregiverTasks() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
+      {/* Header — tasks are assigned by the head nurse / supervisor, so caregivers cannot create them here. */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
@@ -162,20 +168,7 @@ export default function CaregiverTasks() {
           </h1>
           <p className="text-gray-600 text-xs sm:text-sm">Manage daily tasks and track completion</p>
         </div>
-        <button
-          onClick={() => setCreatingTask(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" /> New Task
-        </button>
       </div>
-
-      {creatingTask && (
-        <AddTaskModal
-          onClose={() => setCreatingTask(false)}
-          onSaved={() => { void refetchTasks(); setCreatingTask(false); }}
-        />
-      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 lg:gap-4">
