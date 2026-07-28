@@ -469,6 +469,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   const lastBehaviorLogRef = useRef<{ key: string; at: number }>({ key: "", at: 0 });
   const BEHAVIOR_LOG_MIN_MS = 5_000;
   const stillSinceRef = useRef(0); // last time the resident showed movement (drives sleep state)
+  const reclinedRef = useRef(false); // torso horizontal (lying/reclined) from pose keypoints
   const saveMonitoringLog = useCallback(async (logType: string, analysis: VisionAnalysis) => {
     try {
       await fetch("/api/db/camera-monitoring-logs", {
@@ -1327,6 +1328,16 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
           if (pose0) {
             analyzeBodyMovement(pose0);
             poseFallenRef.current = checkFall(pose0, now);
+            // Lying/reclined from torso orientation (shoulders→hips): a horizontal
+            // torso = lying in bed. Needs shoulders+hips visible (full-body camera).
+            {
+              const sL = pose0[11], sR = pose0[12], hL = pose0[23], hR = pose0[24];
+              if (sL && sR && hL && hR && (sL.visibility ?? 1) > 0.4 && (hL.visibility ?? 1) > 0.4) {
+                const dx = Math.abs((sL.x + sR.x) / 2 - (hL.x + hR.x) / 2);
+                const dy = Math.abs((sL.y + sR.y) / 2 - (hL.y + hR.y) / 2);
+                reclinedRef.current = dy < dx * 1.3; // torso more horizontal than vertical
+              }
+            }
           } else {
             poseFallenRef.current = false;
           }
@@ -1442,14 +1453,15 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         const moving = a.globalBehavior === "Moving" || a.globalBehavior === "Waving" || waveRef.current;
         if (moving || selfFallenRef.current || !stillSinceRef.current) stillSinceRef.current = now;
         const stillMs = now - stillSinceRef.current;
-        const reclined = /lying|reclin|down|slouch|lean/i.test(a.globalPosture || "");
+        const reclined = reclinedRef.current || /lying|reclin|down|slouch|lean/i.test(a.globalPosture || "");
         const eye = getEyeState(); // { closed, closedForMs } from face-landmark EAR
         let sleepState = "Awake";
         // Eyes closed is the strongest signal: sustained closure → Sleeping, briefly
-        // closed → Drowsy (blinks reset the timer, so they don't count). Otherwise fall
-        // back to prolonged stillness + reclined posture.
+        // closed → Drowsy (blinks reset the timer). Lying still (in bed) → Sleeping.
+        // Otherwise prolonged stillness → Drowsy.
         if (eye.closed && eye.closedForMs > 8000) sleepState = "Sleeping";
         else if (eye.closed && eye.closedForMs > 2500) sleepState = "Drowsy";
+        else if (reclined && stillMs > 45_000) sleepState = "Sleeping"; // lying still = likely asleep
         else if (stillMs > 90_000) sleepState = reclined ? "Sleeping" : "Drowsy";
         else if (stillMs > 40_000 && reclined) sleepState = "Drowsy";
         const confused = agitationStreakRef.current >= AGITATION_STREAK_TRIGGER && !selfFallenRef.current;
