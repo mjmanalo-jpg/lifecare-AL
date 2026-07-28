@@ -64,7 +64,9 @@ export type Role =
   | "RESIDENT"
   | "FLEET_MANAGEMENT"
   | "DRIVER"
-  | "SECURITY";
+  | "SECURITY"
+  | "NUTRITIONIST"
+  | "KITCHEN";
 
 export interface SidebarLink {
   name: string;
@@ -183,6 +185,8 @@ export const PATH_TO_ROLE: Record<string, Role> = {
   fleet_management: "FLEET_MANAGEMENT",
   driver: "DRIVER",
   security: "SECURITY",
+  nutritionist: "NUTRITIONIST",
+  kitchen: "KITCHEN",
 };
 
 export const ROLES: Record<Role, RoleDetails> = {
@@ -512,6 +516,32 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Security & Incident Log", icon: AlertTriangle, route: "/security/securitylog" },
       { name: "Camera Activity Log", icon: Activity, route: "/security/cameralogs" },
       { name: "Time Clock", icon: Timer, route: "/security/timeclock" },
+    ],
+  },
+  NUTRITIONIST: {
+    name: "Nutritionist",
+    badge: "Dietary & Nutrition",
+    desc: "Set each resident's diet orders (diet type, restrictions, target meals), manage the daily menu, and review the kitchen cook list.",
+    icon: Utensils,
+    profileName: "Facility Nutritionist",
+    basePath: "/nutritionist",
+    footerText: "Nutrition & Dietary Portal",
+    sidebarLinks: [
+      { name: "Diet & Nutrition Orders", icon: Utensils, route: "/nutritionist/dietorders" },
+      { name: "Kitchen — Cook List", icon: Grid, route: "/nutritionist/kitchen" },
+      { name: "Dining & Compliance", icon: Utensils, route: "/nutritionist/dining" },
+    ],
+  },
+  KITCHEN: {
+    name: "Kitchen Staff",
+    badge: "Food Service",
+    desc: "See today's cook list — the active diet orders per resident, grouped by meal, so you know exactly what to prepare.",
+    icon: Utensils,
+    profileName: "Kitchen Staff",
+    basePath: "/kitchen",
+    footerText: "Kitchen Cook List Portal",
+    sidebarLinks: [
+      { name: "Kitchen — Cook List", icon: Utensils, route: "/kitchen/kitchen" },
     ],
   },
 };

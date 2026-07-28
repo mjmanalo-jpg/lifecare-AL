@@ -28,6 +28,8 @@ enum Role {
   FLEET_MANAGEMENT
   DRIVER
   SECURITY
+  NUTRITIONIST
+  KITCHEN
 }
 
 enum PlatformRole {

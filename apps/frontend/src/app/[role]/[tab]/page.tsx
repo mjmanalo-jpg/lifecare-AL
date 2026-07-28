@@ -16,6 +16,8 @@ import FacilityAdminPortalContent from "@/components/portal/views/FacilityAdminP
 import FleetManagementPortalContent from "@/components/portal/views/FleetManagementPortalContent";
 import DriverPortalContent from "@/components/portal/views/DriverPortalContent";
 import SecurityPortalContent from "@/components/portal/views/SecurityPortalContent";
+import NutritionistPortalContent from "@/components/portal/views/NutritionistPortalContent";
+import KitchenPortalContent from "@/components/portal/views/KitchenPortalContent";
 import { useEffect, useState } from "react";
 
 export default function RolePortalPage() {
@@ -81,6 +83,13 @@ export default function RolePortalPage() {
       {/* Security Guard sees the security command portal. */}
       {userRole === "SECURITY" && (
         <SecurityPortalContent tab={tabParam || "dashboard"} />
+      )}
+      {/* Nutritionist manages diet orders + menus; Kitchen reads the cook list. */}
+      {userRole === "NUTRITIONIST" && (
+        <NutritionistPortalContent tab={tabParam || "dashboard"} />
+      )}
+      {userRole === "KITCHEN" && (
+        <KitchenPortalContent tab={tabParam || "dashboard"} />
       )}
     </PortalShell>
   );

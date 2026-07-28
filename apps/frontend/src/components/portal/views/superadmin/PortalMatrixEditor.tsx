@@ -35,6 +35,8 @@ const ROLE_LABELS: Record<Role, string> = {
   FLEET_MANAGEMENT: "Fleet Manager",
   DRIVER: "Transport Driver",
   SECURITY: "Security Guard",
+  NUTRITIONIST: "Nutritionist",
+  KITCHEN: "Kitchen Staff",
 };
 
 /** Colour accents per role row for the left badge. */
@@ -51,6 +53,8 @@ const ROLE_COLORS: Record<Role, string> = {
   FLEET_MANAGEMENT: "from-indigo-400 to-indigo-600",
   DRIVER: "from-amber-400 to-amber-600",
   SECURITY: "from-red-500 to-rose-700",
+  NUTRITIONIST: "from-lime-500 to-green-600",
+  KITCHEN: "from-orange-500 to-amber-600",
 };
 
 type MatrixState = Record<string, Record<string, boolean>>;
