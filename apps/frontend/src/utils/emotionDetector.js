@@ -109,19 +109,15 @@ function triggerFaceCNN(videoElement) {
           if (lm) {
             const ear = (eyeAspectRatio(lm.getLeftEye()) + eyeAspectRatio(lm.getRightEye())) / 2;
             lastEar = ear;
-            // Adaptive: learn THIS person's open-eye EAR (track the peak, decay slowly),
-            // then flag closed on a clear relative drop. Robust to the model's absolute
-            // scale AND to posture (upright works too). Fixed floor as a backstop.
-            if (ear > earBaseline) earBaseline = ear;
-            else earBaseline = earBaseline * 0.999 + ear * 0.001;
-            // Hysteresis: enter "closed" on a clear drop (< base*0.75); once closed,
-            // stay closed until EAR clearly recovers (> base*0.85). This stops
-            // near-threshold flicker from resetting the closed timer so it can reach
-            // the 8s "Sleeping" mark.
-            const enterT = earBaseline * 0.75, exitT = earBaseline * 0.85;
-            const closed = earBaseline > 0.18
-              ? (eyesClosed ? ear < exitT : ear < enterT) || ear < 0.18
-              : ear < 0.18;
+            // Baseline = EWMA of the OPEN-eye EAR, clamped to a physiological range so a
+            // stray high reading can't inflate it (that inflation was making open eyes
+            // read as "closed"). Decide closed against the CURRENT baseline with
+            // hysteresis, THEN adapt the baseline toward the reading only when the eyes
+            // look open — so it tracks the real open level (up AND down).
+            if (earBaseline === 0) earBaseline = Math.min(0.40, Math.max(0.18, ear));
+            const enterT = earBaseline * 0.68, exitT = earBaseline * 0.80;
+            const closed = eyesClosed ? ear < exitT : ear < enterT;
+            if (!closed) earBaseline = Math.min(0.40, Math.max(0.18, earBaseline * 0.9 + ear * 0.1));
             const nowMs = Date.now();
             if (closed && !eyesClosed) eyesClosedSince = nowMs; // start the closed timer
             if (!closed) eyesClosedSince = 0;                   // opened → reset (blink-safe)
