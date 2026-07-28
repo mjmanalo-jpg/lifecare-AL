@@ -1916,6 +1916,21 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
           <p className={`text-[12px] font-bold mt-0.5 ${postColor}`}>{emergency ? "EMERGENCY" : analysis.globalPosture}</p>
         </div>
 
+        {/* Sleep / alertness state (eyes-closed EAR + stillness) */}
+        <div className="bg-black/78 backdrop-blur-md border border-white/10 rounded-lg px-2.5 py-2 min-w-[92px]">
+          <p className="text-[8px] text-zinc-500 uppercase tracking-wider font-bold flex items-center gap-1">
+            <span className="w-1 h-1 rounded-full bg-indigo-400 inline-block"/> State
+          </p>
+          <p className={`text-[12px] font-bold mt-0.5 ${
+            analysis.sleepState === "Sleeping" ? "text-indigo-400"
+              : analysis.sleepState === "Drowsy" ? "text-amber-400"
+              : "text-emerald-400"
+          }`}>
+            {analysis.sleepState === "Sleeping" ? "Sleeping 😴" : analysis.sleepState === "Drowsy" ? "Drowsy" : "Awake"}
+          </p>
+          {analysis.confused && <p className="text-[8px] text-red-400 font-bold mt-0.5">⚠ Confused</p>}
+        </div>
+
         {/* AI Vitals (rPPG Remote Sensing) */}
         {/* eslint-disable-next-line react-hooks/refs */}
         {posesRef.current[0] && (
