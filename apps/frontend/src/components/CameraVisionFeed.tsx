@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Camera, AlertTriangle, Activity, Shield, Brain, Cpu, Volume2, VolumeX, Heart, History, RefreshCw, X } from "lucide-react";
-import { analyzeEmotionFromLandmarks, loadFaceAPI } from "@/utils/emotionDetector";
+import { analyzeEmotionFromLandmarks, loadFaceAPI, getEyeState } from "@/utils/emotionDetector";
 import { rppgProcessor, RppgProcessor, type VitalEstimate } from "@/utils/rppgProcessor";
 
 // Suppress TensorFlow.js and WebGL verbose logging
@@ -1443,8 +1443,14 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         if (moving || selfFallenRef.current || !stillSinceRef.current) stillSinceRef.current = now;
         const stillMs = now - stillSinceRef.current;
         const reclined = /lying|reclin|down|slouch|lean/i.test(a.globalPosture || "");
+        const eye = getEyeState(); // { closed, closedForMs } from face-landmark EAR
         let sleepState = "Awake";
-        if (stillMs > 90_000) sleepState = reclined ? "Sleeping" : "Drowsy";
+        // Eyes closed is the strongest signal: sustained closure → Sleeping, briefly
+        // closed → Drowsy (blinks reset the timer, so they don't count). Otherwise fall
+        // back to prolonged stillness + reclined posture.
+        if (eye.closed && eye.closedForMs > 8000) sleepState = "Sleeping";
+        else if (eye.closed && eye.closedForMs > 2500) sleepState = "Drowsy";
+        else if (stillMs > 90_000) sleepState = reclined ? "Sleeping" : "Drowsy";
         else if (stillMs > 40_000 && reclined) sleepState = "Drowsy";
         const confused = agitationStreakRef.current >= AGITATION_STREAK_TRIGGER && !selfFallenRef.current;
         analysisRef.current = { ...a, sleepState, confused };

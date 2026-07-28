@@ -27,6 +27,8 @@ export async function loadFaceAPI() {
 
   await faceapi.nets.tinyFaceDetector.loadFromUri('/models/face-api');
   await faceapi.nets.faceExpressionNet.loadFromUri('/models/face-api');
+  // 68-pt landmarks (tiny) give the eyelid points → eye-closure via EAR (sleep detection).
+  await faceapi.nets.faceLandmark68TinyNet.loadFromUri('/models/face-api');
 
   // Restore previous debug mode
   if (typeof global !== 'undefined') {
@@ -52,6 +54,26 @@ let smoothedHeightRatio = null;
 let currentCNNEmotion = null;
 let currentCNNConfidence = 0;
 let isPredictingCNN = false;
+
+// Eye-closure state (from 68-pt landmark EAR) — powers sleep detection.
+let eyesClosed = false;
+let eyesClosedSince = 0; // ms timestamp when eyes first went closed (0 = open)
+let lastEyeReadMs = 0;   // last time we got a face+landmarks read (for staleness)
+
+// Eye Aspect Ratio for a face-api 6-point eye: low EAR = closed.
+function eyeAspectRatio(eye) {
+  if (!eye || eye.length < 6) return 1;
+  const v1 = dist(eye[1], eye[5]);
+  const v2 = dist(eye[2], eye[4]);
+  const h = dist(eye[0], eye[3]) || 1e-6;
+  return (v1 + v2) / (2 * h);
+}
+
+/** Current eye state: { closed, closedForMs }. Stale reads (no face >3s) read as open. */
+export function getEyeState() {
+  if (Date.now() - lastEyeReadMs > 3000) return { closed: false, closedForMs: 0 };
+  return { closed: eyesClosed, closedForMs: eyesClosed && eyesClosedSince ? Date.now() - eyesClosedSince : 0 };
+}
 let emotionHistory = []; // rolling window of recent readings for majority-vote smoothing
 let lastCNNTime = 0;     // timestamp of last successful face reading (for staleness expiry)
 
@@ -72,9 +94,23 @@ function triggerFaceCNN(videoElement) {
     // "surprised" — the exact bug we're killing here. inputSize 448 still reaches
     // a moderately distant face on a room camera.
     .detectSingleFace(videoElement, new faceapi.TinyFaceDetectorOptions({ inputSize: 448, scoreThreshold: 0.5 }))
+    .withFaceLandmarks(true)
     .withFaceExpressions()
     .then(detection => {
       if (detection && detection.detection && detection.detection.score >= 0.5) {
+        // ── Eye-closure via Eye Aspect Ratio (drives sleep detection) ──
+        try {
+          const lm = detection.landmarks;
+          if (lm) {
+            const ear = (eyeAspectRatio(lm.getLeftEye()) + eyeAspectRatio(lm.getRightEye())) / 2;
+            const closed = ear < 0.21; // typical open EAR ~0.28-0.35, closed <~0.2
+            const nowMs = Date.now();
+            if (closed && !eyesClosed) eyesClosedSince = nowMs; // start the closed timer
+            if (!closed) eyesClosedSince = 0;                   // opened → reset (blink-safe)
+            eyesClosed = closed;
+            lastEyeReadMs = nowMs;
+          }
+        } catch { /* landmarks are best-effort */ }
         const sorted = Object.entries(detection.expressions).sort((a, b) => b[1] - a[1]);
         let [topEmotion, topScore] = sorted[0];
         const runnerUp = sorted[1] ? sorted[1][1] : 0;
