@@ -334,18 +334,37 @@ function RaiseModal({ role, raisedBy, residents, meds, onClose, onSaved }: {
     situation: "", background: "", assessment: "", recommendation: "",
   });
   const [saving, setSaving] = useState(false);
+  const [drafting, setDrafting] = useState(false);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const valid = form.residentId && form.situation.trim();
 
-  // AI-assisted draft: builds a Recommendation from the Situation + Assessment.
-  const aiDraft = () => {
-    const sit = form.situation.trim();
-    const asmt = form.assessment.trim();
-    if (!sit) { Swal.fire("Add a Situation first", "The draft uses the Situation and Assessment fields.", "info"); return; }
+  // Offline fallback draft, used when no Gemini key is configured or the call fails.
+  const templateDraft = () => {
     const urgent = form.priority === "EMERGENCY";
-    const resp = /spo2|oxygen|breath|resp|desat/i.test(sit + asmt);
-    const rec = `${urgent ? "Escalate immediately. " : ""}Reassess vitals now, ${resp ? "consider supplemental O₂, " : ""}monitor closely, and carry out physician orders. Document the response and re-escalate if there is no improvement within the SLA window.`;
-    set("recommendation", rec);
+    const resp = /spo2|oxygen|breath|resp|desat/i.test(form.situation + form.assessment);
+    return `${urgent ? "Escalate immediately. " : ""}Reassess vitals now, ${resp ? "consider supplemental O₂, " : ""}monitor closely, and carry out physician orders. Document the response and re-escalate if there is no improvement within the SLA window.`;
+  };
+
+  // AI-assisted draft: asks Gemini for the Recommendation (the "R" of SBAR) from
+  // the Situation / Background / Assessment; falls back to the template offline.
+  const aiDraft = async () => {
+    const sit = form.situation.trim();
+    if (!sit) { Swal.fire("Add a Situation first", "The draft uses the Situation and Assessment fields.", "info"); return; }
+    setDrafting(true);
+    try {
+      const resName = residentOpts.find((r) => r.id === form.residentId)?.name || "the resident";
+      const res = await fetch("/api/ai-assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sbar", situation: sit, background: form.background.trim(), assessment: form.assessment.trim(), priority: form.priority, resident: resName }),
+      });
+      const data = await res.json().catch(() => ({}));
+      set("recommendation", res.ok && data?.recommendation ? String(data.recommendation).trim() : templateDraft());
+    } catch {
+      set("recommendation", templateDraft());
+    } finally {
+      setDrafting(false);
+    }
   };
   const inputCls = "w-full px-3 py-2 bg-white border border-[#D6D8CD] rounded-lg text-sm text-[#2B2B27] focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30";
   const residentOpts = useMemo(() => residents.map((r) => ({
@@ -421,7 +440,9 @@ function RaiseModal({ role, raisedBy, residents, meds, onClose, onSaved }: {
           <SbarField letter="B" label="Background" value={form.background} onChange={(v) => set("background", v)} placeholder="Relevant history (auto-filled from the record — edit as needed)." />
           <SbarField letter="A" label="Assessment" value={form.assessment} onChange={(v) => set("assessment", v)} placeholder="Your clinical read. e.g. Possible respiratory distress; vitals trending down." />
           <div className="flex justify-end -mb-2">
-            <button type="button" onClick={aiDraft} className="text-xs font-semibold text-[#2E4A48] hover:underline flex items-center gap-1">⚡ AI draft recommendation</button>
+            <button type="button" onClick={aiDraft} disabled={drafting} className="text-xs font-semibold text-[#2E4A48] hover:underline flex items-center gap-1 disabled:opacity-60">
+              {drafting ? <><Loader2 className="w-3 h-3 animate-spin" /> Drafting…</> : <>⚡ AI draft recommendation</>}
+            </button>
           </div>
           <SbarField letter="R" label="Recommendation" value={form.recommendation} onChange={(v) => set("recommendation", v)} placeholder="What you're asking for. e.g. Please review now; consider O2 + orders." />
         </div>

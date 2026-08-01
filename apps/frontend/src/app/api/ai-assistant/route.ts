@@ -263,6 +263,8 @@ export async function POST(req: NextRequest) {
       return handleStt(body);
     case "extract":
       return handleExtract(body);
+    case "sbar":
+      return handleSbar(body);
     default:
       return NextResponse.json({ error: `Unknown action '${action}'` }, { status: 400 });
   }
@@ -569,6 +571,60 @@ async function handleStt(body: Record<string, unknown>) {
     console.warn("[AI Assistant stt] network error", (err as Error).message);
   }
   return NextResponse.json({ fallback: true, reason: "cloud STT failed" });
+}
+
+// ── SBAR RECOMMENDATION DRAFT ─────────────────────────────────────────────────
+// Generate ONLY the Recommendation (the "R" of SBAR) for a clinical escalation
+// from the Situation / Background / Assessment the nurse entered. Returns
+// { recommendation, source:"gemini" } or { fallback:true } so the caller can
+// use its own templated draft when no cloud key is configured or the call fails.
+async function handleSbar(body: Record<string, unknown>) {
+  const situation = String(body.situation ?? "").trim();
+  if (!situation) return NextResponse.json({ error: "No situation" }, { status: 400 });
+  const background = String(body.background ?? "").trim();
+  const assessment = String(body.assessment ?? "").trim();
+  const priority = String(body.priority ?? "URGENT").trim();
+  const resident = String(body.resident ?? "the resident").trim();
+
+  if (!GEMINI_API_KEY) return NextResponse.json({ fallback: true, reason: "no GEMINI_API_KEY" });
+
+  const systemInstruction =
+    "You are a clinical decision-support assistant for an assisted-living facility, helping a " +
+    "nurse complete the Recommendation (the 'R') of an SBAR escalation to the physician/on-call. " +
+    "Write ONLY the recommendation: a concise, specific, actionable set of next steps for the care " +
+    "team and physician (2-4 short sentences, or a brief action list). Be clinically appropriate and " +
+    "safe; scale urgency to the stated priority. Do NOT restate the situation, background, or " +
+    "assessment. Do NOT add a preamble such as 'Request physician review for <name>' or 'Recommend:'. " +
+    "Never invent specific vitals, doses, or diagnoses that were not provided. Output only the " +
+    "recommendation text, no headings, no quotes.";
+
+  const userText =
+    `Priority: ${priority}\nResident: ${resident}\n` +
+    `Situation: ${situation}\n` +
+    (background ? `Background: ${background}\n` : "") +
+    (assessment ? `Assessment: ${assessment}\n` : "");
+
+  try {
+    const res = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        contents: [{ role: "user", parts: [{ text: userText }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 320 },
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const text = (data?.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? "").join("").trim();
+      if (text) return NextResponse.json({ recommendation: text, source: "gemini" });
+    } else {
+      console.warn(`[AI Assistant sbar] Gemini ${res.status}`);
+    }
+  } catch (err) {
+    console.warn("[AI Assistant sbar] network error", (err as Error).message);
+  }
+  return NextResponse.json({ fallback: true, reason: "cloud draft failed" });
 }
 
 // ── FILE TEXT EXTRACTION ─────────────────────────────────────────────────────
