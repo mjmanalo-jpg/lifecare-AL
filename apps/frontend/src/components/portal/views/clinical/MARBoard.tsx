@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Pill, Plus, X, Trash2, Search, CheckCircle, Loader2, ShieldCheck } from "lucide-react";
+import { Pill, Plus, X, Trash2, Search, CheckCircle, Loader2 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
@@ -192,11 +192,6 @@ export default function MARBoard() {
           ))}
         </div>
       )}
-
-      <div className="rounded-lg bg-[#2E4A48] px-5 py-3.5 flex items-center gap-3">
-        <ShieldCheck className="w-4 h-4 text-[#C0573F] flex-shrink-0" />
-        <p className="text-sm text-[#D7DAD1]"><span className="font-semibold text-[#C0573F]">Approval workflow:</span> new prescriptions require Care Manager sign-off before activation in the MAR.</p>
-      </div>
 
       {creating && <MARModal residents={residents} onClose={() => setCreating(false)} onSaved={() => { refetch(); setCreating(false); }} />}
     </div>
