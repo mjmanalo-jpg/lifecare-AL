@@ -22,13 +22,25 @@ export default function PhysicianCommsLog() {
   const { data: residentRows } = useLiveQuery<Row>("residents", { query: "take=300", tables: ["Resident"] });
   const residents = useMemo(() => residentRows.map(adaptResident), [residentRows]);
 
+  // Escalations, for the SBAR link — a physician communication can be the direct
+  // result of an SBAR escalation, giving one record with the full clinical context.
+  const { data: escRows } = useLiveQuery<Row>("escalations", { query: "include=resident&take=400", tables: ["Escalation"] });
+  const escMap = useMemo(() => new Map(escRows.map((e) => [s(e.id), e])), [escRows]);
+  const escSnippet = (e: Row) => { const t = s(e.situation).trim(); return t.length > 52 ? `${t.slice(0, 52)}…` : t || "SBAR escalation"; };
+
   const [session, setSession] = useState<{ id: string | null; name: string | null }>({ id: null, name: null });
   useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => { if (d?.authenticated) setSession({ id: d.session?.userId ?? null, name: d.session?.name ?? "Clinician" }); }).catch(() => {}); }, []);
 
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({ residentId: "", method: "PHONE", physicianName: "", reason: "", instructionsReceived: "", followUpRequired: false, followUpDeadline: "" });
+  const [form, setForm] = useState({ residentId: "", method: "PHONE", physicianName: "", reason: "", instructionsReceived: "", followUpRequired: false, followUpDeadline: "", relatedEscalationId: "" });
+
+  // Escalations for the resident chosen in the modal (newest first) — the SBAR picker.
+  const residentEscalations = useMemo(
+    () => escRows.filter((e) => s(e.residentId) === form.residentId).sort((a, b) => new Date(s(b.createdAt)).getTime() - new Date(s(a.createdAt)).getTime()),
+    [escRows, form.residentId]
+  );
 
   const rname = (c: Row) => { const r = (c.resident ?? {}) as Row; return `${s(r.firstName)} ${s(r.lastName)}`.trim() || "—"; };
   const rroom = (c: Row) => s((c.resident as Row)?.roomNumber) || "—";
@@ -49,10 +61,11 @@ export default function PhysicianCommsLog() {
         reason: form.reason.trim(), instructionsReceived: form.instructionsReceived.trim(),
         loggedById: session.id, loggedByName: session.name, followUpRequired: form.followUpRequired,
         followUpDeadline: form.followUpRequired && form.followUpDeadline ? new Date(form.followUpDeadline).toISOString() : null,
+        relatedEscalationId: form.relatedEscalationId || null,
         occurredAt: new Date().toISOString(),
       });
       await refetch(); setShowAdd(false);
-      setForm({ residentId: "", method: "PHONE", physicianName: "", reason: "", instructionsReceived: "", followUpRequired: false, followUpDeadline: "" });
+      setForm({ residentId: "", method: "PHONE", physicianName: "", reason: "", instructionsReceived: "", followUpRequired: false, followUpDeadline: "", relatedEscalationId: "" });
       Swal.fire({ title: "Logged", text: "Physician communication recorded.", icon: "success", timer: 1500, showConfirmButton: false });
     } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not save.", "error"); } finally { setBusy(false); }
   };
@@ -94,6 +107,7 @@ export default function PhysicianCommsLog() {
         ) : filtered.map((c) => {
           const Icon = METHOD_ICON[s(c.method)] ?? Phone;
           const overdue = isOverdue(c);
+          const linked = c.relatedEscalationId ? escMap.get(s(c.relatedEscalationId)) : undefined;
           return (
             <ClinicalCard key={s(c.id)} top={overdue ? "coral" : "teal"} className="p-5 break-inside-avoid">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
@@ -114,6 +128,19 @@ export default function PhysicianCommsLog() {
                 <p className="text-sm text-[#2B2B27] mt-0.5 whitespace-pre-wrap">{s(c.instructionsReceived)}</p>
               </div>
 
+              {linked && (
+                <div className="mt-3 rounded-md border border-[#2E4A48]/15 bg-[#2E4A48]/[0.04] p-3">
+                  <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#2E4A48]"><Link2 className="w-3.5 h-3.5 text-[#C0573F]" /> Linked SBAR Escalation</span>
+                    {linked.priority ? <StatusPill status={s(linked.priority)} /> : null}
+                    {linked.status ? <StatusPill status={s(linked.status)} /> : null}
+                  </div>
+                  <p className="text-sm text-[#2B2B27]"><span className="font-semibold text-[#6B6E63]">S:</span> {s(linked.situation) || "—"}</p>
+                  {linked.recommendation ? <p className="text-[13px] text-[#6B6E63] mt-0.5"><span className="font-semibold">R:</span> {s(linked.recommendation)}</p> : null}
+                  {linked.response ? <p className="text-[13px] text-[#6B6E63] mt-0.5"><span className="font-semibold">Physician response:</span> {s(linked.response)}</p> : null}
+                </div>
+              )}
+
               {c.followUpRequired && (
                 <div className="mt-3.5 flex flex-wrap items-center gap-2 text-sm">
                   {c.followUpCompletedAt ? (
@@ -132,23 +159,26 @@ export default function PhysicianCommsLog() {
         })}
       </div>
 
-      <div className="rounded-lg bg-[#2E4A48] px-5 py-3.5 flex items-center gap-3 print:hidden">
-        <Link2 className="w-4 h-4 text-[#C0573F] flex-shrink-0" />
-        <p className="text-sm text-[#D7DAD1]"><span className="font-semibold text-white">SBAR Link:</span> escalations can be directly linked to the resulting physician communication — one record for the full clinical context.</p>
-      </div>
-
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 print:hidden">
           <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg bg-white shadow-2xl">
             <div className="sticky top-0 flex items-center justify-between bg-[#2E4A48] p-5 text-white"><h2 className="text-lg font-bold">Log Physician Contact</h2><button onClick={() => setShowAdd(false)} className="rounded-lg p-1.5 hover:bg-white/15"><X className="w-5 h-5" /></button></div>
             <div className="space-y-4 p-6">
-              <div><MicroLabel>Resident *</MicroLabel><select value={form.residentId} onChange={(e) => setForm({ ...form, residentId: e.target.value })} className={`${inp} mt-1`}><option value="">Select resident…</option>{residents.map((r) => <option key={r.id} value={r.id}>{r.name} — Room {r.room}</option>)}</select></div>
+              <div><MicroLabel>Resident *</MicroLabel><select value={form.residentId} onChange={(e) => setForm({ ...form, residentId: e.target.value, relatedEscalationId: "" })} className={`${inp} mt-1`}><option value="">Select resident…</option>{residents.map((r) => <option key={r.id} value={r.id}>{r.name} — Room {r.room}</option>)}</select></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><MicroLabel>Method</MicroLabel><select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })} className={`${inp} mt-1 bg-white`}>{METHODS.map((m) => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}</select></div>
                 <div><MicroLabel>Physician *</MicroLabel><input value={form.physicianName} onChange={(e) => setForm({ ...form, physicianName: e.target.value })} placeholder="Dr. …" className={`${inp} mt-1`} /></div>
               </div>
               <div><MicroLabel>Reason for contact *</MicroLabel><input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} className={`${inp} mt-1`} /></div>
               <div><MicroLabel>Instructions received (verbatim) *</MicroLabel><textarea value={form.instructionsReceived} onChange={(e) => setForm({ ...form, instructionsReceived: e.target.value })} rows={3} placeholder="Record exactly what the physician instructed…" className={`${inp} mt-1 resize-y`} /></div>
+              <div>
+                <MicroLabel className="flex items-center gap-1"><Link2 className="w-3 h-3 text-[#C0573F]" /> Link to SBAR escalation (optional)</MicroLabel>
+                <select value={form.relatedEscalationId} onChange={(e) => setForm({ ...form, relatedEscalationId: e.target.value })} disabled={!form.residentId} className={`${inp} mt-1 bg-white disabled:opacity-50`}>
+                  <option value="">{form.residentId ? (residentEscalations.length ? "None" : "No escalations for this resident") : "Select a resident first…"}</option>
+                  {residentEscalations.map((e) => <option key={s(e.id)} value={s(e.id)}>{s(e.priority) || "SBAR"} · {escSnippet(e)} · {fmt(e.createdAt)}</option>)}
+                </select>
+                <p className="mt-1 text-[11px] text-[#8A8D82]">Ties this contact to the escalation it resulted from — one record for the full clinical context.</p>
+              </div>
               <div className="flex items-center gap-2"><input id="fu" type="checkbox" checked={form.followUpRequired} onChange={(e) => setForm({ ...form, followUpRequired: e.target.checked })} className="rounded" /><label htmlFor="fu" className="text-sm font-semibold text-[#2B2B27]">Follow-up required</label></div>
               {form.followUpRequired && <div><MicroLabel>Follow-up deadline</MicroLabel><input type="datetime-local" value={form.followUpDeadline} onChange={(e) => setForm({ ...form, followUpDeadline: e.target.value })} className={`${inp} mt-1`} /></div>}
             </div>

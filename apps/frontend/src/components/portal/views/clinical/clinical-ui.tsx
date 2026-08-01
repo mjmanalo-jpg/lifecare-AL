@@ -21,16 +21,18 @@ export const CLINICAL = {
 
 // Status → pill classes, keyed by the PDF's colour language.
 const PILL: Record<string, string> = {
-  // teal — given / approved / confirmed / normal / active / responded / phone
+  // teal — given / approved / confirmed / normal / active / responded / acknowledged / phone
   GIVEN: "bg-[#2E4A48] text-white", APPROVED: "bg-[#2E4A48] text-white", CONFIRMED: "bg-[#2E4A48] text-white",
   NORMAL: "bg-[#2E4A48] text-white", ACTIVE: "bg-[#2E4A48] text-white", RESPONDED: "bg-[#2E4A48] text-white",
+  ACKNOWLEDGED: "bg-[#2E4A48] text-white",
   SPECIALIST: "bg-[#2E4A48] text-white", PHONE: "bg-[#2E4A48] text-white", SCHEDULED: "bg-[#2E4A48] text-white",
-  // green — completed / done / closed / follow_up
+  // green — completed / done / closed / resolved / follow_up
   COMPLETED: "bg-[#7E9B6F] text-white", DONE: "bg-[#7E9B6F] text-white", CLOSED: "bg-[#7E9B6F] text-white",
-  FOLLOW_UP: "bg-[#7E9B6F] text-white",
-  // coral — refused / critical / overdue / expired / emergency / rejected / cancelled / in_person
+  RESOLVED: "bg-[#7E9B6F] text-white", FOLLOW_UP: "bg-[#7E9B6F] text-white",
+  // coral — refused / critical / overdue / expired / emergency / escalated / rejected / cancelled / in_person
   REFUSED: "bg-[#C0573F] text-white", CRITICAL: "bg-[#C0573F] text-white", OVERDUE: "bg-[#C0573F] text-white",
   EXPIRED: "bg-[#C0573F] text-white", EMERGENCY: "bg-[#C0573F] text-white", REJECTED: "bg-[#C0573F] text-white",
+  ESCALATED: "bg-[#C0573F] text-white",
   CANCELLED: "bg-[#B4735F] text-white", IN_PERSON: "bg-[#C0573F] text-white",
   OUT_OF_STOCK: "bg-[#9E3B2A] text-white",
   // amber — pending / in progress / low / urgent / warning / expiring / open / written
