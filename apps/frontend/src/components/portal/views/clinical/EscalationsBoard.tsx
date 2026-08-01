@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect } from "react";
 import {
   Siren, Search, RefreshCw, Plus, X, CheckCircle2, Clock, AlertTriangle,
   Eye, Loader2, ChevronLeft, ChevronRight, UserRound, ArrowUpCircle,
-  Stethoscope, ClipboardList, Printer, type LucideIcon,
+  Stethoscope, ClipboardList, Printer, Link2, type LucideIcon,
 } from "lucide-react";
 
 // Print a single SBAR as a clean standalone document (no page print-CSS needed).
@@ -148,6 +148,43 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
   };
 
   const escalateOnCall = (e: EscVM) => patch(e, { status: "ESCALATED", assignedToRole: "FACILITY_ADMIN" }, "Escalated to on-call");
+
+  // Close the loop: record the physician communication that resulted from this
+  // SBAR and link it back (relatedEscalationId) — one record, full clinical context.
+  const logPhysicianComm = async (e: EscVM) => {
+    const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c] as string));
+    const result = await Swal.fire({
+      title: "Log physician communication",
+      html:
+        `<input id="pc-phys" class="swal2-input" placeholder="Physician name (e.g. Dr. Reyes)">` +
+        `<select id="pc-method" class="swal2-select" style="display:block;width:80%;margin:0.5em auto">` +
+          `<option value="PHONE">Phone Call</option><option value="IN_PERSON">In-Person Visit</option><option value="WRITTEN">Written</option><option value="TELEMEDICINE">Telemedicine</option>` +
+        `</select>` +
+        `<textarea id="pc-instr" class="swal2-textarea" placeholder="Instructions received (verbatim)">${esc(e.response || "")}</textarea>`,
+      showCancelButton: true, confirmButtonText: "Save & link", confirmButtonColor: "#2E4A48",
+      preConfirm: () => {
+        const phys = (document.getElementById("pc-phys") as HTMLInputElement | null)?.value.trim() || "";
+        const method = (document.getElementById("pc-method") as HTMLSelectElement | null)?.value || "PHONE";
+        const instr = (document.getElementById("pc-instr") as HTMLTextAreaElement | null)?.value.trim() || "";
+        if (!phys) { Swal.showValidationMessage("Physician name is required"); return false; }
+        if (!instr) { Swal.showValidationMessage("Instructions received is required"); return false; }
+        return { phys, method, instr };
+      },
+    });
+    if (!result.isConfirmed || !result.value) return;
+    const v = result.value as { phys: string; method: string; instr: string };
+    try {
+      await createRecord("physician-communications", {
+        residentId: e.residentId, method: v.method, physicianName: v.phys,
+        reason: e.situation || "SBAR escalation follow-up", instructionsReceived: v.instr,
+        loggedById: clinician.userId || null, loggedByName: clinician.name,
+        relatedEscalationId: e.id, occurredAt: new Date().toISOString(),
+      });
+      Swal.fire({ title: "Logged & linked", text: "Physician communication recorded and linked to this SBAR.", icon: "success", timer: 1800, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: "Failed", text: err instanceof Error ? err.message : "Could not save.", icon: "error" });
+    }
+  };
 
   return (
     <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-6" style={{ background: "#FFFFFF" }}>
@@ -299,6 +336,9 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
                     <p className="text-sm text-[#2B2B27] whitespace-pre-wrap">{e.response}</p>
                   </div>
                 )}
+                <button onClick={() => logPhysicianComm(e)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white text-[#2E4A48] border border-[#2E4A48]/30 font-semibold rounded-lg hover:bg-[#2E4A48]/[0.06] transition text-sm">
+                  <Link2 className="w-4 h-4 text-[#C0573F]" /> Log physician communication
+                </button>
               </div>
               {canRespond && !closed && (
                 <div className="sticky bottom-0 bg-[#F3F4EE] border-t border-[#E1E3D9] px-6 py-4 flex items-center justify-between gap-2 flex-wrap">
