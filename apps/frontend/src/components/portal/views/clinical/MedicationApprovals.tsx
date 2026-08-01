@@ -111,9 +111,11 @@ export default function MedicationApprovals() {
           </h1>
           <p className="text-gray-600">Nurses request meds; a Care Manager signs off before they activate in the MAR.</p>
         </div>
-        <button onClick={() => setShowRequest(true)} className="self-start inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-semibold shadow hover:shadow-lg transition active:scale-95">
-          <Plus className="w-4 h-4" /> Request Meds
-        </button>
+        {!canDecide && (
+          <button onClick={() => setShowRequest(true)} className="self-start inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-semibold shadow hover:shadow-lg transition active:scale-95">
+            <Plus className="w-4 h-4" /> Request Meds
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
