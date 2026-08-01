@@ -20,7 +20,8 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord } from "@/lib/api";
 import { useClinician, type ClinicianRole } from "./useClinician";
-import { PRIORITY_META, STATUS_PILL, STATUS_LABEL, PRIORITIES, slaState } from "./escalationMeta";
+import { PRIORITY_META, STATUS_LABEL, PRIORITIES, slaState } from "./escalationMeta";
+import { CLINICAL, StatusPill, MicroLabel, ClinicalHeader, ClinicalCard } from "./clinical-ui";
 
 /**
  * SBAR clinical escalation — one role-aware board:
@@ -149,33 +150,30 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
   const escalateOnCall = (e: EscVM) => patch(e, { status: "ESCALATED", assignedToRole: "FACILITY_ADMIN" }, "Escalated to on-call");
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
-            <Siren className="w-7 h-7 text-red-500 flex-shrink-0" /> SBAR Escalations
-          </h1>
-          <p className="text-gray-600 flex items-center gap-2 text-sm">
-            <span className="inline-flex items-center gap-1 text-green-600"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Live</span>
-            {canRaise ? "Raise a clinical concern (Situation · Background · Assessment · Recommendation)" : canRespond ? "Acknowledge, respond with orders & resolve" : "Escalation oversight & SLA monitoring"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 self-start">
-          <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
-          {canRaise && (
-            <button onClick={() => setShowRaise(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
-              <Plus className="w-4 h-4" /> New SBAR Escalation
+    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-6" style={{ background: CLINICAL.ground }}>
+      <ClinicalHeader
+        eyebrow="SBAR Clinical Escalation"
+        title="SBAR Escalations"
+        subtitle={canRaise ? "Raise a clinical concern (Situation · Background · Assessment · Recommendation)" : canRespond ? "Acknowledge, respond with orders & resolve" : "Escalation oversight & SLA monitoring"}
+        right={
+          <div className="flex items-center gap-2 self-start">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#7E9B6F] mr-1"><span className="w-2 h-2 rounded-full bg-[#7E9B6F] animate-pulse" /> Live</span>
+            <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 bg-white border border-[#D6D8CD] rounded-lg text-[#2B2B27] hover:bg-[#F3F4EE] transition text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30">
+              <RefreshCw className="w-4 h-4" /> Refresh
             </button>
-          )}
-        </div>
-      </div>
+            {canRaise && (
+              <button onClick={() => setShowRaise(true)} className="flex items-center gap-2 px-4 py-2 bg-[#2E4A48] hover:bg-[#25403D] text-white font-semibold rounded-lg transition active:scale-95 text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30">
+                <Plus className="w-4 h-4" /> New SBAR Escalation
+              </button>
+            )}
+          </div>
+        }
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="Open" value={stats.open} icon={ClipboardList} tone="amber" />
-        <Stat label="SLA Breached" value={stats.breached} icon={AlertTriangle} tone="red" />
-        <Stat label="Emergency" value={stats.emergency} icon={Siren} tone="red" />
+        <Stat label="SLA Breached" value={stats.breached} icon={AlertTriangle} tone="coral" />
+        <Stat label="Emergency" value={stats.emergency} icon={Siren} tone="coral" />
         <Stat label="Resolved" value={stats.resolved} icon={CheckCircle2} tone="green" />
       </div>
 
@@ -184,64 +182,65 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
         <div className="flex gap-2 flex-wrap">
           {["open", "resolved", "all"].map((s) => (
             <button key={s} onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition border ${statusFilter === s ? "bg-yellow-400 text-black border-yellow-400" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}>
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition border focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30 ${statusFilter === s ? "bg-[#2E4A48] text-white border-[#2E4A48]" : "bg-white text-[#6B6E63] border-[#D6D8CD] hover:bg-[#F3F4EE]"}`}>
               {s === "open" ? "Open" : s === "resolved" ? "Resolved" : "All"}
             </button>
           ))}
-          <span className="w-px bg-gray-200 mx-1 hidden sm:block" />
+          <span className="w-px bg-[#D6D8CD] mx-1 hidden sm:block" />
           {["all", ...PRIORITIES].map((p) => (
             <button key={p} onClick={() => setPriorityFilter(p)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition border ${priorityFilter === p ? "bg-yellow-400 text-black border-yellow-400" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}>
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition border focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30 ${priorityFilter === p ? "bg-[#2E4A48] text-white border-[#2E4A48]" : "bg-white text-[#6B6E63] border-[#D6D8CD] hover:bg-[#F3F4EE]"}`}>
               {p === "all" ? "All Priorities" : PRIORITY_META[p].label}
             </button>
           ))}
         </div>
         <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-3 w-4 h-4 text-[#8A8D82]" />
           <input type="text" placeholder="Search resident, situation, or clinician…" value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
+            className="w-full pl-9 pr-4 py-2.5 bg-white border border-[#D6D8CD] rounded-lg text-sm text-[#2B2B27] focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30" />
         </div>
       </div>
 
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">Failed to load: {error}</div>}
+      {error && <div className="bg-[#C0573F]/[0.06] border border-[#C0573F]/30 text-[#C0573F] rounded-lg px-4 py-3 text-sm">Failed to load: {error}</div>}
 
       {/* List */}
       {loading && escalations.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-500">Loading escalations…</div>
+        <ClinicalCard className="p-10 text-center text-[#8A8D82]">Loading escalations…</ClinicalCard>
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-500">No {statusFilter !== "all" ? statusFilter : ""} escalations.</div>
+        <ClinicalCard className="p-10 text-center text-[#8A8D82]">No {statusFilter !== "all" ? statusFilter : ""} escalations.</ClinicalCard>
       ) : (
         <div className="space-y-2">
           {paginated.map((e) => {
             const pm = PRIORITY_META[e.priority] ?? PRIORITY_META.URGENT;
             const sla = slaState(e.createdAt, e.priority, e.status, nowTs);
             const busy = busyId === e.id;
+            const alarm = sla.overdue || e.priority === "EMERGENCY";
             return (
-              <div key={e.id} className={`bg-white rounded-lg border p-4 transition hover:shadow-md ${sla.overdue ? "border-red-300 ring-1 ring-red-100" : "border-gray-200 hover:border-yellow-300"}`}>
+              <ClinicalCard key={e.id} top={alarm ? "coral" : "teal"} className="p-4 transition hover:shadow-md">
                 <div className="flex items-start justify-between gap-3">
                   <button onClick={() => setViewing(e)} className="min-w-0 flex-1 text-left">
                     <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${pm.pill}`}>{pm.label}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${STATUS_PILL[e.status] ?? "bg-gray-100 text-gray-700"}`}>{STATUS_LABEL[e.status] ?? e.status}</span>
-                      {sla.overdue && <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600"><Clock className="w-3 h-3" /> {sla.label}</span>}
+                      <StatusPill status={e.priority}>{pm.label}</StatusPill>
+                      <StatusPill status={e.status}>{STATUS_LABEL[e.status] ?? e.status}</StatusPill>
+                      {sla.overdue && <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#C0573F]"><Clock className="w-3 h-3" /> {sla.label}</span>}
                     </div>
-                    <p className="text-sm font-semibold text-gray-900">{e.residentName} <span className="text-gray-400 font-normal">· Room {e.room || "—"}</span></p>
-                    <p className="text-sm text-gray-600 line-clamp-2">{e.situation}</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">Raised by {e.raisedBy || "—"} ({e.raisedByRole || "—"}) → {e.assignedToRole.replace(/_/g, " ")}</p>
+                    <p className="text-sm font-semibold text-[#2B2B27]">{e.residentName} <span className="text-[#8A8D82] font-normal">· Room {e.room || "—"}</span></p>
+                    <p className="text-sm text-[#6B6E63] line-clamp-2">{e.situation}</p>
+                    <p className="text-[11px] text-[#8A8D82] mt-0.5">Raised by {e.raisedBy || "—"} ({e.raisedByRole || "—"}) → {e.assignedToRole.replace(/_/g, " ")}</p>
                   </button>
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    <button onClick={() => setViewing(e)} className="p-1.5 rounded hover:bg-blue-50 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
+                    <button onClick={() => setViewing(e)} className="p-1.5 rounded hover:bg-[#2E4A48]/10 text-[#2E4A48] transition" title="View"><Eye className="w-4 h-4" /></button>
                     {canRespond && !["RESOLVED", "CANCELLED"].includes(e.status) && (
-                      busy ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : (
+                      busy ? <Loader2 className="w-4 h-4 text-[#8A8D82] animate-spin" /> : (
                         <>
-                          {e.status === "OPEN" && <button onClick={() => acknowledge(e)} className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition" title="Acknowledge"><CheckCircle2 className="w-3.5 h-3.5" /> Ack</button>}
-                          <button onClick={() => respondResolve(e)} className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 transition" title="Respond & Resolve"><Stethoscope className="w-3.5 h-3.5" /> Respond</button>
+                          {e.status === "OPEN" && <button onClick={() => acknowledge(e)} className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-white text-[#2E4A48] border border-[#2E4A48]/30 rounded-lg hover:bg-[#2E4A48]/10 transition" title="Acknowledge"><CheckCircle2 className="w-3.5 h-3.5" /> Ack</button>}
+                          <button onClick={() => respondResolve(e)} className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-[#2E4A48] text-white rounded-lg hover:bg-[#25403D] transition" title="Respond & Resolve"><Stethoscope className="w-3.5 h-3.5" /> Respond</button>
                         </>
                       )
                     )}
                   </div>
                 </div>
-              </div>
+              </ClinicalCard>
             );
           })}
         </div>
@@ -250,11 +249,11 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
       {/* Pagination */}
       {filtered.length > PER_PAGE && (
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <p className="text-sm text-gray-600">{(pageClamped - 1) * PER_PAGE + 1}–{Math.min(pageClamped * PER_PAGE, filtered.length)} of {filtered.length}</p>
+          <p className="text-sm text-[#6B6E63]">{(pageClamped - 1) * PER_PAGE + 1}–{Math.min(pageClamped * PER_PAGE, filtered.length)} of {filtered.length}</p>
           <div className="flex items-center gap-2">
-            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pageClamped === 1} className="flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition text-sm font-medium"><ChevronLeft className="w-4 h-4" /> Prev</button>
-            <span className="px-3 py-2 text-sm font-medium text-gray-700">Page {pageClamped} / {totalPages}</span>
-            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={pageClamped === totalPages} className="flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition text-sm font-medium">Next <ChevronRight className="w-4 h-4" /></button>
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pageClamped === 1} className="flex items-center gap-1 px-3 py-2 bg-white border border-[#D6D8CD] rounded-lg text-[#2B2B27] hover:bg-[#F3F4EE] disabled:opacity-50 transition text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30"><ChevronLeft className="w-4 h-4" /> Prev</button>
+            <span className="px-3 py-2 text-sm font-medium text-[#2B2B27]">Page {pageClamped} / {totalPages}</span>
+            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={pageClamped === totalPages} className="flex items-center gap-1 px-3 py-2 bg-white border border-[#D6D8CD] rounded-lg text-[#2B2B27] hover:bg-[#F3F4EE] disabled:opacity-50 transition text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30">Next <ChevronRight className="w-4 h-4" /></button>
           </div>
         </div>
       )}
@@ -267,13 +266,13 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
         return (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-              <div className={`sticky top-0 text-white p-5 flex items-start justify-between gap-3 z-10 ${e.priority === "EMERGENCY" ? "bg-gradient-to-r from-red-500 to-red-600" : "bg-gradient-to-r from-blue-500 to-blue-600"}`}>
+              <div className={`sticky top-0 text-white p-5 flex items-start justify-between gap-3 z-10 ${e.priority === "EMERGENCY" ? "bg-[#C0573F]" : "bg-[#2E4A48]"}`}>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-white/20">{pm.label}</span>
-                    <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-white/20">{STATUS_LABEL[e.status] ?? e.status}</span>
+                    <span className="px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-[0.05em] bg-white/20">{pm.label}</span>
+                    <span className="px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-[0.05em] bg-white/20">{STATUS_LABEL[e.status] ?? e.status}</span>
                   </div>
-                  <h2 className="text-lg sm:text-xl font-bold mt-1 break-words">{e.residentName} · Room {e.room || "—"}</h2>
+                  <h2 className="text-lg sm:text-xl font-bold mt-1 break-words" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>{e.residentName} · Room {e.room || "—"}</h2>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button onClick={() => printEscalation(e, pm.label, STATUS_LABEL[e.status] ?? e.status)} className="p-2 hover:bg-white/20 rounded-lg transition" title="Print SBAR"><Printer className="w-5 h-5" /></button>
@@ -282,28 +281,31 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
               </div>
               <div className="p-6 space-y-3">
                 {!closed && (
-                  <div className={`rounded-lg px-3 py-2 text-sm flex items-center gap-2 ${sla.overdue ? "bg-red-50 text-red-700 border border-red-200" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>
+                  <div className={`rounded-lg px-3 py-2 text-sm flex items-center gap-2 ${sla.overdue ? "bg-[#C0573F]/[0.06] text-[#C0573F] border border-[#C0573F]/30" : "bg-[#F3F4EE] text-[#6B6E63] border border-[#E1E3D9]"}`}>
                     <Clock className="w-4 h-4 flex-shrink-0" /> {sla.label} · raised {e.createdAt ? new Date(e.createdAt).toLocaleString() : "—"}
                   </div>
                 )}
-                <SbarRow letter="S" label="Situation" value={e.situation} />
-                <SbarRow letter="B" label="Background" value={e.background} />
-                <SbarRow letter="A" label="Assessment" value={e.assessment} />
-                <SbarRow letter="R" label="Recommendation" value={e.recommendation} />
-                <p className="text-[11px] text-gray-400">Raised by {e.raisedBy || "—"} ({e.raisedByRole || "—"}) → {e.assignedToRole.replace(/_/g, " ")}{e.acknowledgedBy ? ` · acknowledged by ${e.acknowledgedBy}` : ""}</p>
+                <StatusStepper status={e.status} />
+                <div className="space-y-0">
+                  <SbarRow letter="S" label="Situation" value={e.situation} />
+                  <SbarRow letter="B" label="Background" value={e.background} />
+                  <SbarRow letter="A" label="Assessment" value={e.assessment} />
+                  <SbarRow letter="R" label="Recommendation" value={e.recommendation} letterTone="coral" />
+                </div>
+                <p className="text-[11px] text-[#8A8D82]">Raised by {e.raisedBy || "—"} ({e.raisedByRole || "—"}) → {e.assignedToRole.replace(/_/g, " ")}{e.acknowledgedBy ? ` · acknowledged by ${e.acknowledgedBy}` : ""}</p>
                 {e.response && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                    <p className="text-xs font-semibold text-green-800 mb-0.5">Physician Response{e.resolvedBy ? ` — ${e.resolvedBy}` : ""}</p>
-                    <p className="text-sm text-gray-900 whitespace-pre-wrap">{e.response}</p>
+                  <div className="bg-[#7E9B6F]/[0.1] border border-[#7E9B6F]/40 rounded-lg p-3">
+                    <MicroLabel className="!text-[#5E7A50] mb-0.5">Physician Response{e.resolvedBy ? ` — ${e.resolvedBy}` : ""}</MicroLabel>
+                    <p className="text-sm text-[#2B2B27] whitespace-pre-wrap">{e.response}</p>
                   </div>
                 )}
               </div>
               {canRespond && !closed && (
-                <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between gap-2 flex-wrap">
-                  <button onClick={() => escalateOnCall(e)} disabled={busy} className="flex items-center gap-1.5 px-4 py-2 bg-red-50 text-red-600 border border-red-200 font-semibold rounded-lg hover:bg-red-100 transition text-sm disabled:opacity-50"><ArrowUpCircle className="w-4 h-4" /> On-call</button>
+                <div className="sticky bottom-0 bg-[#F3F4EE] border-t border-[#E1E3D9] px-6 py-4 flex items-center justify-between gap-2 flex-wrap">
+                  <button onClick={() => escalateOnCall(e)} disabled={busy} className="flex items-center gap-1.5 px-4 py-2 bg-white text-[#C0573F] border border-[#C0573F]/30 font-semibold rounded-lg hover:bg-[#C0573F]/[0.06] transition text-sm disabled:opacity-50"><ArrowUpCircle className="w-4 h-4" /> On-call</button>
                   <div className="flex items-center gap-2">
-                    {e.status === "OPEN" && <button onClick={() => acknowledge(e)} disabled={busy} className="flex items-center gap-1.5 px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 font-semibold rounded-lg hover:bg-blue-100 transition text-sm disabled:opacity-50"><CheckCircle2 className="w-4 h-4" /> Acknowledge</button>}
-                    <button onClick={() => respondResolve(e)} disabled={busy} className="flex items-center gap-1.5 px-5 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm disabled:opacity-50">{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Stethoscope className="w-4 h-4" />} Respond & Resolve</button>
+                    {e.status === "OPEN" && <button onClick={() => acknowledge(e)} disabled={busy} className="flex items-center gap-1.5 px-4 py-2 bg-white text-[#2E4A48] border border-[#2E4A48]/30 font-semibold rounded-lg hover:bg-[#2E4A48]/10 transition text-sm disabled:opacity-50"><CheckCircle2 className="w-4 h-4" /> Acknowledge</button>}
+                    <button onClick={() => respondResolve(e)} disabled={busy} className="flex items-center gap-1.5 px-5 py-2 bg-[#2E4A48] hover:bg-[#25403D] text-white font-semibold rounded-lg transition text-sm disabled:opacity-50">{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Stethoscope className="w-4 h-4" />} Respond & Resolve</button>
                   </div>
                 </div>
               )}
@@ -349,7 +351,7 @@ function RaiseModal({ role, raisedBy, residents, meds, onClose, onSaved }: {
       ` Document the response and re-escalate if there is no improvement within the SLA window.`;
     set("recommendation", rec);
   };
-  const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none";
+  const inputCls = "w-full px-3 py-2 bg-white border border-[#D6D8CD] rounded-lg text-sm text-[#2B2B27] focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30";
   const residentOpts = useMemo(() => residents.map((r) => ({
     id: asStr(r.id), name: `${asStr(r.firstName)} ${asStr(r.lastName)}`.trim(), room: asStr(r.roomNumber),
     allergies: asStr(r.allergies), history: asStr(r.medicalHistory),
@@ -392,28 +394,28 @@ function RaiseModal({ role, raisedBy, residents, meds, onClose, onSaved }: {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-red-500 to-red-600 text-white p-5 flex items-center justify-between z-10">
-          <h2 className="text-xl font-bold flex items-center gap-2"><Siren className="w-6 h-6" /> New SBAR Escalation</h2>
+        <div className="sticky top-0 bg-[#C0573F] text-white p-5 flex items-center justify-between z-10">
+          <h2 className="text-xl font-bold flex items-center gap-2" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}><Siren className="w-6 h-6" /> New SBAR Escalation</h2>
           <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
         <div className="p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="sm:col-span-1">
-              <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-1"><UserRound className="w-3.5 h-3.5" /> Resident <span className="text-red-500">*</span></label>
-              <select value={form.residentId} onChange={(e) => onPickResident(e.target.value)} className={`${inputCls} bg-white`}>
+              <label className="text-sm font-semibold text-[#2B2B27] mb-1 flex items-center gap-1"><UserRound className="w-3.5 h-3.5" /> Resident <span className="text-[#C0573F]">*</span></label>
+              <select value={form.residentId} onChange={(e) => onPickResident(e.target.value)} className={inputCls}>
                 <option value="">Select…</option>
                 {residentOpts.map((r) => <option key={r.id} value={r.id}>{r.name} — Room {r.room}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Priority</label>
-              <select value={form.priority} onChange={(e) => set("priority", e.target.value)} className={`${inputCls} bg-white`}>
+              <label className="block text-sm font-semibold text-[#2B2B27] mb-1">Priority</label>
+              <select value={form.priority} onChange={(e) => set("priority", e.target.value)} className={inputCls}>
                 {PRIORITIES.map((p) => <option key={p} value={p}>{PRIORITY_META[p].label} (SLA {PRIORITY_META[p].slaMin}m)</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Route to</label>
-              <select value={form.assignedToRole} onChange={(e) => set("assignedToRole", e.target.value)} className={`${inputCls} bg-white`}>
+              <label className="block text-sm font-semibold text-[#2B2B27] mb-1">Route to</label>
+              <select value={form.assignedToRole} onChange={(e) => set("assignedToRole", e.target.value)} className={inputCls}>
                 <option value="PHYSICIAN">Physician</option>
                 <option value="FACILITY_ADMIN">On-call (Facility Admin)</option>
               </select>
@@ -423,13 +425,13 @@ function RaiseModal({ role, raisedBy, residents, meds, onClose, onSaved }: {
           <SbarField letter="B" label="Background" value={form.background} onChange={(v) => set("background", v)} placeholder="Relevant history (auto-filled from the record — edit as needed)." />
           <SbarField letter="A" label="Assessment" value={form.assessment} onChange={(v) => set("assessment", v)} placeholder="Your clinical read. e.g. Possible respiratory distress; vitals trending down." />
           <div className="flex justify-end -mb-2">
-            <button type="button" onClick={aiDraft} className="text-xs font-semibold text-indigo-600 hover:underline flex items-center gap-1">⚡ AI draft recommendation</button>
+            <button type="button" onClick={aiDraft} className="text-xs font-semibold text-[#2E4A48] hover:underline flex items-center gap-1">⚡ AI draft recommendation</button>
           </div>
           <SbarField letter="R" label="Recommendation" value={form.recommendation} onChange={(v) => set("recommendation", v)} placeholder="What you're asking for. e.g. Please review now; consider O2 + orders." />
         </div>
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
-          <button onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition text-sm">Cancel</button>
-          <button onClick={() => void submit()} disabled={!valid || saving} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 text-sm">
+        <div className="sticky bottom-0 bg-[#F3F4EE] border-t border-[#E1E3D9] px-6 py-4 flex items-center justify-between">
+          <button onClick={onClose} className="px-5 py-2 text-[#6B6E63] hover:bg-[#E8E9E1] rounded-lg transition text-sm">Cancel</button>
+          <button onClick={() => void submit()} disabled={!valid || saving} className="flex items-center gap-2 px-6 py-2 bg-[#C0573F] hover:bg-[#A94832] text-white font-semibold rounded-lg transition disabled:opacity-50 text-sm">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Siren className="w-4 h-4" />} {saving ? "Sending…" : "Send Escalation"}
           </button>
         </div>
@@ -439,38 +441,67 @@ function RaiseModal({ role, raisedBy, residents, meds, onClose, onSaved }: {
 }
 
 function SbarField({ letter, label, value, onChange, placeholder, required }: { letter: string; label: string; value: string; onChange: (v: string) => void; placeholder?: string; required?: boolean }) {
+  const coral = letter === "R";
   return (
     <div>
-      <label className="block text-sm font-semibold text-gray-700 mb-1"><span className="inline-flex items-center justify-center w-5 h-5 rounded bg-red-100 text-red-700 text-xs font-bold mr-1.5">{letter}</span>{label}{required && <span className="text-red-500"> *</span>}</label>
-      <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={2} placeholder={placeholder} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none resize-y" />
+      <label className="block text-sm font-semibold text-[#2B2B27] mb-1"><span className={`inline-flex items-center justify-center w-5 h-5 rounded text-white text-xs font-bold mr-1.5 ${coral ? "bg-[#C0573F]" : "bg-[#2E4A48]"}`} style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>{letter}</span>{label}{required && <span className="text-[#C0573F]"> *</span>}</label>
+      <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={2} placeholder={placeholder} className="w-full px-3 py-2 bg-white border border-[#D6D8CD] rounded-lg text-sm text-[#2B2B27] focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30 resize-y" />
     </div>
   );
 }
 
-function SbarRow({ letter, label, value }: { letter: string; label: string; value: string }) {
+function SbarRow({ letter, label, value, letterTone }: { letter: string; label: string; value: string; letterTone?: "teal" | "coral" }) {
   if (!value) return null;
+  const coral = letterTone === "coral";
   return (
-    <div className="flex gap-2">
-      <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-red-100 text-red-700 text-xs font-bold flex-shrink-0 mt-0.5">{letter}</span>
-      <div className="min-w-0">
-        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
-        <p className="text-sm text-gray-900 whitespace-pre-wrap">{value}</p>
+    <div className={`flex gap-3 border-t border-[#EBEDE4] pt-3 mt-3 first:border-t-0 first:mt-0 first:pt-0 ${coral ? "bg-[#C0573F]/[0.04] -mx-2 px-2 rounded" : ""}`}>
+      <span className={`inline-flex items-center justify-center w-11 h-11 rounded text-white text-xl font-bold flex-shrink-0 ${coral ? "bg-[#C0573F]" : "bg-[#2E4A48]"}`} style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>{letter}</span>
+      <div className="min-w-0 pt-0.5">
+        <MicroLabel className={coral ? "!text-[#C0573F]" : ""}>{label}</MicroLabel>
+        <p className="text-sm text-[#2B2B27] whitespace-pre-wrap mt-0.5">{value}</p>
       </div>
     </div>
   );
 }
 
-const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
-  amber: { wrap: "bg-amber-50 border-amber-200", icon: "text-amber-500", value: "text-amber-600" },
-  red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
-  green: { wrap: "bg-green-50 border-green-200", icon: "text-green-500", value: "text-green-600" },
+/* Compact 3-step lifecycle: OPEN → RESPONDED/ACKNOWLEDGED → CLOSED/RESOLVED. */
+function StatusStepper({ status }: { status: string }) {
+  const isResponded = ["ACKNOWLEDGED", "IN_PROGRESS", "ESCALATED", "RESOLVED"].includes(status);
+  const isClosed = ["RESOLVED", "CANCELLED"].includes(status);
+  const steps = [
+    { key: "open", active: status === "OPEN", block: "bg-[#C39A3E]", Icon: Clock, title: "Open", sub: "Awaiting response" },
+    { key: "responded", active: isResponded && !isClosed, block: "bg-[#2E4A48]", Icon: Stethoscope, title: "Responded", sub: "Response recorded" },
+    { key: "closed", active: isClosed, block: "bg-[#7E9B6F]", Icon: CheckCircle2, title: "Closed", sub: "Issue resolved" },
+  ];
+  return (
+    <div className="flex items-stretch gap-1">
+      {steps.map((s, i) => (
+        <div key={s.key} className="flex items-center gap-1 flex-1">
+          <div className={`flex-1 flex items-center gap-2 rounded-lg px-2.5 py-2 ${s.active ? "" : "opacity-40"}`}>
+            <span className={`inline-flex items-center justify-center w-8 h-8 rounded ${s.block} text-white flex-shrink-0`}><s.Icon className="w-4 h-4" /></span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-[#2B2B27] leading-tight">{s.title}</p>
+              <p className="text-[10px] text-[#8A8D82] leading-tight truncate">{s.sub}</p>
+            </div>
+          </div>
+          {i < steps.length - 1 && <ChevronRight className="w-4 h-4 text-[#8A8D82] flex-shrink-0" />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const TONES: Record<string, { color: string; top: "amber" | "coral" | "green" }> = {
+  amber: { color: "#C39A3E", top: "amber" },
+  coral: { color: "#C0573F", top: "coral" },
+  green: { color: "#7E9B6F", top: "green" },
 };
 function Stat({ label, value, icon: Icon, tone }: { label: string; value: number; icon: LucideIcon; tone: keyof typeof TONES }) {
   const t = TONES[tone];
   return (
-    <div className={`p-4 rounded-lg border ${t.wrap}`}>
-      <div className="flex items-center justify-between"><p className="text-xs sm:text-sm text-gray-600 font-semibold">{label}</p><Icon className={`w-4 h-4 ${t.icon}`} /></div>
-      <p className={`text-2xl sm:text-3xl font-bold mt-1 ${t.value}`}>{value}</p>
-    </div>
+    <ClinicalCard top={t.top} className="p-4">
+      <div className="flex items-center justify-between"><MicroLabel>{label}</MicroLabel><Icon className="w-4 h-4" style={{ color: t.color }} /></div>
+      <p className="text-2xl sm:text-3xl font-bold mt-1" style={{ color: t.color, fontFamily: "Georgia, 'Times New Roman', serif" }}>{value}</p>
+    </ClinicalCard>
   );
 }
