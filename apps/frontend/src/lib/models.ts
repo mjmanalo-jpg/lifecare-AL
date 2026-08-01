@@ -38,6 +38,7 @@ export const MODELS: Record<string, ModelDef> = {
   admissions: { delegate: prisma.admission, table: "Admission", orderBy: { createdAt: "desc" } },
   rooms: { delegate: prisma.room, table: "Room", orderBy: { roomNumber: "asc" } },
   inventory: { delegate: prisma.inventoryItem, table: "InventoryItem", orderBy: { itemName: "asc" } },
+  "purchase-requests": { delegate: prisma.purchaseRequest, table: "PurchaseRequest", orderBy: { createdAt: "desc" } },
   "service-charges": { delegate: prisma.serviceCharge, table: "ServiceCharge", orderBy: { serviceDate: "desc" } },
   "insurance-validations": { delegate: prisma.insuranceValidation, table: "InsuranceValidation", orderBy: { createdAt: "desc" } },
   payments: { delegate: prisma.payment, table: "Payment", orderBy: { paymentDate: "desc" } },

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import {
   Mail, Lock, User, ScanFace, Stethoscope, BedDouble, HeartPulse,
   Check, ChevronLeft, ChevronRight, X, Plus, Search, Eye, EyeOff,

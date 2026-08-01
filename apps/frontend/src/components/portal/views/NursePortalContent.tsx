@@ -60,7 +60,7 @@ type MonitoringAnalysis = {
   globalPosture?: string;
 };
 
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 
 export default function NursePortalContent({ tab }: NursePortalContentProps) {
   // ---- Live data (hooks must run unconditionally, before any tab return) ----

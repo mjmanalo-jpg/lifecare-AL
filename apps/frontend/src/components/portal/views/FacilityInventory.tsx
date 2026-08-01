@@ -11,7 +11,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptInventoryItem } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";

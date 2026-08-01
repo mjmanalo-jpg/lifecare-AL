@@ -7,7 +7,7 @@ import {
   DollarSign, UserCheck, Calendar, ChevronDown, ChevronUp, PlayCircle,
   type LucideIcon,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord } from "@/lib/api";
 

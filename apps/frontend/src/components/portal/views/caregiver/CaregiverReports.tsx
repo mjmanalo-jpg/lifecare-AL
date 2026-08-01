@@ -7,13 +7,14 @@ import {
   ListChecks, BarChart3, TrendingUp,
   type LucideIcon,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, Legend,
 } from "recharts";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
+import ShiftContinuityPanel from "./ShiftContinuityPanel";
 
 /* ── Types ───────────────────────────────────────────────────────────── */
 
@@ -339,6 +340,8 @@ export default function CaregiverReports() {
         <SummaryCard label="Incidents Flagged" value={summary.incidents} icon={AlertTriangle} tone="red" />
         <SummaryCard label="Awaiting Sign-off" value={summary.unsigned} icon={PenLine} tone="amber" />
       </div>
+
+      {view === "list" && <ShiftContinuityPanel />}
 
       {view === "analytics" && <ReportsAnalytics reports={reports} nowTs={nowTs} />}
 

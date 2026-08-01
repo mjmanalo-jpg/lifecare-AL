@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { X, Plus, ClipboardList } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord } from "@/lib/api";
@@ -10,7 +10,9 @@ import { createRecord } from "@/lib/api";
 type TaskPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 
 // Roles allowed to delegate a task to another staff member (a supervisor).
-const SUPERVISOR_ROLES = new Set([
+// Exported so the Task Checklist can gate the "Assign Task" button to the same
+// set — head nurse / supervisors see it, caregivers do not.
+export const SUPERVISOR_ROLES = new Set([
   "NURSE", "FACILITY_ADMIN", "PHYSICIAN", "SUPERADMIN", "ORGANIZATION_ADMIN",
 ]);
 

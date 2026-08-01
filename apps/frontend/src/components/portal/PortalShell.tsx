@@ -2,7 +2,7 @@
 
 import { useState, ReactNode, useEffect, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFacilityConfig } from "@/lib/useFacilityConfig";
 import {
@@ -68,6 +68,19 @@ export default function PortalShell({
   const [notifications, setNotifications] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [language, setLanguage] = useState("en");
+
+  // Supervisor portals nudge the alerts engine (throttled to once / 10 min) so
+  // automated alerts get generated during normal use; Vercel Cron covers prod.
+  useEffect(() => {
+    if (!["NURSE", "FACILITY_ADMIN", "SUPERADMIN"].includes(userRole)) return;
+    try {
+      const KEY = "lcms_alerts_scan_ts";
+      const last = Number(localStorage.getItem(KEY) || 0);
+      if (Date.now() - last < 10 * 60 * 1000) return;
+      localStorage.setItem(KEY, String(Date.now()));
+      fetch("/api/cron/alerts", { method: "POST" }).catch(() => { /* non-fatal */ });
+    } catch { /* ignore */ }
+  }, [userRole]);
   const [profileName, setProfileName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
   const [settingsSaving, setSettingsSaving] = useState(false);

@@ -7,7 +7,7 @@ import {
   Ban, Syringe, Sun, Sunrise, Sunset, Moon, HelpCircle, CalendarClock,
   UserRound, Undo2, type LucideIcon,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Legend, Tooltip, BarChart, Bar,
   XAxis, YAxis, CartesianGrid,

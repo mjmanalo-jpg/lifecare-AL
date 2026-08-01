@@ -7,7 +7,7 @@ import {
   Target, Signature, Plus, X, CheckCircle2, Loader2, ClipboardCheck,
   Eye, ChevronLeft, ChevronRight, UserRound, Clock, type LucideIcon,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord } from "@/lib/api";

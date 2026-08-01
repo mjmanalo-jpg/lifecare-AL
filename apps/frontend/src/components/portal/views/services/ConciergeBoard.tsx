@@ -5,7 +5,7 @@ import {
   RefreshCw, Plus, X, Trash2, Search, CheckCircle2, Ban, Loader2, Star,
   CalendarCheck, Clock, CircleDollarSign, Play, ChevronLeft, ChevronRight, Eye,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { CONCIERGE_CATALOG, BOOKING_STATUS_PILL } from "./serviceMeta";

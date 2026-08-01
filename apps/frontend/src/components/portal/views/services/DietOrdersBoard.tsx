@@ -5,7 +5,7 @@ import {
   UtensilsCrossed, RefreshCw, Plus, X, Trash2, Search, Ban, CheckCircle2,
   Loader2, ClipboardList, ShieldAlert,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { adaptResident } from "@/lib/adapters";

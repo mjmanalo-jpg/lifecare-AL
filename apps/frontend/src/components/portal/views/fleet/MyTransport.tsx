@@ -7,7 +7,7 @@ import {
   Navigation, User, Car, ArrowLeftRight,
   type LucideIcon,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord } from "@/lib/api";
 

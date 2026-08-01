@@ -5,7 +5,7 @@ import {
   RefreshCw, Plus, X, Search, LogIn, LogOut, Loader2, Trash2, Receipt,
   BadgeCheck, CircleDollarSign, Users, DoorOpen, ChevronLeft, ChevronRight, Eye,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { VISIT_TYPE_META, FRONTDESK_STATUS_PILL } from "./pmsMeta";

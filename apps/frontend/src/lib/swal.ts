@@ -1,0 +1,132 @@
+// ─────────────────────────────────────────────────────────────
+// SweetAlert2-compatible drop-in.
+//
+// Plain success / error / warning / info NOTIFICATIONS are routed to the
+// globally-mounted shadcn toast (see components/ui/global-toast). Everything
+// else — confirm dialogs (showCancelButton), prompts (input), loading spinners
+// (didOpen/showLoading), and rich HTML popups — is DELEGATED to the real
+// SweetAlert2 untouched, so existing flows behave exactly as before.
+//
+// Usage is unchanged: `import Swal from "@/lib/swal"` then `Swal.fire(...)`.
+// ─────────────────────────────────────────────────────────────
+
+import RealSwal from "sweetalert2";
+import { pushGlobalToast, type GlobalToastVariant } from "@/components/ui/global-toast";
+import { openGlobalConfirm, type ConfirmVariant } from "@/components/ui/global-confirm";
+
+type SweetIcon = "success" | "error" | "warning" | "info" | "question";
+
+interface FireOptions {
+  title?: string;
+  titleText?: string;
+  text?: string;
+  html?: unknown;
+  icon?: SweetIcon;
+  showCancelButton?: boolean;
+  showDenyButton?: boolean;
+  input?: unknown;
+  timer?: number;
+  showConfirmButton?: boolean;
+  toast?: boolean;
+  didOpen?: unknown;
+  willOpen?: unknown;
+  footer?: unknown;
+  imageUrl?: unknown;
+  [key: string]: unknown;
+}
+
+interface FireResult {
+  isConfirmed: boolean;
+  isDenied: boolean;
+  isDismissed: boolean;
+  value?: unknown;
+}
+
+function toVariant(icon?: SweetIcon): GlobalToastVariant {
+  if (icon === "error") return "error";
+  if (icon === "warning") return "warning";
+  if (icon === "info" || icon === "question") return "info";
+  return "success";
+}
+
+/**
+ * A "plain notification" is a simple message popup — the kind that only shows an
+ * OK button (or auto-dismisses). These become toasts. Anything interactive or
+ * rich is left to SweetAlert2.
+ */
+function isPlainNotification(o: FireOptions): boolean {
+  if (o.showCancelButton || o.showDenyButton) return false; // confirm / choice
+  if (o.input) return false; // prompt
+  if (o.toast) return false; // corner-toast mixin — leave as-is
+  if (o.didOpen || o.willOpen) return false; // loading / custom lifecycle
+  if (o.html || o.imageUrl || o.footer) return false; // rich content
+  if (o.showConfirmButton === false && !o.timer) return false; // spinner-style modal
+  const icon = o.icon;
+  return icon === undefined || icon === "success" || icon === "error" || icon === "warning" || icon === "info";
+}
+
+/**
+ * A "confirm" is a two-choice popup (Cancel + Confirm). Plain-text confirms are
+ * routed to the shadcn AlertDialog; anything with an input/rich HTML/custom
+ * lifecycle is left to SweetAlert2.
+ */
+function isConfirm(o: FireOptions): boolean {
+  return Boolean(o.showCancelButton) && !o.input && !o.html && !o.didOpen && !o.willOpen;
+}
+
+const DANGER_COLORS = ["#ef4444", "#dc2626", "#f44336", "#e11d48", "#b91c1c", "#c0392b", "#e3342f", "#d33"];
+
+function confirmVariant(o: FireOptions): ConfirmVariant {
+  const color = String(o.confirmButtonColor ?? "").toLowerCase();
+  if (DANGER_COLORS.some((r) => color.includes(r))) return "danger";
+  const text = `${o.title ?? ""} ${o.text ?? ""} ${o.confirmButtonText ?? ""}`.toLowerCase();
+  if (/\b(delete|remove|discard|deactivate|permanently|cannot be undone|irreversible)\b/.test(text)) return "danger";
+  if (o.icon === "warning" || o.icon === "error") return "warning";
+  if (o.icon === "success") return "success";
+  if (o.icon === "info") return "info";
+  return "default";
+}
+
+function customFire(a?: FireOptions | string, b?: string, c?: SweetIcon): Promise<FireResult> {
+  const o: FireOptions = typeof a === "string" ? { title: a, text: b, icon: c } : a || {};
+
+  if (isConfirm(o)) {
+    return openGlobalConfirm({
+      title: o.title != null ? String(o.title) : undefined,
+      description: o.text != null ? String(o.text) : undefined,
+      confirmText: o.confirmButtonText != null ? String(o.confirmButtonText) : undefined,
+      cancelText: o.cancelButtonText != null ? String(o.cancelButtonText) : undefined,
+      variant: confirmVariant(o),
+    }).then((r) => ({ isConfirmed: r.confirmed, isDenied: false, isDismissed: !r.confirmed, value: undefined }));
+  }
+
+  if (isPlainNotification(o)) {
+    // Mimic SweetAlert2's single-instance behaviour: firing a new popup closes
+    // any open one (e.g. a loading spinner that this success message replaces).
+    try {
+      RealSwal.close();
+    } catch {
+      /* no-op */
+    }
+    const title = String(o.title ?? o.titleText ?? "");
+    const desc = o.text != null ? String(o.text) : undefined;
+    pushGlobalToast(toVariant(o.icon), title, desc);
+    return Promise.resolve({ isConfirmed: true, isDenied: false, isDismissed: false, value: undefined });
+  }
+
+  // Delegate everything else to the real SweetAlert2 (unchanged behaviour).
+  const fire = RealSwal.fire as (...args: unknown[]) => Promise<FireResult>;
+  return typeof a === "string" ? fire(a, b, c) : fire(a);
+}
+
+// Proxy the real Swal so `fire` is intercepted while `close`, `showLoading`,
+// `mixin`, `isVisible`, etc. delegate straight through (bound to Swal).
+const swalProxy = new Proxy(RealSwal as unknown as Record<string, unknown>, {
+  get(target, prop, receiver) {
+    if (prop === "fire") return customFire;
+    const value = Reflect.get(target, prop, receiver);
+    return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+  },
+});
+
+export default swalProxy as unknown as typeof RealSwal;

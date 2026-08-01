@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { Search, Phone, Clock, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { updateRecord } from "@/lib/api";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 
 interface Resident {
   id: string;

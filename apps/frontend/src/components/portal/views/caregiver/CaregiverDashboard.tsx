@@ -7,7 +7,7 @@ import {
   Clock, Heart, Sun, Sunset, Moon, ChevronRight, Activity, Inbox,
   type LucideIcon,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import StatCard from "@/components/portal/widgets/StatCard";
 import { useLiveQuery, useStats } from "@/lib/useLiveQuery";
 import { adaptTask, adaptResident, adaptIncident, residentName } from "@/lib/adapters";

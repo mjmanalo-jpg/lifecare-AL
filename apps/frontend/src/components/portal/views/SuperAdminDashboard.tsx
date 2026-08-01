@@ -7,7 +7,7 @@ import {
   UserCheck, UserX, Bell, ArrowRight, Activity, ClipboardList, BellRing,
   DollarSign, UserRound, BarChart3, Settings, type LucideIcon,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell,
 } from "recharts";

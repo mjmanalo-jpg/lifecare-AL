@@ -16,6 +16,9 @@ const ACCOUNT_DEFINITIONS = [
   // Facility Admin → the Facility Management portal. org role VIEWER keeps it out
   // of the Organization Admin portal; the community role drives the login.
   { email: "facility.admin@goldenhearth.com", name: "Golden Hearth Facility Management", role: "FACILITY_ADMIN", phone: "555-0150", firstName: "Facility", lastName: "Management", orgRole: "VIEWER" },
+  // Billing & Finance → the dedicated billing portal. org role VIEWER keeps it
+  // out of the Organization Admin portal; the community role drives the login.
+  { email: "billing.admin@goldenhearth.com", name: "Golden Hearth Billing & Finance", role: "BILLING_ADMIN", phone: "555-0155", firstName: "Billing", lastName: "Finance", orgRole: "VIEWER" },
   // Dedicated Organization Admin login (SaaS tenant-management portal).
   { email: "org.admin@goldenhearth.com", name: "Golden Hearth Organization Admin", role: "FACILITY_ADMIN", phone: "555-0156", firstName: "Organization", lastName: "Admin", orgRole: "ADMIN" },
   { email: "alan.reyes@goldenhearth.com", name: "Dr. Alan Reyes", role: "PHYSICIAN", phone: "555-0160", firstName: "Alan", lastName: "Reyes" },

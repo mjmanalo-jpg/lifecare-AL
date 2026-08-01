@@ -20,6 +20,7 @@ datasource db {
 enum Role {
   SUPERADMIN
   FACILITY_ADMIN
+  BILLING_ADMIN
   PHYSICIAN
   NURSE
   CAREGIVER
@@ -180,6 +181,7 @@ enum NotificationType {
   ANNOUNCEMENT
   EVENT_INVITE
   SBAR_ESCALATION
+  BILLING_UPDATE
 }
 
 enum AttendanceStatus {
@@ -2690,6 +2692,49 @@ model Admission {
 // ============================================================================
 // NEW BILLING & FINANCE MODELS
 // ============================================================================
+
+enum PurchaseRequestStatus {
+  REQUESTED
+  APPROVED
+  ORDERED
+  RECEIVED
+  REJECTED
+  CANCELLED
+}
+
+// Restock / procurement request for inventory items. Closes the loop from a
+// low-stock/reorder signal → approval → order → receive (bumps stock on hand).
+model PurchaseRequest {
+  id                String                @id @default(uuid())
+  organizationId    String?
+  communityId       String?
+  inventoryItemId   String?               // soft link (no FK relation) to InventoryItem
+  itemName          String
+  category          String?
+  quantity          Int
+  unit              String?
+  estimatedUnitCost Float?
+  supplier          String?
+  reason            String?
+  priority          String                @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  status            PurchaseRequestStatus  @default(REQUESTED)
+  requestedById     String?
+  requestedByName   String?
+  approvedById      String?
+  approvedByName    String?
+  approvedAt        DateTime?
+  orderedAt         DateTime?
+  receivedAt        DateTime?
+  receivedQuantity  Int?
+  notes             String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@index([communityId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([inventoryItemId])
+}
 
 model ServiceCharge {
   id           String    @id @default(uuid())

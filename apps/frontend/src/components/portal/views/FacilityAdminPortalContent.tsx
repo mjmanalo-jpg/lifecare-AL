@@ -3,7 +3,7 @@
 import { useState, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Trash2, Search, Eye, Edit, X, Plus, Check, XCircle, Camera, Activity, ArrowLeft } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptStaff } from "@/lib/adapters";
 import { updateRecord, deleteRecord } from "@/lib/api";
@@ -16,6 +16,7 @@ import AIAssistantContent from "@/components/portal/ai/AIAssistantContent";
 import FacilityRooms from "@/components/portal/views/FacilityRooms";
 import FacilityOccupancy from "@/components/portal/views/FacilityOccupancy";
 import FacilityInventory from "@/components/portal/views/FacilityInventory";
+import PurchaseRequests from "@/components/portal/views/PurchaseRequests";
 import FacilityUnifiedView from "@/components/portal/views/FacilityUnifiedView";
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
 import CameraVisionFeed from "@/components/CameraVisionFeed";
@@ -267,9 +268,11 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
   if (tab === "rooms") return <FacilityRooms />;
   if (tab === "occupancy") return <FacilityOccupancy />;
   if (tab === "inventory") return <FacilityInventory />;
+  if (tab === "purchaserequests") return <PurchaseRequests />;
   if (tab === "escalations") return <EscalationsBoard role="FACILITY_ADMIN" />;
-  // Unified operations hub — reports, billing, dining, services, maintenance, concierge, front desk, turnover, community
-  if (["reports", "billing", "dining", "services", "maintenance", "concierge", "frontdesk", "turnover", "community"].includes(tab))
+  // Unified operations hub — reports, dining, services, maintenance, concierge, front desk, turnover, community.
+  // Billing moved to the dedicated Billing & Finance portal (BILLING_ADMIN).
+  if (["reports", "dining", "services", "maintenance", "concierge", "frontdesk", "turnover", "community"].includes(tab))
     return <FacilityUnifiedView initialTab={tab} />;
 
   // Staff Registry tab

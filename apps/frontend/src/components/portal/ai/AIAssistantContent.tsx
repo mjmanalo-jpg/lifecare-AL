@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import {
   Bot,
   Send,

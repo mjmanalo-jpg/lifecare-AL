@@ -5,7 +5,7 @@ import {
   DollarSign, Search, Eye, FileText, AlertTriangle, CheckCircle, Clock, X, Plus,
   Printer, ShieldCheck, CreditCard, RefreshCw, Layers, ClipboardList, TrendingUp, Download
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFacilityConfig } from "@/lib/useFacilityConfig";
 import { adaptInvoice, adaptServiceCharge, adaptInsuranceValidation, adaptPayment } from "@/lib/adapters";
@@ -31,8 +31,10 @@ const TAB_STYLING = (active: boolean) =>
       : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
   }`;
 
-export default function FacilityBilling() {
-  const [activeTab, setActiveTab] = useState<"overview" | "charges" | "insurance" | "invoices" | "payments" | "receipts">("overview");
+type BillingTab = "overview" | "charges" | "insurance" | "invoices" | "payments" | "receipts";
+
+export default function FacilityBilling({ initialTab = "overview" }: { initialTab?: BillingTab } = {}) {
+  const [activeTab, setActiveTab] = useState<BillingTab>(initialTab);
 
   // Real-time Queries
   const { data: invoiceRows, loading: invLoading, refetch: refetchInvoices } = useLiveQuery<Record<string, unknown>>(
@@ -308,12 +310,17 @@ export default function FacilityBilling() {
     });
     if (result.isConfirmed) {
       try {
-        await updateRecord("invoices", inv.id, {
-          status: "SENT",
-          sentAt: new Date().toISOString()
-        });
+        const res = await fetch(`/api/billing/invoices/${inv.id}/send`, { method: "POST" });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Could not send invoice.");
         await refetchInvoices();
-        Swal.fire("Sent", "Invoice dispatched successfully.", "success");
+        Swal.fire(
+          "Sent",
+          body.recipients > 0
+            ? `Invoice ${inv.invoiceNumber} sent — notified ${body.recipients} recipient${body.recipients === 1 ? "" : "s"}.`
+            : `Invoice ${inv.invoiceNumber} marked as sent. (No linked resident/family account to notify.)`,
+          "success",
+        );
       } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         Swal.fire("Failed", err.message || "Could not send invoice.", "error");
       }

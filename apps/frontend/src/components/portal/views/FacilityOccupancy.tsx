@@ -11,7 +11,7 @@ import {
   ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell,
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from "recharts";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident, adaptRoom, humanize } from "@/lib/adapters";
 import { updateRecord } from "@/lib/api";

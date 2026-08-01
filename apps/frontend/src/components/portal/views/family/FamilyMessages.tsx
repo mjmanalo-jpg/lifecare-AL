@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   MessageSquare, AlertTriangle, CheckCircle2, RefreshCw, Search, Plus, X, Send, Mail,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord } from "@/lib/api";
 import { humanize } from "@/lib/adapters";

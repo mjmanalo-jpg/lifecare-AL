@@ -50,7 +50,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import Link from "next/link";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { ASSISTANT_CONFIG_KEY, parseAssistantConfig } from "@/lib/assistantConfig";

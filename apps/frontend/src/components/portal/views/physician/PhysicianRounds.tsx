@@ -6,7 +6,7 @@ import {
   AlertTriangle, HeartPulse, Activity, ChevronRight, Stethoscope,
   FileText, X, ChevronLeft, Camera, type LucideIcon,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { updateRecord } from "@/lib/api";

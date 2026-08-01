@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LCMS SaaS Operations Flowchart</title>
+<style>
+  @page { size: A4 landscape; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #dbe4f0; color: #172033; font-family: "Segoe UI", Arial, sans-serif; }
+  .page { width: 297mm; height: 210mm; padding: 12mm 15mm 8mm; background: #f8fafc; page-break-after: always; overflow: hidden; position: relative; display: flex; flex-direction: column; }
+  .page:last-child { page-break-after: auto; }
+
+  /* Header */
+  .brand { display: flex; align-items: center; gap: 13px; }
+  .logo { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; background: linear-gradient(135deg,#1769ff,#4d32df); color: white; font-weight: 800; font-size: 20px; }
+  .eyebrow { color: #2456e8; font-size: 12px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; }
+  h1 { margin: 3px 0 0; font-size: 31px; line-height: 1.05; letter-spacing: -.7px; }
+  .subtitle { margin: 6px 0 9px 55px; color: #526079; font-size: 13.5px; line-height: 1.35; }
+  .rule { height: 4px; border-radius: 2px; background: linear-gradient(90deg,#1769ff,#5132de 48%,#19b987); margin-bottom: 11px; }
+
+  /* Section label */
+  .section-label { display: flex; align-items: center; gap: 10px; margin: 4px 0 5px; color: #34425b; font-size: 12.5px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; }
+  .section-label:first-of-type { margin-top: 2px; }
+  .section-label:after { content: ""; height: 1.5px; background: #d5deeb; flex: 1; }
+
+  /* Flow rows */
+  .flow { display: flex; align-items: stretch; gap: 9px; }
+  .node { border: 1.75px solid #cbd6e6; border-radius: 12px; background: white; padding: 8px 13px; box-shadow: 0 2px 7px rgba(30,49,85,.08); min-width: 0; }
+  .node h3 { margin: 0 0 5px; font-size: 13.5px; line-height: 1.2; color: #132141; }
+  .node p { margin: 0; font-size: 11px; line-height: 1.36; color: #55637c; }
+  .node.blue { border-color: #7ca9ff; background: #eef5ff; }
+  .node.purple { border-color: #a99aff; background: #f4f1ff; }
+  .node.green { border-color: #72d7ae; background: #effcf7; }
+  .node.amber { border-color: #f4c76a; background: #fff9e9; }
+  .node.red { border-color: #f29a9f; background: #fff2f2; }
+  .node.dark { border-color: #253350; background: #17233b; }
+  .node.dark h3 { color: white; }
+  .node.dark p { color: #c3ccdd; }
+
+  .arrow { align-self: center; color: #315de8; font-size: 26px; font-weight: 900; flex: 0 0 20px; text-align: center; }
+  .down { color: #315de8; text-align: center; font-size: 18px; font-weight: 900; line-height: 1; margin: 2px 0; }
+  .equal > .node, .five > .node { flex: 1; }
+
+  /* Decision diamond */
+  .decision { clip-path: polygon(7% 0,93% 0,100% 50%,93% 100%,7% 100%,0 50%); border-radius: 0; padding-left: 26px; padding-right: 26px; display: flex; flex-direction: column; justify-content: center; }
+
+  /* Pass / fail branches */
+  .branches { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .branch { border-radius: 13px; padding: 12px 13px; }
+  .branch.yes { background: #ebfaf3; border: 1.75px solid #74d4ad; }
+  .branch.no { background: #fff3f3; border: 1.75px solid #f1a2a7; }
+  .branch-title { font-size: 12px; font-weight: 800; margin-bottom: 9px; letter-spacing: .3px; }
+  .branch.yes .branch-title { color: #0f7a53; }
+  .branch.no .branch-title { color: #b23b42; }
+  .mini-flow { display: flex; align-items: stretch; gap: 7px; }
+  .mini-flow .node { flex: 1; padding: 10px 11px; }
+  .mini-flow .node h3 { font-size: 12.5px; margin-bottom: 4px; }
+  .mini-flow .node p { font-size: 10.6px; }
+  .mini-flow .arrow { flex-basis: 14px; font-size: 19px; }
+
+  /* Footer + legend */
+  .spacer { flex: 1; }
+  .legend { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 9px; color: #5a6a82; font-size: 11px; }
+  .legend span { display: inline-flex; align-items: center; }
+  .dot { display: inline-block; width: 11px; height: 11px; margin-right: 6px; border-radius: 3px; }
+  .footer { margin-top: 8px; display: flex; justify-content: space-between; color: #76849a; font-size: 10.5px; border-top: 1.5px solid #dbe3ee; padding-top: 6px; }
+  .badge { display: inline-block; padding: 3px 8px; margin-bottom: 7px; border-radius: 10px; background: #315de8; color: white; font-size: 9.5px; font-weight: 800; letter-spacing: .7px; }
+
+  /* Release gate grid */
+  .gate-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 11px 22px; }
+  .gate { position: relative; padding-left: 15px; }
+  .gate:not(:nth-child(4n)):after { content: "→"; position: absolute; right: -17px; top: 50%; transform: translateY(-50%); color: #315de8; font-size: 19px; font-weight: 900; z-index: 2; }
+  .gate-num { width: 26px; height: 26px; float: left; display: grid; place-items: center; margin: 0 9px 4px -3px; border-radius: 8px; background: #315de8; color: white; font-weight: 800; font-size: 13px; }
+  .gate h3 { padding-top: 4px; }
+
+  /* Acceptance checklist */
+  .checklist { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+
+  .code { font-family: Consolas, monospace; color: #273b74; font-size: 10.6px; background: #eef1fa; padding: 1px 4px; border-radius: 4px; }
+
+  /* Page 3 layouts */
+  .security-grid { display: grid; grid-template-columns: 2.15fr 1fr; gap: 16px; }
+  .deny-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .deny-list .node { padding: 10px 11px; }
+  .deny-list .node h3 { font-size: 15px; margin-bottom: 3px; }
+  .deny-list .node p { font-size: 10.4px; }
+  .vertical .node { width: 100%; }
+  .state-row { display: grid; grid-template-columns: repeat(5,1fr); gap: 9px; align-items: stretch; }
+  .state-row .node { text-align: center; }
+  .state-row .node h3 { font-size: 12.5px; }
+</style>
+</head>
+<body>
+
+<section class="page">
+  <header class="brand"><div class="logo">L</div><div><div class="eyebrow">LifeCare CMS · SaaS Control Plane</div><h1>Customer SaaS Operations Flowchart</h1></div></header>
+  <div class="subtitle">Sales-assisted provisioning → secure onboarding → delegated customer administration → governed daily operations</div>
+  <div class="rule"></div>
+
+  <div class="section-label">1 · Platform customer provisioning</div>
+  <div class="flow equal">
+    <div class="node dark"><span class="badge">PLATFORM</span><h3>Platform Admin signs in</h3><p>Supabase Auth + verified email + required TOTP MFA. Platform role is separate from tenant roles.</p></div>
+    <div class="arrow">→</div>
+    <div class="node purple"><h3>Create or select plan</h3><p>Set configurable community, resident, staff-seat and storage limits; enable entitled modules.</p></div>
+    <div class="arrow">→</div>
+    <div class="node blue"><h3>Provision customer</h3><p>Create Organization, first Community, subscription, branding, timezone, capacity and support metadata.</p></div>
+    <div class="arrow">→</div>
+    <div class="node amber"><h3>Invite first owner</h3><p>Issue a single-use, expiring, revocable and tenant-bound OWNER invitation through Supabase Auth.</p></div>
+  </div>
+  <div class="down">↓</div>
+
+  <div class="section-label">2 · Customer acceptance and delegated administration</div>
+  <div class="flow equal">
+    <div class="node amber"><h3>Owner receives invitation</h3><p>Follows the configured redirect URL; invitation token remains role- and organization-bound.</p></div>
+    <div class="arrow">→</div>
+    <div class="node green"><h3>Accept + secure account</h3><p>Verify email, set password, enroll TOTP MFA and establish an Organization Admin session.</p></div>
+    <div class="arrow">→</div>
+    <div class="node blue"><h3>Organization Admin Portal</h3><p>Manage company branding, communities, memberships, invitations, approvals, subscription usage and tenant security.</p></div>
+    <div class="arrow">→</div>
+    <div class="node purple"><h3>Delegate facility access</h3><p>Invite Facility Admins and staff with community-specific roles. Organization roles stay centrally controlled.</p></div>
+  </div>
+  <div class="down">↓</div>
+
+  <div class="section-label">3 · Membership approval and workspace access</div>
+  <div class="flow equal">
+    <div class="node blue"><h3>Facility Admin invites staff</h3><p>Invitation is limited to the active community; facility admins cannot grant organization-wide roles.</p></div>
+    <div class="arrow">→</div>
+    <div class="node amber"><h3>Organization Admin reviews</h3><p>Approve or reject pending access. Revocation preserves historical clinical attribution.</p></div>
+    <div class="arrow">→</div>
+    <div class="node green"><h3>User activates account</h3><p>Accept invitation and sign in. One identity may hold different roles in multiple communities.</p></div>
+    <div class="arrow">→</div>
+    <div class="node purple"><h3>Select workspace</h3><p>Server validates organization/community membership, then rotates the active tenant session context.</p></div>
+  </div>
+  <div class="down">↓</div>
+
+  <div class="branches">
+    <div class="branch yes">
+      <div class="branch-title">✓ MEMBERSHIP + ENTITLEMENT + CAPACITY PASS</div>
+      <div class="mini-flow"><div class="node green"><h3>Enter portal</h3><p>Role-specific modules and branding</p></div><div class="arrow">→</div><div class="node green"><h3>Perform work</h3><p>Tenant IDs injected server-side</p></div><div class="arrow">→</div><div class="node green"><h3>Track usage</h3><p>Audit + usage snapshots</p></div></div>
+    </div>
+    <div class="branch no">
+      <div class="branch-title">✕ VALIDATION OR LIMIT FAILS</div>
+      <div class="mini-flow"><div class="node red"><h3>Deny safely</h3><p>401 / 403 / hidden 404</p></div><div class="arrow">→</div><div class="node red"><h3>Explain limit</h3><p>409 / 422 as appropriate</p></div><div class="arrow">→</div><div class="node red"><h3>Audit event</h3><p>No PHI in logs</p></div></div>
+    </div>
+  </div>
+
+  <div class="spacer"></div>
+  <div class="legend"><span><i class="dot" style="background:#315de8"></i>Identity / tenant context</span><span><i class="dot" style="background:#23ad78"></i>Allowed operation</span><span><i class="dot" style="background:#e5aa34"></i>Human approval or invitation</span><span><i class="dot" style="background:#df5d66"></i>Denied / blocked state</span></div>
+  <footer class="footer"><span>Source: docs/SAAS-OPERATIONS.md</span><span>LCMS SaaS Operations · Page 1 of 3</span></footer>
+</section>
+
+<section class="page">
+  <header class="brand"><div class="logo">L</div><div><div class="eyebrow">Release Engineering</div><h1>Supabase + Prisma Migration Release Gate</h1></div></header>
+  <div class="subtitle">A controlled staging rehearsal must pass every gate before production or a second customer is enabled</div>
+  <div class="rule"></div>
+
+  <div class="section-label">Release sequence</div>
+  <div class="gate-grid">
+    <div class="node gate blue"><div class="gate-num">1</div><h3>Restore backup to staging</h3><p>Verify that the backup can actually be restored. Never rehearse on production.</p></div>
+    <div class="node gate"><div class="gate-num">2</div><h3>Confirm connections</h3><p><span class="code">DATABASE_URL / DIRECT_URL</span> must target the intended Supabase project; encode reserved characters.</p></div>
+    <div class="node gate"><div class="gate-num">3</div><h3>Validate + inspect status</h3><p><span class="code">npx prisma validate</span> &nbsp; <span class="code">npx prisma migrate status</span></p></div>
+    <div class="node gate amber"><div class="gate-num">4</div><h3>Baseline only if proven</h3><p>For former <span class="code">db push</span> databases, resolve old migrations only after confirming their columns exist.</p></div>
+
+    <div class="node gate purple"><div class="gate-num">5</div><h3>Deploy migrations</h3><p><span class="code">npx prisma migrate deploy</span> — foundation first, tenant RLS second. Never use <span class="code">db push</span>.</p></div>
+    <div class="node gate red"><div class="gate-num">6</div><h3>Run backfill report</h3><p>Stop on missing ownership, cross-tenant links, orphaned PHI, duplicates or count mismatches.</p></div>
+    <div class="node gate green"><div class="gate-num">7</div><h3>Configure runtime role</h3><p>Use a non-owner PostgreSQL login with <span class="code">rolsuper=false</span> and <span class="code">rolbypassrls=false</span>.</p></div>
+    <div class="node gate blue"><div class="gate-num">8</div><h3>Provision Platform Admin</h3><p>Link immutable Supabase Auth UUID, confirm email, enroll MFA and replace the temporary password.</p></div>
+
+    <div class="node gate"><div class="gate-num">9</div><h3>Deploy application</h3><p>Runtime uses least-privilege URLs. Migration-owner credentials remain deployment-only secrets.</p></div>
+    <div class="node gate amber"><div class="gate-num">10</div><h3>Run isolation matrix</h3><p>Two organizations, multiple communities, all roles, APIs, exports, aggregates and guessed IDs.</p></div>
+    <div class="node gate purple"><div class="gate-num">11</div><h3>Test authenticated Realtime</h3><p>Keep tenant Realtime disabled until API and direct RLS tests pass with the application role.</p></div>
+    <div class="node gate green"><div class="gate-num">12</div><h3>Release + observe</h3><p>Monitor 401/403/404, entitlement denials, invitation failures and RLS violations before customer two.</p></div>
+  </div>
+
+  <div class="section-label">Hard release decision</div>
+  <div class="flow equal">
+    <div class="node decision amber"><h3>Are migration reconciliation, isolation tests and backup restoration all successful?</h3><p>All three conditions are mandatory. “Mostly passing” is not a release state.</p></div>
+    <div class="arrow">→</div>
+    <div class="node red"><h3>NO · Stop rollout</h3><p>Preserve diagnostic output, restore the rehearsed backup, investigate, correct and repeat the full gate sequence. Never edit <span class="code">_prisma_migrations</span> manually.</p></div>
+    <div class="arrow">→</div>
+    <div class="node green"><h3>YES · Controlled production release</h3><p>Enable customer access, retain monitoring, and only enable tenant Realtime after authenticated policies are proven.</p></div>
+  </div>
+
+  <div class="section-label">Acceptance checklist</div>
+  <div class="checklist">
+    <div class="node"><h3>Data integrity</h3><p>Organization/community ownership reconciles; tenant-aware uniqueness holds; no ambiguous resident, membership or access mappings remain.</p></div>
+    <div class="node"><h3>Isolation</h3><p>Reads, writes, includes, aggregates, exports, search, FastAPI, RLS and Realtime cannot cross organization or community boundaries.</p></div>
+    <div class="node"><h3>Operational recovery</h3><p>Suspension blocks normal access, audit remains available, backup restoration succeeds, and production/staging/demo remain separated.</p></div>
+  </div>
+
+  <div class="spacer"></div>
+  <div class="legend"><span><i class="dot" style="background:#315de8"></i>Migration action</span><span><i class="dot" style="background:#23ad78"></i>Verified release condition</span><span><i class="dot" style="background:#e5aa34"></i>Decision / manual verification</span><span><i class="dot" style="background:#df5d66"></i>Mandatory stop</span></div>
+  <footer class="footer"><span>Canonical production schema process: versioned Prisma migrations</span><span>LCMS SaaS Operations · Page 2 of 3</span></footer>
+</section>
+
+<section class="page">
+  <header class="brand"><div class="logo">L</div><div><div class="eyebrow">Defense in Depth</div><h1>Runtime Authorization, Isolation &amp; Tenant State</h1></div></header>
+  <div class="subtitle">Every request is evaluated through identity, MFA, membership, entitlement and PostgreSQL RLS boundaries</div>
+  <div class="rule"></div>
+
+  <div class="security-grid">
+    <div>
+      <div class="section-label">Request authorization path</div>
+      <div class="flow five">
+        <div class="node blue"><h3>1 · Authenticate</h3><p>Validate Supabase identity and signed LCMS session.</p></div><div class="arrow">→</div>
+        <div class="node purple"><h3>2 · Verify MFA</h3><p>AAL2 required for platform and organization admins.</p></div><div class="arrow">→</div>
+        <div class="node blue"><h3>3 · Load access</h3><p>Platform, organization, community and resident memberships.</p></div><div class="arrow">→</div>
+        <div class="node amber"><h3>4 · Check plan</h3><p>Module entitlement, subscription state and usage limits.</p></div>
+      </div>
+      <div class="down">↓</div>
+      <div class="flow equal">
+        <div class="node green"><h3>5 · Establish tenant context</h3><p>Server chooses validated organization/community. Client-supplied ownership fields are ignored or rejected.</p></div><div class="arrow">→</div>
+        <div class="node green"><h3>6 · Execute with RLS</h3><p>Transaction-local user, organization and community context is set using the non-BYPASSRLS application role.</p></div><div class="arrow">→</div>
+        <div class="node green"><h3>7 · Return + audit</h3><p>Only tenant-safe results are returned. Sensitive successes and denials create immutable, PHI-minimized audit events.</p></div>
+      </div>
+
+      <div class="section-label">Tenant lifecycle state machine</div>
+      <div class="state-row">
+        <div class="node amber"><h3>TRIALING</h3><p>Limited evaluation</p></div>
+        <div class="node green"><h3>ACTIVE</h3><p>Normal access</p></div>
+        <div class="node amber"><h3>PAST_DUE</h3><p>Contract follow-up</p></div>
+        <div class="node red"><h3>SUSPENDED</h3><p>Normal access blocked; data preserved</p></div>
+        <div class="node dark"><h3>CANCELED / ARCHIVED</h3><p>Retention and export rules apply</p></div>
+      </div>
+      <div class="mini-flow" style="margin-top:11px">
+        <div class="node"><h3>Platform recovery</h3><p>Explicit, audited operator action only; support metadata does not automatically reveal resident PHI.</p></div>
+        <div class="arrow">→</div>
+        <div class="node green"><h3>Reactivate</h3><p>Validate subscription, memberships, security state and tenant context before access resumes.</p></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Safe denial outcomes</div>
+      <div class="deny-list">
+        <div class="node red"><h3>401</h3><p>Invalid or expired identity/session</p></div>
+        <div class="node red"><h3>403</h3><p>Known user lacks role, MFA or entitlement</p></div>
+        <div class="node red"><h3>404</h3><p>Hide another tenant’s resource existence</p></div>
+        <div class="node red"><h3>409</h3><p>Tenant-aware uniqueness or capacity conflict</p></div>
+        <div class="node red"><h3>422</h3><p>Invalid relationship or tenant mismatch</p></div>
+        <div class="node red"><h3>RLS deny</h3><p>Missing/wrong transaction tenant context</p></div>
+      </div>
+
+      <div class="section-label">HIPAA-ready controls</div>
+      <div class="vertical">
+        <div class="node blue"><h3>Vendor + environment governance</h3><p>Appropriate BAAs; separated production, staging and demo; environment-managed endpoints and origins.</p></div>
+        <div class="down">↓</div>
+        <div class="node purple"><h3>Data protection</h3><p>Encryption, secret rotation, private object storage, signed URLs, scanning, retention and tested backups/PITR.</p></div>
+        <div class="down">↓</div>
+        <div class="node green"><h3>Operational procedures</h3><p>Access review, termination, incident/breach response, legal hold, export, secure deletion and quarterly restore tests.</p></div>
+        <div class="down">↓</div>
+        <div class="node amber"><h3>PHI-minimized telemetry</h3><p>No clinical text, names, rooms, media, access tokens or invitation tokens in logs and error messages.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="spacer"></div>
+  <div class="legend"><span><i class="dot" style="background:#315de8"></i>Authentication / context</span><span><i class="dot" style="background:#23ad78"></i>Authorized execution</span><span><i class="dot" style="background:#e5aa34"></i>Entitlement / state decision</span><span><i class="dot" style="background:#df5d66"></i>Denied or suspended</span></div>
+  <footer class="footer"><span>HIPAA-ready is an operational baseline, not a compliance certification</span><span>LCMS SaaS Operations · Page 3 of 3</span></footer>
+</section>
+</body>
+</html>

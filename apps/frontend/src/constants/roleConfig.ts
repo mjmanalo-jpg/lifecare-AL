@@ -50,6 +50,12 @@ import {
   Mail,
   ServerCog,
   CircleDollarSign,
+  CreditCard,
+  Receipt,
+  Wallet,
+  PieChart,
+  TrendingDown,
+  ShoppingCart,
 } from "lucide-react";
 
 export type Role =
@@ -57,6 +63,7 @@ export type Role =
   | "ORGANIZATION_ADMIN"
   | "SUPERADMIN"
   | "FACILITY_ADMIN"
+  | "BILLING_ADMIN"
   | "PHYSICIAN"
   | "NURSE"
   | "CAREGIVER"
@@ -116,7 +123,17 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   rooms: "Rooms",
   occupancy: "Occupancy",
   billing: "Billing",
+  ledger: "Transactions Ledger",
+  receivables: "Receivables & Aging",
+  revenue: "Revenue by Source",
+  charges: "Service Charges",
+  invoices: "Invoice Generation",
+  payments: "Payment Processing",
+  insurance: "Insurance Validation",
+  receipts: "Receipts",
+  onlinepayment: "Online Payment",
   inventory: "Medication Management & Inventory",
+  purchaserequests: "Purchase Requests",
   medications: "Medication Management & Inventory",
   callbells: "Call Bells",
   timeclock: "Time Clock",
@@ -182,6 +199,7 @@ export const PATH_TO_ROLE: Record<string, Role> = {
   caregiver: "CAREGIVER",
   family: "FAMILY",
   facility_admin: "FACILITY_ADMIN",
+  billing_admin: "BILLING_ADMIN",
   physician: "PHYSICIAN",
   resident: "RESIDENT",
   fleet_management: "FLEET_MANAGEMENT",
@@ -375,8 +393,9 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Incidents", icon: AlertTriangle, route: "/facility_admin/incidents" },
       { name: "Clinical Coordination", icon: Siren, route: "/facility_admin/escalations" },
       { name: "Medication Management & Inventory", icon: Package, route: "/facility_admin/inventory" },
+      { name: "Purchase Requests", icon: ShoppingCart, route: "/facility_admin/purchaserequests" },
       { name: "Shift Endorsement & Continuity", icon: FileText, route: "/facility_admin/reports" },
-      { name: "Billing", icon: DollarSign, route: "/facility_admin/billing" },
+      // Billing moved to the dedicated Billing & Finance portal (BILLING_ADMIN).
       // Dining / Diet Orders / Kitchen moved to the Nutritionist & Kitchen portals.
       { name: "Camera Activity Log", icon: Activity, route: "/facility_admin/cameralogs" },
       { name: "Resident Services", icon: Ticket, route: "/facility_admin/services" },
@@ -396,6 +415,27 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Audit Log", icon: Shield, route: "/facility_admin/auditlog" },
       { name: "Inventory Alerts", icon: Bell, route: "/facility_admin/inventory-alerts" },
       { name: "Clinical Reports", icon: BarChart3, route: "/facility_admin/clinicalreports" },
+    ],
+  },
+  BILLING_ADMIN: {
+    name: "Billing & Finance",
+    badge: "Finance & Billing",
+    desc: "Run resident billing end-to-end — service charges, invoice generation, insurance validation, payment processing, and receipts.",
+    icon: CircleDollarSign,
+    profileName: "Billing & Finance Officer",
+    basePath: "/billing_admin",
+    footerText: "Billing & Finance Portal",
+    sidebarLinks: [
+      { name: "Billing Overview", icon: BarChart3, route: "/billing_admin/dashboard" },
+      { name: "Transactions Ledger", icon: Wallet, route: "/billing_admin/ledger" },
+      { name: "Receivables & Aging", icon: TrendingDown, route: "/billing_admin/receivables" },
+      { name: "Revenue by Source", icon: PieChart, route: "/billing_admin/revenue" },
+      { name: "Service Charges", icon: ClipboardList, route: "/billing_admin/charges" },
+      { name: "Invoice Generation", icon: FileText, route: "/billing_admin/invoices" },
+      { name: "Payment Processing", icon: CreditCard, route: "/billing_admin/payments" },
+      { name: "Online Payment", icon: DollarSign, route: "/billing_admin/onlinepayment" },
+      { name: "Insurance Validation", icon: ShieldCheck, route: "/billing_admin/insurance" },
+      { name: "Receipts", icon: Receipt, route: "/billing_admin/receipts" },
     ],
   },
   PHYSICIAN: {
@@ -585,6 +625,7 @@ export const SIDEBAR_GROUP_ORDER = [
   "Medication",
   "Coordination & Comms",
   "Operations",
+  "Billing & Finance",
   "Hospitality & Services",
   "Fleet & Transport",
   "Administration",
@@ -659,7 +700,19 @@ const LINK_GROUP_MAP: Record<string, SidebarGroup> = {
   "Incident Review": "Operations",
   "Incident Medical Review": "Operations",
   "Billing": "Operations",
+  "Purchase Requests": "Operations",
   "Clinical Reports": "Operations",
+  // Billing & Finance (dedicated BILLING_ADMIN portal)
+  "Billing Overview": "Billing & Finance",
+  "Transactions Ledger": "Billing & Finance",
+  "Receivables & Aging": "Billing & Finance",
+  "Revenue by Source": "Billing & Finance",
+  "Service Charges": "Billing & Finance",
+  "Invoice Generation": "Billing & Finance",
+  "Payment Processing": "Billing & Finance",
+  "Online Payment": "Billing & Finance",
+  "Insurance Validation": "Billing & Finance",
+  "Receipts": "Billing & Finance",
   // Hospitality & Services (Module 14 — PMS)
   "Dining & Compliance": "Hospitality & Services",
   "Resident Services": "Hospitality & Services",

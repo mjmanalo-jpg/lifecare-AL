@@ -12,7 +12,7 @@ export async function createInvitation(input: {
   communityId?: string;
   residentId?: string;
   organizationRole?: "OWNER" | "ADMIN" | "BILLING_ADMIN" | "VIEWER";
-  communityRole?: "FACILITY_ADMIN" | "PHYSICIAN" | "NURSE" | "CAREGIVER" | "FAMILY" | "RESIDENT" | "FLEET_MANAGEMENT" | "DRIVER";
+  communityRole?: "FACILITY_ADMIN" | "BILLING_ADMIN" | "PHYSICIAN" | "NURSE" | "CAREGIVER" | "FAMILY" | "RESIDENT" | "FLEET_MANAGEMENT" | "DRIVER";
   createdById?: string;
   baseUrl: string;
 }) {

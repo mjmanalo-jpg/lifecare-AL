@@ -5,7 +5,7 @@ import {
   RefreshCw, X, Megaphone, CalendarDays, UtensilsCrossed, SlidersHorizontal,
   Plus, Trash2, Star, CheckCircle2, Loader2, Pin, MapPin,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import {

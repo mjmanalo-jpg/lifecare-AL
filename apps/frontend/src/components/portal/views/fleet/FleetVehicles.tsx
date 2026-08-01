@@ -10,7 +10,7 @@ import {
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend,
 } from "recharts";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 

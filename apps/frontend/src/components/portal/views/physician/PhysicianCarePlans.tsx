@@ -5,7 +5,7 @@ import {
   Target, Search, RefreshCw, Plus, X, CheckCircle2, Circle, Trash2, Loader2,
   Users, Eye, ChevronLeft, ChevronRight, UserRound, Clock, type LucideIcon,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";

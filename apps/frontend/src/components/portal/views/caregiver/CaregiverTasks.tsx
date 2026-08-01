@@ -1,11 +1,12 @@
 "use client";
 
-import { Search, X, Eye, Trash2 } from "lucide-react";
+import { Search, X, Eye, Trash2, Plus } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptTask } from "@/lib/adapters";
 import { updateRecord, deleteRecord } from "@/lib/api";
+import AddTaskModal, { SUPERVISOR_ROLES } from "./AddTaskModal";
 
 type CaregiverTask = ReturnType<typeof adaptTask>;
 
@@ -62,6 +63,19 @@ export default function CaregiverTasks() {
   const [viewingTask, setViewingTask] = useState<CaregiverTask | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [showAddTask, setShowAddTask] = useState(false);
+
+  // Only the head nurse / supervisors may assign tasks — caregivers cannot.
+  const [sessionRole, setSessionRole] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.authenticated) setSessionRole(data.session?.role ?? null);
+      })
+      .catch(() => { /* Non-fatal: hides the assign button. */ });
+  }, []);
+  const canAssign = sessionRole ? SUPERVISOR_ROLES.has(sessionRole) : false;
 
   const allFilteredTasks = useMemo(() => {
     const createdTs = (task: CaregiverTask) => {
@@ -160,7 +174,7 @@ export default function CaregiverTasks() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Header — tasks are assigned by the head nurse / supervisor, so caregivers cannot create them here. */}
+      {/* Header — only the head nurse / supervisor can assign tasks; caregivers cannot. */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
@@ -168,6 +182,14 @@ export default function CaregiverTasks() {
           </h1>
           <p className="text-gray-600 text-xs sm:text-sm">Manage daily tasks and track completion</p>
         </div>
+        {canAssign && (
+          <button
+            onClick={() => setShowAddTask(true)}
+            className="inline-flex items-center gap-2 self-start px-4 py-2.5 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-semibold shadow hover:shadow-lg transition active:scale-95"
+          >
+            <Plus className="w-4 h-4" /> Assign Task
+          </button>
+        )}
       </div>
 
       {/* Stats */}
@@ -387,6 +409,17 @@ export default function CaregiverTasks() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Assign Task Modal — supervisors delegate to a caregiver (gated by canAssign). */}
+      {showAddTask && canAssign && (
+        <AddTaskModal
+          onClose={() => setShowAddTask(false)}
+          onSaved={() => {
+            setShowAddTask(false);
+            refetchTasks();
+          }}
+        />
       )}
 
       {/* Task Details Modal */}

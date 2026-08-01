@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import SmoothScroll from "@/components/SmoothScroll";
+import { GlobalToaster } from "@/components/ui/global-toast";
+import { GlobalConfirmDialog } from "@/components/ui/global-confirm";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -27,6 +29,8 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} bg-background text-foreground`} suppressHydrationWarning>
         <SmoothScroll>{children}</SmoothScroll>
+        <GlobalToaster />
+        <GlobalConfirmDialog />
       </body>
     </html>
   );

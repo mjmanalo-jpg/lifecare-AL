@@ -5,8 +5,8 @@ import { createInvitation } from "@/lib/invitations";
 import { logAudit } from "@/lib/audit";
 
 const ORG_ROLES = new Set(["OWNER", "ADMIN", "BILLING_ADMIN", "VIEWER"]);
-const COMMUNITY_ROLES = new Set(["FACILITY_ADMIN", "PHYSICIAN", "NURSE", "CAREGIVER", "FAMILY", "RESIDENT", "FLEET_MANAGEMENT", "DRIVER"]);
-const STAFF_ROLES = new Set(["FACILITY_ADMIN", "PHYSICIAN", "NURSE", "CAREGIVER", "FLEET_MANAGEMENT", "DRIVER"]);
+const COMMUNITY_ROLES = new Set(["FACILITY_ADMIN", "BILLING_ADMIN", "PHYSICIAN", "NURSE", "CAREGIVER", "FAMILY", "RESIDENT", "FLEET_MANAGEMENT", "DRIVER"]);
+const STAFF_ROLES = new Set(["FACILITY_ADMIN", "BILLING_ADMIN", "PHYSICIAN", "NURSE", "CAREGIVER", "FLEET_MANAGEMENT", "DRIVER"]);
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const context = await requireTenantContext();
   if (context && requiresPrivilegedMfa(context)) return NextResponse.json({ error: "MFA required", code: "MFA_REQUIRED" }, { status: 403 });

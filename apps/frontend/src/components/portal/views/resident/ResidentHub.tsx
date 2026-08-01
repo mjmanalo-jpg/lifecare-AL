@@ -9,7 +9,7 @@ import {
   UtensilsCrossed, CalendarDays, SlidersHorizontal, Pin, Loader2, Phone, FileText,
   type LucideIcon,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { adaptResident, humanize } from "@/lib/adapters";

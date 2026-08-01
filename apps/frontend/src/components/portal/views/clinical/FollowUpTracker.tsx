@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { CalendarCheck, Plus, X, Trash2, Search, CheckCircle, Clock, AlertTriangle, Loader2 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";

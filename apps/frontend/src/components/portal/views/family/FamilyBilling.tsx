@@ -5,7 +5,7 @@ import {
   Activity, AlertTriangle, CheckCircle2, Clock, CreditCard, FileText, Printer,
   Receipt, RefreshCw, Search, Wallet, X,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, Legend,

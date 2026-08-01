@@ -6,7 +6,7 @@ import {
   Activity, Droplets, ClipboardList, Trash2, Loader2,
   type LucideIcon, Wind, Frown, Meh, SmilePlus, Annoyed,
 } from "lucide-react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";

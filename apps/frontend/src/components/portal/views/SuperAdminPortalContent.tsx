@@ -24,7 +24,7 @@ import AssessmentAcuityBoard from "@/components/portal/views/clinical/Assessment
 import FeatureMatrixDashboard from "@/components/portal/views/superadmin/FeatureMatrixDashboard";
 import { Trash2, Search, Eye, Edit, X, UserPlus } from "lucide-react";
 import { useState, useMemo } from "react";
-import Swal from "sweetalert2";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptStaff } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
