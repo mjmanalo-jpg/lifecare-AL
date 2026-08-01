@@ -102,6 +102,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ data: created }, { status: 201 });
   } catch (error) {
     if (error instanceof EntitlementError) return NextResponse.json({ error: error.message, code: error.code }, { status: 403 });
-    return NextResponse.json({ error: "Create failed" }, { status: 400 });
+    console.error(`[db POST ${model}] create failed:`, error);
+    const detail = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: "Create failed", detail }, { status: 400 });
   }
 }

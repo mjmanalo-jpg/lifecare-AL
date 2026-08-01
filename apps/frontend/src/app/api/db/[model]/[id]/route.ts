@@ -96,7 +96,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ data: updated });
   } catch (error) {
     if (error instanceof EntitlementError) return NextResponse.json({ error: error.message, code: error.code }, { status: 403 });
-    return NextResponse.json({ error: "Update failed" }, { status: 400 });
+    console.error(`[db PATCH ${model}/${id}] update failed:`, error);
+    return NextResponse.json({ error: "Update failed", detail: error instanceof Error ? error.message : String(error) }, { status: 400 });
   }
 }
 
@@ -117,6 +118,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (error instanceof EntitlementError) return NextResponse.json({ error: error.message, code: error.code }, { status: 403 });
-    return NextResponse.json({ error: "Delete failed" }, { status: 400 });
+    console.error(`[db DELETE ${model}/${id}] delete failed:`, error);
+    return NextResponse.json({ error: "Delete failed", detail: error instanceof Error ? error.message : String(error) }, { status: 400 });
   }
 }

@@ -15,7 +15,7 @@ async function mutate(method: string, path: string, body?: unknown) {
     cache: "no-store",
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json?.error || res.statusText);
+  if (!res.ok) throw new Error(json?.detail ? `${json.error}: ${json.detail}` : json?.error || res.statusText);
   return json;
 }
 

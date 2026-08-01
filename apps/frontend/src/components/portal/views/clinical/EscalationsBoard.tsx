@@ -342,13 +342,9 @@ function RaiseModal({ role, raisedBy, residents, meds, onClose, onSaved }: {
     const sit = form.situation.trim();
     const asmt = form.assessment.trim();
     if (!sit) { Swal.fire("Add a Situation first", "The draft uses the Situation and Assessment fields.", "info"); return; }
-    const who = residentOpts.find((r) => r.id === form.residentId)?.name || "the resident";
     const urgent = form.priority === "EMERGENCY";
     const resp = /spo2|oxygen|breath|resp|desat/i.test(sit + asmt);
-    const rec = `Request ${urgent ? "immediate" : "prompt"} physician review for ${who}.` +
-      `${asmt ? ` Assessment: ${asmt}.` : ""}` +
-      ` Recommend: reassess vitals now, ${resp ? "consider supplemental O₂, " : ""}monitor closely, and carry out physician orders.` +
-      ` Document the response and re-escalate if there is no improvement within the SLA window.`;
+    const rec = `${urgent ? "Escalate immediately. " : ""}Reassess vitals now, ${resp ? "consider supplemental O₂, " : ""}monitor closely, and carry out physician orders. Document the response and re-escalate if there is no improvement within the SLA window.`;
     set("recommendation", rec);
   };
   const inputCls = "w-full px-3 py-2 bg-white border border-[#D6D8CD] rounded-lg text-sm text-[#2B2B27] focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30";
