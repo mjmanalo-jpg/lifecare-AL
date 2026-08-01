@@ -15,7 +15,7 @@ import ClinicalNotes from "@/components/portal/views/clinical/ClinicalNotes";
 import ClinicalMessages from "@/components/portal/views/clinical/ClinicalMessages";
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
 import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
-import MedicationApprovals from "@/components/portal/views/clinical/MedicationApprovals";
+import ApprovalWorkflows from "@/components/portal/views/clinical/ApprovalWorkflows";
 import PhysicianCommsLog from "@/components/portal/views/clinical/PhysicianCommsLog";
 import ReferralsBoard from "@/components/portal/views/clinical/ReferralsBoard";
 import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
@@ -732,7 +732,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   if (tab === "taskboard") {
     return <CaregiverTasks />;
   }
-  if (tab === "medapprovals") return <MedicationApprovals />;
+  if (tab === "approvalworkflows") return <ApprovalWorkflows />;
   if (tab === "physiciancomms") return <PhysicianCommsLog />;
   if (tab === "referrals") return <ReferralsBoard canApprove />;
   if (tab === "cameralogs") {
