@@ -20,6 +20,7 @@ import MARBoard from "@/components/portal/views/clinical/MARBoard";
 import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker";
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
+import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
 
 interface CaregiverPortalContentProps {
   tab: string;
@@ -70,6 +71,8 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
       return <MARBoard />;
     case "followups":
       return <FollowUpTracker />;
+    case "incidents":
+      return <FacilityIncidents readOnly />;
     default:
       return <CaregiverDashboard />;
   }

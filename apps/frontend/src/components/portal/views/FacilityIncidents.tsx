@@ -48,7 +48,7 @@ function relTime(iso: string | null, nowTs: number): string {
   return `${Math.round(h / 24)}d ago`;
 }
 
-export default function FacilityIncidents() {
+export default function FacilityIncidents({ readOnly = false }: { readOnly?: boolean } = {}) {
   const { data: incidentRows, loading, error, refetch } = useLiveQuery<Record<string, unknown>>(
     "incidents", { query: "include=resident&take=500", tables: ["Incident"] }
   );
@@ -146,18 +146,22 @@ export default function FacilityIncidents() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setPage(1); }, [search, severityFilter, statusFilter, typeFilter, perPage]);
 
+  // Care Manager review-and-close: capture sign-off notes, then close the incident.
   const handleResolve = async (id: string) => {
     const res = await Swal.fire({
-      title: "Resolve Incident?", icon: "question", showCancelButton: true,
-      confirmButtonColor: "#10b981", cancelButtonColor: "#6b7280", confirmButtonText: "Yes, resolve",
+      title: "Review & close incident",
+      input: "textarea",
+      inputLabel: "Review notes (Care Manager sign-off)",
+      inputPlaceholder: "Findings, corrective actions verified, outcome…",
+      showCancelButton: true, confirmButtonColor: "#10b981", cancelButtonColor: "#6b7280", confirmButtonText: "Close incident",
     });
     if (!res.isConfirmed) return;
     try {
-      await updateRecord("incidents", id, { resolvedAt: new Date().toISOString() });
+      await updateRecord("incidents", id, { resolvedAt: new Date().toISOString(), reviewNotes: res.value || null });
       await refetch();
-      Swal.fire({ title: "Resolved", icon: "success", timer: 1200, showConfirmButton: false });
+      Swal.fire({ title: "Reviewed & closed", icon: "success", timer: 1300, showConfirmButton: false });
     } catch (err) {
-      Swal.fire({ title: "Failed", text: err instanceof Error ? err.message : "Could not resolve.", icon: "error" });
+      Swal.fire({ title: "Failed", text: err instanceof Error ? err.message : "Could not close.", icon: "error" });
     }
   };
 
@@ -354,18 +358,20 @@ export default function FacilityIncidents() {
                       <button onClick={() => setViewing(i)} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition">
                         <Eye className="w-3.5 h-3.5" /> View
                       </button>
-                      {!i.resolved ? (
+                      {!readOnly && (!i.resolved ? (
                         <button onClick={() => void handleResolve(i.id)} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded transition">
-                          <CheckCircle className="w-3.5 h-3.5" /> Resolve
+                          <CheckCircle className="w-3.5 h-3.5" /> Review &amp; Close
                         </button>
                       ) : (
                         <button onClick={() => void handleReopen(i.id)} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-amber-600 bg-amber-50 hover:bg-amber-100 rounded transition">
                           <RefreshCw className="w-3.5 h-3.5" /> Reopen
                         </button>
+                      ))}
+                      {!readOnly && (
+                        <button onClick={() => void handleDelete(i.id)} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded transition">
+                          <Trash2 className="w-3.5 h-3.5" /> Delete
+                        </button>
                       )}
-                      <button onClick={() => void handleDelete(i.id)} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded transition">
-                        <Trash2 className="w-3.5 h-3.5" /> Delete
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -404,12 +410,12 @@ export default function FacilityIncidents() {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => setViewing(i)} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
-                        {!i.resolved ? (
-                          <button onClick={() => void handleResolve(i.id)} className="p-1.5 rounded hover:bg-green-100 text-green-600 transition" title="Resolve"><CheckCircle className="w-4 h-4" /></button>
+                        {!readOnly && (!i.resolved ? (
+                          <button onClick={() => void handleResolve(i.id)} className="p-1.5 rounded hover:bg-green-100 text-green-600 transition" title="Review & Close"><CheckCircle className="w-4 h-4" /></button>
                         ) : (
                           <button onClick={() => void handleReopen(i.id)} className="p-1.5 rounded hover:bg-amber-100 text-amber-600 transition" title="Reopen"><RefreshCw className="w-4 h-4" /></button>
-                        )}
-                        <button onClick={() => void handleDelete(i.id)} className="p-1.5 rounded hover:bg-red-100 text-red-600 transition" title="Delete"><Trash2 className="w-4 h-4" /></button>
+                        ))}
+                        {!readOnly && <button onClick={() => void handleDelete(i.id)} className="p-1.5 rounded hover:bg-red-100 text-red-600 transition" title="Delete"><Trash2 className="w-4 h-4" /></button>}
                       </div>
                     </td>
                   </tr>
@@ -505,6 +511,14 @@ export default function FacilityIncidents() {
                 </div>
               )}
 
+              {/* Care Manager review */}
+              {typeof viewing.raw.reviewNotes === "string" && viewing.raw.reviewNotes && (
+                <div className="bg-green-50 border-l-4 border-green-400 p-3 rounded">
+                  <h3 className="font-bold text-gray-900 mb-1 text-sm flex items-center gap-1.5"><CheckCircle className="w-4 h-4 text-green-600" /> Care Manager Review</h3>
+                  <p className="text-gray-900 text-sm">{viewing.raw.reviewNotes}</p>
+                </div>
+              )}
+
               {/* Notes fallback */}
               {viewing.notes && !viewing.raw.immediateActions && !viewing.raw.followUpNotes && (
                 <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
@@ -515,20 +529,22 @@ export default function FacilityIncidents() {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
               <button onClick={() => setViewing(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Close</button>
-              <div className="flex gap-2">
-                {!viewing.resolved ? (
-                  <button onClick={() => { void handleResolve(viewing.id); setViewing(null); }} className="px-5 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm">
-                    <CheckCircle className="w-4 h-4 inline mr-1" /> Mark Resolved
+              {!readOnly && (
+                <div className="flex gap-2">
+                  {!viewing.resolved ? (
+                    <button onClick={() => { void handleResolve(viewing.id); setViewing(null); }} className="px-5 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm">
+                      <CheckCircle className="w-4 h-4 inline mr-1" /> Review &amp; Close
+                    </button>
+                  ) : (
+                    <button onClick={() => { void handleReopen(viewing.id); setViewing(null); }} className="px-5 py-2 bg-gradient-to-r from-amber-400 to-amber-500 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm">
+                      <RefreshCw className="w-4 h-4 inline mr-1" /> Reopen
+                    </button>
+                  )}
+                  <button onClick={() => { void handleDelete(viewing.id); setViewing(null); }} className="px-5 py-2 bg-gradient-to-r from-red-400 to-red-500 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm">
+                    <Trash2 className="w-4 h-4 inline mr-1" /> Delete
                   </button>
-                ) : (
-                  <button onClick={() => { void handleReopen(viewing.id); setViewing(null); }} className="px-5 py-2 bg-gradient-to-r from-amber-400 to-amber-500 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm">
-                    <RefreshCw className="w-4 h-4 inline mr-1" /> Reopen
-                  </button>
-                )}
-                <button onClick={() => { void handleDelete(viewing.id); setViewing(null); }} className="px-5 py-2 bg-gradient-to-r from-red-400 to-red-500 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm">
-                  <Trash2 className="w-4 h-4 inline mr-1" /> Delete
-                </button>
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

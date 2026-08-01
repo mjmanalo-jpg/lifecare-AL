@@ -313,7 +313,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Medication Approvals", icon: ClipboardCheck, route: "/nurse/approvalworkflows" },
       { name: "Physician Comms Log", icon: Stethoscope, route: "/nurse/physiciancomms" },
       { name: "Referrals & Appointments", icon: CalendarCheck, route: "/nurse/referrals" },
-      { name: "Incident Review", icon: AlertTriangle, route: "/nurse/incidents" },
+      { name: "Incident Reports", icon: AlertTriangle, route: "/nurse/incidents", group: "Clinical Monitoring" },
       { name: "Secure Messages", icon: MessageSquare, route: "/nurse/messages" },
       // Core SLMS Modules Aligned
       { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/nurse/tasks" },
@@ -352,6 +352,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Vaccinations", icon: Syringe, route: "/caregiver/vaccinations" },
       { name: "Resident Documents", icon: FolderOpen, route: "/caregiver/documents" },
       { name: "Medication Administration Record", icon: Pill, route: "/caregiver/mar", group: "Clinical Monitoring" },
+      { name: "Incident Reports", icon: AlertTriangle, route: "/caregiver/incidents", group: "Clinical Monitoring" },
       { name: "Follow-up Tracker", icon: CalendarCheck, route: "/caregiver/followups" },
     ],
   },

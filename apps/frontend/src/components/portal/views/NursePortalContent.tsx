@@ -14,6 +14,7 @@ import PhysicianVitals from "@/components/portal/views/physician/PhysicianVitals
 import ClinicalNotes from "@/components/portal/views/clinical/ClinicalNotes";
 import ClinicalMessages from "@/components/portal/views/clinical/ClinicalMessages";
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
+import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
 import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
 import ApprovalWorkflows from "@/components/portal/views/clinical/ApprovalWorkflows";
 import PhysicianCommsLog from "@/components/portal/views/clinical/PhysicianCommsLog";
@@ -327,7 +328,11 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     );
   }
 
-  if (tab === "incidents") {
+  // Incident Reports — read-only for nurses (Care Manager reviews & closes).
+  if (tab === "incidents") return <FacilityIncidents readOnly />;
+
+  // Legacy inline nurse incident view — superseded by the read-only view above.
+  if (tab === "incidents-legacy") {
     const incidentStats = {
       total: incidents.length,
       open: incidents.filter((i) => i.status === "open").length,
