@@ -265,6 +265,8 @@ export async function POST(req: NextRequest) {
       return handleExtract(body);
     case "sbar":
       return handleSbar(body);
+    case "endorsement":
+      return handleEndorsement(body);
     default:
       return NextResponse.json({ error: `Unknown action '${action}'` }, { status: 400 });
   }
@@ -623,6 +625,64 @@ async function handleSbar(body: Record<string, unknown>) {
     }
   } catch (err) {
     console.warn("[AI Assistant sbar] network error", (err as Error).message);
+  }
+  return NextResponse.json({ fallback: true, reason: "cloud draft failed" });
+}
+
+// ── SHIFT ENDORSEMENT (HANDOVER) SUMMARY ──────────────────────────────────────
+// Write a professional end-of-shift endorsement from the fields the nurse/
+// caregiver recorded. Returns { summary, source:"gemini" } or { fallback:true }
+// so the caller can use its own templated summary offline.
+async function handleEndorsement(body: Record<string, unknown>) {
+  const shift = String(body.shift ?? "shift").trim();
+  const residentUpdates = String(body.residentUpdates ?? "").trim();
+  const incidentsOccurred = Boolean(body.incidentsOccurred);
+  const incidentDetails = String(body.incidentDetails ?? "").trim();
+  const medications = String(body.medications ?? "").trim();
+  const tasks = String(body.tasks ?? "").trim();
+  const handoverNotes = String(body.handoverNotes ?? "").trim();
+
+  // Nothing meaningful to summarise → let the caller fall back.
+  if (!residentUpdates && !incidentsOccurred && !medications && !tasks && !handoverNotes) {
+    return NextResponse.json({ fallback: true, reason: "no content" });
+  }
+  if (!GEMINI_API_KEY) return NextResponse.json({ fallback: true, reason: "no GEMINI_API_KEY" });
+
+  const systemInstruction =
+    "You are a clinical assistant writing a professional end-of-shift endorsement (handover " +
+    "summary) for an assisted-living facility. From the recorded shift details, write a clear, " +
+    "concise handover the incoming shift can read in seconds: overall status, key resident updates, " +
+    "any incidents, medications given, tasks completed, and what to carry over/watch. 3-6 sentences, " +
+    "professional clinical tone. Do NOT invent residents, vitals, doses, or events that were not " +
+    "provided. No headings, no bullet markup, no preamble like 'Here is' — output only the endorsement.";
+
+  const userText =
+    `Shift: ${shift}\n` +
+    (residentUpdates ? `Resident updates: ${residentUpdates}\n` : "") +
+    `Incidents: ${incidentsOccurred ? incidentDetails || "occurred — see incident log" : "none reported"}\n` +
+    (medications ? `Medications administered: ${medications}\n` : "") +
+    (tasks ? `Tasks completed: ${tasks}\n` : "") +
+    (handoverNotes ? `Carry-over notes: ${handoverNotes}\n` : "");
+
+  try {
+    const res = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        contents: [{ role: "user", parts: [{ text: userText }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 420 },
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const text = (data?.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? "").join("").trim();
+      if (text) return NextResponse.json({ summary: text, source: "gemini" });
+    } else {
+      console.warn(`[AI Assistant endorsement] Gemini ${res.status}`);
+    }
+  } catch (err) {
+    console.warn("[AI Assistant endorsement] network error", (err as Error).message);
   }
   return NextResponse.json({ fallback: true, reason: "cloud draft failed" });
 }

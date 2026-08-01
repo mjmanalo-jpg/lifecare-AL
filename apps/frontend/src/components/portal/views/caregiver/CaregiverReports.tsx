@@ -205,14 +205,44 @@ export default function CaregiverReports() {
   }, [search, shiftFilter, range, incidentsOnly, perPage]);
 
   /* Mutations */
-  const generateSummary = () => {
+  const [generating, setGenerating] = useState(false);
+
+  // Offline fallback — the original templated summary from the entered fields.
+  const templateSummary = () => {
     const parts: string[] = [`${shiftMeta(form.shiftType).label} shift handover.`];
     if (form.residentUpdates.trim()) parts.push(`Resident updates: ${form.residentUpdates.trim()}.`);
     parts.push(form.incidentsOccurred ? `Incident(s): ${form.incidentDetails.trim() || "see incident log"}.` : "No incidents reported this shift.");
     if (form.medicationsAdministered.trim()) parts.push(`Medications: ${form.medicationsAdministered.trim()}.`);
     if (form.taskCompleted.trim()) parts.push(`Tasks completed: ${form.taskCompleted.trim()}.`);
     if (form.handoverNotes.trim()) parts.push(`Carry-over: ${form.handoverNotes.trim()}.`);
-    setField("summary", parts.join(" "));
+    return parts.join(" ");
+  };
+
+  // AI endorsement via Gemini, drafted from the shift fields; falls back offline.
+  const generateSummary = async () => {
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/ai-assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "endorsement",
+          shift: shiftMeta(form.shiftType).label,
+          residentUpdates: form.residentUpdates.trim(),
+          incidentsOccurred: form.incidentsOccurred,
+          incidentDetails: form.incidentDetails.trim(),
+          medications: form.medicationsAdministered.trim(),
+          tasks: form.taskCompleted.trim(),
+          handoverNotes: form.handoverNotes.trim(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setField("summary", res.ok && data?.summary ? String(data.summary).trim() : templateSummary());
+    } catch {
+      setField("summary", templateSummary());
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleAck = async (r: ShiftReport) => {
@@ -637,7 +667,9 @@ export default function CaregiverReports() {
 
             <div className="flex items-center justify-between">
               <label className="text-sm font-semibold text-gray-700">Summary <span className="text-red-500">*</span></label>
-              <button type="button" onClick={generateSummary} className="text-xs font-semibold text-indigo-600 hover:underline">⚡ Generate AI summary</button>
+              <button type="button" onClick={() => void generateSummary()} disabled={generating} className="text-xs font-semibold text-indigo-600 hover:underline flex items-center gap-1 disabled:opacity-60">
+                {generating ? <><RefreshCw className="w-3 h-3 animate-spin" /> Generating…</> : <>⚡ Generate AI summary</>}
+              </button>
             </div>
             <TextArea label="" value={form.summary} onChange={(v) => setField("summary", v)} placeholder="Overall shift summary — or use ⚡ to draft from the fields above…" />
             <TextArea label="Resident Updates" value={form.residentUpdates} onChange={(v) => setField("residentUpdates", v)} placeholder="Per-resident notes…" />
