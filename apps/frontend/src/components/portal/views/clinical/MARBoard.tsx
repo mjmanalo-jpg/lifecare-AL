@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pill, Plus, X, Trash2, Search, CheckCircle, Loader2 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -22,6 +22,10 @@ export default function MARBoard() {
   const [filter, setFilter] = useState("ALL");
   const [creating, setCreating] = useState(false);
   const [dateFilter, setDateFilter] = useState(new Date().toISOString().split("T")[0]);
+
+  // The signed-in clinician — recorded as who administered/logged each dose.
+  const [me, setMe] = useState<{ id: string | null; name: string | null }>({ id: null, name: null });
+  useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => { if (d?.authenticated) setMe({ id: d.session?.userId ?? null, name: d.session?.name ?? "Clinician" }); }).catch(() => {}); }, []);
 
   const rowTime = (m: any) => m.actualTime || m.scheduledTime || null;
   const today = new Date().toISOString().split("T")[0];
@@ -77,7 +81,7 @@ export default function MARBoard() {
     if (r.isConfirmed) { await deleteRecord("medication-administrations", id); refetch(); Swal.fire("Deleted", "", "success"); }
   };
   const markGiven = async (id: string) => {
-    await updateRecord("medication-administrations", id, { status: "GIVEN", actualTime: new Date().toISOString() });
+    await updateRecord("medication-administrations", id, { status: "GIVEN", actualTime: new Date().toISOString(), recordedById: me.id, recordedByName: me.name });
     refetch();
     Swal.fire({ icon: "success", title: "Recorded", timer: 1200, showConfirmButton: false });
   };
@@ -155,7 +159,7 @@ export default function MARBoard() {
                   <tbody className="divide-y divide-[#EBEDE4]">
                     {rows.map((mar: any) => {
                       const med = medMap.get(mar.medicationId);
-                      const admin = mar.administeredByName || mar.witnessName || "—";
+                      const admin = mar.recordedByName || mar.witnessName || "—";
                       return (
                         <tr key={mar.id} className="hover:bg-[#F5F6F1]">
                           <td className="px-4 py-3">
@@ -193,12 +197,12 @@ export default function MARBoard() {
         </div>
       )}
 
-      {creating && <MARModal residents={residents} onClose={() => setCreating(false)} onSaved={() => { refetch(); setCreating(false); }} />}
+      {creating && <MARModal residents={residents} me={me} onClose={() => setCreating(false)} onSaved={() => { refetch(); setCreating(false); }} />}
     </div>
   );
 }
 
-function MARModal({ residents, onClose, onSaved }: { residents: any[]; onClose: () => void; onSaved: () => void }) {
+function MARModal({ residents, me, onClose, onSaved }: { residents: any[]; me: { id: string | null; name: string | null }; onClose: () => void; onSaved: () => void }) {
   const { data: medRows } = useLiveQuery("medications", { query: "take=200", tables: ["Medication"] });
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ residentId: "", medicationId: "", dosage: "", route: "ORAL", status: "GIVEN", reasonForRefusal: "", heldReason: "", witnessName: "", notes: "" });
@@ -210,7 +214,7 @@ function MARModal({ residents, onClose, onSaved }: { residents: any[]; onClose: 
     setSaving(true);
     try {
       const now = new Date().toISOString();
-      await createRecord("medication-administrations", { ...form, scheduledTime: now, actualTime: form.status === "SCHEDULED" ? null : now });
+      await createRecord("medication-administrations", { ...form, scheduledTime: now, actualTime: form.status === "SCHEDULED" ? null : now, recordedById: me.id, recordedByName: me.name });
       onSaved();
       Swal.fire({ icon: "success", title: "Recorded!", timer: 1500, showConfirmButton: false });
     } catch { Swal.fire("Error", "Could not save the MAR entry.", "error"); } finally { setSaving(false); }
