@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, X, Eye, Trash2, Plus, Clock } from "lucide-react";
+import { Search, X, Eye, Trash2, Plus, Clock, CheckCircle2, Undo2 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -11,18 +11,24 @@ import { CLINICAL, StatusPill, MicroLabel, ClinicalHeader, ClinicalCard } from "
 
 type CaregiverTask = ReturnType<typeof adaptTask>;
 
-/** Map a UI priority tier to a StatusPill status keyword. */
-const priorityStatus = (priority: string) => {
-  switch (priority) {
-    case "critical":
-      return "CRITICAL";
-    case "high":
-      return "URGENT";
-    case "medium":
-      return "ROUTINE";
-    default:
-      return "LOW";
-  }
+/** Priority tier → pill label + colour, matching the board reference exactly:
+ *  CRITICAL = deep maroon, URGENT = coral, MODERATE = amber, ROUTINE = grey. */
+const PRIORITY_PILL: Record<string, { label: string; cls: string }> = {
+  critical: { label: "CRITICAL", cls: "bg-[#9E3B2A] text-white" },
+  high: { label: "URGENT", cls: "bg-[#C0573F] text-white" },
+  medium: { label: "MODERATE", cls: "bg-[#C39A3E] text-white" },
+  low: { label: "ROUTINE", cls: "bg-[#D8DAD0] text-[#5A5D53]" },
+};
+function PriorityPill({ priority }: { priority: string }) {
+  const p = PRIORITY_PILL[priority] ?? PRIORITY_PILL.low;
+  return <span className={`inline-flex items-center px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-[0.05em] ${p.cls}`}>{p.label}</span>;
+}
+
+/** "First Last" → "Last, F." to match the reference card header. */
+const shortName = (full: string) => {
+  const parts = full.trim().split(/\s+/);
+  if (parts.length < 2) return full;
+  return `${parts[parts.length - 1]}, ${parts[0].charAt(0)}.`;
 };
 
 /** Human-friendly "overdue" elapsed string. */
@@ -185,71 +191,67 @@ export default function CaregiverTasks() {
     const assignee = nameOf(task.raw?.assignedToId);
 
     return (
-      <ClinicalCard top={top} className={`p-3.5 ${task.completed ? "opacity-80" : ""}`}>
-        <div className="flex items-start gap-2.5">
-          <input
-            type="checkbox"
-            checked={task.completed}
-            onChange={() => handleToggleTask(task.id)}
-            className="w-4 h-4 rounded cursor-pointer mt-0.5 flex-shrink-0 accent-[#7E9B6F]"
-            title="Mark task complete"
-          />
-          <div className="flex-1 min-w-0">
-            {/* Resident + priority */}
-            <div className="flex items-start justify-between gap-2">
-              <p className={`font-bold text-sm leading-tight ${task.completed ? "text-[#8A8D82]" : "text-[#2B2B27]"}`}>
-                {task.resident} · Rm {task.room}
-              </p>
-              <StatusPill status={priorityStatus(task.priority)} className="flex-shrink-0" />
-            </div>
+      <ClinicalCard top={top} className={`p-3.5 ${task.completed ? "opacity-90" : ""}`}>
+        {/* Resident + priority */}
+        <div className="flex items-start justify-between gap-2">
+          <p className={`font-bold text-sm leading-tight ${task.completed ? "text-[#8A8D82]" : "text-[#2B2B27]"}`}>
+            {shortName(task.resident)} · Rm {task.room}
+          </p>
+          <PriorityPill priority={task.priority} />
+        </div>
 
-            {/* Title */}
-            <p className={`text-sm mt-1.5 ${task.completed ? "line-through text-[#8A8D82]" : "text-[#3C3C36]"}`}>
-              {task.title}
-            </p>
+        {/* Title */}
+        <p className={`text-sm mt-1.5 ${task.completed ? "line-through text-[#8A8D82]" : "text-[#3C3C36]"}`}>
+          {task.title}
+        </p>
 
-            {/* Category + assignee */}
-            <div className="flex items-center flex-wrap gap-2 mt-2.5">
-              <StatusPill status="ROUTINE">{task.category.toUpperCase()}</StatusPill>
-              {assignee && <span className="text-[11px] text-[#8A8D82]">{assignee}</span>}
-            </div>
+        {/* Category + assignee + overdue elapsed */}
+        <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-2.5">
+          <span className="inline-flex items-center px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-[0.05em] bg-[#D8DAD0] text-[#5A5D53]">{task.category.toUpperCase()}</span>
+          {assignee && <span className="text-[11px] text-[#8A8D82]">{assignee}</span>}
+          {!task.completed && isOverdue && task.dueDate && (
+            <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-[#C0573F]">
+              <Clock className="w-3 h-3" /> {overdueLabel(task.dueDate)}
+            </span>
+          )}
+        </div>
 
-            {/* Due / overdue / done */}
-            <div className="mt-3 flex items-center justify-between gap-2">
-              {task.completed ? (
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#5F7A52]">
-                  ✓ Done {completedTime}
-                </span>
-              ) : isOverdue && task.dueDate ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <StatusPill status="OVERDUE" />
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#C0573F]">
-                    <Clock className="w-3 h-3" /> {overdueLabel(task.dueDate)}
-                  </span>
-                </span>
-              ) : task.dueTime ? (
-                <span className="text-[11px] text-[#8A8D82]">Due {task.dueTime}</span>
-              ) : (
-                <span />
-              )}
+        {/* Status line + actions */}
+        <div className="mt-3 flex items-center justify-between gap-2">
+          {task.completed ? (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#5F7A52]">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Done {completedTime}
+            </span>
+          ) : isOverdue ? (
+            <StatusPill status="OVERDUE" />
+          ) : task.dueTime ? (
+            <span className="text-[11px] text-[#8A8D82]">Due {task.dueTime}</span>
+          ) : (
+            <span />
+          )}
 
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <button
-                  onClick={() => setViewingTask(task)}
-                  title="View task"
-                  className="p-1.5 rounded text-[#2E4A48] hover:bg-[#2E4A48]/10 transition"
-                >
-                  <Eye className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDeleteTask(task.id)}
-                  title="Delete task"
-                  className="p-1.5 rounded text-[#C0573F] hover:bg-[#C0573F]/10 transition"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={() => handleToggleTask(task.id)}
+              title={task.completed ? "Mark pending" : "Mark complete"}
+              className={`p-1.5 rounded transition ${task.completed ? "text-[#8A8D82] hover:bg-black/5" : "text-[#7E9B6F] hover:bg-[#7E9B6F]/12"}`}
+            >
+              {task.completed ? <Undo2 className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={() => setViewingTask(task)}
+              title="View task"
+              className="p-1.5 rounded text-[#2E4A48] hover:bg-[#2E4A48]/10 transition"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => handleDeleteTask(task.id)}
+              title="Delete task"
+              className="p-1.5 rounded text-[#C0573F] hover:bg-[#C0573F]/10 transition"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </ClinicalCard>
@@ -441,7 +443,7 @@ export default function CaregiverTasks() {
                 </div>
                 <div>
                   <MicroLabel className="mb-2">Priority</MicroLabel>
-                  <StatusPill status={priorityStatus(viewingTask.priority)} />
+                  <PriorityPill priority={viewingTask.priority} />
                 </div>
                 <div>
                   <MicroLabel className="mb-2">Status</MicroLabel>
