@@ -28,7 +28,7 @@ export default function DriverPortalContent({
       return <DriverHub initialTab="checklist" />;
     case "fuel":
       return <DriverHub initialTab="fuel" />;
-    // Core LCMS Modules Aligned
+    // Core SLMS Modules Aligned
     case "records":
       return <CaregiverResidents />;
     case "rounds":

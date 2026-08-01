@@ -104,36 +104,36 @@ export const MODELS: Record<string, ModelDef> = {
   // V2.1 — Staffing intelligence
   "staffing-plans": { delegate: prisma.staffingPlan, table: "StaffingPlan", orderBy: { planDate: "desc" } },
 
-  // LCMS Module 1 — Vaccinations & Documents
+  // SLMS Module 1 — Vaccinations & Documents
   vaccinations: { delegate: prisma.vaccination, table: "Vaccination", orderBy: { dateGiven: "desc" } },
   "resident-documents": { delegate: prisma.residentDocument, table: "ResidentDocument", orderBy: { createdAt: "desc" } },
 
-  // LCMS Module 3 — Care Plans
+  // SLMS Module 3 — Care Plans
   "care-plans": { delegate: prisma.carePlan, table: "CarePlan", orderBy: { startDate: "desc" } },
   "care-plan-items": { delegate: prisma.carePlanItem, table: "CarePlanItem", orderBy: { sortOrder: "asc" } },
   "care-plan-reviews": { delegate: prisma.carePlanReview, table: "CarePlanReview", orderBy: { reviewDate: "desc" } },
 
-  // LCMS Module 4 — Daily Documentation
+  // SLMS Module 4 — Daily Documentation
   eliminations: { delegate: prisma.eliminationLog, table: "EliminationLog", orderBy: { time: "desc" } },
   "pain-assessments": { delegate: prisma.painAssessment, table: "PainAssessment", orderBy: { assessedAt: "desc" } },
   "wound-cares": { delegate: prisma.woundCare, table: "WoundCare", orderBy: { assessedAt: "desc" } },
   "sleep-logs": { delegate: prisma.sleepLog, table: "SleepLog", orderBy: { date: "desc" } },
   "mobility-logs": { delegate: prisma.mobilityLog, table: "MobilityLog", orderBy: { startTime: "desc" } },
 
-  // LCMS Module 6 — Medication Administration & History
+  // SLMS Module 6 — Medication Administration & History
   "medication-administrations": { delegate: prisma.medicationAdministration, table: "MedicationAdministration", orderBy: { scheduledTime: "desc" } },
   "medication-change-logs": { delegate: prisma.medicationChangeLog, table: "MedicationChangeLog", orderBy: { changedAt: "desc" } },
 
-  // LCMS Module 7 — Clinical Coordination
+  // SLMS Module 7 — Clinical Coordination
   "hospital-referrals": { delegate: prisma.hospitalReferral, table: "HospitalReferral", orderBy: { createdAt: "desc" } },
   "follow-ups": { delegate: prisma.followUp, table: "FollowUp", orderBy: { dueDate: "asc" } },
 
-  // LCMS Module 8 — Timeline, Reports, Alerts
+  // SLMS Module 8 — Timeline, Reports, Alerts
   "care-timeline": { delegate: prisma.careTimelineEntry, table: "CareTimelineEntry", orderBy: { entryDate: "desc" } },
   "generated-reports": { delegate: prisma.generatedReport, table: "GeneratedReport", orderBy: { createdAt: "desc" } },
   "inventory-alerts": { delegate: prisma.inventoryAlert, table: "InventoryAlert", orderBy: { createdAt: "desc" } },
 
-  // LCMS Module 4 — Comprehensive Daily Rounds
+  // SLMS Module 4 — Comprehensive Daily Rounds
   "daily-rounds": { delegate: prisma.dailyRound, table: "DailyRound", orderBy: { roundDate: "desc" } },
   "bowel-records": { delegate: prisma.bowelRecord, table: "BowelRecord", orderBy: { time: "desc" } },
   "urine-records": { delegate: prisma.urineRecord, table: "UrineRecord", orderBy: { time: "desc" } },

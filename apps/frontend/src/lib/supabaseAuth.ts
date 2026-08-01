@@ -137,7 +137,7 @@ export async function deleteSupabaseUser(id: string): Promise<void> {
     headers: { Authorization: `Bearer ${serviceKey}` },
   }, serviceKey);
 }
-export async function enrollTotpFactor(accessToken: string, friendlyName = "LifeCare CMS") {
+export async function enrollTotpFactor(accessToken: string, friendlyName = "Senior Living Management System") {
   return authRequest("/factors", { method: "POST", headers: { Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ factor_type: "totp", friendly_name: friendlyName }) });
 }
 

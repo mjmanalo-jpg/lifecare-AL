@@ -987,7 +987,7 @@ Vitals:
   };
 
 
-  // Core LCMS Modules Aligned
+  // Core SLMS Modules Aligned
   if (tab === "records") {
     return <FamilyRelative />;
   }

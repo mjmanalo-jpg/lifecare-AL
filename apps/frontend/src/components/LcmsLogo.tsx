@@ -54,10 +54,10 @@ export default function LcmsLogo({ className = "h-8 w-auto", iconOnly = false }:
       {!iconOnly && (
         <div className="flex flex-col">
           <span className="text-xl font-black tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent leading-none">
-            LCMS
+            SLMS
           </span>
           <span className="text-[9px] font-bold text-gray-500 dark:text-gray-400 tracking-wider uppercase mt-1">
-            LifeCare CMS
+            Senior Living Management System
           </span>
         </div>
       )}

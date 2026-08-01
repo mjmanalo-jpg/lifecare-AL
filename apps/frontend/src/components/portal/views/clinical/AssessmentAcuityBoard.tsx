@@ -289,7 +289,7 @@ function AssessmentForm({ clinicianName, clinicianId, communityId, residentId, o
         hydrationScore: scores.hydration, skinIntegrityScore: scores.skinIntegrity, socialEngagementScore: scores.socialEngagement,
         totalRawScore: c.total, dimensionCount: 9, maxPossibleScore: 45,
         assessedById: clinicianId || null, assessedByName: clinicianName,
-        assessmentTool: "LCMS 9-Dimension Acuity", notes: notes || null, completedAt: new Date().toISOString(),
+        assessmentTool: "SLMS 9-Dimension Acuity", notes: notes || null, completedAt: new Date().toISOString(),
       });
       const assessmentId = res?.data?.id;
       if (!assessmentId) throw new Error("Assessment did not return an id");

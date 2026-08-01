@@ -48,6 +48,7 @@ interface VisionAnalysis {
   confused: boolean;    // sustained disoriented/agitated affect
   alert: boolean;
   alertReason: string | null;
+  fallConfidence?: number; // 0..1 — how sure the fall detector is (geometry + drop + stillness)
   summary: string;
   objects: Array<{ type: string; thought: string; risk: "low" | "medium" | "high" }>;
 }
@@ -216,6 +217,12 @@ const RAPID_DROP_WINDOW_MS = 2000; // a drop counts toward a fall if it was this
 // "active"). No rapid drop required.
 const LYING_CONFIRM_MS = 1000;
 const CLEAR_CONFIRM_MS = 1500;
+// A confirmed fall (that auto-escalates) needs the body DOWN and STILL this long —
+// borrowed from the "sustained fall" idea, it filters out floor exercises / rolling.
+const STILL_CONFIRM_MS = 2500;
+// Never raise more than one automatic escalation per this window for the same camera.
+const FALL_ESCALATION_DEBOUNCE_MS = 5 * 60_000;
+const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
 // ── Preventive pre-fall risk ────────────────────────────────────────────────
 // Warn staff BEFORE a fall when a resident shows agitation/startle or a near-fall
@@ -460,6 +467,8 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   const fallStartRef  = useRef<number | null>(null); // when the horizontal (fallen) posture first began — for auto-fall persistence
   const fallClearStartRef = useRef<number | null>(null); // when the non-fallen posture first began — for auto-fall clearing
   const selfFallenRef = useRef(false);               // internal latch so the component fires its own EMERGENCY even when no parent controls `isFallen`
+  const fallConfidenceRef = useRef(0);               // live 0..1 fall confidence from pose geometry
+  const lastFallEscalationRef = useRef(0);           // debounce for auto-raised escalations
   const startRef      = useRef<number>(0);
 
   useEffect(() => {
@@ -517,6 +526,35 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       });
     } catch { /* non-critical — ignore save errors */ }
   }, [residentId, residentName, residentRoom, cameraMode, aiVitals.heartRate, aiVitals.respirationRate, aiVitals.temperature, aiVitals.oxygen, bpEstimate?.systolicBP, bpEstimate?.diastolicBP]);
+
+  // Auto-escalation — when a fall is CONFIRMED, raise an EMERGENCY SBAR escalation so
+  // the clinical team is paged immediately, independent of any parent wiring. Debounced.
+  const raiseFallEscalation = useCallback(async (confidence: number) => {
+    if (!residentId) return; // need a resident to route the escalation to
+    const now = Date.now();
+    if (now - lastFallEscalationRef.current < FALL_ESCALATION_DEBOUNCE_MS) return;
+    lastFallEscalationRef.current = now;
+    const who = `${residentName || "Resident"}${residentRoom ? ` (Room ${residentRoom})` : ""}`;
+    try {
+      await fetch("/api/db/escalations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          residentId,
+          situation: `Automated fall detection — ${who} appears to have fallen and is on the floor (confidence ${Math.round(confidence * 100)}%).`,
+          background: "Detected on-device by camera vision (pose + motion): the resident went horizontal on the floor and stayed still through the confirmation window.",
+          assessment: "Possible fall with risk of injury — needs an immediate in-person check.",
+          recommendation: "Dispatch a caregiver/nurse to the room now to assess the resident and take vitals.",
+          priority: "EMERGENCY",
+          status: "OPEN",
+          raisedBy: "Automated Fall Detection",
+          raisedByRole: "SYSTEM",
+          assignedToRole: "NURSE",
+        }),
+      });
+    } catch { /* non-critical — the on-screen EMERGENCY + fall log still fire */ }
+  }, [residentId, residentName, residentRoom]);
 
   // Wave detection - separate left and right history for accuracy
   const lWristHistRef = useRef<number[]>([]);
@@ -973,11 +1011,12 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         }
       }
 
-      if (isSideways || isHorizontalShape) return true;
+      if (isSideways || isHorizontalShape) { fallConfidenceRef.current = 0.55; return true; }
+      fallConfidenceRef.current = 0;
       return false;
     }
-    
-    if (!hipVisible || !shlVisible) return false;
+
+    if (!hipVisible || !shlVisible) { fallConfidenceRef.current = 0; return false; }
     
     const hipY = (lh && (lh.visibility??0) > 0.45 && rh && (rh.visibility??0) > 0.45) 
       ? (lh.y+rh.y)/2 
@@ -1002,12 +1041,21 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     const dy = Math.abs(shlY - hipY);
     const torsoHorizontal = dx > dy * 1.5;         // body clearly horizontal (lying), not upright
     const onFloor = hipY > 0.55 && shlY > 0.55;    // body is low in the frame (on the ground)
-    
+
     // Also guard head position if nose is visible
     const nose = lms[0];
     const noseLow = (nose && (nose.visibility ?? 0) > 0.45) ? nose.y > 0.50 : true;
 
-    return torsoHorizontal && onFloor && noseLow;
+    const fallen = torsoHorizontal && onFloor && noseLow;
+    // Confidence blends torso horizontality (aspect ratio), how low the body sits, and
+    // head position. Motion (rapid drop) + stillness are layered on at the firing site.
+    const torsoScore = clamp01((dx / (dy + 1e-4) - 1) / 1.5);
+    const floorScore = clamp01(((hipY + shlY) / 2 - 0.55) / 0.35);
+    const noseScore = noseLow ? 1 : 0.4;
+    fallConfidenceRef.current = fallen
+      ? Math.max(0.5, clamp01(0.45 * torsoScore + 0.35 * floorScore + 0.2 * noseScore))
+      : 0;
+    return fallen;
   }, []);
 
   // ── AI Vision vision (called every ~2000ms from inference loop) ───────────────
@@ -1524,22 +1572,31 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
 
         if (!selfFallenRef.current) {
           const rapidRecent = now - rapidDropTimeRef.current < RAPID_DROP_WINDOW_MS;
+          const stillMs = now - stillSinceRef.current;
+          // Final confidence = pose geometry + a bump for a rapid drop + a bump for
+          // sustained stillness. Stored on the analysis so the log/escalation carry it.
+          let fallConf = fallConfidenceRef.current;
+          if (rapidRecent) fallConf = Math.min(1, fallConf + 0.2);
+          fallConf = Math.min(1, fallConf + Math.min(0.2, (stillMs / STILL_CONFIRM_MS) * 0.2));
+
+          const confirmFall = () => {
+            fallStartRef.current = null;
+            selfFallenRef.current = true;
+            setSelfFallen(true);
+            analysisRef.current = { ...analysisRef.current, fallConfidence: Math.round(fallConf * 100) / 100 };
+            onFallTriggered?.(analysisRef.current);
+            saveMonitoringLog("FALL_DETECTION", analysisRef.current);
+            void raiseFallEscalation(fallConf);
+          };
+
           if (poseFallenRef.current && rapidRecent) {
             // Fast fall: horizontal pose right after a rapid drop → fire instantly.
-            fallStartRef.current = null;
-            selfFallenRef.current = true;
-            setSelfFallen(true);
-            onFallTriggered?.(analysisRef.current);
-            saveMonitoringLog("FALL_DETECTION", analysisRef.current);
+            confirmFall();
           } else if (fallStartRef.current == null) {
             fallStartRef.current = now;
-          } else if (now - fallStartRef.current > LYING_CONFIRM_MS) {
-            // Confirmed lying on the floor
-            fallStartRef.current = null;
-            selfFallenRef.current = true;
-            setSelfFallen(true);
-            onFallTriggered?.(analysisRef.current);
-            saveMonitoringLog("FALL_DETECTION", analysisRef.current);
+          } else if (now - fallStartRef.current > LYING_CONFIRM_MS && stillMs > STILL_CONFIRM_MS) {
+            // Confirmed: horizontal on the floor AND still for the confirmation window.
+            confirmFall();
           }
         } else {
           // If we are already in selfFallen state, reset the fall start timer

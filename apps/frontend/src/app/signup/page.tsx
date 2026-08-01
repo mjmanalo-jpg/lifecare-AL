@@ -179,7 +179,7 @@ export default function SignupPage() {
 
             <h1 className="text-4xl font-extrabold tracking-tight leading-tight mb-4">
               Launch your facility <br />
-              <span className="font-light" style={{ color: accent }}>on LifeCare CMS.</span>
+              <span className="font-light" style={{ color: accent }}>on Senior Living Management System.</span>
             </h1>
             <p className="text-zinc-400 text-sm font-light mb-8 max-w-md">
               Create your organization in seconds — no invitation required. Your workspace, first community, and a 30-day trial are set up instantly.
@@ -219,7 +219,7 @@ export default function SignupPage() {
           </div>
 
           <div className="relative z-10 text-[11px] text-zinc-500 border-t border-white/5 pt-4 text-left">
-            © 2026 LifeCare CMS. Connected Care. Better Outcomes.
+            © 2026 Senior Living Management System. Connected Care. Better Outcomes.
           </div>
         </div>
 

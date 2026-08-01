@@ -26,7 +26,7 @@ export const DEFAULT_ASSISTANT_CONFIG: AssistantConfig = {
   name: "Sunny",
   tone: "friendly",
   greeting:
-    "Hi there! I'm Sunny, your LifeCare CMS (LCMS) companion. How are you feeling today? " +
+    "Hi there! I'm Sunny, your Senior Living Management System (SLMS) companion. How are you feeling today? " +
     "You can talk to me with the mic or ask about your schedule, meals, or vitals.",
   instructions: "",
   useEmoji: true,

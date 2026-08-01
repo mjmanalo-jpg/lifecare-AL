@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       take: 2,
       include: { organization: { include: { communities: { where: { isActive: true }, orderBy: { createdAt: "asc" }, take: 1 } } }, community: true },
     });
-    if (!invitations.length) return NextResponse.json({ error: "No pending LCMS invitation matches this email" }, { status: 404 });
+    if (!invitations.length) return NextResponse.json({ error: "No pending SLMS invitation matches this email" }, { status: 404 });
     if (invitations.length > 1) return NextResponse.json({ error: "Multiple invitations are pending. Open the tenant-specific invitation link." }, { status: 409 });
     const invitation = invitations[0];
     if (invitation.organization.status !== "ACTIVE") return NextResponse.json({ error: "Organization is not active" }, { status: 403 });

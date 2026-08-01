@@ -53,9 +53,9 @@ function SetupPasswordForm() {
         <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
           {complete ? <CheckCircle2 className="h-7 w-7 text-emerald-600" /> : <ShieldCheck className="h-7 w-7" />}
         </div>
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600">LCMS secure onboarding</p>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600">SLMS secure onboarding</p>
         <h1 className="mt-2 text-2xl font-black">Create your account password</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-500">Your invitation verified your email. Set the password you will use for future LCMS sign-ins.</p>
+        <p className="mt-2 text-sm leading-6 text-slate-500">Your invitation verified your email. Set the password you will use for future SLMS sign-ins.</p>
 
         <form onSubmit={submit} className="mt-7 space-y-4">
           <label className="block text-sm font-semibold">

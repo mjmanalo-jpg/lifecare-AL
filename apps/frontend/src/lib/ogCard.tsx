@@ -6,9 +6,9 @@ import { ImageResponse } from "next/og";
 // can't live here.
 
 export const OG_SIZE = { width: 1200, height: 630 };
-export const OG_ALT = "LifeCare CMS (LCMS) — Real-time Assisted Living Management";
+export const OG_ALT = "Senior Living Management System (SLMS) — Real-time Assisted Living Management";
 
-// LCMS heart mark (matches components/LcmsLogo) as an inline SVG data URI.
+// SLMS heart mark (matches components/LcmsLogo) as an inline SVG data URI.
 const LOGO = `data:image/svg+xml;utf8,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
     <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
@@ -38,10 +38,13 @@ export function renderOgCard(): ImageResponse {
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={LOGO} width={188} height={188} alt="" style={{ marginBottom: 30 }} />
-        <div style={{ fontSize: 76, fontWeight: 800, letterSpacing: -2, display: "flex" }}>
-          LifeCare&nbsp;CMS
+        <div style={{ fontSize: 92, fontWeight: 800, letterSpacing: 4, display: "flex" }}>
+          SLMS
         </div>
-        <div style={{ fontSize: 33, marginTop: 10, color: "#9DC0F0", display: "flex" }}>
+        <div style={{ fontSize: 36, marginTop: 8, color: "#C7DBF5", display: "flex" }}>
+          Senior Living Management System
+        </div>
+        <div style={{ fontSize: 24, marginTop: 6, color: "#8FA9CC", display: "flex" }}>
           Real-time Assisted Living Management
         </div>
         <div

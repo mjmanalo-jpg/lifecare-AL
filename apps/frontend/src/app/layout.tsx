@@ -8,8 +8,8 @@ import { GlobalConfirmDialog } from "@/components/ui/global-confirm";
 const inter = Inter({ subsets: ["latin"] });
 
 const SITE_URL = "https://assisted-living.resoluteaiph.com";
-const SITE_TITLE = "LifeCare CMS (LCMS) | Real-time Assisted Living Management";
-const SITE_DESC = "Next-Generation LifeCare CMS (LCMS) Person-Centered Care Platform";
+const SITE_TITLE = "Senior Living Management System (SLMS) | Real-time Assisted Living Management";
+const SITE_DESC = "Next-Generation Senior Living Management System (SLMS) Person-Centered Care Platform";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: SITE_URL,
-    siteName: "LifeCare CMS (LCMS)",
+    siteName: "Senior Living Management System (SLMS)",
     title: SITE_TITLE,
     description: SITE_DESC,
   },

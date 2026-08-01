@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
   if (!session || !accessToken) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const body = await request.json().catch(() => ({}));
-    const friendlyName = String(body.friendlyName || "LifeCare CMS");
+    const friendlyName = String(body.friendlyName || "Senior Living Management System");
     const identity = await getSupabaseIdentity(accessToken);
     const existingFactors = (identity.factors || []).filter((factor) => factor.factor_type === "totp");
     const verifiedFactor = existingFactors.find((factor) => factor.status === "verified");

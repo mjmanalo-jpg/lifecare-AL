@@ -177,7 +177,7 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   dietorders: "Diet & Nutrition Orders",
   kitchen: "Kitchen — Cook List",
   dailyrounds: "Daily Rounds — Bedside Documentation",
-  featurematrix: "LCMS Feature Matrix & System Overview",
+  featurematrix: "SLMS Feature Matrix & System Overview",
   workspaces: "Customer Workspaces",
   plans: "Plans & Entitlements",
   usage: "Usage & Capacity",
@@ -263,15 +263,15 @@ export const ROLES: Record<Role, RoleDetails> = {
     footerText: "Super Admin Portal",
     sidebarLinks: [
       { name: "Reporting & Care Intelligence", icon: Grid, route: "/superadmin/dashboard" },
-      { name: "LCMS Feature Matrix", icon: ShieldCheck, route: "/superadmin/featurematrix" },
+      { name: "SLMS Feature Matrix", icon: ShieldCheck, route: "/superadmin/featurematrix" },
       { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/superadmin/dailyrounds" },
       { name: "Camera Activity Log", icon: Activity, route: "/superadmin/cameralogs" },
-      // "Portal Matrix" is merged into "LCMS Feature Matrix" as its Access Control tab.
+      // "Portal Matrix" is merged into "SLMS Feature Matrix" as its Access Control tab.
       { name: "Admissions & Registration", icon: UserPlus, route: "/superadmin/admissions" },
       { name: "Staff Registry", icon: Users, route: "/superadmin/staff" },
       { name: "AI Assistant", icon: Sparkles, route: "/superadmin/assistant" },
       { name: "Landing Studio", icon: Palette, route: "/superadmin/appearance" },
-      // Core LCMS Modules Aligned
+      // Core SLMS Modules Aligned
       { name: "Resident Profile & Care Record", icon: ShieldCheck, route: "/superadmin/records" },
       { name: "Assessment & Level of Care", icon: ClipboardList, route: "/superadmin/rounds" },
       { name: "Care Planning", icon: Target, route: "/superadmin/careplans" },
@@ -309,7 +309,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Orders & Prescriptions", icon: Pill, route: "/nurse/orders" },
       { name: "Incident Review", icon: AlertTriangle, route: "/nurse/incidents" },
       { name: "Secure Messages", icon: MessageSquare, route: "/nurse/messages" },
-      // Core LCMS Modules Aligned
+      // Core SLMS Modules Aligned
       { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/nurse/tasks" },
       { name: "Vaccinations", icon: Syringe, route: "/nurse/vaccinations" },
       { name: "Resident Documents", icon: FolderOpen, route: "/nurse/documents" },
@@ -339,7 +339,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Resident Profile & Care Record", icon: Users, route: "/caregiver/residents" },
       { name: "Time Clock", icon: Timer, route: "/caregiver/timeclock" },
       { name: "Shift Endorsement & Continuity", icon: Clock, route: "/caregiver/reports" },
-      // Core LCMS Modules Aligned
+      // Core SLMS Modules Aligned
       { name: "Assessment & Level of Care", icon: ClipboardList, route: "/caregiver/rounds" },
       { name: "Care Planning", icon: Target, route: "/caregiver/careplans" },
       { name: "Medication Management & Inventory", icon: Pill, route: "/caregiver/medications" },
@@ -370,7 +370,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Hotel Services", icon: ConciergeBell, route: "/family/services" },
       { name: "Community & Events", icon: CalendarDays, route: "/family/community" },
       { name: "Billing", icon: DollarSign, route: "/family/expenses" },
-      // Core LCMS Modules Aligned
+      // Core SLMS Modules Aligned
       { name: "Assessment & Level of Care", icon: ClipboardList, route: "/family/rounds" },
       { name: "Shift Endorsement & Continuity", icon: FileText, route: "/family/reports" },
       { name: "Medication Management & Inventory", icon: Pill, route: "/family/medications" },
@@ -409,7 +409,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Front Desk", icon: DoorOpen, route: "/facility_admin/frontdesk" },
       { name: "Unit Turnover", icon: Repeat, route: "/facility_admin/turnover" },
       { name: "Community & Events", icon: CalendarDays, route: "/facility_admin/community" },
-      // Core LCMS Modules Aligned
+      // Core SLMS Modules Aligned
       { name: "Assessment & Level of Care", icon: ClipboardList, route: "/facility_admin/rounds" },
       { name: "Care Planning", icon: Target, route: "/facility_admin/careplans" },
       { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/facility_admin/tasks" },
@@ -462,7 +462,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Clinical Coordination", icon: Siren, route: "/physician/escalations" },
       { name: "Clinical Notes", icon: PenTool, route: "/physician/notes" },
       { name: "Secure Messages", icon: MessageSquare, route: "/physician/messages" },
-      // Core LCMS Modules Aligned
+      // Core SLMS Modules Aligned
       { name: "Resident Profile & Care Record", icon: ShieldCheck, route: "/physician/records" },
       { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/physician/tasks" },
       { name: "Shift Endorsement & Continuity", icon: FileText, route: "/physician/reports" },
@@ -489,7 +489,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Transport", icon: Bus, route: "/resident/transport" },
       { name: "Hotel Services", icon: ConciergeBell, route: "/resident/services" },
       { name: "Community & Events", icon: CalendarDays, route: "/resident/community" },
-      // Core LCMS Modules Aligned
+      // Core SLMS Modules Aligned
       { name: "Resident Profile & Care Record", icon: ShieldCheck, route: "/resident/records" },
       { name: "Assessment & Level of Care", icon: ClipboardList, route: "/resident/rounds" },
       { name: "Care Planning", icon: Target, route: "/resident/careplans" },
@@ -517,7 +517,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Drivers", icon: Users, route: "/fleet_management/drivers" },
       { name: "Fleet Maintenance", icon: Wrench, route: "/fleet_management/maintenance" },
       { name: "Fuel & Odometer", icon: Fuel, route: "/fleet_management/fuel" },
-      // Core LCMS Modules Aligned
+      // Core SLMS Modules Aligned
       { name: "Resident Profile & Care Record", icon: ShieldCheck, route: "/fleet_management/records" },
       { name: "Assessment & Level of Care", icon: ClipboardList, route: "/fleet_management/rounds" },
       { name: "Care Planning", icon: Target, route: "/fleet_management/careplans" },
@@ -540,7 +540,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Trip Board", icon: Route, route: "/driver/trips" },
       { name: "Inspection Checklist", icon: ClipboardList, route: "/driver/checklist" },
       { name: "Fuel & Odometer", icon: Fuel, route: "/driver/fuel" },
-      // Core LCMS Modules Aligned
+      // Core SLMS Modules Aligned
       { name: "Resident Profile & Care Record", icon: ShieldCheck, route: "/driver/records" },
       { name: "Assessment & Level of Care", icon: ClipboardList, route: "/driver/rounds" },
       { name: "Care Planning", icon: Target, route: "/driver/careplans" },
@@ -620,7 +620,7 @@ export const ROLES: Record<Role, RoleDetails> = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Sidebar grouping — mirrors the LCMS Feature Matrix modules so the
+// Sidebar grouping — mirrors the SLMS Feature Matrix modules so the
 // nav renders as collapsible "group selections" instead of one long
 // flat list. SIDEBAR_GROUP_ORDER defines the order groups appear in.
 // ─────────────────────────────────────────────────────────────
@@ -738,7 +738,7 @@ const LINK_GROUP_MAP: Record<string, SidebarGroup> = {
   "Fuel & Odometer": "Fleet & Transport",
   "Inspection Checklist": "Fleet & Transport",
   // Administration (governance, system tools)
-  "LCMS Feature Matrix": "Administration",
+  "SLMS Feature Matrix": "Administration",
   "AI Assistant": "Administration",
   "Landing Studio": "Administration",
   "Portal Matrix": "Administration",
@@ -843,5 +843,5 @@ export const GLOBAL_FEATURES: Record<string, FeatureInfo> = {
   "Inventory Alerts": { name: "Inventory Alerts", icon: Bell, routeSegment: "inventory-alerts" },
   "Clinical Reports": { name: "Clinical Reports", icon: BarChart3, routeSegment: "clinicalreports" },
   "Daily Rounds (10-Area Bedside)": { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, routeSegment: "dailyrounds" },
-  "LCMS Feature Matrix": { name: "LCMS Feature Matrix", icon: ShieldCheck, routeSegment: "featurematrix" },
+  "SLMS Feature Matrix": { name: "SLMS Feature Matrix", icon: ShieldCheck, routeSegment: "featurematrix" },
 };

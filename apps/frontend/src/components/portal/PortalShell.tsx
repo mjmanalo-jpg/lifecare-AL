@@ -453,7 +453,7 @@ export default function PortalShell({
           </button>
         </div>
 
-        {/* Navigation Links — grouped by LCMS matrix module when expanded */}
+        {/* Navigation Links — grouped by SLMS matrix module when expanded */}
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto min-h-0 scrollbar-thin">
           {sidebarOpen
             ? (
@@ -841,7 +841,7 @@ export default function PortalShell({
             <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain p-4 scrollbar-thin sm:p-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <section className={`rounded-2xl border p-4 sm:p-5 md:col-span-2 ${theme === "dark" ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
-                  <div className="mb-4 flex items-center gap-3"><span className="rounded-xl bg-blue-100 p-2.5 text-blue-600"><UserIcon className="h-5 w-5" /></span><div><h2 className="font-bold">Profile</h2><p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Your name is shared across authorized LCMS workspaces.</p></div></div>
+                  <div className="mb-4 flex items-center gap-3"><span className="rounded-xl bg-blue-100 p-2.5 text-blue-600"><UserIcon className="h-5 w-5" /></span><div><h2 className="font-bold">Profile</h2><p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Your name is shared across authorized SLMS workspaces.</p></div></div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="text-sm font-medium">Full name<input value={profileName} onChange={(event) => setProfileName(event.target.value)} maxLength={100} className={`mt-2 w-full rounded-xl border px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${theme === "dark" ? "border-slate-700 bg-slate-950" : "border-slate-300 bg-white"}`} /></label>
                     <label className="text-sm font-medium">Email address<input value={profileEmail} disabled className={`mt-2 w-full rounded-xl border px-3 py-2.5 ${theme === "dark" ? "border-slate-700 bg-slate-800 text-slate-400" : "border-slate-200 bg-slate-100 text-slate-500"}`} /></label>

@@ -294,7 +294,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     return <CameraActivityLog />;
   }
 
-  // Core LCMS Modules Aligned
+  // Core SLMS Modules Aligned
   if (tab === "records") {
     return <FacilityResidents />;
   }

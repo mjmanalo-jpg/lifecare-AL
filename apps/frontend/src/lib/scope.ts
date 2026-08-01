@@ -197,7 +197,7 @@ function getDemoNotificationsForRole(role: string): Row[] {
       ];
     default:
       return [
-        { id: "def_n1", type: "SYSTEM_ALERT", title: "Welcome to LifeCare CMS", message: "Logged in successfully to your portal workspace.", isRead: false, createdAt: iso(1 * H) }
+        { id: "def_n1", type: "SYSTEM_ALERT", title: "Welcome to Senior Living Management System", message: "Logged in successfully to your portal workspace.", isRead: false, createdAt: iso(1 * H) }
       ];
   }
 }

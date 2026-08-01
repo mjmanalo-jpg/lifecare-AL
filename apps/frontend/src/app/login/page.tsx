@@ -192,7 +192,7 @@ export default function LoginPage() {
               <span className="font-light" style={{ color: accent }}>AI Assisted Efficiency.</span>
             </h1>
             <p className="text-zinc-400 text-sm font-light mb-8 max-w-md">
-              LifeCare CMS (LCMS) — the digital care operating system for assisted living facilities. Sign in with your portal credentials.
+              Senior Living Management System (SLMS) — the digital care operating system for assisted living facilities. Sign in with your portal credentials.
             </p>
 
             <div className="space-y-6">
@@ -229,7 +229,7 @@ export default function LoginPage() {
           </div>
 
           <div className="relative z-10 text-[11px] text-zinc-500 border-t border-white/5 pt-4 text-left">
-            © 2026 LifeCare CMS. Connected Care. Better Outcomes.
+            © 2026 Senior Living Management System. Connected Care. Better Outcomes.
           </div>
         </div>
 

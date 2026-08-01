@@ -261,7 +261,7 @@ export default function FeatureMatrixDashboard({ initialTab = "overview" }: { in
       <div>
         <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 mb-3">
           <ShieldCheck className="w-5 h-5 text-purple-600" />
-          LCMS Feature Matrix &amp; Access Control
+          SLMS Feature Matrix &amp; Access Control
         </h2>
         <div className="flex items-center gap-1 border-b border-gray-200 overflow-x-auto">
           <button
@@ -311,7 +311,7 @@ export default function FeatureMatrixDashboard({ initialTab = "overview" }: { in
         <div className="w-full bg-gray-100 rounded-full h-3">
           <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-3 rounded-full transition-all" style={{ width: `${(implementedFeatures / totalFeatures) * 100}%` }} />
         </div>
-        <p className="text-xs text-gray-500 mt-1">{implementedFeatures} of {totalFeatures} LCMS spec features fully implemented</p>
+        <p className="text-xs text-gray-500 mt-1">{implementedFeatures} of {totalFeatures} SLMS spec features fully implemented</p>
       </div>
 
       {/* Feature Categories */}

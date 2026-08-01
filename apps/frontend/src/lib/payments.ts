@@ -33,7 +33,7 @@ export type CreateCheckoutParams = {
 export async function createCheckout(params: CreateCheckoutParams): Promise<CheckoutResult> {
   const amount = params.amount;
   const currency = params.currency || "PHP";
-  const description = params.description || "LCMS Billing";
+  const description = params.description || "SLMS Billing";
   const referenceId = params.referenceId;
 
   const provider = (process.env.PAYMENT_PROVIDER || "").trim().toLowerCase();
@@ -95,7 +95,7 @@ async function createPayMongoCheckout(args: {
         attributes: {
           line_items: [
             {
-              name: description || "LCMS Billing",
+              name: description || "SLMS Billing",
               amount: Math.round(amount * 100),
               currency: currency || "PHP",
               quantity: 1,
@@ -146,7 +146,7 @@ async function createStripeCheckout(args: {
   form.set("line_items[0][quantity]", "1");
   form.set("line_items[0][price_data][currency]", (currency || "PHP").toLowerCase());
   form.set("line_items[0][price_data][unit_amount]", String(Math.round(amount * 100)));
-  form.set("line_items[0][price_data][product_data][name]", description || "LCMS Billing");
+  form.set("line_items[0][price_data][product_data][name]", description || "SLMS Billing");
   if (referenceId) form.set("client_reference_id", referenceId);
 
   const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {

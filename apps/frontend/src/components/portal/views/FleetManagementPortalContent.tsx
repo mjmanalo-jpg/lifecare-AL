@@ -41,7 +41,7 @@ export default function FleetManagementPortalContent({
       return <FleetVehicles />;
     case "drivers":
       return <FleetDrivers />;
-    // Core LCMS Modules Aligned
+    // Core SLMS Modules Aligned
     case "records":
       return <FacilityResidents />;
     case "rounds":
