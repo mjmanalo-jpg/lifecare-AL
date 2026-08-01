@@ -7,7 +7,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptTask } from "@/lib/adapters";
 import { updateRecord, deleteRecord } from "@/lib/api";
 import AddTaskModal, { SUPERVISOR_ROLES } from "./AddTaskModal";
-import { CLINICAL, StatusPill, MicroLabel, ClinicalHeader, ClinicalCard } from "../clinical/clinical-ui";
+import { StatusPill, MicroLabel, ClinicalHeader, ClinicalCard } from "../clinical/clinical-ui";
 
 type CaregiverTask = ReturnType<typeof adaptTask>;
 
@@ -293,7 +293,7 @@ export default function CaregiverTasks() {
   return (
     <div
       className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5"
-      style={{ background: CLINICAL.ground }}
+      style={{ background: "#FFFFFF" }}
     >
       {/* Header — only the head nurse / supervisor can assign tasks; caregivers cannot. */}
       <ClinicalHeader
