@@ -5,6 +5,7 @@ import {
   AlertTriangle, Search, X, Eye, CheckCircle, Trash2, RefreshCw,
   ArrowUpDown, Filter, LayoutGrid, Table2, Clock, User, MapPin,
   Shield, FileText, Flag, Calendar, ChevronDown, ChevronRight, Printer,
+  Plus, Upload, Loader2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -24,7 +25,7 @@ import {
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptIncident } from "@/lib/adapters";
-import { updateRecord, deleteRecord } from "@/lib/api";
+import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 
 type Incident = ReturnType<typeof adaptIncident>;
 type Severity = "critical" | "high" | "medium" | "low";
@@ -37,6 +38,8 @@ const SEVERITY_META: Record<Severity, { label: string; badge: string; color: str
 };
 
 const INCIDENT_TYPES = ["FALL", "MEDICATION_ERROR", "BEHAVIORAL", "MEDICAL_EMERGENCY", "SAFETY_HAZARD", "INFECTION", "OTHER"];
+const typeLabel = (t: string) => t === "MEDICAL_EMERGENCY" ? "Medical Emergency" : t === "MEDICATION_ERROR" ? "Medication Error" : t === "SAFETY_HAZARD" ? "Safety Hazard" : t.charAt(0) + t.slice(1).toLowerCase();
+const incInp = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none bg-white";
 
 function relTime(iso: string | null, nowTs: number): string {
   if (!iso) return "—";
@@ -71,6 +74,61 @@ export default function FacilityIncidents({ readOnly = false }: { readOnly?: boo
   const [perPage, setPerPage] = useState(10);
   const [sortBy, setSortBy] = useState<"date" | "severity">("date");
   const [sortAsc, setSortAsc] = useState(false);
+
+  // ── Report a new incident (available to reporting staff, incl. read-only roles) ──
+  const { data: residentRows } = useLiveQuery<Record<string, unknown>>("residents", { query: "take=300", tables: ["Resident"] });
+  const residentOpts = useMemo(
+    () => residentRows.map((r) => ({ id: String(r.id), name: `${String(r.firstName ?? "")} ${String(r.lastName ?? "")}`.trim() || "—", room: String(r.roomNumber ?? "—") })).sort((a, b) => a.name.localeCompare(b.name)),
+    [residentRows]
+  );
+  const emptyForm = { residentId: "", incidentType: "FALL", severity: "MINOR", incidentDate: new Date().toISOString().slice(0, 16), description: "", location: "", immediateActions: "", witnesses: "", photoUrl: "", followUpRequired: false, followUpNotes: "" };
+  const [creating, setCreating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const setF = (k: keyof typeof emptyForm, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
+
+  // Downscale + read the wound/scene photo to a data URI stored in photoUrl (no external storage needed).
+  const onPhoto = (file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onload = () => {
+        const maxW = 1200;
+        const scale = Math.min(1, maxW / img.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { setF("photoUrl", String(reader.result)); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        setF("photoUrl", canvas.toDataURL("image/jpeg", 0.7));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCreate = async () => {
+    if (!form.residentId || !form.description.trim()) { Swal.fire("Missing fields", "Resident and description are required.", "warning"); return; }
+    setSaving(true);
+    try {
+      await createRecord("incidents", {
+        residentId: form.residentId, incidentType: form.incidentType, severity: form.severity,
+        description: form.description.trim(), location: form.location.trim() || null,
+        immediateActions: form.immediateActions.trim() || null, witnesses: form.witnesses.trim() || null,
+        photoUrl: form.photoUrl || null, followUpRequired: form.followUpRequired,
+        followUpNotes: form.followUpRequired ? (form.followUpNotes.trim() || null) : null,
+        incidentDate: new Date(form.incidentDate).toISOString(),
+      });
+      await refetch();
+      setCreating(false);
+      setForm(emptyForm);
+      Swal.fire({ title: "Incident reported", text: "Severe & critical incidents auto-alert the Care Manager.", icon: "success", timer: 1800, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: "Failed", text: err instanceof Error ? err.message : "Could not save the incident.", icon: "error" });
+    } finally { setSaving(false); }
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -205,9 +263,14 @@ export default function FacilityIncidents({ readOnly = false }: { readOnly?: boo
           </h1>
           <p className="text-gray-600 text-sm">Facility-wide incident tracking, management, and analytics</p>
         </div>
-        <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium self-start">
-          <RefreshCw className="w-4 h-4" /> Refresh
-        </button>
+        <div className="flex items-center gap-2 self-start">
+          <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
+            <RefreshCw className="w-4 h-4" /> Refresh
+          </button>
+          <button onClick={() => { setForm(emptyForm); setCreating(true); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition text-sm font-semibold shadow">
+            <Plus className="w-4 h-4" /> Report Incident
+          </button>
+        </div>
       </div>
 
       {/* Stat Boxes */}
@@ -545,6 +608,91 @@ export default function FacilityIncidents({ readOnly = false }: { readOnly?: boo
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Report Incident modal */}
+      {creating && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-red-500 to-red-600 text-white p-5 flex items-center justify-between z-10">
+              <h2 className="text-xl font-bold flex items-center gap-2"><AlertTriangle className="w-6 h-6" /> Report Incident</h2>
+              <button onClick={() => setCreating(false)} className="p-2 hover:bg-white/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Resident <span className="text-red-500">*</span></label>
+                  <select value={form.residentId} onChange={e => setF("residentId", e.target.value)} className={incInp}>
+                    <option value="">Select resident…</option>
+                    {residentOpts.map(r => <option key={r.id} value={r.id}>{r.name} — Room {r.room}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Incident Type <span className="text-red-500">*</span></label>
+                  <select value={form.incidentType} onChange={e => setF("incidentType", e.target.value)} className={incInp}>
+                    {INCIDENT_TYPES.map(t => <option key={t} value={t}>{typeLabel(t)}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Severity <span className="text-red-500">*</span></label>
+                  <select value={form.severity} onChange={e => setF("severity", e.target.value)} className={incInp}>
+                    {["MINOR", "MODERATE", "SEVERE", "CRITICAL"].map(sv => <option key={sv} value={sv}>{sv.charAt(0) + sv.slice(1).toLowerCase()}</option>)}
+                  </select>
+                  <p className="text-[11px] text-gray-500 mt-1">Severe &amp; Critical auto-alert the Care Manager.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Date &amp; Time</label>
+                  <input type="datetime-local" value={form.incidentDate} onChange={e => setF("incidentDate", e.target.value)} className={incInp} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Description <span className="text-red-500">*</span></label>
+                <textarea value={form.description} onChange={e => setF("description", e.target.value)} rows={3} placeholder="What happened?" className={incInp} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Location</label>
+                  <input value={form.location} onChange={e => setF("location", e.target.value)} placeholder="e.g. Room 204 bathroom" className={incInp} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Witnesses</label>
+                  <input value={form.witnesses} onChange={e => setF("witnesses", e.target.value)} placeholder="Names of any witnesses" className={incInp} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Immediate Actions Taken</label>
+                <textarea value={form.immediateActions} onChange={e => setF("immediateActions", e.target.value)} rows={2} placeholder="Actions taken right away…" className={incInp} />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Wound / Scene Photo</label>
+                <div className="flex items-center gap-3">
+                  <label className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 cursor-pointer">
+                    <Upload className="w-4 h-4" /> Upload photo
+                    <input type="file" accept="image/*" className="hidden" onChange={e => onPhoto(e.target.files?.[0])} />
+                  </label>
+                  {form.photoUrl && (
+                    <div className="flex items-center gap-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={form.photoUrl} alt="incident" className="h-12 w-12 object-cover rounded border border-gray-200" />
+                      <button type="button" onClick={() => setF("photoUrl", "")} className="text-xs text-red-600 hover:underline">Remove</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={form.followUpRequired} onChange={e => setF("followUpRequired", e.target.checked)} className="w-4 h-4 rounded" />
+                <span className="text-sm font-semibold text-gray-700">Follow-up required</span>
+              </label>
+              {form.followUpRequired && <textarea value={form.followUpNotes} onChange={e => setF("followUpNotes", e.target.value)} rows={2} placeholder="Follow-up notes…" className={incInp} />}
+            </div>
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+              <button onClick={() => setCreating(false)} disabled={saving} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition text-sm disabled:opacity-50">Cancel</button>
+              <button onClick={() => void handleCreate()} disabled={saving} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm disabled:opacity-50">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} {saving ? "Saving…" : "Submit Report"}
+              </button>
             </div>
           </div>
         </div>
