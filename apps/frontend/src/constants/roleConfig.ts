@@ -56,6 +56,7 @@ import {
   PieChart,
   TrendingDown,
   ShoppingCart,
+  Camera,
 } from "lucide-react";
 
 export type Role =
@@ -81,6 +82,8 @@ export interface SidebarLink {
   name: string;
   icon: React.ComponentType<{ className?: string }>;
   route: string;
+  /** Optional per-link sidebar group override (wins over the name-based map). */
+  group?: SidebarGroup;
 }
 
 export interface RoleDetails {
@@ -294,9 +297,9 @@ export const ROLES: Record<Role, RoleDetails> = {
     footerText: "Nurse Clinical Portal",
     sidebarLinks: [
       { name: "Reporting & Care Intelligence", icon: Grid, route: "/nurse/dashboard" },
-      { name: "Task Assignment", icon: ClipboardList, route: "/nurse/taskboard" },
-      { name: "Camera Activity Log", icon: Activity, route: "/nurse/cameralogs" },
-      { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/nurse/dailyrounds" },
+      { name: "Task Assignment", icon: ClipboardList, route: "/nurse/taskboard", group: "Clinical Monitoring" },
+      { name: "Camera Activity Log", icon: Camera, route: "/nurse/cameralogs", group: "Clinical Monitoring" },
+      { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/nurse/dailyrounds", group: "Clinical Monitoring" },
       { name: "Assessment & Level of Care", icon: ClipboardList, route: "/nurse/rounds" },
       { name: "Resident Profile & Care Record", icon: ShieldCheck, route: "/nurse/records" },
       { name: "Medication Management & Inventory", icon: Pill, route: "/nurse/medications" },
@@ -310,7 +313,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/nurse/tasks" },
       { name: "Vaccinations", icon: Syringe, route: "/nurse/vaccinations" },
       { name: "Resident Documents", icon: FolderOpen, route: "/nurse/documents" },
-      { name: "Medication Administration Record", icon: Pill, route: "/nurse/mar" },
+      { name: "Medication Administration Record", icon: Pill, route: "/nurse/mar", group: "Clinical Monitoring" },
       { name: "Follow-up Tracker", icon: CalendarCheck, route: "/nurse/followups" },
       { name: "Audit Log", icon: Shield, route: "/nurse/auditlog" },
       { name: "Clinical Reports", icon: BarChart3, route: "/nurse/clinicalreports" },
@@ -326,8 +329,10 @@ export const ROLES: Record<Role, RoleDetails> = {
     footerText: "Caregiver Shift Portal",
     sidebarLinks: [
       { name: "Reporting & Care Intelligence", icon: Grid, route: "/caregiver/dashboard" },
-      { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/caregiver/dailyrounds" },
-      { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/caregiver/tasks" },
+      { name: "Camera Activity Log", icon: Camera, route: "/caregiver/cameralogs", group: "Clinical Monitoring" },
+      { name: "Task Assignment", icon: ClipboardList, route: "/caregiver/taskboard", group: "Clinical Monitoring" },
+      { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/caregiver/dailyrounds", group: "Clinical Monitoring" },
+      { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/caregiver/documentation" },
       { name: "Care Team", icon: Stethoscope, route: "/caregiver/careteam" },
       { name: "Call Bells", icon: BellRing, route: "/caregiver/callbells" },
       { name: "Clinical Coordination", icon: Siren, route: "/caregiver/escalations" },
@@ -340,7 +345,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Medication Management & Inventory", icon: Pill, route: "/caregiver/medications" },
       { name: "Vaccinations", icon: Syringe, route: "/caregiver/vaccinations" },
       { name: "Resident Documents", icon: FolderOpen, route: "/caregiver/documents" },
-      { name: "Medication Administration Record", icon: Pill, route: "/caregiver/mar" },
+      { name: "Medication Administration Record", icon: Pill, route: "/caregiver/mar", group: "Clinical Monitoring" },
       { name: "Follow-up Tracker", icon: CalendarCheck, route: "/caregiver/followups" },
     ],
   },
@@ -621,6 +626,7 @@ export const ROLES: Record<Role, RoleDetails> = {
 // ─────────────────────────────────────────────────────────────
 export const SIDEBAR_GROUP_ORDER = [
   "Overview",
+  "Clinical Monitoring",
   "Resident Care",
   "Medication",
   "Coordination & Comms",
@@ -752,7 +758,7 @@ export const groupSidebarLinks = (
 ): { group: SidebarGroup; links: SidebarLink[] }[] => {
   const buckets = new Map<SidebarGroup, SidebarLink[]>();
   for (const link of links) {
-    const g = getSidebarGroup(link.name);
+    const g = link.group ?? getSidebarGroup(link.name);
     const bucket = buckets.get(g);
     if (bucket) bucket.push(link);
     else buckets.set(g, [link]);

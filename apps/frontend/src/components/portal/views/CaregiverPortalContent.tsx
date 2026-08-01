@@ -8,6 +8,7 @@ import CaregiverTimeClock from "@/components/portal/views/caregiver/CaregiverTim
 import CaregiverReports from "@/components/portal/views/caregiver/CaregiverReports";
 import CaregiverCareTeam from "@/components/portal/views/caregiver/CaregiverCareTeam";
 import CaregiverMonitoring from "@/components/portal/views/caregiver/CaregiverMonitoring";
+import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
 import PhysicianCarePlans from "@/components/portal/views/physician/PhysicianCarePlans";
 import NurseMedications from "@/components/portal/views/NurseMedications";
@@ -33,7 +34,10 @@ interface CaregiverPortalContentProps {
 export default function CaregiverPortalContent({ tab }: CaregiverPortalContentProps) {
   switch (tab) {
     case "tasks":
+    case "taskboard":
       return <CaregiverTasks />;
+    case "cameralogs":
+      return <CameraActivityLog />;
     case "dailyrounds":
       return <DailyRoundsBoard clinicianRole="CAREGIVER" />;
     case "callbells":

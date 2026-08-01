@@ -7,9 +7,14 @@ import { GlobalConfirmDialog } from "@/components/ui/global-confirm";
 
 const inter = Inter({ subsets: ["latin"] });
 
+const SITE_URL = "https://assisted-living.resoluteaiph.com";
+const SITE_TITLE = "LifeCare CMS (LCMS) | Real-time Assisted Living Management";
+const SITE_DESC = "Next-Generation LifeCare CMS (LCMS) Person-Centered Care Platform";
+
 export const metadata: Metadata = {
-  title: "LifeCare CMS (LCMS) | Real-time Assisted Living Management",
-  description: "Next-Generation LifeCare CMS (LCMS) Person-Centered Care Platform",
+  metadataBase: new URL(SITE_URL),
+  title: SITE_TITLE,
+  description: SITE_DESC,
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
@@ -17,6 +22,18 @@ export const metadata: Metadata = {
       { url: "/icon.png", type: "image/png", sizes: "192x192" },
     ],
     apple: "/apple-icon.png",
+  },
+  openGraph: {
+    type: "website",
+    url: SITE_URL,
+    siteName: "LifeCare CMS (LCMS)",
+    title: SITE_TITLE,
+    description: SITE_DESC,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESC,
   },
 };
 

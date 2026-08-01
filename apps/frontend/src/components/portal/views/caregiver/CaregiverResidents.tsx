@@ -5,14 +5,16 @@ import { useRouter } from "next/navigation";
 import {
   Users, Search, X, Heart, Droplets, Wind, Thermometer, AlertTriangle,
   Pill, Activity, Clock, RefreshCw, ListChecks, BarChart3, HeartPulse,
-  Camera, ArrowUpRight,
+  Camera, ArrowUpRight, CheckCircle2, Phone, BellRing,
   type LucideIcon,
 } from "lucide-react";
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Legend, Tooltip, BarChart, Bar,
   XAxis, YAxis, CartesianGrid,
 } from "recharts";
+import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { updateRecord } from "@/lib/api";
 import { adaptResident, humanize } from "@/lib/adapters";
 
 /* ── Types ───────────────────────────────────────────────────────────── */
@@ -100,7 +102,7 @@ export default function CaregiverResidents() {
     "vitals",
     { query: "include=resident&take=500", tables: ["VitalsLog"] }
   );
-  const { data: callBellRows } = useLiveQuery<Record<string, unknown>>(
+  const { data: callBellRows, refetch: refetchCallBells } = useLiveQuery<Record<string, unknown>>(
     "call-bells",
     { query: "include=resident&take=300", tables: ["CallBell"] }
   );
@@ -121,6 +123,7 @@ export default function CaregiverResidents() {
   const [perPage, setPerPage] = useState(25);
   const [page, setPage] = useState(1);
   const [viewing, setViewing] = useState<ResidentVM | null>(null);
+  const [bellsViewing, setBellsViewing] = useState<ResidentVM | null>(null);
 
   // Index EAV vitals by residentId AND room (demo links by room, DB by id).
   const vitalIndex = useMemo(() => {
@@ -381,7 +384,21 @@ export default function CaregiverResidents() {
                         <td className="px-4 py-3 text-center text-gray-700">{r.meds.length}</td>
                         <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{relTime(r.lastCheckIn, nowTs)}</td>
                         <td className="px-4 py-3 text-right">
-                          <button onClick={() => setViewing(r)} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition">View</button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {(() => {
+                              const active = r.callBells.filter((cb) => cb.status !== "RESOLVED" && cb.status !== "CANCELLED").length;
+                              return r.callBells.length > 0 ? (
+                                <button
+                                  onClick={() => setBellsViewing(r)}
+                                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition ${active > 0 ? "bg-orange-500 text-white hover:bg-orange-600" : "bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200"}`}
+                                  title="Call bells"
+                                >
+                                  <BellRing className="w-3.5 h-3.5" /> Bells{active > 0 ? ` (${active})` : ""}
+                                </button>
+                              ) : null;
+                            })()}
+                            <button onClick={() => setViewing(r)} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition">View</button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -409,6 +426,109 @@ export default function CaregiverResidents() {
 
       {/* Detail modal */}
       {viewing && <ResidentModal r={viewing} nowTs={nowTs} onClose={() => setViewing(null)} />}
+
+      {/* Call Bells modal */}
+      {bellsViewing && <CallBellsModal r={bellsViewing} onClose={() => setBellsViewing(null)} refetchCallBells={refetchCallBells} />}
+    </div>
+  );
+}
+
+/* ── Call Bells modal — respond / resolve, mirrors the nurse Residents view ── */
+
+function CallBellsModal({ r, onClose, refetchCallBells }: { r: ResidentVM; onClose: () => void; refetchCallBells: () => void }) {
+  const handleRespond = async (bellId: string) => {
+    try {
+      await updateRecord("call-bells", bellId, { status: "RESPONDED", respondedAt: new Date().toISOString() });
+      refetchCallBells();
+      Swal.fire({ title: "Responded", text: "Call bell marked as responded", icon: "success", timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: "Error", text: err instanceof Error ? err.message : "Failed to respond", icon: "error" });
+    }
+  };
+
+  const handleResolve = async (bellId: string) => {
+    const result = await Swal.fire({
+      title: "Resolve Call Bell?",
+      input: "textarea",
+      inputLabel: "Resolution notes",
+      inputPlaceholder: "What was done...",
+      showCancelButton: true,
+      confirmButtonColor: "#10b981",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Resolve",
+    });
+    if (result.isConfirmed) {
+      try {
+        await updateRecord("call-bells", bellId, { status: "RESOLVED", resolvedAt: new Date().toISOString(), notes: result.value || "Resolved" });
+        refetchCallBells();
+        Swal.fire({ title: "Resolved", text: "Call bell marked as resolved", icon: "success", timer: 1500, showConfirmButton: false });
+      } catch (err) {
+        Swal.fire({ title: "Error", text: err instanceof Error ? err.message : "Failed to resolve", icon: "error" });
+      }
+    }
+  };
+
+  const bellStyle = (s: string) => (s === "PENDING" ? "bg-red-50 border-red-200" : s === "RESPONDED" ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200");
+  const pillStyle = (s: string) => (s === "PENDING" ? "bg-red-200 text-red-800" : s === "RESPONDED" ? "bg-yellow-200 text-yellow-800" : "bg-green-200 text-green-800");
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-gradient-to-r from-orange-400 to-orange-500 text-white p-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">Call Bells</h2>
+            <p className="text-orange-100">{r.name} • Room {r.room}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-orange-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {r.callBells.length > 0 ? (
+            <>
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4"><p className="text-xs text-red-700 font-semibold">PENDING</p><p className="text-2xl font-bold text-red-600 mt-1">{r.callBells.filter((cb) => cb.status === "PENDING").length}</p></div>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4"><p className="text-xs text-yellow-700 font-semibold">RESPONDING</p><p className="text-2xl font-bold text-yellow-600 mt-1">{r.callBells.filter((cb) => cb.status === "RESPONDED").length}</p></div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4"><p className="text-xs text-green-700 font-semibold">RESOLVED</p><p className="text-2xl font-bold text-green-600 mt-1">{r.callBells.filter((cb) => cb.status === "RESOLVED").length}</p></div>
+              </div>
+              <div className="space-y-3">
+                {r.callBells.map((bell) => (
+                  <div key={bell.id} className={`p-4 rounded-lg border ${bellStyle(bell.status)}`}>
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div>
+                        <h3 className="font-bold text-gray-900">{bell.reason || "Call bell"}</h3>
+                        {bell.createdAt && (
+                          // eslint-disable-next-line react-hooks/purity
+                          <p className="text-xs text-gray-600 mt-1">{Math.round((Date.now() - new Date(bell.createdAt).getTime()) / 60000)} min ago</p>
+                        )}
+                      </div>
+                      <span className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${pillStyle(bell.status)}`}>{bell.status}</span>
+                    </div>
+                    {bell.notes && <p className="text-xs text-gray-700 p-2 bg-white/50 rounded border border-gray-200 mb-3">📝 {bell.notes}</p>}
+                    {bell.status !== "RESOLVED" && bell.status !== "CANCELLED" && (
+                      <div className="flex gap-2 mt-3">
+                        {bell.status === "PENDING" && (
+                          <button onClick={() => void handleRespond(bell.id)} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-semibold rounded text-sm transition"><Clock className="w-4 h-4" /> Respond</button>
+                        )}
+                        <button onClick={() => void handleResolve(bell.id)} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded text-sm transition"><CheckCircle2 className="w-4 h-4" /> Resolve</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-12 text-gray-500">
+              <Phone className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-lg font-medium">No call bells</p>
+              <p className="text-sm">This resident has no active call bells</p>
+            </div>
+          )}
+        </div>
+
+        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end">
+          <button onClick={onClose} className="px-6 py-2 bg-gray-700 hover:bg-gray-800 text-white font-semibold rounded-lg transition">Close</button>
+        </div>
+      </div>
     </div>
   );
 }

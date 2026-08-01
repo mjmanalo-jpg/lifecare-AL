@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>LCMS Operator Manual &amp; Credentials</title><style>html,body{margin:0;padding:0}</style></head><body>
+<style>
+  :root{
+    --ground:#F6F8FB; --panel:#FFFFFF; --ink:#0F1B2D; --muted:#566577;
+    --line:#E3E9F0; --line-2:#EDF1F6;
+    --brand:#2563EB; --brand-ink:#1E40AF; --brand-soft:#EAF1FE;
+    --teal:#0E9488; --teal-soft:#E4F5F3;
+    --good:#16A34A; --good-soft:#E7F6EC; --warn:#B45309; --warn-soft:#FCF1E2; --crit:#DC2626; --crit-soft:#FCEBEB;
+    --mono:"SF Mono","Cascadia Code","JetBrains Mono",ui-monospace,"Consolas",monospace;
+    --sans:"SF Pro Text","Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  .doc{background:var(--ground);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;font-size:16px}
+  .doc h1,.doc h2,.doc h3,.doc h4{text-wrap:balance;line-height:1.2;letter-spacing:-.02em;margin:0}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+
+  /* Header band */
+  .masthead{background:linear-gradient(180deg,#0F1B2D 0%,#132741 100%);color:#fff;padding:44px 0 40px}
+  .masthead .wrap{display:flex;flex-direction:column;gap:14px}
+  .brandrow{display:flex;align-items:center;gap:12px}
+  .logo{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,#2563EB,#0E9488);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:19px}
+  .kicker{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#8FA6C4;font-weight:600}
+  .masthead h1{font-size:clamp(28px,4vw,42px);font-weight:800}
+  .masthead p{margin:0;color:#B9C7DB;max-width:64ch}
+  .metastrip{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .metastrip span{font-size:12.5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);padding:5px 11px;border-radius:999px;color:#DCE6F2}
+
+  /* Layout */
+  .layout{display:grid;grid-template-columns:232px 1fr;gap:40px;padding:40px 0 80px;align-items:start}
+  nav.toc{position:sticky;top:20px;font-size:14px;display:flex;flex-direction:column;gap:2px}
+  nav.toc .toc-h{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:14px 0 6px;padding-left:12px}
+  nav.toc a{color:#3A4A5E;text-decoration:none;padding:6px 12px;border-radius:8px;border-left:2px solid transparent;display:block;transition:background .12s,color .12s}
+  nav.toc a:hover{background:var(--brand-soft);color:var(--brand-ink)}
+  nav.toc a:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+  main{min-width:0}
+
+  section{margin-bottom:44px;scroll-margin-top:20px}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--brand);font-weight:700;margin-bottom:8px}
+  section>h2{font-size:26px;font-weight:800;margin-bottom:6px}
+  .lede{color:var(--muted);max-width:70ch;margin-bottom:22px}
+  h3.sub{font-size:18px;font-weight:700;margin:26px 0 10px}
+  p{margin:0 0 12px}
+  .doc a.inline{color:var(--brand-ink);text-decoration:underline;text-underline-offset:2px}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 24px;box-shadow:0 1px 2px rgba(15,27,45,.04)}
+  .grid{display:grid;gap:16px}
+  .cols-2{grid-template-columns:repeat(2,1fr)}
+  .cols-3{grid-template-columns:repeat(3,1fr)}
+
+  /* Callout */
+  .note{border-left:3px solid var(--brand);background:var(--brand-soft);border-radius:0 10px 10px 0;padding:13px 16px;margin:14px 0;font-size:14.5px;color:#25405f}
+  .note.warn{border-color:var(--warn);background:var(--warn-soft);color:#6b4310}
+  .note strong{color:inherit}
+
+  /* Credentials table */
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:720px}
+  thead th{text-align:left;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;padding:13px 16px;border-bottom:1px solid var(--line);background:#FBFCFE;position:sticky;top:0}
+  tbody td{padding:12px 16px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#FAFBFE}
+  .role{font-weight:700;color:var(--ink)}
+  .mono{font-family:var(--mono);font-size:12.8px;font-variant-numeric:tabular-nums}
+  .pw{font-family:var(--mono);font-size:12.8px;background:#0F1B2D;color:#CFE0FF;padding:3px 8px;border-radius:6px;white-space:nowrap}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;border:1px solid}
+  .chip.good{color:var(--good);background:var(--good-soft);border-color:#BfE6C9}
+  .chip.warn{color:var(--warn);background:var(--warn-soft);border-color:#E0CDA6}
+  .chip.crit{color:var(--crit);background:var(--crit-soft);border-color:#EFC4C4}
+
+  /* Portal cards */
+  .portal{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:0;overflow:hidden;display:flex;flex-direction:column}
+  .portal .top{display:flex;align-items:flex-start;gap:12px;padding:18px 20px 14px;border-bottom:1px solid var(--line-2)}
+  .pdot{width:34px;height:34px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff}
+  .portal h4{font-size:16.5px;font-weight:800}
+  .portal .who{font-size:12.5px;color:var(--muted);margin-top:1px}
+  .portal ul{margin:0;padding:14px 20px 18px;list-style:none;display:flex;flex-direction:column;gap:9px;font-size:13.6px}
+  .portal li{display:flex;gap:9px;color:#2c3a4c}
+  .portal li b{color:var(--ink);font-weight:700}
+  .portal li::before{content:"";width:6px;height:6px;border-radius:2px;background:var(--brand);margin-top:7px;flex:none}
+  .portal.teal li::before{background:var(--teal)}
+
+  /* Workflow steps */
+  ol.flow{list-style:none;counter-reset:s;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+  ol.flow li{counter-increment:s;display:grid;grid-template-columns:34px 1fr;gap:14px;align-items:start;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  ol.flow li::before{content:counter(s);width:30px;height:30px;border-radius:8px;background:var(--brand);color:#fff;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+  ol.flow b{color:var(--ink)}
+  ol.flow .path{font-family:var(--mono);font-size:12.5px;color:var(--brand-ink)}
+
+  .kbd{font-family:var(--mono);font-size:12px;background:#EEF2F7;border:1px solid #D8E0EA;border-bottom-width:2px;border-radius:5px;padding:1px 6px}
+  .footer{border-top:1px solid var(--line);color:var(--muted);font-size:13px;padding:26px 0 60px}
+  @media (max-width:920px){
+    .layout{grid-template-columns:1fr;gap:0}
+    nav.toc{display:none}
+    .cols-2,.cols-3{grid-template-columns:1fr}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+  /* Print / PDF */
+  @page{margin:14mm}
+  @media print{
+    html,body,.doc{background:#fff}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .wrap{max-width:none;padding:0 6mm}
+    .layout{grid-template-columns:1fr;gap:0;padding:14px 0 0}
+    nav.toc{display:none}
+    .masthead{padding:24px 0 20px}
+    .masthead h1{font-size:26px}
+    section{margin-bottom:22px;break-inside:auto}
+    section>h2{font-size:20px}
+    .card,.portal,ol.flow li,.tablewrap,.note{break-inside:avoid}
+    tbody tr{break-inside:avoid}
+    .cols-3{grid-template-columns:1fr 1fr}
+    .tablewrap{overflow:visible}
+    table{min-width:0;font-size:11.5px}
+    thead th,tbody td{padding:7px 9px}
+    .pw{font-size:11px}
+    a[href]{text-decoration:none;color:inherit}
+  }
+</style>
+
+<div class="doc">
+  <header class="masthead">
+    <div class="wrap">
+      <div class="brandrow"><div class="logo">L</div><div class="kicker">LifeCare CMS · Staff Handbook</div></div>
+      <h1>LCMS Operator Manual &amp; Access Credentials</h1>
+      <p>How to sign in, navigate every portal, and run the everyday workflows of the LifeCare CMS assisted-living platform — one platform, one resident record, connected care.</p>
+      <div class="metastrip"><span>15 staff logins</span><span>Shared password · GoldenHearth2026</span><span>Community: Golden Hearth Care</span><span>Updated Aug 2026</span></div>
+    </div>
+  </header>
+
+  <div class="wrap layout">
+    <nav class="toc" aria-label="Contents">
+      <div class="toc-h">Start</div>
+      <a href="#start">Getting started</a>
+      <a href="#creds">Login credentials</a>
+      <a href="#ui">Screen basics</a>
+      <div class="toc-h">Portals</div>
+      <a href="#admin">Admin &amp; oversight</a>
+      <a href="#clinical">Clinical team</a>
+      <a href="#residents">Family &amp; resident</a>
+      <a href="#ops">Operations &amp; services</a>
+      <div class="toc-h">Do it</div>
+      <a href="#flows">Key workflows</a>
+    </nav>
+
+    <main>
+      <!-- GETTING STARTED -->
+      <section id="start">
+        <div class="eyebrow">Getting started</div>
+        <h2>Signing in</h2>
+        <p class="lede">Every role uses the same sign-in screen. LCMS reads your role from your account and takes you straight to the right portal.</p>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3 class="sub" style="margin-top:0">Sign in</h3>
+            <p>Open <span class="mono">/login</span>, enter your <b>email</b> and <b>password</b>, and select <b>Sign In</b>. You land on your portal dashboard automatically.</p>
+            <p style="margin:0">Use the <b>sun / moon</b> button (top-right of the login card) to switch light and dark themes.</p>
+          </div>
+          <div class="card">
+            <h3 class="sub" style="margin-top:0">Every account here uses</h3>
+            <p>Password: <span class="pw">GoldenHearth2026</span></p>
+            <p style="margin:0">Change it anytime from the <b>profile menu → Change Password</b>. New staff can be added by an Admin from the Staff Registry and can sign in immediately.</p>
+          </div>
+        </div>
+        <div class="note"><strong>Base address.</strong> In development the app runs at <span class="mono">http://localhost:3001</span> — the paths below (e.g. <span class="mono">/nurse</span>) hang off that address. On your deployed site, use your own domain.</div>
+      </section>
+
+      <!-- CREDENTIALS -->
+      <section id="creds">
+        <div class="eyebrow">Access</div>
+        <h2>The 15 staff logins</h2>
+        <p class="lede">One representative account per role, Super Admin down to Maintenance. The Platform Admin (SaaS owner) account is intentionally excluded. All are active unless flagged.</p>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th>Role / Portal</th><th>Name</th><th>Email</th><th>Password</th><th>Opens</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="role">Super Admin</td><td>System Admin</td><td class="mono">admin@goldenhearth.com</td><td><span class="pw">GoldenHearth2026</span></td><td class="mono">/superadmin</td><td><span class="chip good">Active</span></td></tr>
+              <tr><td class="role">Facility Admin</td><td>Golden Hearth Facility Mgmt</td><td class="mono">facility.admin@goldenhearth.com</td><td><span class="pw">GoldenHearth2026</span></td><td class="mono">/facility_admin</td><td><span class="chip good">Active</span></td></tr>
+              <tr><td class="role">Billing &amp; Finance</td><td>Golden Hearth Billing</td><td class="mono">billing.admin@goldenhearth.com</td><td><span class="pw">GoldenHearth2026</span></td><td class="mono">/billing_admin</td><td><span class="chip good">Active</span></td></tr>
+              <tr><td class="role">Physician</td><td>Dr. Alan Reyes</td><td class="mono">alan.reyes@goldenhearth.com</td><td><span class="pw">GoldenHearth2026</span></td><td class="mono">/physician</td><td><span class="chip good">Active</span></td></tr>
+              <tr><td class="role">Head Nurse</td><td>Sarah Jenkins</td><td class="mono">sarah.jenkins@goldenhearth.com</td><td><span class="pw">GoldenHearth2026</span></td><td class="mono">/nurse</td><td><span class="chip good">Active</span></td></tr>
+              <tr><td class="role">Caregiver</td><td>Caleb Randall</td><td class="mono">caleb.randall@goldenhearth.com</td><td><span class="pw">GoldenHearth2026</span></td><td class="mono">/caregiver</td><td><span class="chip good">Active</span></td></tr>
+              <tr><td class="role">Family Sponsor</td><td>John Pendelton</td><td class="mono">john.pendelton@family.com</td><td><span class="pw">GoldenHearth2026</span></td><td class="mono">/family</td><td><span class="chip good">Active</span></td></tr>
+              <tr><td class="role">Resident</td><td>Arthur Pendelton</td><td class="mono">arthur.pendelton@resident.com</td><td><span class="pw">GoldenHearth2026</span></td><td class="mono">/resident</td><td><span class="chip good">Active</span></td></tr>
+              <tr><td class="role">Fleet Manager</td><td>Marcus Dela Cruz</td><td class="mono">fleet.manager@goldenhearth.com</td><td><span class="pw">GoldenHearth2026</span></td><td class="mono">/fleet_management</td><td><span class="chip good">Active</span></td></tr>
+              <tr><td class="role">Driver</td><td>James Miguel</td><td class="mono">james.miguel@goldenhearth.com</td><td><span class="pw">GoldenHearth2026</span></td><td class="mono">/driver</td><td><span class="chip good">Active</span></td></tr>
+              <tr><td class="role">Security</td><td>Ramon Bautista</td><td class="mono">security.guard@goldenhearth.com</td><td><span class="pw">GoldenHearth2026</span></td><td class="mono">/security</td><td><span class="chip good">Active</span></td></tr>
+              <tr><td class="role">Nutritionist</td><td>Facility Nutritionist</td><td class="mono">nutritionist@goldenhearth.com</td><td><span class="pw">GoldenHearth2026</span></td><td class="mono">/nutritionist</td><td><span class="chip good">Active</span></td></tr>
+              <tr><td class="role">Kitchen</td><td>Kitchen Staff</td><td class="mono">kitchen@goldenhearth.com</td><td><span class="pw">GoldenHearth2026</span></td><td class="mono">/kitchen</td><td><span class="chip good">Active</span></td></tr>
+              <tr><td class="role">Housekeeping</td><td>Housekeeping Staff</td><td class="mono">housekeeping@goldenhearth.com</td><td><span class="pw">GoldenHearth2026</span></td><td class="mono">/housekeeping</td><td><span class="chip good">Active</span></td></tr>
+              <tr><td class="role">Maintenance</td><td>Maintenance Staff</td><td class="mono">maintenance@goldenhearth.com</td><td><span class="pw">GoldenHearth2026</span></td><td class="mono">/maintenance</td><td><span class="chip good">Active</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note warn"><strong>Handle with care.</strong> These are shared demo credentials for a training environment. For a live facility, give each person their own login and a private password, then retire this shared password.</div>
+      </section>
+
+      <!-- SCREEN BASICS -->
+      <section id="ui">
+        <div class="eyebrow">Orientation</div>
+        <h2>Screen basics — the same controls everywhere</h2>
+        <p class="lede">Once you know these, every portal feels familiar. They behave identically across all 15 roles.</p>
+        <div class="grid cols-2">
+          <div class="card">
+            <h3 class="sub" style="margin-top:0">The left sidebar</h3>
+            <p>Your tools, organized into collapsible <b>groups</b> (Overview, Clinical Monitoring, Resident Care, Operations, and so on). Click a group heading to expand or collapse it; click any item to open it. The <span class="kbd">‹</span> button at the top collapses the whole sidebar to icons.</p>
+          </div>
+          <div class="card">
+            <h3 class="sub" style="margin-top:0">The top bar</h3>
+            <p><b>Company selector</b> (left) switches facility if you manage more than one. The <b>bell</b> shows your notifications — automated alerts land here. Your <b>profile menu</b> (right) holds Settings, Change Password and Log out.</p>
+          </div>
+          <div class="card">
+            <h3 class="sub" style="margin-top:0">Buttons &amp; confirmations</h3>
+            <p>Primary actions are the solid blue buttons (<b>Save</b>, <b>Create</b>, <b>Assign</b>). Anything destructive asks first in a pop-up with a red icon — <b>Confirm</b> or <b>Cancel</b>. After an action a small <b>toast</b> slides in bottom-right: green = done, red = something went wrong (with the reason).</p>
+          </div>
+          <div class="card">
+            <h3 class="sub" style="margin-top:0">Lists, search &amp; export</h3>
+            <p>Most screens have a <b>search box</b>, <b>filters</b> (priority, status, date range) and paging. Where a report exists, an <b>Export CSV</b> button downloads exactly what you're viewing.</p>
+          </div>
+        </div>
+        <div class="note"><strong>Automated alerts.</strong> LCMS watches the data and raises alerts on its own — abnormal vitals, missed medications, overdue tasks &amp; follow-ups, low stock, and weight loss — delivering them to the right team's notification bell. No one has to go looking.</div>
+      </section>
+
+      <!-- ADMIN -->
+      <section id="admin">
+        <div class="eyebrow">Portals · Admin &amp; oversight</div>
+        <h2>Running the facility</h2>
+        <p class="lede">Oversight, staffing, money, and governance.</p>
+        <div class="grid cols-2">
+          <article class="portal">
+            <div class="top"><div class="pdot" style="background:linear-gradient(135deg,#2563EB,#4F46E5)">S</div><div><h4>Super Admin</h4><div class="who">Whole-facility operations &amp; system control</div></div></div>
+            <ul>
+              <li><b>Reporting &amp; Care Intelligence</b> — facility dashboard, KPIs, trends.</li>
+              <li><b>LCMS Feature Matrix</b> — turn features on/off per role (access control).</li>
+              <li><b>Admissions &amp; Registration</b> — enroll a new resident via the step-by-step wizard.</li>
+              <li><b>Staff Registry</b> — add staff, approve/disapprove, edit records.</li>
+              <li><b>AI Assistant</b> &amp; <b>Landing Studio</b> — ask questions; customize the public landing page.</li>
+              <li><b>Audit Log</b> — every action, who did it and when.</li>
+            </ul>
+          </article>
+          <article class="portal">
+            <div class="top"><div class="pdot" style="background:linear-gradient(135deg,#3B82F6,#2563EB)">F</div><div><h4>Facility Admin</h4><div class="who">Day-to-day operations of one community</div></div></div>
+            <ul>
+              <li><b>Residents · Staff · Rooms · Occupancy</b> — the operational registers.</li>
+              <li><b>Incidents</b> &amp; <b>Clinical Coordination</b> — track and route issues.</li>
+              <li><b>Medication &amp; Inventory</b> and <b>Purchase Requests</b> — stock plus the restock workflow.</li>
+              <li><b>Resident Services · Maintenance · Concierge · Front Desk · Unit Turnover</b> — hospitality ops.</li>
+              <li><b>Reports</b> — incidents, staff, residents, with CSV export.</li>
+            </ul>
+          </article>
+          <article class="portal">
+            <div class="top"><div class="pdot" style="background:linear-gradient(135deg,#10B981,#0E9488)">B</div><div><h4>Billing &amp; Finance</h4><div class="who">The money hub — charges to receipts</div></div></div>
+            <ul>
+              <li><b>Transactions Ledger</b> — every charge by source; tick pending charges → <b>Generate Invoice</b>.</li>
+              <li><b>Receivables &amp; Aging</b> — what's owed, bucketed by age.</li>
+              <li><b>Revenue by Source</b> — collected vs outstanding per stream.</li>
+              <li><b>Invoice Generation</b> — <b>Mark Sent</b> notifies the resident &amp; family.</li>
+              <li><b>Payment Processing · Insurance · Receipts</b>; <b>Online Payment</b> is built but off until a provider is chosen.</li>
+            </ul>
+          </article>
+          <article class="portal teal">
+            <div class="top"><div class="pdot" style="background:linear-gradient(135deg,#0EA5A4,#0E7490)">R</div><div><h4>Security</h4><div class="who">Safety &amp; patrol</div></div></div>
+            <ul>
+              <li><b>Security Command</b> — shift overview.</li>
+              <li><b>Security &amp; Incident Log</b> — file and review incident reports.</li>
+              <li><b>Camera Activity Log</b> — review flagged camera events.</li>
+              <li><b>Time Clock</b> — clock in and out.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <!-- CLINICAL -->
+      <section id="clinical">
+        <div class="eyebrow">Portals · Clinical team</div>
+        <h2>Care &amp; monitoring</h2>
+        <p class="lede">Physician, nurse and caregiver share one resident record — everything they log is instantly visible to the others.</p>
+        <div class="grid cols-3">
+          <article class="portal teal">
+            <div class="top"><div class="pdot" style="background:linear-gradient(135deg,#14B8A6,#0E9488)">P</div><div><h4>Physician</h4><div class="who">Medical authority</div></div></div>
+            <ul>
+              <li><b>Medication Orders</b> — <b>Approve &amp; Sign</b>, Hold, or Discontinue.</li>
+              <li><b>Assessment (Case Review)</b> &amp; <b>Care Planning</b> directives.</li>
+              <li><b>Consults &amp; Referrals</b> — answer and co-sign.</li>
+              <li><b>Clinical Coordination</b> — respond to SBAR escalations.</li>
+              <li><b>Clinical Notes</b> &amp; <b>Secure Messages</b>.</li>
+            </ul>
+          </article>
+          <article class="portal teal">
+            <div class="top"><div class="pdot" style="background:linear-gradient(135deg,#EC4899,#DB2777)">N</div><div><h4>Head Nurse</h4><div class="who">Clinical care lead</div></div></div>
+            <ul>
+              <li><b>Clinical Monitoring</b> — Vitals Monitor, Task Assignment, Camera, Daily Rounds, MAR, together in one group.</li>
+              <li><b>Task Assignment</b> — <b>Assign Task</b> delegates to a caregiver (nurse/supervisor only).</li>
+              <li><b>MAR</b> — mark each dose Given / Refused / Held with a reason.</li>
+              <li><b>Clinical Coordination</b> — raise an SBAR escalation to the physician.</li>
+              <li><b>Shift Endorsement</b> — review the Carry-Over panel, then sign the handover.</li>
+            </ul>
+          </article>
+          <article class="portal teal">
+            <div class="top"><div class="pdot" style="background:linear-gradient(135deg,#22C55E,#16A34A)">C</div><div><h4>Caregiver</h4><div class="who">Daily assistance</div></div></div>
+            <ul>
+              <li><b>Clinical Monitoring</b> — Vitals Monitor, Camera, Task Assignment, Daily Rounds, MAR.</li>
+              <li><b>Task Assignment</b> — tick the checkbox to complete an assigned task (caregivers execute, they don't assign).</li>
+              <li><b>Daily Rounds</b> — 10-area bedside documentation (vitals, meals, elimination, mobility, mood, pain, sleep, skin).</li>
+              <li><b>Call Bells</b> — respond to resident calls.</li>
+              <li><b>Time Clock</b> — clock in/out; <b>Shift Endorsement</b> for handover.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <!-- FAMILY / RESIDENT -->
+      <section id="residents">
+        <div class="eyebrow">Portals · Family &amp; resident</div>
+        <h2>Transparency for families</h2>
+        <p class="lede">Read-only where it should be — families see and pay, residents see their own care.</p>
+        <div class="grid cols-2">
+          <article class="portal">
+            <div class="top"><div class="pdot" style="background:linear-gradient(135deg,#8B5CF6,#7C3AED)">F</div><div><h4>Family Sponsor</h4><div class="who">Monitor your relative</div></div></div>
+            <ul>
+              <li><b>Dashboard &amp; Health Timeline</b> — live vitals and daily comfort summaries.</li>
+              <li><b>Care Team · Care Planning · Alerts · Messages</b> — stay in the loop, message staff.</li>
+              <li><b>Appointments · Transport · Hotel Services · Community &amp; Events</b>.</li>
+              <li><b>Billing</b> — view invoices, pay, and print receipts. New invoices arrive as a bell notification.</li>
+            </ul>
+          </article>
+          <article class="portal">
+            <div class="top"><div class="pdot" style="background:linear-gradient(135deg,#F97316,#EA580C)">R</div><div><h4>Resident</h4><div class="who">My care portal</div></div></div>
+            <ul>
+              <li><b>Dashboard</b> — your own vitals and daily report.</li>
+              <li><b>Messages · Appointments · Transport</b>.</li>
+              <li><b>Hotel Services · Community &amp; Events</b> — request services, RSVP to activities.</li>
+              <li><b>Care Record · Care Planning · Medications</b> — your own information, read-only.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <!-- OPS -->
+      <section id="ops">
+        <div class="eyebrow">Portals · Operations &amp; services</div>
+        <h2>Transport, dining &amp; upkeep</h2>
+        <p class="lede">The teams that keep the community moving, fed, clean and repaired.</p>
+        <div class="grid cols-3">
+          <article class="portal">
+            <div class="top"><div class="pdot" style="background:linear-gradient(135deg,#6366F1,#4F46E5)">L</div><div><h4>Fleet Manager</h4><div class="who">Transport dispatch</div></div></div>
+            <ul>
+              <li><b>Transport Requests</b> — approve &amp; schedule rides.</li>
+              <li><b>Trip Board</b> — live trips.</li>
+              <li><b>Vehicles · Drivers · Maintenance · Fuel</b> — keep the fleet road-ready.</li>
+            </ul>
+          </article>
+          <article class="portal">
+            <div class="top"><div class="pdot" style="background:linear-gradient(135deg,#F59E0B,#D97706)">D</div><div><h4>Driver</h4><div class="who">On the road</div></div></div>
+            <ul>
+              <li><b>Trip Board</b> — your assigned runs.</li>
+              <li><b>Inspection Checklist</b> — pre-trip vehicle safety check.</li>
+              <li><b>Fuel &amp; Odometer</b> — log fuel and mileage.</li>
+            </ul>
+          </article>
+          <article class="portal teal">
+            <div class="top"><div class="pdot" style="background:linear-gradient(135deg,#84CC16,#65A30D)">U</div><div><h4>Nutritionist</h4><div class="who">Dietary &amp; nutrition</div></div></div>
+            <ul>
+              <li><b>Diet &amp; Nutrition Orders</b> — set each resident's diet type &amp; restrictions.</li>
+              <li><b>Kitchen — Cook List</b> — review what's being prepared.</li>
+              <li><b>Dining &amp; Compliance</b> — track meal adherence.</li>
+            </ul>
+          </article>
+          <article class="portal">
+            <div class="top"><div class="pdot" style="background:linear-gradient(135deg,#F97316,#D97706)">K</div><div><h4>Kitchen</h4><div class="who">Food service</div></div></div>
+            <ul>
+              <li><b>Kitchen — Cook List</b> — today's active diet orders, grouped by meal, so you know exactly what to prepare.</li>
+            </ul>
+          </article>
+          <article class="portal teal">
+            <div class="top"><div class="pdot" style="background:linear-gradient(135deg,#38BDF8,#0EA5E9)">H</div><div><h4>Housekeeping</h4><div class="who">Rooms &amp; cleaning</div></div></div>
+            <ul>
+              <li><b>Housekeeping Requests</b> — work the cleaning &amp; laundry queue.</li>
+              <li><b>Unit Turnover</b> — advance a room make-ready → inspection → ready → occupied.</li>
+            </ul>
+          </article>
+          <article class="portal">
+            <div class="top"><div class="pdot" style="background:linear-gradient(135deg,#64748B,#475569)">M</div><div><h4>Maintenance</h4><div class="who">Repairs &amp; engineering</div></div></div>
+            <ul>
+              <li><b>Maintenance Requests</b> — work resident repair &amp; HVAC tickets.</li>
+              <li><b>Facility Maintenance</b> — preventive schedules (generator, elevator, fire safety, pest).</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <!-- WORKFLOWS -->
+      <section id="flows">
+        <div class="eyebrow">Do it</div>
+        <h2>Key workflows, step by step</h2>
+        <p class="lede">The everyday tasks that cross roles — where to click and what happens.</p>
+
+        <h3 class="sub">Assign &amp; complete a care task</h3>
+        <ol class="flow">
+          <li><div><b>Nurse assigns.</b> <span class="path">/nurse → Task Assignment</span> → <b>Assign Task</b> → pick the resident, the caregiver, priority and due time → <b>Add Task</b>.</div></li>
+          <li><div><b>Caregiver sees it.</b> <span class="path">/caregiver → Task Assignment</span> shows the checklist, newest first. Tick the box to mark it complete.</div></li>
+          <li><div><b>If it slips.</b> An overdue task auto-alerts the nurse &amp; facility admin in their notification bell.</div></li>
+        </ol>
+
+        <h3 class="sub">Give a medication (MAR)</h3>
+        <ol class="flow">
+          <li><div><b>Open the record.</b> <span class="path">/nurse → Medication Administration Record</span>.</div></li>
+          <li><div><b>Log the dose.</b> Mark it <b>Given</b>, or <b>Refused</b> / <b>Held</b> — a reason is required for the last two, plus a witness where needed.</div></li>
+          <li><div><b>Missed doses.</b> A scheduled dose left un-given for 30+ minutes flips to Missed and alerts the team automatically.</div></li>
+        </ol>
+
+        <h3 class="sub">Escalate a clinical concern (SBAR)</h3>
+        <ol class="flow">
+          <li><div><b>Raise it.</b> <span class="path">/nurse → Clinical Coordination</span> → new escalation. Fill <b>S</b>ituation, <b>B</b>ackground (auto-filled from history), <b>A</b>ssessment, <b>R</b>ecommendation, and set priority.</div></li>
+          <li><div><b>Physician responds.</b> <span class="path">/physician → Clinical Coordination</span> — acknowledge, reply with orders, resolve. The SLA clock turns red if it breaches.</div></li>
+        </ol>
+
+        <h3 class="sub">Endorse a shift</h3>
+        <ol class="flow">
+          <li><div><b>Check what's open.</b> <span class="path">/nurse → Shift Endorsement</span> — the <b>Carry-Over &amp; Unresolved</b> panel lists open escalations, pending/overdue tasks and due follow-ups with priority and time.</div></li>
+          <li><div><b>Write &amp; sign.</b> <b>New Report</b> → fill the handover → <b>Sign</b> to validate it. It appears instantly to the incoming shift.</div></li>
+        </ol>
+
+        <h3 class="sub">Bill a resident and send the invoice</h3>
+        <ol class="flow">
+          <li><div><b>Gather charges.</b> <span class="path">/billing_admin → Transactions Ledger</span> — tick a resident's pending charges → <b>Generate Invoice</b>.</div></li>
+          <li><div><b>Issue it.</b> Set the due date, then <b>Create &amp; Send</b>. The invoice is marked Sent and the resident + family get a bell notification and can view/pay it in their portal.</div></li>
+        </ol>
+
+        <h3 class="sub">Restock inventory (purchase request)</h3>
+        <ol class="flow">
+          <li><div><b>Raise a request.</b> <span class="path">/facility_admin → Purchase Requests</span> → <b>New Request</b> (link an inventory item to prefill), set quantity, cost and priority → <b>Submit</b>.</div></li>
+          <li><div><b>Move it along.</b> <b>Approve</b> → <b>Mark Ordered</b> → <b>Mark Received</b>. Receiving automatically adds the quantity back to stock on hand.</div></li>
+        </ol>
+      </section>
+
+      <div class="footer">LifeCare CMS (LCMS) — Operator Manual. Golden Hearth Care demo environment. Credentials are shared training logins; replace with per-person accounts before going live.</div>
+    </main>
+  </div>
+</div>
+</body></html>
