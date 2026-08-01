@@ -421,6 +421,9 @@ export default function FacilityIncidents({ readOnly = false }: { readOnly?: boo
                       <button onClick={() => setViewing(i)} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition">
                         <Eye className="w-3.5 h-3.5" /> View
                       </button>
+                      <button onClick={() => printIncident(i)} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition">
+                        <Printer className="w-3.5 h-3.5" /> Print PDF
+                      </button>
                       {!readOnly && (!i.resolved ? (
                         <button onClick={() => void handleResolve(i.id)} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded transition">
                           <CheckCircle className="w-3.5 h-3.5" /> Review &amp; Close
@@ -473,6 +476,7 @@ export default function FacilityIncidents({ readOnly = false }: { readOnly?: boo
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => setViewing(i)} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
+                        <button onClick={() => printIncident(i)} className="p-1.5 rounded hover:bg-gray-100 text-gray-600 transition" title="Print PDF"><Printer className="w-4 h-4" /></button>
                         {!readOnly && (!i.resolved ? (
                           <button onClick={() => void handleResolve(i.id)} className="p-1.5 rounded hover:bg-green-100 text-green-600 transition" title="Review & Close"><CheckCircle className="w-4 h-4" /></button>
                         ) : (
