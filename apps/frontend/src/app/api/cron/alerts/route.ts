@@ -14,6 +14,13 @@ export const dynamic = "force-dynamic";
 // follow-ups → OVERDUE). Meant to run on a schedule (Vercel Cron) and is also
 // pinged, throttled, from the supervisor portals so it works in dev/demo.
 //
+// AUTOMATIC ALERT SOURCES (severity: CRITICAL / WARNING / INFO):
+//   • Vital Signs — abnormal BP, SpO₂, HR, temp, RR (CRITICAL when dangerous).
+//   • MAR         — missed dose windows + refused meds.
+//   • Care Logs   — missing daily rounds + no shift report submitted (INFO).
+//   • Incidents   — severe & critical incident reports (CRITICAL when critical).
+// Plus operational guards: overdue follow-ups/tasks, low/expiring stock, weight loss.
+//
 // Auth: a Vercel-cron request (Bearer CRON_SECRET) scans ALL communities; a
 // signed-in NURSE / FACILITY_ADMIN / SUPERADMIN scans only their community.
 // ─────────────────────────────────────────────────────────────
@@ -40,6 +47,20 @@ function isAbnormal(type: string, value: string): boolean {
     case "BLOOD_GLUCOSE": return !isNaN(n) && (n < 70 || n > 180);
     case "BLOOD_PRESSURE": { const sys = parseInt(value, 10); return !isNaN(sys) && (sys >= 140 || sys < 90); }
     default: return false;
+  }
+}
+
+/** Dangerously-out-of-range vitals escalate to CRITICAL; other abnormals are WARNING. */
+function vitalSeverity(type: string, value: string): "CRITICAL" | "WARNING" {
+  const n = parseFloat(value);
+  switch (type) {
+    case "HEART_RATE": return !isNaN(n) && (n < 45 || n > 130) ? "CRITICAL" : "WARNING";
+    case "OXYGEN": return !isNaN(n) && n < 90 ? "CRITICAL" : "WARNING";
+    case "TEMPERATURE": return !isNaN(n) && n >= 39 ? "CRITICAL" : "WARNING";
+    case "RESPIRATORY_RATE": return !isNaN(n) && (n < 8 || n > 28) ? "CRITICAL" : "WARNING";
+    case "BLOOD_GLUCOSE": return !isNaN(n) && (n < 54 || n > 300) ? "CRITICAL" : "WARNING";
+    case "BLOOD_PRESSURE": { const sys = parseInt(value, 10); return !isNaN(sys) && (sys >= 180 || sys < 80) ? "CRITICAL" : "WARNING"; }
+    default: return "WARNING";
   }
 }
 
@@ -104,7 +125,9 @@ async function scanCommunity(communityId: string, organizationId: string | null)
   for (const v of vitals) {
     if (!isAbnormal(v.type, v.value)) continue;
     const l = VITAL_LABEL[v.type] ?? v.type.toLowerCase();
-    if (await notify("VITAL_ALERT", "vitalsLog", v.id, `Abnormal ${l}`, `${rname(v.resident)} (Room ${room(v.resident)}) recorded ${l} of ${v.value}. Please review.`)) counts.abnormalVitals++;
+    const sev = vitalSeverity(v.type, v.value);
+    const lead = sev === "CRITICAL" ? "Critically abnormal" : "Abnormal";
+    if (await notify("VITAL_ALERT", "vitalsLog", v.id, `${lead} ${l}`, `${rname(v.resident)} (Room ${room(v.resident)}) recorded ${l} of ${v.value}.${sev === "CRITICAL" ? " Immediate review required." : " Please review."}`, sev)) counts.abnormalVitals++;
   }
 
   // 1b) Severe/critical incidents (last 12h, unresolved) — auto-alert the team.
@@ -127,6 +150,16 @@ async function scanCommunity(communityId: string, organizationId: string | null)
     const created = await notify("MEDICATION_REMINDER", "medicationAdministration", m.id, "Missed medication", `${rname(m.resident)} (Room ${room(m.resident)}) — ${m.medication?.name ?? "medication"} scheduled ${fmtTime(m.scheduledTime)} has not been administered.`);
     await prisma.medicationAdministration.update({ where: { id: m.id }, data: { status: "MISSED" } });
     if (created) counts.missedMeds++;
+  }
+
+  // 2b) Refused medications (last 12h) — flag for clinical follow-up.
+  const refused = await prisma.medicationAdministration.findMany({
+    where: { resident: { communityId }, status: "REFUSED", actualTime: { gte: new Date(nowTs - 12 * 3_600_000) } },
+    select: { id: true, reasonForRefusal: true, medication: { select: { name: true } }, resident: { select: { firstName: true, lastName: true, roomNumber: true } } },
+  });
+  for (const m of refused) {
+    const why = m.reasonForRefusal ? ` — reason: ${m.reasonForRefusal}` : "";
+    if (await notify("MEDICATION_REMINDER", "medicationAdministration", `refused:${m.id}`, "Medication refused", `${rname(m.resident)} (Room ${room(m.resident)}) refused ${m.medication?.name ?? "medication"}${why}.`, "WARNING")) counts.missedMeds++;
   }
 
   // 3) Overdue follow-ups → mark OVERDUE + notify.
@@ -183,6 +216,17 @@ async function scanCommunity(communityId: string, organizationId: string | null)
     for (const r of residents) {
       if (documented.has(r.id)) continue;
       if (await notify("SYSTEM_ALERT", "dailyDoc", `doc:${r.id}:${dateStr}`, "Missing daily documentation", `No daily round recorded today for ${rname(r)} (Room ${room(r)}).`)) counts.missedDocs++;
+    }
+  }
+
+  // 6b) Missed shift documentation — no shift report submitted today (evening check).
+  if (now.getHours() >= 19) {
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+    const dateStr = startOfDay.toISOString().slice(0, 10);
+    const reportsToday = await prisma.shiftReport.count({ where: { communityId, createdAt: { gte: startOfDay } } });
+    if (reportsToday === 0) {
+      if (await notify("SYSTEM_ALERT", "dailyDoc", `shiftdoc:${communityId}:${dateStr}`, "Missing shift documentation", "No shift report has been submitted today. Please complete the shift endorsement/handover.", "INFO")) counts.missedDocs++;
     }
   }
 
