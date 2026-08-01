@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ClipboardCheck, Check, X, Clock, Pill, ShieldCheck } from "lucide-react";
+import { ClipboardCheck, Check, X, Clock, Pill, ShieldCheck, Plus, Loader2 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord } from "@/lib/api";
@@ -26,6 +26,32 @@ export default function MedicationApprovals() {
       if (d?.authenticated) setSession({ id: d.session?.userId ?? null, name: d.session?.name ?? d.session?.role ?? "Care Manager" });
     }).catch(() => {});
   }, []);
+
+  // Residents for the "Request Meds" submission form.
+  const { data: residentRows } = useLiveQuery<Row>("residents", { query: "take=300", tables: ["Resident"] });
+  const residents = useMemo(() => residentRows.map((r) => ({ id: s(r.id), name: `${s(r.firstName)} ${s(r.lastName)}`.trim() || "—", room: s(r.roomNumber) })), [residentRows]);
+
+  const [showRequest, setShowRequest] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ residentId: "", name: "", dosage: "", route: "ORAL", frequency: "", reason: "" });
+  const setField = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const submitRequest = async () => {
+    if (!form.residentId || !form.name.trim()) { Swal.fire("Missing fields", "Resident and medication name are required.", "warning"); return; }
+    setSaving(true);
+    try {
+      await createRecord("medications", {
+        residentId: form.residentId, name: form.name.trim(), dosage: form.dosage.trim() || null,
+        route: form.route, frequency: form.frequency.trim() || null, reason: form.reason.trim() || null,
+        status: "PENDING", submittedById: session.id, submittedByName: session.name,
+      });
+      await refetch();
+      setShowRequest(false);
+      setForm({ residentId: "", name: "", dosage: "", route: "ORAL", frequency: "", reason: "" });
+      Swal.fire({ title: "Request submitted", text: "Sent for Care Manager approval.", icon: "success", timer: 1600, showConfirmButton: false });
+    } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not submit the request.", "error"); }
+    finally { setSaving(false); }
+  };
 
   const pending = useMemo(() => rows.filter((m) => s(m.status) === "PENDING"), [rows]);
   const decided = useMemo(
@@ -75,11 +101,16 @@ export default function MedicationApprovals() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2 flex items-center gap-3">
-          <ClipboardCheck className="w-8 h-8 text-blue-500" /> Medication Approvals
-        </h1>
-        <p className="text-gray-600">New prescriptions require a Care Manager sign-off before they activate in the MAR.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2 flex items-center gap-3">
+            <ClipboardCheck className="w-8 h-8 text-blue-500" /> Medication Approvals
+          </h1>
+          <p className="text-gray-600">Nurses request meds; a Care Manager signs off before they activate in the MAR.</p>
+        </div>
+        <button onClick={() => setShowRequest(true)} className="self-start inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-semibold shadow hover:shadow-lg transition active:scale-95">
+          <Plus className="w-4 h-4" /> Request Meds
+        </button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
@@ -124,6 +155,57 @@ export default function MedicationApprovals() {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {showRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
+            <div className="sticky top-0 flex items-center justify-between bg-gradient-to-r from-blue-500 to-indigo-600 p-5 text-white">
+              <h2 className="text-lg font-bold flex items-center gap-2"><Pill className="w-5 h-5" /> Request Medication</h2>
+              <button onClick={() => setShowRequest(false)} className="rounded-lg p-1.5 hover:bg-white/20"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-4 p-6">
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Resident <span className="text-red-500">*</span></label>
+                <select value={form.residentId} onChange={(e) => setField("residentId", e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400">
+                  <option value="">Select resident…</option>
+                  {residents.map((r) => <option key={r.id} value={r.id}>{r.name} — Room {r.room}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Medication <span className="text-red-500">*</span></label>
+                <input value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="e.g. Amlodipine" className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-gray-700">Dosage</label>
+                  <input value={form.dosage} onChange={(e) => setField("dosage", e.target.value)} placeholder="e.g. 5mg" className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-gray-700">Route</label>
+                  <select value={form.route} onChange={(e) => setField("route", e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-400">
+                    {["ORAL", "IV", "IM", "SUBCUTANEOUS", "TOPICAL", "INHALATION", "RECTAL", "OTHER"].map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Frequency</label>
+                <input value={form.frequency} onChange={(e) => setField("frequency", e.target.value)} placeholder="e.g. Once daily, BID, PRN" className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Indication / reason</label>
+                <textarea value={form.reason} onChange={(e) => setField("reason", e.target.value)} rows={2} placeholder="Why is this being prescribed?" className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400 resize-y" />
+              </div>
+              <p className="text-xs text-gray-500">Saved as <span className="font-semibold">Pending</span> — it won't activate in the MAR until a Care Manager approves it.</p>
+            </div>
+            <div className="sticky bottom-0 flex items-center justify-between border-t border-gray-200 bg-gray-50 px-6 py-4">
+              <button onClick={() => setShowRequest(false)} disabled={saving} className="rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 disabled:opacity-50">Cancel</button>
+              <button onClick={submitRequest} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-2 font-semibold text-white shadow hover:shadow-lg disabled:opacity-50">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} {saving ? "Submitting…" : "Submit request"}
+              </button>
+            </div>
           </div>
         </div>
       )}
