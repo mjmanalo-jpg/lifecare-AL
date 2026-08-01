@@ -115,7 +115,10 @@ function customFire(a?: FireOptions | string, b?: string, c?: SweetIcon): Promis
   }
 
   // Delegate everything else to the real SweetAlert2 (unchanged behaviour).
-  const fire = RealSwal.fire as (...args: unknown[]) => Promise<FireResult>;
+  // NOTE: must stay bound to RealSwal — SweetAlert2's `fire` uses `this`
+  // internally (`new this(...)`), so an unbound reference throws
+  // "this is not a constructor" for input/HTML dialogs.
+  const fire = (RealSwal.fire as (...args: unknown[]) => Promise<FireResult>).bind(RealSwal);
   return typeof a === "string" ? fire(a, b, c) : fire(a);
 }
 

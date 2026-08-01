@@ -83,8 +83,12 @@ export function ClinicalHeader({ eyebrow, title, subtitle, right }: { eyebrow?: 
 /** White card with an optional coloured top rule (teal / coral / amber / green). */
 export function ClinicalCard({ top, className = "", children }: { top?: "teal" | "coral" | "amber" | "green" | "none"; className?: string; children: React.ReactNode }) {
   const rule = { teal: "#2E4A48", coral: "#C0573F", amber: "#C39A3E", green: "#7E9B6F", none: "transparent" }[top ?? "none"];
+  const hasTop = Boolean(top && top !== "none");
+  // Longhand only — mixing `border` shorthand with `borderTop` warns in React.
+  const style: React.CSSProperties = { borderStyle: "solid", borderColor: "#E1E3D9", borderWidth: 1 };
+  if (hasTop) { style.borderTopWidth = 3; style.borderTopColor = rule; }
   return (
-    <div className={`bg-white rounded-lg shadow-sm shadow-black/[0.03] ${className}`} style={{ borderTop: top && top !== "none" ? `3px solid ${rule}` : undefined, border: top && top !== "none" ? undefined : "1px solid #E1E3D9" }}>
+    <div className={`bg-white rounded-lg shadow-sm shadow-black/[0.03] ${className}`} style={style}>
       {children}
     </div>
   );
