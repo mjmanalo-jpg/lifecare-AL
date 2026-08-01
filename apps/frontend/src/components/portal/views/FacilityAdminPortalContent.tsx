@@ -18,6 +18,7 @@ import FacilityOccupancy from "@/components/portal/views/FacilityOccupancy";
 import FacilityInventory from "@/components/portal/views/FacilityInventory";
 import PurchaseRequests from "@/components/portal/views/PurchaseRequests";
 import MedicationApprovals from "@/components/portal/views/clinical/MedicationApprovals";
+import ApprovalWorkflows from "@/components/portal/views/clinical/ApprovalWorkflows";
 import ReferralsBoard from "@/components/portal/views/clinical/ReferralsBoard";
 import FacilityUnifiedView from "@/components/portal/views/FacilityUnifiedView";
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
@@ -272,6 +273,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
   if (tab === "inventory") return <FacilityInventory />;
   if (tab === "purchaserequests") return <PurchaseRequests />;
   if (tab === "medapprovals") return <MedicationApprovals />;
+  if (tab === "approvalworkflows") return <ApprovalWorkflows />;
   if (tab === "referrals") return <ReferralsBoard canApprove />;
   if (tab === "escalations") return <EscalationsBoard role="FACILITY_ADMIN" />;
   // Unified operations hub — reports, dining, services, maintenance, concierge, front desk, turnover, community.
