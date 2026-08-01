@@ -20,12 +20,15 @@ export default function MedicationApprovals() {
     tables: ["Medication", "Resident"],
   });
 
-  const [session, setSession] = useState<{ id: string | null; name: string | null }>({ id: null, name: null });
+  const [session, setSession] = useState<{ id: string | null; name: string | null; role: string | null }>({ id: null, name: null, role: null });
   useEffect(() => {
     fetch("/api/auth/session").then((r) => r.json()).then((d) => {
-      if (d?.authenticated) setSession({ id: d.session?.userId ?? null, name: d.session?.name ?? d.session?.role ?? "Care Manager" });
+      if (d?.authenticated) setSession({ id: d.session?.userId ?? null, name: d.session?.name ?? d.session?.role ?? "Care Manager", role: d.session?.role ?? null });
     }).catch(() => {});
   }, []);
+  // Only the approving authority (Administrator / Care Manager) can decide;
+  // nurses submit requests and see status only.
+  const canDecide = session.role === "FACILITY_ADMIN" || session.role === "SUPERADMIN" || session.role === "CARE_MANAGER";
 
   // Residents for the "Request Meds" submission form.
   const { data: residentRows } = useLiveQuery<Row>("residents", { query: "take=300", tables: ["Resident"] });
@@ -132,10 +135,14 @@ export default function MedicationApprovals() {
                 <p className="font-semibold text-gray-900 flex items-center gap-2"><Pill className="w-4 h-4 text-indigo-500" /> {s(m.name)} <span className="text-gray-500 font-normal">{s(m.dosage)} · {s(m.route) || "PO"} · {s(m.frequency)}</span></p>
                 <p className="text-xs text-gray-500 mt-0.5">{residentName(m)}{m.submittedByName ? ` · submitted by ${s(m.submittedByName)}` : ""}{m.reason ? ` · ${s(m.reason)}` : ""}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => approve(m)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500 text-white text-sm font-semibold hover:bg-green-600"><Check className="w-4 h-4" /> Approve</button>
-                <button onClick={() => reject(m)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50"><X className="w-4 h-4" /> Reject</button>
-              </div>
+              {canDecide ? (
+                <div className="flex items-center gap-2">
+                  <button onClick={() => approve(m)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-500 text-white text-sm font-semibold hover:bg-green-600"><Check className="w-4 h-4" /> Approve</button>
+                  <button onClick={() => reject(m)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50"><X className="w-4 h-4" /> Reject</button>
+                </div>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold uppercase tracking-wide"><Clock className="w-3.5 h-3.5" /> Pending Approval</span>
+              )}
             </div>
           ))}
         </div>
