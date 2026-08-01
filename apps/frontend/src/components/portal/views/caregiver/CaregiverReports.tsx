@@ -33,6 +33,8 @@ interface ShiftReport {
   taskCompleted: string | null;
   handoverNotes: string | null;
   signedAt: string | null;
+  aiSummary: string | null;
+  acknowledgedByName: string | null;
   createdAt: string | null;
 }
 
@@ -91,6 +93,8 @@ function toReport(row: Record<string, unknown>): ShiftReport {
     taskCompleted: asStr(row.taskCompleted),
     handoverNotes: asStr(row.handoverNotes),
     signedAt: asStr(row.signedAt),
+    aiSummary: asStr(row.aiSummary),
+    acknowledgedByName: asStr(row.acknowledgedByName),
     createdAt: asStr(row.createdAt),
   };
 }
@@ -147,6 +151,8 @@ export default function CaregiverReports() {
   const [viewing, setViewing] = useState<ShiftReport | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<ReportForm>(EMPTY_FORM);
+  const [me, setMe] = useState<string | null>(null);
+  useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => { if (d?.authenticated) setMe(d.session?.name ?? "Incoming nurse"); }).catch(() => {}); }, []);
   const [saving, setSaving] = useState(false);
 
   // Current time held in state (reading the clock during render is impure).
@@ -199,6 +205,26 @@ export default function CaregiverReports() {
   }, [search, shiftFilter, range, incidentsOnly, perPage]);
 
   /* Mutations */
+  const generateSummary = () => {
+    const parts: string[] = [`${shiftMeta(form.shiftType).label} shift handover.`];
+    if (form.residentUpdates.trim()) parts.push(`Resident updates: ${form.residentUpdates.trim()}.`);
+    parts.push(form.incidentsOccurred ? `Incident(s): ${form.incidentDetails.trim() || "see incident log"}.` : "No incidents reported this shift.");
+    if (form.medicationsAdministered.trim()) parts.push(`Medications: ${form.medicationsAdministered.trim()}.`);
+    if (form.taskCompleted.trim()) parts.push(`Tasks completed: ${form.taskCompleted.trim()}.`);
+    if (form.handoverNotes.trim()) parts.push(`Carry-over: ${form.handoverNotes.trim()}.`);
+    setField("summary", parts.join(" "));
+  };
+
+  const handleAck = async (r: ShiftReport) => {
+    try {
+      await updateRecord("shift-reports", r.id, { acknowledgedByName: me || "Incoming nurse", acknowledgedAt: new Date().toISOString() });
+      await refetch();
+      Swal.fire({ title: "Acknowledged", text: "Handover receipt recorded.", icon: "success", timer: 1300, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: "Failed", text: err instanceof Error ? err.message : "Could not acknowledge.", icon: "error" });
+    }
+  };
+
   const handleCreate = async () => {
     if (!form.summary.trim()) {
       Swal.fire({ title: "Summary required", text: "Add a shift summary before saving.", icon: "warning" });
@@ -216,6 +242,7 @@ export default function CaregiverReports() {
         medicationsAdministered: form.medicationsAdministered.trim() || null,
         taskCompleted: form.taskCompleted.trim() || null,
         handoverNotes: form.handoverNotes.trim() || null,
+        aiSummary: form.summary.trim() || null,
       });
       await refetch();
       setCreating(false);
@@ -467,6 +494,15 @@ export default function CaregiverReports() {
                       <PenLine className="w-4 h-4" /> Sign
                     </button>
                   )}
+                  {r.signedAt && !r.acknowledgedByName && (
+                    <button
+                      onClick={() => void handleAck(r)}
+                      className="flex items-center gap-1 px-2.5 py-1 text-indigo-600 hover:bg-indigo-50 rounded text-sm font-medium transition"
+                    >
+                      <CheckCircle2 className="w-4 h-4" /> Acknowledge
+                    </button>
+                  )}
+                  {r.acknowledgedByName && <span className="self-center text-xs text-gray-400">✓ Ack: {r.acknowledgedByName}</span>}
                   <button
                     onClick={() => void handleDelete(r)}
                     className="flex items-center gap-1 px-2.5 py-1 text-red-600 hover:bg-red-50 rounded text-sm font-medium transition ml-auto"
@@ -599,7 +635,11 @@ export default function CaregiverReports() {
               </div>
             </div>
 
-            <TextArea label="Summary *" value={form.summary} onChange={(v) => setField("summary", v)} placeholder="Overall shift summary…" />
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-semibold text-gray-700">Summary <span className="text-red-500">*</span></label>
+              <button type="button" onClick={generateSummary} className="text-xs font-semibold text-indigo-600 hover:underline">⚡ Generate AI summary</button>
+            </div>
+            <TextArea label="" value={form.summary} onChange={(v) => setField("summary", v)} placeholder="Overall shift summary — or use ⚡ to draft from the fields above…" />
             <TextArea label="Resident Updates" value={form.residentUpdates} onChange={(v) => setField("residentUpdates", v)} placeholder="Per-resident notes…" />
 
             <label className="flex items-center gap-2 cursor-pointer select-none">

@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 // signed-in NURSE / FACILITY_ADMIN / SUPERADMIN scans only their community.
 // ─────────────────────────────────────────────────────────────
 
-const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend"];
+const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "incident"];
 
 const VITAL_LABEL: Record<string, string> = {
   HEART_RATE: "heart rate",
@@ -57,10 +57,11 @@ interface Scan {
   lowStock: number;
   missedDocs: number;
   weightLoss: number;
+  incidents: number;
 }
 
 async function scanCommunity(communityId: string, organizationId: string | null): Promise<Scan> {
-  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0 };
+  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, incidents: 0 };
 
   const recipientIds = [
     ...new Set(
@@ -83,13 +84,13 @@ async function scanCommunity(communityId: string, organizationId: string | null)
   });
   const seen = new Set(existing.map((e) => `${e.type}|${e.relatedEntityId}`));
 
-  async function notify(type: string, relatedEntityType: string, relatedEntityId: string, title: string, message: string): Promise<boolean> {
+  async function notify(type: string, relatedEntityType: string, relatedEntityId: string, title: string, message: string, severity: string = "WARNING"): Promise<boolean> {
     const key = `${type}|${relatedEntityId}`;
     if (seen.has(key)) return false;
     seen.add(key);
     if (recipientIds.length) {
       await prisma.notification.createMany({
-        data: recipientIds.map((userId) => ({ userId, type: type as never, title, message, relatedEntityId, relatedEntityType, organizationId, communityId })),
+        data: recipientIds.map((userId) => ({ userId, type: type as never, title, message, severity, relatedEntityId, relatedEntityType, organizationId, communityId })),
       });
     }
     return true;
@@ -104,6 +105,17 @@ async function scanCommunity(communityId: string, organizationId: string | null)
     if (!isAbnormal(v.type, v.value)) continue;
     const l = VITAL_LABEL[v.type] ?? v.type.toLowerCase();
     if (await notify("VITAL_ALERT", "vitalsLog", v.id, `Abnormal ${l}`, `${rname(v.resident)} (Room ${room(v.resident)}) recorded ${l} of ${v.value}. Please review.`)) counts.abnormalVitals++;
+  }
+
+  // 1b) Severe/critical incidents (last 12h, unresolved) — auto-alert the team.
+  const incidents = await prisma.incident.findMany({
+    where: { resident: { communityId }, severity: { in: ["SEVERE", "CRITICAL"] }, resolvedAt: null, createdAt: { gte: new Date(nowTs - 12 * 3_600_000) } },
+    select: { id: true, severity: true, incidentType: true, resident: { select: { firstName: true, lastName: true, roomNumber: true } } },
+  });
+  for (const inc of incidents) {
+    const crit = inc.severity === "CRITICAL";
+    const kind = String(inc.incidentType).replace(/_/g, " ").toLowerCase();
+    if (await notify("INCIDENT_REPORT", "incident", inc.id, `${crit ? "Critical" : "Severe"} incident — ${kind}`, `${rname(inc.resident)} (Room ${room(inc.resident)}): a ${crit ? "critical" : "severe"} ${kind} incident was reported. Review immediately.`, crit ? "CRITICAL" : "WARNING")) counts.incidents++;
   }
 
   // 2) Missed medication: still SCHEDULED > 30 min after the scheduled time.
@@ -218,7 +230,7 @@ async function runScan(request: NextRequest) {
     communities = [{ id: ctx.communityId, organizationId: ctx.organizationId ?? null }];
   }
 
-  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0 };
+  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, incidents: 0 };
   for (const c of communities) {
     try {
       const s = await scanCommunity(c.id, c.organizationId);

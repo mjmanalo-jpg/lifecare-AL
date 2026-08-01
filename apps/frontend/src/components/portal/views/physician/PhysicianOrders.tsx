@@ -359,7 +359,8 @@ function AddOrderModal({ residents, onClose, onSaved }: {
     try {
       await createRecord("medications", {
         residentId: form.residentId, name: form.name.trim(), dosage: form.dosage.trim(),
-        frequency: form.frequency, route: form.route, status: form.status,
+        frequency: form.frequency, route: form.route, status: "PENDING",
+        submittedByName: form.prescribedBy.trim() || null,
         startDate: new Date(form.startDate).toISOString(),
         endDate: form.endDate ? new Date(form.endDate).toISOString() : null,
         prescribedBy: form.prescribedBy.trim() || null, reason: form.reason.trim() || null,

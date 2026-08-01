@@ -4,8 +4,18 @@ import { useMemo, useState, useEffect } from "react";
 import {
   Siren, Search, RefreshCw, Plus, X, CheckCircle2, Clock, AlertTriangle,
   Eye, Loader2, ChevronLeft, ChevronRight, UserRound, ArrowUpCircle,
-  Stethoscope, ClipboardList, type LucideIcon,
+  Stethoscope, ClipboardList, Printer, type LucideIcon,
 } from "lucide-react";
+
+// Print a single SBAR as a clean standalone document (no page print-CSS needed).
+function printEscalation(e: { residentName: string; room?: string; situation: string; background: string; assessment: string; recommendation: string; raisedBy?: string; createdAt?: string | null; response?: string }, priorityLabel: string, statusLabel: string) {
+  const esc = (s: string) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
+  const row = (l: string, v: string) => v ? `<div class="row"><div class="l">${l}</div><div class="v">${esc(v)}</div></div>` : "";
+  const w = window.open("", "_blank", "width=720,height=860");
+  if (!w) return;
+  w.document.write(`<html><head><title>SBAR — ${esc(e.residentName)}</title><style>body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;padding:36px;color:#111;line-height:1.5}h1{font-size:20px;margin:0 0 4px}.meta{color:#555;font-size:13px;margin-bottom:18px}.row{margin:12px 0}.l{font-weight:700;color:#b91c1c;font-size:13px;text-transform:uppercase;letter-spacing:.04em}.v{white-space:pre-wrap;margin-top:2px}</style></head><body><h1>SBAR Escalation — ${esc(e.residentName)} · Room ${esc(e.room || "—")}</h1><div class="meta">Priority: ${esc(priorityLabel)} · Status: ${esc(statusLabel)} · Raised ${e.createdAt ? new Date(e.createdAt).toLocaleString() : "—"} by ${esc(e.raisedBy || "—")}</div>${row("S — Situation", e.situation)}${row("B — Background", e.background)}${row("A — Assessment", e.assessment)}${row("R — Recommendation", e.recommendation)}${e.response ? row("Physician Response", e.response) : ""}</body></html>`);
+  w.document.close(); w.focus(); w.print();
+}
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord } from "@/lib/api";
@@ -265,7 +275,10 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
                   </div>
                   <h2 className="text-lg sm:text-xl font-bold mt-1 break-words">{e.residentName} · Room {e.room || "—"}</h2>
                 </div>
-                <button onClick={() => setViewing(null)} className="p-2 hover:bg-white/20 rounded-lg transition flex-shrink-0"><X className="w-6 h-6" /></button>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button onClick={() => printEscalation(e, pm.label, STATUS_LABEL[e.status] ?? e.status)} className="p-2 hover:bg-white/20 rounded-lg transition" title="Print SBAR"><Printer className="w-5 h-5" /></button>
+                  <button onClick={() => setViewing(null)} className="p-2 hover:bg-white/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+                </div>
               </div>
               <div className="p-6 space-y-3">
                 {!closed && (
@@ -321,6 +334,21 @@ function RaiseModal({ role, raisedBy, residents, meds, onClose, onSaved }: {
   const [saving, setSaving] = useState(false);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const valid = form.residentId && form.situation.trim();
+
+  // AI-assisted draft: builds a Recommendation from the Situation + Assessment.
+  const aiDraft = () => {
+    const sit = form.situation.trim();
+    const asmt = form.assessment.trim();
+    if (!sit) { Swal.fire("Add a Situation first", "The draft uses the Situation and Assessment fields.", "info"); return; }
+    const who = residentOpts.find((r) => r.id === form.residentId)?.name || "the resident";
+    const urgent = form.priority === "EMERGENCY";
+    const resp = /spo2|oxygen|breath|resp|desat/i.test(sit + asmt);
+    const rec = `Request ${urgent ? "immediate" : "prompt"} physician review for ${who}.` +
+      `${asmt ? ` Assessment: ${asmt}.` : ""}` +
+      ` Recommend: reassess vitals now, ${resp ? "consider supplemental O₂, " : ""}monitor closely, and carry out physician orders.` +
+      ` Document the response and re-escalate if there is no improvement within the SLA window.`;
+    set("recommendation", rec);
+  };
   const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none";
   const residentOpts = useMemo(() => residents.map((r) => ({
     id: asStr(r.id), name: `${asStr(r.firstName)} ${asStr(r.lastName)}`.trim(), room: asStr(r.roomNumber),
@@ -394,6 +422,9 @@ function RaiseModal({ role, raisedBy, residents, meds, onClose, onSaved }: {
           <SbarField letter="S" label="Situation" required value={form.situation} onChange={(v) => set("situation", v)} placeholder="What is happening right now? e.g. Sudden SpO2 drop to 88%, laboured breathing." />
           <SbarField letter="B" label="Background" value={form.background} onChange={(v) => set("background", v)} placeholder="Relevant history (auto-filled from the record — edit as needed)." />
           <SbarField letter="A" label="Assessment" value={form.assessment} onChange={(v) => set("assessment", v)} placeholder="Your clinical read. e.g. Possible respiratory distress; vitals trending down." />
+          <div className="flex justify-end -mb-2">
+            <button type="button" onClick={aiDraft} className="text-xs font-semibold text-indigo-600 hover:underline flex items-center gap-1">⚡ AI draft recommendation</button>
+          </div>
           <SbarField letter="R" label="Recommendation" value={form.recommendation} onChange={(v) => set("recommendation", v)} placeholder="What you're asking for. e.g. Please review now; consider O2 + orders." />
         </div>
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">

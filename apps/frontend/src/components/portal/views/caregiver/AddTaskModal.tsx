@@ -57,6 +57,7 @@ export default function AddTaskModal({ onClose, onSaved }: { onClose: () => void
 
   const [assigneeId, setAssigneeId] = useState("");
   const [residentId, setResidentId] = useState("");
+  const [category, setCategory] = useState("Personal Care");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("MEDIUM");
@@ -83,6 +84,7 @@ export default function AddTaskModal({ onClose, onSaved }: { onClose: () => void
         residentId,
         title: title.trim(),
         description: description.trim() || null,
+        category,
         priority,
         status: "PENDING",
         dueDate: new Date(dueDate).toISOString(),
@@ -130,6 +132,14 @@ export default function AddTaskModal({ onClose, onSaved }: { onClose: () => void
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Description</label>
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Details, precautions…" className={`${inputCls} resize-y`} />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Category</label>
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className={inputCls}>
+                {["Personal Care", "Hygiene", "Medication", "Mobility", "Nutrition", "Observation"].map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

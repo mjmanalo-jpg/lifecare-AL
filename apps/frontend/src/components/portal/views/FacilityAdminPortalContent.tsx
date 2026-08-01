@@ -17,6 +17,8 @@ import FacilityRooms from "@/components/portal/views/FacilityRooms";
 import FacilityOccupancy from "@/components/portal/views/FacilityOccupancy";
 import FacilityInventory from "@/components/portal/views/FacilityInventory";
 import PurchaseRequests from "@/components/portal/views/PurchaseRequests";
+import MedicationApprovals from "@/components/portal/views/clinical/MedicationApprovals";
+import ReferralsBoard from "@/components/portal/views/clinical/ReferralsBoard";
 import FacilityUnifiedView from "@/components/portal/views/FacilityUnifiedView";
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
 import CameraVisionFeed from "@/components/CameraVisionFeed";
@@ -269,6 +271,8 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
   if (tab === "occupancy") return <FacilityOccupancy />;
   if (tab === "inventory") return <FacilityInventory />;
   if (tab === "purchaserequests") return <PurchaseRequests />;
+  if (tab === "medapprovals") return <MedicationApprovals />;
+  if (tab === "referrals") return <ReferralsBoard canApprove />;
   if (tab === "escalations") return <EscalationsBoard role="FACILITY_ADMIN" />;
   // Unified operations hub — reports, dining, services, maintenance, concierge, front desk, turnover, community.
   // Billing moved to the dedicated Billing & Finance portal (BILLING_ADMIN).

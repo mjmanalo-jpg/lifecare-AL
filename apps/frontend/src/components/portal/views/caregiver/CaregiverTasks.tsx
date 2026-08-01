@@ -322,6 +322,12 @@ export default function CaregiverTasks() {
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                      {/* eslint-disable-next-line react-hooks/purity */}
+                      {!task.completed && task.dueDate && new Date(task.dueDate).getTime() < Date.now() && (
+                        <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs font-bold bg-red-100 text-red-700 border border-red-300 animate-pulse">
+                          OVERDUE
+                        </span>
+                      )}
                       <span
                         className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs font-semibold border ${getPriorityColor(
                           task.priority

@@ -4,9 +4,19 @@ import { useMemo, useState, useEffect } from "react";
 import {
   AlertTriangle, Search, X, Eye, CheckCircle, Trash2, RefreshCw,
   ArrowUpDown, Filter, LayoutGrid, Table2, Clock, User, MapPin,
-  Shield, FileText, Flag, Calendar, ChevronDown, ChevronRight,
+  Shield, FileText, Flag, Calendar, ChevronDown, ChevronRight, Printer,
   type LucideIcon,
 } from "lucide-react";
+
+// Print a single incident report as a standalone document (regulatory submission).
+function printIncident(v: { type: string; resident: string; room: string; severity: string; timestamp: string | null; description: string; raw: Record<string, unknown> }) {
+  const esc = (s: unknown) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
+  const row = (l: string, val: unknown) => val ? `<div class="row"><div class="l">${l}</div><div class="v">${esc(val)}</div></div>` : "";
+  const w = window.open("", "_blank", "width=720,height=900");
+  if (!w) return;
+  w.document.write(`<html><head><title>Incident — ${esc(v.resident)}</title><style>body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;padding:36px;color:#111;line-height:1.5}h1{font-size:20px;margin:0 0 4px}.meta{color:#555;font-size:13px;margin-bottom:18px}.row{margin:12px 0}.l{font-weight:700;color:#b91c1c;font-size:12px;text-transform:uppercase;letter-spacing:.04em}.v{white-space:pre-wrap}img{max-width:100%;margin-top:10px;border:1px solid #ddd;border-radius:8px}</style></head><body><h1>Incident Report — ${esc(v.type)}</h1><div class="meta">${esc(v.resident)} · Room ${esc(v.room)} · Severity ${esc(v.severity).toUpperCase()} · ${v.timestamp ? new Date(v.timestamp).toLocaleString() : "—"}</div>${row("Description", v.description)}${row("Location", v.raw.location)}${row("Immediate actions", v.raw.immediateActions)}${row("Witnesses", v.raw.witnesses)}${row("Follow-up", v.raw.followUpNotes)}${row("Review notes", v.raw.reviewNotes)}${v.raw.photoUrl ? `<img src="${esc(v.raw.photoUrl)}" alt="incident photo" />` : ""}</body></html>`);
+  w.document.close(); w.focus(); w.print();
+}
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, Legend,
@@ -439,7 +449,10 @@ export default function FacilityIncidents() {
                 <h2 className="text-xl font-bold">{viewing.type}</h2>
                 <p className="text-white/90">{viewing.resident} &middot; Room {viewing.room}</p>
               </div>
-              <button onClick={() => setViewing(null)} className="p-2 hover:bg-white/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+              <div className="flex items-center gap-1">
+                <button onClick={() => printIncident(viewing)} className="p-2 hover:bg-white/20 rounded-lg transition" title="Print report"><Printer className="w-5 h-5" /></button>
+                <button onClick={() => setViewing(null)} className="p-2 hover:bg-white/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+              </div>
             </div>
             <div className="p-6 space-y-5">
               {/* Meta grid */}
@@ -462,6 +475,10 @@ export default function FacilityIncidents() {
               <div>
                 <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-1.5"><FileText className="w-4 h-4 text-gray-500" /> Description</h3>
                 <p className="text-gray-700 p-3 bg-gray-50 rounded border border-gray-200 text-sm leading-relaxed">{viewing.description}</p>
+                {typeof viewing.raw.photoUrl === "string" && viewing.raw.photoUrl && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={viewing.raw.photoUrl} alt="Incident documentation" className="mt-3 max-w-full max-h-72 rounded-lg border border-gray-200 object-contain" />
+                )}
               </div>
 
               {/* Immediate Actions */}

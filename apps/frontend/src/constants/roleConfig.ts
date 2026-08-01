@@ -146,6 +146,9 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   consults: "Consults & Referrals",
   escalations: "Clinical Coordination",
   orders: "Medication Management & Inventory",
+  medapprovals: "Medication Approvals",
+  physiciancomms: "Physician Comms Log",
+  referrals: "Referrals & Appointments",
   notes: "Care Planning",
   vitals: "Vitals Trends",
   careteam: "Care Team",
@@ -307,6 +310,9 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Clinical Coordination", icon: Siren, route: "/nurse/escalations" },
       { name: "Shift Endorsement & Continuity", icon: FileText, route: "/nurse/reports" },
       { name: "Orders & Prescriptions", icon: Pill, route: "/nurse/orders" },
+      { name: "Medication Approvals", icon: ClipboardCheck, route: "/nurse/medapprovals" },
+      { name: "Physician Comms Log", icon: Stethoscope, route: "/nurse/physiciancomms" },
+      { name: "Referrals & Appointments", icon: CalendarCheck, route: "/nurse/referrals" },
       { name: "Incident Review", icon: AlertTriangle, route: "/nurse/incidents" },
       { name: "Secure Messages", icon: MessageSquare, route: "/nurse/messages" },
       // Core SLMS Modules Aligned
@@ -399,6 +405,8 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Clinical Coordination", icon: Siren, route: "/facility_admin/escalations" },
       { name: "Medication Management & Inventory", icon: Package, route: "/facility_admin/inventory" },
       { name: "Purchase Requests", icon: ShoppingCart, route: "/facility_admin/purchaserequests" },
+      { name: "Medication Approvals", icon: ClipboardCheck, route: "/facility_admin/medapprovals" },
+      { name: "Referrals & Appointments", icon: CalendarCheck, route: "/facility_admin/referrals" },
       { name: "Shift Endorsement & Continuity", icon: FileText, route: "/facility_admin/reports" },
       // Billing moved to the dedicated Billing & Finance portal (BILLING_ADMIN).
       // Dining / Diet Orders / Kitchen moved to the Nutritionist & Kitchen portals.
@@ -458,6 +466,8 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Medication Management & Inventory", icon: Pill, route: "/physician/orders" },
       { name: "Care Planning", icon: Target, route: "/physician/careplans" },
       { name: "Consults & Referrals", icon: BookOpen, route: "/physician/consults" },
+      { name: "Physician Comms Log", icon: Stethoscope, route: "/physician/physiciancomms" },
+      { name: "Referrals & Appointments", icon: CalendarCheck, route: "/physician/referrals" },
       { name: "Incident Medical Review", icon: AlertTriangle, route: "/physician/incidents" },
       { name: "Clinical Coordination", icon: Siren, route: "/physician/escalations" },
       { name: "Clinical Notes", icon: PenTool, route: "/physician/notes" },
@@ -682,7 +692,10 @@ const LINK_GROUP_MAP: Record<string, SidebarGroup> = {
   "Medication Management & Inventory": "Medication",
   "Medication Administration Record": "Medication",
   "Orders & Prescriptions": "Medication",
+  "Medication Approvals": "Medication",
   "Inventory Alerts": "Medication",
+  "Physician Comms Log": "Coordination & Comms",
+  "Referrals & Appointments": "Coordination & Comms",
   // Coordination & Comms (Modules 5, 7)
   "Clinical Coordination": "Coordination & Comms",
   "Care Team": "Coordination & Comms",

@@ -164,6 +164,21 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
     return Array.from(uniqueResidents.values());
   }, [vitals]);
 
+  // Shift completeness — residents whose room has had no vital in the last 8h.
+  const { data: residentRows } = useLiveQuery<Record<string, unknown>>("residents", { query: "take=300", tables: ["Resident"] });
+  const needsVitals = useMemo(() => {
+    const now = Date.now();
+    const roomLast = new Map<string, number>();
+    for (const rv of residentVitals) {
+      const times = Object.values(rv.vitals).map((v) => (v.recordedAt ? new Date(v.recordedAt).getTime() : 0));
+      const last = times.length ? Math.max(...times) : 0;
+      if (rv.room) roomLast.set(String(rv.room), Math.max(roomLast.get(String(rv.room)) ?? 0, last));
+    }
+    return residentRows
+      .map((r) => ({ name: `${r.firstName ?? ""} ${r.lastName ?? ""}`.trim() || "Resident", room: String(r.roomNumber ?? "") }))
+      .filter((r) => now - (roomLast.get(r.room) ?? 0) > 8 * 3_600_000);
+  }, [residentRows, residentVitals]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return residentVitals.filter((rv) => {
@@ -232,6 +247,17 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
             <StatBox label="Abnormal Readings" value={stats.abnormal} color="text-red-600" bg="bg-red-50" />
             <StatBox label="Residents w/ Alerts" value={stats.withAbnormal} color="text-orange-600" bg="bg-orange-50" />
           </div>
+
+          {!isScoped && needsVitals.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="font-bold text-amber-900 text-sm mb-2 flex items-center gap-2">⏱ Needs vitals this shift ({needsVitals.length}) — no reading in 8h</p>
+              <div className="flex flex-wrap gap-2">
+                {needsVitals.slice(0, 30).map((r) => (
+                  <span key={`${r.room}-${r.name}`} className="inline-flex items-center gap-1 rounded-full bg-white border border-amber-200 px-2.5 py-1 text-xs font-medium text-amber-800">{r.name}{r.room ? ` · Rm ${r.room}` : ""}</span>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">

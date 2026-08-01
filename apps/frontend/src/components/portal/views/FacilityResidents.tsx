@@ -13,7 +13,17 @@ import {
 } from "recharts";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident, humanize } from "@/lib/adapters";
-import { createRecord } from "@/lib/api";
+import { createRecord, updateRecord } from "@/lib/api";
+import Swal from "@/lib/swal";
+
+type ResidentStatus = "ACTIVE" | "DISCHARGED" | "ON_LEAVE" | "DECEASED";
+const RESIDENT_STATUS_BADGE: Record<ResidentStatus, string> = {
+  ACTIVE: "bg-green-100 text-green-700 border-green-200",
+  DISCHARGED: "bg-gray-100 text-gray-600 border-gray-200",
+  ON_LEAVE: "bg-amber-100 text-amber-700 border-amber-200",
+  DECEASED: "bg-slate-200 text-slate-700 border-slate-300",
+};
+const RESIDENT_STATUS_LABEL: Record<ResidentStatus, string> = { ACTIVE: "Active", DISCHARGED: "Discharged", ON_LEAVE: "On Leave", DECEASED: "Deceased" };
 
 type CareLevel = "INDEPENDENT" | "ASSISTED" | "MEMORY" | "SKILLED";
 
@@ -25,7 +35,7 @@ interface MedVM { name: string; dosage: string; frequency: string; status: strin
 interface IncidentVM { type: string; severity: string; date: string | null; resolved: boolean; description: string }
 interface ResidentVM {
   id: string; name: string; room: string; age: number | string;
-  careLevel: CareLevel; alertsCount: number;
+  careLevel: CareLevel; status: ResidentStatus; alertsCount: number;
   allergies: string; conditions: string[]; notes: string;
   meds: MedVM[]; incidents: IncidentVM[];
   vitalsLatest: Record<string, { value: string; unit: string; recordedAt: string | null }>;
@@ -137,7 +147,7 @@ export default function FacilityResidents() {
 
       return {
         id: r.id, name: r.name, room: r.room, age: r.age ?? "—",
-        careLevel: r.careLevel, alertsCount: r.alertsCount,
+        careLevel: r.careLevel, status: r.status, alertsCount: r.alertsCount,
         allergies: r.allergies || "",
         conditions: r.medicalHistory ? r.medicalHistory.split(",").map((c) => c.trim()).filter(Boolean) : [],
         notes: r.notes || "",
@@ -341,7 +351,12 @@ export default function FacilityResidents() {
                         </td>
                         <td className="px-4 py-3 text-gray-700">{r.room}</td>
                         <td className="px-4 py-3 text-gray-700">{r.age}</td>
-                        <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-xs font-semibold ${CARE_BADGE[r.careLevel]}`}>{humanize(r.careLevel)}</span></td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${CARE_BADGE[r.careLevel]}`}>{humanize(r.careLevel)}</span>
+                            {r.status !== "ACTIVE" && <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${RESIDENT_STATUS_BADGE[r.status]}`}>{RESIDENT_STATUS_LABEL[r.status]}</span>}
+                          </div>
+                        </td>
                         <td className="px-4 py-3 text-center text-gray-700">{vital(r, "HEART_RATE")}</td>
                         <td className="px-4 py-3 text-center text-gray-700">{vital(r, "BLOOD_PRESSURE")}</td>
                         <td className="px-4 py-3 text-center text-gray-700">{vital(r, "TEMPERATURE")}</td>
@@ -392,6 +407,22 @@ export default function FacilityResidents() {
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold">{viewing.name}</h2>
                 <p className="text-blue-100 text-sm">Room {viewing.room} • Age {viewing.age} • {humanize(viewing.careLevel)}</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-xs text-blue-100">Status:</span>
+                  <select
+                    value={viewing.status}
+                    onChange={async (e) => {
+                      const st = e.target.value as ResidentStatus;
+                      try { await updateRecord("residents", viewing.id, { status: st }); setViewing({ ...viewing, status: st }); }
+                      catch (err) { Swal.fire("Failed", err instanceof Error ? err.message : "Could not update status.", "error"); }
+                    }}
+                    className="text-xs font-semibold rounded-lg px-2 py-1 text-gray-800 bg-white/90 outline-none cursor-pointer"
+                  >
+                    {(["ACTIVE", "DISCHARGED", "ON_LEAVE", "DECEASED"] as ResidentStatus[]).map((st) => (
+                      <option key={st} value={st}>{RESIDENT_STATUS_LABEL[st]}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <button onClick={() => setViewing(null)} className="p-2 hover:bg-blue-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>

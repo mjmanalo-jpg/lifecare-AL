@@ -55,12 +55,13 @@ export default function MARBoard() {
       const t = rowTime(m);
       return t && new Date(t).toISOString().split("T")[0] === today;
     });
-    return {
-      given: todays.filter((m: any) => m.status === "GIVEN").length,
-      refused: todays.filter((m: any) => m.status === "REFUSED").length,
-      held: todays.filter((m: any) => m.status === "HELD").length,
-      scheduled: todays.filter((m: any) => m.status === "SCHEDULED").length,
-    };
+    const given = todays.filter((m: any) => m.status === "GIVEN").length;
+    const refused = todays.filter((m: any) => m.status === "REFUSED").length;
+    const held = todays.filter((m: any) => m.status === "HELD").length;
+    const missed = todays.filter((m: any) => m.status === "MISSED").length;
+    const scheduled = todays.filter((m: any) => m.status === "SCHEDULED").length;
+    const decided = given + refused + held + missed;
+    return { given, refused, held, missed, scheduled, compliance: decided ? Math.round((given / decided) * 100) : 100 };
   }, [marRows, today]);
 
   const handleDelete = async (id: string) => {
@@ -86,12 +87,13 @@ export default function MARBoard() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
-          { label: "Given", value: stats.given, icon: CheckCircle, color: "text-green-600" },
-          { label: "Refused", value: stats.refused, icon: AlertOctagon, color: "text-red-600" },
-          { label: "Held", value: stats.held, icon: Clock, color: "text-yellow-600" },
-          { label: "Scheduled", value: stats.scheduled, icon: Clock, color: "text-blue-600" },
+          { label: "Given", value: String(stats.given), icon: CheckCircle, color: "text-green-600" },
+          { label: "Refused", value: String(stats.refused), icon: AlertOctagon, color: "text-red-600" },
+          { label: "Held", value: String(stats.held), icon: Clock, color: "text-yellow-600" },
+          { label: "Scheduled", value: String(stats.scheduled), icon: Clock, color: "text-blue-600" },
+          { label: "Compliance", value: `${stats.compliance}%`, icon: CheckCircle, color: stats.compliance >= 90 ? "text-green-600" : stats.compliance >= 75 ? "text-amber-600" : "text-red-600" },
         ].map(s => (
           <div key={s.label} className="bg-white rounded-lg border p-3 flex items-center gap-3">
             <s.icon className={`w-5 h-5 ${s.color}`} />

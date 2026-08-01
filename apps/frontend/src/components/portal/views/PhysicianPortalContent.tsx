@@ -9,6 +9,8 @@ import PhysicianIncidents from "@/components/portal/views/physician/PhysicianInc
 import ClinicalNotes from "@/components/portal/views/clinical/ClinicalNotes";
 import ClinicalMessages from "@/components/portal/views/clinical/ClinicalMessages";
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
+import PhysicianCommsLog from "@/components/portal/views/clinical/PhysicianCommsLog";
+import ReferralsBoard from "@/components/portal/views/clinical/ReferralsBoard";
 import CaregiverReports from "@/components/portal/views/caregiver/CaregiverReports";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import NurseRecords from "@/components/portal/views/NurseRecords";
@@ -50,6 +52,10 @@ export default function PhysicianPortalContent({ tab }: PhysicianPortalContentPr
       return <CarePlanBoard />;
     case "consults":
       return <PhysicianConsults />;
+    case "physiciancomms":
+      return <PhysicianCommsLog />;
+    case "referrals":
+      return <ReferralsBoard />;
     case "escalations":
       return <EscalationsBoard role="PHYSICIAN" />;
     case "incidents":

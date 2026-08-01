@@ -118,6 +118,8 @@ export default function PortalShell({
     message: string;
     isRead: boolean;
     createdAt: string;
+    severity?: string | null;
+    snoozedUntil?: string | null;
   }>("notifications", {
     query: sessionUserId ? `f_userId=${sessionUserId}` : undefined,
     tables: ["Notification"],
@@ -126,8 +128,19 @@ export default function PortalShell({
   const [bellDropdownOpen, setBellDropdownOpen] = useState(false);
 
   // Compute unread count
-  const unreadNotifications = notificationsData?.filter((n) => !n.isRead) || [];
+  // Snoozed alerts drop out of the queue until their snooze window elapses.
+  const isSnoozed = (n: { snoozedUntil?: string | null }) => !!n.snoozedUntil && new Date(n.snoozedUntil).getTime() >= Date.now();
+  const visibleNotifications = (notificationsData || []).filter((n) => !isSnoozed(n));
+  const unreadNotifications = visibleNotifications.filter((n) => !n.isRead);
   const unreadCount = unreadNotifications.length;
+
+  const handleSnooze = async (id: string) => {
+    try {
+      const { updateRecord } = await import("@/lib/api");
+      await updateRecord("notifications", id, { snoozedUntil: new Date(Date.now() + 60 * 60 * 1000).toISOString() });
+      await refetchNotifications();
+    } catch (err) { console.error("Snooze failed:", err); }
+  };
 
   const handleMarkAllRead = async () => {
     try {
@@ -585,8 +598,8 @@ export default function PortalShell({
 
                   {/* Dropdown List */}
                   <div className="max-h-[380px] overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
-                    {notificationsData && notificationsData.length > 0 ? (
-                      notificationsData.map((n) => {
+                    {visibleNotifications.length > 0 ? (
+                      visibleNotifications.map((n) => {
                         const getNotificationIcon = (type: string) => {
                           switch (type) {
                             case "VITAL_ALERT":
@@ -654,7 +667,7 @@ export default function PortalShell({
                           <div
                             key={n.id}
                             onClick={() => !n.isRead && handleMarkSingleRead(n.id)}
-                            className={`p-4 flex gap-3 transition cursor-pointer hover:bg-blue-50/10 ${
+                            className={`p-4 flex gap-3 transition cursor-pointer hover:bg-blue-50/10 ${n.severity === "CRITICAL" ? "border-l-4 border-red-500" : n.severity === "WARNING" ? "border-l-4 border-amber-400" : ""} ${
                               !n.isRead ? "bg-blue-50/5 dark:bg-blue-500/5 font-medium" : ""
                             }`}
                           >
@@ -670,6 +683,13 @@ export default function PortalShell({
                                 theme === "dark" ? "text-gray-300" : "text-gray-600"
                               }`}>{n.message}</p>
                             </div>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); void handleSnooze(n.id); }}
+                              title="Snooze 1 hour"
+                              className="self-center flex-shrink-0 text-[10px] font-semibold text-gray-400 hover:text-gray-700 px-1.5 py-1 rounded"
+                            >
+                              Snooze
+                            </button>
                             {!n.isRead && (
                               <div className="w-2 h-2 rounded-full bg-blue-500 self-center flex-shrink-0" />
                             )}

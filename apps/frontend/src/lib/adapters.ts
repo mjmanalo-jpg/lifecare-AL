@@ -59,7 +59,7 @@ export function adaptResident(r: any) {
     room: r.roomNumber ?? "—",
     age: ageFromDob(r.dateOfBirth),
     careLevel: (r.careLevel ?? "ASSISTED") as "INDEPENDENT" | "ASSISTED" | "MEMORY" | "SKILLED",
-    status: "ACTIVE" as const,
+    status: (r.status ?? "ACTIVE") as "ACTIVE" | "DISCHARGED" | "ON_LEAVE" | "DECEASED",
     alertsCount: openAlerts,
     allergies: r.allergies ?? "",
     medicalHistory: r.medicalHistory ?? "",
@@ -96,7 +96,8 @@ export function adaptTask(t: any) {
       ? new Date(t.dueDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       : "",
     priority: priorityTier(t.priority),
-    category: humanize(t.status) || "Task",
+    category: humanize(t.category) || "General",
+    dueDate: t.dueDate ?? null,
     completed: t.status === "COMPLETED",
     notes: t.description ?? "",
     raw: t,

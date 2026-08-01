@@ -718,7 +718,8 @@ function AddMedicationModal({ residents, onClose, onSaved }: {
         dosage: form.dosage.trim(),
         frequency: form.frequency,
         route: form.route,
-        status: form.status,
+        status: "PENDING", // new prescriptions require Care Manager approval before activating
+        submittedByName: form.prescribedBy.trim() || null,
         startDate: new Date(form.startDate).toISOString(),
         endDate: form.endDate ? new Date(form.endDate).toISOString() : null,
         prescribedBy: form.prescribedBy.trim() || null,
