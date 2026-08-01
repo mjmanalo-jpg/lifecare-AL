@@ -6,7 +6,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord } from "@/lib/api";
-import { ClinicalHeader, ClinicalCard, StatusPill, MicroLabel, Eyebrow, CLINICAL } from "./clinical-ui";
+import { ClinicalHeader, ClinicalCard, StatusPill, MicroLabel, Eyebrow } from "./clinical-ui";
 
 type Row = Record<string, unknown>;
 const s = (v: unknown) => (v == null ? "" : String(v));
@@ -74,7 +74,7 @@ export default function PhysicianCommsLog() {
   const inp = "w-full rounded-md border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30 text-sm";
 
   return (
-    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5 print:m-0 print:p-0" style={{ background: CLINICAL.ground }}>
+    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5 print:m-0 print:p-0" style={{ background: "#FFFFFF" }}>
       <div className="print:hidden">
         <ClinicalHeader
           eyebrow="Physician Communication Log"

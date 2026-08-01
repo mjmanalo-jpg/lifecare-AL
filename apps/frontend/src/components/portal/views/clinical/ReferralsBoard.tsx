@@ -6,7 +6,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord } from "@/lib/api";
-import { CLINICAL, StatusPill, Eyebrow, MicroLabel, ClinicalCard } from "./clinical-ui";
+import { StatusPill, Eyebrow, MicroLabel, ClinicalCard } from "./clinical-ui";
 
 type Row = Record<string, unknown>;
 const s = (v: unknown) => (v == null ? "" : String(v));
@@ -80,7 +80,7 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
   ];
 
   return (
-    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-6" style={{ background: CLINICAL.ground }}>
+    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-6" style={{ background: "#FFFFFF" }}>
       {/* Header banner */}
       <div className="bg-[#2E4A48] rounded-lg p-6 relative overflow-hidden">
         <Eyebrow className="absolute top-6 right-6 !text-[#E0836B]">Module · Referrals</Eyebrow>

@@ -21,7 +21,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord } from "@/lib/api";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { PRIORITY_META, STATUS_LABEL, PRIORITIES, slaState } from "./escalationMeta";
-import { CLINICAL, StatusPill, MicroLabel, ClinicalHeader, ClinicalCard } from "./clinical-ui";
+import { StatusPill, MicroLabel, ClinicalHeader, ClinicalCard } from "./clinical-ui";
 
 /**
  * SBAR clinical escalation — one role-aware board:
@@ -150,7 +150,7 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
   const escalateOnCall = (e: EscVM) => patch(e, { status: "ESCALATED", assignedToRole: "FACILITY_ADMIN" }, "Escalated to on-call");
 
   return (
-    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-6" style={{ background: CLINICAL.ground }}>
+    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-6" style={{ background: "#FFFFFF" }}>
       <ClinicalHeader
         eyebrow="SBAR Clinical Escalation"
         title="SBAR Escalations"

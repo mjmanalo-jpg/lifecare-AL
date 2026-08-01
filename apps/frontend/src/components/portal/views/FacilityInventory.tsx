@@ -15,7 +15,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptInventoryItem } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
-import { CLINICAL, StatusPill, MicroLabel, ClinicalHeader, ClinicalCard } from "./clinical/clinical-ui";
+import { StatusPill, MicroLabel, ClinicalHeader, ClinicalCard } from "./clinical/clinical-ui";
 
 type InventoryItem = ReturnType<typeof adaptInventoryItem>;
 
@@ -227,7 +227,7 @@ export default function FacilityInventory() {
   };
 
   return (
-    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5" style={{ background: CLINICAL.ground }}>
+    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5" style={{ background: "#FFFFFF" }}>
       {/* Header */}
       <ClinicalHeader
         eyebrow="Inventory Stock List"
