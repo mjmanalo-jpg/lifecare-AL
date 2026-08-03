@@ -17,6 +17,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { updateRecord } from "@/lib/api";
 import { adaptResident, humanize } from "@/lib/adapters";
 import ResidentQRScanner from "@/components/ResidentQRScanner";
+import ResidentQRModal from "@/components/ResidentQRModal";
 
 /* ── Types ───────────────────────────────────────────────────────────── */
 
@@ -125,6 +126,7 @@ export default function CaregiverResidents() {
   const [page, setPage] = useState(1);
   const [viewing, setViewing] = useState<ResidentVM | null>(null);
   const [bellsViewing, setBellsViewing] = useState<ResidentVM | null>(null);
+  const [qrResident, setQrResident] = useState<{ id: string; name: string; room: string } | null>(null);
 
   // Index EAV vitals by residentId AND room (demo links by room, DB by id).
   const vitalIndex = useMemo(() => {
@@ -400,7 +402,7 @@ export default function CaregiverResidents() {
                               ) : null;
                             })()}
                             <button onClick={() => setViewing(r)} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition">View</button>
-                            <a href={`/rcard/${r.id}`} target="_blank" rel="noopener noreferrer" title="Scannable QR care card" className="px-2 py-1 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 transition inline-flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> QR</a>
+                            <button onClick={() => setQrResident({ id: r.id, name: r.name, room: r.room })} title="Show QR care card" className="px-2 py-1 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 transition inline-flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> QR</button>
                           </div>
                         </td>
                       </tr>
@@ -432,6 +434,7 @@ export default function CaregiverResidents() {
 
       {/* Call Bells modal */}
       {bellsViewing && <CallBellsModal r={bellsViewing} onClose={() => setBellsViewing(null)} refetchCallBells={refetchCallBells} />}
+      <ResidentQRModal open={!!qrResident} onClose={() => setQrResident(null)} residentId={qrResident?.id ?? ""} name={qrResident?.name ?? ""} room={qrResident?.room} />
     </div>
   );
 }

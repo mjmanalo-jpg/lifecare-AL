@@ -16,6 +16,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident, humanize } from "@/lib/adapters";
 import { updateRecord, deleteRecord } from "@/lib/api";
 import ResidentQRScanner from "@/components/ResidentQRScanner";
+import ResidentQRModal from "@/components/ResidentQRModal";
 
 /* ── Types ───────────────────────────────────────────────────────────── */
 
@@ -114,6 +115,7 @@ export default function NurseRecords() {
   const [viewing, setViewing] = useState<RecordVM | null>(null);
   const [editing, setEditing] = useState<RecordVM | null>(null);
   const [bellsViewing, setBellsViewing] = useState<RecordVM | null>(null);
+  const [qrResident, setQrResident] = useState<{ id: string; name: string; room: string } | null>(null);
   const [form, setForm] = useState<EditForm>({ name: "", room: "", careLevel: "INDEPENDENT", allergies: "", medicalHistory: "", notes: "" });
   const [saving, setSaving] = useState(false);
 
@@ -403,7 +405,7 @@ export default function NurseRecords() {
                             <div className="flex items-center justify-end gap-1">
                               {r.callBells.length > 0 && <button onClick={() => setBellsViewing(r)} className="px-2 py-1 bg-orange-500 text-white rounded text-xs font-semibold hover:bg-orange-600 transition">Bells</button>}
                               <button onClick={() => setViewing(r)} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition">View</button>
-                              <a href={`/rcard/${r.id}`} target="_blank" rel="noopener noreferrer" title="Scannable QR care card" className="px-2 py-1 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 transition inline-flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> QR</a>
+                              <button onClick={() => setQrResident({ id: r.id, name: r.name, room: r.room })} title="Show QR care card" className="px-2 py-1 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 transition inline-flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> QR</button>
                             </div>
                           </td>
                         </tr>
@@ -436,6 +438,7 @@ export default function NurseRecords() {
 
       {/* Call Bells modal */}
       {bellsViewing && <CallBellsModal r={bellsViewing} onClose={() => setBellsViewing(null)} refetchCallBells={() => void refetchCallBells()} />}
+      <ResidentQRModal open={!!qrResident} onClose={() => setQrResident(null)} residentId={qrResident?.id ?? ""} name={qrResident?.name ?? ""} room={qrResident?.room} />
 
       {/* View modal */}
       {viewing && <RecordModal r={viewing} nowTs={nowTs} onClose={() => setViewing(null)} onEdit={() => openEdit(viewing)} />}

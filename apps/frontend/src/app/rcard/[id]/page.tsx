@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
-  AlertTriangle, Pill, ClipboardList, ConciergeBell, Printer, ShieldAlert,
-  UserRound, Phone, CalendarClock, Loader2,
+  AlertTriangle, Pill, ClipboardList, ConciergeBell, ShieldAlert,
+  UserRound, Phone, CalendarClock, Loader2, FileDown,
 } from "lucide-react";
-import ResidentQR from "@/components/ResidentQR";
+import QRCode from "qrcode";
+import { jsPDF } from "jspdf";
 
 type Row = Record<string, unknown>;
 const s = (v: unknown) => (v == null ? "" : String(v));
@@ -34,8 +35,10 @@ export default function ResidentCardPage() {
   const [requests, setRequests] = useState<Row[]>([]);
   const [tasks, setTasks] = useState<Row[]>([]);
   const [cardUrl, setCardUrl] = useState("");
+  const [qrData, setQrData] = useState("");
 
   useEffect(() => { setCardUrl(window.location.href); }, []);
+  useEffect(() => { if (cardUrl) QRCode.toDataURL(cardUrl, { width: 512, margin: 1 }).then(setQrData).catch(() => {}); }, [cardUrl]);
 
   useEffect(() => {
     if (!id) return;
@@ -71,6 +74,39 @@ export default function ResidentCardPage() {
     [tasks],
   );
 
+  const residentSlug = () => (`${s(resident?.firstName)} ${s(resident?.lastName)}`.trim() || "resident").toLowerCase().replace(/\s+/g, "-");
+
+  // The whole care card as a downloadable PDF (shown after the QR is scanned).
+  const downloadFullPdf = () => {
+    if (!resident) return;
+    const name = `${s(resident.firstName)} ${s(resident.lastName)}`.trim() || "Resident";
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const M = 40, MAXW = 480, PH = doc.internal.pageSize.getHeight();
+    let y = 50;
+    const ensure = (h = 14) => { if (y + h > PH - 40) { doc.addPage(); y = 50; } };
+    const heading = (t: string) => { ensure(24); doc.setFont("helvetica", "bold").setFontSize(12).setTextColor(30); doc.text(t, M, y); y += 15; };
+    const body = (t: string) => { doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(70); for (const ln of doc.splitTextToSize(t || "—", MAXW)) { ensure(13); doc.text(ln, M, y); y += 13; } y += 6; };
+
+    doc.setFont("helvetica", "bold").setFontSize(18).setTextColor(20).text("Resident Care Card", M, y);
+    if (qrData) doc.addImage(qrData, "PNG", 470, 26, 90, 90);
+    y += 22;
+    doc.setFont("helvetica", "bold").setFontSize(14).text(name, M, y); y += 16;
+    doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(100).text(`Room ${s(resident.roomNumber) || "—"} · ${s(resident.careLevel) || "—"} · DOB ${fmtDate(resident.dateOfBirth)}${age(resident.dateOfBirth) != null ? ` · ${age(resident.dateOfBirth)} yrs` : ""}`, M, y); y += 24;
+
+    heading("Allergies"); body(s(resident.allergies) || "None on record");
+    heading("Medical History"); body(s(resident.medicalHistory));
+    heading(`Medications (${activeMeds.length})`);
+    activeMeds.length ? activeMeds.forEach(m => body(`• ${s(m.name)} ${s(m.dosage)} · ${s(m.frequency)}${m.route ? ` · ${s(m.route)}` : ""}`)) : body("None active");
+    heading("Recent Requests");
+    recentRequests.length ? recentRequests.forEach(r => body(`• ${s(r.category).replace(/_/g, " ")}${r.subType ? ` — ${s(r.subType)}` : ""}: ${s(r.details)} [${s(r.status)}]`)) : body("None");
+    heading("Assignments / To-do");
+    openTasks.length ? openTasks.forEach(t => body(`• ${s(t.title)}${t.dueDate ? ` (due ${fmtDate(t.dueDate)})` : ""}`)) : body("Nothing outstanding");
+    if (resident.emergencyContact || resident.emergencyContactPhone) { heading("Emergency Contact"); body(`${s(resident.emergencyContact)} ${resident.emergencyContactPhone ? `· ${s(resident.emergencyContactPhone)}` : ""}`); }
+
+    doc.setFontSize(8).setTextColor(150).text(`Generated ${new Date().toLocaleString()} · confidential — authorized care staff only`, M, PH - 24);
+    doc.save(`${residentSlug()}-care-card.pdf`);
+  };
+
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>;
   }
@@ -104,10 +140,9 @@ export default function ResidentCardPage() {
               {yrs != null && ` · ${yrs} yrs`} · DOB {fmtDate(resident.dateOfBirth)}
             </p>
           </div>
-          <div className="text-center shrink-0">
-            {cardUrl && <ResidentQR value={cardUrl} size={104} />}
-            <button onClick={() => window.print()} className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-white/80 hover:text-white print:hidden"><Printer className="w-3.5 h-3.5" /> Print</button>
-          </div>
+          <button onClick={downloadFullPdf} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/15 hover:bg-white/25 text-white text-sm font-semibold transition print:hidden">
+            <FileDown className="w-4 h-4" /> Download PDF
+          </button>
         </div>
 
         <div className="p-5 space-y-4">
