@@ -398,6 +398,10 @@ function DashboardTab() {
                       <Navigation className="w-3.5 h-3.5" /> Navigate route
                     </a>
                   </div>
+                  <div className="col-span-2">
+                    <span className="text-[10px] text-gray-500 font-semibold uppercase block">Scheduled</span>
+                    <p className="font-bold text-gray-900 flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-blue-500" /> {fmtDT(activeTrip.scheduledAt)}</p>
+                  </div>
                   <div><span className="text-[10px] text-gray-500 font-semibold uppercase block">Resident</span><p className="font-bold text-gray-900">{activeTrip.residentName}</p><p className="text-xs text-gray-500">Room {activeTrip.roomNumber}</p></div>
                   <div><span className="text-[10px] text-gray-500 font-semibold uppercase block">Vehicle</span><p className="font-bold text-gray-900 flex items-center gap-1"><Truck className="w-3 h-3 text-yellow-500" /> {activeTrip.vehicleName}</p><p className="text-xs text-gray-500">{activeTrip.vehiclePlate}</p></div>
                   <div><span className="text-[10px] text-gray-500 font-semibold uppercase block">Escort</span><p className="font-bold text-gray-900">{activeTrip.escortName || "No Escort"}</p></div>
