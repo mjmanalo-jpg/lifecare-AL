@@ -60,11 +60,28 @@ export default function KitchenCookList() {
   const { data: rows, loading, error, refetch } = useLiveQuery<Row>(
     "diet-orders", { query: "take=300", tables: ["DietOrder"] }
   );
+  // Today's facility menu (the dishes the nutritionist set) — so the kitchen sees
+  // WHAT to cook, alongside each resident's diet order (WHICH variant to prepare).
+  const { data: menuRows } = useLiveQuery<Row>("daily-menus", { query: "take=100", tables: ["DailyMenu"] });
 
   const [search, setSearch] = useState("");
   const [mealFilter, setMealFilter] = useState("all");
   const [today, setToday] = useState("");
-  useEffect(() => { setToday(new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })); }, []);
+  const [todayKey, setTodayKey] = useState("");
+  useEffect(() => {
+    const d = new Date();
+    setToday(d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }));
+    setTodayKey(d.toISOString().slice(0, 10));
+  }, []);
+
+  // Group today's menu dishes by meal.
+  const menuByMeal = useMemo(() => {
+    const todays = menuRows.filter(m => String(m.menuDate ?? "").slice(0, 10) === todayKey);
+    return MEAL_GROUPS.map(meal => ({
+      meal,
+      dishes: todays.filter(m => String(m.mealType ?? "").toUpperCase() === meal),
+    })).filter(g => g.dishes.length > 0);
+  }, [menuRows, todayKey]);
 
   // Kitchen only ever sees ACTIVE orders.
   const active = useMemo<CookItem[]>(
@@ -111,6 +128,30 @@ export default function KitchenCookList() {
           <RefreshCw className="w-4 h-4" /> Refresh
         </button>
       </div>
+
+      {/* Today's Menu — the dishes the nutritionist set for today, per meal. */}
+      {menuByMeal.length > 0 && (
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5"><Utensils className="w-4 h-4 text-orange-500" /> Today&apos;s Menu — cook these dishes</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {menuByMeal.map(({ meal, dishes }) => (
+              <div key={meal} className="rounded-lg border border-orange-100 bg-orange-50/40 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-orange-700 mb-1.5">{MEAL_LABEL[meal]}</p>
+                <ul className="space-y-1.5">
+                  {dishes.map(d => (
+                    <li key={String(d.id)} className="text-sm">
+                      <span className="font-semibold text-gray-900">{String(d.name ?? "—")}</span>
+                      {d.dietaryTags ? <span className="ml-1 text-[11px] text-blue-600">· {String(d.dietaryTags).split(",")[0]}</span> : null}
+                      {d.description ? <p className="text-[11px] text-gray-500 leading-snug">{String(d.description)}</p> : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-gray-400 mt-2">Prepare each resident&apos;s diet variant below (low-sodium, diabetic, pureed…) from these dishes.</p>
+        </div>
+      )}
 
       {/* Diet-type count summary */}
       {dietSummary.length > 0 && (

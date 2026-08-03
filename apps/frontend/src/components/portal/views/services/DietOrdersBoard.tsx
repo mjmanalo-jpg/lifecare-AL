@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   UtensilsCrossed, RefreshCw, Plus, X, Trash2, Search, Ban, CheckCircle2,
   Loader2, ClipboardList, ShieldAlert,
@@ -62,7 +62,7 @@ type DietOrder = ReturnType<typeof adaptOrder>;
 
 const emptyForm = {
   residentId: "", dietType: "REGULAR" as DietType, mealType: "ALL" as MealType,
-  restrictions: "", notes: "", orderedBy: "",
+  restrictions: "", notes: "",
 };
 
 export default function DietOrdersBoard() {
@@ -80,6 +80,11 @@ export default function DietOrdersBoard() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // The ordering nutritionist is recorded automatically from the session.
+  const [me, setMe] = useState<string>("");
+  useEffect(() => {
+    fetch("/api/auth/session").then(r => r.json()).then(d => { if (d?.authenticated) setMe(d.session?.name ?? "Nutritionist"); }).catch(() => {});
+  }, []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -123,7 +128,7 @@ export default function DietOrdersBoard() {
         restrictions: form.restrictions || null,
         notes: form.notes || null,
         active: true,
-        orderedBy: form.orderedBy || null,
+        orderedBy: me || null,
       });
       await refetch();
       setShowCreate(false);
@@ -339,9 +344,8 @@ export default function DietOrdersBoard() {
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Notes</label>
                   <textarea value={form.notes} onChange={set("notes")} rows={2} placeholder="Preparation notes for the kitchen…" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-400 outline-none" />
                 </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Ordered By (Nutritionist)</label>
-                  <input type="text" value={form.orderedBy} onChange={set("orderedBy")} placeholder="Your name" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-400 outline-none" />
+                <div className="col-span-2 text-xs text-gray-500">
+                  Ordered by <span className="font-semibold text-gray-700">{me || "…"}</span> (recorded automatically)
                 </div>
               </div>
             </div>
