@@ -28,6 +28,7 @@ import {
   PenTool,
   Target,
   Bus,
+  Ambulance,
   Car,
   Route,
   Wrench,
@@ -154,6 +155,7 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   vitals: "Vitals Trends",
   careteam: "Care Team",
   requests: "Transport Requests",
+  ambulance: "Ambulance Booking",
   trips: "Trip Board",
   vehicles: "Vehicles",
   drivers: "Drivers",
@@ -527,6 +529,7 @@ export const ROLES: Record<Role, RoleDetails> = {
     sidebarLinks: [
       { name: "Fleet Dashboard", icon: Grid, route: "/fleet_management/dashboard" },
       { name: "Transport Requests", icon: ClipboardList, route: "/fleet_management/requests" },
+      { name: "Ambulance Booking", icon: Ambulance, route: "/fleet_management/ambulance" },
       { name: "Trip Board", icon: Route, route: "/fleet_management/trips" },
       { name: "Vehicles", icon: Car, route: "/fleet_management/vehicles" },
       { name: "Drivers", icon: Users, route: "/fleet_management/drivers" },
@@ -750,6 +753,7 @@ const LINK_GROUP_MAP: Record<string, SidebarGroup> = {
   "Transport": "Hospitality & Services",
   // Fleet & Transport (Module 13)
   "Transport Requests": "Fleet & Transport",
+  "Ambulance Booking": "Fleet & Transport",
   "Trip Board": "Fleet & Transport",
   "Vehicles": "Fleet & Transport",
   "Drivers": "Fleet & Transport",

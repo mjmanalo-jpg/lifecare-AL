@@ -4,6 +4,7 @@ import FleetDashboard from "@/components/portal/views/fleet/FleetDashboard";
 import FleetVehicles from "@/components/portal/views/fleet/FleetVehicles";
 import FleetDrivers from "@/components/portal/views/fleet/FleetDrivers";
 import FleetHub from "@/components/portal/views/fleet/FleetHub";
+import AmbulanceBooking from "@/components/portal/views/fleet/AmbulanceBooking";
 import FacilityResidents from "@/components/portal/views/FacilityResidents";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import PhysicianCarePlans from "@/components/portal/views/physician/PhysicianCarePlans";
@@ -29,6 +30,8 @@ export default function FleetManagementPortalContent({
   tab,
 }: FleetManagementPortalContentProps) {
   switch (tab) {
+    case "ambulance":
+      return <AmbulanceBooking />;
     case "maintenance":
       return <FleetHub initialTab="maintenance" />;
     case "fuel":

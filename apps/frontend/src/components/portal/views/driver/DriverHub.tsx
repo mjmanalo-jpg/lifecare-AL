@@ -1241,7 +1241,8 @@ function ViewModal({ row, onClose }: { row: Record<string, unknown>; onClose: ()
             {trip.arrivedAt && <VF label="Arrived" value={fmtDT(trip.arrivedAt)} />}
             {trip.completedAt && <VF label="Completed" value={fmtDT(trip.completedAt)} />}
             {trip.distanceKm > 0 && <VF label="Distance" value={`${trip.distanceKm} km`} />}
-            {trip.notes && <VF label="Notes" value={trip.notes} />}
+            {(() => { const m = /\[until:([^\]]+)\]/.exec(String(trip.notes || "")); return m ? <VF label="Return by" value={fmtDT(m[1])} /> : null; })()}
+            {trip.notes && <VF label="Notes" value={String(trip.notes).replace(/\s*\[until:[^\]]+\]/, "").trim() || "—"} />}
 
             {/* Route map — pickup → drop-off with live vehicle position */}
             <div>
