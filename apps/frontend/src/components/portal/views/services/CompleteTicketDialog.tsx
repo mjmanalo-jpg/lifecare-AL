@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Camera, Upload } from "lucide-react";
 
 interface CompleteTicketDialogProps {
   open: boolean;
@@ -99,14 +100,18 @@ export default function CompleteTicketDialog({
 
         <form onSubmit={handleSubmit} className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="ticket-photo-file">Photo of finished work</Label>
-            <Input
-              id="ticket-photo-file"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleFile}
-            />
+            <Label>Photo of finished work</Label>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* capture="environment" opens the rear camera on a phone. */}
+              <label className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 cursor-pointer">
+                <Camera className="w-4 h-4" /> Take Photo
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
+              </label>
+              <label className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-input text-sm font-medium hover:bg-accent cursor-pointer">
+                <Upload className="w-4 h-4" /> Upload
+                <input type="file" accept="image/*" className="hidden" onChange={handleFile} />
+              </label>
+            </div>
           </div>
 
           {preview && (
