@@ -15,6 +15,7 @@ const EXPLICIT_ADMIN_MODELS = new Set(["organizations", "communities", "users", 
 const SELF_PATCH_FIELDS: Record<string, Set<string>> = {
   messages: new Set(["isRead", "readAt"]),
   notifications: new Set(["isRead", "readAt"]),
+  tasks: new Set(["status", "completedAt"]),
   "call-bells": new Set(["status"]),
   "service-requests": new Set(["status", "rating", "ratingComment"]),
   "concierge-bookings": new Set(["status"]),

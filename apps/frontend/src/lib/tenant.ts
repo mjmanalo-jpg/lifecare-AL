@@ -191,6 +191,11 @@ export function tenantWhere(modelKey: string, context: TenantContext): Record<st
 
   const selfService = context.role === "FAMILY" || context.role === "RESIDENT";
   if (modelKey === "residents") return selfService ? residentAccessWhere(context) : { communityId: context.communityId };
+  if (modelKey === "tasks") {
+    // Tasks carry a required residentId. Staff see the whole community's tasks;
+    // a resident/family may only see (and complete) their own.
+    return selfService ? { resident: residentAccessWhere(context) } : { communityId: context.communityId };
+  }
   if (RESIDENT_SCOPED.has(modelKey)) {
     return { resident: selfService ? residentAccessWhere(context) : { communityId: context.communityId } };
   }
