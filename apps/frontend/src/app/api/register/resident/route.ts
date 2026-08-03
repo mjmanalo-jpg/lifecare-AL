@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   const context = await requireTenantContext({ requireCommunity: true });
   if (!context?.organizationId || !context.communityId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!canManageOrganization(context) && context.role !== "FACILITY_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!canManageOrganization(context) && !["FACILITY_ADMIN", "SUPERADMIN"].includes(context.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const body = await request.json();
   const email = String(body.email || "").toLowerCase().trim();
   const firstName = String(body.firstName || "").trim();
