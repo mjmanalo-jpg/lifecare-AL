@@ -6,6 +6,7 @@ import { assertMutationEntitled, EntitlementError } from "@/lib/entitlements";
 import { logAudit, snapshot } from "@/lib/audit";
 import { transactionDelegate, withTenantDb } from "@/lib/tenantDb";
 import { prisma } from "@/lib/prisma";
+import { canAlertAction } from "@/lib/alertAccess";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,6 +74,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       data.confirmedAt = new Date();
     }
   }
+  // Module 09 RBAC: acknowledging an alert (isRead/readAt) is open to all staff,
+  // but only full-control roles (Administrator/Care Manager/Nurse) may snooze it.
+  if (model === "notifications" && "snoozedUntil" in data && !canAlertAction(context.role, "snooze")) {
+    return NextResponse.json({ error: "Your role cannot snooze alerts." }, { status: 403 });
+  }
   if (!Object.keys(data).length) return NextResponse.json({ error: "No permitted fields" }, { status: 422 });
   if (!isDbConfigured()) return NextResponse.json({ data: { id, ...data }, demo: true });
 
@@ -108,6 +114,11 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const { model, id } = await params;
   const definition = getModel(model);
   if (!definition || EXPLICIT_ADMIN_MODELS.has(model)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  // Module 09 RBAC: resolving an alert removes it from the queue — restricted to
+  // full-control roles (Administrator/Care Manager/Nurse). The delete is audit-logged.
+  if (model === "notifications" && !canAlertAction(context.role, "resolve")) {
+    return NextResponse.json({ error: "Your role cannot resolve alerts." }, { status: 403 });
+  }
   const existing = await scopedRecord(model, id, context);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!isDbConfigured()) return NextResponse.json({ ok: true, demo: true });

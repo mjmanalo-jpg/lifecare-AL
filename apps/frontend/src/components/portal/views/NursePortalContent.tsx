@@ -17,6 +17,7 @@ import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoar
 import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
 import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
 import ApprovalWorkflows from "@/components/portal/views/clinical/ApprovalWorkflows";
+import AlertCenter from "@/components/portal/views/clinical/AlertCenter";
 import PhysicianCommsLog from "@/components/portal/views/clinical/PhysicianCommsLog";
 import ReferralsBoard from "@/components/portal/views/clinical/ReferralsBoard";
 import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
@@ -316,6 +317,10 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
       });
     }
   };
+
+  if (tab === "alertcenter") {
+    return <AlertCenter />;
+  }
 
   if (tab === "monitoring") {
     return (

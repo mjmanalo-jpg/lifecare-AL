@@ -42,6 +42,7 @@ import {
   SidebarLink,
   groupSidebarLinks,
 } from "@/constants/roleConfig";
+import { canAlertAction } from "@/lib/alertAccess";
 
 interface PortalShellProps {
   userRole: Role;
@@ -683,13 +684,16 @@ export default function PortalShell({
                                 theme === "dark" ? "text-gray-300" : "text-gray-600"
                               }`}>{n.message}</p>
                             </div>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); void handleSnooze(n.id); }}
-                              title="Snooze 1 hour"
-                              className="self-center flex-shrink-0 text-[10px] font-semibold text-gray-400 hover:text-gray-700 px-1.5 py-1 rounded"
-                            >
-                              Snooze
-                            </button>
+                            {/* Snooze is RBAC-gated (Module 09) — full-control roles only. */}
+                            {canAlertAction(userRole, "snooze") && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); void handleSnooze(n.id); }}
+                                title="Snooze 1 hour"
+                                className="self-center flex-shrink-0 text-[10px] font-semibold text-gray-400 hover:text-gray-700 px-1.5 py-1 rounded"
+                              >
+                                Snooze
+                              </button>
+                            )}
                             {!n.isRead && (
                               <div className="w-2 h-2 rounded-full bg-blue-500 self-center flex-shrink-0" />
                             )}

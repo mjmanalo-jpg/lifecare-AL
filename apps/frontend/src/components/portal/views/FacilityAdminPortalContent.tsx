@@ -21,6 +21,7 @@ import ApprovalWorkflows from "@/components/portal/views/clinical/ApprovalWorkfl
 import ReferralsBoard from "@/components/portal/views/clinical/ReferralsBoard";
 import FacilityUnifiedView from "@/components/portal/views/FacilityUnifiedView";
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
+import AlertCenter from "@/components/portal/views/clinical/AlertCenter";
 import CameraVisionFeed from "@/components/CameraVisionFeed";
 import PhysicianCarePlans from "@/components/portal/views/physician/PhysicianCarePlans";
 import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
@@ -248,6 +249,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
   };
 
   // Tab routing
+  if (tab === "alertcenter") return <AlertCenter />;
   if (tab === "admissions") return <AdmissionsContent />;
   if (tab === "assistant") return <AIAssistantContent />;
   if (tab === "residents") return <FacilityResidents />;

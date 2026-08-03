@@ -110,6 +110,7 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   timeline: "Health Timeline",
   report: "Daily Care Documentation & Monitoring",
   alerts: "Alerts",
+  alertcenter: "Alert Center",
   messages: "Messages",
   photos: "Photos",
   appointments: "Appointments",
@@ -267,6 +268,7 @@ export const ROLES: Record<Role, RoleDetails> = {
     sidebarLinks: [
       { name: "Reporting & Care Intelligence", icon: Grid, route: "/superadmin/dashboard" },
       { name: "SLMS Feature Matrix", icon: ShieldCheck, route: "/superadmin/featurematrix" },
+      { name: "Alert Center", icon: BellRing, route: "/superadmin/alertcenter", group: "Clinical Monitoring" },
       { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/superadmin/dailyrounds" },
       { name: "Camera Activity Log", icon: Activity, route: "/superadmin/cameralogs" },
       // "Portal Matrix" is merged into "SLMS Feature Matrix" as its Access Control tab.
@@ -300,6 +302,7 @@ export const ROLES: Record<Role, RoleDetails> = {
     footerText: "Nurse Clinical Portal",
     sidebarLinks: [
       { name: "Reporting & Care Intelligence", icon: Grid, route: "/nurse/dashboard" },
+      { name: "Alert Center", icon: BellRing, route: "/nurse/alertcenter", group: "Clinical Monitoring" },
       { name: "Task Assignment", icon: ClipboardList, route: "/nurse/taskboard", group: "Clinical Monitoring" },
       { name: "Camera Activity Log", icon: Camera, route: "/nurse/cameralogs", group: "Clinical Monitoring" },
       { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/nurse/dailyrounds", group: "Clinical Monitoring" },
@@ -397,6 +400,7 @@ export const ROLES: Record<Role, RoleDetails> = {
     footerText: "Facility Admin Portal",
     sidebarLinks: [
       { name: "Reporting & Care Intelligence", icon: Grid, route: "/facility_admin/dashboard" },
+      { name: "Alert Center", icon: BellRing, route: "/facility_admin/alertcenter", group: "Clinical Monitoring" },
       { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/facility_admin/dailyrounds" },
       { name: "Resident Profile & Care Record", icon: UserRound, route: "/facility_admin/residents" },
       { name: "Staff", icon: Users, route: "/facility_admin/staff" },
@@ -708,6 +712,7 @@ const LINK_GROUP_MAP: Record<string, SidebarGroup> = {
   "Secure Messages": "Coordination & Comms",
   "Messages": "Coordination & Comms",
   "Alerts": "Coordination & Comms",
+  "Alert Center": "Clinical Monitoring",
   "Appointments": "Coordination & Comms",
   // Operations (facility, staff, incidents, billing, reports)
   "Staff Registry": "Operations",

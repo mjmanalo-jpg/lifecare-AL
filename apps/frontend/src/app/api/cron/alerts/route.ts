@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
+import { slaMinutes } from "@/lib/alertAccess";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -288,6 +289,30 @@ async function scanCommunity(communityId: string, organizationId: string | null)
         const r = arr[arr.length - 1].resident;
         if (await notify("SYSTEM_ALERT", "weightTrend", `weight:${residentId}:${monthKey}`, "Weight loss detected", `${rname(r)} (Room ${room(r)}) is down ${dropPct.toFixed(1)}% (${first} → ${last}) over the past weeks. Consider a nutrition review.`)) counts.weightLoss++;
       }
+    }
+  });
+
+  // 8) SLA auto-escalation — CRITICAL alerts left unacknowledged past their
+  //    response window are escalated to the on-call/admin team (Module 09 SLA
+  //    enforcement, server side). Deduped per underlying alert.
+  await runSource("sla-escalation", async () => {
+    const cutoff = new Date(nowTs - slaMinutes("CRITICAL") * 60_000);
+    const overdue = await prisma.notification.findMany({
+      where: {
+        communityId,
+        severity: "CRITICAL",
+        isRead: false,
+        type: { in: ["VITAL_ALERT", "INCIDENT_REPORT"] },
+        createdAt: { lt: cutoff, gte: new Date(nowTs - 24 * 3_600_000) },
+        OR: [{ snoozedUntil: null }, { snoozedUntil: { lt: now } }],
+      },
+      select: { id: true, title: true, relatedEntityId: true },
+    });
+    // Multiple recipients share one underlying alert — escalate it once.
+    const byEntity = new Map<string, (typeof overdue)[number]>();
+    for (const o of overdue) byEntity.set(String(o.relatedEntityId ?? o.id), o);
+    for (const [key, o] of byEntity) {
+      await notify("SYSTEM_ALERT", "slaBreach", `sla:${key}`, "SLA breach — critical alert unacknowledged", `"${o.title}" has not been acknowledged within the ${slaMinutes("CRITICAL")}-minute SLA. Please respond now.`, "CRITICAL");
     }
   });
 

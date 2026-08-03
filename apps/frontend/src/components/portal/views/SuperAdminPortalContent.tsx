@@ -8,6 +8,7 @@ import FacilityResidents from "@/components/portal/views/FacilityResidents";
 import PhysicianCarePlans from "@/components/portal/views/physician/PhysicianCarePlans";
 import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
 import FacilityUnifiedView from "@/components/portal/views/FacilityUnifiedView";
+import AlertCenter from "@/components/portal/views/clinical/AlertCenter";
 import FacilityInventory from "@/components/portal/views/FacilityInventory";
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
 import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
@@ -260,6 +261,10 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   };
 
   // Combined onboarding hub: Admissions + Resident Registration as tabs.
+  if (tab === "alertcenter") {
+    return <AlertCenter />;
+  }
+
   if (tab === "admissions") {
     return <OnboardingHub initialTab="admissions" />;
   }
