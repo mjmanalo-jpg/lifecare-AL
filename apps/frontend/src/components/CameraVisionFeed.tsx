@@ -489,6 +489,8 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   const canvasRef  = useRef<HTMLCanvasElement|null>(null);
   const captureRef = useRef<HTMLCanvasElement|null>(null);
   const faceCropRef = useRef<HTMLCanvasElement|null>(null); // offscreen zoom-crop of the face for accurate emotion
+  const poseCropRef = useRef<HTMLCanvasElement|null>(null); // offscreen zoom-crop of the person for far-away pose (CCTV)
+  const personBoxRef = useRef<{ x: number; y: number; w: number; h: number; at: number } | null>(null); // latest detected person box (for ROI crop)
   const tapoImgRef = useRef<HTMLImageElement|null>(null);
 
   // Model refs
@@ -1411,6 +1413,34 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     return c;
   }, []);
 
+  // Person-ROI zoom for FAR-AWAY detection (CCTV). MediaPipe shrinks its input to a
+  // small square internally, so a resident who is only ~30px tall in a wide 1080p
+  // room shot is invisible to the pose model on the full frame. Here we crop to the
+  // person's detected bounding box and scale it up (keeping aspect ratio) so the body
+  // is big enough to track. The caller remaps the landmarks back to full-frame coords
+  // using the returned source rect. Returns null if the box is too small to trust.
+  const buildPersonCrop = useCallback((
+    src: HTMLVideoElement | HTMLImageElement,
+    box: { x: number; y: number; w: number; h: number }, W: number, H: number,
+  ): { canvas: HTMLCanvasElement; sx: number; sy: number; sw: number; sh: number } | null => {
+    const padX = box.w * 0.25, padY = box.h * 0.2; // pad so limbs/head aren't clipped
+    let sx = (box.x - padX) * W, sy = (box.y - padY) * H;
+    let sw = (box.w + padX * 2) * W, sh = (box.h + padY * 2) * H;
+    sx = Math.max(0, sx); sy = Math.max(0, sy);
+    sw = Math.min(sw, W - sx); sh = Math.min(sh, H - sy);
+    if (sw < 24 || sh < 24) return null;
+    // Scale up so the smaller side is ~256px (cap 4x) — enough pixels for the pose net.
+    const scale = Math.min(4, Math.max(1, 256 / Math.min(sw, sh)));
+    const cw = Math.round(sw * scale), ch = Math.round(sh * scale);
+    let c = poseCropRef.current;
+    if (!c) { c = document.createElement("canvas"); poseCropRef.current = c; }
+    c.width = cw; c.height = ch;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    try { ctx.drawImage(src, sx, sy, sw, sh, 0, 0, cw, ch); } catch { return null; }
+    return { canvas: c, sx, sy, sw, sh };
+  }, []);
+
   // ── Main inference + draw loop (requestAnimationFrame) ────────────────────
   const loop = useCallback(() => {
     const now=performance.now();
@@ -1437,8 +1467,31 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
       // Pose: throttled to ~30fps (for body movement & behavior analysis)
       if (poseRef.current && now-lastPoseRef.current>30) {
         try {
-          const r=poseRef.current.detectForVideo(source,now);
-          posesRef.current = r.landmarks??[];
+          // FAR-AWAY (CCTV): if the object detector just saw a SMALL person (i.e. one
+          // far from the camera), run pose on a zoomed crop of that person instead of
+          // the wide full frame, then remap the landmarks back to full-frame coords.
+          // For a close/large person (or before any detection) we use the full frame,
+          // so current webcam behaviour is unchanged.
+          const box = personBoxRef.current;
+          const boxFresh = !!box && (now - box.at) < 500;
+          const distant = boxFresh && box!.h < 0.55 && box!.w < 0.55; // small in frame ⇒ far
+          let poseInput: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement = source;
+          let crop: { sx: number; sy: number; sw: number; sh: number } | null = null;
+          if (distant) {
+            const c = buildPersonCrop(source, box!, srcW, srcH);
+            if (c) { poseInput = c.canvas; crop = c; }
+          }
+          const r=poseRef.current.detectForVideo(poseInput,now);
+          let landmarks: LM[][] = r.landmarks ?? [];
+          if (crop && landmarks.length) {
+            // Crop-normalized (0..1 over the crop) → full-frame normalized.
+            landmarks = landmarks.map((lm) => lm.map((p) => ({
+              ...p,
+              x: (p.x * crop!.sw + crop!.sx) / srcW,
+              y: (p.y * crop!.sh + crop!.sy) / srcH,
+            })));
+          }
+          posesRef.current = landmarks;
           const pose0 = posesRef.current[0];
           if (pose0) {
             analyzeBodyMovement(pose0);
@@ -1543,7 +1596,14 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
           // The confidence gate mirrors the repo's `conf > 80` and stops low-confidence
           // detections from firing. `y > 0.35` and box bottom > 0.75 is our added guard
           // so only a person flat on the floor can trigger a fall alert.
+          // Largest-scoring person → drives both the object-fall check and the
+          // far-away pose ROI crop below. The person detector holds a lock at much
+          // greater distance than the pose net, so it's our "where is the resident"
+          // signal for a wide CCTV shot.
           const personBox = newDets.find(d => d.label.toLowerCase() === "person" || d.label.toLowerCase() === "human");
+          if (personBox && personBox.score > 0.4) {
+            personBoxRef.current = { x: personBox.x, y: personBox.y, w: personBox.w, h: personBox.h, at: now };
+          }
           if (personBox && personBox.score > 0.65) {
             // Tech-Watt: person horizontal when the box is CLEARLY wider than tall (lying).
             const horizontal = personBox.w > personBox.h * 1.4;
@@ -1790,7 +1850,7 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
 
     // eslint-disable-next-line react-hooks/immutability
     rafRef.current=requestAnimationFrame(loop);
-  }, [modelsOk, activeCamera, useBackendFeed, analyzeBodyMovement, checkFall, runVision, drawFrame, buildFaceCrop]);
+  }, [modelsOk, activeCamera, useBackendFeed, analyzeBodyMovement, checkFall, runVision, drawFrame, buildFaceCrop, buildPersonCrop]);
 
   // Start loop once camera is active
   useEffect(() => {
