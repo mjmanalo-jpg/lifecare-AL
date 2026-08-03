@@ -744,7 +744,8 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   }
   if (tab === "approvalworkflows") return <ApprovalWorkflows />;
   if (tab === "physiciancomms") return <PhysicianCommsLog />;
-  if (tab === "referrals") return <ReferralsBoard canApprove />;
+  // Nurses submit referrals only — Care Manager (Facility Admin) approves/rejects.
+  if (tab === "referrals") return <ReferralsBoard />;
   if (tab === "cameralogs") {
     return <CameraActivityLog />;
   }
