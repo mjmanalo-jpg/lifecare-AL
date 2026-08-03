@@ -83,9 +83,9 @@ export default function AlertCenter() {
     return rows
       .filter((n) => ALERT_NOTIFICATION_TYPES.has(String(n.type)) && !isSnoozed(n))
       .sort((a, b) => {
-        // Unacknowledged first, then by SLA urgency (soonest/most-breached first).
+        // Unacknowledged first, then newest alert first (most recently reported).
         if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
-        return slaState(a.createdAt, a.severity, nowMs).remainingMs - slaState(b.createdAt, b.severity, nowMs).remainingMs;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
   }, [rows, nowMs]);
 
