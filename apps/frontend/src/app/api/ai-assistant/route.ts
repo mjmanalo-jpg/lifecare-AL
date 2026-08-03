@@ -167,17 +167,22 @@ const RESIDENT_TOOLS = [
   },
 ];
 
-/** The Resident.id behind the current session, only for RESIDENT logins. */
-async function residentIdForSession(): Promise<string | null> {
+/** Identity + tenant of the Resident behind the current session (RESIDENT logins only). */
+interface ResidentIdentity {
+  id: string;
+  communityId: string | null;
+  organizationId: string | null;
+}
+async function residentForSession(): Promise<ResidentIdentity | null> {
   if (!isDbConfigured()) return null;
   try {
     const session = await getSession();
     if (!session || session.role !== "RESIDENT" || !session.userId) return null;
     const row = await prisma.resident.findFirst({
       where: { userId: session.userId },
-      select: { id: true },
+      select: { id: true, communityId: true, organizationId: true },
     });
-    return row?.id ?? null;
+    return row ?? null;
   } catch {
     return null;
   }
@@ -186,8 +191,12 @@ async function residentIdForSession(): Promise<string | null> {
 async function executeResidentTool(
   name: string,
   args: Record<string, unknown>,
-  residentId: string
+  resident: ResidentIdentity
 ): Promise<Record<string, unknown>> {
+  // Every row this writes is stamped with the resident's own tenant so it stays
+  // scoped to their community/org — never orphaned or visible cross-tenant.
+  const tenant = { communityId: resident.communityId, organizationId: resident.organizationId };
+
   if (name === "request_visit") {
     const when = new Date(String(args.checkInTime ?? ""));
     if (isNaN(when.getTime())) {
@@ -195,12 +204,13 @@ async function executeResidentTool(
     }
     const visit = await prisma.visit.create({
       data: {
-        residentId,
+        residentId: resident.id,
         visitorName: String(args.visitorName ?? "Family member"),
         relationship: args.relationship ? String(args.relationship) : null,
         purpose: args.purpose ? String(args.purpose) : "Requested via AI companion",
         notes: "Requested through the AI companion chat",
         checkInTime: when,
+        ...tenant,
       },
     });
     return { ok: true, visitId: visit.id, scheduledFor: when.toISOString() };
@@ -208,42 +218,77 @@ async function executeResidentTool(
 
   if (name === "ring_call_bell") {
     const bell = await prisma.callBell.create({
-      data: { residentId, reason: String(args.reason ?? "Assistance requested via AI companion") },
+      data: { residentId: resident.id, reason: String(args.reason ?? "Assistance requested via AI companion"), ...tenant },
     });
-    // Notify staff — mirrors the /api/db call-bells auto-notification.
-    const resident = await prisma.resident.findUnique({
-      where: { id: residentId },
+    // Notify staff — mirrors the /api/db call-bells auto-notification. Scope the
+    // recipients to the resident's OWN community (via active memberships), so a
+    // call bell never pages staff at other facilities in the same database.
+    const info = await prisma.resident.findUnique({
+      where: { id: resident.id },
       select: { firstName: true, lastName: true, roomNumber: true },
     });
-    const staff = await prisma.user.findMany({
-      where: { role: { in: ["FACILITY_ADMIN", "NURSE", "CAREGIVER"] }, isActive: true },
-      select: { id: true },
-    });
-    const who = resident ? `${resident.firstName} ${resident.lastName}` : "A resident";
-    const room = resident ? `Room ${resident.roomNumber}` : "their room";
-    await prisma.notification.createMany({
-      data: staff.map((u) => ({
-        userId: u.id,
-        type: "CALL_BELL" as const,
-        title: `Call Bell: ${who}`,
-        message: `${who} in ${room} asked the AI companion for help: "${bell.reason}".`,
-        relatedEntityId: bell.id,
-        relatedEntityType: "CallBell",
-      })),
-    });
+    const staff = resident.communityId
+      ? await prisma.communityMembership.findMany({
+          where: { communityId: resident.communityId, status: "ACTIVE", role: { in: ["FACILITY_ADMIN", "NURSE", "CAREGIVER"] } },
+          select: { userId: true },
+        })
+      : [];
+    const who = info ? `${info.firstName} ${info.lastName}` : "A resident";
+    const room = info ? `Room ${info.roomNumber}` : "their room";
+    if (staff.length) {
+      await prisma.notification.createMany({
+        data: staff.map((m) => ({
+          userId: m.userId,
+          type: "CALL_BELL" as const,
+          title: `Call Bell: ${who}`,
+          message: `${who} in ${room} asked the AI companion for help: "${bell.reason}".`,
+          relatedEntityId: bell.id,
+          relatedEntityType: "CallBell",
+          ...tenant,
+        })),
+      });
+    }
     return { ok: true, callBellId: bell.id };
   }
 
   return { ok: false, error: `Unknown tool '${name}'` };
 }
 
+// ── Per-action authorization ──────────────────────────────────────────────
+// Each action is limited to the portals that legitimately use it, so a
+// low-privilege session (FAMILY, or a RESIDENT reaching for staff tools) can't
+// drive the endpoint, exfiltrate crafted context, or burn Gemini/ElevenLabs
+// quota. Callers (verified against the codebase):
+//   chat/admin, tts, extract → SuperAdmin & Facility Admin assistant; Nurse &
+//                              Physician clinical-notes chat
+//   chat/resident, tts, stt  → the resident AI companion
+//   sbar, endorsement        → Nurse/Caregiver clinical drafts
+const CLINICAL_STAFF = new Set(["SUPERADMIN", "FACILITY_ADMIN", "NURSE", "CAREGIVER", "PHYSICIAN"]);
+const ADMIN_STAFF = new Set(["SUPERADMIN", "FACILITY_ADMIN"]);
+
+function actionAllowed(action: string, audience: string, role: string, isPlatform: boolean): boolean {
+  if (isPlatform) return true; // platform operators are superusers
+  switch (action) {
+    case "chat":
+      return audience === "resident" ? role === "RESIDENT" : CLINICAL_STAFF.has(role);
+    case "tts":
+    case "stt":
+      // Voice I/O serves both the resident companion and the staff assistant.
+      return role === "RESIDENT" || CLINICAL_STAFF.has(role);
+    case "sbar":
+    case "endorsement":
+      return CLINICAL_STAFF.has(role);
+    case "extract":
+      return ADMIN_STAFF.has(role);
+    default:
+      return false;
+  }
+}
+
 export async function POST(req: NextRequest) {
   const tenantContext = await requireTenantContext({ allowPlatform: true });
   if (!tenantContext) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (tenantContext.organizationId) {
-    const entitlements = await getEntitlements(tenantContext.organizationId);
-    if (entitlements?.features.ai_assistant?.enabled === false) return NextResponse.json({ error: "AI Assistant is not enabled for this plan" }, { status: 403 });
-  }
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -253,6 +298,17 @@ export async function POST(req: NextRequest) {
 
   const action = body.action as string | undefined;
   if (!action) return NextResponse.json({ error: "No action" }, { status: 400 });
+  const audience = String(body.audience ?? "admin");
+
+  // Role gate before any provider call or DB action.
+  if (!actionAllowed(action, audience, tenantContext.role, tenantContext.isPlatform)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (tenantContext.organizationId) {
+    const entitlements = await getEntitlements(tenantContext.organizationId);
+    if (entitlements?.features.ai_assistant?.enabled === false) return NextResponse.json({ error: "AI Assistant is not enabled for this plan" }, { status: 403 });
+  }
 
   switch (action) {
     case "chat":
@@ -284,7 +340,8 @@ async function handleChat(body: Record<string, unknown>) {
   const history = Array.isArray(body.history) ? (body.history as ChatTurn[]) : [];
 
   // Real actions are only armed for a verified RESIDENT session with a DB.
-  const residentId = audience === "resident" ? await residentIdForSession() : null;
+  const residentRec = audience === "resident" ? await residentForSession() : null;
+  const residentId = residentRec?.id ?? null;
 
   const systemInstruction =
     persona +
@@ -328,10 +385,10 @@ async function handleChat(body: Record<string, unknown>) {
         const call = parts.find((p) => p.functionCall)?.functionCall;
 
         // ── Tool call: execute for real, then let the model confirm naturally ──
-        if (call && residentId) {
+        if (call && residentRec) {
           let result: Record<string, unknown>;
           try {
-            result = await executeResidentTool(call.name, call.args ?? {}, residentId);
+            result = await executeResidentTool(call.name, call.args ?? {}, residentRec);
           } catch (err) {
             result = { ok: false, error: (err as Error).message };
           }
