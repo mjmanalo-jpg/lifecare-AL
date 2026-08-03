@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, X, Eye, Trash2, Plus, Clock, CheckCircle2, Undo2 } from "lucide-react";
+import { Search, X, Eye, Trash2, Plus, Clock, CheckCircle2, Undo2, Play } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -122,13 +122,14 @@ export default function CaregiverTasks() {
     return { pending, inProgress, completed };
   }, [allFilteredTasks]);
 
-  const handleToggleTask = async (id: string) => {
-    const task = tasks.find((t) => t.id === id);
-    if (!task) return;
+  // Advance a task through its lifecycle: Start → IN_PROGRESS, Complete →
+  // COMPLETED, or revert/reopen → PENDING. completedAt is stamped only on
+  // completion and cleared otherwise, so a reopened task looks fresh.
+  const handleSetStatus = async (id: string, status: "PENDING" | "IN_PROGRESS" | "COMPLETED") => {
     try {
       await updateRecord("tasks", id, {
-        status: task.completed ? "PENDING" : "COMPLETED",
-        completedAt: task.completed ? null : new Date().toISOString(),
+        status,
+        completedAt: status === "COMPLETED" ? new Date().toISOString() : null,
       });
       await refetchTasks();
     } catch (err) {
@@ -182,7 +183,8 @@ export default function CaregiverTasks() {
 
   /** A single kanban task card. `top` colours the top rule to match its column. */
   const TaskCard = ({ task, top }: { task: CaregiverTask; top: "teal" | "amber" | "green" }) => {
-    const raw = task.raw as { completedAt?: string } | undefined;
+    const raw = task.raw as { completedAt?: string; status?: string } | undefined;
+    const inProgress = !task.completed && String(raw?.status ?? "").toUpperCase() === "IN_PROGRESS";
     // eslint-disable-next-line react-hooks/purity
     const isOverdue = !task.completed && !!task.dueDate && new Date(task.dueDate).getTime() < Date.now();
     const completedTime = raw?.completedAt
@@ -231,13 +233,42 @@ export default function CaregiverTasks() {
           )}
 
           <div className="flex items-center gap-1 flex-shrink-0">
-            <button
-              onClick={() => handleToggleTask(task.id)}
-              title={task.completed ? "Mark pending" : "Mark complete"}
-              className={`p-1.5 rounded transition ${task.completed ? "text-[#8A8D82] hover:bg-black/5" : "text-[#7E9B6F] hover:bg-[#7E9B6F]/12"}`}
-            >
-              {task.completed ? <Undo2 className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-            </button>
+            {task.completed ? (
+              <button
+                onClick={() => handleSetStatus(task.id, "PENDING")}
+                title="Reopen task"
+                className="p-1.5 rounded transition text-[#8A8D82] hover:bg-black/5"
+              >
+                <Undo2 className="w-4 h-4" />
+              </button>
+            ) : (
+              <>
+                {inProgress ? (
+                  <button
+                    onClick={() => handleSetStatus(task.id, "PENDING")}
+                    title="Move back to pending"
+                    className="p-1.5 rounded transition text-[#8A8D82] hover:bg-black/5"
+                  >
+                    <Undo2 className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleSetStatus(task.id, "IN_PROGRESS")}
+                    title="Start task"
+                    className="p-1.5 rounded transition text-[#C39A3E] hover:bg-[#C39A3E]/12"
+                  >
+                    <Play className="w-4 h-4" />
+                  </button>
+                )}
+                <button
+                  onClick={() => handleSetStatus(task.id, "COMPLETED")}
+                  title="Mark complete"
+                  className="p-1.5 rounded transition text-[#7E9B6F] hover:bg-[#7E9B6F]/12"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                </button>
+              </>
+            )}
             <button
               onClick={() => setViewingTask(task)}
               title="View task"
@@ -447,7 +478,7 @@ export default function CaregiverTasks() {
                 </div>
                 <div>
                   <MicroLabel className="mb-2">Status</MicroLabel>
-                  <StatusPill status={viewingTask.completed ? "COMPLETED" : "PENDING"} />
+                  <StatusPill status={viewingTask.completed ? "COMPLETED" : String((viewingTask.raw as { status?: string } | undefined)?.status ?? "").toUpperCase() === "IN_PROGRESS" ? "IN_PROGRESS" : "PENDING"} />
                 </div>
                 <div>
                   <MicroLabel className="mb-2">Assigned To</MicroLabel>
@@ -475,17 +506,33 @@ export default function CaregiverTasks() {
               >
                 Close
               </button>
-              <button
-                onClick={() => {
-                  handleToggleTask(viewingTask.id);
-                  setViewingTask(null);
-                }}
-                className={`px-4 sm:px-6 py-2 text-white font-semibold rounded-lg transition text-sm ${
-                  viewingTask.completed ? "bg-[#2E4A48] hover:bg-[#25403D]" : "bg-[#7E9B6F] hover:bg-[#6E8A5F]"
-                }`}
-              >
-                {viewingTask.completed ? "Mark Pending" : "Mark Complete"}
-              </button>
+              <div className="flex items-center gap-2">
+                {viewingTask.completed ? (
+                  <button
+                    onClick={() => { handleSetStatus(viewingTask.id, "PENDING"); setViewingTask(null); }}
+                    className="px-4 sm:px-6 py-2 text-white font-semibold rounded-lg transition text-sm bg-[#2E4A48] hover:bg-[#25403D]"
+                  >
+                    Reopen Task
+                  </button>
+                ) : (
+                  <>
+                    {String((viewingTask.raw as { status?: string } | undefined)?.status ?? "").toUpperCase() !== "IN_PROGRESS" && (
+                      <button
+                        onClick={() => { handleSetStatus(viewingTask.id, "IN_PROGRESS"); setViewingTask(null); }}
+                        className="px-4 sm:px-6 py-2 font-semibold rounded-lg transition text-sm border border-[#C39A3E] text-[#9A7A2E] hover:bg-[#C39A3E]/10"
+                      >
+                        Start Task
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { handleSetStatus(viewingTask.id, "COMPLETED"); setViewingTask(null); }}
+                      className="px-4 sm:px-6 py-2 text-white font-semibold rounded-lg transition text-sm bg-[#7E9B6F] hover:bg-[#6E8A5F]"
+                    >
+                      Mark Complete
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -336,7 +336,7 @@ export const ROLES: Record<Role, RoleDetails> = {
     sidebarLinks: [
       { name: "Reporting & Care Intelligence", icon: Grid, route: "/caregiver/dashboard" },
       { name: "Camera Activity Log", icon: Camera, route: "/caregiver/cameralogs", group: "Clinical Monitoring" },
-      { name: "Task Assignment", icon: ClipboardList, route: "/caregiver/taskboard", group: "Clinical Monitoring" },
+      { name: "Task Checklist", icon: ClipboardList, route: "/caregiver/taskboard", group: "Clinical Monitoring" },
       { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/caregiver/dailyrounds", group: "Clinical Monitoring" },
       { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/caregiver/documentation" },
       { name: "Care Team", icon: Stethoscope, route: "/caregiver/careteam" },
