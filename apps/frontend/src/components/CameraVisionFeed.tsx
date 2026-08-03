@@ -166,13 +166,20 @@ async function loadMediaPipeOnce(): Promise<{ pose: any; detector: any }> {
     );
     _mpVision = vision;
 
-    // Load pose first (critical for camera to start working)
+    // Load pose first (critical for camera to start working).
+    // The FULL model (vs lite) tracks people who are far from the camera or turned
+    // AWAY from it far more reliably — the pose landmarker is body-based, so it does
+    // not need a visible face. Confidence gates are lowered from the 0.5 default so a
+    // small/backlit/back-facing body keeps its lock instead of dropping out.
     const pose = await PoseLandmarker.createFromOptions(vision, {
       baseOptions: {
-        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
         delegate: "GPU",
       },
       runningMode: "VIDEO", numPoses: 2,
+      minPoseDetectionConfidence: 0.3,
+      minPosePresenceConfidence: 0.3,
+      minTrackingConfidence: 0.3,
     });
     _mpPose = pose;
 
@@ -232,6 +239,15 @@ const PREFALL_EVAL_INTERVAL_MS = 1000;   // how often risk is scored
 const PREFALL_DEBOUNCE_MS = 60_000;      // minimum gap between preventive alerts
 const PREFALL_BANNER_MS = 10_000;        // how long the on-screen warning stays up
 const AGITATION_STREAK_TRIGGER = 3;      // consecutive agitated reads before alerting
+
+// ── Bed-exit / getting-up (the #1 elderly pre-fall trigger) ──────────────────
+// Standing up from lying — especially abruptly ("tumayo na lang agad") or right
+// after waking — is the moment most falls happen. Fire an URGENT alarm the instant
+// the torso goes from horizontal (in bed) to upright so staff get a head start.
+const STANDUP_DEBOUNCE_MS = 45_000;      // min gap between bed-exit / stand-up alarms
+const RECENT_WAKE_MS = 20_000;           // "just woke up" window — a rise inside it is riskier
+const SUDDEN_STAND_MS = 5000;            // reclined → upright within this = an abrupt stand-up
+const AGGRESSIVE_WAKE_STREAK = 2;        // agitated reads around wake-up → "woke up aggressively"
 
 const INIT: VisionAnalysis = {
   globalEmotion:"Neutral", emotionConfidence:0, globalBehavior:"Initializing",
@@ -351,6 +367,35 @@ function drawWaveBanner(ctx: CanvasRenderingContext2D, W: number, t: number) {
   ctx.fill();
   ctx.fillStyle="#000"; ctx.fillText(txt,bx+10,by+18);
   ctx.restore();
+}
+
+// Short urgent double-beep (rising tone) for high-risk pre-fall events like a
+// bed-exit or an abrupt wake-and-stand. Best-effort — silent if WebAudio is
+// unavailable or the tab has not yet been interacted with.
+function playUrgentBeep(ref: { current: AudioContext | null }) {
+  try {
+    const AC = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return;
+    if (!ref.current) ref.current = new AC();
+    const ctx = ref.current;
+    if (ctx.state === "suspended") void ctx.resume();
+    const beep = (at: number, freq: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.value = freq;
+      const t0 = ctx.currentTime + at;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.3, t0 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.24);
+    };
+    beep(0, 880);
+    beep(0.28, 1175);
+  } catch { /* audio is best-effort */ }
 }
 
 // Tech-Watt/Fall-Detection style live "FALL DETECTED" text, drawn on the person's box
@@ -580,12 +625,21 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
   const onPreFallRiskRef   = useRef(onPreFallRisk);
   useEffect(() => { onPreFallRiskRef.current = onPreFallRisk; }, [onPreFallRisk]); // keep fresh for the long-lived render loop
 
+  // Bed-exit / getting-up + wake tracking (pose-based → works even at a distance
+  // and when the resident is NOT facing the camera).
+  const prevSleepStateRef  = useRef("Awake"); // detect Sleeping/Drowsy → Awake transitions
+  const wokeAtRef          = useRef(0);       // when the resident last woke up
+  const lastReclinedAtRef  = useRef(0);       // last time the torso was horizontal (lying in bed)
+  const standUpAlertedRef  = useRef(false);   // latched after a stand-up alarm until they lie back down
+  const lastStandAlertRef  = useRef(0);       // debounce for stand-up / bed-exit alarms
+  const alarmCtxRef        = useRef<AudioContext | null>(null); // WebAudio ctx for the urgent beep
+
   // FPS
   const fpsTimesRef = useRef<number[]>([]);
 
   // React UI state
   const [selfFallen, setSelfFallen] = useState(false); // drives the EMERGENCY render when this component detects a fall itself
-  const [preFallRisk, setPreFallRisk] = useState<{ active: boolean; reason: string }>({ active: false, reason: "" });
+  const [preFallRisk, setPreFallRisk] = useState<{ active: boolean; reason: string; urgent: boolean }>({ active: false, reason: "", urgent: false });
   const [camActive,  setCamActive]  = useState(false);
   // A fall is active if the parent says so OR this component detected one itself.
   const fallen = (isFallen ?? false) || selfFallen;
@@ -1390,12 +1444,21 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
             analyzeBodyMovement(pose0);
             poseFallenRef.current = checkFall(pose0, now);
             // Lying/reclined from torso orientation (shoulders→hips): a horizontal
-            // torso = lying in bed. Needs shoulders+hips visible (full-body camera).
+            // torso = lying in bed. Uses whichever shoulder/hip is visible (single
+            // side is enough) so it still works when the resident is far away or
+            // turned away from the camera and only one side is picked up.
             {
+              const VIS = 0.35;
               const sL = pose0[11], sR = pose0[12], hL = pose0[23], hR = pose0[24];
-              if (sL && sR && hL && hR && (sL.visibility ?? 1) > 0.4 && (hL.visibility ?? 1) > 0.4) {
-                const dx = Math.abs((sL.x + sR.x) / 2 - (hL.x + hR.x) / 2);
-                const dy = Math.abs((sL.y + sR.y) / 2 - (hL.y + hR.y) / 2);
+              const shoulders = [sL, sR].filter((p) => p && (p.visibility ?? 1) > VIS) as Array<{ x: number; y: number }>;
+              const hips = [hL, hR].filter((p) => p && (p.visibility ?? 1) > VIS) as Array<{ x: number; y: number }>;
+              if (shoulders.length && hips.length) {
+                const sx = shoulders.reduce((s, p) => s + p.x, 0) / shoulders.length;
+                const sy = shoulders.reduce((s, p) => s + p.y, 0) / shoulders.length;
+                const hx = hips.reduce((s, p) => s + p.x, 0) / hips.length;
+                const hy = hips.reduce((s, p) => s + p.y, 0) / hips.length;
+                const dx = Math.abs(sx - hx);
+                const dy = Math.abs(sy - hy);
                 reclinedRef.current = dy < dx * 1.3; // torso more horizontal than vertical
               }
             }
@@ -1541,6 +1604,12 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         else if (stillMs > 90_000) sleepState = reclined ? "Sleeping" : "Drowsy";
         else if (stillMs > 40_000 && reclined) sleepState = "Drowsy";
         const confused = agitationStreakRef.current >= AGITATION_STREAK_TRIGGER && !selfFallenRef.current;
+        // Wake transition: remember the moment they go from Sleeping/Drowsy → Awake.
+        // A rise/stand-up shortly after this is the classic "woke up and got up too
+        // fast" fall — orthostatic dizziness before the body has adjusted.
+        const prevSleep = prevSleepStateRef.current;
+        if ((prevSleep === "Sleeping" || prevSleep === "Drowsy") && sleepState === "Awake") wokeAtRef.current = now;
+        prevSleepStateRef.current = sleepState;
         analysisRef.current = { ...a, sleepState, confused };
       }
 
@@ -1639,20 +1708,51 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
 
         const nearFall = now - rapidDropTimeRef.current < RAPID_DROP_WINDOW_MS;
 
-        let reason: string | null = null;
-        if (nearFall) reason = "Sudden loss of balance / near-fall motion detected — check resident now.";
-        else if (agitationStreakRef.current >= AGITATION_STREAK_TRIGGER)
-          reason = `Sustained agitation/distress (${emo}, ${conf}%) — resident may be about to get up and fall.`;
+        // ── Bed-exit / stand-up ("tumayo na lang agad") ──────────────────────
+        // Pose-only (torso orientation), so it works at a distance and with the
+        // resident's back to the camera. Track the lying→upright transition: the
+        // instant the torso stops being horizontal after having been in bed, and
+        // it happened quickly, treat it as a stand-up. Latch so we alarm once per
+        // rise (reset when they lie/recline again).
+        const reclinedNow = reclinedRef.current;
+        if (reclinedNow) { lastReclinedAtRef.current = now; standUpAlertedRef.current = false; }
+        const roseFromLying = !reclinedNow && lastReclinedAtRef.current > 0 && (now - lastReclinedAtRef.current) < SUDDEN_STAND_MS;
+        const justWoke = now - wokeAtRef.current < RECENT_WAKE_MS;
+        // "Woke up aggressively": agitation/startle or a motion spike within the
+        // just-woke window — even before they are fully upright.
+        const aggressiveWake = justWoke && (agitationStreakRef.current >= AGGRESSIVE_WAKE_STREAK || nearFall);
 
-        if (reason && now - lastPreFallAlertRef.current > PREFALL_DEBOUNCE_MS) {
-          lastPreFallAlertRef.current = now;
+        let reason: string | null = null;
+        let urgent = false;
+        if (roseFromLying && !standUpAlertedRef.current) {
+          urgent = true;
+          reason = justWoke
+            ? "Resident woke and stood up abruptly (bed-exit) — high fall risk, check now."
+            : "Resident just stood up from lying down (bed-exit) — high fall risk, check now.";
+        } else if (aggressiveWake) {
+          urgent = true;
+          reason = `Resident woke up agitated/abruptly (${emo}, ${conf}%) — may try to get up. Pre-fall risk.`;
+        } else if (nearFall) {
+          reason = "Sudden loss of balance / near-fall motion detected — check resident now.";
+        } else if (agitationStreakRef.current >= AGITATION_STREAK_TRIGGER) {
+          reason = `Sustained agitation/distress (${emo}, ${conf}%) — resident may be about to get up and fall.`;
+        }
+
+        // Urgent (bed-exit / aggressive wake) events get their own faster debounce
+        // and an audible alarm; ambient agitation keeps the calmer cadence.
+        const lastRef = urgent ? lastStandAlertRef : lastPreFallAlertRef;
+        const gate = urgent ? STANDUP_DEBOUNCE_MS : PREFALL_DEBOUNCE_MS;
+        if (reason && now - lastRef.current > gate) {
+          lastRef.current = now;
+          if (roseFromLying) standUpAlertedRef.current = true; // one alarm per stand-up
           agitationStreakRef.current = 0;
           const pre: VisionAnalysis = { ...a, alert: true, alertReason: reason };
           saveMonitoringLog("PRE_FALL_RISK", pre);
           onPreFallRiskRef.current?.(pre, reason);
-          setPreFallRisk({ active: true, reason });
+          setPreFallRisk({ active: true, reason, urgent });
+          if (urgent) playUrgentBeep(alarmCtxRef);
           if (preFallTimerRef.current) clearTimeout(preFallTimerRef.current);
-          preFallTimerRef.current = setTimeout(() => setPreFallRisk({ active: false, reason: "" }), PREFALL_BANNER_MS);
+          preFallTimerRef.current = setTimeout(() => setPreFallRisk({ active: false, reason: "", urgent: false }), PREFALL_BANNER_MS);
         }
       }
     }
@@ -1908,12 +2008,13 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         <div className="absolute inset-0 z-40 pointer-events-none border-4 border-red-500 rounded-2xl animate-pulse"/>
       )}
 
-      {/* PRE-FALL RISK: amber preventive warning shown BEFORE a fall (hidden once a real fall fires) */}
+      {/* PRE-FALL RISK: preventive warning shown BEFORE a fall (hidden once a real fall fires).
+          Urgent bed-exit / abrupt-wake events render red + louder; ambient agitation stays amber. */}
       {preFallRisk.active && !fallen && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex items-center gap-2 max-w-[90%] px-3 py-2 rounded-xl bg-amber-500/95 text-black shadow-lg border border-amber-300 animate-pulse">
+        <div className={`absolute top-16 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex items-center gap-2 max-w-[90%] px-3 py-2 rounded-xl shadow-lg animate-pulse ${preFallRisk.urgent ? "bg-red-600/95 text-white border border-red-300" : "bg-amber-500/95 text-black border border-amber-300"}`}>
           <AlertTriangle className="w-5 h-5 shrink-0"/>
           <div className="leading-tight">
-            <p className="font-black text-[11px] uppercase tracking-widest">Pre-Fall Risk</p>
+            <p className="font-black text-[11px] uppercase tracking-widest">{preFallRisk.urgent ? "Bed-Exit / Stand-Up — Fall Risk" : "Pre-Fall Risk"}</p>
             <p className="font-semibold text-[11px]">{preFallRisk.reason}</p>
           </div>
         </div>
