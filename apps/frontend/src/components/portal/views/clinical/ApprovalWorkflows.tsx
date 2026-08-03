@@ -42,12 +42,16 @@ export default function ApprovalWorkflows() {
   const setReq = (k: string, v: string) => setReqForm((f) => ({ ...f, [k]: v }));
 
   const submitRequest = async () => {
-    if (!reqForm.residentId || !reqForm.name.trim()) { Swal.fire("Missing fields", "Resident and medication name are required.", "warning"); return; }
+    if (!reqForm.residentId || !reqForm.name.trim() || !reqForm.dosage.trim() || !reqForm.frequency.trim()) { Swal.fire("Missing fields", "Resident, medication name, dosage, and frequency are all required.", "warning"); return; }
     setSaving(true);
     try {
+      // dosage, frequency and startDate are required, non-null columns on
+      // Medication — omitting them makes the whole create 400. A pending
+      // request starts today; the reviewer activates it in the MAR on approval.
       await createRecord("medications", {
-        residentId: reqForm.residentId, name: reqForm.name.trim(), dosage: reqForm.dosage.trim() || null,
-        route: reqForm.route, frequency: reqForm.frequency.trim() || null, reason: reqForm.reason.trim() || null,
+        residentId: reqForm.residentId, name: reqForm.name.trim(), dosage: reqForm.dosage.trim(),
+        route: reqForm.route, frequency: reqForm.frequency.trim(), reason: reqForm.reason.trim() || null,
+        startDate: new Date().toISOString(),
         status: "PENDING", submittedById: session.id, submittedByName: session.name,
       });
       await refetchMeds();

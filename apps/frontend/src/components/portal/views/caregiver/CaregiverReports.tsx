@@ -151,8 +151,8 @@ export default function CaregiverReports() {
   const [viewing, setViewing] = useState<ShiftReport | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<ReportForm>(EMPTY_FORM);
-  const [me, setMe] = useState<string | null>(null);
-  useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => { if (d?.authenticated) setMe(d.session?.name ?? "Incoming nurse"); }).catch(() => {}); }, []);
+  const [me, setMe] = useState<{ userId: string | null; staffId: string | null; name: string }>({ userId: null, staffId: null, name: "Incoming nurse" });
+  useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => { if (d?.authenticated) setMe({ userId: d.session?.userId ?? null, staffId: d.session?.staffId ?? null, name: d.session?.name ?? "Incoming nurse" }); }).catch(() => {}); }, []);
   const [saving, setSaving] = useState(false);
 
   // Current time held in state (reading the clock during render is impure).
@@ -247,7 +247,7 @@ export default function CaregiverReports() {
 
   const handleAck = async (r: ShiftReport) => {
     try {
-      await updateRecord("shift-reports", r.id, { acknowledgedByName: me || "Incoming nurse", acknowledgedAt: new Date().toISOString() });
+      await updateRecord("shift-reports", r.id, { acknowledgedByName: me.name || "Incoming nurse", acknowledgedAt: new Date().toISOString() });
       await refetch();
       Swal.fire({ title: "Acknowledged", text: "Handover receipt recorded.", icon: "success", timer: 1300, showConfirmButton: false });
     } catch (err) {
@@ -260,9 +260,18 @@ export default function CaregiverReports() {
       Swal.fire({ title: "Summary required", text: "Add a shift summary before saving.", icon: "warning" });
       return;
     }
+    // staffId + userId are required, non-null relations on ShiftReport; without
+    // a resolved staff identity the create would 400. Block early with a clear
+    // message rather than letting the generic API reject the write.
+    if (!me.staffId || !me.userId) {
+      Swal.fire({ title: "Can't save yet", text: "Your staff profile isn't loaded. Refresh and try again, or contact an admin if your account has no staff record.", icon: "warning" });
+      return;
+    }
     setSaving(true);
     try {
       await createRecord("shift-reports", {
+        staffId: me.staffId,
+        userId: me.userId,
         shiftType: form.shiftType,
         date: new Date(form.date).toISOString(),
         summary: form.summary.trim(),

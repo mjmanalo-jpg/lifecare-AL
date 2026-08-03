@@ -112,5 +112,23 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ authenticated: false }, { status: 401 });
   const workspaces = await listWorkspaces(session.userId!);
-  return NextResponse.json({ authenticated: true, session, workspaces });
+  // Enrich the wire session with the signed-in user's display name and their
+  // Staff id. SessionData carries neither, but clinical screens need them to
+  // record "Administered By" (name) and to satisfy ShiftReport.staffId on write.
+  const enriched: Record<string, unknown> = { ...session };
+  if (isDbConfigured() && session.userId) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: session.userId },
+        select: { name: true, staff: { select: { id: true } } },
+      });
+      if (user) {
+        enriched.name = user.name;
+        enriched.staffId = user.staff?.id ?? null;
+      }
+    } catch {
+      /* fall back to the bare session — non-fatal */
+    }
+  }
+  return NextResponse.json({ authenticated: true, session: enriched, workspaces });
 }
