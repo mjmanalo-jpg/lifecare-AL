@@ -53,7 +53,7 @@ export function autoAssignTeam(category: string, _subType?: string): string {
     REPAIRS: "MAINTENANCE_ENGINEER",
     HOUSEKEEPING: "HOUSEKEEPING_TEAM",
     LAUNDRY: "HOUSEKEEPING_TEAM",
-    ROOM_SERVICE: "HOUSEKEEPING_TEAM",
+    ROOM_SERVICE: "KITCHEN", // meals / snacks / beverages → the kitchen prepares
   };
   return map[category] ?? "MAINTENANCE_ENGINEER";
 }

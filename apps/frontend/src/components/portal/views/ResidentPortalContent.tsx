@@ -593,20 +593,24 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
     }
     setSubmittingMenuSub(true);
     try {
-      await createRecord("tasks", {
+      // Food substitution goes to the KITCHEN as a service request — it shows on
+      // the kitchen's cook list and the facility service-ticket board.
+      await createRecord("service-requests", {
         residentId: resident.id,
-        title: `Diet Substitution: Room ${resident.roomNumber}`,
-        description: `Diet request: ${menuSubText}`,
-        status: "PENDING",
-        priority: "LOW",
-        dueDate: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+        roomNumber: resident.roomNumber || null,
+        category: "ROOM_SERVICE",
+        subType: "Meal Substitution",
+        details: menuSubText.trim(),
+        source: "RESIDENT_PORTAL",
+        priority: "ROUTINE",
+        status: "ASSIGNED",
+        assignedTeam: "KITCHEN",
       });
-      await refetchTasks();
       setMenuModalOpen(false);
       setMenuSubText("");
       Swal.fire({
-        title: "Substitution Dispatched",
-        text: "Your request was logged. The kitchen and caregiver staff have been notified.",
+        title: "Sent to the Kitchen",
+        text: "Your food substitution request was sent to the kitchen.",
         icon: "success",
       });
     } catch (err) {

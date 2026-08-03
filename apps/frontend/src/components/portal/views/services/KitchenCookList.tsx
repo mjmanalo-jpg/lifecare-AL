@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
-import { ChefHat, RefreshCw, Search, Utensils, CalendarDays } from "lucide-react";
+import { ChefHat, RefreshCw, Search, Utensils, CalendarDays, Bell, Check } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { updateRecord } from "@/lib/api";
 import { parseMeals, hasMeals } from "@/lib/dietMeals";
 
 /**
@@ -64,6 +65,15 @@ export default function KitchenCookList() {
   // Today's facility menu (the dishes the nutritionist set) — so the kitchen sees
   // WHAT to cook, alongside each resident's diet order (WHICH variant to prepare).
   const { data: menuRows } = useLiveQuery<Row>("daily-menus", { query: "take=100", tables: ["DailyMenu"] });
+  // Resident food/substitution requests routed to the kitchen.
+  const { data: reqRows, refetch: refetchReqs } = useLiveQuery<Row>("service-requests", { query: "include=resident&take=200", tables: ["ServiceRequest"] });
+  const foodRequests = useMemo(
+    () => reqRows.filter(r => String(r.assignedTeam ?? "") === "KITCHEN" && !["COMPLETED", "CONFIRMED", "CANCELLED"].includes(String(r.status ?? ""))),
+    [reqRows],
+  );
+  const markPrepared = async (id: string) => {
+    try { await updateRecord("service-requests", id, { status: "COMPLETED" }); await refetchReqs(); } catch { /* non-critical */ }
+  };
 
   const [search, setSearch] = useState("");
   const [mealFilter, setMealFilter] = useState("all");
@@ -129,6 +139,31 @@ export default function KitchenCookList() {
           <RefreshCw className="w-4 h-4" /> Refresh
         </button>
       </div>
+
+      {/* Resident food / substitution requests routed to the kitchen. */}
+      {foodRequests.length > 0 && (
+        <div className="rounded-lg border-2 border-orange-300 bg-orange-50 p-4">
+          <p className="text-sm font-bold text-orange-900 mb-2 flex items-center gap-1.5"><Bell className="w-4 h-4" /> Resident Food Requests ({foodRequests.length})</p>
+          <ul className="space-y-2">
+            {foodRequests.map(r => {
+              const res = (r.resident ?? {}) as Row;
+              const name = `${String(res.firstName ?? "")} ${String(res.lastName ?? "")}`.trim() || "Resident";
+              const rm = String(r.roomNumber ?? res.roomNumber ?? "");
+              return (
+              <li key={String(r.id)} className="flex items-start justify-between gap-3 bg-white rounded-lg border border-orange-200 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900">{name}{rm ? ` · Rm ${rm}` : ""}<span className="ml-2 text-[11px] font-medium text-orange-600">{String(r.subType ?? "Request")}</span></p>
+                  <p className="text-xs text-gray-600">{String(r.details ?? "")}</p>
+                </div>
+                <button onClick={() => void markPrepared(String(r.id))} className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition">
+                  <Check className="w-3.5 h-3.5" /> Prepared
+                </button>
+              </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {/* Today's Menu — the dishes the nutritionist set for today, per meal. */}
       {menuByMeal.length > 0 && (
