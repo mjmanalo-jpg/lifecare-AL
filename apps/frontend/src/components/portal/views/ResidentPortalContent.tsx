@@ -1041,45 +1041,32 @@ Vitals:
     <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 space-y-6 sm:space-y-8 select-none relative">
       
       {/* ── TOP GREETING HEADER ── */}
-      <div className="bg-gradient-to-r from-blue-50/50 to-amber-50/30 p-4 sm:p-6 rounded-2xl border border-blue-100/50 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="space-y-1 min-w-0">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-blue-900 tracking-tight truncate">
-              Good Morning, {resident?.firstName || ""}
+      <div className="bg-white p-5 sm:p-8 rounded-3xl border border-gray-100 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div className="min-w-0 space-y-2">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-gray-900 tracking-tight truncate">
+              {now.getHours() < 12 ? "Good morning" : now.getHours() < 17 ? "Good afternoon" : "Good evening"}, {resident?.firstName || "there"}
             </h1>
-            <p className="text-gray-600 text-xs sm:text-sm md:text-base leading-relaxed">
-              It&apos;s a beautiful {dayName}. You have <span className="font-semibold text-blue-900">{todayTasks.filter(t => t.status !== "COMPLETED").length} activities</span> left scheduled today, and your wellness score is looking {wellnessScore >= 90 ? "optimal" : wellnessScore >= 80 ? "good" : "steady"}.
+            <p className="text-gray-600 text-base sm:text-lg md:text-xl leading-relaxed">
+              Happy {dayName}. You have{" "}
+              <span className="font-bold text-blue-700">{todayTasks.filter(t => t.status !== "COMPLETED").length}</span>{" "}
+              {todayTasks.filter(t => t.status !== "COMPLETED").length === 1 ? "activity" : "activities"} left today.
             </p>
           </div>
-          {/* Quick-action icons: theme, notifs, profile */}
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-            <Link href="/resident/messages" className="p-2 rounded-lg hover:bg-blue-100 text-blue-600 transition active:scale-95" title="Messages">
-              <MessageSquare className="w-5 h-5" />
-            </Link>
-            <Link href="/resident/documents" className="p-2 rounded-lg hover:bg-blue-100 text-blue-600 transition active:scale-95" title="Documents">
-              <FileText className="w-5 h-5" />
-            </Link>
-            <Link href="/resident/medications" className="p-2 rounded-lg hover:bg-blue-100 text-blue-600 transition active:scale-95" title="Medications">
-              <Pill className="w-5 h-5" />
-            </Link>
-            <Link href="/resident/records" className="p-2 rounded-lg hover:bg-blue-100 text-blue-600 transition active:scale-95" title="My Profile">
-              <User className="w-5 h-5" />
-            </Link>
-          </div>
-        </div>
-        
-        {/* Wellness Score Widget */}
-        <div className="flex items-center gap-3 sm:gap-4 bg-white p-3 sm:p-4 rounded-xl border border-gray-100 shadow-md w-full sm:w-auto sm:min-w-[200px] hover:shadow-lg transition">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-            <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
-          </div>
-          <div className="flex-1 sm:flex-initial">
-            <div className="text-[10px] uppercase font-black text-gray-400 tracking-wider">Wellness Score</div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl sm:text-3xl font-black text-blue-900">{wellnessScore}</span>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${wellnessLabel(wellnessScore).color}`}>
-                {wellnessLabel(wellnessScore).text}
-              </span>
+
+          {/* Wellness score — clean, large, easy to read */}
+          <div className="flex items-center gap-4 bg-gray-50 rounded-2xl px-5 py-4 shrink-0 self-start md:self-auto">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-600 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-gray-500">Wellness score</div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-4xl sm:text-5xl font-extrabold text-gray-900">{wellnessScore}</span>
+                <span className={`text-sm px-2.5 py-1 rounded-full font-bold ${wellnessLabel(wellnessScore).color}`}>
+                  {wellnessLabel(wellnessScore).text}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -1094,10 +1081,10 @@ Vitals:
           className="lg:col-span-4 bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 shadow-sm flex flex-col h-auto lg:h-[600px] hover:border-blue-400 hover:shadow-md transition cursor-pointer"
         >
           <div className="flex items-center justify-between pb-4 border-b border-gray-100">
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-blue-600" /> Today&apos;s Schedule
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Calendar className="w-6 h-6 text-blue-600" /> Today&apos;s Schedule
             </h2>
-            <span className="text-xs font-semibold text-blue-600 px-2.5 py-1 bg-blue-50 rounded-full">
+            <span className="text-sm font-semibold text-blue-600 px-3 py-1 bg-blue-50 rounded-full">
               {now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
             </span>
           </div>
@@ -1136,18 +1123,18 @@ Vitals:
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-semibold text-blue-600">
+                          <span className="text-sm font-bold text-blue-600">
                             {new Date(task.dueDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                           </span>
                           {task.priority === "URGENT" && (
-                            <span className="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-[9px] font-bold">URGENT</span>
+                            <span className="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs font-bold">URGENT</span>
                           )}
                         </div>
-                        <h4 className={`text-sm font-bold mt-1 text-gray-900 ${isDone ? "line-through text-gray-400" : ""}`}>
+                        <h4 className={`text-base font-bold mt-1 text-gray-900 ${isDone ? "line-through text-gray-400" : ""}`}>
                           {task.title}
                         </h4>
                         {task.description && (
-                          <p className={`text-xs mt-1 leading-relaxed line-clamp-2 ${isDone ? "text-gray-400" : "text-gray-500"}`}>
+                          <p className={`text-sm mt-1 leading-relaxed line-clamp-2 ${isDone ? "text-gray-400" : "text-gray-600"}`}>
                             {task.description}
                           </p>
                         )}
@@ -1158,8 +1145,8 @@ Vitals:
               </div>
             )}
           </div>
-          <div className="pt-3 border-t border-gray-100 text-center text-xs text-blue-500 font-bold flex items-center justify-center gap-1">
-            Tap to open complete schedule planner <ChevronRight className="w-4 h-4" />
+          <div className="pt-3 border-t border-gray-100 text-center text-sm text-blue-600 font-bold flex items-center justify-center gap-1">
+            Tap to see full schedule <ChevronRight className="w-4 h-4" />
           </div>
         </div>
 
@@ -1173,11 +1160,11 @@ Vitals:
           >
             <div>
               <div className="flex items-center justify-between pb-3 border-b border-blue-500/30">
-                <h3 className="text-lg font-bold flex items-center gap-2 text-white">
-                  <Pill className="w-5 h-5 text-white" /> Upcoming Medications
+                <h3 className="text-xl font-bold flex items-center gap-2 text-white">
+                  <Pill className="w-6 h-6 text-white" /> Upcoming Medications
                 </h3>
-                <span className="text-[10px] uppercase font-black bg-blue-700/50 px-2 py-1 rounded text-blue-200 tracking-wider">
-                  {nextDoseTime ? `Next Dose: ${nextDoseTime}` : "No Doses Scheduled"}
+                <span className="text-xs font-black bg-blue-700/50 px-2.5 py-1 rounded text-blue-100 tracking-wide">
+                  {nextDoseTime ? `Next dose: ${nextDoseTime}` : "No doses scheduled"}
                 </span>
               </div>
               
@@ -1198,20 +1185,20 @@ Vitals:
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <Pill className="w-4 h-4 text-blue-200" />
+                          <Pill className="w-5 h-5 text-blue-100" />
                           <div>
-                            <div className={`text-sm font-bold ${isChecked ? "text-blue-200 line-through" : "text-white"}`}>
+                            <div className={`text-base font-bold ${isChecked ? "text-blue-200 line-through" : "text-white"}`}>
                               {med.name}
                             </div>
-                            <div className="text-xs text-blue-200">
+                            <div className="text-sm text-blue-100">
                               {med.dosage} • {med.frequency}
                             </div>
                           </div>
                         </div>
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center transition border ${
-                          isChecked ? "bg-emerald-500 border-emerald-500 text-white" : "border-blue-300"
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center transition border-2 ${
+                          isChecked ? "bg-emerald-500 border-emerald-500 text-white" : "border-blue-200"
                         }`}>
-                          {isChecked && <CheckCircle2 className="w-3.5 h-3.5" />}
+                          {isChecked && <CheckCircle2 className="w-4 h-4" />}
                         </div>
                       </div>
                     );
@@ -1220,9 +1207,9 @@ Vitals:
               </div>
             </div>
             
-            <div className="flex items-center justify-between text-xs text-blue-200/80 pt-2 border-t border-blue-500/30">
-              <span>Tap to check compliance</span>
-              <span className="font-bold flex items-center gap-0.5">View details <ChevronRight className="w-3.5 h-3.5" /></span>
+            <div className="flex items-center justify-between text-sm text-blue-100 pt-3 border-t border-blue-500/30">
+              <span>Tap to mark as taken</span>
+              <span className="font-bold flex items-center gap-0.5">View details <ChevronRight className="w-4 h-4" /></span>
             </div>
           </div>
 
@@ -1230,31 +1217,31 @@ Vitals:
           <div className="grid grid-cols-2 gap-3 sm:gap-4">
             
             {/* Heart Rate */}
-            <div 
+            <div
               onClick={() => setVitalsModalOpen(true)}
-              className="bg-white border border-gray-200 rounded-2xl p-3 sm:p-5 shadow-sm hover:border-red-400 hover:shadow-md transition cursor-pointer"
+              className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-red-400 hover:shadow-md transition cursor-pointer"
             >
-              <div className="flex items-center gap-2 pb-2">
-                <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 fill-red-50" />
-                <span className="text-[10px] sm:text-xs font-semibold text-gray-500">Heart Rate</span>
+              <div className="flex items-center gap-2 pb-1">
+                <Heart className="w-5 h-5 sm:w-6 sm:h-6 text-red-500 fill-red-50" />
+                <span className="text-sm font-semibold text-gray-600">Heart Rate</span>
               </div>
-              <div className="text-2xl sm:text-3xl font-black text-gray-900">{heartRate}</div>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full mt-2 inline-block ${heartRateStatus.color}`}>
+              <div className="text-3xl sm:text-4xl font-extrabold text-gray-900">{heartRate}</div>
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full mt-2 inline-block ${heartRateStatus.color}`}>
                 {heartRateStatus.text}
               </span>
             </div>
 
             {/* Activity Steps */}
-            <div 
+            <div
               onClick={() => setStepsModalOpen(true)}
-              className="bg-white border border-gray-200 rounded-2xl p-3 sm:p-5 shadow-sm hover:border-blue-400 hover:shadow-md transition cursor-pointer"
+              className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-blue-400 hover:shadow-md transition cursor-pointer"
             >
-              <div className="flex items-center gap-2 pb-2">
-                <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
-                <span className="text-[10px] sm:text-xs font-semibold text-gray-500">Activity</span>
+              <div className="flex items-center gap-2 pb-1">
+                <Activity className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500" />
+                <span className="text-sm font-semibold text-gray-600">Activity</span>
               </div>
-              <div className="text-2xl sm:text-3xl font-black text-gray-900">{activitySteps}</div>
-              <span className="text-[10px] text-blue-600 font-bold px-2 py-0.5 bg-blue-50 rounded-full mt-2 inline-block">
+              <div className="text-3xl sm:text-4xl font-extrabold text-gray-900">{activitySteps}</div>
+              <span className="text-xs text-blue-700 font-bold px-2.5 py-1 bg-blue-50 rounded-full mt-2 inline-block">
                 Daily Goal: {activityGoalPct}%
               </span>
             </div>
@@ -1275,16 +1262,16 @@ Vitals:
               </div>
               <div className="space-y-2">
                 {activeBells.map((bell) => (
-                  <div key={bell.id} className="flex items-center justify-between bg-white rounded-xl px-3 py-2 border border-red-200">
+                  <div key={bell.id} className="flex items-center justify-between bg-white rounded-xl px-3 py-2.5 border border-red-200">
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-red-700 truncate">{bell.reason || "Help Request"}</p>
-                      <p className="text-[10px] text-red-500">
+                      <p className="text-sm font-bold text-red-700 truncate">{bell.reason || "Help Request"}</p>
+                      <p className="text-xs text-red-500">
                         Status: <span className="font-semibold">{bell.status === "RESPONDED" ? "Staff en route" : "Waiting for staff"}</span>
                       </p>
                     </div>
                     <button
                       onClick={() => cancelBell(bell.id)}
-                      className="ml-3 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition active:scale-95 flex-shrink-0"
+                      className="ml-3 px-3.5 py-2 text-xs font-bold uppercase tracking-wide bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition active:scale-95 flex-shrink-0"
                     >
                       Cancel
                     </button>
@@ -1294,34 +1281,34 @@ Vitals:
             </div>
           )}
 
-          {/* Quick Action buttons at bottom */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-3">
-            
-            {/* CALL BELL BUTTON — opens modal */}
+          {/* Quick Action buttons — large, obvious, one tap */}
+          <div className="grid grid-cols-3 gap-3">
+
+            {/* CALL BELL — the safety action, most prominent */}
             <button
               onClick={() => setCallBellModalOpen(true)}
-              className="py-2.5 sm:py-3 bg-red-50 border border-red-200 hover:bg-red-100 active:scale-95 text-red-700 font-black rounded-xl text-center shadow-sm transition flex flex-col items-center justify-center gap-0.5 sm:gap-1"
+              className="py-5 sm:py-6 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold rounded-2xl text-center shadow-sm hover:shadow-md transition flex flex-col items-center justify-center gap-2"
             >
-              <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="text-[9px] sm:text-[10px] uppercase">Call Bell</span>
+              <Bell className="w-8 h-8" />
+              <span className="text-sm sm:text-base">Call Bell</span>
             </button>
 
             {/* CALL FAMILY */}
             <button
               onClick={() => setFamilyModalOpen(true)}
-              className="py-2.5 sm:py-3 bg-blue-50 border border-blue-200 hover:bg-blue-100 active:scale-95 text-blue-700 font-black rounded-xl text-center shadow-sm transition flex flex-col items-center justify-center gap-0.5 sm:gap-1"
+              className="py-5 sm:py-6 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold rounded-2xl text-center shadow-sm hover:shadow-md transition flex flex-col items-center justify-center gap-2"
             >
-              <PhoneCall className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="text-[9px] sm:text-[10px] uppercase">Call Family</span>
+              <PhoneCall className="w-8 h-8" />
+              <span className="text-sm sm:text-base">Call Family</span>
             </button>
 
             {/* ROOM SERVICE */}
             <button
               onClick={() => setRoomServiceModalOpen(true)}
-              className="py-2.5 sm:py-3 bg-amber-50 border border-amber-200 hover:bg-amber-100 active:scale-95 text-amber-700 font-black rounded-xl text-center shadow-sm transition flex flex-col items-center justify-center gap-0.5 sm:gap-1"
+              className="py-5 sm:py-6 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold rounded-2xl text-center shadow-sm hover:shadow-md transition flex flex-col items-center justify-center gap-2"
             >
-              <Coffee className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="text-[9px] sm:text-[10px] uppercase">Room Service</span>
+              <Coffee className="w-8 h-8" />
+              <span className="text-sm sm:text-base">Room Service</span>
             </button>
 
           </div>
@@ -1337,35 +1324,35 @@ Vitals:
             className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5 shadow-sm flex-1 overflow-y-auto custom-scrollbar flex flex-col justify-between mb-2 hover:border-amber-400 hover:shadow-md transition cursor-pointer"
           >
             <div>
-              <h3 className="text-sm font-bold text-gray-900 pb-3 border-b border-gray-100 flex items-center gap-2">
-                <Utensils className="w-4 h-4 text-amber-500" /> Today&apos;s Menu
+              <h3 className="text-xl font-bold text-gray-900 pb-3 border-b border-gray-100 flex items-center gap-2">
+                <Utensils className="w-6 h-6 text-amber-500" /> Today&apos;s Menu
               </h3>
-              
+
               <div className="mt-3 space-y-4">
                 {todayMenuItems.length === 0 ? (
                   <div className="text-center py-6 text-gray-400">
                     <Utensils className="w-8 h-8 mx-auto text-gray-200 mb-2" />
-                    <p className="text-xs italic">No menu set for today yet.</p>
+                    <p className="text-sm">No menu set for today yet.</p>
                   </div>
                 ) : (
                   todayMenuItems.slice(0, 2).map((item) => (
                     <div key={item.id} className="space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-600">{item.mealType}</span>
+                        <span className="text-xs uppercase tracking-wide font-extrabold text-amber-600">{item.mealType}</span>
                         {item.dietaryTags && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">{item.dietaryTags.split(",")[0]}</span>
+                          <span className="text-xs font-bold px-2 py-0.5 bg-blue-50 text-blue-600 rounded">{item.dietaryTags.split(",")[0]}</span>
                         )}
                       </div>
                       {item.imageUrl ? (
-                        <div className="h-20 w-full bg-cover bg-center rounded-lg relative border border-gray-100" style={{ backgroundImage: `url('${item.imageUrl}')` }}>
+                        <div className="h-24 w-full bg-cover bg-center rounded-lg relative border border-gray-100" style={{ backgroundImage: `url('${item.imageUrl}')` }}>
                           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent rounded-lg flex items-end p-2">
-                            <span className="text-white text-xs font-black truncate">{item.name}</span>
+                            <span className="text-white text-base font-black truncate">{item.name}</span>
                           </div>
                         </div>
                       ) : (
                         <>
-                          <h4 className="text-xs font-bold text-gray-900">{item.name}</h4>
-                          {item.description && <p className="text-[10px] text-gray-500 leading-normal line-clamp-2">{item.description}</p>}
+                          <h4 className="text-base font-bold text-gray-900">{item.name}</h4>
+                          {item.description && <p className="text-sm text-gray-600 leading-normal line-clamp-2">{item.description}</p>}
                         </>
                       )}
                     </div>
@@ -1373,9 +1360,9 @@ Vitals:
                 )}
               </div>
             </div>
-            
-            <div className="text-[10px] text-amber-500 font-bold text-center pt-2 flex items-center justify-center gap-0.5 border-t border-gray-50">
-              View complete dining menu <ChevronRight className="w-3.5 h-3.5" />
+
+            <div className="text-sm text-amber-600 font-bold text-center pt-2 flex items-center justify-center gap-0.5 border-t border-gray-50">
+              See full dining menu <ChevronRight className="w-4 h-4" />
             </div>
           </div>
 
@@ -1385,18 +1372,18 @@ Vitals:
             className="bg-teal-800 rounded-2xl p-4 sm:p-5 text-white shadow-md flex flex-col justify-between h-auto lg:h-[210px] hover:bg-teal-900 hover:shadow-lg transition cursor-pointer border border-teal-700"
           >
             <div>
-              <h3 className="text-sm font-bold flex items-center gap-2 pb-2 border-b border-teal-700/50 text-white">
-                <CheckCircle2 className="w-4 h-4 text-teal-300" /> Daily Goals
+              <h3 className="text-xl font-bold flex items-center gap-2 pb-2 border-b border-teal-700/50 text-white">
+                <CheckCircle2 className="w-6 h-6 text-teal-300" /> Daily Goals
               </h3>
-              
-              <div className="space-y-2 mt-3">
+
+              <div className="space-y-3 mt-3">
                 {/* Goal 1 */}
-                <label className="flex items-center gap-3 cursor-pointer text-xs select-none" onClick={(e) => { e.stopPropagation(); toggleGoal("Morning Walk"); }}>
+                <label className="flex items-center gap-3 cursor-pointer text-base select-none" onClick={(e) => { e.stopPropagation(); toggleGoal("Morning Walk"); }}>
                   <input
                     type="checkbox"
                     checked={goalsChecked["Morning Walk"]?.checked || false}
                     readOnly
-                    className="w-4 h-4 rounded border-teal-600 text-teal-600 focus:ring-teal-500 bg-teal-900"
+                    className="w-5 h-5 rounded border-teal-600 text-teal-600 focus:ring-teal-500 bg-teal-900"
                   />
                   <span className={goalsChecked["Morning Walk"]?.checked ? "line-through text-teal-300" : "text-white"}>
                     Morning Walk (15 mins)
@@ -1404,12 +1391,12 @@ Vitals:
                 </label>
 
                 {/* Goal 2 */}
-                <label className="flex items-center gap-3 cursor-pointer text-xs select-none" onClick={(e) => { e.stopPropagation(); toggleGoal("Drink 2 Liters of Water"); }}>
+                <label className="flex items-center gap-3 cursor-pointer text-base select-none" onClick={(e) => { e.stopPropagation(); toggleGoal("Drink 2 Liters of Water"); }}>
                   <input
                     type="checkbox"
                     checked={goalsChecked["Drink 2 Liters of Water"]?.checked || false}
                     readOnly
-                    className="w-4 h-4 rounded border-teal-600 text-teal-600 focus:ring-teal-500 bg-teal-900"
+                    className="w-5 h-5 rounded border-teal-600 text-teal-600 focus:ring-teal-500 bg-teal-900"
                   />
                   <span className={goalsChecked["Drink 2 Liters of Water"]?.checked ? "line-through text-teal-300" : "text-white"}>
                     Drink 2 Liters of Water
@@ -1418,8 +1405,8 @@ Vitals:
               </div>
             </div>
 
-            <div className="text-[10px] text-teal-300 text-center font-bold flex items-center justify-center gap-0.5 pt-2 border-t border-teal-700/30">
-              Manage & Add custom goals <ChevronRight className="w-3.5 h-3.5" />
+            <div className="text-sm text-teal-200 text-center font-bold flex items-center justify-center gap-0.5 pt-2 border-t border-teal-700/30">
+              Manage &amp; add goals <ChevronRight className="w-4 h-4" />
             </div>
           </div>
 
