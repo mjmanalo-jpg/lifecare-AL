@@ -91,7 +91,6 @@ export default function MARBoard() {
   return (
     <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5" style={{ background: "#FFFFFF" }}>
       <ClinicalHeader
-        eyebrow="Module 05 · MAR"
         title="Medication Administration Record"
         subtitle="Every scheduled dose documented — with timestamp, administering nurse, and outcome."
         right={

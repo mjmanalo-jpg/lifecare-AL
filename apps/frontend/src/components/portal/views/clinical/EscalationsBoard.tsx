@@ -189,7 +189,6 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
   return (
     <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-6" style={{ background: "#FFFFFF" }}>
       <ClinicalHeader
-        eyebrow="SBAR Clinical Escalation"
         title="SBAR Escalations"
         subtitle={canRaise ? "Raise a clinical concern (Situation · Background · Assessment · Recommendation)" : canRespond ? "Acknowledge, respond with orders & resolve" : "Escalation oversight & SLA monitoring"}
         right={

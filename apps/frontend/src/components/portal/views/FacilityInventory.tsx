@@ -230,7 +230,6 @@ export default function FacilityInventory() {
     <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5" style={{ background: "#FFFFFF" }}>
       {/* Header */}
       <ClinicalHeader
-        eyebrow="Inventory Stock List"
         title="Inventory Management"
         subtitle="Track supplies, equipment, and stock levels across the facility"
         right={

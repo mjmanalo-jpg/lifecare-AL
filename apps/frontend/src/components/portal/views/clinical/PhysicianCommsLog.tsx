@@ -77,7 +77,6 @@ export default function PhysicianCommsLog() {
     <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5 print:m-0 print:p-0" style={{ background: "#FFFFFF" }}>
       <div className="print:hidden">
         <ClinicalHeader
-          eyebrow="Physician Communication Log"
           title="Physician Communications"
           subtitle="Every physician contact on record — with instructions received verbatim and follow-up tracking."
           right={

@@ -140,7 +140,6 @@ export default function ApprovalWorkflows() {
   return (
     <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5" style={{ background: "#FFFFFF" }}>
       <ClinicalHeader
-        eyebrow="Approval Workflow"
         title="Medication Approvals"
         subtitle="Clinical decisions require the right authority — new prescriptions and referrals are signed off here before they go active."
         right={!canDecide ? (
