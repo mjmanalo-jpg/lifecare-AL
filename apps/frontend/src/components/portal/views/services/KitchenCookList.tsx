@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ChefHat, RefreshCw, Search, Utensils } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { ChefHat, RefreshCw, Search, Utensils, CalendarDays } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 
 /**
@@ -63,6 +63,8 @@ export default function KitchenCookList() {
 
   const [search, setSearch] = useState("");
   const [mealFilter, setMealFilter] = useState("all");
+  const [today, setToday] = useState("");
+  useEffect(() => { setToday(new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })); }, []);
 
   // Kitchen only ever sees ACTIVE orders.
   const active = useMemo<CookItem[]>(
@@ -103,6 +105,7 @@ export default function KitchenCookList() {
             <ChefHat className="w-8 h-8 text-orange-500" /> Kitchen — Today&apos;s Cook List
           </h1>
           <p className="text-gray-600">Active diet orders straight from the nutritionist, grouped by meal. Cook to each resident&apos;s diet type &amp; restrictions.</p>
+          {today && <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-orange-700"><CalendarDays className="w-4 h-4" /> {today} · updates live as the nutritionist changes orders</p>}
         </div>
         <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
           <RefreshCw className="w-4 h-4" /> Refresh

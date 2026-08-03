@@ -42,6 +42,8 @@ const DIET_PILL: Record<string, string> = {
 };
 
 const dietLabel = (d: string) => d.replace(/_/g, " ");
+// REGULAR = a normal diet with no restrictions — spell it out in the dropdowns.
+const dietOptionLabel = (d: string) => (d === "REGULAR" ? "Regular — No Restriction" : dietLabel(d));
 
 const adaptOrder = (r: Row) => ({
   id: String(r.id ?? ""),
@@ -96,6 +98,14 @@ export default function DietOrdersBoard() {
       restricted: active.filter(o => o.dietType !== "REGULAR").length,
     };
   }, [orders]);
+
+  // Coverage — every resident should have a diet order. Surface who still needs one.
+  const coverage = useMemo(() => {
+    const covered = new Set(orders.filter(o => o.active).map(o => o.residentId));
+    return { total: residents.length, covered: covered.size, uncovered: residents.filter(r => !covered.has(r.id)) };
+  }, [orders, residents]);
+
+  const openCreate = (residentId = "") => { setForm({ ...emptyForm, residentId }); setShowCreate(true); };
 
   const handleCreate = async () => {
     if (!form.residentId) {
@@ -176,17 +186,34 @@ export default function DietOrdersBoard() {
           <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
             <RefreshCw className="w-4 h-4" /> Refresh
           </button>
-          <button onClick={() => { setForm(emptyForm); setShowCreate(true); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+          <button onClick={() => openCreate()} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
             <Plus className="w-4 h-4" /> New Diet Order
           </button>
         </div>
       </div>
 
       {/* Stat Boxes */}
-      <div className="grid grid-cols-2 gap-3 max-w-lg">
+      <div className="grid grid-cols-3 gap-3 max-w-2xl">
+        <StatBox label="Residents Covered" value={`${coverage.covered} / ${coverage.total}`} icon={CheckCircle2} color={coverage.uncovered.length ? "amber" : "emerald"} />
         <StatBox label="Active Orders" value={String(stats.activeCount)} icon={ClipboardList} color="emerald" />
         <StatBox label="Restricted Diets" value={String(stats.restricted)} icon={ShieldAlert} color="red" />
       </div>
+
+      {/* Residents still needing a diet order — one tap to set each up. */}
+      {coverage.uncovered.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="font-bold text-amber-900 text-sm mb-2 flex items-center gap-2">
+            <UtensilsCrossed className="w-4 h-4" /> {coverage.uncovered.length} resident{coverage.uncovered.length === 1 ? "" : "s"} without a diet order — tap to set:
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {coverage.uncovered.map(r => (
+              <button key={r.id} onClick={() => openCreate(r.id)} className="inline-flex items-center gap-1 rounded-full bg-white border border-amber-300 px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 transition">
+                <Plus className="w-3 h-3" /> {r.name}{r.room ? ` · Rm ${r.room}` : ""}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
@@ -198,7 +225,7 @@ export default function DietOrdersBoard() {
         <select value={dietFilter} onChange={e => setDietFilter(e.target.value)}
           className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-400 outline-none">
           <option value="all">All Diet Types</option>
-          {DIET_TYPES.map(d => <option key={d} value={d}>{dietLabel(d)}</option>)}
+          {DIET_TYPES.map(d => <option key={d} value={d}>{dietOptionLabel(d)}</option>)}
         </select>
         <select value={mealFilter} onChange={e => setMealFilter(e.target.value)}
           className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-400 outline-none">
@@ -295,7 +322,7 @@ export default function DietOrdersBoard() {
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Diet Type</label>
                   <select value={form.dietType} onChange={set("dietType")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-400 outline-none">
-                    {DIET_TYPES.map(d => <option key={d} value={d}>{dietLabel(d)}</option>)}
+                    {DIET_TYPES.map(d => <option key={d} value={d}>{dietOptionLabel(d)}</option>)}
                   </select>
                 </div>
                 <div>
