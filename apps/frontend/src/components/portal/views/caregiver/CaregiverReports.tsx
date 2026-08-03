@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect } from "react";
 import {
   FileText, Plus, Download, Search, X, Eye, Trash2, PenLine,
   AlertTriangle, CheckCircle2, Clock, Sun, Sunset, Moon, RefreshCw,
-  ListChecks, BarChart3, TrendingUp,
+  ListChecks, BarChart3, TrendingUp, Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import Swal from "@/lib/swal";
@@ -206,6 +206,48 @@ export default function CaregiverReports() {
 
   /* Mutations */
   const [generating, setGenerating] = useState(false);
+  const [recapping, setRecapping] = useState(false);
+
+  // Auto-fill the whole report from what actually happened this shift — the meds
+  // you logged, incidents you filed, escalations you raised, tasks you completed,
+  // plus the unit's open carry-over — then let the AI draft the narrative. The
+  // nurse reviews & edits before submitting; nothing is auto-submitted.
+  const recapFromShift = async () => {
+    setRecapping(true);
+    try {
+      const res = await fetch("/api/ai-assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "shift-recap", shiftType: form.shiftType, date: form.date }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        Swal.fire({ title: "Couldn't pull your shift", text: data?.error || "Fill the report manually or try again.", icon: "info" });
+        return;
+      }
+      const f = (data.fields ?? {}) as Partial<ReportForm>;
+      setForm((prev) => ({
+        ...prev,
+        summary: data.summary ? String(data.summary) : prev.summary,
+        residentUpdates: f.residentUpdates || prev.residentUpdates,
+        incidentsOccurred: Boolean(f.incidentsOccurred) || prev.incidentsOccurred,
+        incidentDetails: f.incidentDetails || prev.incidentDetails,
+        medicationsAdministered: f.medicationsAdministered || prev.medicationsAdministered,
+        taskCompleted: f.taskCompleted || prev.taskCompleted,
+        handoverNotes: f.handoverNotes || prev.handoverNotes,
+      }));
+      Swal.fire({
+        toast: true, position: "top-end", icon: data.empty ? "info" : "success", showConfirmButton: false, timer: 3600, timerProgressBar: true,
+        title: data.empty
+          ? "No logged activity found for this shift window — fill in anything manual."
+          : "Pulled your shift activity — review and edit before saving.",
+      });
+    } catch {
+      Swal.fire({ title: "Couldn't pull your shift", text: "Network error — fill the report manually.", icon: "info" });
+    } finally {
+      setRecapping(false);
+    }
+  };
 
   // Offline fallback — the original templated summary from the entered fields.
   const templateSummary = () => {
@@ -688,10 +730,18 @@ export default function CaregiverReports() {
               </div>
             </div>
 
+            {/* Auto-fill the whole report from real shift activity, then let the nurse edit. */}
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 space-y-1.5">
+              <button type="button" onClick={() => void recapFromShift()} disabled={recapping} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold hover:shadow-md transition active:scale-[0.99] disabled:opacity-60">
+                {recapping ? <><RefreshCw className="w-4 h-4 animate-spin" /> Pulling your shift activity…</> : <><Sparkles className="w-4 h-4" /> Auto-fill from my shift activity</>}
+              </button>
+              <p className="text-[11px] text-emerald-800/80 text-center">Pulls the meds you gave, incidents you filed, escalations you raised, tasks you completed &amp; open carry-over for this shift — then drafts the summary. Review before saving.</p>
+            </div>
+
             <div className="flex items-center justify-between">
               <label className="text-sm font-semibold text-gray-700">Summary <span className="text-red-500">*</span></label>
               <button type="button" onClick={() => void generateSummary()} disabled={generating} className="text-xs font-semibold text-indigo-600 hover:underline flex items-center gap-1 disabled:opacity-60">
-                {generating ? <><RefreshCw className="w-3 h-3 animate-spin" /> Generating…</> : <>⚡ Generate AI summary</>}
+                {generating ? <><RefreshCw className="w-3 h-3 animate-spin" /> Generating…</> : <>⚡ Re-draft summary from fields</>}
               </button>
             </div>
             <TextArea label="" value={form.summary} onChange={(v) => setField("summary", v)} placeholder="Overall shift summary — or use ⚡ to draft from the fields above…" />

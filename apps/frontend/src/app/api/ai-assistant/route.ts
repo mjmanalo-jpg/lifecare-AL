@@ -277,6 +277,7 @@ function actionAllowed(action: string, audience: string, role: string, isPlatfor
       return role === "RESIDENT" || CLINICAL_STAFF.has(role);
     case "sbar":
     case "endorsement":
+    case "shift-recap":
       return CLINICAL_STAFF.has(role);
     case "extract":
       return ADMIN_STAFF.has(role);
@@ -323,6 +324,8 @@ export async function POST(req: NextRequest) {
       return handleSbar(body);
     case "endorsement":
       return handleEndorsement(body);
+    case "shift-recap":
+      return handleShiftRecap(body, tenantContext);
     default:
       return NextResponse.json({ error: `Unknown action '${action}'` }, { status: 400 });
   }
@@ -742,6 +745,139 @@ async function handleEndorsement(body: Record<string, unknown>) {
     console.warn("[AI Assistant endorsement] network error", (err as Error).message);
   }
   return NextResponse.json({ fallback: true, reason: "cloud draft failed" });
+}
+
+// ── SHIFT RECAP (activity-based endorsement) ──────────────────────────────────
+// Build the endorsement from what actually happened in the system this shift:
+// the clinician's OWN logged activity (meds given/held/refused, incidents filed,
+// escalations raised, physician calls, tasks completed) PLUS the unit's open
+// carry-over. Returns deterministic structured field strings (nothing invented)
+// AND an AI narrative summarising them. { summary, fields, source, empty }.
+const SHIFT_WINDOWS: Record<string, [number, number]> = {
+  MORNING: [6, 14], AFTERNOON: [14, 22], NIGHT: [22, 6], OVERNIGHT: [22, 6],
+};
+function shiftWindow(shiftType: string, dateStr: string): { start: Date; end: Date } {
+  const base = new Date(dateStr);
+  const d = isNaN(base.getTime()) ? new Date() : base;
+  const [sh, eh] = SHIFT_WINDOWS[shiftType.toUpperCase()] ?? [0, 24];
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), sh, 0, 0, 0);
+  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), eh, 0, 0, 0);
+  if (eh <= sh) end.setDate(end.getDate() + 1); // overnight wraps past midnight
+  return { start, end };
+}
+type ResLite = { firstName?: string | null; lastName?: string | null; roomNumber?: string | null } | null;
+const rn = (r: ResLite) =>
+  r ? `${`${(r.firstName ?? "").trim()} ${(r.lastName ?? "").charAt(0)}.`.trim()}${r.roomNumber ? ` (Rm ${r.roomNumber})` : ""}` : "a resident";
+
+async function handleShiftRecap(
+  body: Record<string, unknown>,
+  ctx: NonNullable<Awaited<ReturnType<typeof requireTenantContext>>>,
+) {
+  if (!isDbConfigured()) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
+  const communityId = ctx.communityId;
+  if (!communityId) return NextResponse.json({ error: "Select a community first." }, { status: 409 });
+
+  const shiftType = String(body.shiftType ?? "MORNING");
+  const { start, end } = shiftWindow(shiftType, String(body.date ?? new Date().toISOString()));
+  const inWindow = { gte: start, lte: end };
+  const resSel = { select: { firstName: true, lastName: true, roomNumber: true } };
+
+  const me = await prisma.user.findUnique({ where: { id: ctx.userId }, select: { name: true, staff: { select: { id: true } } } });
+  const myName = me?.name ?? "";
+  const myStaffId = me?.staff?.id ?? null;
+
+  const [meds, incidents, escMine, comms, tasksDone, openEsc, pendingTasks, dueFollowups] = await Promise.all([
+    prisma.medicationAdministration.findMany({ where: { recordedById: ctx.userId, actualTime: inWindow, resident: { communityId } }, select: { status: true, dosage: true, route: true, reasonForRefusal: true, heldReason: true, medication: { select: { name: true } }, resident: resSel } }),
+    prisma.incident.findMany({ where: { reportedById: ctx.userId, createdAt: inWindow }, select: { incidentType: true, severity: true, description: true, resident: resSel } }),
+    myName ? prisma.escalation.findMany({ where: { raisedBy: myName, createdAt: inWindow }, select: { situation: true, priority: true, status: true, resident: resSel } }) : Promise.resolve([]),
+    prisma.physicianCommunication.findMany({ where: { loggedById: ctx.userId, occurredAt: inWindow }, select: { physicianName: true, method: true, reason: true, resident: resSel } }),
+    myStaffId ? prisma.task.findMany({ where: { assignedToId: myStaffId, status: "COMPLETED", completedAt: inWindow }, select: { title: true, resident: resSel } }) : Promise.resolve([]),
+    prisma.escalation.findMany({ where: { resident: { communityId }, status: { notIn: ["RESOLVED", "CANCELLED"] } }, select: { situation: true, resident: resSel }, take: 20 }),
+    prisma.task.count({ where: { resident: { communityId }, status: { in: ["PENDING", "IN_PROGRESS"] } } }),
+    prisma.followUp.count({ where: { resident: { communityId }, status: { in: ["PENDING", "SCHEDULED", "OVERDUE"] } } }),
+  ]);
+
+  // ── Deterministic structured fields (real records, nothing invented) ──
+  const medLine = (m: (typeof meds)[number]) => `${m.medication?.name ?? "medication"}${m.dosage ? ` ${m.dosage}` : ""}${m.route ? ` ${m.route}` : ""} — ${rn(m.resident)}`;
+  const pick = (s: string) => meds.filter((m) => m.status === s);
+  const given = pick("GIVEN"), partial = pick("PARTIAL"), held = pick("HELD"), refused = pick("REFUSED");
+  const medsParts: string[] = [];
+  if (given.length) medsParts.push(`Given: ${given.map(medLine).join("; ")}.`);
+  if (partial.length) medsParts.push(`Partial: ${partial.map(medLine).join("; ")}.`);
+  if (held.length) medsParts.push(`Held: ${held.map((m) => `${medLine(m)}${m.heldReason ? ` (${m.heldReason})` : ""}`).join("; ")}.`);
+  if (refused.length) medsParts.push(`Refused: ${refused.map((m) => `${medLine(m)}${m.reasonForRefusal ? ` (${m.reasonForRefusal})` : ""}`).join("; ")}.`);
+  const medicationsAdministered = medsParts.join(" ");
+
+  const taskCompleted = tasksDone.map((t) => `${t.title} — ${rn(t.resident)}`).join("; ");
+  const incidentsOccurred = incidents.length > 0;
+  const incidentDetails = incidents.map((i) => `${String(i.severity)} ${String(i.incidentType).replace(/_/g, " ").toLowerCase()} — ${rn(i.resident)}: ${i.description}`).join(" | ");
+
+  const updates: string[] = [];
+  for (const e of escMine) updates.push(`Escalated (${String(e.priority)}) for ${rn(e.resident)}: ${e.situation} [${String(e.status)}]`);
+  for (const c of comms) updates.push(`Contacted ${c.physicianName} (${String(c.method)}) re ${rn(c.resident)}: ${c.reason}`);
+  const residentUpdates = updates.join(" | ");
+
+  const carry: string[] = [];
+  if (openEsc.length) carry.push(`${openEsc.length} open escalation(s): ${openEsc.slice(0, 5).map((e) => `${rn(e.resident)} — ${e.situation}`).join("; ")}${openEsc.length > 5 ? "…" : ""}.`);
+  if (pendingTasks) carry.push(`${pendingTasks} pending task(s).`);
+  if (dueFollowups) carry.push(`${dueFollowups} follow-up(s) due.`);
+  const handoverNotes = carry.join(" ");
+
+  const fields = { residentUpdates, incidentsOccurred, incidentDetails, medicationsAdministered, taskCompleted, handoverNotes };
+  const empty = !medicationsAdministered && !taskCompleted && !incidentsOccurred && !residentUpdates && !handoverNotes;
+  const shiftLabel = shiftType.charAt(0) + shiftType.slice(1).toLowerCase();
+
+  const template = () =>
+    empty
+      ? `${shiftLabel} shift — no logged activity found for this window. Add any manual notes before submitting.`
+      : `${shiftLabel} shift handover. ` + [
+          medicationsAdministered && `Medications — ${medicationsAdministered}`,
+          taskCompleted && `Tasks completed: ${taskCompleted}.`,
+          incidentsOccurred && `Incidents: ${incidentDetails}.`,
+          residentUpdates && `${residentUpdates}.`,
+          handoverNotes && `Carry-over: ${handoverNotes}`,
+        ].filter(Boolean).join(" ");
+
+  let summary = template();
+  let source = "generated";
+  if (GEMINI_API_KEY && !empty) {
+    const facts =
+      `Shift: ${shiftLabel}\n` +
+      (medicationsAdministered ? `Medications: ${medicationsAdministered}\n` : "") +
+      (taskCompleted ? `Tasks completed: ${taskCompleted}\n` : "") +
+      (incidentsOccurred ? `Incidents: ${incidentDetails}\n` : "") +
+      (residentUpdates ? `Clinical actions: ${residentUpdates}\n` : "") +
+      (handoverNotes ? `Open carry-over: ${handoverNotes}\n` : "");
+    const systemInstruction =
+      "You are a clinical assistant writing a professional end-of-shift endorsement (handover) for an " +
+      "assisted-living facility, from the REAL logged activity provided. Write a clear, concise handover the " +
+      "incoming shift can read in seconds: overall status, meds given/held/refused, incidents, clinical actions " +
+      "(escalations, physician calls), and open items to carry over. 3-6 sentences, professional clinical tone. " +
+      "Use ONLY the facts provided — do NOT invent residents, vitals, doses, or events. No headings, no bullet " +
+      "markup, no preamble like 'Here is' — output only the endorsement.";
+    try {
+      const res = await fetch(`${GEMINI_BASE}/${GEMINI_MODEL}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          contents: [{ role: "user", parts: [{ text: facts }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 420 },
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const text = (data?.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? "").join("").trim();
+        if (text) { summary = text; source = "gemini"; }
+      } else {
+        console.warn(`[AI Assistant shift-recap] Gemini ${res.status}`);
+      }
+    } catch (err) {
+      console.warn("[AI Assistant shift-recap] network error", (err as Error).message);
+    }
+  }
+
+  return NextResponse.json({ summary, fields, source, empty });
 }
 
 // ── FILE TEXT EXTRACTION ─────────────────────────────────────────────────────
