@@ -6,6 +6,7 @@ import { requireTenantContext, isDeniedWhere, sanitizeTenantWrite, tenantWhere }
 import { assertMutationEntitled, EntitlementError } from "@/lib/entitlements";
 import { logAudit, snapshot } from "@/lib/audit";
 import { transactionDelegate, withTenantDb } from "@/lib/tenantDb";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,6 +65,41 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
+// Immediately notify the Care Manager + nurses of a SEVERE/CRITICAL incident so
+// it appears in their Alert Center right away (with an SLA countdown), instead of
+// waiting for the next alerts-cron tick. Best-effort — never blocks the create.
+async function alertSevereIncident(
+  context: NonNullable<Awaited<ReturnType<typeof requireTenantContext>>>,
+  incident: Record<string, unknown>,
+) {
+  try {
+    const severity = String(incident.severity ?? "");
+    if (!context.communityId || !["SEVERE", "CRITICAL"].includes(severity)) return;
+    const crit = severity === "CRITICAL";
+    const recipients = await prisma.communityMembership.findMany({
+      where: { communityId: context.communityId, status: "ACTIVE", role: { in: ["FACILITY_ADMIN", "NURSE"] } },
+      select: { userId: true },
+    });
+    if (!recipients.length) return;
+    const kind = String(incident.incidentType ?? "incident").replace(/_/g, " ").toLowerCase();
+    await prisma.notification.createMany({
+      data: recipients.map((m) => ({
+        userId: m.userId,
+        type: "INCIDENT_REPORT" as const,
+        title: `${crit ? "Critical" : "Severe"} incident — ${kind}`,
+        message: `A ${crit ? "critical" : "severe"} ${kind} incident was reported. Review immediately.`,
+        severity: crit ? "CRITICAL" : "WARNING",
+        relatedEntityId: String(incident.id),
+        relatedEntityType: "incident",
+        organizationId: context.organizationId ?? null,
+        communityId: context.communityId,
+      })),
+    });
+  } catch (e) {
+    console.error("[incident alert] failed:", e instanceof Error ? e.message : e);
+  }
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ model: string }> }) {
   const context = await requireTenantContext({ allowPlatform: true });
   if (!context) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -99,6 +135,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       communityId: context.communityId,
       after: snapshot(created),
     });
+    // Severe/Critical incidents auto-alert the Care Manager (+ nurses) the moment
+    // they're reported — they surface in the Alert Center with an SLA countdown.
+    // The alerts cron dedups on INCIDENT_REPORT|<id>, so it won't double-fire.
+    if (model === "incidents") await alertSevereIncident(context, created);
     return NextResponse.json({ data: created }, { status: 201 });
   } catch (error) {
     if (error instanceof EntitlementError) return NextResponse.json({ error: error.message, code: error.code }, { status: 403 });
