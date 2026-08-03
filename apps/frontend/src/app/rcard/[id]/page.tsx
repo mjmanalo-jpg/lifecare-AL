@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
-  AlertTriangle, Pill, ClipboardList, ConciergeBell, ShieldAlert,
-  UserRound, Phone, CalendarClock, Loader2, FileDown,
+  Pill, ClipboardList, ConciergeBell, ShieldAlert,
+  UserRound, CalendarClock, Loader2, FileDown,
 } from "lucide-react";
 import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
@@ -17,6 +17,13 @@ const age = (dob: unknown) => {
   if (!dob) return null;
   const d = new Date(s(dob)); if (isNaN(d.getTime())) return null;
   return Math.floor((Date.now() - d.getTime()) / 31_557_600_000);
+};
+
+const STATUS_META: Record<string, string> = {
+  ACTIVE: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  DISCHARGED: "bg-gray-200 text-gray-700 border-gray-300",
+  ON_LEAVE: "bg-amber-100 text-amber-700 border-amber-200",
+  DECEASED: "bg-red-100 text-red-700 border-red-200",
 };
 
 async function getJson(url: string) {
@@ -34,6 +41,8 @@ export default function ResidentCardPage() {
   const [meds, setMeds] = useState<Row[]>([]);
   const [requests, setRequests] = useState<Row[]>([]);
   const [tasks, setTasks] = useState<Row[]>([]);
+  const [comms, setComms] = useState<Row[]>([]);
+  const [diets, setDiets] = useState<Row[]>([]);
   const [cardUrl, setCardUrl] = useState("");
   const [qrData, setQrData] = useState("");
 
@@ -49,15 +58,19 @@ export default function ResidentCardPage() {
       if (!alive) return;
       if (res.status === 401) { setDenied(true); setLoading(false); return; }
       setResident(res.data as Row | null);
-      const [m, sr, tk] = await Promise.all([
+      const [m, sr, tk, pc, dt] = await Promise.all([
         getJson(`/api/db/medications?f_residentId=${id}&take=100`),
         getJson(`/api/db/service-requests?f_residentId=${id}&take=100`),
         getJson(`/api/db/tasks?f_residentId=${id}&take=100`),
+        getJson(`/api/db/physician-communications?f_residentId=${id}&take=50`),
+        getJson(`/api/db/diet-orders?f_residentId=${id}&take=50`),
       ]);
       if (!alive) return;
       setMeds((m.data as Row[]) || []);
       setRequests((sr.data as Row[]) || []);
       setTasks((tk.data as Row[]) || []);
+      setComms((pc.data as Row[]) || []);
+      setDiets((dt.data as Row[]) || []);
       setLoading(false);
     })();
     return () => { alive = false; };
@@ -73,6 +86,18 @@ export default function ResidentCardPage() {
       .sort((a, b) => new Date(s(a.dueDate)).getTime() - new Date(s(b.dueDate)).getTime()),
     [tasks],
   );
+
+  // Primary physician derived from the latest physician communication; diet from
+  // the resident's active diet order (both migration-free).
+  const primaryPhysician = useMemo(() => {
+    const latest = [...comms].sort((a, b) => new Date(s(b.occurredAt)).getTime() - new Date(s(a.occurredAt)).getTime())[0];
+    return s(latest?.physicianName);
+  }, [comms]);
+  const dietRestriction = useMemo(() => {
+    const active = diets.filter(d => d.active !== false)[0];
+    if (!active) return "";
+    return [s(active.dietType).replace(/_/g, " "), s(active.restrictions)].filter(Boolean).join(" · ");
+  }, [diets]);
 
   const residentSlug = () => (`${s(resident?.firstName)} ${s(resident?.lastName)}`.trim() || "resident").toLowerCase().replace(/\s+/g, "-");
 
@@ -130,30 +155,40 @@ export default function ResidentCardPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-6 px-4 print:bg-white print:py-0">
       <div className="max-w-2xl mx-auto bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden print:shadow-none print:border-0">
-        {/* Header */}
-        <div className="bg-[#2E4A48] text-white p-5 flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/70"><UserRound className="w-4 h-4" /> Resident Care Card</div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold mt-1 truncate">{name}</h1>
-            <p className="text-white/80 text-sm mt-0.5">
-              Room {s(resident.roomNumber) || "—"} · {s(resident.careLevel) || "—"}
-              {yrs != null && ` · ${yrs} yrs`} · DOB {fmtDate(resident.dateOfBirth)}
-            </p>
-          </div>
-          <button onClick={downloadFullPdf} className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/15 hover:bg-white/25 text-white text-sm font-semibold transition print:hidden">
+        {/* Title bar */}
+        <div className="bg-[#2E4A48] text-white px-5 py-3 flex items-center justify-between">
+          <span className="text-sm font-semibold uppercase tracking-wide flex items-center gap-2"><UserRound className="w-4 h-4" /> Resident Care Card</span>
+          <button onClick={downloadFullPdf} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-sm font-semibold transition print:hidden">
             <FileDown className="w-4 h-4" /> Download PDF
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
-          {/* Allergies — most safety-critical, always first */}
-          <div className={`rounded-xl border p-3 ${allergies ? "border-red-300 bg-red-50" : "border-gray-200 bg-gray-50"}`}>
-            <p className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 mb-1 ${allergies ? "text-red-700" : "text-gray-500"}`}>
-              <AlertTriangle className={`w-4 h-4 ${allergies ? "text-red-600" : "text-gray-400"}`} /> Allergies
-            </p>
-            <p className={`text-sm font-semibold ${allergies ? "text-red-800" : "text-gray-400"}`}>{allergies || "None on record"}</p>
+        {/* Module 01 summary — photo, identity, status + field grid */}
+        <div className="px-5 pt-5 pb-4 border-b border-gray-100">
+          <div className="flex items-start gap-4">
+            {resident.photoUrl ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={s(resident.photoUrl)} alt="" className="w-14 h-14 rounded-full object-cover border border-gray-200 shrink-0" />
+            ) : (
+              <div className="w-14 h-14 rounded-full bg-[#2E4A48] text-white flex items-center justify-center shrink-0"><UserRound className="w-7 h-7" /></div>
+            )}
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl font-extrabold text-gray-900 truncate">{name}</h1>
+              <p className="text-sm text-gray-500 mt-0.5">Room {s(resident.roomNumber) || "—"} · Admitted {fmtDate(resident.admissionDate)}{yrs != null ? ` · Age ${yrs}` : ""}</p>
+            </div>
+            <span className={`shrink-0 px-2.5 py-1 rounded text-[11px] font-bold uppercase border ${STATUS_META[s(resident.status)] || STATUS_META.ACTIVE}`}>{s(resident.status).replace(/_/g, " ") || "ACTIVE"}</span>
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3 mt-4">
+            <Cell label="Primary Diagnosis" value={s(resident.diagnosis)} />
+            <Cell label="Care Level" value={s(resident.careLevel).replace(/_/g, " ")} accent />
+            <Cell label="Allergies" value={allergies} danger />
+            <Cell label="Primary Physician" value={primaryPhysician} />
+            <Cell label="Emergency Contact" value={[s(resident.emergencyContact), s(resident.emergencyContactPhone)].filter(Boolean).join(" · ")} />
+            <Cell label="Diet Restriction" value={dietRestriction} accent />
+          </div>
+        </div>
 
+        <div className="px-5 py-5 space-y-4">
           {/* Medical history */}
           <Section title="Medical History" icon={ClipboardList}>
             <p className="text-sm text-gray-700 whitespace-pre-wrap">{s(resident.medicalHistory) || "—"}</p>
@@ -200,17 +235,18 @@ export default function ResidentCardPage() {
               </ul>
             )}
           </Section>
-
-          {/* Emergency contact */}
-          {(resident.emergencyContact || resident.emergencyContactPhone) && (
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 flex items-center gap-2">
-              <Phone className="w-4 h-4 text-gray-400" /> <span className="font-semibold">Emergency:</span> {s(resident.emergencyContact) || "—"} {resident.emergencyContactPhone ? `· ${s(resident.emergencyContactPhone)}` : ""}
-            </div>
-          )}
-
           <p className="text-[11px] text-gray-400 text-center">Generated {fmt(new Date().toISOString())} · confidential — for authorized care staff only.</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Cell({ label, value, danger, accent }: { label: string; value: string; danger?: boolean; accent?: boolean }) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{label}</p>
+      <p className={`text-sm mt-0.5 ${danger && value ? "text-red-600 font-semibold" : accent && value ? "text-[#2E4A48] font-semibold" : "text-gray-800"}`}>{value || "—"}</p>
     </div>
   );
 }

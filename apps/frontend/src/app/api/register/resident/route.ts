@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
           emergencyContactPhone: body.emergencyContactPhone || null,
           allergies: body.allergies || null,
           medicalHistory: body.medicalHistory || null,
+          diagnosis: body.diagnosis || null,
           photoUrl: body.photoUrl || null,
         },
       });

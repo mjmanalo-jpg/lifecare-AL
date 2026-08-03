@@ -41,7 +41,7 @@ const emptyForm = {
   email: "", password: "", confirm: "",
   firstName: "", lastName: "", dateOfBirth: "", gender: "", phone: "",
   emergencyContact: "", emergencyContactPhone: "",
-  allergies: "", medicalHistory: "",
+  allergies: "", medicalHistory: "", diagnosis: "",
   careLevel: "", mobility: "", roomNumber: "",
   carePlan: "",
 };
@@ -238,7 +238,7 @@ export default function ResidentRegistration({ variant = "admin", accent = "#f59
           firstName: form.firstName, lastName: form.lastName,
           dateOfBirth: form.dateOfBirth || null, gender: form.gender || null, phone: form.phone || null,
           emergencyContact: form.emergencyContact || null, emergencyContactPhone: form.emergencyContactPhone || null,
-          allergies: form.allergies || null, medicalHistory: form.medicalHistory || null,
+          allergies: form.allergies || null, medicalHistory: form.medicalHistory || null, diagnosis: form.diagnosis || null,
           careLevel: form.careLevel, mobility: form.mobility || null, roomNumber: form.roomNumber || null,
           carePlan: form.carePlan || null,
           photoUrl: faceUrls.up || faceUrls.right || faceUrls.left || faceUrls.down || null,
@@ -482,6 +482,7 @@ export default function ResidentRegistration({ variant = "admin", accent = "#f59
               {/* Step 4 — Medical */}
               {step === 4 && (
                 <div className="space-y-4">
+                  <Field label="Primary Diagnosis"><input className={inputCls} value={form.diagnosis} onChange={(e) => set({ diagnosis: e.target.value })} placeholder="e.g. Hypertension, T2DM" /></Field>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field label="Allergies"><input className={inputCls} value={form.allergies} onChange={(e) => set({ allergies: e.target.value })} placeholder="Penicillin, none…" /></Field>
                     <Field label="Medical History"><input className={inputCls} value={form.medicalHistory} onChange={(e) => set({ medicalHistory: e.target.value })} placeholder="Hypertension, Diabetes…" /></Field>
