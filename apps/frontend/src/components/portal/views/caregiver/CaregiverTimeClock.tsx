@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import {
   Timer, RefreshCw, BarChart3, Clock, Trash2, LogIn, LogOut,
-  Coffee, Sun, Sunset, Moon, CheckCircle2, History, CalendarDays,
+  Coffee, Sun, Sunset, Moon, CheckCircle2, History, CalendarDays, UserCheck,
   type LucideIcon,
 } from "lucide-react";
 import Swal from "@/lib/swal";
@@ -106,8 +106,16 @@ export default function CaregiverTimeClock() {
   // Break-in-progress start timestamps, keyed by entry id (session-local).
   const [breakStart, setBreakStart] = useState<Record<string, number>>({});
 
+  // The staff member is ALWAYS the logged-in user — this is their own time
+  // clock. There is no staff picker; identity comes from the session.
+  const [me, setMe] = useState<{ staffId: string | null; name: string }>({ staffId: null, name: "" });
+  useEffect(() => {
+    fetch("/api/auth/session").then((r) => r.json()).then((d) => {
+      if (d?.authenticated) setMe({ staffId: d.session?.staffId ?? null, name: d.session?.name ?? "" });
+    }).catch(() => {});
+  }, []);
+
   // Clock-in form
-  const [staffId, setStaffId] = useState("");
   const [shiftType, setShiftType] = useState<ShiftType | "">("");
   const [clockNotes, setClockNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -120,20 +128,24 @@ export default function CaregiverTimeClock() {
     }), [staffRows]);
   const staffById = useMemo(() => new Map(staffOptions.map((s) => [s.id, s])), [staffOptions]);
 
-  const entries = useMemo<EntryVM[]>(() => entryRows.map((row) => {
-    const rel = row.staff as { user?: { name?: string } } | undefined;
-    return {
-      id: String(row.id),
-      staffId: asStr(row.staffId),
-      staffName: rel?.user?.name ?? staffById.get(asStr(row.staffId))?.name ?? "Staff member",
-      shiftType: (SHIFT_ORDER.includes(row.shiftType as ShiftType) ? row.shiftType : "MORNING") as ShiftType,
-      startTime: row.startTime ? String(row.startTime) : null,
-      endTime: row.endTime ? String(row.endTime) : null,
-      breakDuration: Number(row.breakDuration ?? 0) || 0,
-      status: (["PRESENT", "ABSENT", "LATE", "EARLY_LEAVE"].includes(String(row.status)) ? row.status : "PRESENT") as AttendanceStatus,
-      notes: asStr(row.notes),
-    };
-  }), [entryRows, staffById]);
+  const entries = useMemo<EntryVM[]>(() => entryRows
+    .map((row) => {
+      const rel = row.staff as { user?: { name?: string } } | undefined;
+      return {
+        id: String(row.id),
+        staffId: asStr(row.staffId),
+        staffName: rel?.user?.name ?? staffById.get(asStr(row.staffId))?.name ?? "Staff member",
+        shiftType: (SHIFT_ORDER.includes(row.shiftType as ShiftType) ? row.shiftType : "MORNING") as ShiftType,
+        startTime: row.startTime ? String(row.startTime) : null,
+        endTime: row.endTime ? String(row.endTime) : null,
+        breakDuration: Number(row.breakDuration ?? 0) || 0,
+        status: (["PRESENT", "ABSENT", "LATE", "EARLY_LEAVE"].includes(String(row.status)) ? row.status : "PRESENT") as AttendanceStatus,
+        notes: asStr(row.notes),
+      };
+    })
+    // A caregiver's time clock only shows — and only acts on — their OWN records.
+    .filter((e) => me.staffId != null && e.staffId === me.staffId),
+    [entryRows, staffById, me.staffId]);
 
   const active = useMemo(() =>
     entries.filter((e) => e.startTime && !e.endTime)
@@ -179,9 +191,9 @@ export default function CaregiverTimeClock() {
   /* ── Mutations ─────────────────────────────────────────────────────── */
 
   const handleClockIn = async () => {
-    if (!staffId || saving) return;
-    if (active.some((e) => e.staffId === staffId)) {
-      Swal.fire({ title: "Already Clocked In", text: "This staff member has an open shift. Clock out first.", icon: "warning" });
+    if (!me.staffId || saving) return;
+    if (active.some((e) => e.staffId === me.staffId)) {
+      Swal.fire({ title: "Already Clocked In", text: "You have an open shift. Clock out first.", icon: "warning" });
       return;
     }
     setSaving(true);
@@ -190,7 +202,7 @@ export default function CaregiverTimeClock() {
     const minutesLate = (new Date().getHours() - SHIFTS[effectiveShift].startHour) * 60 + new Date().getMinutes();
     try {
       await createRecord("time-tracking", {
-        staffId,
+        staffId: me.staffId,
         shiftType: effectiveShift,
         startTime: nowIso,
         status: minutesLate > 15 ? "LATE" : "PRESENT",
@@ -198,7 +210,7 @@ export default function CaregiverTimeClock() {
       });
       await refetch();
       setClockNotes("");
-      Swal.fire({ title: "Clocked In", text: `${staffById.get(staffId)?.name ?? "Staff"} — ${SHIFTS[effectiveShift].label} shift started.`, icon: "success", timer: 1500, showConfirmButton: false });
+      Swal.fire({ title: "Clocked In", text: `${me.name || "You"} — ${SHIFTS[effectiveShift].label} shift started.`, icon: "success", timer: 1500, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ title: "Clock-in Failed", text: err instanceof Error ? err.message : "Could not clock in.", icon: "error" });
     } finally {
@@ -329,12 +341,12 @@ export default function CaregiverTimeClock() {
           <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
             <h3 className="font-bold text-gray-900 flex items-center gap-2"><LogIn className="w-5 h-5 text-green-500" /> Clock In</h3>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Staff Member <span className="text-red-500">*</span></label>
-              <select value={staffId} onChange={(e) => setStaffId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none text-sm">
-                <option value="">Select staff…</option>
-                {staffOptions.map((s) => <option key={s.id} value={s.id}>{s.name} — {s.position}</option>)}
-              </select>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Staff Member</label>
+              <div className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-sm text-gray-800 flex items-center gap-2">
+                <UserCheck className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <span className="font-medium">{me.name || (me.staffId ? "You" : "Loading your account…")}</span>
+                <span className="text-xs text-gray-400 ml-auto">Your own shift</span>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Shift</label>
@@ -360,7 +372,7 @@ export default function CaregiverTimeClock() {
               <input type="text" value={clockNotes} onChange={(e) => setClockNotes(e.target.value)} placeholder="Optional…"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none text-sm" />
             </div>
-            <button onClick={() => void handleClockIn()} disabled={!staffId || saving}
+            <button onClick={() => void handleClockIn()} disabled={!me.staffId || saving}
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
               <LogIn className="w-4 h-4" /> {saving ? "Clocking In…" : `Clock In — ${SHIFTS[effectiveShift].label} Shift`}
             </button>
