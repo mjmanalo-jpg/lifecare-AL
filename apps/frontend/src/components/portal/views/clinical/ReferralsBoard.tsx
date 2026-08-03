@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, Plus, X, Check, Ban, Stethoscope, ClipboardCheck } from "lucide-react";
+import { CalendarClock, Plus, X, Check, Ban, ClipboardCheck, UserRound } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
@@ -31,6 +31,14 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
   const [form, setForm] = useState({ residentId: "", specialist: "", facilityName: "", scheduledDate: "", reason: "", urgency: "ROUTINE" });
 
   const rname = (c: Row) => { const r = (c.resident ?? {}) as Row; return `${s(r.firstName)} ${s(r.lastName)}`.trim() || "—"; };
+  // Card header leads with the RESIDENT — "Last, First · Room N" — since the
+  // referral is about them; the specialist is a field below.
+  const rHeader = (c: Row) => {
+    const r = (c.resident ?? {}) as Row;
+    const name = [s(r.lastName), s(r.firstName)].filter(Boolean).join(", ") || rname(c);
+    const room = s(r.roomNumber);
+    return room ? `${name} · Room ${room}` : name;
+  };
 
   const filtered = useMemo(() => rows.filter((r) => statusFilter === "all" || s(r.status) === statusFilter), [rows, statusFilter]);
   const stats = useMemo(() => ({
@@ -136,7 +144,7 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusPill status={s(r.urgency) || "ROUTINE"} />
                     <StatusPill status={st} />
-                    <span className="inline-flex items-center gap-1.5 font-bold text-[#2B2B27]"><Stethoscope className="w-4 h-4 text-[#2E4A48]" />{specialist || s(r.facilityName)}</span>
+                    <span className="inline-flex items-center gap-1.5 font-bold text-[#2B2B27]"><UserRound className="w-4 h-4 text-[#2E4A48]" />{rHeader(r)}</span>
                   </div>
                   {s(r.scheduledDate) && <span className="text-sm font-semibold text-[#2E4A48]">{fmtD(r.scheduledDate)}</span>}
                 </div>
