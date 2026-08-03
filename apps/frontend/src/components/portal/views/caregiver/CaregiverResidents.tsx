@@ -544,6 +544,9 @@ function CallBellsModal({ r, onClose, refetchCallBells }: { r: ResidentVM; onClo
 function ResidentModal({ r, nowTs, onClose }: { r: ResidentVM; nowTs: number; onClose: () => void }) {
   const router = useRouter();
 
+  // Only surface open incidents in the profile — resolved ones drop off.
+  const openIncidents = r.incidents.filter((i) => !i.resolved);
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto">
@@ -618,11 +621,11 @@ function ResidentModal({ r, nowTs, onClose }: { r: ResidentVM; nowTs: number; on
             </div>
           </div>
 
-          {r.incidents.length > 0 && (
+          {openIncidents.length > 0 && (
             <div>
               <h3 className="font-bold text-gray-900 mb-3">Recent Incidents</h3>
               <div className="space-y-2">
-                {r.incidents.slice(0, 5).map((i, idx) => (
+                {openIncidents.slice(0, 5).map((i, idx) => (
                   <div key={idx} className={`p-3 rounded-lg border ${i.resolved ? "bg-gray-50 border-gray-200" : "bg-red-50 border-red-200"}`}>
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <span className="font-medium text-gray-900 text-sm">{i.type}</span>

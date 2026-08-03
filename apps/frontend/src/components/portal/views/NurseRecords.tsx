@@ -711,6 +711,12 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
     }
   };
 
+  // Resident profile only surfaces what still needs attention: active call bells
+  // (not resolved/cancelled) and open incidents. Once a bell is resolved or an
+  // incident is closed it drops off this view.
+  const activeBells = r.callBells.filter((cb) => cb.status !== "RESOLVED" && cb.status !== "CANCELLED");
+  const openIncidents = r.incidents.filter((i) => !i.resolved);
+
   return (
     <>
     <Modal title={r.name} subtitle={`Room ${r.room} • Age ${r.age} • ${humanize(r.careLevel)}`} onClose={onClose}>
@@ -757,11 +763,11 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
             </div>
           </div>
         </div>
-        {r.callBells.length > 0 && (
+        {activeBells.length > 0 && (
           <div>
-            <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2"><Phone className="w-4 h-4 text-orange-600" /> Call Bells ({r.callBells.length})</h3>
+            <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2"><Phone className="w-4 h-4 text-orange-600" /> Call Bells ({activeBells.length})</h3>
             <div className="space-y-2">
-              {r.callBells.map((cb, idx) => (
+              {activeBells.map((cb, idx) => (
                 <div key={idx} className={`p-3 rounded-lg border ${cb.status === "PENDING" ? "bg-red-50 border-red-200" : cb.status === "RESPONDED" ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200"}`}>
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="font-medium text-gray-900 text-sm">{cb.reason}</span>
@@ -799,11 +805,11 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
             </div>
           </div>
         )}
-        {r.incidents.length > 0 && (
+        {openIncidents.length > 0 && (
           <div>
             <h3 className="font-bold text-gray-900 mb-3">Recent Incidents</h3>
             <div className="space-y-2">
-              {r.incidents.slice(0, 5).map((i, idx) => (
+              {openIncidents.slice(0, 5).map((i, idx) => (
                 <div key={idx} className={`p-3 rounded-lg border ${i.resolved ? "bg-gray-50 border-gray-200" : "bg-red-50 border-red-200"}`}>
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <span className="font-medium text-gray-900 text-sm">{i.type}</span>

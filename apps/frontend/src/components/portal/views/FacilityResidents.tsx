@@ -485,11 +485,11 @@ export default function FacilityResidents() {
                   </div>
                 </div>
               </div>
-              {viewing.incidents.length > 0 && (
+              {viewing.incidents.some((i) => !i.resolved) && (
                 <div>
                   <h3 className="font-bold text-gray-900 mb-3">Recent Incidents</h3>
                   <div className="space-y-2">
-                    {viewing.incidents.slice(0, 5).map((i, idx) => (
+                    {viewing.incidents.filter((i) => !i.resolved).slice(0, 5).map((i, idx) => (
                       <div key={idx} className={`p-3 rounded-lg border ${i.resolved ? "bg-gray-50 border-gray-200" : "bg-red-50 border-red-200"}`}>
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <span className="font-medium text-gray-900 text-sm">{i.type}</span>
