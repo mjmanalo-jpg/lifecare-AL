@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   Users, Search, X, AlertTriangle, Pill, HeartPulse, Activity, RefreshCw,
   ListChecks, BarChart3, Trash2, Pencil, Heart, Droplets, Wind, Thermometer,
-  Camera, Clock, Phone, CheckCircle2, type LucideIcon,
+  Camera, Clock, Phone, CheckCircle2, QrCode, type LucideIcon,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import {
@@ -15,6 +15,7 @@ import {
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident, humanize } from "@/lib/adapters";
 import { updateRecord, deleteRecord } from "@/lib/api";
+import ResidentQRScanner from "@/components/ResidentQRScanner";
 
 /* ── Types ───────────────────────────────────────────────────────────── */
 
@@ -293,6 +294,7 @@ export default function NurseRecords() {
             <button onClick={() => setView("list")} className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition ${view === "list" ? "bg-yellow-400 text-black" : "text-gray-700 hover:bg-gray-50"}`}><ListChecks className="w-4 h-4" /> Records</button>
             <button onClick={() => setView("analytics")} className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition border-l border-gray-300 ${view === "analytics" ? "bg-yellow-400 text-black" : "text-gray-700 hover:bg-gray-50"}`}><BarChart3 className="w-4 h-4" /> Analytics</button>
           </div>
+          <ResidentQRScanner />
           <button onClick={refreshAll} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
             <RefreshCw className="w-4 h-4" /> Refresh
           </button>
@@ -401,6 +403,7 @@ export default function NurseRecords() {
                             <div className="flex items-center justify-end gap-1">
                               {r.callBells.length > 0 && <button onClick={() => setBellsViewing(r)} className="px-2 py-1 bg-orange-500 text-white rounded text-xs font-semibold hover:bg-orange-600 transition">Bells</button>}
                               <button onClick={() => setViewing(r)} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition">View</button>
+                              <a href={`/rcard/${r.id}`} target="_blank" rel="noopener noreferrer" title="Scannable QR care card" className="px-2 py-1 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 transition inline-flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> QR</a>
                             </div>
                           </td>
                         </tr>

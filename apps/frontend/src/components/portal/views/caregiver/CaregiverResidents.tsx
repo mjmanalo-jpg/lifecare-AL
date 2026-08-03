@@ -16,6 +16,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { updateRecord } from "@/lib/api";
 import { adaptResident, humanize } from "@/lib/adapters";
+import ResidentQRScanner from "@/components/ResidentQRScanner";
 
 /* ── Types ───────────────────────────────────────────────────────────── */
 
@@ -290,6 +291,7 @@ export default function CaregiverResidents() {
               <BarChart3 className="w-4 h-4" /> Analytics
             </button>
           </div>
+          <ResidentQRScanner />
           <button onClick={refreshAll} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
             <RefreshCw className="w-4 h-4" /> Refresh
           </button>
