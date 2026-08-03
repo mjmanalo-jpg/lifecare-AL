@@ -16,24 +16,56 @@ const severityColors: Record<string, string> = {
 
 export default function InventoryAlertsPanel() {
   const { data: alertRows, loading, refetch } = useLiveQuery("inventory-alerts", { query: "take=200", tables: ["InventoryAlert"] });
+  // Derive live alerts straight from the inventory items so a low/expiring item
+  // shows up automatically — no manual alert record needed (Module 14).
+  const invQ = useLiveQuery("inventory", { query: "take=500", tables: ["InventoryItem"] });
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("ALL");
   const [creating, setCreating] = useState(false);
 
+  const derivedAlerts = useMemo(() => {
+    const now = Date.now();
+    const out: any[] = [];
+    for (const it of (invQ.data || []) as any[]) {
+      const qty = Number(it.quantity ?? 0);
+      const threshold = Number(it.reorderPoint ?? it.minimumStock ?? 0);
+      const name = String(it.itemName ?? "Item");
+      const loc = it.location ? ` · ${it.location}` : "";
+      // Stock level → Out of Stock / Critical / Low
+      if (qty <= 0) {
+        out.push({ id: `stock-${it.id}`, itemName: name, severity: "CRITICAL", message: `Out of stock${loc} — reorder at ${threshold}`, currentQuantity: qty, threshold, derived: true, createdAt: it.updatedAt ?? it.createdAt });
+      } else if (threshold > 0 && qty <= threshold) {
+        const critical = qty <= Math.ceil(threshold / 2);
+        out.push({ id: `stock-${it.id}`, itemName: name, severity: critical ? "HIGH" : "MEDIUM", message: `${critical ? "Critically low" : "Low"} stock — ${qty} left (reorder at ${threshold})${loc}`, currentQuantity: qty, threshold, derived: true, createdAt: it.updatedAt ?? it.createdAt });
+      }
+      // Expiry → Expired / Expiring Soon
+      if (it.expiryDate) {
+        const days = Math.floor((new Date(it.expiryDate).getTime() - now) / 86_400_000);
+        if (days < 0) out.push({ id: `exp-${it.id}`, itemName: name, severity: "CRITICAL", message: `Expired ${-days} day(s) ago${loc}`, currentQuantity: qty, threshold, derived: true, createdAt: it.expiryDate });
+        else if (days <= 30) out.push({ id: `exp-${it.id}`, itemName: name, severity: days <= 7 ? "HIGH" : "MEDIUM", message: `Expiring in ${days} day(s)${loc}`, currentQuantity: qty, threshold, derived: true, createdAt: it.expiryDate });
+      }
+    }
+    return out;
+  }, [invQ.data]);
+
+  // Live derived alerts + any manual, still-unresolved alerts.
+  const merged = useMemo(
+    () => [...derivedAlerts, ...((alertRows || []) as any[]).filter(a => !a.resolved)],
+    [derivedAlerts, alertRows],
+  );
+
   const filtered = useMemo(() => {
-    return (alertRows || []).filter((a: any) => {
+    return merged.filter((a: any) => {
       if (filter !== "ALL" && a.severity !== filter) return false;
-      if (a.resolved) return false;
       if (search) {
         const q = search.toLowerCase();
         return (a.itemName || "").toLowerCase().includes(q) || (a.message || "").toLowerCase().includes(q);
       }
       return true;
     });
-  }, [alertRows, filter, search]);
+  }, [merged, filter, search]);
 
-  const allAlerts = alertRows || [];
-  const unresolved = allAlerts.filter((a: any) => !a.resolved);
+  const unresolved = merged;
 
   const handleResolve = async (id: string) => {
     await updateRecord("inventory-alerts", id, { resolved: true, resolvedAt: new Date().toISOString() });
@@ -99,12 +131,18 @@ export default function InventoryAlertsPanel() {
                 </p>
               </div>
               <div className="flex items-center gap-1">
-                {!alert.resolved && (
-                  <button onClick={() => handleResolve(alert.id)} className="p-1.5 text-green-500 hover:bg-green-50 rounded cursor-pointer" title="Resolve">
-                    <CheckCircle className="w-4 h-4" />
-                  </button>
+                {alert.derived ? (
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide px-1.5" title="Auto-generated from inventory — clears when restocked/updated">Auto</span>
+                ) : (
+                  <>
+                    {!alert.resolved && (
+                      <button onClick={() => handleResolve(alert.id)} className="p-1.5 text-green-500 hover:bg-green-50 rounded cursor-pointer" title="Resolve">
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button onClick={() => handleDelete(alert.id)} className="p-1.5 text-red-400 hover:text-red-500 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+                  </>
                 )}
-                <button onClick={() => handleDelete(alert.id)} className="p-1.5 text-red-400 hover:text-red-500 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
               </div>
             </div>
           ))}
