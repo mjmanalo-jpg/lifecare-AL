@@ -136,7 +136,7 @@ async function scanCommunity(communityId: string, organizationId: string | null)
     for (const inc of incidents) {
       const crit = inc.severity === "CRITICAL";
       const kind = String(inc.incidentType).replace(/_/g, " ").toLowerCase();
-      if (await notify("INCIDENT_REPORT", "incident", inc.id, `${crit ? "Critical" : "Severe"} incident — ${kind}`, `${rname(inc.resident)} (Room ${room(inc.resident)}): a ${crit ? "critical" : "severe"} ${kind} incident was reported. Review immediately.`, crit ? "CRITICAL" : "WARNING")) counts.incidents++;
+      if (await notify("INCIDENT_REPORT", "incident", inc.id, `${crit ? "Critical" : "Severe"} incident — ${kind}`, `${rname(inc.resident)} (Room ${room(inc.resident)}): a ${crit ? "critical" : "severe"} ${kind} incident was reported. Review immediately.`, "CRITICAL")) counts.incidents++;
     }
   });
 

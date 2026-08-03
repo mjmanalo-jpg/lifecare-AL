@@ -88,7 +88,9 @@ async function alertSevereIncident(
         type: "INCIDENT_REPORT" as const,
         title: `${crit ? "Critical" : "Severe"} incident — ${kind}`,
         message: `A ${crit ? "critical" : "severe"} ${kind} incident was reported. Review immediately.`,
-        severity: crit ? "CRITICAL" : "WARNING",
+        // Both severe and critical incidents are alerted at CRITICAL level so
+        // they surface prominently (top lane, 15-min SLA), not buried as warnings.
+        severity: "CRITICAL",
         relatedEntityId: String(incident.id),
         relatedEntityType: "incident",
         organizationId: context.organizationId ?? null,
