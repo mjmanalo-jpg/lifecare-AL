@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Users, Search, X, Heart, Droplets, Wind, Thermometer, AlertTriangle,
   Pill, Activity, Clock, RefreshCw, ListChecks, BarChart3, HeartPulse,
-  Camera, ArrowUpRight, CheckCircle2, Phone, BellRing,
+  Camera, ArrowUpRight, CheckCircle2, Phone, BellRing, QrCode,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -398,6 +398,7 @@ export default function CaregiverResidents() {
                               ) : null;
                             })()}
                             <button onClick={() => setViewing(r)} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition">View</button>
+                            <a href={`/rcard/${r.id}`} target="_blank" rel="noopener noreferrer" title="Scannable QR care card" className="px-2 py-1 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 transition inline-flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> QR</a>
                           </div>
                         </td>
                       </tr>
