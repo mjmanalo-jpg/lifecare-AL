@@ -399,9 +399,23 @@ function RaiseModal({ role, raisedBy, residents, meds, onClose, onSaved }: {
         body: JSON.stringify({ action: "sbar", situation: sit, background: form.background.trim(), assessment: form.assessment.trim(), priority: form.priority, resident: resName }),
       });
       const data = await res.json().catch(() => ({}));
-      set("recommendation", res.ok && data?.recommendation ? String(data.recommendation).trim() : templateDraft());
+      if (res.ok && data?.recommendation) {
+        set("recommendation", String(data.recommendation).trim());
+      } else {
+        // AI unavailable (plan without the ai_assistant entitlement, no key, or a
+        // provider error) — insert the offline template but say so, otherwise it
+        // looks like the AI silently produced boilerplate.
+        set("recommendation", templateDraft());
+        Swal.fire({
+          toast: true, position: "top-end", icon: "info", showConfirmButton: false, timer: 3400, timerProgressBar: true,
+          title: res.status === 403
+            ? "AI drafting isn't enabled on your plan — inserted a template to edit."
+            : "AI draft unavailable right now — inserted a template to edit.",
+        });
+      }
     } catch {
       set("recommendation", templateDraft());
+      Swal.fire({ toast: true, position: "top-end", icon: "info", showConfirmButton: false, timer: 3400, title: "AI draft unavailable right now — inserted a template to edit." });
     } finally {
       setDrafting(false);
     }

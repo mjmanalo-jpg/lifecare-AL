@@ -237,9 +237,23 @@ export default function CaregiverReports() {
         }),
       });
       const data = await res.json().catch(() => ({}));
-      setField("summary", res.ok && data?.summary ? String(data.summary).trim() : templateSummary());
+      if (res.ok && data?.summary) {
+        setField("summary", String(data.summary).trim());
+      } else {
+        // AI unavailable (plan without the ai_assistant entitlement, no key, or a
+        // provider error) — insert the offline template but say so, so it doesn't
+        // look like the AI silently produced boilerplate.
+        setField("summary", templateSummary());
+        Swal.fire({
+          toast: true, position: "top-end", icon: "info", showConfirmButton: false, timer: 3400, timerProgressBar: true,
+          title: res.status === 403
+            ? "AI endorsement isn't enabled on your plan — used a template you can edit."
+            : "AI endorsement unavailable right now — used a template you can edit.",
+        });
+      }
     } catch {
       setField("summary", templateSummary());
+      Swal.fire({ toast: true, position: "top-end", icon: "info", showConfirmButton: false, timer: 3400, title: "AI endorsement unavailable right now — used a template you can edit." });
     } finally {
       setGenerating(false);
     }
