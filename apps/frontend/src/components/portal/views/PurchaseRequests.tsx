@@ -9,7 +9,7 @@ import { createRecord, updateRecord } from "@/lib/api";
 type Row = Record<string, unknown>;
 const s = (v: unknown) => (v == null ? "" : String(v));
 const n = (v: unknown) => (typeof v === "number" ? v : Number(v) || 0);
-const money = (v: number) => `$${Math.round(v).toLocaleString()}`;
+const money = (v: number) => `₱${Math.round(v).toLocaleString()}`;
 
 const STATUS_BADGE: Record<string, string> = {
   REQUESTED: "bg-amber-100 text-amber-700 border-amber-200",

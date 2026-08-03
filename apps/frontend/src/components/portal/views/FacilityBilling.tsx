@@ -121,7 +121,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
     }
     const result = await Swal.fire({
       title: "Record Service Charge?",
-      text: `Record charge of $${Number(chargeForm.amount).toLocaleString()}?`,
+      text: `Record charge of ₱${Number(chargeForm.amount).toLocaleString()}?`,
       icon: "question", showCancelButton: true, confirmButtonColor: "#fbbf24", cancelButtonColor: "#6b7280"
     });
     if (result.isConfirmed) {
@@ -208,7 +208,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
     const result = await Swal.fire({
       title: "Generate Invoice?",
       text: pendingForResident.length > 0 && invoiceForm.addPendingCharges
-        ? `Create invoice pulling in ${pendingForResident.length} pending service charges worth $${sumPending.toLocaleString()}?`
+        ? `Create invoice pulling in ${pendingForResident.length} pending service charges worth ₱${sumPending.toLocaleString()}?`
         : "Create a blank draft invoice?",
       icon: "question", showCancelButton: true, confirmButtonColor: "#fbbf24"
     });
@@ -267,7 +267,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
 
     const result = await Swal.fire({
       title: "Process Payment?",
-      text: `Authorize receipt of $${amt.toLocaleString()} on ${selectedInv.invoiceNumber}?`,
+      text: `Authorize receipt of ₱${amt.toLocaleString()} on ${selectedInv.invoiceNumber}?`,
       icon: "info", showCancelButton: true, confirmButtonColor: "#10b981"
     });
 
@@ -430,9 +430,9 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
         <div className="space-y-6 animate-fadeIn">
           {/* Key Metrics Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatBox label="Total Revenue Collected" value={`$${stats.totalCollected.toLocaleString()}`} icon={CheckCircle} color="green" />
-            <StatBox label="Total Outstanding Balance" value={`$${stats.totalOutstanding.toLocaleString()}`} icon={Clock} color="amber" />
-            <StatBox label="Unbilled Pending Charges" value={`$${stats.pendingChargesSum.toLocaleString()}`} icon={Layers} color="blue" />
+            <StatBox label="Total Revenue Collected" value={`₱${stats.totalCollected.toLocaleString()}`} icon={CheckCircle} color="green" />
+            <StatBox label="Total Outstanding Balance" value={`₱${stats.totalOutstanding.toLocaleString()}`} icon={Clock} color="amber" />
+            <StatBox label="Unbilled Pending Charges" value={`₱${stats.pendingChargesSum.toLocaleString()}`} icon={Layers} color="blue" />
             <StatBox label="Overdue Invoices" value={String(stats.overdueCount)} icon={AlertTriangle} color="red" />
           </div>
 
@@ -449,7 +449,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                 <div>
                   <div className="flex justify-between text-sm font-semibold text-gray-600 mb-1">
                     <span>Collected Revenue ({Math.round(stats.totalBilled > 0 ? (stats.totalCollected / stats.totalBilled) * 100 : 0)}%)</span>
-                    <span className="text-green-600">${stats.totalCollected.toLocaleString()}</span>
+                    <span className="text-green-600">₱{stats.totalCollected.toLocaleString()}</span>
                   </div>
                   <div className="w-full h-4 bg-gray-100 rounded-full overflow-hidden">
                     <div className="h-full bg-green-500 transition-all duration-500" style={{ width: `${stats.totalBilled > 0 ? (stats.totalCollected / stats.totalBilled) * 100 : 0}%` }} />
@@ -458,7 +458,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                 <div>
                   <div className="flex justify-between text-sm font-semibold text-gray-600 mb-1">
                     <span>Outstanding Receivables</span>
-                    <span className="text-amber-600">${stats.totalOutstanding.toLocaleString()}</span>
+                    <span className="text-amber-600">₱{stats.totalOutstanding.toLocaleString()}</span>
                   </div>
                   <div className="w-full h-4 bg-gray-100 rounded-full overflow-hidden">
                     <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${stats.totalBilled > 0 ? (stats.totalOutstanding / stats.totalBilled) * 100 : 0}%` }} />
@@ -467,7 +467,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                 <div>
                   <div className="flex justify-between text-sm font-semibold text-gray-600 mb-1">
                     <span>Unbilled Care Backlog</span>
-                    <span className="text-blue-600">${stats.pendingChargesSum.toLocaleString()}</span>
+                    <span className="text-blue-600">₱{stats.pendingChargesSum.toLocaleString()}</span>
                   </div>
                   <div className="w-full h-4 bg-gray-100 rounded-full overflow-hidden">
                     <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${stats.totalCollected > 0 ? Math.min(100, (stats.pendingChargesSum / stats.totalCollected) * 100) : 0}%` }} />
@@ -533,10 +533,10 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                       <tr key={res.id} className="hover:bg-gray-50/50">
                         <td className="px-6 py-4 font-bold text-gray-900">{res.name}</td>
                         <td className="px-6 py-4">Room {res.room}</td>
-                        <td className="px-6 py-4">${billed.toLocaleString()}</td>
-                        <td className="px-6 py-4 text-green-600">${paid.toLocaleString()}</td>
-                        <td className={`px-6 py-4 ${balance > 0 ? "text-amber-600" : "text-gray-400"}`}>${balance.toLocaleString()}</td>
-                        <td className="px-6 py-4 text-blue-600">${unbilled.toLocaleString()}</td>
+                        <td className="px-6 py-4">₱{billed.toLocaleString()}</td>
+                        <td className="px-6 py-4 text-green-600">₱{paid.toLocaleString()}</td>
+                        <td className={`px-6 py-4 ${balance > 0 ? "text-amber-600" : "text-gray-400"}`}>₱{balance.toLocaleString()}</td>
+                        <td className="px-6 py-4 text-blue-600">₱{unbilled.toLocaleString()}</td>
                       </tr>
                     );
                   })}
@@ -586,7 +586,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                       <td className="px-6 py-4 font-bold text-gray-900">{sc.residentName}</td>
                       <td className="px-6 py-4"><span className="px-2.5 py-1 bg-purple-50 text-purple-700 rounded-lg text-xs font-bold border border-purple-100">{sc.category}</span></td>
                       <td className="px-6 py-4 max-w-[200px] truncate">{sc.description}</td>
-                      <td className="px-6 py-4 font-bold text-gray-900">${sc.amount.toLocaleString()}</td>
+                      <td className="px-6 py-4 font-bold text-gray-900">₱{sc.amount.toLocaleString()}</td>
                       <td className="px-6 py-4">
                         {sc.invoiceId ? (
                           <span className="inline-flex items-center gap-1 text-green-700 font-bold text-xs"><CheckCircle className="w-3.5 h-3.5 text-green-500" /> Billed ({sc.invoiceNumber})</span>
@@ -707,9 +707,9 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                     <tr key={inv.id} className="hover:bg-gray-50 transition">
                       <td className="px-6 py-4 font-bold text-gray-900">{inv.invoiceNumber}</td>
                       <td className="px-6 py-4 font-semibold text-gray-800">{inv.residentName}</td>
-                      <td className="px-6 py-4 font-bold text-gray-900">${inv.totalAmount.toLocaleString()}</td>
-                      <td className="px-6 py-4 text-green-600 font-semibold">${inv.amountPaid.toLocaleString()}</td>
-                      <td className={`px-6 py-4 font-bold ${inv.balance > 0 ? "text-amber-600" : "text-gray-400"}`}>${inv.balance.toLocaleString()}</td>
+                      <td className="px-6 py-4 font-bold text-gray-900">₱{inv.totalAmount.toLocaleString()}</td>
+                      <td className="px-6 py-4 text-green-600 font-semibold">₱{inv.amountPaid.toLocaleString()}</td>
+                      <td className={`px-6 py-4 font-bold ${inv.balance > 0 ? "text-amber-600" : "text-gray-400"}`}>₱{inv.balance.toLocaleString()}</td>
                       <td className="px-6 py-4 text-xs font-semibold text-gray-500">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : "—"}</td>
                       <td className="px-6 py-4">
                         <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${STATUS_BADGE[inv.status] || "bg-gray-100 text-gray-800"}`}>{inv.status}</span>
@@ -772,7 +772,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                       <td className="px-6 py-4 font-semibold text-gray-800">{p.residentName}</td>
                       <td className="px-6 py-4"><span className="px-2.5 py-1 bg-green-50 text-green-700 rounded-lg text-xs font-bold border border-green-100">{p.paymentMethod}</span></td>
                       <td className="px-6 py-4 text-xs font-semibold text-gray-500">{p.paymentDate ? new Date(p.paymentDate).toLocaleString() : "—"}</td>
-                      <td className="px-6 py-4 font-extrabold text-green-600 text-right">${p.amount.toLocaleString()}</td>
+                      <td className="px-6 py-4 font-extrabold text-green-600 text-right">₱{p.amount.toLocaleString()}</td>
                     </tr>
                   )) : (
                     <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-500">No payment logs recorded.</td></tr>
@@ -812,7 +812,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                   <div className="flex justify-between"><span className="text-gray-500 font-medium">Invoice Reference:</span><span className="font-bold text-gray-800">{p.invoiceNumber}</span></div>
                   <div className="flex justify-between"><span className="text-gray-500 font-medium">Payment Method:</span><span className="font-bold text-gray-800">{p.paymentMethod}</span></div>
                   <div className="flex justify-between"><span className="text-gray-500 font-medium">Auth Date:</span><span className="font-bold text-gray-800">{p.paymentDate ? new Date(p.paymentDate).toLocaleDateString() : ""}</span></div>
-                  <div className="flex justify-between border-t border-dashed border-gray-200 pt-2 text-sm"><span className="font-bold text-gray-700">Amount Paid:</span><span className="font-extrabold text-green-600">${p.amount.toLocaleString()}</span></div>
+                  <div className="flex justify-between border-t border-dashed border-gray-200 pt-2 text-sm"><span className="font-bold text-gray-700">Amount Paid:</span><span className="font-extrabold text-green-600">₱{p.amount.toLocaleString()}</span></div>
                 </div>
 
                 <button onClick={() => setViewingReceipt(p)} className="w-full flex items-center justify-center gap-2 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 font-bold rounded-lg text-xs transition">
@@ -894,7 +894,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                             <td className="px-4 py-2">{sc.serviceDate ? new Date(sc.serviceDate).toLocaleDateString() : ""}</td>
                             <td className="px-4 py-2 font-bold">{sc.category}</td>
                             <td className="px-4 py-2">{sc.description}</td>
-                            <td className="px-4 py-2 text-right font-bold">${sc.amount.toLocaleString()}</td>
+                            <td className="px-4 py-2 text-right font-bold">₱{sc.amount.toLocaleString()}</td>
                           </tr>
                         ))
                       ) : (
@@ -916,7 +916,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                     {viewingInvoice.payments.map((p: any) => (
                       <div key={p.id} className="flex justify-between bg-green-50/50 p-2 rounded border border-green-100 text-green-800">
                         <span>Authorized txn <strong className="font-mono">{p.transactionId}</strong> via {p.paymentMethod} on {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString() : ""}</span>
-                        <span className="font-bold">-${p.amount.toLocaleString()}</span>
+                        <span className="font-bold">-₱{p.amount.toLocaleString()}</span>
                       </div>
                     ))}
                   </div>
@@ -925,11 +925,11 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
 
               {/* Total calculations */}
               <div className="border-t border-gray-200 pt-6 space-y-2 text-sm max-w-xs ml-auto">
-                <div className="flex justify-between font-semibold text-gray-600"><span>Subtotal:</span><span>${viewingInvoice.totalAmount.toLocaleString()}</span></div>
-                <div className="flex justify-between font-semibold text-green-600"><span>Paid to Date:</span><span>-${viewingInvoice.amountPaid.toLocaleString()}</span></div>
+                <div className="flex justify-between font-semibold text-gray-600"><span>Subtotal:</span><span>₱{viewingInvoice.totalAmount.toLocaleString()}</span></div>
+                <div className="flex justify-between font-semibold text-green-600"><span>Paid to Date:</span><span>-₱{viewingInvoice.amountPaid.toLocaleString()}</span></div>
                 <div className="flex justify-between font-extrabold text-gray-900 border-t border-gray-200 pt-2 text-lg">
                   <span>Balance Due:</span>
-                  <span className={viewingInvoice.balance > 0 ? "text-amber-600" : "text-green-600"}>${viewingInvoice.balance.toLocaleString()}</span>
+                  <span className={viewingInvoice.balance > 0 ? "text-amber-600" : "text-green-600"}>₱{viewingInvoice.balance.toLocaleString()}</span>
                 </div>
               </div>
             </div>
@@ -974,7 +974,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
 
                 <div className="border-t border-dashed border-gray-200 pt-4 flex justify-between items-center">
                   <span className="font-extrabold text-gray-700 text-base">Total Captured</span>
-                  <span className="font-black text-green-600 text-2xl">${viewingReceipt.amount.toLocaleString()}</span>
+                  <span className="font-black text-green-600 text-2xl">₱{viewingReceipt.amount.toLocaleString()}</span>
                 </div>
               </div>
 
@@ -1021,7 +1021,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                     Pending Care Charges:
                   </p>
                   <p className="font-medium text-gray-600">
-                    Total unbilled charges for this resident: <strong className="text-gray-900">${
+                    Total unbilled charges for this resident: <strong className="text-gray-900">₱{
                       serviceCharges.filter(c => c.residentId === invoiceForm.residentId && !c.invoiceId).reduce((s, c) => s + c.amount, 0).toLocaleString()
                     }</strong>
                   </p>
@@ -1153,7 +1153,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Coverage Details / Copay Terms</label>
-                <textarea value={insuranceForm.coverageDetails} onChange={(e) => setInsuranceForm({ ...insuranceForm, coverageDetails: e.target.value })} rows={2} placeholder="e.g. 80% coverage for special medical therapies, $50 flat medication copay..." className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 resize-y" />
+                <textarea value={insuranceForm.coverageDetails} onChange={(e) => setInsuranceForm({ ...insuranceForm, coverageDetails: e.target.value })} rows={2} placeholder="e.g. 80% coverage for special medical therapies, ₱50 flat medication copay..." className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 resize-y" />
               </div>
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
@@ -1186,7 +1186,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 bg-white text-gray-800">
                   <option value="">Select outstanding invoice...</option>
                   {invoices.filter(i => i.status === "SENT" || i.status === "OVERDUE").map((i) => (
-                    <option key={i.id} value={i.id}>{i.invoiceNumber} - {i.residentName} (Bal: ${i.balance.toLocaleString()})</option>
+                    <option key={i.id} value={i.id}>{i.invoiceNumber} - {i.residentName} (Bal: ₱{i.balance.toLocaleString()})</option>
                   ))}
                 </select>
               </div>

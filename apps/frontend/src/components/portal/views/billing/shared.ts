@@ -2,7 +2,7 @@
 // (Transactions Ledger, Receivables & Aging, Revenue by Source).
 
 /** Money formatter — matches the `$` convention used across the billing UI. */
-export const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`;
+export const fmt = (n: number) => `₱${Math.round(n).toLocaleString()}`;
 
 export interface SourceMeta {
   label: string;

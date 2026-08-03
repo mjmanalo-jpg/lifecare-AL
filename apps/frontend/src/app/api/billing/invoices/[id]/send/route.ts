@@ -51,9 +51,9 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const outstanding = Math.round(Math.max(0, (invoice.totalAmount ?? 0) - (invoice.amountPaid ?? 0))).toLocaleString();
     const due = invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : null;
     const title = `Invoice ${invoice.invoiceNumber}`;
-    const message = `A new invoice for ${residentName || "your account"} totaling $${total} has been issued${
+    const message = `A new invoice for ${residentName || "your account"} totaling ₱${total} has been issued${
       due ? `, due ${due}` : ""
-    }. Outstanding balance: $${outstanding}.`;
+    }. Outstanding balance: ₱${outstanding}.`;
 
     if (recipientIds.size > 0) {
       await prisma.notification.createMany({

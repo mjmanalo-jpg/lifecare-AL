@@ -585,8 +585,8 @@ function BillingReport({ invoices, search: _s }: { invoices: Record<string, unkn
         <StatBox label="Paid" value={String(stats.paid)} icon={CreditCard} color="green" />
         <StatBox label="Overdue" value={String(stats.overdue)} icon={CreditCard} color="red" />
         <StatBox label="Pending" value={String(stats.pending)} icon={CreditCard} color="amber" />
-        <StatBox label="Revenue" value={`$${stats.revenue.toLocaleString()}`} icon={CreditCard} color="purple" />
-        <StatBox label="Collected" value={`$${stats.collected.toLocaleString()}`} icon={CreditCard} color="green" />
+        <StatBox label="Revenue" value={`₱${stats.revenue.toLocaleString()}`} icon={CreditCard} color="purple" />
+        <StatBox label="Collected" value={`₱${stats.collected.toLocaleString()}`} icon={CreditCard} color="green" />
       </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-4">
@@ -606,15 +606,15 @@ function BillingReport({ invoices, search: _s }: { invoices: Record<string, unkn
           <div className="flex flex-col justify-center h-full gap-3 p-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Total Revenue</span>
-              <span className="text-xl font-bold text-gray-900">${stats.revenue.toLocaleString()}</span>
+              <span className="text-xl font-bold text-gray-900">₱{stats.revenue.toLocaleString()}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Amount Collected</span>
-              <span className="text-xl font-bold text-green-600">${stats.collected.toLocaleString()}</span>
+              <span className="text-xl font-bold text-green-600">₱{stats.collected.toLocaleString()}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Outstanding</span>
-              <span className="text-xl font-bold text-red-600">${(stats.revenue - stats.collected).toLocaleString()}</span>
+              <span className="text-xl font-bold text-red-600">₱{(stats.revenue - stats.collected).toLocaleString()}</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2.5">
               <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${stats.revenue > 0 ? (stats.collected / stats.revenue) * 100 : 0}%` }} />
@@ -640,7 +640,7 @@ function BillingReport({ invoices, search: _s }: { invoices: Record<string, unkn
                     <tr key={inv.id} className="hover:bg-gray-50">
                       <td className="px-4 py-2.5 font-medium text-gray-900">{inv.invoiceNumber ?? "—"}</td>
                       <td className="px-4 py-2.5 text-gray-600">{name}</td>
-                      <td className="px-4 py-2.5 font-semibold">${(inv.totalAmount ?? 0).toLocaleString()}</td>
+                      <td className="px-4 py-2.5 font-semibold">₱{(inv.totalAmount ?? 0).toLocaleString()}</td>
                       <td className="px-4 py-2.5"><span className={`px-2 py-0.5 rounded text-xs font-bold ${STATUS_BADGE[inv.status] || "bg-gray-100 text-gray-700"}`}>{inv.status}</span></td>
                       <td className="px-4 py-2.5 text-xs text-gray-500">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : "—"}</td>
                     </tr>

@@ -416,13 +416,13 @@ export default function FamilyPortal() {
           <h2 className="text-2xl font-bold">Billing - {data.expenses.month}</h2>
           <div className="p-6 rounded-lg bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-500/30">
             <p className="text-sm text-muted-foreground mb-2">Total This Month</p>
-            <p className="text-4xl font-bold text-purple-300">${data.expenses.total}</p>
+            <p className="text-4xl font-bold text-purple-300">₱{data.expenses.total}</p>
           </div>
           <div className="space-y-2">
             {data.expenses.breakdown.map((item, idx) => (
               <div key={idx} className="flex justify-between items-center p-3 rounded-lg bg-foreground/5 border border-border">
                 <span className="text-sm">{item.item}</span>
-                <span className="font-bold">${item.amount}</span>
+                <span className="font-bold">₱{item.amount}</span>
               </div>
             ))}
           </div>

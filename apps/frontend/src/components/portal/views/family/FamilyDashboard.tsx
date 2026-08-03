@@ -151,7 +151,7 @@ export default function FamilyDashboard() {
         />
         <StatCard
           title="Balance Due"
-          value={`$${balanceDue.toFixed(0)}`}
+          value={`₱${balanceDue.toFixed(0)}`}
           icon={DollarSign}
           backgroundColor="bg-yellow-50"
           textColor="text-yellow-900"

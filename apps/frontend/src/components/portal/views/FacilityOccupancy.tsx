@@ -467,7 +467,7 @@ export default function FacilityOccupancy() {
                 <DetailField icon={BedDouble} label="Type" value={humanize(viewingRoom.roomType)} />
                 <DetailField icon={Hash} label="Status" value={humanize(viewingRoom.status)} />
                 <DetailField icon={Users} label="Capacity" value={`${viewingRoom.capacity} bed${viewingRoom.capacity > 1 ? "s" : ""}`} />
-                <DetailField icon={CreditCard} label="Rate" value={viewingRoom.rateMonthly ? `$${viewingRoom.rateMonthly.toLocaleString()}/mo` : "—"} />
+                <DetailField icon={CreditCard} label="Rate" value={viewingRoom.rateMonthly ? `₱${viewingRoom.rateMonthly.toLocaleString()}/mo` : "—"} />
               </div>
 
               {viewingRoom.features && (

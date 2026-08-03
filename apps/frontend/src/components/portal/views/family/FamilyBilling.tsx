@@ -31,7 +31,7 @@ const STATUS: Record<string, { label: string; badge: string; bar: string }> = {
   CANCELLED: { label: "Cancelled", badge: "bg-gray-100 text-gray-500 border-gray-200", bar: "bg-gray-300" },
 };
 const statusMeta = (s: string) => STATUS[s] ?? STATUS.DRAFT;
-const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`;
+const fmt = (n: number) => `₱${Math.round(n).toLocaleString()}`;
 
 /** Billing & Finance — invoices, service charges, insurance, online payments, analytics. */
 export default function FamilyBilling() {
@@ -350,7 +350,7 @@ export default function FamilyBilling() {
                         <td className="px-6 py-4 text-xs font-semibold text-gray-500">{sc.serviceDate ? new Date(sc.serviceDate).toLocaleDateString() : ""}</td>
                         <td className="px-6 py-4"><span className="px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-100 rounded-lg text-xs font-bold">{sc.category}</span></td>
                         <td className="px-6 py-4 max-w-[200px] truncate">{sc.description}</td>
-                        <td className="px-6 py-4 font-bold text-gray-900">${sc.amount.toLocaleString()}</td>
+                        <td className="px-6 py-4 font-bold text-gray-900">₱{sc.amount.toLocaleString()}</td>
                         <td className="px-6 py-4">
                           {sc.invoiceId ? (
                             <span className="text-green-700 font-bold text-xs flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-green-500" /> Billed ({sc.invoiceNumber})</span>
@@ -418,7 +418,7 @@ export default function FamilyBilling() {
               <div className="bg-gray-50 rounded-lg p-4 text-xs space-y-2 border border-gray-100">
                 <div className="flex justify-between"><span>Billing Invoice:</span><span className="font-bold text-gray-800">{payingInvoice.invoiceNumber}</span></div>
                 <div className="flex justify-between"><span>Resident:</span><span className="font-bold text-gray-800">{payingInvoice.residentName}</span></div>
-                <div className="flex justify-between text-sm border-t border-dashed border-gray-200 pt-2"><span className="font-bold text-gray-700">Amount Due:</span><span className="font-extrabold text-yellow-600">${payingInvoice.balance.toLocaleString()}</span></div>
+                <div className="flex justify-between text-sm border-t border-dashed border-gray-200 pt-2"><span className="font-bold text-gray-700">Amount Due:</span><span className="font-extrabold text-yellow-600">₱{payingInvoice.balance.toLocaleString()}</span></div>
               </div>
 
               <div className="space-y-4">
@@ -491,7 +491,7 @@ export default function FamilyBilling() {
                 </div>
                 <div className="border-t border-dashed border-gray-200 pt-4 flex justify-between items-center text-sm">
                   <span className="font-extrabold text-gray-700">Total Captured</span>
-                  <span className="font-black text-green-600 text-xl">${viewingReceipt.amount.toLocaleString()}</span>
+                  <span className="font-black text-green-600 text-xl">₱{viewingReceipt.amount.toLocaleString()}</span>
                 </div>
               </div>
               <p className="text-center text-[9px] text-gray-400 mt-6 leading-relaxed">
@@ -561,8 +561,8 @@ function BillingAnalytics({ invoices }: { invoices: InvoiceVM[] }) {
           <BarChart data={a.byMonth} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
             <XAxis dataKey="label" fontSize={12} tickLine={false} axisLine={false} />
-            <YAxis fontSize={12} tickLine={false} axisLine={false} width={48} tickFormatter={(n) => `$${Math.round(Number(n) / 1000)}k`} />
-            <Tooltip formatter={(n) => `$${Math.round(Number(n)).toLocaleString()}`} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+            <YAxis fontSize={12} tickLine={false} axisLine={false} width={48} tickFormatter={(n) => `₱${Math.round(Number(n) / 1000)}k`} />
+            <Tooltip formatter={(n) => `₱${Math.round(Number(n)).toLocaleString()}`} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
             <Legend />
             <Bar dataKey="Billed" fill="#eab308" radius={[4, 4, 0, 0]} />
             <Bar dataKey="Paid" fill="#22c55e" radius={[4, 4, 0, 0]} />
@@ -592,7 +592,7 @@ function BillingAnalytics({ invoices }: { invoices: InvoiceVM[] }) {
                   <p className="font-medium text-gray-900 text-sm truncate">{v.number}</p>
                   <p className="text-xs text-gray-600 truncate">{v.description || "—"}</p>
                 </div>
-                <span className="font-bold text-amber-700 flex-shrink-0">${Math.round(v.balance).toLocaleString()}</span>
+                <span className="font-bold text-amber-700 flex-shrink-0">₱{Math.round(v.balance).toLocaleString()}</span>
               </div>
             ))}
           </div>

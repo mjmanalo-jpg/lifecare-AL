@@ -375,7 +375,7 @@ export default function FacilityRooms() {
                             {room.status.charAt(0) + room.status.slice(1).toLowerCase()}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-gray-700">${room.rateMonthly?.toLocaleString() ?? "—"}</td>
+                        <td className="px-6 py-4 text-gray-700">₱{room.rateMonthly?.toLocaleString() ?? "—"}</td>
                         <td className="px-6 py-4 text-gray-600 text-xs">
                           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                           {residents.length > 0 ? residents.map((r: any) => <div key={r.id}>{residentName(r)}</div>) : "—"}
@@ -430,7 +430,7 @@ export default function FacilityRooms() {
                 <div><label className="block text-sm font-semibold text-gray-600 mb-2">Wing</label><p className="text-lg text-gray-900">{viewing.wing}</p></div>
                 <div><label className="block text-sm font-semibold text-gray-600 mb-2">Type</label><p className="text-lg text-gray-900">{TYPE_LABEL[viewing.roomType] || viewing.roomType}</p></div>
                 <div><label className="block text-sm font-semibold text-gray-600 mb-2">Capacity</label><p className="text-lg text-gray-900">{viewing.capacity === 1 ? "Single" : `Shared (${viewing.capacity} beds)`}</p></div>
-                <div><label className="block text-sm font-semibold text-gray-600 mb-2">Rate</label><p className="text-lg text-gray-900">{viewing.rateMonthly ? `$${viewing.rateMonthly.toLocaleString()}/mo` : "—"}</p></div>
+                <div><label className="block text-sm font-semibold text-gray-600 mb-2">Rate</label><p className="text-lg text-gray-900">{viewing.rateMonthly ? `₱${viewing.rateMonthly.toLocaleString()}/mo` : "—"}</p></div>
                 {viewing.features && <div className="col-span-2"><label className="block text-sm font-semibold text-gray-600 mb-2">Features</label><p className="text-gray-900">{viewing.features}</p></div>}
                 {viewing.notes && <div className="col-span-2"><label className="block text-sm font-semibold text-gray-600 mb-2">Notes</label><p className="text-gray-900 whitespace-pre-wrap">{viewing.notes}</p></div>}
                 {(() => {
