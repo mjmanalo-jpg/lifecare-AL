@@ -14,6 +14,20 @@ const severityColors: Record<string, string> = {
   LOW: "bg-blue-100 text-blue-700 border-blue-200",
 };
 
+// Module 14 stock levels — Out of Stock / Critical / Low / Normal — classified
+// from quantity vs the reorder-or-minimum threshold. Normal → no alert.
+const STOCK_BADGE: Record<string, string> = {
+  "OUT OF STOCK": "bg-red-200 text-red-800 border-red-300",
+  CRITICAL: "bg-red-100 text-red-700 border-red-200",
+  LOW: "bg-amber-100 text-amber-700 border-amber-200",
+};
+function stockLevel(qty: number, threshold: number): { label: string; severity: string; cls: string } | null {
+  if (qty <= 0) return { label: "OUT OF STOCK", severity: "CRITICAL", cls: STOCK_BADGE["OUT OF STOCK"] };
+  if (threshold > 0 && qty <= Math.ceil(threshold / 2)) return { label: "CRITICAL", severity: "HIGH", cls: STOCK_BADGE.CRITICAL };
+  if (threshold > 0 && qty <= threshold) return { label: "LOW", severity: "MEDIUM", cls: STOCK_BADGE.LOW };
+  return null; // NORMAL — within range, no alert
+}
+
 export default function InventoryAlertsPanel() {
   const { data: alertRows, loading, refetch } = useLiveQuery("inventory-alerts", { query: "take=200", tables: ["InventoryAlert"] });
   // Derive live alerts straight from the inventory items so a low/expiring item
@@ -31,18 +45,20 @@ export default function InventoryAlertsPanel() {
       const threshold = Number(it.reorderPoint ?? it.minimumStock ?? 0);
       const name = String(it.itemName ?? "Item");
       const loc = it.location ? ` · ${it.location}` : "";
-      // Stock level → Out of Stock / Critical / Low
-      if (qty <= 0) {
-        out.push({ id: `stock-${it.id}`, itemName: name, severity: "CRITICAL", message: `Out of stock${loc} — reorder at ${threshold}`, currentQuantity: qty, threshold, derived: true, createdAt: it.updatedAt ?? it.createdAt });
-      } else if (threshold > 0 && qty <= threshold) {
-        const critical = qty <= Math.ceil(threshold / 2);
-        out.push({ id: `stock-${it.id}`, itemName: name, severity: critical ? "HIGH" : "MEDIUM", message: `${critical ? "Critically low" : "Low"} stock — ${qty} left (reorder at ${threshold})${loc}`, currentQuantity: qty, threshold, derived: true, createdAt: it.updatedAt ?? it.createdAt });
+      // Stock level per Module 14: Out of Stock / Critical / Low (Normal = no alert).
+      const sl = stockLevel(qty, threshold);
+      if (sl) {
+        out.push({
+          id: `stock-${it.id}`, itemName: name, severity: sl.severity, badge: sl.label, badgeCls: sl.cls,
+          message: `${qty} ${it.unit ?? "left"}${threshold > 0 ? ` · reorder at ${threshold}` : ""}${loc}`,
+          currentQuantity: qty, threshold, derived: true, createdAt: it.updatedAt ?? it.createdAt,
+        });
       }
       // Expiry → Expired / Expiring Soon
       if (it.expiryDate) {
         const days = Math.floor((new Date(it.expiryDate).getTime() - now) / 86_400_000);
-        if (days < 0) out.push({ id: `exp-${it.id}`, itemName: name, severity: "CRITICAL", message: `Expired ${-days} day(s) ago${loc}`, currentQuantity: qty, threshold, derived: true, createdAt: it.expiryDate });
-        else if (days <= 30) out.push({ id: `exp-${it.id}`, itemName: name, severity: days <= 7 ? "HIGH" : "MEDIUM", message: `Expiring in ${days} day(s)${loc}`, currentQuantity: qty, threshold, derived: true, createdAt: it.expiryDate });
+        if (days < 0) out.push({ id: `exp-${it.id}`, itemName: name, severity: "CRITICAL", badge: "EXPIRED", badgeCls: STOCK_BADGE["OUT OF STOCK"], message: `Expired ${-days} day(s) ago${loc}`, currentQuantity: qty, threshold, derived: true, createdAt: it.expiryDate });
+        else if (days <= 30) out.push({ id: `exp-${it.id}`, itemName: name, severity: days <= 7 ? "HIGH" : "MEDIUM", badge: "EXPIRING SOON", badgeCls: STOCK_BADGE.LOW, message: `Expiring in ${days} day(s)${loc}`, currentQuantity: qty, threshold, derived: true, createdAt: it.expiryDate });
       }
     }
     return out;
@@ -121,7 +137,7 @@ export default function InventoryAlertsPanel() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <h3 className="font-medium text-gray-900">{alert.itemName || "Inventory Item"}</h3>
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${severityColors[alert.severity] || "bg-gray-100 text-gray-600"}`}>{alert.severity}</span>
+                  <span className={`px-2 py-0.5 rounded text-xs font-bold ${alert.badgeCls || severityColors[alert.severity] || "bg-gray-100 text-gray-600"}`}>{alert.badge || alert.severity}</span>
                 </div>
                 <p className="text-sm text-gray-600 mt-0.5">{alert.message || "Stock level alert"}</p>
                 <p className="text-xs text-gray-500 mt-1">
