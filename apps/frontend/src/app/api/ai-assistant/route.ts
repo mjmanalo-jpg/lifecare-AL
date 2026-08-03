@@ -673,7 +673,7 @@ async function handleSbar(body: Record<string, unknown>) {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemInstruction }] },
         contents: [{ role: "user", parts: [{ text: userText }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 320 },
+        generationConfig: { temperature: 0.4, maxOutputTokens: 384, thinkingConfig: { thinkingBudget: 0 } },
       }),
     });
     if (res.ok) {
@@ -731,7 +731,10 @@ async function handleEndorsement(body: Record<string, unknown>) {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemInstruction }] },
         contents: [{ role: "user", parts: [{ text: userText }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 420 },
+        // thinkingBudget:0 — gemini-2.5-flash "thinking" tokens count against
+        // maxOutputTokens; without this the reasoning eats the budget and the
+        // summary gets truncated mid-sentence.
+        generationConfig: { temperature: 0.4, maxOutputTokens: 512, thinkingConfig: { thinkingBudget: 0 } },
       }),
     });
     if (res.ok) {
@@ -862,7 +865,10 @@ async function handleShiftRecap(
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: systemInstruction }] },
           contents: [{ role: "user", parts: [{ text: facts }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 420 },
+          // thinkingBudget:0 — gemini-2.5-flash "thinking" tokens count against
+        // maxOutputTokens; without this the reasoning eats the budget and the
+        // summary gets truncated mid-sentence.
+        generationConfig: { temperature: 0.4, maxOutputTokens: 512, thinkingConfig: { thinkingBudget: 0 } },
         }),
       });
       if (res.ok) {
