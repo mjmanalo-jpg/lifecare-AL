@@ -9,6 +9,8 @@ import {
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { residentName, humanize } from "@/lib/adapters";
 import { rppgProcessor } from "@/utils/rppgProcessor";
+import { isAbnormalVital as isAbnormal, VITAL_META } from "@/lib/vitalThresholds";
+import Swal from "@/lib/swal";
 
 interface VitalReading {
   id: string; type: string; value: string; unit: string;
@@ -17,7 +19,7 @@ interface VitalReading {
 const VITAL_DEFS: { key: string; label: string; icon: LucideIcon; normalRange: string }[] = [
   { key: "HEART_RATE", label: "Heart Rate", icon: Heart, normalRange: "60-100 bpm" },
   { key: "BLOOD_PRESSURE", label: "Blood Pressure", icon: Droplets, normalRange: "<140/90" },
-  { key: "TEMPERATURE", label: "Temperature", icon: Thermometer, normalRange: "36.5-37.5 °C" },
+  { key: "TEMPERATURE", label: "Temperature", icon: Thermometer, normalRange: "36.1-37.2 °C" },
   { key: "OXYGEN", label: "O₂ Saturation", icon: Wind, normalRange: "≥95%" },
   { key: "RESPIRATORY_RATE", label: "Respiratory Rate", icon: Activity, normalRange: "12-20 /min" },
   { key: "BLOOD_GLUCOSE", label: "Blood Glucose", icon: HeartPulse, normalRange: "70-180 mg/dL" },
@@ -27,19 +29,6 @@ const VITAL_COLORS: Record<string, string> = {
   HEART_RATE: "text-red-500", BLOOD_PRESSURE: "text-blue-500", TEMPERATURE: "text-orange-500",
   OXYGEN: "text-green-500", RESPIRATORY_RATE: "text-purple-500", BLOOD_GLUCOSE: "text-amber-500",
 };
-function isAbnormal(type: string, value: string): boolean {
-  const n = parseFloat(value);
-  switch (type) {
-    case "HEART_RATE": return !isNaN(n) && (n < 60 || n > 100);
-    case "OXYGEN": return !isNaN(n) && n < 95;
-    case "TEMPERATURE": return !isNaN(n) && n > 37.5;
-    case "RESPIRATORY_RATE": return !isNaN(n) && (n < 12 || n > 20);
-    case "BLOOD_GLUCOSE": return !isNaN(n) && (n < 70 || n > 180);
-    case "BLOOD_PRESSURE": { const sys = parseInt(value, 10); return !isNaN(sys) && (sys >= 140 || sys < 90); }
-    default: return false;
-  }
-}
-
 function relTime(iso: string | null, nowTs: number): string {
   if (!iso) return "—";
   const m = Math.round((nowTs - new Date(iso).getTime()) / 60000);
@@ -65,6 +54,35 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
   const [search, setSearch] = useState("");
   const [abnormalOnly, setAbnormalOnly] = useState(false);
   const [viewingResident, setViewingResident] = useState<string | null>(null);
+
+  // ── Log Vitals (Module 02) — the write path was missing; this records one
+  // VitalsLog per entered parameter via /api/vitals (stamps recordedBy). ──
+  const LOG_KEYS = ["HEART_RATE", "BLOOD_PRESSURE", "TEMPERATURE", "OXYGEN", "RESPIRATORY_RATE", "BLOOD_GLUCOSE", "WEIGHT"] as const;
+  const [showLog, setShowLog] = useState(false);
+  const [savingLog, setSavingLog] = useState(false);
+  const [logForm, setLogForm] = useState<Record<string, string>>({ residentId: "" });
+  const setLog = (k: string, v: string) => setLogForm((f) => ({ ...f, [k]: v }));
+  const submitLog = async () => {
+    const rid = logForm.residentId;
+    if (!rid) { Swal.fire("Select a resident", "Choose who these vitals are for.", "warning"); return; }
+    const entries = LOG_KEYS.filter((k) => (logForm[k] ?? "").trim() !== "");
+    if (!entries.length) { Swal.fire("Nothing to log", "Enter at least one vital value.", "warning"); return; }
+    setSavingLog(true);
+    try {
+      let ok = 0; let flagged = 0;
+      for (const type of entries) {
+        const value = logForm[type].trim();
+        const res = await fetch("/api/vitals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ residentId: rid, type, value, unit: VITAL_META[type]?.unit }) });
+        if (res.ok) { ok++; if (isAbnormal(type, value)) flagged++; }
+      }
+      await refetch();
+      setShowLog(false);
+      setLogForm({ residentId: "" });
+      Swal.fire({ title: "Vitals logged", text: `${ok} reading${ok === 1 ? "" : "s"} recorded${flagged ? ` · ${flagged} abnormal — alerts will follow` : ""}.`, icon: "success", timer: 2000, showConfirmButton: false });
+    } catch (e) {
+      Swal.fire("Failed", e instanceof Error ? e.message : "Could not log vitals.", "error");
+    } finally { setSavingLog(false); }
+  };
 
   // Charted values are shown as-is (no cosmetic jitter).
   const offsets: Record<string, number> = { HEART_RATE: 0, OXYGEN: 0, TEMPERATURE: 0, SYS: 0, DIA: 0 };
@@ -236,10 +254,62 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
               </h1>
               <p className="text-gray-600 text-sm">Facility-wide vital signs overview</p>
             </div>
-            <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium self-start">
-              <RefreshCw className="w-4 h-4" /> Refresh
-            </button>
+            <div className="flex items-center gap-2 self-start">
+              <button onClick={() => { setLogForm({ residentId: "" }); setShowLog(true); }} className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-semibold">
+                <HeartPulse className="w-4 h-4" /> Log Vitals
+              </button>
+              <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
+                <RefreshCw className="w-4 h-4" /> Refresh
+              </button>
+            </div>
           </div>
+
+          {/* Log Vitals modal */}
+          {showLog && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[92vh] overflow-y-auto">
+                <div className="sticky top-0 bg-blue-600 text-white px-5 py-4 flex items-center justify-between">
+                  <h3 className="font-bold text-lg flex items-center gap-2"><HeartPulse className="w-5 h-5" /> Log Vitals</h3>
+                  <button onClick={() => setShowLog(false)} className="p-1 hover:bg-blue-700 rounded"><X className="w-5 h-5" /></button>
+                </div>
+                <div className="p-5 space-y-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Resident *</label>
+                    <select value={logForm.residentId} onChange={(e) => setLog("residentId", e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-400">
+                      <option value="">Select resident…</option>
+                      {residentRows.map((r) => (
+                        <option key={String(r.id)} value={String(r.id)}>{`${r.firstName ?? ""} ${r.lastName ?? ""}`.trim() || "Resident"}{r.roomNumber ? ` · Rm ${r.roomNumber}` : ""}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {LOG_KEYS.map((k) => {
+                    const meta = VITAL_META[k];
+                    const val = logForm[k] ?? "";
+                    const bad = val.trim() !== "" && isAbnormal(k, val.trim());
+                    return (
+                      <div key={k}>
+                        <label className="flex items-center justify-between text-sm font-semibold text-gray-700 mb-1">
+                          <span>{meta.label} <span className="text-gray-400 font-normal">({meta.unit})</span></span>
+                          <span className={`text-xs font-normal ${bad ? "text-red-600" : "text-gray-400"}`}>{bad ? "abnormal" : `normal ${meta.normal}`}</span>
+                        </label>
+                        <input
+                          value={val}
+                          onChange={(e) => setLog(k, e.target.value)}
+                          placeholder={k === "BLOOD_PRESSURE" ? "e.g. 120/80" : `${meta.normal}`}
+                          className={`w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 ${bad ? "border-red-300 focus:ring-red-400" : "border-gray-300 focus:ring-blue-400"}`}
+                        />
+                      </div>
+                    );
+                  })}
+                  <p className="text-xs text-gray-500">Fill only what you measured. Abnormal values trigger alerts automatically.</p>
+                </div>
+                <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-5 py-3 flex items-center justify-end gap-2">
+                  <button onClick={() => setShowLog(false)} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancel</button>
+                  <button onClick={() => void submitLog()} disabled={savingLog} className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-sm disabled:opacity-50">{savingLog ? "Saving…" : "Save Vitals"}</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             <StatBox label="Total Readings" value={stats.total} color="text-gray-900" bg="bg-gray-50" />

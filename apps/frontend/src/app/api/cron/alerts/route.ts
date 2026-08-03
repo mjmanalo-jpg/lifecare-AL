@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
 import { slaMinutes } from "@/lib/alertAccess";
+import { isAbnormalVital, vitalSeverity } from "@/lib/vitalThresholds";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,32 +39,9 @@ const VITAL_LABEL: Record<string, string> = {
   WEIGHT: "weight",
 };
 
-function isAbnormal(type: string, value: string): boolean {
-  const n = parseFloat(value);
-  switch (type) {
-    case "HEART_RATE": return !isNaN(n) && (n < 60 || n > 100);
-    case "OXYGEN": return !isNaN(n) && n < 95;
-    case "TEMPERATURE": return !isNaN(n) && n > 37.5;
-    case "RESPIRATORY_RATE": return !isNaN(n) && (n < 12 || n > 20);
-    case "BLOOD_GLUCOSE": return !isNaN(n) && (n < 70 || n > 180);
-    case "BLOOD_PRESSURE": { const sys = parseInt(value, 10); return !isNaN(sys) && (sys >= 140 || sys < 90); }
-    default: return false;
-  }
-}
-
-/** Dangerously-out-of-range vitals escalate to CRITICAL; other abnormals are WARNING. */
-function vitalSeverity(type: string, value: string): "CRITICAL" | "WARNING" {
-  const n = parseFloat(value);
-  switch (type) {
-    case "HEART_RATE": return !isNaN(n) && (n < 45 || n > 130) ? "CRITICAL" : "WARNING";
-    case "OXYGEN": return !isNaN(n) && n < 90 ? "CRITICAL" : "WARNING";
-    case "TEMPERATURE": return !isNaN(n) && n >= 39 ? "CRITICAL" : "WARNING";
-    case "RESPIRATORY_RATE": return !isNaN(n) && (n < 8 || n > 28) ? "CRITICAL" : "WARNING";
-    case "BLOOD_GLUCOSE": return !isNaN(n) && (n < 54 || n > 300) ? "CRITICAL" : "WARNING";
-    case "BLOOD_PRESSURE": { const sys = parseInt(value, 10); return !isNaN(sys) && (sys >= 180 || sys < 80) ? "CRITICAL" : "WARNING"; }
-    default: return "WARNING";
-  }
-}
+// Vital thresholds live in one shared module (lib/vitalThresholds) so the alert
+// engine and the vitals UIs never disagree. `isAbnormal` aliases the shared fn.
+const isAbnormal = isAbnormalVital;
 
 type Res = { firstName?: string | null; lastName?: string | null; roomNumber?: string | null } | null;
 const rname = (r: Res) => `${r?.firstName ?? ""} ${r?.lastName ?? ""}`.trim() || "Resident";
