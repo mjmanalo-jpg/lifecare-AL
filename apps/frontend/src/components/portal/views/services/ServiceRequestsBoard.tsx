@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import {
   ConciergeBell, RefreshCw, Plus, X, Trash2, Search, Play, CheckCircle2,
   Ban, Loader2, Star, Ticket, Timer, CircleDollarSign, UserCheck, Camera,
-  TrendingUp,
+  TrendingUp, Upload,
 } from "lucide-react";
+import { downscaleImage } from "@/lib/photoCapture";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
@@ -73,7 +74,7 @@ const DAY_MS = 86400000;
 
 const emptyForm = {
   residentId: "", category: "HOUSEKEEPING", subType: "Room Clean",
-  priority: "ROUTINE", source: "FRONT_DESK", details: "",
+  priority: "ROUTINE", source: "FRONT_DESK", details: "", photo: "",
   billable: false, charge: "",
 };
 
@@ -175,6 +176,7 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
         assignedTeam: team,
         billable: form.billable,
         charge: form.billable && form.charge !== "" ? Number(form.charge) || 0 : null,
+        photoProofUrl: form.photo || null,
       });
       await refetch();
       setShowCreate(false);
@@ -552,6 +554,27 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
                 <div className="col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Request Details</label>
                   <textarea value={form.details} onChange={set("details")} rows={3} placeholder="e.g. Aircon not cooling; please check the filter." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Photo (optional)</label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* capture="environment" opens the rear camera on a phone. */}
+                    <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 cursor-pointer">
+                      <Camera className="w-4 h-4" /> Take Photo
+                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const url = await downscaleImage(f); setForm(p => ({ ...p, photo: url })); }} />
+                    </label>
+                    <label className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 cursor-pointer">
+                      <Upload className="w-4 h-4" /> Upload
+                      <input type="file" accept="image/*" className="hidden" onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const url = await downscaleImage(f); setForm(p => ({ ...p, photo: url })); }} />
+                    </label>
+                    {form.photo && (
+                      <span className="inline-flex items-center gap-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={form.photo} alt="ticket" className="h-12 w-12 object-cover rounded border border-gray-200" />
+                        <button type="button" onClick={() => setForm(p => ({ ...p, photo: "" }))} className="text-xs text-red-600 hover:underline">Remove</button>
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="col-span-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-xs text-yellow-800">
                   Auto-assign: <strong>{TEAM_LABEL[autoAssignTeam(form.category, form.subType)]}</strong>

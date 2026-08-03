@@ -5,7 +5,7 @@ import {
   AlertTriangle, Search, X, Eye, CheckCircle, Trash2, RefreshCw,
   ArrowUpDown, Filter, LayoutGrid, Table2, Clock, User, MapPin,
   Shield, FileText, Flag, Calendar, ChevronDown, ChevronRight, Printer,
-  Plus, Upload, Loader2,
+  Plus, Upload, Loader2, Camera,
   type LucideIcon,
 } from "lucide-react";
 
@@ -672,9 +672,14 @@ export default function FacilityIncidents({ readOnly = false }: { readOnly?: boo
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Wound / Scene Photo</label>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Take Photo — capture="environment" opens the rear camera on a phone. */}
+                  <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 cursor-pointer">
+                    <Camera className="w-4 h-4" /> Take Photo
+                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={e => onPhoto(e.target.files?.[0])} />
+                  </label>
                   <label className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 cursor-pointer">
-                    <Upload className="w-4 h-4" /> Upload photo
+                    <Upload className="w-4 h-4" /> Upload
                     <input type="file" accept="image/*" className="hidden" onChange={e => onPhoto(e.target.files?.[0])} />
                   </label>
                   {form.photoUrl && (

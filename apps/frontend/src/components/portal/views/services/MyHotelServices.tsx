@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from "react";
 import {
-  ConciergeBell, RefreshCw, X, Star, CheckCircle2, Camera, Ban, Loader2,
+  ConciergeBell, RefreshCw, X, Star, CheckCircle2, Camera, Ban, Loader2, Upload,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord } from "@/lib/api";
+import { downscaleImage } from "@/lib/photoCapture";
 import {
   CATEGORY_META, PRIORITY_PILL, REQUEST_STATUS_PILL, TEAM_LABEL,
   autoAssignTeam, CONCIERGE_CATALOG, BOOKING_STATUS_PILL,
@@ -24,7 +25,7 @@ import {
 
 type Row = Record<string, unknown>;
 
-const requestForm = { category: "HOUSEKEEPING", subType: "Room Clean", priority: "ROUTINE", details: "" };
+const requestForm = { category: "HOUSEKEEPING", subType: "Room Clean", priority: "ROUTINE", details: "", photo: "" };
 const bookingForm = { category: "SALON_BARBER", scheduledAt: "", notes: "" };
 
 function timeAgo(iso: string): string {
@@ -94,6 +95,7 @@ export default function MyHotelServices() {
         priority: reqForm.priority,
         status: "ASSIGNED",
         assignedTeam: team,
+        photoProofUrl: reqForm.photo || null,
       });
       await refetch();
       setShowRequest(false);
@@ -396,6 +398,27 @@ export default function MyHotelServices() {
                   <label className="block text-sm font-semibold text-gray-700 mb-1">What do you need?</label>
                   <textarea value={reqForm.details} onChange={e => setReqForm(f => ({ ...f, details: e.target.value }))} rows={3}
                     placeholder="e.g. The room feels warm — please adjust the aircon to 22°C." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Photo (optional)</label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* capture="environment" opens the rear camera on a phone. */}
+                    <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 cursor-pointer">
+                      <Camera className="w-4 h-4" /> Take Photo
+                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const url = await downscaleImage(f); setReqForm(p => ({ ...p, photo: url })); }} />
+                    </label>
+                    <label className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 cursor-pointer">
+                      <Upload className="w-4 h-4" /> Upload
+                      <input type="file" accept="image/*" className="hidden" onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const url = await downscaleImage(f); setReqForm(p => ({ ...p, photo: url })); }} />
+                    </label>
+                    {reqForm.photo && (
+                      <span className="inline-flex items-center gap-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={reqForm.photo} alt="request" className="h-12 w-12 object-cover rounded border border-gray-200" />
+                        <button type="button" onClick={() => setReqForm(p => ({ ...p, photo: "" }))} className="text-xs text-red-600 hover:underline">Remove</button>
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="col-span-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 text-xs text-yellow-800">
                   Goes to: <strong>{TEAM_LABEL[autoAssignTeam(reqForm.category, reqForm.subType)]}</strong> · Room {String(resident?.roomNumber ?? "—")}
