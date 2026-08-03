@@ -9,6 +9,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { adaptResident } from "@/lib/adapters";
+import { packMeals, parseMeals, hasMeals } from "@/lib/dietMeals";
 
 /**
  * Nutritionist-facing per-resident Diet & Nutrition ordering board — live via
@@ -63,6 +64,7 @@ type DietOrder = ReturnType<typeof adaptOrder>;
 const emptyForm = {
   residentId: "", dietType: "REGULAR" as DietType, mealType: "ALL" as MealType,
   restrictions: "", notes: "",
+  breakfast: "", lunch: "", dinner: "",
 };
 
 export default function DietOrdersBoard() {
@@ -126,7 +128,8 @@ export default function DietOrdersBoard() {
         dietType: form.dietType,
         mealType: form.mealType,
         restrictions: form.restrictions || null,
-        notes: form.notes || null,
+        // Option B: per-resident meals are packed into notes alongside prep notes.
+        notes: packMeals(form.notes, { breakfast: form.breakfast, lunch: form.lunch, dinner: form.dinner }) || null,
         active: true,
         orderedBy: me || null,
       });
@@ -275,9 +278,23 @@ export default function DietOrdersBoard() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-xs">{o.mealType}</td>
-                    <td className="px-4 py-3 text-gray-600 text-xs max-w-[220px]">
-                      <p className="truncate" title={o.restrictions}>{o.restrictions || "—"}</p>
-                      {o.notes && <p className="text-[11px] text-gray-400 truncate" title={o.notes}>{o.notes}</p>}
+                    <td className="px-4 py-3 text-gray-600 text-xs max-w-[240px]">
+                      {(() => {
+                        const { meals, notes } = parseMeals(o.notes);
+                        return (
+                          <>
+                            <p className="truncate" title={o.restrictions}>{o.restrictions || "—"}</p>
+                            {hasMeals(meals) && (
+                              <p className="text-[11px] text-emerald-700 mt-0.5">
+                                {meals.breakfast && <span title="Breakfast">🍳 {meals.breakfast} </span>}
+                                {meals.lunch && <span title="Lunch">· 🍽 {meals.lunch} </span>}
+                                {meals.dinner && <span title="Dinner">· 🌙 {meals.dinner}</span>}
+                              </p>
+                            )}
+                            {notes && <p className="text-[11px] text-gray-400 truncate" title={notes}>{notes}</p>}
+                          </>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-xs">{o.orderedBy || "—"}</td>
                     <td className="px-4 py-3">
@@ -339,6 +356,15 @@ export default function DietOrdersBoard() {
                 <div className="col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Restrictions</label>
                   <input type="text" value={form.restrictions} onChange={set("restrictions")} placeholder="e.g. No shellfish, thickened liquids only" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-400 outline-none" />
+                </div>
+                {/* Option B: specific meals for this resident (optional). */}
+                <div className="col-span-2 rounded-lg border border-emerald-100 bg-emerald-50/40 p-3 space-y-2">
+                  <p className="text-xs font-semibold text-emerald-800">Meals for this resident <span className="font-normal text-emerald-700/70">(optional — leave blank to just cook the facility menu to this diet)</span></p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input type="text" value={form.breakfast} onChange={set("breakfast")} placeholder="Breakfast" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-400 outline-none" />
+                    <input type="text" value={form.lunch} onChange={set("lunch")} placeholder="Lunch" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-400 outline-none" />
+                    <input type="text" value={form.dinner} onChange={set("dinner")} placeholder="Dinner" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-400 outline-none" />
+                  </div>
                 </div>
                 <div className="col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Notes</label>

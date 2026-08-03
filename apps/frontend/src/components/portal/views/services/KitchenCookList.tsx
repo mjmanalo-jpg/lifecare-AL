@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { ChefHat, RefreshCw, Search, Utensils, CalendarDays } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { parseMeals, hasMeals } from "@/lib/dietMeals";
 
 /**
  * Kitchen-facing read-only cook list — the today's-service view of the
@@ -209,8 +210,22 @@ export default function KitchenCookList() {
                     </span>
                     <div className="flex-1 text-xs text-gray-600">
                       {o.restrictions && <p><span className="font-semibold text-gray-700">Restrictions:</span> {o.restrictions}</p>}
-                      {o.notes && <p className="text-gray-400">{o.notes}</p>}
-                      {!o.restrictions && !o.notes && <span className="text-gray-300">—</span>}
+                      {(() => {
+                        const { meals, notes } = parseMeals(o.notes);
+                        return (
+                          <>
+                            {hasMeals(meals) && (
+                              <p className="text-emerald-700 font-medium">
+                                {meals.breakfast && <span title="Breakfast">🍳 {meals.breakfast}  </span>}
+                                {meals.lunch && <span title="Lunch">🍽 {meals.lunch}  </span>}
+                                {meals.dinner && <span title="Dinner">🌙 {meals.dinner}</span>}
+                              </p>
+                            )}
+                            {notes && <p className="text-gray-400">{notes}</p>}
+                            {!o.restrictions && !hasMeals(meals) && !notes && <span className="text-gray-300">—</span>}
+                          </>
+                        );
+                      })()}
                     </div>
                   </li>
                 ))}
