@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState, useCallback } from "react";
 import {
-  Stethoscope, Search, Plus, X, RefreshCw, ChevronRight, Clock,
+  Stethoscope, Search, Plus, X, RefreshCw, ChevronRight, ChevronLeft, Clock,
   CheckCircle2, AlertTriangle, Smile, Moon, Footprints, Utensils,
   Activity, Droplets, ClipboardList, Trash2, Loader2,
   type LucideIcon, Wind, Frown, Meh, SmilePlus, Annoyed,
@@ -51,6 +51,12 @@ export default function DailyRoundsBoard({ clinicianRole = "CAREGIVER" }: { clin
   const [showForm, setShowForm] = useState(false);
   const [searchRes, setSearchRes] = useState("");
   const [formTab, setFormTab] = useState<TabKey>("bowel");
+  // Care history timeline — view any day's rounds, not just today.
+  const [viewDate, setViewDate] = useState<string>(todayDate());
+  const viewingToday = viewDate.split("T")[0] === todayDate().split("T")[0];
+  const shiftDay = (delta: number) => { setSelectedRoundId(""); setViewDate((d) => new Date(new Date(d).getTime() + delta * 86_400_000).toISOString()); };
+  // Only the Care Manager / nurse (not caregivers) may sign off a completed round.
+  const canReview = clinicianRole !== "CAREGIVER";
 
   const resQ = useLiveQuery("residents", { tables: ["Resident"] });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -66,12 +72,12 @@ export default function DailyRoundsBoard({ clinicianRole = "CAREGIVER" }: { clin
   }, [residents, searchRes]);
 
   const todayRounds = useMemo(() => {
-    const today = todayDate();
+    const day = viewDate.split("T")[0];
     return (roundQ.data || []).filter((r: any) => {
       const rd = new Date(r.roundDate).toISOString().split("T")[0];
-      return rd === today.split("T")[0] && (!selectedResident || r.residentId === selectedResident);
+      return rd === day && (!selectedResident || r.residentId === selectedResident);
     });
-  }, [roundQ.data, selectedResident]);
+  }, [roundQ.data, selectedResident, viewDate]);
 
   const currentRound = useMemo(() => {
     if (selectedRoundId) return (roundQ.data || []).find((r: any) => r.id === selectedRoundId);
@@ -120,6 +126,14 @@ export default function DailyRoundsBoard({ clinicianRole = "CAREGIVER" }: { clin
     await updateRecord("daily-rounds", currentRoundId, { status: "COMPLETED", endTime: timeNow() });
     await roundQ.refetch();
     Swal.fire({ title: "Round Completed", icon: "success", timer: 1500, showConfirmButton: false });
+  };
+
+  const handleMarkReviewed = async () => {
+    if (!currentRoundId) return;
+    // DailyRound has no reviewer columns — the REVIEWED status is the sign-off.
+    await updateRecord("daily-rounds", currentRoundId, { status: "REVIEWED" });
+    await roundQ.refetch();
+    Swal.fire({ title: "Round Reviewed", text: "Signed off by the Care Manager.", icon: "success", timer: 1500, showConfirmButton: false });
   };
 
   const handleDeleteRecord = async (model: string, id: string) => {
@@ -198,7 +212,14 @@ export default function DailyRoundsBoard({ clinicianRole = "CAREGIVER" }: { clin
           </h2>
           <span className="text-xs text-gray-400">Room {resMap.get(selectedResident)?.room}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Care history timeline — navigate to any day's rounds */}
+          <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-1 py-0.5">
+            <button onClick={() => shiftDay(-1)} title="Previous day" className="p-1 rounded hover:bg-gray-100 text-gray-500"><ChevronLeft className="w-4 h-4" /></button>
+            <span className="text-xs font-semibold text-gray-700 px-1 min-w-[92px] text-center">{new Date(viewDate).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</span>
+            <button onClick={() => shiftDay(1)} disabled={viewingToday} title="Next day" className="p-1 rounded hover:bg-gray-100 text-gray-500 disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
+            {!viewingToday && <button onClick={() => { setSelectedRoundId(""); setViewDate(todayDate()); }} className="text-[11px] font-semibold text-emerald-600 px-1.5 hover:underline">Today</button>}
+          </div>
           {currentRound && (
             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
               currentRound.status === "COMPLETED" ? "bg-green-100 text-green-700" :
@@ -208,24 +229,50 @@ export default function DailyRoundsBoard({ clinicianRole = "CAREGIVER" }: { clin
               {currentRound.status.replace("_", " ")}
             </span>
           )}
-          {currentRound && currentRound.status !== "COMPLETED" && (
+          {currentRound && currentRound.status !== "COMPLETED" && currentRound.status !== "REVIEWED" && (
             <button onClick={handleCompleteRound} className={btnPrimary + " flex items-center gap-1"}>
               <CheckCircle2 className="w-4 h-4" /> Complete Round
+            </button>
+          )}
+          {currentRound && currentRound.status === "COMPLETED" && canReview && (
+            <button onClick={handleMarkReviewed} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm transition-colors flex items-center gap-1">
+              <ClipboardList className="w-4 h-4" /> Mark Reviewed
             </button>
           )}
         </div>
       </div>
 
+      {/* Documentation completion score (Module 06 — 100% completion tracked) */}
+      {currentRoundId && (() => {
+        const done = TABS.filter((t) => (allQueries[t.key]?.data || []).length > 0).length;
+        const pct = Math.round((done / TABS.length) * 100);
+        return (
+          <div className="bg-white rounded-xl border p-3 flex items-center gap-3">
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-gray-600">Documentation completeness</span>
+                <span className={`text-xs font-bold ${pct === 100 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600"}`}>{done}/{TABS.length} domains · {pct}%</span>
+              </div>
+              <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${pct === 100 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-red-400"}`} style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {!currentRoundId && (
         <div className="bg-white rounded-xl border p-6 text-center">
-          <p className="text-gray-500 mb-4">No active round for today.</p>
-          <div className="flex justify-center gap-3 flex-wrap">
-            {(["DAY", "EVENING", "NIGHT"] as const).map((s) => (
-              <button key={s} onClick={() => handleCreateRound(selectedResident, s)} className={btnPrimary}>
-                <Plus className="w-4 h-4 inline mr-1" /> Start {s} Round
-              </button>
-            ))}
-          </div>
+          <p className="text-gray-500 mb-4">{viewingToday ? "No active round for today." : "No round recorded for this day."}</p>
+          {viewingToday && (
+            <div className="flex justify-center gap-3 flex-wrap">
+              {(["DAY", "EVENING", "NIGHT"] as const).map((s) => (
+                <button key={s} onClick={() => handleCreateRound(selectedResident, s)} className={btnPrimary}>
+                  <Plus className="w-4 h-4 inline mr-1" /> Start {s} Round
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -245,10 +292,13 @@ export default function DailyRoundsBoard({ clinicianRole = "CAREGIVER" }: { clin
                 >
                   <Icon className={`w-3.5 h-3.5 ${tab === t.key ? "text-white" : t.color}`} />
                   {t.label}
-                  {count > 0 && (
+                  {count > 0 ? (
                     <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                      tab === t.key ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"
+                      tab === t.key ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-700"
                     }`}>{count}</span>
+                  ) : (
+                    // Empty domain — flagged so incomplete documentation is obvious.
+                    <span className={`ml-1 w-1.5 h-1.5 rounded-full ${tab === t.key ? "bg-white/60" : "bg-amber-400"}`} title="Not documented yet" />
                   )}
                 </button>
               );
