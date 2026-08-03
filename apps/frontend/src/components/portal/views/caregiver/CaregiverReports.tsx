@@ -23,6 +23,7 @@ type RangeKey = "all" | "today" | "7d" | "30d";
 
 interface ShiftReport {
   id: string;
+  userId: string | null;
   shiftType: ShiftType | string;
   date: string | null;
   summary: string | null;
@@ -83,6 +84,7 @@ const asStr = (v: unknown): string | null => (v == null || v === "" ? null : Str
 function toReport(row: Record<string, unknown>): ShiftReport {
   return {
     id: String(row.id),
+    userId: asStr(row.userId),
     shiftType: row.shiftType ? String(row.shiftType) : "MORNING",
     date: asStr(row.date),
     summary: asStr(row.summary),
@@ -396,6 +398,10 @@ export default function CaregiverReports() {
   const setField = <K extends keyof ReportForm>(key: K, value: ReportForm[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  // The outgoing author signs their own report; the incoming shift (a DIFFERENT
+  // person) acknowledges receipt. Everyone else is view-only.
+  const isAuthor = (r: ShiftReport) => Boolean(me.userId && r.userId && r.userId === me.userId);
+
   /* ── Render ────────────────────────────────────────────────────────── */
   return (
     <div className="space-y-6">
@@ -581,7 +587,8 @@ export default function CaregiverReports() {
                   >
                     <Eye className="w-4 h-4" /> View
                   </button>
-                  {!r.signedAt && (
+                  {/* Only the author signs off their own report. */}
+                  {!r.signedAt && isAuthor(r) && (
                     <button
                       onClick={() => void handleSign(r)}
                       className="flex items-center gap-1 px-2.5 py-1 text-green-600 hover:bg-green-50 rounded text-sm font-medium transition"
@@ -589,7 +596,8 @@ export default function CaregiverReports() {
                       <PenLine className="w-4 h-4" /> Sign
                     </button>
                   )}
-                  {r.signedAt && !r.acknowledgedByName && (
+                  {/* The incoming shift (not the author) acknowledges receipt once signed. */}
+                  {r.signedAt && !r.acknowledgedByName && !isAuthor(r) && (
                     <button
                       onClick={() => void handleAck(r)}
                       className="flex items-center gap-1 px-2.5 py-1 text-indigo-600 hover:bg-indigo-50 rounded text-sm font-medium transition"
@@ -598,12 +606,16 @@ export default function CaregiverReports() {
                     </button>
                   )}
                   {r.acknowledgedByName && <span className="self-center text-xs text-gray-400">✓ Ack: {r.acknowledgedByName}</span>}
-                  <button
-                    onClick={() => void handleDelete(r)}
-                    className="flex items-center gap-1 px-2.5 py-1 text-red-600 hover:bg-red-50 rounded text-sm font-medium transition ml-auto"
-                  >
-                    <Trash2 className="w-4 h-4" /> Delete
-                  </button>
+                  {!r.signedAt && !isAuthor(r) && <span className="self-center text-xs text-amber-600">Awaiting author sign-off</span>}
+                  {/* Only the author can remove their own report (protects the audit chain). */}
+                  {isAuthor(r) && (
+                    <button
+                      onClick={() => void handleDelete(r)}
+                      className="flex items-center gap-1 px-2.5 py-1 text-red-600 hover:bg-red-50 rounded text-sm font-medium transition ml-auto"
+                    >
+                      <Trash2 className="w-4 h-4" /> Delete
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -682,7 +694,7 @@ export default function CaregiverReports() {
           <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex items-center justify-between gap-2">
             <button onClick={() => setViewing(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
             <div className="flex gap-2">
-              {!viewing.signedAt && (
+              {!viewing.signedAt && isAuthor(viewing) && (
                 <button
                   onClick={() => void handleSign(viewing)}
                   className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition"
@@ -690,12 +702,25 @@ export default function CaregiverReports() {
                   <PenLine className="w-4 h-4" /> Sign Off
                 </button>
               )}
-              <button
-                onClick={() => void handleDelete(viewing)}
-                className="flex items-center gap-2 px-5 py-2 bg-red-50 text-red-600 border border-red-200 font-semibold rounded-lg hover:bg-red-100 transition"
-              >
-                <Trash2 className="w-4 h-4" /> Delete
-              </button>
+              {viewing.signedAt && !viewing.acknowledgedByName && !isAuthor(viewing) && (
+                <button
+                  onClick={() => { void handleAck(viewing); setViewing((v) => (v ? { ...v, acknowledgedByName: me.name } : v)); }}
+                  className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white font-semibold rounded-lg hover:shadow-lg transition"
+                >
+                  <CheckCircle2 className="w-4 h-4" /> Acknowledge Receipt
+                </button>
+              )}
+              {!viewing.signedAt && !isAuthor(viewing) && (
+                <span className="self-center text-sm text-amber-600 font-medium">Awaiting the author&apos;s sign-off</span>
+              )}
+              {isAuthor(viewing) && (
+                <button
+                  onClick={() => void handleDelete(viewing)}
+                  className="flex items-center gap-2 px-5 py-2 bg-red-50 text-red-600 border border-red-200 font-semibold rounded-lg hover:bg-red-100 transition"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete
+                </button>
+              )}
             </div>
           </div>
         </Modal>
