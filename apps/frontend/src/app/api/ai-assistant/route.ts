@@ -452,8 +452,10 @@ async function handleChat(body: Record<string, unknown>) {
         "ride to an appointment or outing (get the destination and the pickup day/time first); " +
         "request_service opens a hotel-services ticket for housekeeping, room service, laundry, aircon, " +
         "or repairs. If a needed detail (visitor name, destination, day/time, or which service) is " +
-        "unclear, ask one short follow-up question first, then call the tool. After a tool runs, confirm " +
-        "warmly in one sentence what you arranged."
+        "unclear, ask one short follow-up question first. Once you have what you need you MUST call the " +
+        "matching tool in that same turn — the request only becomes real when the tool runs, so never " +
+        "merely say you 'will' or 'have' arranged something without actually calling the tool. After the " +
+        "tool runs, confirm warmly in one sentence what you arranged."
       : "") +
     (context
       ? `\n\n--- KNOWLEDGE BASE CONTEXT ---\n${context}\n--- END CONTEXT ---`
