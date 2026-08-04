@@ -211,6 +211,7 @@ const RESIDENT_TOOLS = [
 /** Identity + tenant of the Resident behind the current session (RESIDENT logins only). */
 interface ResidentIdentity {
   id: string;
+  firstName: string | null;
   communityId: string | null;
   organizationId: string | null;
 }
@@ -221,7 +222,7 @@ async function residentForSession(): Promise<ResidentIdentity | null> {
     if (!session || session.role !== "RESIDENT" || !session.userId) return null;
     const row = await prisma.resident.findFirst({
       where: { userId: session.userId },
-      select: { id: true, communityId: true, organizationId: true },
+      select: { id: true, firstName: true, communityId: true, organizationId: true },
     });
     return row ?? null;
   } catch {
@@ -446,6 +447,9 @@ async function handleChat(body: Record<string, unknown>) {
   const systemInstruction =
     persona +
     `\nCurrent date-time: ${new Date().toString()}` +
+    (residentRec?.firstName
+      ? `\nYou are speaking with ${residentRec.firstName}. Address them warmly by their first name when it feels natural. Never output a placeholder like "[Resident Name]" — if you don't know a name, just leave it out.`
+      : "") +
     (residentId
       ? "\nYou can take real actions with your tools: request_visit saves a visit request the " +
         "staff and family can see; ring_call_bell alerts staff immediately; schedule_transport books a " +
