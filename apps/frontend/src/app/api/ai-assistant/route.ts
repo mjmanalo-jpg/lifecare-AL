@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import type { TransportRequestType, ServiceRequestCategory, ServiceRequestPriority, ServiceTeam } from "@prisma/client";
 import { isDbConfigured } from "@/lib/models";
 import { getSession } from "@/lib/auth";
 import { requireTenantContext } from "@/lib/tenant";
@@ -164,6 +165,45 @@ const RESIDENT_TOOLS = [
           required: ["reason"],
         },
       },
+      {
+        name: "schedule_transport",
+        description:
+          "Schedule a transport / ride when the resident asks to arrange transportation — to a medical " +
+          "appointment, dialysis, therapy, a family outing, etc. Gather the destination and the pickup " +
+          "date-time before calling; resolve relative dates ('next Tuesday 9am') to ISO 8601 using the " +
+          "current date-time. Ask if they want a return trip or need a wheelchair when relevant.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            destination: { type: "STRING", description: "Where the resident wants to go (drop-off)" },
+            requestedDate: { type: "STRING", description: "Requested pickup date-time in ISO 8601" },
+            type: { type: "STRING", description: "One of: MEDICAL_APPOINTMENT, DIALYSIS, THERAPY, FAMILY_OUTING, EMERGENCY_TRANSFER, OTHER" },
+            purpose: { type: "STRING", description: "Short reason for the trip" },
+            pickupLocation: { type: "STRING", description: "Pickup point if not the facility" },
+            wheelchairNeeded: { type: "BOOLEAN", description: "True if a wheelchair-accessible vehicle is needed" },
+            returnRequired: { type: "BOOLEAN", description: "True if a return trip back is needed" },
+          },
+          required: ["destination", "requestedDate"],
+        },
+      },
+      {
+        name: "request_service",
+        description:
+          "Open a hotel-services / concierge ticket when the resident asks for a service in their room " +
+          "or the facility — housekeeping or room cleaning, linen or laundry, room-service meals or " +
+          "snacks, aircon/temperature, or repairs (plumbing, electrical, Wi-Fi/TV). Choose the best " +
+          "category and summarize what they want in details.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            category: { type: "STRING", description: "One of: AIRCON_HVAC, HOUSEKEEPING, ROOM_SERVICE, LAUNDRY, REPAIRS" },
+            subType: { type: "STRING", description: "Short label, e.g. 'Linen Change', 'Temp Adjust', 'Wi-Fi/TV', 'Snacks'" },
+            details: { type: "STRING", description: "What the resident is requesting, in their words" },
+            priority: { type: "STRING", description: "ROUTINE (default), URGENT, or EMERGENCY" },
+          },
+          required: ["details"],
+        },
+      },
     ],
   },
 ];
@@ -250,6 +290,62 @@ async function executeResidentTool(
       });
     }
     return { ok: true, callBellId: bell.id };
+  }
+
+  if (name === "schedule_transport") {
+    const when = new Date(String(args.requestedDate ?? ""));
+    if (isNaN(when.getTime())) {
+      return { ok: false, error: "Invalid date-time — ask the resident which day and time they want to travel." };
+    }
+    const destination = String(args.destination ?? "").trim();
+    if (!destination) return { ok: false, error: "Ask the resident where they would like to go." };
+    const TYPES = ["MEDICAL_APPOINTMENT", "DIALYSIS", "THERAPY", "FAMILY_OUTING", "EMERGENCY_TRANSFER", "OTHER"];
+    const type = (TYPES.includes(String(args.type)) ? String(args.type) : "MEDICAL_APPOINTMENT") as TransportRequestType;
+    const req = await prisma.transportRequest.create({
+      data: {
+        residentId: resident.id,
+        type,
+        destination,
+        dropoffLocation: destination,
+        pickupLocation: args.pickupLocation ? String(args.pickupLocation) : null,
+        purpose: args.purpose ? String(args.purpose) : "Requested via AI companion",
+        requestedDate: when,
+        returnRequired: args.returnRequired !== false,
+        wheelchairNeeded: Boolean(args.wheelchairNeeded),
+        source: "AI_COMPANION",
+        notes: "Requested through the AI companion chat",
+        ...tenant,
+      },
+    });
+    return { ok: true, transportRequestId: req.id, destination, type, scheduledFor: when.toISOString() };
+  }
+
+  if (name === "request_service") {
+    const details = String(args.details ?? "").trim();
+    if (!details) return { ok: false, error: "Ask the resident what service they need." };
+    const CATS = ["AIRCON_HVAC", "HOUSEKEEPING", "ROOM_SERVICE", "LAUNDRY", "REPAIRS"];
+    const category = (CATS.includes(String(args.category)) ? String(args.category) : "HOUSEKEEPING") as ServiceRequestCategory;
+    const TEAM: Record<string, ServiceTeam> = {
+      AIRCON_HVAC: "MAINTENANCE_ENGINEER", HOUSEKEEPING: "HOUSEKEEPING_TEAM", ROOM_SERVICE: "KITCHEN",
+      LAUNDRY: "HOUSEKEEPING_TEAM", REPAIRS: "MAINTENANCE_ENGINEER",
+    };
+    const PRIS = ["ROUTINE", "URGENT", "EMERGENCY"];
+    const priority = (PRIS.includes(String(args.priority)) ? String(args.priority) : "ROUTINE") as ServiceRequestPriority;
+    const info = await prisma.resident.findUnique({ where: { id: resident.id }, select: { roomNumber: true } });
+    const req = await prisma.serviceRequest.create({
+      data: {
+        residentId: resident.id,
+        roomNumber: info?.roomNumber ?? null,
+        category,
+        subType: args.subType ? String(args.subType) : null,
+        details,
+        priority,
+        source: "AI_COMPANION",
+        assignedTeam: TEAM[category] ?? ("CONCIERGE" as ServiceTeam),
+        ...tenant,
+      },
+    });
+    return { ok: true, serviceRequestId: req.id, category, subType: args.subType ?? null };
   }
 
   return { ok: false, error: `Unknown tool '${name}'` };
@@ -352,8 +448,12 @@ async function handleChat(body: Record<string, unknown>) {
     `\nCurrent date-time: ${new Date().toString()}` +
     (residentId
       ? "\nYou can take real actions with your tools: request_visit saves a visit request the " +
-        "staff and family can see; ring_call_bell alerts staff immediately. If the visitor name " +
-        "or day is unclear, ask one short follow-up question first, then call the tool."
+        "staff and family can see; ring_call_bell alerts staff immediately; schedule_transport books a " +
+        "ride to an appointment or outing (get the destination and the pickup day/time first); " +
+        "request_service opens a hotel-services ticket for housekeeping, room service, laundry, aircon, " +
+        "or repairs. If a needed detail (visitor name, destination, day/time, or which service) is " +
+        "unclear, ask one short follow-up question first, then call the tool. After a tool runs, confirm " +
+        "warmly in one sentence what you arranged."
       : "") +
     (context
       ? `\n\n--- KNOWLEDGE BASE CONTEXT ---\n${context}\n--- END CONTEXT ---`
