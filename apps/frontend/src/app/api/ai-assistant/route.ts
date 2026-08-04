@@ -94,8 +94,7 @@ function buildPersona(cfg: AssistantConfig, audience: string): string {
         "care and gently remind them to press the call bell so staff can help right away."
       : `You are ${cfg.name}, the AI assistant for the Senior Living Management System assisted-living facility's ` +
         "staff and administrators. You help with resident care, staffing, operations, compliance " +
-        "and facility knowledge. Answer in 1-4 short sentences unless asked for detail, and cite " +
-        "the source file name when you use the knowledge base.";
+        "and facility knowledge. Answer in 1-4 short sentences unless asked for detail.";
   return [
     who,
     `Personality: ${style}`,
@@ -107,7 +106,9 @@ function buildPersona(cfg: AssistantConfig, audience: string): string {
       : "Do not use emoji.",
     "When knowledge-base or resident context is provided, ground your answer in it. If the " +
       "context does not contain the answer, say so briefly, then help from general knowledge. " +
-      "Never invent resident medical facts.",
+      "Never invent resident medical facts. Answer naturally and conversationally — never mention, " +
+      "cite, name, or reference the knowledge-base documents or source files you used (for example, " +
+      "do not append a source like \"(SLMS — ...)\" to your reply).",
     cfg.instructions ? `Instructions from the facility administrator: ${cfg.instructions}` : "",
   ]
     .filter(Boolean)
