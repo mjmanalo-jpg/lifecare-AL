@@ -21,6 +21,9 @@ const ACCOUNT_DEFINITIONS = [
   { email: "billing.admin@goldenhearth.com", name: "Golden Hearth Billing & Finance", role: "BILLING_ADMIN", phone: "555-0155", firstName: "Billing", lastName: "Finance", orgRole: "VIEWER" },
   // Dedicated Organization Admin login (SaaS tenant-management portal).
   { email: "org.admin@goldenhearth.com", name: "Golden Hearth Organization Admin", role: "FACILITY_ADMIN", phone: "555-0156", firstName: "Organization", lastName: "Admin", orgRole: "ADMIN" },
+  // Care Manager → the clinical-oversight portal (approvals, incidents, alerts,
+  // rounds, MAR, consent forms). Community-scoped clinical role, no org role.
+  { email: "care.manager@goldenhearth.com", name: "Golden Hearth Care Manager", role: "CARE_MANAGER", phone: "555-0158", firstName: "Care", lastName: "Manager" },
   { email: "alan.reyes@goldenhearth.com", name: "Dr. Alan Reyes", role: "PHYSICIAN", phone: "555-0160", firstName: "Alan", lastName: "Reyes" },
   { email: "sarah.jenkins@goldenhearth.com", name: "Sarah Jenkins", role: "NURSE", phone: "555-0101", firstName: "Sarah", lastName: "Jenkins" },
   { email: "rebecca.wilson@goldenhearth.com", name: "Rebecca Wilson", role: "NURSE", phone: "555-0105", firstName: "Rebecca", lastName: "Wilson" },

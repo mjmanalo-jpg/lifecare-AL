@@ -1,0 +1,4 @@
+# Live data dumps contain resident PHI + auth password hashes — never commit.
+live_data_public.sql
+live_data_auth.sql
+*.dump
