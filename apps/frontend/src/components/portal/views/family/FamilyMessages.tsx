@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useState } from "react";
 import {
   MessageSquare, AlertTriangle, CheckCircle2, RefreshCw, Search, Plus, X, Send, Mail,
@@ -103,7 +105,7 @@ export default function FamilyMessages() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => void refetchMessages()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium"><RefreshCw className="w-4 h-4" /> Refresh</button>
+          <RefreshButton onRefresh={() => void refetchMessages()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           <button onClick={() => { setComposeForm({ subject: "", content: "", messageType: "GENERAL" }); setShowCompose(true); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm"><Plus className="w-4 h-4" /> New Message</button>
         </div>
       </div>

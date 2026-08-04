@@ -10,6 +10,7 @@ import ChartContainer from "@/components/portal/widgets/ChartContainer";
 import VitalsPanel, { VitalReading } from "@/components/portal/widgets/VitalsPanel";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptIncident, humanize } from "@/lib/adapters";
+import AppointmentCalendar from "@/components/portal/AppointmentCalendar";
 import {
   useRelative, Panel, LiveBadge, EMPTY_VITALS_TREND, type Row,
 } from "./shared";
@@ -211,6 +212,7 @@ export default function FamilyDashboard() {
 
         {/* Right column: alerts, care team, messages, appointments */}
         <div className="space-y-4 sm:space-y-6">
+          {relative && <AppointmentCalendar residentId={relative.id} residentName={relative.name} title="Calendar" />}
           <Panel title="Recent Alerts" icon={AlertTriangle} count={incidents.length}>
             {topAlerts.length > 0 ? (
               <div className="space-y-2">

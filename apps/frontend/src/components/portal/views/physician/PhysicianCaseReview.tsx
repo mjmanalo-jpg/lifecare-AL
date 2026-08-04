@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -138,9 +140,7 @@ function CaseReviewInner() {
             Consolidated chart across the care team — diagnose, direct &amp; co-sign
           </p>
         </div>
-        <button onClick={refreshAll} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium self-start">
-          <RefreshCw className="w-4 h-4" /> Refresh
-        </button>
+        <RefreshButton onRefresh={refreshAll} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium self-start" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">

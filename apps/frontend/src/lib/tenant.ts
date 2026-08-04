@@ -36,7 +36,59 @@ const ORG_ADMIN_ROLES = new Set(["OWNER", "ADMIN"]);
 const ACTIVE_SUBSCRIPTIONS = new Set(["TRIALING", "ACTIVE"]);
 const DENY = { id: "__tenant_access_denied__" };
 
+// ---------------------------------------------------------------------------
+// Short-lived identity caches.
+//
+// The database lives on a remote pooler (~150ms per round-trip). Every
+// /api/db request resolves the tenant context first, and a single dashboard
+// fires 6-19 of those at once — so without caching each page load pays the
+// identity-resolution tax (a nested user+membership lookup) dozens of times
+// over. Membership / role / subscription state changes rarely, so we memoize
+// the resolved context (and the workspace tree) for a few seconds, keyed by
+// the signed session fields. A workspace switch rewrites those fields, which
+// produces a fresh cache key, so switching is never served stale data. Only
+// successful lookups are cached; failures fall through and re-query so a
+// just-approved / just-activated account is never locked out for the TTL.
+// ---------------------------------------------------------------------------
+const IDENTITY_TTL_MS = Number(process.env.IDENTITY_CACHE_TTL_MS || 15000);
+
+type CacheEntry<T> = { expires: number; value: T };
+function makeIdentityCache<T>() {
+  const store = new Map<string, CacheEntry<T>>();
+  return {
+    get(key: string): T | undefined {
+      const hit = store.get(key);
+      if (!hit) return undefined;
+      if (hit.expires <= Date.now()) {
+        store.delete(key);
+        return undefined;
+      }
+      return hit.value;
+    },
+    set(key: string, value: T) {
+      // Bound memory: sweep expired entries once the map grows large.
+      if (store.size > 500) {
+        const now = Date.now();
+        for (const [k, v] of store) if (v.expires <= now) store.delete(k);
+      }
+      store.set(key, { expires: Date.now() + IDENTITY_TTL_MS, value });
+    },
+  };
+}
+
+type Workspaces = NonNullable<Awaited<ReturnType<typeof loadWorkspaces>>>;
+const workspaceCache = makeIdentityCache<Workspaces>();
+const contextCache = makeIdentityCache<TenantContext>();
+
 export async function listWorkspaces(userId: string) {
+  const cached = workspaceCache.get(userId);
+  if (cached !== undefined) return cached;
+  const result = await loadWorkspaces(userId);
+  if (result) workspaceCache.set(userId, result);
+  return result;
+}
+
+async function loadWorkspaces(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -100,6 +152,13 @@ export async function requireTenantContext(options: { allowPlatform?: boolean; r
   const session = await getSession();
   if (!session?.userId) return null;
 
+  // Reuse a recently-resolved context for the same session state. The key
+  // folds in the fields that change access (active workspace, role, MFA level)
+  // plus the option flags, so any change re-resolves against the DB.
+  const cacheKey = `${session.userId}|${session.activeOrganizationId || ""}|${session.activeCommunityId || ""}|${session.role}|${session.authAssuranceLevel || ""}|${options.allowPlatform ? 1 : 0}|${options.requireCommunity ? 1 : 0}`;
+  const cachedContext = contextCache.get(cacheKey);
+  if (cachedContext) return cachedContext;
+
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
     select: {
@@ -117,7 +176,7 @@ export async function requireTenantContext(options: { allowPlatform?: boolean; r
 
   const isPlatform = Boolean(user.platformRole);
   if (isPlatform && options.allowPlatform) {
-    return {
+    const platformContext: TenantContext = {
       session,
       userId: session.userId,
       role: session.role,
@@ -127,6 +186,8 @@ export async function requireTenantContext(options: { allowPlatform?: boolean; r
       isPlatform: true,
       isOrganizationAdmin: false,
     };
+    contextCache.set(cacheKey, platformContext);
+    return platformContext;
   }
 
   const orgMembership = user.organizationMemberships[0];
@@ -142,7 +203,7 @@ export async function requireTenantContext(options: { allowPlatform?: boolean; r
   }
   if (options.requireCommunity && !session.activeCommunityId) return null;
 
-  return {
+  const context: TenantContext = {
     session,
     userId: session.userId,
     role: communityMembership?.role || session.role,
@@ -153,6 +214,8 @@ export async function requireTenantContext(options: { allowPlatform?: boolean; r
     isPlatform,
     isOrganizationAdmin,
   };
+  contextCache.set(cacheKey, context);
+  return context;
 }
 
 function residentAccessWhere(context: TenantContext) {

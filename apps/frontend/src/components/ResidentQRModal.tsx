@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { QrCode, X, FileDown, ExternalLink } from "lucide-react";
 import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
+import { patientCode } from "@/lib/patientId";
 
 /**
  * Shows a resident's QR code (the thing staff scan). Scanning it opens the full
@@ -23,14 +24,16 @@ export default function ResidentQRModal({
   }, [open, residentId]);
 
   const slug = (name || "resident").toLowerCase().replace(/\s+/g, "-");
+  const pid = patientCode(residentId);
 
   const downloadQrPdf = () => {
     if (!qrData) return;
     const doc = new jsPDF({ unit: "pt", format: [280, 340] });
-    doc.addImage(qrData, "PNG", 40, 30, 200, 200);
-    doc.setFont("helvetica", "bold").setFontSize(15).text(name || "Resident", 140, 258, { align: "center" });
-    if (room) doc.setFont("helvetica", "normal").setFontSize(11).setTextColor(90).text(`Room ${room}`, 140, 278, { align: "center" });
-    doc.setFontSize(9).setTextColor(130).text("Scan for the resident care card", 140, 300, { align: "center" });
+    doc.addImage(qrData, "PNG", 40, 24, 200, 200);
+    doc.setFont("helvetica", "bold").setFontSize(15).text(name || "Resident", 140, 250, { align: "center" });
+    doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(46, 74, 72).text(`Patient ID: ${pid}`, 140, 269, { align: "center" });
+    if (room) doc.setFont("helvetica", "normal").setFontSize(11).setTextColor(90).text(`Room ${room}`, 140, 287, { align: "center" });
+    doc.setFontSize(9).setTextColor(130).text("Scan for the resident care card", 140, 306, { align: "center" });
     doc.save(`${slug}-qr.pdf`);
   };
 
@@ -51,6 +54,7 @@ export default function ResidentQRModal({
           )}
           <div>
             <p className="font-bold text-gray-900">{name || "Resident"}</p>
+            <p className="text-xs font-bold tracking-wide text-[#2E4A48] mt-0.5">Patient ID: {pid}</p>
             {room && <p className="text-sm text-gray-500">Room {room}</p>}
           </div>
           <p className="text-xs text-gray-500">Scan this code to open the resident&apos;s full care card.</p>

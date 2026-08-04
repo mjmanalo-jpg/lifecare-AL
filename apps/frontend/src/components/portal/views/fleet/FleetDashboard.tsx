@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo } from "react";
 import {
   Bus, RefreshCw, AlertTriangle, ShieldCheck, ShieldAlert, Wrench,
@@ -324,9 +326,7 @@ export default function FleetDashboard() {
           </h1>
           <p className="text-gray-600">Fleet analytics · compliance · live operations</p>
         </div>
-        <button onClick={refreshAll} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-          <RefreshCw className="w-4 h-4" /> Refresh
-        </button>
+        <RefreshButton onRefresh={refreshAll} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">Failed to load: {error}</div>}

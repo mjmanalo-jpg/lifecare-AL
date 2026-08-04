@@ -107,6 +107,13 @@ export default function DailyRoundsBoard({ clinicianRole = "CAREGIVER" }: { clin
   const refetchTab = useCallback(() => { allQueries[tab]?.refetch(); }, [tab, allQueries]);
 
   const handleCreateRound = async (resId: string, shift: string) => {
+    // Guard against firing before a resident is chosen (e.g. the residents list
+    // is still loading, so the picker was skipped and selectedResident is ""):
+    // an empty residentId would hit the DB as a raw foreign-key violation.
+    if (!resId) {
+      Swal.fire({ title: "Select a resident", text: "Choose a resident before starting a round.", icon: "info", timer: 1800, showConfirmButton: false });
+      return;
+    }
     const round = await createRecord("daily-rounds", {
       residentId: resId,
       caregiverId: clinicianId,
@@ -144,7 +151,7 @@ export default function DailyRoundsBoard({ clinicianRole = "CAREGIVER" }: { clin
     }
   };
 
-  if (!selectedResident && residents.length > 0) {
+  if (!selectedResident) {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -165,6 +172,11 @@ export default function DailyRoundsBoard({ clinicianRole = "CAREGIVER" }: { clin
               className={inputCls + " pl-10"}
             />
           </div>
+          {residents.length === 0 && (
+            <p className="py-8 text-center text-sm text-gray-500">
+              {resQ.loading ? "Loading residents…" : "No residents found for this community."}
+            </p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredResidents.map((r: any) => {
               const existingRound = todayRounds.find((tr: any) => tr.residentId === r.id);

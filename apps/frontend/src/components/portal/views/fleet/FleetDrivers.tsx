@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState } from "react";
 import {
   Users, Search, Plus, X, Edit, Trash2, RefreshCw, LayoutGrid, Table2, Eye,
@@ -239,9 +241,7 @@ export default function FleetDrivers() {
           <p className="text-gray-600">Track drivers, licenses, certifications, and safety performance</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
+          <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
             <Plus className="w-4 h-4" /> Add Driver
           </button>

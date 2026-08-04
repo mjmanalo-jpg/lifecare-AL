@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState } from "react";
 import {
   RefreshCw, Plus, X, Edit, Trash2, Search, CalendarClock, Play,
@@ -277,9 +279,7 @@ export default function FacilityMaintenanceBoard({ canManage = false }: { canMan
           <p className="text-gray-600">Preventive calendar — HVAC quarterly · generator monthly · elevator · fire &amp; safety · pest control</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
+          <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           {/* Scheduling preventive maintenance is a Facility Admin task; the crew
               portal (canManage) only works the jobs. */}
           {!canManage && (

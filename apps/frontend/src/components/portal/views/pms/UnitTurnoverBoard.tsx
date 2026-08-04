@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState } from "react";
 import {
   RefreshCw, Loader2, ArrowRight, ClipboardCheck, DoorOpen, Repeat,
@@ -155,9 +157,7 @@ export default function UnitTurnoverBoard() {
           </h1>
           <p className="text-gray-600">Apartment lifecycle — make ready · inspection · occupied · turnover · move-out · deep clean ↺</p>
         </div>
-        <button onClick={() => void refreshAll()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-          <RefreshCw className="w-4 h-4" /> Refresh
-        </button>
+        <RefreshButton onRefresh={() => void refreshAll()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
       </div>
 
       {/* Stats */}

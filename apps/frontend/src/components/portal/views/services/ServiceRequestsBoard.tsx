@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState } from "react";
 import {
   ConciergeBell, RefreshCw, Plus, X, Trash2, Search, Play, CheckCircle2,
@@ -306,9 +308,7 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
           <p className="text-gray-600">Hotel-style ticket desk — aircon/HVAC · housekeeping · room service · laundry · repairs</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
+          <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           {/* Tickets originate from residents or the Facility Admin front desk — crew
               portals (scoped via `categories`) work the queue but don't raise tickets. */}
           {!categories && (

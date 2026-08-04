@@ -1,12 +1,15 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Users, CheckCircle2, ClipboardList, AlertTriangle, BellRing, RefreshCw,
-  Clock, Heart, Sun, Sunset, Moon, ChevronRight, Activity, Inbox,
+  Clock, Heart, Sun, Sunset, Moon, ChevronRight, Activity, Inbox, StickyNote, X,
   type LucideIcon,
 } from "lucide-react";
+import { TASK_NOTES_FIELD, taskNotesOf, withAppendedNote, withoutNote } from "@/lib/taskNotes";
 import Swal from "@/lib/swal";
 import StatCard from "@/components/portal/widgets/StatCard";
 import { useLiveQuery, useStats } from "@/lib/useLiveQuery";
@@ -62,9 +65,9 @@ function relTime(iso: string | null, nowTs: number): string {
   const m = Math.round(diff / 60000);
   if (m < 1) return "just now";
   if (m < 60) return `${m}m ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.round(h / 24)}d ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return m % 60 ? `${h}h ${m % 60}m ago` : `${h}h ago`;
+  return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h ago` : `${Math.floor(h / 24)}d ago`;
 }
 
 /* ── Component ───────────────────────────────────────────────────────── */
@@ -201,6 +204,42 @@ export default function CaregiverDashboard() {
     }
   };
 
+  // Current user's name — stamped on task notes so the nurse / other caregivers
+  // know who flagged the blocker.
+  const [authorName, setAuthorName] = useState("");
+  useEffect(() => {
+    fetch("/api/auth/session").then((r) => r.json()).then((d) => setAuthorName(d?.session?.name || d?.workspaces?.user?.name || "")).catch(() => {});
+  }, []);
+
+  // Add / remove a caregiver note on a task. Stored on the task, so it reflects
+  // live to the nurse, other caregivers, and the resident's QR profile.
+  const addTaskNote = async (t: Task) => {
+    const { value } = await Swal.fire({
+      title: "Add a note to this task",
+      input: "textarea",
+      inputPlaceholder: "e.g. Can't give the medication yet — resident hasn't eaten (no solid food).",
+      inputAttributes: { "aria-label": "Task note", maxlength: "500" },
+      showCancelButton: true,
+      confirmButtonText: "Add note",
+      confirmButtonColor: "#2E4A48",
+      inputValidator: (v) => (!v || String(v).trim().length < 2 ? "Please enter a note." : undefined),
+    });
+    if (!value) return;
+    try {
+      await updateRecord("tasks", t.id, { [TASK_NOTES_FIELD]: withAppendedNote((t.raw as Record<string, unknown>)?.[TASK_NOTES_FIELD], String(value), authorName) });
+      await refetchTasks();
+      Swal.fire({ title: "Note added", text: "Visible to the nurse, other caregivers, and on the resident's profile.", icon: "success", timer: 1800, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: "Couldn't add note", text: err instanceof Error ? err.message : "Try again.", icon: "error" });
+    }
+  };
+  const removeTaskNote = async (t: Task, noteId: string) => {
+    try {
+      await updateRecord("tasks", t.id, { [TASK_NOTES_FIELD]: withoutNote((t.raw as Record<string, unknown>)?.[TASK_NOTES_FIELD], noteId) });
+      await refetchTasks();
+    } catch { /* non-fatal */ }
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
@@ -217,12 +256,7 @@ export default function CaregiverDashboard() {
             {nowTs ? new Date(nowTs).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }) : "—"}
           </p>
         </div>
-        <button
-          onClick={refreshAll}
-          className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium self-start"
-        >
-          <RefreshCw className="w-4 h-4" /> Refresh
-        </button>
+        <RefreshButton onRefresh={refreshAll} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium self-start" />
       </div>
 
       {/* Stat cards */}
@@ -267,11 +301,32 @@ export default function CaregiverDashboard() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <h4 className="font-semibold text-gray-900 truncate">{t.title}</h4>
-                      <span className={`px-2 py-0.5 rounded text-xs font-semibold border flex-shrink-0 ${PRIORITY_BADGE[t.priority]}`}>
-                        {t.priority.toUpperCase()}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button onClick={() => void addTaskNote(t)} title="Add note" className="p-1 rounded text-[#C39A3E] hover:bg-amber-100 transition"><StickyNote className="w-4 h-4" /></button>
+                        <span className={`px-2 py-0.5 rounded text-xs font-semibold border ${PRIORITY_BADGE[t.priority]}`}>
+                          {t.priority.toUpperCase()}
+                        </span>
+                      </div>
                     </div>
                     <p className="text-sm text-gray-600 truncate">{t.resident} • Room {t.room}{t.dueTime ? ` • ${t.dueTime}` : ""}</p>
+                    {(() => {
+                      const notes = taskNotesOf(t.raw as Record<string, unknown>);
+                      if (!notes.length) return null;
+                      return (
+                        <div className="mt-1.5 space-y-1">
+                          {notes.map((n) => (
+                            <div key={n.id} className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1">
+                              <StickyNote className="w-3.5 h-3.5 text-amber-600 mt-0.5 flex-shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[11px] leading-snug text-gray-700">{n.text}</p>
+                                <p className="text-[10px] text-gray-400">{n.author}{n.at ? ` · ${new Date(n.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}</p>
+                              </div>
+                              <button onClick={() => void removeTaskNote(t, n.id)} title="Remove note" className="text-gray-300 hover:text-red-500 flex-shrink-0"><X className="w-3 h-3" /></button>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               ))}

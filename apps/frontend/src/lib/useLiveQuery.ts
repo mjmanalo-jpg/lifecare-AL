@@ -10,6 +10,29 @@ import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 // model at once (e.g. a portal shell + a child module both reading "tasks").
 let channelSeq = 0;
 
+// In-flight request coalescer. A dashboard mounts many useLiveQuery hooks at
+// once, and several often read the SAME endpoint (e.g. the shell + a child both
+// read "app-settings"). Each fetch hits a remote DB (~150ms/round-trip), so
+// firing duplicates is pure waste. When an identical GET is already in flight,
+// new callers await the same promise instead of opening another request.
+const inFlight = new Map<string, Promise<unknown>>();
+
+function coalescedFetch(url: string): Promise<unknown> {
+  const existing = inFlight.get(url);
+  if (existing) return existing;
+  const promise = fetch(url, { cache: "no-store" })
+    .then(async (res) => {
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || res.statusText);
+      return json;
+    })
+    .finally(() => {
+      inFlight.delete(url);
+    });
+  inFlight.set(url, promise);
+  return promise;
+}
+
 interface LiveQueryOptions {
   /** Query string appended to /api/db/:model, e.g. "include=resident&take=50". */
   query?: string;
@@ -51,9 +74,7 @@ export function useLiveQuery<T = Record<string, unknown>>(
   // fetchData closes over the current `url`; it re-creates when the url changes.
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch(url, { cache: "no-store" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || res.statusText);
+      const json = (await coalescedFetch(url)) as { data?: T[] };
       setData((json.data ?? []) as T[]);
       setError(null);
     } catch (err) {

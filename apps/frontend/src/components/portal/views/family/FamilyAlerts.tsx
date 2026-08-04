@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState } from "react";
 import { AlertTriangle, Activity, CheckCircle2, RefreshCw, Search } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -62,7 +64,7 @@ export default function FamilyAlerts() {
             Safety &amp; health events for {displayName}
           </p>
         </div>
-        <button onClick={() => void refetchIncidents()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium self-start"><RefreshCw className="w-4 h-4" /> Refresh</button>
+        <RefreshButton onRefresh={() => void refetchIncidents()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium self-start" />
       </div>
 
       {/* All-clear banner */}

@@ -11,6 +11,7 @@ import FamilyMessages from "@/components/portal/views/family/FamilyMessages";
 import FamilyAppointments from "@/components/portal/views/family/FamilyAppointments";
 import FamilyBilling from "@/components/portal/views/family/FamilyBilling";
 import FamilyPhotos from "@/components/portal/views/family/FamilyPhotos";
+import FamilyDocuments from "@/components/portal/views/family/FamilyDocuments";
 import MyTransport from "@/components/portal/views/fleet/MyTransport";
 import MyHotelServices from "@/components/portal/views/services/MyHotelServices";
 import MyCommunity from "@/components/portal/views/pms/MyCommunity";
@@ -34,6 +35,8 @@ export default function FamilyPortalContent({ tab }: FamilyPortalContentProps) {
   switch (tab) {
     case "relative":
       return <FamilyRelative />;
+    case "forms":
+      return <FamilyDocuments />;
     case "report":
       return <FamilyDailyReport />;
     case "timeline":

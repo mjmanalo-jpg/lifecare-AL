@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState, useEffect } from "react";
 import {
   Camera, Search, RefreshCw, AlertTriangle, TrendingDown, Bell,
@@ -142,9 +144,7 @@ export default function CameraActivityLog() {
             Timestamped events detected by AI monitoring
           </p>
         </div>
-        <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium self-start">
-          <RefreshCw className="w-4 h-4" /> Refresh
-        </button>
+        <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium self-start" />
       </div>
 
       {/* Stat cards */}

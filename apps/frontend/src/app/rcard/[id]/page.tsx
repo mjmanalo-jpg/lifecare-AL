@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Pill, ClipboardList, ConciergeBell, ShieldAlert,
-  UserRound, CalendarClock, Loader2, FileDown,
+  UserRound, CalendarClock, Loader2, FileDown, StickyNote, IdCard,
 } from "lucide-react";
+import { taskNotesOf } from "@/lib/taskNotes";
+import { patientCode } from "@/lib/patientId";
 import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
 
@@ -115,7 +117,8 @@ export default function ResidentCardPage() {
     doc.setFont("helvetica", "bold").setFontSize(18).setTextColor(20).text("Resident Care Card", M, y);
     if (qrData) doc.addImage(qrData, "PNG", 470, 26, 90, 90);
     y += 22;
-    doc.setFont("helvetica", "bold").setFontSize(14).text(name, M, y); y += 16;
+    doc.setFont("helvetica", "bold").setFontSize(14).text(name, M, y); y += 15;
+    doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(46, 74, 72).text(`Patient ID: ${patientCode(s(resident.id))}`, M, y); y += 15;
     doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(100).text(`Room ${s(resident.roomNumber) || "—"} · ${s(resident.careLevel) || "—"} · DOB ${fmtDate(resident.dateOfBirth)}${age(resident.dateOfBirth) != null ? ` · ${age(resident.dateOfBirth)} yrs` : ""}`, M, y); y += 24;
 
     heading("Allergies"); body(s(resident.allergies) || "None on record");
@@ -125,7 +128,7 @@ export default function ResidentCardPage() {
     heading("Recent Requests");
     recentRequests.length ? recentRequests.forEach(r => body(`• ${s(r.category).replace(/_/g, " ")}${r.subType ? ` — ${s(r.subType)}` : ""}: ${s(r.details)} [${s(r.status)}]`)) : body("None");
     heading("Assignments / To-do");
-    openTasks.length ? openTasks.forEach(t => body(`• ${s(t.title)}${t.dueDate ? ` (due ${fmtDate(t.dueDate)})` : ""}`)) : body("Nothing outstanding");
+    openTasks.length ? openTasks.forEach(t => { body(`• ${s(t.title)}${t.dueDate ? ` (due ${fmtDate(t.dueDate)})` : ""}`); taskNotesOf(t as Record<string, unknown>).forEach(n => body(`    - Note: ${n.text} (${n.author})`)); }) : body("Nothing outstanding");
     if (resident.emergencyContact || resident.emergencyContactPhone) { heading("Emergency Contact"); body(`${s(resident.emergencyContact)} ${resident.emergencyContactPhone ? `· ${s(resident.emergencyContactPhone)}` : ""}`); }
 
     doc.setFontSize(8).setTextColor(150).text(`Generated ${new Date().toLocaleString()} · confidential — authorized care staff only`, M, PH - 24);
@@ -174,7 +177,10 @@ export default function ResidentCardPage() {
             )}
             <div className="min-w-0 flex-1">
               <h1 className="text-2xl font-extrabold text-gray-900 truncate">{name}</h1>
-              <p className="text-sm text-gray-500 mt-0.5">Room {s(resident.roomNumber) || "—"} · Admitted {fmtDate(resident.admissionDate)}{yrs != null ? ` · Age ${yrs}` : ""}</p>
+              <p className="mt-1 inline-flex items-center gap-1.5 rounded bg-gray-100 px-2 py-0.5 text-xs font-bold tracking-wide text-gray-800">
+                <IdCard className="w-3.5 h-3.5 text-[#2E4A48]" /> {patientCode(s(resident.id))}
+              </p>
+              <p className="text-sm text-gray-500 mt-1">Room {s(resident.roomNumber) || "—"} · Admitted {fmtDate(resident.admissionDate)}{yrs != null ? ` · Age ${yrs}` : ""}</p>
             </div>
             <span className={`shrink-0 px-2.5 py-1 rounded text-[11px] font-bold uppercase border ${STATUS_META[s(resident.status)] || STATUS_META.ACTIVE}`}>{s(resident.status).replace(/_/g, " ") || "ACTIVE"}</span>
           </div>
@@ -226,12 +232,27 @@ export default function ResidentCardPage() {
           <Section title={`Assignments / To-do (${openTasks.length})`} icon={CalendarClock}>
             {openTasks.length === 0 ? <p className="text-sm text-gray-400">Nothing outstanding.</p> : (
               <ul className="space-y-1.5">
-                {openTasks.map(t => (
-                  <li key={s(t.id)} className="text-sm flex items-start justify-between gap-2">
-                    <span className="min-w-0 text-gray-900">{s(t.title)}{t.description ? <span className="text-gray-500"> — {s(t.description)}</span> : ""}</span>
-                    <span className="shrink-0 text-[11px] text-gray-500">{t.dueDate ? `Due ${fmtDate(t.dueDate)}` : ""}</span>
+                {openTasks.map(t => {
+                  const notes = taskNotesOf(t as Record<string, unknown>);
+                  return (
+                  <li key={s(t.id)} className="text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="min-w-0 text-gray-900">{s(t.title)}{t.description ? <span className="text-gray-500"> — {s(t.description)}</span> : ""}</span>
+                      <span className="shrink-0 text-[11px] text-gray-500">{t.dueDate ? `Due ${fmtDate(t.dueDate)}` : ""}</span>
+                    </div>
+                    {notes.length > 0 && (
+                      <ul className="mt-1 space-y-1">
+                        {notes.map(n => (
+                          <li key={n.id} className="flex items-start gap-1.5 rounded bg-amber-50 border border-amber-200 px-2 py-1">
+                            <StickyNote className="w-3 h-3 text-amber-600 mt-0.5 flex-shrink-0" />
+                            <span className="text-[11px] text-gray-700 leading-snug"><b className="text-gray-800">Note:</b> {n.text}<span className="text-gray-400"> — {n.author}</span></span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </Section>

@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Shield, Search, Filter, Download, Loader2, Clock, User, FileText } from "lucide-react";
+import { Shield, Search, Filter, Download, Loader2, Clock, User, FileText, Stethoscope } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 
 const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none text-sm";
@@ -17,37 +17,106 @@ const actionColors: Record<string, string> = {
 };
 const PER_PAGE = 25;
 
-export default function AuditLogViewer() {
+// Care/clinical activity the Care Manager is accountable for: task completions,
+// MAR, daily rounds and every round sub-record, assessments, care plans,
+// escalations, incidents, referrals, follow-ups, vitals, wound care, etc.
+const CLINICAL_ENTITIES = new Set<string>([
+  "tasks", "medication-administrations", "medication-logs", "medications",
+  "daily-rounds", "round-sleep-records", "sleep-logs", "meal-records",
+  "bowel-records", "urine-records", "eliminations", "mobility-logs",
+  "mobility-records", "mood-records", "edema-records", "concern-records",
+  "medical-notes", "pain-records", "pain-assessments", "vaccinations",
+  "assessments", "acuity-scores", "care-plans", "care-plan-items",
+  "escalations", "incidents", "hospital-referrals", "follow-ups",
+  "physician-communications", "vitals", "vital-signs", "wound-cares",
+  "shift-reports",
+]);
+
+// Human-readable labels for entity slugs (used everywhere; falls back to the
+// slug prettified). Keeps both the Admin firehose and the Care Manager view legible.
+const ENTITY_LABELS: Record<string, string> = {
+  tasks: "Task", "medication-administrations": "Medication (MAR)", "medication-logs": "Medication log",
+  medications: "Medication order", "daily-rounds": "Daily round", "round-sleep-records": "Round · sleep",
+  "sleep-logs": "Sleep log", "meal-records": "Round · meal", "bowel-records": "Round · bowel",
+  "urine-records": "Round · urine", eliminations: "Round · elimination", "mobility-logs": "Mobility",
+  "mobility-records": "Round · mobility", "mood-records": "Round · mood", "edema-records": "Round · edema",
+  "concern-records": "Round · concern", "medical-notes": "Medical note", "pain-records": "Round · pain",
+  "pain-assessments": "Pain assessment", vaccinations: "Vaccination", assessments: "Assessment",
+  "acuity-scores": "Acuity score", "care-plans": "Care plan", "care-plan-items": "Care plan item",
+  escalations: "Escalation", incidents: "Incident", "hospital-referrals": "Referral",
+  "follow-ups": "Follow-up", "physician-communications": "Physician comms", vitals: "Vitals",
+  "vital-signs": "Vitals", "wound-cares": "Wound care", "shift-reports": "Shift report",
+  residents: "Resident", invoices: "Invoice", payments: "Payment", "app-settings": "System setting",
+};
+function entityLabel(slug?: string): string {
+  if (!slug) return "—";
+  return ENTITY_LABELS[slug] || slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Turn a raw audit row into a plain-language activity line for the Care Manager.
+function describeActivity(log: any): string {
+  const after = log.after || {};
+  const status = typeof after.status === "string" ? after.status : null;
+  const noun = entityLabel(log.entityType);
+  if (log.entityType === "tasks") {
+    if (status === "COMPLETED") return "Task completed";
+    if (status) return `Task marked ${status.toLowerCase().replace(/_/g, " ")}`;
+    if (log.action === "CREATE") return "Task assigned";
+  }
+  if ((log.entityType === "medication-administrations" || log.entityType === "medication-logs") && log.action === "CREATE") {
+    return "Medication administered (MAR)";
+  }
+  if (log.entityType === "daily-rounds") return log.action === "CREATE" ? "Daily round recorded" : "Daily round updated";
+  if (status) return `${noun} → ${status.toLowerCase().replace(/_/g, " ")}`;
+  const verb = { CREATE: "recorded", UPDATE: "updated", DELETE: "removed", APPROVE: "approved", REJECT: "rejected" }[log.action as string] || log.action?.toLowerCase();
+  return `${noun} ${verb}`;
+}
+
+export default function AuditLogViewer({ focus = "all" }: { focus?: "all" | "clinical" }) {
+  const isClinical = focus === "clinical";
   const { data: auditRows, loading } = useLiveQuery("audit-logs", { query: "take=1000", tables: ["AuditLog"] });
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("ALL");
   const [entityFilter, setEntityFilter] = useState("ALL");
   const [page, setPage] = useState(1);
 
+  // Care Manager only ever sees care/clinical activity; Admin sees everything.
+  const scopedRows = useMemo(
+    () => isClinical ? (auditRows || []).filter((a: any) => CLINICAL_ENTITIES.has(a.entityType)) : (auditRows || []),
+    [auditRows, isClinical]
+  );
+
   const filtered = useMemo(() => {
-    return (auditRows || []).filter((a: any) => {
+    return scopedRows.filter((a: any) => {
       if (actionFilter !== "ALL" && a.action !== actionFilter) return false;
       if (entityFilter !== "ALL" && a.entityType !== entityFilter) return false;
       if (search) {
         const q = search.toLowerCase();
-        return (a.actorName || "").toLowerCase().includes(q) || (a.entityType || "").toLowerCase().includes(q) || (a.reason || "").toLowerCase().includes(q);
+        return (a.actorName || "").toLowerCase().includes(q) || entityLabel(a.entityType).toLowerCase().includes(q) || (a.entityType || "").toLowerCase().includes(q) || (a.reason || "").toLowerCase().includes(q) || describeActivity(a).toLowerCase().includes(q);
       }
       return true;
     }).sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-  }, [auditRows, actionFilter, entityFilter, search]);
+  }, [scopedRows, actionFilter, entityFilter, search]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  const uniqueActions = useMemo(() => [...new Set((auditRows || []).map((a: any) => a.action).filter(Boolean))], [auditRows]);
-  const uniqueEntities = useMemo(() => [...new Set((auditRows || []).map((a: any) => a.entityType).filter(Boolean))], [auditRows]);
+  const uniqueActions = useMemo(() => [...new Set(scopedRows.map((a: any) => a.action).filter(Boolean))], [scopedRows]);
+  const uniqueEntities = useMemo(() => [...new Set(scopedRows.map((a: any) => a.entityType).filter(Boolean))], [scopedRows]);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold flex items-center gap-2"><Shield className="w-5 h-5 text-yellow-500" /> Audit Log</h2>
-          <p className="text-sm text-gray-500">Track all system activity for compliance and governance</p>
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            {isClinical ? <Stethoscope className="w-5 h-5 text-teal-500" /> : <Shield className="w-5 h-5 text-yellow-500" />}
+            {isClinical ? "Care Activity Log" : "Audit Log"}
+          </h2>
+          <p className="text-sm text-gray-500">
+            {isClinical
+              ? "Task completions, MAR, daily rounds, assessments, incidents and other clinical activity"
+              : "Track all system activity for compliance and governance"}
+          </p>
         </div>
         <div className="text-sm text-gray-500">{filtered.length} entries</div>
       </div>
@@ -62,8 +131,8 @@ export default function AuditLogViewer() {
           {uniqueActions.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
         <select value={entityFilter} onChange={e => { setEntityFilter(e.target.value); setPage(1); }} className={`${inputCls} w-full sm:w-auto`}>
-          <option value="ALL">All Entities</option>
-          {uniqueEntities.map(e => <option key={e} value={e}>{e}</option>)}
+          <option value="ALL">{isClinical ? "All Activity" : "All Entities"}</option>
+          {uniqueEntities.map(e => <option key={e} value={e}>{entityLabel(e)}</option>)}
         </select>
       </div>
 
@@ -84,7 +153,7 @@ export default function AuditLogViewer() {
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">Timestamp</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">User</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">Action</th>
-                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Entity</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-600">{isClinical ? "Activity" : "Entity"}</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">Details</th>
                   </tr>
                 </thead>
@@ -104,8 +173,14 @@ export default function AuditLogViewer() {
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${actionColors[log.action] || "bg-gray-100 text-gray-600"}`}>{log.action}</span>
                       </td>
-                      <td className="px-4 py-3 text-gray-700">{log.entityType || "—"} {log.entityId && <span className="text-xs text-gray-400">({log.entityId.slice(0, 8)}...)</span>}</td>
-                      <td className="px-4 py-3 text-gray-500 text-xs max-w-xs truncate">{log.reason || "—"}</td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {isClinical ? (
+                          <span className="font-medium text-gray-800">{describeActivity(log)}</span>
+                        ) : (
+                          <>{entityLabel(log.entityType)} {log.entityId && <span className="text-xs text-gray-400">({log.entityId.slice(0, 8)}...)</span>}</>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 text-xs max-w-xs truncate">{log.reason || (isClinical ? entityLabel(log.entityType) : describeActivity(log))}</td>
                     </tr>
                   ))}
                 </tbody>

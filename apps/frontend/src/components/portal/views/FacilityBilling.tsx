@@ -3,13 +3,16 @@
 import { useMemo, useState } from "react";
 import {
   DollarSign, Search, Eye, FileText, AlertTriangle, CheckCircle, Clock, X, Plus,
-  Printer, ShieldCheck, CreditCard, RefreshCw, Layers, ClipboardList, TrendingUp, Download
+  Printer, ShieldCheck, CreditCard, RefreshCw, Layers, ClipboardList, TrendingUp, Download, Library
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFacilityConfig } from "@/lib/useFacilityConfig";
 import { adaptInvoice, adaptServiceCharge, adaptInsuranceValidation, adaptPayment } from "@/lib/adapters";
-import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
+import { createRecord, updateRecord, deleteRecord, upsertRecord } from "@/lib/api";
+import BillingLibraryTab from "./billing/BillingLibraryTab";
+import ResidentStatement from "./billing/ResidentStatement";
+import { BILLING_LIBRARY_KEY, BILLING_DISPUTES_KEY, parseTemplates, parseDisputes, newId } from "@/lib/billingLibrary";
 
 type Invoice = ReturnType<typeof adaptInvoice>;
 type ServiceCharge = ReturnType<typeof adaptServiceCharge>;
@@ -31,7 +34,7 @@ const TAB_STYLING = (active: boolean) =>
       : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
   }`;
 
-type BillingTab = "overview" | "charges" | "insurance" | "invoices" | "payments" | "receipts";
+type BillingTab = "overview" | "charges" | "insurance" | "invoices" | "payments" | "receipts" | "library";
 
 export default function FacilityBilling({ initialTab = "overview" }: { initialTab?: BillingTab } = {}) {
   const [activeTab, setActiveTab] = useState<BillingTab>(initialTab);
@@ -53,6 +56,9 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
     "payments", { query: "include=invoice&take=300", tables: ["Payment", "Invoice"] }
   );
   const { facilityName, facilityAddress } = useFacilityConfig();
+  const { data: settingRows, refetch: refetchSettings } = useLiveQuery<{ id: string; key?: string; value: string }>("app-settings", { tables: ["AppSetting"] });
+  const chargeTemplates = useMemo(() => parseTemplates(settingRows.find((r) => (r.key || r.id) === BILLING_LIBRARY_KEY)?.value), [settingRows]);
+  const [statementResident, setStatementResident] = useState<{ id: string; name: string } | null>(null);
 
   // Normalized Models
   const invoices = useMemo<Invoice[]>(() => invoiceRows.map(adaptInvoice), [invoiceRows]);
@@ -114,6 +120,34 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
   }, [invoices, serviceCharges, insuranceValidations]);
 
   // Action: Add Service Charge
+  // Raise a dispute / chargeback on an invoice: reverse any recorded payment
+  // with a negative CHARGEBACK payment, flip the invoice back to SENT, and log
+  // the dispute (billing_disputes) for the Library & Ledger audit trail.
+  const handleChargeback = async (inv: Invoice) => {
+    const { value: reason } = await Swal.fire({
+      title: "Raise dispute / chargeback",
+      input: "textarea",
+      inputPlaceholder: "Reason for the dispute or chargeback…",
+      showCancelButton: true, confirmButtonText: "Record chargeback", confirmButtonColor: "#e11d48",
+      inputValidator: (v) => (!v || String(v).trim().length < 3 ? "Enter a reason" : undefined),
+    });
+    if (!reason) return;
+    try {
+      const amt = inv.amountPaid > 0 ? inv.amountPaid : inv.totalAmount;
+      if (inv.amountPaid > 0) {
+        await createRecord("payments", { invoiceId: inv.id, amount: -inv.amountPaid, paymentMethod: "CHARGEBACK", transactionId: `CB-${Date.now()}`, notes: `Chargeback: ${reason}` });
+        await updateRecord("invoices", inv.id, { amountPaid: 0, status: "SENT", paidAt: null });
+      }
+      const disputes = parseDisputes(settingRows.find((r) => (r.key || r.id) === BILLING_DISPUTES_KEY)?.value);
+      disputes.push({ id: newId("dsp"), invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, reason: String(reason), status: "CHARGEBACK", amount: amt, at: new Date().toISOString(), by: "Billing Admin" });
+      await upsertRecord("app-settings", BILLING_DISPUTES_KEY, { key: BILLING_DISPUTES_KEY, value: JSON.stringify(disputes) });
+      await Promise.all([refetchInvoices(), refetchPayments(), refetchSettings()]);
+      Swal.fire({ title: "Chargeback recorded", icon: "success", timer: 1500, showConfirmButton: false });
+    } catch (e) {
+      Swal.fire({ title: "Failed", text: e instanceof Error ? e.message : "Try again", icon: "error" });
+    }
+  };
+
   const handleRecordCharge = async () => {
     if (!chargeForm.residentId || !chargeForm.amount || !chargeForm.description) {
       Swal.fire("Missing Fields", "Please populate Resident, Amount, and Description.", "warning");
@@ -423,7 +457,13 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
         <button onClick={() => { setActiveTab("receipts"); setSearch(""); }} className={TAB_STYLING(activeTab === "receipts")}>
           <Printer className="w-4 h-4" /> Receipts Issued
         </button>
+        <button onClick={() => { setActiveTab("library"); setSearch(""); }} className={TAB_STYLING(activeTab === "library")}>
+          <Library className="w-4 h-4" /> Library &amp; Ledger
+        </button>
       </div>
+
+      {activeTab === "library" && <BillingLibraryTab />}
+      {statementResident && <ResidentStatement residentId={statementResident.id} residentName={statementResident.name} facilityName={facilityName} onClose={() => setStatementResident(null)} />}
 
       {/* ── VIEW TAB 1: OVERVIEW & REPORTS ── */}
       {activeTab === "overview" && (
@@ -720,6 +760,14 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                             Send / Dispatch
                           </button>
                         )}
+                        {inv.status !== "DRAFT" && inv.status !== "CANCELLED" && (
+                          <button onClick={() => handleChargeback(inv)} className="px-3 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg text-xs font-bold transition" title="Dispute / chargeback">
+                            Dispute
+                          </button>
+                        )}
+                        <button onClick={() => setStatementResident({ id: String((inv.raw as { residentId?: string }).residentId ?? ""), name: inv.residentName })} className="p-2 text-gray-600 hover:bg-gray-100 hover:text-black rounded-lg transition" title="Account statement">
+                          <ClipboardList className="w-4 h-4" />
+                        </button>
                         <button onClick={() => setViewingInvoice(inv)} className="p-2 text-gray-600 hover:bg-gray-100 hover:text-black rounded-lg transition" title="View details">
                           <Eye className="w-4 h-4" />
                         </button>
@@ -1070,6 +1118,16 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
               <button onClick={() => setShowRecordCharge(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-4 sm:p-6 space-y-4">
+              {chargeTemplates.length > 0 && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Apply charge template</label>
+                  <select onChange={(e) => { const t = chargeTemplates.find((x) => x.id === e.target.value); if (t) setChargeForm((f) => ({ ...f, description: t.name, amount: String(t.amount), category: t.category })); e.target.value = ""; }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 bg-white text-gray-800">
+                    <option value="">— Pick from Charge Library —</option>
+                    {chargeTemplates.map((t) => <option key={t.id} value={t.id}>{t.name} · ₱{t.amount.toLocaleString()}</option>)}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Resident *</label>
                 <select value={chargeForm.residentId} onChange={(e) => setChargeForm({ ...chargeForm, residentId: e.target.value })}

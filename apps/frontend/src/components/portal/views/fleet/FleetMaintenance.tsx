@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState } from "react";
 import {
   Wrench, RefreshCw, Plus, X, Edit, Trash2, Search, CalendarClock,
@@ -366,9 +368,7 @@ export default function FleetMaintenance() {
           <p className="text-gray-600">Preventive schedule · repair work orders · garage &amp; vendor service</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => void refreshAll()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
+          <RefreshButton onRefresh={() => void refreshAll()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           <button onClick={() => { setCreateForm(emptyForm); setShowCreate(true); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
             <Plus className="w-4 h-4" /> New Work Order
           </button>

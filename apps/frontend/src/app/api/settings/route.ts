@@ -11,7 +11,7 @@ export async function GET() {
   if (!context?.organizationId || !context.communityId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!isDbConfigured()) return NextResponse.json({ data: {}, demo: true });
   const rows = await withTenantDb(context, (tx) => tx.appSetting.findMany({ where: { OR: [{ organizationId: context.organizationId, communityId: null }, { organizationId: context.organizationId, communityId: context.communityId }] } }));
-  return NextResponse.json({ data: Object.fromEntries(rows.map((row) => [row.key || row.id, row.value])) });
+  return NextResponse.json({ data: Object.fromEntries(rows.filter((row) => !String(row.key || row.id).startsWith("__")).map((row) => [row.key || row.id, row.value])) });
 }
 
 export async function POST(request: NextRequest) {

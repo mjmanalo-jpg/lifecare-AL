@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState } from "react";
 import {
   Bus, Plus, RefreshCw, X, MapPin, Clock, CheckCircle, AlertTriangle,
@@ -180,9 +182,7 @@ export default function MyTransport() {
           <p className="text-gray-600">Request rides for {residentName} and follow every trip live</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => { void refetch(); void refetchTrips(); }} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
+          <RefreshButton onRefresh={() => { void refetch(); void refetchTrips(); }} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
             <Plus className="w-4 h-4" /> Request Transport
           </button>

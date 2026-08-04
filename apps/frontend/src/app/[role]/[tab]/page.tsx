@@ -13,6 +13,7 @@ import SuperAdminPortalContent from "@/components/portal/views/SuperAdminPortalC
 import PlatformAdminPortalContent from "@/components/portal/views/PlatformAdminPortalContent";
 import OrganizationAdminPortalContent from "@/components/portal/views/OrganizationAdminPortalContent";
 import FacilityAdminPortalContent from "@/components/portal/views/FacilityAdminPortalContent";
+import CareManagerPortalContent from "@/components/portal/views/CareManagerPortalContent";
 import BillingFinancePortalContent from "@/components/portal/views/BillingFinancePortalContent";
 import FleetManagementPortalContent from "@/components/portal/views/FleetManagementPortalContent";
 import DriverPortalContent from "@/components/portal/views/DriverPortalContent";
@@ -74,6 +75,10 @@ export default function RolePortalPage() {
       {/* Facility Admin sees the dedicated facility portal. */}
       {userRole === "FACILITY_ADMIN" && (
         <FacilityAdminPortalContent tab={tabParam || "dashboard"} />
+      )}
+      {/* Care Manager — clinical oversight split out of Facility Operations. */}
+      {userRole === "CARE_MANAGER" && (
+        <CareManagerPortalContent tab={tabParam || "dashboard"} />
       )}
       {/* Billing & Finance sees the dedicated billing portal. */}
       {userRole === "BILLING_ADMIN" && (

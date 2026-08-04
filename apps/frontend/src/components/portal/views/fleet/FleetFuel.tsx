@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState } from "react";
 import {
   Fuel, RefreshCw, Plus, X, Trash2, Gauge, Droplets, CircleDollarSign,
@@ -250,9 +252,7 @@ export default function FleetFuel() {
           <p className="text-gray-600">Odometer &amp; fuel log · consumption analytics</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => void refreshAll()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
+          <RefreshButton onRefresh={() => void refreshAll()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           <button onClick={() => { setForm(emptyForm()); setShowCreate(true); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
             <Plus className="w-4 h-4" /> Log Fuel-Up
           </button>

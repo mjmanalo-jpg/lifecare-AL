@@ -34,6 +34,7 @@ import LcmsLogo from "@/components/LcmsLogo";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import ChangePasswordDialog from "@/components/portal/ChangePasswordDialog";
 import LogoutDialog from "@/components/portal/LogoutDialog";
+import SignatureModal from "@/components/portal/SignatureModal";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Role,
@@ -51,6 +52,34 @@ interface PortalShellProps {
   onLogout?: () => void;
 }
 
+// Keywords used to route a notification to the most relevant tab. Matched
+// against the current role's sidebar link routes/names, so a click only ever
+// navigates to a tab that actually exists for that role (otherwise it falls
+// back to the dashboard). Order matters — earlier keywords win.
+const NOTIFICATION_ROUTE_KEYWORDS: Record<string, string[]> = {
+  INCIDENT_REPORT: ["incident", "escalation", "alert"],
+  VITAL_ALERT: ["vital", "record"],
+  MEDICATION_REMINDER: ["medication", "mar", "pharmacy"],
+  CALL_BELL: ["callbell", "call-bell", "record", "monitoring"],
+  TASK_ASSIGNMENT: ["task", "care", "round"],
+  MESSAGE: ["message", "comms", "secure", "inbox"],
+  SHIFT_REMINDER: ["shift", "continuity", "endorsement", "report"],
+  TRANSPORT_UPDATE: ["transport", "trip", "fleet", "ambulance", "dispatch"],
+  SYSTEM_ALERT: ["alert", "dashboard", "overview"],
+};
+
+/** Best matching tab route for a notification within the current role's nav. */
+function routeForNotification(type: string, links: SidebarLink[], fallback: string): string {
+  const keywords = NOTIFICATION_ROUTE_KEYWORDS[type] ?? [];
+  for (const keyword of keywords) {
+    const match = links.find(
+      (link) => link.route.toLowerCase().includes(keyword) || link.name.toLowerCase().includes(keyword)
+    );
+    if (match) return match.route;
+  }
+  return fallback;
+}
+
 export default function PortalShell({
   userRole,
   children,
@@ -65,6 +94,7 @@ export default function PortalShell({
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showPinSetup, setShowPinSetup] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(true);
@@ -180,6 +210,18 @@ export default function PortalShell({
     } catch (err) {
       console.error("Mark single read failed:", err);
     }
+  };
+
+  // Clicking a notification marks it read and navigates to the page most
+  // relevant to its content (incident → Incidents, call bell → Records, …),
+  // scoped to the current role's available tabs.
+  const handleNotificationClick = (n: { id: string; type: string; isRead: boolean }) => {
+    if (!n.isRead) void handleMarkSingleRead(n.id);
+    setBellDropdownOpen(false);
+    const fallback =
+      roleDetails.sidebarLinks[0]?.route ||
+      `/${pathname.split("/")[1] || String(userRole).toLowerCase()}/dashboard`;
+    router.push(routeForNotification(n.type, roleDetails.sidebarLinks, fallback));
   };
 
 
@@ -416,7 +458,7 @@ export default function PortalShell({
       <aside
         className={`${
           sidebarOpen ? "w-20 lg:w-64" : "w-20"
-        } transition-all duration-300 flex flex-col shadow-2xl hidden md:flex overflow-hidden ${
+        } shrink-0 transition-all duration-300 flex flex-col shadow-2xl hidden md:flex overflow-hidden ${
           theme === "dark"
             ? "bg-gradient-to-b from-black to-gray-950 text-white"
             : "bg-gradient-to-b from-white to-gray-100 text-gray-900 border-r border-gray-200"
@@ -500,7 +542,7 @@ export default function PortalShell({
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0">
         {/* Topbar */}
         <header className={`border-b px-3 sm:px-4 md:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 shadow-sm transition-colors duration-300 ${
           theme === "dark"
@@ -667,7 +709,7 @@ export default function PortalShell({
                         return (
                           <div
                             key={n.id}
-                            onClick={() => !n.isRead && handleMarkSingleRead(n.id)}
+                            onClick={() => handleNotificationClick(n)}
                             className={`p-4 flex gap-3 transition cursor-pointer hover:bg-blue-50/10 ${n.severity === "CRITICAL" ? "border-l-4 border-red-500" : n.severity === "WARNING" ? "border-l-4 border-amber-400" : ""} ${
                               !n.isRead ? "bg-blue-50/5 dark:bg-blue-500/5 font-medium" : ""
                             }`}
@@ -890,7 +932,7 @@ export default function PortalShell({
 
                 <section className={`rounded-2xl border p-4 sm:p-5 md:col-span-2 ${theme === "dark" ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
                   <div className="mb-4 flex items-center gap-3"><span className="rounded-xl bg-rose-100 p-2.5 text-rose-600"><Lock className="h-5 w-5" /></span><div><h2 className="font-bold">Security</h2><p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Manage credentials for your own account.</p></div></div>
-                  <div className="grid gap-3 sm:grid-cols-2"><button onClick={() => void handleChangePassword()} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>Change password</button><button onClick={() => void handleMfaSetup()} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>Authenticator MFA</button></div>
+                  <div className="grid gap-3 sm:grid-cols-2"><button onClick={() => void handleChangePassword()} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>Change password</button><button onClick={() => void handleMfaSetup()} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>Authenticator MFA</button><button onClick={() => setShowPinSetup(true)} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>4-digit signing PIN</button></div>
                 </section>
               </div>
             </div>
@@ -904,6 +946,7 @@ export default function PortalShell({
       )}
 
       <ChangePasswordDialog open={showChangePassword} onOpenChange={setShowChangePassword} />
+      <SignatureModal open={showPinSetup} onClose={() => setShowPinSetup(false)} mode="manage" title="Your signing PIN" description="Your personal 4-digit code (auto-issued). Use it to sign and finalise data such as shift endorsements. Reveal it below or regenerate a new one." />
       <LogoutDialog open={showLogout} onOpenChange={setShowLogout} onConfirm={handleConfirmLogout} />
     </div>
   );

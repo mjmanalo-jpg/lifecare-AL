@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState, useEffect } from "react";
 import { ChefHat, RefreshCw, Search, Utensils, CalendarDays, Bell, Check } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -135,9 +137,7 @@ export default function KitchenCookList() {
           <p className="text-gray-600">Active diet orders straight from the nutritionist, grouped by meal. Cook to each resident&apos;s diet type &amp; restrictions.</p>
           {today && <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-orange-700"><CalendarDays className="w-4 h-4" /> {today} · updates live as the nutritionist changes orders</p>}
         </div>
-        <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-          <RefreshCw className="w-4 h-4" /> Refresh
-        </button>
+        <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
       </div>
 
       {/* Resident food / substitution requests routed to the kitchen. */}

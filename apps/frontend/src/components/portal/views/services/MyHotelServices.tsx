@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState } from "react";
 import {
   ConciergeBell, RefreshCw, X, Star, CheckCircle2, Camera, Ban, Loader2, Upload,
@@ -209,9 +211,7 @@ export default function MyHotelServices() {
           </h1>
           <p className="text-gray-600">Room comfort, housekeeping &amp; concierge for {residentName} — tracked live</p>
         </div>
-        <button onClick={() => { void refetch(); void bookingsQ.refetch(); }} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-          <RefreshCw className="w-4 h-4" /> Refresh
-        </button>
+        <RefreshButton onRefresh={() => { void refetch(); void bookingsQ.refetch(); }} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
       </div>
 
       {/* Confirm & rate banner */}

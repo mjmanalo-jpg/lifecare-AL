@@ -65,6 +65,7 @@ export type Role =
   | "ORGANIZATION_ADMIN"
   | "SUPERADMIN"
   | "FACILITY_ADMIN"
+  | "CARE_MANAGER"
   | "BILLING_ADMIN"
   | "PHYSICIAN"
   | "NURSE"
@@ -123,6 +124,10 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   appearance: "Landing Studio",
   assistant: "AI Assistant",
   matrix: "Portal Matrix",
+  crm: "CRM & Leads",
+  leads: "CRM & Leads",
+  consentforms: "Consent & Move-in Forms",
+  forms: "Sign & Upload",
   admissions: "Admissions & Registration",
   registration: "Admissions & Registration",
   rooms: "Rooms",
@@ -208,6 +213,7 @@ export const PATH_TO_ROLE: Record<string, Role> = {
   caregiver: "CAREGIVER",
   family: "FAMILY",
   facility_admin: "FACILITY_ADMIN",
+  care_manager: "CARE_MANAGER",
   billing_admin: "BILLING_ADMIN",
   physician: "PHYSICIAN",
   resident: "RESIDENT",
@@ -260,11 +266,11 @@ export const ROLES: Record<Role, RoleDetails> = {
     ],
   },
   SUPERADMIN: {
-    name: "Super Admin",
-    badge: "Operations",
-    desc: "Oversee entire facility operations, manage staff registries, and monitor system health telemetry.",
+    name: "Administrator",
+    badge: "Full System Access",
+    desc: "Full system access — approvals, audit, staff registries, and system-wide oversight.",
     icon: Settings,
-    profileName: "System Admin",
+    profileName: "Administrator",
     basePath: "/superadmin",
     footerText: "Super Admin Portal",
     sidebarLinks: [
@@ -274,6 +280,8 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/superadmin/dailyrounds" },
       { name: "Camera Activity Log", icon: Activity, route: "/superadmin/cameralogs" },
       // "Portal Matrix" is merged into "SLMS Feature Matrix" as its Access Control tab.
+      { name: "CRM & Leads", icon: UserPlus, route: "/superadmin/crm" },
+      { name: "Consent & Move-in Forms", icon: ClipboardList, route: "/superadmin/consentforms" },
       { name: "Admissions & Registration", icon: UserPlus, route: "/superadmin/admissions" },
       { name: "Staff Registry", icon: Users, route: "/superadmin/staff" },
       { name: "AI Assistant", icon: Sparkles, route: "/superadmin/assistant" },
@@ -289,6 +297,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Vaccinations", icon: Syringe, route: "/superadmin/vaccinations" },
       { name: "Resident Documents", icon: FolderOpen, route: "/superadmin/documents" },
       { name: "Medication Administration Record", icon: Pill, route: "/superadmin/mar" },
+      { name: "Medication Approvals", icon: ClipboardCheck, route: "/superadmin/approvalworkflows", group: "Medication" },
       { name: "Audit Log", icon: Shield, route: "/superadmin/auditlog" },
       { name: "Inventory Alerts", icon: Bell, route: "/superadmin/inventory-alerts" },
       { name: "Clinical Reports", icon: BarChart3, route: "/superadmin/clinicalreports" },
@@ -388,8 +397,34 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Medication Management & Inventory", icon: Pill, route: "/family/medications" },
       { name: "Clinical Coordination", icon: Siren, route: "/family/escalations" },
       { name: "Vaccinations", icon: Syringe, route: "/family/vaccinations" },
-      { name: "Resident Documents", icon: FolderOpen, route: "/family/documents" },
+      { name: "Sign & Upload", icon: FolderOpen, route: "/family/forms", group: "Resident Care" },
       { name: "Follow-up Tracker", icon: CalendarCheck, route: "/family/followups" },
+    ],
+  },
+  CARE_MANAGER: {
+    name: "Care Manager",
+    badge: "Clinical Oversight",
+    desc: "Clinical oversight — approvals, incidents, alerts, and care coordination.",
+    icon: Stethoscope,
+    profileName: "Care Manager",
+    basePath: "/care_manager",
+    footerText: "Care Manager Portal",
+    sidebarLinks: [
+      { name: "Reporting & Care Intelligence", icon: Grid, route: "/care_manager/dashboard" },
+      { name: "Alert Center", icon: BellRing, route: "/care_manager/alertcenter", group: "Clinical Monitoring" },
+      { name: "Incidents", icon: AlertTriangle, route: "/care_manager/incidents", group: "Clinical Monitoring" },
+      { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/care_manager/dailyrounds", group: "Clinical Monitoring" },
+      { name: "Clinical Coordination", icon: Siren, route: "/care_manager/escalations", group: "Clinical Monitoring" },
+      { name: "Medication Approvals", icon: ClipboardCheck, route: "/care_manager/approvalworkflows", group: "Medication" },
+      { name: "Medication Administration Record", icon: Pill, route: "/care_manager/mar", group: "Medication" },
+      { name: "Assessment & Level of Care", icon: ClipboardList, route: "/care_manager/rounds", group: "Resident Care" },
+      { name: "Care Planning", icon: Target, route: "/care_manager/careplans", group: "Resident Care" },
+      { name: "Referrals & Appointments", icon: CalendarCheck, route: "/care_manager/referrals", group: "Resident Care" },
+      { name: "Physician Comms Log", icon: MessageSquare, route: "/care_manager/physiciancomms", group: "Coordination & Comms" },
+      { name: "Follow-up Tracker", icon: CalendarCheck, route: "/care_manager/followups", group: "Resident Care" },
+      { name: "Consent & Move-in Forms", icon: ClipboardList, route: "/care_manager/consentforms", group: "Resident Care" },
+      { name: "Clinical Reports", icon: BarChart3, route: "/care_manager/clinicalreports", group: "Administration" },
+      { name: "Audit Log", icon: Shield, route: "/care_manager/auditlog", group: "Administration" },
     ],
   },
   FACILITY_ADMIN: {
@@ -402,18 +437,13 @@ export const ROLES: Record<Role, RoleDetails> = {
     footerText: "Facility Admin Portal",
     sidebarLinks: [
       { name: "Reporting & Care Intelligence", icon: Grid, route: "/facility_admin/dashboard" },
-      { name: "Alert Center", icon: BellRing, route: "/facility_admin/alertcenter", group: "Clinical Monitoring" },
-      { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/facility_admin/dailyrounds" },
+      { name: "CRM & Leads", icon: UserPlus, route: "/facility_admin/crm" },
       { name: "Resident Profile & Care Record", icon: UserRound, route: "/facility_admin/residents" },
       { name: "Staff", icon: Users, route: "/facility_admin/staff" },
       { name: "Rooms", icon: DoorOpen, route: "/facility_admin/rooms" },
       { name: "Occupancy", icon: BedDouble, route: "/facility_admin/occupancy" },
-      { name: "Incidents", icon: AlertTriangle, route: "/facility_admin/incidents" },
-      { name: "Clinical Coordination", icon: Siren, route: "/facility_admin/escalations" },
       { name: "Medication Management & Inventory", icon: Package, route: "/facility_admin/inventory" },
       { name: "Purchase Requests", icon: ShoppingCart, route: "/facility_admin/purchaserequests" },
-      { name: "Medication Approvals", icon: ClipboardCheck, route: "/facility_admin/approvalworkflows" },
-      { name: "Referrals & Appointments", icon: CalendarCheck, route: "/facility_admin/referrals" },
       { name: "Shift Endorsement & Continuity", icon: FileText, route: "/facility_admin/reports" },
       // Billing moved to the dedicated Billing & Finance portal (BILLING_ADMIN).
       // Dining / Diet Orders / Kitchen moved to the Nutritionist & Kitchen portals.
@@ -425,16 +455,10 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Unit Turnover", icon: Repeat, route: "/facility_admin/turnover" },
       { name: "Community & Events", icon: CalendarDays, route: "/facility_admin/community" },
       // Core SLMS Modules Aligned
-      { name: "Assessment & Level of Care", icon: ClipboardList, route: "/facility_admin/rounds" },
-      { name: "Care Planning", icon: Target, route: "/facility_admin/careplans" },
       { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/facility_admin/tasks" },
       { name: "Vaccinations", icon: Syringe, route: "/facility_admin/vaccinations" },
       { name: "Resident Documents", icon: FolderOpen, route: "/facility_admin/documents" },
-      { name: "Medication Administration Record", icon: Pill, route: "/facility_admin/mar" },
-      { name: "Follow-up Tracker", icon: CalendarCheck, route: "/facility_admin/followups" },
-      { name: "Audit Log", icon: Shield, route: "/facility_admin/auditlog" },
       { name: "Inventory Alerts", icon: Bell, route: "/facility_admin/inventory-alerts" },
-      { name: "Clinical Reports", icon: BarChart3, route: "/facility_admin/clinicalreports" },
     ],
   },
   BILLING_ADMIN: {
@@ -721,6 +745,7 @@ const LINK_GROUP_MAP: Record<string, SidebarGroup> = {
   "Staff Registry": "Operations",
   "Staff": "Operations",
   "Time Clock": "Operations",
+  "CRM & Leads": "Operations",
   "Admissions & Registration": "Operations",
   "Rooms": "Operations",
   "Occupancy": "Operations",

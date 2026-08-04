@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useState } from "react";
 import {
   Calendar, Clock, Activity, CheckCircle2, RefreshCw, Search, Plus, X, Phone,
@@ -101,7 +103,7 @@ export default function FamilyAppointments() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => void refetchVisits()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium"><RefreshCw className="w-4 h-4" /> Refresh</button>
+          <RefreshButton onRefresh={() => void refetchVisits()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           <button onClick={() => { setVisitForm(EMPTY_FORM); setShowVisitForm(true); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm"><Plus className="w-4 h-4" /> Request Visit</button>
         </div>
       </div>

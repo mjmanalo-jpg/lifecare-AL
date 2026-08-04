@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import RefreshButton from "@/components/portal/RefreshButton";
+
+import { useMemo, useState, useEffect } from "react";
 import {
   Package, Search, AlertTriangle, Plus, X, Edit, Trash2, RefreshCw,
   LayoutGrid, Table2, Minus, Plus as PlusIcon, Eye, Building2,
@@ -16,6 +18,9 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptInventoryItem } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { StatusPill, MicroLabel, ClinicalHeader, ClinicalCard } from "./clinical/clinical-ui";
+import InventoryOpsPanel from "./InventoryOpsPanel";
+import Barcode from "@/components/portal/Barcode";
+import { generateBarcode } from "@/lib/inventoryOps";
 
 type InventoryItem = ReturnType<typeof adaptInventoryItem>;
 
@@ -32,7 +37,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 const emptyForm = {
   itemName: "", category: "OTHER", quantity: "0", unit: "pcs",
-  minimumStock: "5", location: "", supplier: "", expiryDate: "", notes: "",
+  minimumStock: "5", location: "", supplier: "", batchNumber: "", expiryDate: "", notes: "",
 };
 
 export default function FacilityInventory() {
@@ -57,6 +62,7 @@ export default function FacilityInventory() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [viewing, setViewing] = useState<InventoryItem | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [opsOpen, setOpsOpen] = useState(false);
   const [editing, setEditing] = useState<InventoryItem | null>(null);
   const [createForm, setCreateForm] = useState(emptyForm);
   const [editForm, setEditForm] = useState(emptyForm);
@@ -149,6 +155,7 @@ export default function FacilityInventory() {
         quantity: Number(createForm.quantity) || 0, unit: createForm.unit,
         minimumStock: Number(createForm.minimumStock) || 5,
         location: createForm.location, supplier: createForm.supplier,
+        batchNumber: createForm.batchNumber || generateBarcode(),
         expiryDate: createForm.expiryDate ? new Date(createForm.expiryDate).toISOString() : null,
         notes: createForm.notes,
       });
@@ -168,6 +175,7 @@ export default function FacilityInventory() {
       quantity: String(item.quantity), unit: item.unit,
       minimumStock: String(item.minimumStock), location: item.location,
       supplier: item.supplier,
+      batchNumber: item.raw.batchNumber ? String(item.raw.batchNumber) : "",
       expiryDate: item.expiryDate ? item.expiryDate.split("T")[0] : "",
       notes: item.notes,
     });
@@ -186,6 +194,7 @@ export default function FacilityInventory() {
         quantity: Number(editForm.quantity) || 0, unit: editForm.unit,
         minimumStock: Number(editForm.minimumStock) || 5,
         location: editForm.location, supplier: editForm.supplier,
+        batchNumber: editForm.batchNumber || generateBarcode(),
         expiryDate: editForm.expiryDate ? new Date(editForm.expiryDate).toISOString() : null,
         notes: editForm.notes,
       });
@@ -234,8 +243,9 @@ export default function FacilityInventory() {
         subtitle="Track supplies, equipment, and stock levels across the facility"
         right={
           <div className="flex gap-2">
-            <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-[#D6D8CD] bg-white rounded-lg text-[#2B2B27] hover:bg-[#F5F6F1] transition text-sm font-medium">
-              <RefreshCw className="w-4 h-4" /> Refresh
+            <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-[#D6D8CD] bg-white rounded-lg text-[#2B2B27] hover:bg-[#F5F6F1] transition text-sm font-medium" />
+            <button onClick={() => setOpsOpen(true)} className="flex items-center gap-2 px-3 py-2 border border-[#D6D8CD] bg-white rounded-lg text-[#2B2B27] hover:bg-[#F5F6F1] transition text-sm font-medium">
+              <Package className="w-4 h-4" /> Operations
             </button>
             <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 bg-[#2E4A48] hover:bg-[#25403D] text-white font-semibold rounded-lg transition active:scale-95">
               <Plus className="w-4 h-4" /> Add Item
@@ -243,6 +253,18 @@ export default function FacilityInventory() {
           </div>
         }
       />
+
+      {opsOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-start justify-center p-4 overflow-y-auto">
+          <div className="bg-[#F3F4EE] rounded-xl shadow-2xl w-full max-w-5xl my-4">
+            <div className="sticky top-0 bg-[#2E4A48] text-white px-5 py-4 flex items-center justify-between rounded-t-xl z-10">
+              <h2 className="font-bold text-base sm:text-lg flex items-center gap-2"><Package className="w-5 h-5" /> Materials Operations — Scan · FEFO · Vendors · Maintenance</h2>
+              <button onClick={() => setOpsOpen(false)} className="p-1.5 hover:bg-white/15 rounded"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-4 sm:p-5"><InventoryOpsPanel /></div>
+          </div>
+        </div>
+      )}
 
       {/* Stat Boxes */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -494,6 +516,12 @@ export default function FacilityInventory() {
                 <DetailField icon={Package} label="Supplier" value={viewing.supplier !== "—" ? viewing.supplier : "—"} />
                 <DetailField icon={Calendar} label="Expiry" value={viewing.expiryDate ? new Date(viewing.expiryDate).toLocaleDateString() : "—"} />
               </div>
+              {(viewing.raw as { batchNumber?: string }).batchNumber && (
+                <div className="mt-3 rounded-lg border border-[#D6D8CD] bg-white p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8A8D82] mb-1">Barcode / Batch No.</p>
+                  <div className="flex justify-center"><Barcode value={String((viewing.raw as { batchNumber?: string }).batchNumber)} /></div>
+                </div>
+              )}
 
               {viewing.notes && (
                 <div className="bg-[#C39A3E]/10 border-l-4 border-[#C39A3E] p-3 rounded">
@@ -583,6 +611,12 @@ function ItemFormModal({ title, form, onChange, onSave, onCancel, saveLabel }: {
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     onChange({ ...form, [field]: e.target.value });
 
+  // Every item gets a scannable barcode/batch number; auto-generate if blank.
+  useEffect(() => {
+    if (!form.batchNumber) onChange({ ...form, batchNumber: generateBarcode() });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
@@ -621,6 +655,14 @@ function ItemFormModal({ title, form, onChange, onSave, onCancel, saveLabel }: {
             <div>
               <label className="block text-sm font-semibold text-[#2B2B27] mb-1">Supplier</label>
               <input type="text" value={form.supplier} onChange={set("supplier")} className="w-full px-3 py-2 border border-[#D6D8CD] rounded-lg text-sm focus:ring-2 focus:ring-[#2E4A48]/30 focus:border-[#2E4A48] outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-[#2B2B27] mb-1">Barcode / Batch No.</label>
+              <div className="flex gap-2">
+                <input type="text" value={form.batchNumber} onChange={set("batchNumber")} className="flex-1 px-3 py-2 border border-[#D6D8CD] rounded-lg text-sm font-mono focus:ring-2 focus:ring-[#2E4A48]/30 focus:border-[#2E4A48] outline-none" placeholder="Auto-generated" />
+                <button type="button" onClick={() => onChange({ ...form, batchNumber: generateBarcode() })} title="Generate a new code" className="px-3 py-2 border border-[#D6D8CD] rounded-lg text-sm font-medium text-[#2B2B27] hover:bg-[#F5F6F1]"><RefreshCw className="w-4 h-4" /></button>
+              </div>
+              {form.batchNumber && <div className="mt-2 flex justify-center rounded border border-[#EEF0E8] bg-white p-1.5"><Barcode value={form.batchNumber} height={40} width={1.4} /></div>}
             </div>
             <div>
               <label className="block text-sm font-semibold text-[#2B2B27] mb-1">Expiry Date</label>

@@ -48,7 +48,11 @@ const fmtLeft = (ms: number) => {
   const abs = Math.abs(ms);
   const m = Math.floor(abs / 60000);
   const s = Math.floor((abs % 60000) / 1000);
-  if (m >= 60) { const h = Math.floor(m / 60); return `${h}h ${m % 60}m`; }
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    if (h >= 24) return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${Math.floor(h / 24)}d`;
+    return `${h}h ${m % 60}m`;
+  }
   return `${m}m ${String(s).padStart(2, "0")}s`;
 };
 

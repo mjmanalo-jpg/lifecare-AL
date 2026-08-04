@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState } from "react";
 import {
   Shield, RefreshCw, Plus, X, Trash2, Search, CheckCircle2, Loader2,
@@ -195,9 +197,7 @@ export default function SecurityLogBoard() {
           <p className="text-gray-600">Guard patrols · incidents · gate events · visitor sign-ins · hazards</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
+          <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           <button onClick={() => { setForm({ ...emptyForm, occurredAt: nowLocalInput() }); setShowCreate(true); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-slate-700 to-slate-900 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
             <Plus className="w-4 h-4" /> New Log
           </button>

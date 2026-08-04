@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState, useEffect } from "react";
 import {
   AlertTriangle, Search, X, Eye, CheckCircle, Trash2, RefreshCw,
@@ -46,9 +48,9 @@ function relTime(iso: string | null, nowTs: number): string {
   const m = Math.round((nowTs - new Date(iso).getTime()) / 60000);
   if (m < 1) return "just now";
   if (m < 60) return `${m}m ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.round(h / 24)}d ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return m % 60 ? `${h}h ${m % 60}m ago` : `${h}h ago`;
+  return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h ago` : `${Math.floor(h / 24)}d ago`;
 }
 
 export default function FacilityIncidents({ readOnly = false }: { readOnly?: boolean } = {}) {
@@ -264,9 +266,7 @@ export default function FacilityIncidents({ readOnly = false }: { readOnly?: boo
           <p className="text-gray-600 text-sm">Facility-wide incident tracking, management, and analytics</p>
         </div>
         <div className="flex items-center gap-2 self-start">
-          <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
+          <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           <button onClick={() => { setForm(emptyForm); setCreating(true); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition text-sm font-semibold shadow">
             <Plus className="w-4 h-4" /> Report Incident
           </button>

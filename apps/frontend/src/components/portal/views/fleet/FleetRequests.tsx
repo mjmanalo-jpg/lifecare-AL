@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState } from "react";
 import {
   Bus, Search, AlertTriangle, Plus, X, RefreshCw, Check, Ban, Siren,
@@ -422,9 +424,7 @@ export default function FleetRequests() {
           <p className="text-gray-600">Dispatcher review, priority &amp; approval</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
+          <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           <button onClick={openEmergencyTransfer} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
             <Siren className="w-4 h-4" /> Emergency Transfer
           </button>

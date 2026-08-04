@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bus, Search, X, RefreshCw, Siren, MapPin, ClipboardCheck, Navigation,
@@ -395,9 +397,7 @@ export default function FleetTrips() {
           </h1>
           <p className="text-gray-600">Pre-trip inspection · live GPS tracking · drop-off confirmation</p>
         </div>
-        <button onClick={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-          <RefreshCw className="w-4 h-4" /> Refresh
-        </button>
+        <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
       </div>
 
       {/* Stat Boxes */}

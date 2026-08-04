@@ -20,6 +20,7 @@ datasource db {
 enum Role {
   SUPERADMIN
   FACILITY_ADMIN
+  CARE_MANAGER
   BILLING_ADMIN
   PHYSICIAN
   NURSE

@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState } from "react";
 import {
   RefreshCw, X, Megaphone, CalendarDays, UtensilsCrossed, SlidersHorizontal,
@@ -168,9 +170,7 @@ export default function MyCommunity() {
           </h1>
           <p className="text-gray-600">Announcements · events · dining reservations · your preference profile</p>
         </div>
-        <button onClick={refreshAll} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-          <RefreshCw className="w-4 h-4" /> Refresh
-        </button>
+        <RefreshButton onRefresh={refreshAll} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
       </div>
 
       {/* Announcements */}

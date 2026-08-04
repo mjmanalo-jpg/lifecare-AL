@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
@@ -15,6 +17,7 @@ import {
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident, humanize } from "@/lib/adapters";
 import { updateRecord, deleteRecord } from "@/lib/api";
+import { formatDurationHm } from "@/lib/utils";
 import ResidentQRScanner from "@/components/ResidentQRScanner";
 import ResidentQRModal from "@/components/ResidentQRModal";
 
@@ -78,9 +81,9 @@ function relTime(iso: string | null, nowTs: number): string {
   const m = Math.round((nowTs - new Date(iso).getTime()) / 60000);
   if (m < 1) return "just now";
   if (m < 60) return `${m}m ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.round(h / 24)}d ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return m % 60 ? `${h}h ${m % 60}m ago` : `${h}h ago`;
+  return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h ago` : `${Math.floor(h / 24)}d ago`;
 }
 
 /* ── Component ───────────────────────────────────────────────────────── */
@@ -297,9 +300,7 @@ export default function NurseRecords() {
             <button onClick={() => setView("analytics")} className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition border-l border-gray-300 ${view === "analytics" ? "bg-yellow-400 text-black" : "text-gray-700 hover:bg-gray-50"}`}><BarChart3 className="w-4 h-4" /> Analytics</button>
           </div>
           <ResidentQRScanner />
-          <button onClick={refreshAll} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
+          <RefreshButton onRefresh={refreshAll} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
         </div>
       </div>
 
@@ -589,7 +590,7 @@ function CallBellsModal({ r, onClose, refetchCallBells }: { r: RecordVM; onClose
                         <h3 className="font-bold text-gray-900">{bell.reason}</h3>
                         <p className="text-xs text-gray-600 mt-1">
                           {/* eslint-disable-next-line react-hooks/purity */}
-                          {Math.round((Date.now() - new Date(bell.createdAt).getTime()) / 60000)} min ago
+                          {relTime(bell.createdAt, Date.now())}
                         </p>
                       </div>
                       <span
@@ -774,7 +775,7 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
                     <span className={`px-2 py-0.5 rounded text-xs font-semibold ${cb.status === "PENDING" ? "bg-red-200 text-red-800" : cb.status === "RESPONDED" ? "bg-yellow-200 text-yellow-800" : "bg-green-200 text-green-800"}`}>{cb.status}</span>
                   </div>
                   {/* eslint-disable-next-line react-hooks/purity */}
-                  <p className="text-xs text-gray-600 mb-2">{Math.round((Date.now() - new Date(cb.createdAt).getTime()) / 60000)} min ago</p>
+                  <p className="text-xs text-gray-600 mb-2">{relTime(cb.createdAt, Date.now())}</p>
                   {cb.notes && <p className="text-xs text-gray-700 mb-2">📝 {cb.notes}</p>}
                   {cb.status !== "RESOLVED" && cb.status !== "CANCELLED" && (
                     <div className="flex gap-2 mt-2">
@@ -866,7 +867,7 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Time Waiting</label>
               {/* eslint-disable-next-line react-hooks/purity */}
-              <p className="text-gray-900 font-medium">{Math.round((Date.now() - new Date(selectedBell.createdAt).getTime()) / 60000)} minutes</p>
+              <p className="text-gray-900 font-medium">{formatDurationHm(Math.round((Date.now() - new Date(selectedBell.createdAt).getTime()) / 60000))}</p>
             </div>
           </div>
           <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex gap-3">
@@ -985,7 +986,7 @@ function CallBellResolveModal({
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">Time Waiting</label>
             {/* eslint-disable-next-line react-hooks/purity */}
-            <p className="text-gray-900 font-medium">{Math.round((Date.now() - new Date(bell.createdAt).getTime()) / 60000)} minutes</p>
+            <p className="text-gray-900 font-medium">{formatDurationHm(Math.round((Date.now() - new Date(bell.createdAt).getTime()) / 60000))}</p>
           </div>
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Resolution Notes</label>

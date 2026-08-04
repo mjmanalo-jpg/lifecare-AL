@@ -4,6 +4,8 @@ import LandingCustomizerContent from "@/components/portal/views/LandingCustomize
 import SuperAdminDashboard from "@/components/portal/views/SuperAdminDashboard";
 import AIAssistantContent from "@/components/portal/ai/AIAssistantContent";
 import OnboardingHub from "@/components/portal/views/OnboardingHub";
+import LeadPipelineBoard from "@/components/portal/views/LeadPipelineBoard";
+import ConsentFormsManager from "@/components/portal/views/ConsentFormsManager";
 import FacilityResidents from "@/components/portal/views/FacilityResidents";
 import PhysicianCarePlans from "@/components/portal/views/physician/PhysicianCarePlans";
 import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
@@ -17,6 +19,7 @@ import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTr
 import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
 import MARBoard from "@/components/portal/views/clinical/MARBoard";
 import AuditLogViewer from "@/components/portal/views/clinical/AuditLogViewer";
+import ApprovalWorkflows from "@/components/portal/views/clinical/ApprovalWorkflows";
 import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
 import InventoryAlertsPanel from "@/components/portal/views/clinical/InventoryAlertsPanel";
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
@@ -265,6 +268,12 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     return <AlertCenter />;
   }
 
+  if (tab === "crm" || tab === "leads") {
+    return <LeadPipelineBoard />;
+  }
+  if (tab === "consentforms") {
+    return <ConsentFormsManager />;
+  }
   if (tab === "admissions") {
     return <OnboardingHub initialTab="admissions" />;
   }
@@ -326,6 +335,9 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   }
   if (tab === "documents") {
     return <ResidentDocuments />;
+  }
+  if (tab === "approvalworkflows") {
+    return <ApprovalWorkflows />;
   }
   if (tab === "auditlog") {
     return <AuditLogViewer />;

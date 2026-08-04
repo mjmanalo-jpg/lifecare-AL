@@ -15,6 +15,9 @@ const SELF_WRITABLE = new Set([
   "messages", "notifications", "visits", "call-bells", "tasks", "transport-requests",
   "resident-goals", "medication-logs", "service-requests", "concierge-bookings",
   "resident-preferences", "event-attendances", "dining-reservations",
+  // Family/resident self-service: upload files + e-sign consent for their own
+  // resident (the residentId guard scopes writes to their accessible resident).
+  "resident-documents",
 ]);
 const EXPLICIT_ADMIN_MODELS = new Set([
   "organizations", "communities", "users", "plans", "subscriptions",
@@ -53,12 +56,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (isDeniedWhere(scope)) return NextResponse.json({ data: [], count: 0 });
   const { take, where, include, orderBy } = buildQuery(new URL(request.url), definition.orderBy);
   try {
-    const data = await withTenantDb(context, async (tx) => transactionDelegate(definition, tx).findMany({
+    const rows = await withTenantDb(context, async (tx) => transactionDelegate(definition, tx).findMany({
       where: scope ? { AND: [where, scope] } : where,
       take,
       ...(orderBy ? { orderBy } : {}),
       ...(include ? { include } : {}),
     }));
+    // Never expose internal `__`-prefixed settings (e.g. signing-PIN hashes).
+    const data = model === "app-settings"
+      ? (rows as Array<{ key?: string; id: string }>).filter((r) => !String(r.key || r.id).startsWith("__"))
+      : rows;
     return NextResponse.json({ data, count: data.length });
   } catch {
     return NextResponse.json({ error: "Query failed" }, { status: 500 });
@@ -116,10 +123,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const input = await request.json();
   if (typeof input !== "object" || !input || Array.isArray(input)) return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   const data = sanitizeTenantWrite(model, input, context);
-  if (data.residentId && !context.isPlatform) {
+  // A present-but-empty residentId ("") is falsy, so the old truthiness check
+  // skipped validation and let Prisma raise a raw foreign-key error. Validate
+  // whenever a value is actually supplied (null/undefined still mean "omitted"),
+  // and reject empties up front with a clean message.
+  if (data.residentId !== undefined && data.residentId !== null && !context.isPlatform) {
+    const residentId = String(data.residentId).trim();
+    if (!residentId) return NextResponse.json({ error: "A resident must be selected" }, { status: 422 });
     const residentScope = tenantWhere("residents", context);
     const residentDefinition = getModel("residents")!;
-    const resident = await withTenantDb(context, async (tx) => transactionDelegate(residentDefinition, tx).findFirst({ where: { AND: [{ id: String(data.residentId) }, residentScope] }, select: { id: true } }));
+    const resident = await withTenantDb(context, async (tx) => transactionDelegate(residentDefinition, tx).findFirst({ where: { AND: [{ id: residentId }, residentScope] }, select: { id: true } }));
     if (!resident) return NextResponse.json({ error: "Related resident not found" }, { status: 422 });
   }
   if (!isDbConfigured()) return NextResponse.json({ data: { id: `demo-${Date.now()}`, ...data }, demo: true }, { status: 201 });

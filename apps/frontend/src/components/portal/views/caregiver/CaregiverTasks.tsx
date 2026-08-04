@@ -1,11 +1,12 @@
 "use client";
 
-import { Search, X, Eye, Trash2, Plus, Clock, CheckCircle2, Undo2, Play } from "lucide-react";
+import { Search, X, Eye, Trash2, Plus, Clock, CheckCircle2, Undo2, Play, StickyNote } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptTask } from "@/lib/adapters";
 import { updateRecord, deleteRecord } from "@/lib/api";
+import { TASK_NOTES_FIELD, taskNotesOf, withAppendedNote, withoutNote } from "@/lib/taskNotes";
 import AddTaskModal, { SUPERVISOR_ROLES } from "./AddTaskModal";
 import { StatusPill, MicroLabel, ClinicalHeader, ClinicalCard } from "../clinical/clinical-ui";
 
@@ -122,6 +123,49 @@ export default function CaregiverTasks() {
     return { pending, inProgress, completed };
   }, [allFilteredTasks]);
 
+  // Current user's name — stamped as the author on task notes so the nurse and
+  // other caregivers know who flagged the blocker.
+  const [authorName, setAuthorName] = useState("");
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((d) => setAuthorName(d?.session?.name || d?.workspaces?.user?.name || ""))
+      .catch(() => { /* leave blank — the note still saves */ });
+  }, []);
+
+  // Add a caregiver note to a task ("can't bathe — slight fever"). The note is
+  // stored ON the task, so it reflects live to the nurse, other caregivers, and
+  // the resident's QR profile without any extra plumbing.
+  const handleAddNote = async (task: CaregiverTask) => {
+    const { value } = await Swal.fire({
+      title: "Add a note to this task",
+      input: "textarea",
+      inputPlaceholder: "e.g. Can't give the medication yet — resident hasn't eaten (no solid food).",
+      inputAttributes: { "aria-label": "Task note", maxlength: "500" },
+      showCancelButton: true,
+      confirmButtonText: "Add note",
+      confirmButtonColor: "#2E4A48",
+      inputValidator: (v) => (!v || String(v).trim().length < 2 ? "Please enter a note." : undefined),
+    });
+    if (!value) return;
+    try {
+      await updateRecord("tasks", task.id, {
+        [TASK_NOTES_FIELD]: withAppendedNote((task.raw as Record<string, unknown>)?.[TASK_NOTES_FIELD], String(value), authorName),
+      });
+      await refetchTasks();
+      Swal.fire({ title: "Note added", text: "Visible to the nurse, other caregivers, and on the resident's profile.", icon: "success", timer: 1800, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: "Couldn't add note", text: err instanceof Error ? err.message : "Try again.", icon: "error" });
+    }
+  };
+
+  const handleRemoveNote = async (task: CaregiverTask, noteId: string) => {
+    try {
+      await updateRecord("tasks", task.id, { [TASK_NOTES_FIELD]: withoutNote((task.raw as Record<string, unknown>)?.[TASK_NOTES_FIELD], noteId) });
+      await refetchTasks();
+    } catch { /* non-fatal */ }
+  };
+
   // Advance a task through its lifecycle: Start → IN_PROGRESS, Complete →
   // COMPLETED, or revert/reopen → PENDING. completedAt is stamped only on
   // completion and cleared otherwise, so a reopened task looks fresh.
@@ -207,6 +251,26 @@ export default function CaregiverTasks() {
           {task.title}
         </p>
 
+        {/* Caregiver notes / blockers — reflected to nurse + other caregivers + QR profile */}
+        {(() => {
+          const notes = taskNotesOf(task.raw as Record<string, unknown>);
+          if (!notes.length) return null;
+          return (
+            <div className="mt-2 space-y-1.5">
+              {notes.map((n) => (
+                <div key={n.id} className="flex items-start gap-1.5 rounded-md border border-[#E7DFC8] bg-[#FBF7EC] px-2 py-1.5">
+                  <StickyNote className="w-3.5 h-3.5 text-[#C39A3E] mt-0.5 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] leading-snug text-[#3C3C36]">{n.text}</p>
+                    <p className="text-[10px] text-[#8A8D82]">{n.author}{n.at ? ` · ${new Date(n.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}</p>
+                  </div>
+                  <button onClick={() => void handleRemoveNote(task, n.id)} title="Remove note" className="text-[#B0B3A8] hover:text-[#C0573F] flex-shrink-0"><X className="w-3 h-3" /></button>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {/* Category + assignee + overdue elapsed */}
         <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-2.5">
           <span className="inline-flex items-center px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-[0.05em] bg-[#D8DAD0] text-[#5A5D53]">{task.category.toUpperCase()}</span>
@@ -269,6 +333,13 @@ export default function CaregiverTasks() {
                 </button>
               </>
             )}
+            <button
+              onClick={() => void handleAddNote(task)}
+              title="Add note"
+              className="p-1.5 rounded text-[#C39A3E] hover:bg-[#C39A3E]/12 transition"
+            >
+              <StickyNote className="w-4 h-4" />
+            </button>
             <button
               onClick={() => setViewingTask(task)}
               title="View task"

@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import ResidentHub from "./resident/ResidentHub";
+import AppointmentCalendar from "@/components/portal/AppointmentCalendar";
 import FamilyRelative from "@/components/portal/views/family/FamilyRelative";
 import FamilyTimeline from "@/components/portal/views/family/FamilyTimeline";
 import FamilyCareGoals from "@/components/portal/views/family/FamilyCareGoals";
@@ -1077,6 +1078,11 @@ Vitals:
       </div>
 
       {/* ── GRID LAYOUT (Mockup style) ── */}
+      {resident && (
+        <div className="mb-4 sm:mb-6">
+          <AppointmentCalendar residentId={String(resident.id)} residentName={`${String(resident.firstName ?? "")} ${String(resident.lastName ?? "")}`.trim()} title="My Calendar" />
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start">
         
         {/* ── COL 1: Today's Schedule (span 4) ── */}

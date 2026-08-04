@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState, useEffect } from "react";
 import {
   BedDouble, Users, Building2, Activity, RefreshCw, Search, X,
@@ -194,9 +196,7 @@ export default function FacilityOccupancy() {
           </h1>
           <p className="text-gray-600">Real-time occupancy management &mdash; beds, rooms, wings, and floors</p>
         </div>
-        <button onClick={() => void refetch()} className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-          <RefreshCw className="w-4 h-4" /> Refresh
-        </button>
+        <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
       </div>
 
       {/* Stat Boxes */}

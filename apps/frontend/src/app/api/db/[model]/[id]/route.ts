@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getModel, isDbConfigured } from "@/lib/models";
 import { DEMO } from "@/lib/demoData";
 import { requireTenantContext, isDeniedWhere, sanitizeTenantWrite, tenantWhere } from "@/lib/tenant";
+import { SIGN_LOCK } from "@/lib/signingPin";
 import { assertMutationEntitled, EntitlementError } from "@/lib/entitlements";
 import { logAudit, snapshot } from "@/lib/audit";
 import { transactionDelegate, withTenantDb } from "@/lib/tenantDb";
@@ -58,6 +59,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await request.json();
+  // Signed records are locked: once the lock field is set, only whitelisted
+  // downstream fields (e.g. acknowledgement) may still change.
+  const lock = SIGN_LOCK[model];
+  if (lock && (existing as Record<string, unknown>)[lock.lockField] && !context.isPlatform) {
+    const attempted = Object.keys(body).filter((k) => !["id", "organizationId", "communityId"].includes(k));
+    if (attempted.some((k) => !lock.allowAfterLock.includes(k))) {
+      return NextResponse.json({ error: "This record has been signed and is locked from edits." }, { status: 423 });
+    }
+  }
   let data = sanitizeTenantWrite(model, body, context);
   delete data.id;
   delete data.residentId;
@@ -122,6 +132,10 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   }
   const existing = await scopedRecord(model, id, context);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const deleteLock = SIGN_LOCK[model];
+  if (deleteLock && (existing as Record<string, unknown>)[deleteLock.lockField] && !context.isPlatform) {
+    return NextResponse.json({ error: "This record has been signed and cannot be deleted." }, { status: 423 });
+  }
   if (!isDbConfigured()) return NextResponse.json({ ok: true, demo: true });
   try {
     if (context.organizationId) await assertMutationEntitled(context, model);

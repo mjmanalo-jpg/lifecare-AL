@@ -1,5 +1,8 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+import IntakeBodyCheckPanel from "@/components/portal/IntakeBodyCheckPanel";
+
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -69,9 +72,9 @@ function relTime(iso: string | null, nowTs: number): string {
   const m = Math.round((nowTs - new Date(iso).getTime()) / 60000);
   if (m < 1) return "just now";
   if (m < 60) return `${m}m ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.round(h / 24)}d ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return m % 60 ? `${h}h ${m % 60}m ago` : `${h}h ago`;
+  return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h ago` : `${Math.floor(h / 24)}d ago`;
 }
 const newer = (a: string | null, b: string | null) =>
   !b ? true : !a ? false : new Date(a).getTime() > new Date(b).getTime();
@@ -232,9 +235,7 @@ export default function FacilityResidents() {
               <BarChart3 className="w-4 h-4" /> Analytics
             </button>
           </div>
-          <button onClick={() => { void refetch(); void refetchVitals(); }} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
+          <RefreshButton onRefresh={() => { void refetch(); void refetchVitals(); }} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           <button onClick={() => setAdmitting(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
             <UserPlus className="w-4 h-4" /> Admit Resident
           </button>
@@ -427,6 +428,9 @@ export default function FacilityResidents() {
               <button onClick={() => setViewing(null)} className="p-2 hover:bg-blue-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
             <div className="p-4 sm:p-8 space-y-6">
+              {/* Patient ID + intake / move-in body-check record */}
+              <IntakeBodyCheckPanel residentId={viewing.id} />
+
               {viewing.allergies && (
                 <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
                   <p className="text-sm font-semibold text-red-700 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Allergies</p>

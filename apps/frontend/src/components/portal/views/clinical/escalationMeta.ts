@@ -6,6 +6,8 @@
  * view stay in lockstep with the Prisma enums.
  */
 
+import { formatDurationHm } from "@/lib/utils";
+
 export const PRIORITY_META: Record<string, { label: string; slaMin: number; pill: string; dot: string }> = {
   EMERGENCY: { label: "Emergency", slaMin: 5, pill: "bg-red-100 text-red-700 border border-red-300", dot: "bg-red-500" },
   URGENT: { label: "Urgent", slaMin: 30, pill: "bg-orange-50 text-orange-700 border border-orange-200", dot: "bg-orange-500" },
@@ -54,7 +56,7 @@ export function slaState(createdAt: string, priority: string, status: string, no
   const label = !live
     ? "—"
     : overdue
-    ? `SLA breached +${Math.abs(remainingMin)}m`
-    : `${remainingMin}m to SLA`;
+    ? `SLA breached +${formatDurationHm(Math.abs(remainingMin))}`
+    : `${formatDurationHm(remainingMin)} to SLA`;
   return { overdue, elapsedMin, remainingMin, label };
 }

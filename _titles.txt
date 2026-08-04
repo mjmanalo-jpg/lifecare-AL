@@ -1,0 +1,16 @@
+page 1:  L I F E C A R E L I V I N G S O L U T I O N S Care Management System Feat ure Overview for Care Facilit y T eams P L A T F O R M LifeCare CM S A U D I E N C E
+page 2: LifeCare CMS gives every role the right tools P L A T F O R M O V E R V I E W W H A T T H E S Y S T E M C O V E R S A p ur p ose-b ui l t car e manag ement p l 
+page 3: Resident Management — every resident's story in one place M O D U L E 0 1 K E Y C A P A B I L I T I E S Each re s i de nt has a compl e te di gi tal profi l e t
+page 4: Vital Signs Monitoring — abnormal values trigger alerts automatically M O D U L E 0 2  B L O O D P R E S S U R E 90^ 14 0 / 60^ 90 m m H g N O R M A L  H E A 
+page 5: Medication Administration Record — every dose accounted for M O D U L E 0 5 K E Y C A P A B I L I T I E S T he di gi tal re pl ace me nt for the pape r me di ca
+page 6: Care Logging — structured documentation across 7 domains M O D U L E 0 6 P E R S H I F T · P E R R E S I D E N T Eve ry s hi ft, nurs e s and care gi ve rs docu
+page 7: Incident Reporting — from fall to skin breakdown, nothing undocumented M O D U L E 0 7 6 I N C I D E N T T Y P E S Fal l Witnessed or unwitnessed, with injur y 
+page 8: Shift Endorsement — structured handover, nothing lost between shifts M O D U L E 0 8 H A N D O V E R P R O C E S S  O U T G O I N G N U R S E R ev iews a ctiv 
+page 9: Alert Management — nothing critical goes unnoticed M O D U L E 0 9 A U T O M A T I C A L E R T S O U R C E S  Vit al Signs A b n o rm al BP, Sp O₂, HR, T em p 
+page 10: SBAR Escalation Tool — structured clinical escalation in four steps M O D U L E 1 0 K E Y C A P A B I L I T I E S W he n a re s i de nt ne e ds phys i ci an i n
+page 11: Physician Communication Log — every call and visit on record M O D U L E 1 1 S A M P L E L O G E N T R I E S  P H O N E C A L L Dr. Ra m on Reyes Ma y 22, 20 2
+page 12: Task Assignment — nurses assign, caregivers execute, nothing falls through M O D U L E 1 2 K E Y C A P A B I L I T I E S Nurs e s trans l ate care pl ans i nto 
+page 13: Approval Work ows — clinical decisions require the right authority M O D U L E 1 3 A P P R O V A L P R O C E S S N ew prescriptions a nd a ppointment referra ls
+page 14: Medication Inventory — real-time stock visibility with smart alerts M O D U L E 1 4 I N V E N T O R Y S T O C K L I S T — S A M P L E V I E W  S ea r ch by na 
+page 15: Medical Appointments — referrals tracked from request to outcome M O D U L E 0 8 1 SU B M I T RE F E RRAL Nu rs e creat es ap p o i n t m en t req u es t 2 PE N
+page 16: L I F E C A R E C M S One Platform. Every Care Moment. 13 m od ul es . E v er y r ol e. E v er y s hi f t . E v er y r es i d ent .  N U R S E S Do cu me n t f

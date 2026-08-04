@@ -197,3 +197,164 @@ p, blockquote, li {
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
+
+/* ============================================================
+   Dark-mode adaptation layer
+   ------------------------------------------------------------
+   The portal's content components were authored with hard-coded
+   light utilities (bg-white, text-gray-*, border-gray-*). Instead
+   of annotating thousands of elements with dark: variants, we remap
+   those utilities to accessible dark surfaces whenever dark mode is
+   active (`:root` without `.light`). The `:root` scope raises the
+   selector's specificity above the base utility, so no !important is
+   needed. Translucent variants (bg-white/5, text-red-700 on tinted
+   chips …) compile to different class names and are handled
+   explicitly, so the token-based landing/login pages stay intact.
+   All remapped surfaces ease between themes for a smooth toggle.
+   ============================================================ */
+:root:not(.light) {
+  color-scheme: dark;
+}
+
+/* — Neutral surfaces — */
+:root:not(.light) .bg-white { background-color: #18181b; }
+:root:not(.light) .bg-gray-50,
+:root:not(.light) .bg-slate-50,
+:root:not(.light) .bg-zinc-50,
+:root:not(.light) .bg-neutral-50 { background-color: #131316; }
+:root:not(.light) .bg-gray-100,
+:root:not(.light) .bg-slate-100,
+:root:not(.light) .bg-zinc-100,
+:root:not(.light) .bg-neutral-100 { background-color: #1f1f23; }
+:root:not(.light) .bg-gray-200,
+:root:not(.light) .bg-slate-200 { background-color: #27272a; }
+
+/* Hover surfaces */
+:root:not(.light) .hover\:bg-white:hover { background-color: #202024; }
+:root:not(.light) .hover\:bg-gray-50:hover,
+:root:not(.light) .hover\:bg-slate-50:hover { background-color: #202024; }
+:root:not(.light) .hover\:bg-gray-100:hover,
+:root:not(.light) .hover\:bg-slate-100:hover { background-color: #27272a; }
+:root:not(.light) .hover\:bg-gray-200:hover { background-color: #323238; }
+
+/* — Text — */
+/* NB: `.text-black` is intentionally NOT remapped — it sits on bright buttons
+   (bg-yellow-400 text-black, etc.) where it must stay dark for contrast. */
+:root:not(.light) .text-gray-900,
+:root:not(.light) .text-slate-900,
+:root:not(.light) .text-zinc-900,
+:root:not(.light) .text-neutral-900 { color: #f4f4f5; }
+:root:not(.light) .text-gray-800,
+:root:not(.light) .text-slate-800,
+:root:not(.light) .text-zinc-800 { color: #e4e4e7; }
+:root:not(.light) .text-gray-700,
+:root:not(.light) .text-slate-700,
+:root:not(.light) .text-zinc-700 { color: #d4d4d8; }
+:root:not(.light) .text-gray-600,
+:root:not(.light) .text-slate-600,
+:root:not(.light) .text-zinc-600 { color: #b4b4bb; }
+:root:not(.light) .text-gray-500,
+:root:not(.light) .text-slate-500,
+:root:not(.light) .text-zinc-500 { color: #9a9aa2; }
+:root:not(.light) .text-gray-400,
+:root:not(.light) .text-slate-400 { color: #85858d; }
+
+/* Placeholders */
+:root:not(.light) .placeholder-gray-400::placeholder,
+:root:not(.light) .placeholder-gray-500::placeholder { color: #6b6b73; }
+
+/* — Borders & dividers — */
+:root:not(.light) .border-gray-100,
+:root:not(.light) .border-slate-100 { border-color: rgba(255, 255, 255, 0.06); }
+:root:not(.light) .border-gray-200,
+:root:not(.light) .border-slate-200,
+:root:not(.light) .border-zinc-200 { border-color: rgba(255, 255, 255, 0.09); }
+:root:not(.light) .border-gray-300,
+:root:not(.light) .border-slate-300 { border-color: rgba(255, 255, 255, 0.14); }
+:root:not(.light) .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.06); }
+:root:not(.light) .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.09); }
+
+/* — Status surfaces — pastel -50/-100 fills and -200 borders glare on dark.
+   Blend the hue INTO the dark surface (not a translucent film over black, which
+   muddies) for a subtle tinted card, give the paired borders a soft colored
+   line, and lift the ink to a legible mid tone (WCAG AA). — */
+:root:not(.light) .bg-red-50     { background-color: color-mix(in srgb, #18181b 86%, #ef4444); }
+:root:not(.light) .bg-red-100    { background-color: color-mix(in srgb, #18181b 79%, #ef4444); }
+:root:not(.light) .bg-orange-50  { background-color: color-mix(in srgb, #18181b 86%, #f97316); }
+:root:not(.light) .bg-orange-100 { background-color: color-mix(in srgb, #18181b 79%, #f97316); }
+:root:not(.light) .bg-amber-50   { background-color: color-mix(in srgb, #18181b 86%, #f59e0b); }
+:root:not(.light) .bg-amber-100  { background-color: color-mix(in srgb, #18181b 79%, #f59e0b); }
+:root:not(.light) .bg-yellow-50  { background-color: color-mix(in srgb, #18181b 86%, #eab308); }
+:root:not(.light) .bg-yellow-100 { background-color: color-mix(in srgb, #18181b 79%, #eab308); }
+:root:not(.light) .bg-green-50   { background-color: color-mix(in srgb, #18181b 86%, #22c55e); }
+:root:not(.light) .bg-green-100  { background-color: color-mix(in srgb, #18181b 79%, #22c55e); }
+:root:not(.light) .bg-emerald-50 { background-color: color-mix(in srgb, #18181b 86%, #10b981); }
+:root:not(.light) .bg-emerald-100{ background-color: color-mix(in srgb, #18181b 79%, #10b981); }
+:root:not(.light) .bg-teal-50    { background-color: color-mix(in srgb, #18181b 86%, #14b8a6); }
+:root:not(.light) .bg-teal-100   { background-color: color-mix(in srgb, #18181b 79%, #14b8a6); }
+:root:not(.light) .bg-cyan-50    { background-color: color-mix(in srgb, #18181b 86%, #06b6d4); }
+:root:not(.light) .bg-sky-50     { background-color: color-mix(in srgb, #18181b 86%, #0ea5e9); }
+:root:not(.light) .bg-sky-100    { background-color: color-mix(in srgb, #18181b 79%, #0ea5e9); }
+:root:not(.light) .bg-blue-50    { background-color: color-mix(in srgb, #18181b 86%, #3b82f6); }
+:root:not(.light) .bg-blue-100   { background-color: color-mix(in srgb, #18181b 79%, #3b82f6); }
+:root:not(.light) .bg-indigo-50  { background-color: color-mix(in srgb, #18181b 86%, #6366f1); }
+:root:not(.light) .bg-indigo-100 { background-color: color-mix(in srgb, #18181b 79%, #6366f1); }
+:root:not(.light) .bg-violet-50  { background-color: color-mix(in srgb, #18181b 86%, #8b5cf6); }
+:root:not(.light) .bg-purple-50  { background-color: color-mix(in srgb, #18181b 86%, #a855f7); }
+:root:not(.light) .bg-purple-100 { background-color: color-mix(in srgb, #18181b 79%, #a855f7); }
+:root:not(.light) .bg-pink-50    { background-color: color-mix(in srgb, #18181b 86%, #ec4899); }
+:root:not(.light) .bg-rose-50    { background-color: color-mix(in srgb, #18181b 86%, #f43f5e); }
+:root:not(.light) .bg-rose-100   { background-color: color-mix(in srgb, #18181b 79%, #f43f5e); }
+
+:root:not(.light) .border-red-200     { border-color: color-mix(in srgb, transparent 74%, #ef4444); }
+:root:not(.light) .border-orange-200  { border-color: color-mix(in srgb, transparent 74%, #f97316); }
+:root:not(.light) .border-amber-200   { border-color: color-mix(in srgb, transparent 74%, #f59e0b); }
+:root:not(.light) .border-yellow-200  { border-color: color-mix(in srgb, transparent 74%, #eab308); }
+:root:not(.light) .border-green-200   { border-color: color-mix(in srgb, transparent 74%, #22c55e); }
+:root:not(.light) .border-emerald-200 { border-color: color-mix(in srgb, transparent 74%, #10b981); }
+:root:not(.light) .border-teal-200    { border-color: color-mix(in srgb, transparent 74%, #14b8a6); }
+:root:not(.light) .border-sky-200     { border-color: color-mix(in srgb, transparent 74%, #0ea5e9); }
+:root:not(.light) .border-blue-200    { border-color: color-mix(in srgb, transparent 74%, #3b82f6); }
+:root:not(.light) .border-indigo-200  { border-color: color-mix(in srgb, transparent 74%, #6366f1); }
+:root:not(.light) .border-purple-200  { border-color: color-mix(in srgb, transparent 74%, #a855f7); }
+:root:not(.light) .border-rose-200    { border-color: color-mix(in srgb, transparent 74%, #f43f5e); }
+
+:root:not(.light) .text-red-600, :root:not(.light) .text-red-700, :root:not(.light) .text-red-800 { color: #fca5a5; }
+:root:not(.light) .text-orange-600, :root:not(.light) .text-orange-700, :root:not(.light) .text-orange-800 { color: #fdba74; }
+:root:not(.light) .text-amber-600, :root:not(.light) .text-amber-700, :root:not(.light) .text-amber-800 { color: #fcd34d; }
+:root:not(.light) .text-yellow-600, :root:not(.light) .text-yellow-700, :root:not(.light) .text-yellow-800 { color: #fde047; }
+:root:not(.light) .text-green-600, :root:not(.light) .text-green-700, :root:not(.light) .text-green-800 { color: #86efac; }
+:root:not(.light) .text-emerald-600, :root:not(.light) .text-emerald-700, :root:not(.light) .text-emerald-800 { color: #6ee7b7; }
+:root:not(.light) .text-teal-600, :root:not(.light) .text-teal-700 { color: #5eead4; }
+:root:not(.light) .text-cyan-600, :root:not(.light) .text-cyan-700 { color: #67e8f9; }
+:root:not(.light) .text-sky-600, :root:not(.light) .text-sky-700 { color: #7dd3fc; }
+:root:not(.light) .text-blue-600, :root:not(.light) .text-blue-700, :root:not(.light) .text-blue-800 { color: #93c5fd; }
+:root:not(.light) .text-indigo-600, :root:not(.light) .text-indigo-700 { color: #a5b4fc; }
+:root:not(.light) .text-violet-600, :root:not(.light) .text-violet-700 { color: #c4b5fd; }
+:root:not(.light) .text-purple-600, :root:not(.light) .text-purple-700, :root:not(.light) .text-purple-800 { color: #d8b4fe; }
+:root:not(.light) .text-pink-600, :root:not(.light) .text-pink-700 { color: #f9a8d4; }
+:root:not(.light) .text-rose-600, :root:not(.light) .text-rose-700 { color: #fda4af; }
+
+/* Smooth, GPU-cheap crossfade of the remapped surfaces when the theme flips. */
+.bg-white, .bg-gray-50, .bg-gray-100, .bg-slate-50, .bg-slate-100,
+[class*="border-gray-"], [class*="border-slate-"] {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+}
+
+/* — Accessibility essentials — */
+:where(a, button, [role="button"], input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

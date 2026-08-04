@@ -4,6 +4,7 @@ import { requireTenantContext, canManageOrganization } from "@/lib/tenant";
 import { withTenantDb } from "@/lib/tenantDb";
 import { assertMutationEntitled, EntitlementError } from "@/lib/entitlements";
 import { createInvitation } from "@/lib/invitations";
+import { INTAKE_CATEGORY, patientCode } from "@/lib/patientId";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,10 +59,38 @@ export async function POST(request: NextRequest) {
       });
       const faces = Object.entries((body.faces || {}) as Record<string, string>).filter(([, url]) => Boolean(url));
       if (faces.length) await tx.residentDocument.createMany({ data: faces.map(([direction, url]) => ({ organizationId: context.organizationId, communityId: context.communityId, residentId: created.id, documentType: "FACE_ENROLLMENT", title: `Facial enrollment — ${direction}`, fileName: `face-${direction}.jpg`, fileUrl: String(url), uploadedByName: "Admissions", isConfidential: true })) });
+
+      // Intake / move-in body check — captured once at admission as a permanent,
+      // showable record (identifying marks + pre-existing conditions). Stored as
+      // a categorised ResidentNote so no schema change is required.
+      const intake = body.intake as { status?: string; findings?: unknown[]; examinedBy?: string; examinedAt?: string; generalNotes?: string } | undefined;
+      if (intake && (intake.status === "NO_MARKS" || (Array.isArray(intake.findings) && intake.findings.length > 0) || intake.generalNotes)) {
+        await tx.residentNote.create({
+          data: {
+            organizationId: context.organizationId,
+            communityId: context.communityId,
+            residentId: created.id,
+            category: INTAKE_CATEGORY,
+            title: "Intake Body Check",
+            authorName: intake.examinedBy || "Admissions",
+            isPinned: true,
+            content: JSON.stringify({
+              status: intake.status ?? "PENDING",
+              findings: Array.isArray(intake.findings) ? intake.findings : [],
+              examinedBy: intake.examinedBy ?? "",
+              examinedAt: intake.examinedAt ?? new Date().toISOString(),
+              generalNotes: intake.generalNotes ?? "",
+            }),
+          },
+        });
+      }
       return created;
     });
+
     const invitation = await createInvitation({ email, organizationId: context.organizationId, communityId: context.communityId, residentId: resident.id, communityRole: "RESIDENT", createdById: context.userId, baseUrl: new URL(request.url).origin });
-    return NextResponse.json({ residentId: resident.id, invitationId: invitation.invitation.id, ...(process.env.NODE_ENV !== "production" ? { acceptUrl: invitation.acceptUrl } : {}) }, { status: 201 });
+    // Patient ID uses a fixed prefix (no community code) so the derived code is
+    // byte-identical everywhere it is shown — success dialog, profile, QR card.
+    return NextResponse.json({ residentId: resident.id, patientId: patientCode(resident.id), invitationId: invitation.invitation.id, ...(process.env.NODE_ENV !== "production" ? { acceptUrl: invitation.acceptUrl } : {}) }, { status: 201 });
   } catch (error) {
     if (error instanceof EntitlementError) return NextResponse.json({ error: error.message }, { status: 403 });
     const code = error instanceof Error ? error.message : "";

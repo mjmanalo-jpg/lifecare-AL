@@ -1,5 +1,7 @@
 "use client";
 
+import RefreshButton from "@/components/portal/RefreshButton";
+
 import { useMemo, useState, useEffect } from "react";
 import {
   FileText, Plus, Download, Search, X, Eye, Trash2, PenLine,
@@ -15,6 +17,7 @@ import {
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import ShiftContinuityPanel from "./ShiftContinuityPanel";
+import SignatureModal from "@/components/portal/SignatureModal";
 
 /* ── Types ───────────────────────────────────────────────────────────── */
 
@@ -356,17 +359,21 @@ export default function CaregiverReports() {
     }
   };
 
-  const handleSign = async (r: ShiftReport) => {
+  // Signing requires the user's 4-digit PIN; once signed the report is locked
+  // (the server rejects further edits/deletes).
+  const [signTarget, setSignTarget] = useState<ShiftReport | null>(null);
+  const handleSign = (r: ShiftReport) => setSignTarget(r);
+  const doSign = async () => {
+    if (!signTarget) return;
+    const r = signTarget;
     try {
-      await updateRecord("shift-reports", r.id, { signedAt: new Date().toISOString() });
+      const iso = new Date().toISOString();
+      await updateRecord("shift-reports", r.id, { signedAt: iso });
       await refetch();
-      setViewing((v) => (v && v.id === r.id ? { ...v, signedAt: new Date().toISOString() } : v));
+      setViewing((v) => (v && v.id === r.id ? { ...v, signedAt: iso } : v));
+      Swal.fire({ title: "Report signed & locked", text: "This endorsement is finalised and can no longer be edited.", icon: "success", timer: 1900, showConfirmButton: false });
     } catch (err) {
-      Swal.fire({
-        title: "Sign Failed",
-        text: err instanceof Error ? err.message : "Could not sign report.",
-        icon: "error",
-      });
+      Swal.fire({ title: "Sign Failed", text: err instanceof Error ? err.message : "Could not sign report.", icon: "error" });
     }
   };
 
@@ -438,13 +445,7 @@ export default function CaregiverReports() {
               <BarChart3 className="w-4 h-4" /> Analytics
             </button>
           </div>
-          <button
-            onClick={() => void refetch()}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium"
-            title="Refresh now"
-          >
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
+          <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           <button
             onClick={() => exportCsv(filtered)}
             disabled={filtered.length === 0}
@@ -656,6 +657,8 @@ export default function CaregiverReports() {
       )}
 
       {/* View modal */}
+      <SignatureModal open={!!signTarget} onClose={() => setSignTarget(null)} onSigned={doSign} title="Sign shift endorsement" description="Enter your 4-digit signing PIN to finalise and lock this endorsement. Once signed it can no longer be edited." />
+
       {viewing && (
         <Modal title="Shift Report" onClose={() => setViewing(null)}>
           <div className="p-6 sm:p-8 space-y-5">

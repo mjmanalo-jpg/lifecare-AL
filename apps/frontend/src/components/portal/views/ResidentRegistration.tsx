@@ -10,13 +10,15 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import IntakeBodyCheck from "@/components/portal/IntakeBodyCheck";
+import { type IntakeData, EMPTY_INTAKE } from "@/lib/patientId";
 
 // ── 7-step registration pipeline ───────────────────────────────────────────
 const STEPS = [
   { n: 1, key: "account",  label: "Account",      icon: Mail,         required: true  },
   { n: 2, key: "personal", label: "Personal",     icon: User,         required: true  },
   { n: 3, key: "face",     label: "Face Enroll",  icon: ScanFace,     required: true  },
-  { n: 4, key: "medical",  label: "Medical",      icon: Stethoscope,  required: false },
+  { n: 4, key: "medical",  label: "Medical & Intake", icon: Stethoscope, required: false },
   { n: 5, key: "care",     label: "Care & Room",  icon: BedDouble,    required: true  },
   { n: 6, key: "plan",     label: "Care Plan",    icon: HeartPulse,   required: false },
   { n: 7, key: "review",   label: "Review",       icon: CheckCircle2, required: true  },
@@ -81,6 +83,7 @@ export default function ResidentRegistration({ variant = "admin", accent = "#f59
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<Form>({ ...emptyForm, careLevel: isPublic ? "INDEPENDENT" : "" });
   const [faces, setFaces] = useState<Partial<Record<Dir, string>>>({});
+  const [intake, setIntake] = useState<IntakeData>({ ...EMPTY_INTAKE });
   const [showPw, setShowPw] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -163,6 +166,7 @@ export default function ResidentRegistration({ variant = "admin", accent = "#f59
   const openNew = () => {
     setForm({ ...emptyForm });
     setFaces({});
+    setIntake({ ...EMPTY_INTAKE });
     setStep(1);
     setWizardOpen(true);
   };
@@ -243,6 +247,7 @@ export default function ResidentRegistration({ variant = "admin", accent = "#f59
           carePlan: form.carePlan || null,
           photoUrl: faceUrls.up || faceUrls.right || faceUrls.left || faceUrls.down || null,
           faces: faceUrls,
+          intake,
         }),
       });
       const data = await res.json();
@@ -252,7 +257,7 @@ export default function ResidentRegistration({ variant = "admin", accent = "#f59
       setWizardOpen(false);
       await Swal.fire({
         title: "Registration Complete",
-        html: `<b>${form.firstName} ${form.lastName}</b> can now sign in with <code>${form.email}</code>.<br/>${data.faces || 0} facial poses enrolled.`,
+        html: `<b>${form.firstName} ${form.lastName}</b> can now sign in with <code>${form.email}</code>.<br/>${data.faces || 0} facial poses enrolled.${data.patientId ? `<br/><br/>Patient ID: <code style="font-size:1.05em;font-weight:700">${data.patientId}</code>` : ""}`,
         icon: "success",
       });
       if (isPublic) router.push("/login");
@@ -486,6 +491,10 @@ export default function ResidentRegistration({ variant = "admin", accent = "#f59
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field label="Allergies"><input className={inputCls} value={form.allergies} onChange={(e) => set({ allergies: e.target.value })} placeholder="Penicillin, none…" /></Field>
                     <Field label="Medical History"><input className={inputCls} value={form.medicalHistory} onChange={(e) => set({ medicalHistory: e.target.value })} placeholder="Hypertension, Diabetes…" /></Field>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-white p-4">
+                    <p className="text-xs text-gray-500 mb-3">Move-in body check — record any identifying marks or pre-existing conditions (scars, tattoos, wounds, bruises…) so there is a dated record of the resident&apos;s condition on admission.</p>
+                    <IntakeBodyCheck value={intake} onChange={setIntake} />
                   </div>
                 </div>
               )}
