@@ -158,7 +158,7 @@ export default function LeadPipelineBoard() {
       {/* Add / edit modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
             <div className="flex items-center justify-between bg-blue-600 px-5 py-4 text-white rounded-t-xl">
               <h3 className="font-bold">{editing ? "Edit Lead" : "New Lead"}</h3>
               <button onClick={() => setShowForm(false)} className="p-1 hover:bg-white/15 rounded"><X className="w-5 h-5" /></button>

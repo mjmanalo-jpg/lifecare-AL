@@ -393,7 +393,7 @@ export default function FacilityDashboard() {
 
         <Card title="Avg Resolution Time" icon={Timer}>
           <div className="flex flex-col items-center justify-center text-center" style={{ height: 220 }}>
-            <p className="text-5xl font-bold text-emerald-600">{avgResolution.label}</p>
+            <p className="text-4xl sm:text-5xl font-bold text-emerald-600">{avgResolution.label}</p>
             <p className="text-sm text-gray-500 mt-2">
               {avgResolution.count > 0 ? `across ${avgResolution.count} completed ticket${avgResolution.count === 1 ? "" : "s"}` : "no completed tickets yet"}
             </p>

@@ -278,7 +278,7 @@ export default function PhysicianOrders({ approveMode = false }: { approveMode?:
                 <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700 capitalize">{viewing.route}</span>
                 <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-50 text-blue-700">{viewing.frequency}</span>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><p className="text-sm font-semibold text-gray-600 mb-1">Start Date</p><p className="text-gray-900 text-sm">{viewing.startDate ? new Date(viewing.startDate).toLocaleDateString() : "—"}</p></div>
                 <div><p className="text-sm font-semibold text-gray-600 mb-1">End Date</p><p className="text-gray-900 text-sm">{viewing.endDate ? new Date(viewing.endDate).toLocaleDateString() : "Ongoing"}</p></div>
                 <div><p className="text-sm font-semibold text-gray-600 mb-1">Prescribed By</p><p className="text-gray-900 text-sm">{viewing.prescribedBy || "—"}</p></div>

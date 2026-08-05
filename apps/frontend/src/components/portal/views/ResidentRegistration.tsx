@@ -293,7 +293,7 @@ export default function ResidentRegistration({ variant = "admin", accent = "#f59
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <Stat label="Resident Logins" value={registered.length} tone="amber" />
         <Stat label="Total Residents" value={residentRows.length} tone="green" />
         <Stat label="Rooms Available" value={availableRooms.length} tone="gray" />

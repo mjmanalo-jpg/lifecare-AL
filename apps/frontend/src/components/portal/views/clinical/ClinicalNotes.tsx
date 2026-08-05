@@ -155,7 +155,7 @@ export default function ClinicalNotes({ clinicianRole = "PHYSICIAN" }: { clinici
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <Stat label="Total Notes" value={stats.total} icon={FileText} tone="gray" />
         <Stat label="Created Today" value={stats.today} icon={Clock} tone="blue" />
         <Stat label="This Week" value={stats.thisWeek} icon={PenTool} tone="green" />

@@ -674,7 +674,7 @@ function TripsTab({ onView }: { onView: (r: Record<string, unknown>) => void }) 
             </button>
           ))}
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center flex-wrap">
           <div className="relative flex-1 min-w-[180px]">
             <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
             <input type="text" placeholder="Search resident, destination, vehicle…" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
@@ -1099,7 +1099,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
       </div>
 
       {/* Toolbar */}
-      <div className="flex gap-2 items-center">
+      <div className="flex gap-2 items-center flex-wrap">
         <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
           <input type="text" placeholder="Search vehicle, plate, fuel type…" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}

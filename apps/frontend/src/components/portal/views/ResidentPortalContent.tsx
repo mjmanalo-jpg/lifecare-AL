@@ -1224,8 +1224,8 @@ Vitals:
           </div>
 
           {/* Vitals Grid */}
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
-            
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+
             {/* Heart Rate */}
             <div
               onClick={() => setVitalsModalOpen(true)}
@@ -1292,7 +1292,7 @@ Vitals:
           )}
 
           {/* Quick Action buttons — large, obvious, one tap */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
 
             {/* CALL BELL — the safety action, most prominent */}
             <button
@@ -1878,7 +1878,7 @@ Vitals:
             
             <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
               {/* Hero stats */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-indigo-50 rounded-xl p-4 text-center border border-indigo-100">
                   <p className="text-[10px] sm:text-xs font-semibold text-indigo-500 uppercase tracking-wider mb-1">Today</p>
                   <p className="text-2xl sm:text-3xl font-black text-indigo-900">{activitySteps.replace(" Steps", "")}</p>
@@ -1969,7 +1969,7 @@ Vitals:
       {/* ── CALL FAMILY MODAL ── */}
       {familyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="px-4 sm:px-6 py-4 bg-blue-600 text-white flex items-center justify-between">
               <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <Phone className="w-5 h-5" /> Family Contact Details
@@ -2035,7 +2035,7 @@ Vitals:
       {/* ── ROOM SERVICE REQUEST MODAL ── */}
       {roomServiceModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="px-4 sm:px-6 py-4 bg-amber-500 text-white flex items-center justify-between">
               <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <Coffee className="w-5 h-5 text-white" /> Request Room Service
@@ -2083,7 +2083,7 @@ Vitals:
       {/* ── CALL BELL MODAL ── */}
       {callBellModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="px-4 sm:px-6 py-4 bg-red-600 text-white flex items-center justify-between">
               <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <Bell className="w-5 h-5 text-white" /> Call for Help
@@ -2099,7 +2099,7 @@ Vitals:
               {/* Target selection */}
               <div className="space-y-2">
                 <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider">Who do you need?</label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {(["Nurse", "Caregiver", "Nurse & Caregiver"] as const).map((target) => (
                     <button
                       key={target}
@@ -2122,7 +2122,7 @@ Vitals:
               {/* Reason selection */}
               <div className="space-y-2">
                 <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider">Reason for call</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {([
                     { label: "Feeling unwell", icon: "🤒" },
                     { label: "Pain", icon: "😣" },

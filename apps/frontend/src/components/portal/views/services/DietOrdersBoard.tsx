@@ -201,7 +201,7 @@ export default function DietOrdersBoard() {
       </div>
 
       {/* Stat Boxes */}
-      <div className="grid grid-cols-3 gap-3 max-w-2xl">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl">
         <StatBox label="Residents Covered" value={`${coverage.covered} / ${coverage.total}`} icon={CheckCircle2} color={coverage.uncovered.length ? "amber" : "emerald"} />
         <StatBox label="Active Orders" value={String(stats.activeCount)} icon={ClipboardList} color="emerald" />
         <StatBox label="Restricted Diets" value={String(stats.restricted)} icon={ShieldAlert} color="red" />

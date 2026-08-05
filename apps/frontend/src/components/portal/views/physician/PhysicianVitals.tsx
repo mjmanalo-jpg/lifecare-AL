@@ -244,7 +244,7 @@ export default function PhysicianVitals() {
                 return (
                   <div key={rid} className="p-2.5 rounded-lg bg-gray-50 border border-gray-200">
                     <p className="font-medium text-gray-900 text-sm">{firstV?.resident ?? "Unknown"}</p>
-                    <div className="grid grid-cols-3 gap-1 mt-1">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 mt-1">
                       {Object.entries(vMap).slice(0, 3).map(([type, v]) => (
                         <div key={type} className={`text-xs ${v.abnormal ? "text-amber-700 font-bold" : "text-gray-600"}`}>
                           {type.split("_")[0]}: {v.value}

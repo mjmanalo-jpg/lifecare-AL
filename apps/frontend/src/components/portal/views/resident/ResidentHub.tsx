@@ -1279,7 +1279,7 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
               <button onClick={() => setShowRequest(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5 sm:w-6 sm:h-6" /></button>
             </div>
             <div className="p-4 sm:p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className="block text-sm font-semibold text-gray-700 mb-1">Type</label>
                   <select value={reqForm.subType} onChange={e => setReqForm(f => ({ ...f, subType: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none">
                     {(CATEGORY_META[reqForm.category]?.subTypes ?? []).map(s => <option key={s} value={s}>{s}</option>)}

@@ -170,7 +170,7 @@ function DocumentUploadForm({ residents, onClose, onSaved }: { residents: any[];
         </select>
       </div>
       <div><label className={labelCls}>Document Title *</label><input value={form.title} onChange={e => set("title", e.target.value)} className={inputCls} required placeholder="e.g., Admission Form, Power of Attorney" /></div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div><label className={labelCls}>Type</label><select value={form.documentType} onChange={e => set("documentType", e.target.value)} className={inputCls}>
           {Object.keys(typeColors).map(t => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}
         </select></div>

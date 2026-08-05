@@ -465,7 +465,7 @@ export default function LandingCustomizerContent() {
           <Card>
             <SectionTitle icon={Paintbrush} title="Background" hint="Solid, gradient, or an uploaded image." />
             {/* Tabs */}
-            <div className="grid grid-cols-4 gap-2 mb-5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5">
               {BG_TABS.map((t) => {
                 const active = bg.type === t.id;
                 const Icon = t.icon;
@@ -1621,7 +1621,7 @@ function PagesManager() {
                 </div>
 
                 {/* Page Purpose and Parcel Type */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Page Purpose</label>
                     <select
@@ -1667,7 +1667,7 @@ function PagesManager() {
                 </div>
 
                 {/* Sort Order and Published */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Sort Order</label>
                     <input

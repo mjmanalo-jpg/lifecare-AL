@@ -110,7 +110,7 @@ export default function BillingReceivables() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2 flex items-center gap-3">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2 flex items-center gap-3">
             <TrendingDown className="w-8 h-8 text-amber-500" /> Receivables &amp; Aging
           </h1>
           <p className="text-gray-600">What&apos;s owed but not yet paid — unbilled charges and outstanding invoices, aged.</p>

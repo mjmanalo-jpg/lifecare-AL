@@ -388,7 +388,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
             Incident Log
           </h1>
           <p className="text-gray-600">Track and manage resident incidents and safety events</p>
@@ -627,7 +627,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
 
               {/* Modal Content */}
               <div className="p-8 space-y-6">
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-600 mb-2">Severity</label>
                     <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold ${getSeverityColor(viewingIncident.severity)}`}>

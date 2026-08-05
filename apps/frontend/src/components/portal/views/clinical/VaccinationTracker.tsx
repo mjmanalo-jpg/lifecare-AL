@@ -181,7 +181,7 @@ function VaccinationModal({ residents, onClose, onSaved }: { residents: any[]; o
             </select>
           </div>
           <div><label className={labelCls}>Vaccine Name *</label><input value={form.vaccineName} onChange={e => set("vaccineName", e.target.value)} className={inputCls} required placeholder="e.g., Influenza, COVID-19, Pneumococcal" /></div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className={labelCls}>Dose #</label><input type="number" min="1" value={form.doseNumber} onChange={e => set("doseNumber", e.target.value)} className={inputCls} /></div>
             <div><label className={labelCls}>Total Doses</label><input type="number" min="1" value={form.totalDoses} onChange={e => set("totalDoses", e.target.value)} className={inputCls} /></div>
           </div>

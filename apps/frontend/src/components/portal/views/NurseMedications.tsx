@@ -528,7 +528,7 @@ export default function NurseMedications() {
               <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700 capitalize">{viewing.route}</span>
               <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-50 text-blue-700">{viewing.frequency}</span>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Detail label="Start Date">{viewing.startDate ? new Date(viewing.startDate).toLocaleDateString() : "—"}</Detail>
               <Detail label="End Date">{viewing.endDate ? new Date(viewing.endDate).toLocaleDateString() : "Ongoing"}</Detail>
               <Detail label="Prescribed By">{viewing.prescribedBy || "—"}</Detail>

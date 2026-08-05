@@ -116,7 +116,7 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Stat label="Pending Approval" value={String(stats.pending)} color="#C39A3E" />
         <Stat label="Scheduled" value={String(stats.scheduled)} color="#2E4A48" />
         <Stat label="Completed" value={String(stats.completed)} color="#7E9B6F" />
@@ -193,12 +193,12 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
             <div className="space-y-4 p-6">
               <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Resident <span className="text-[#C0573F]">*</span></label>
                 <select value={form.residentId} onChange={(e) => setForm({ ...form, residentId: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30"><option value="">Select…</option>{residents.map((r) => <option key={r.id} value={r.id}>{r.name} — Room {r.room}</option>)}</select></div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Specialist <span className="text-[#C0573F]">*</span></label><input value={form.specialist} onChange={(e) => setForm({ ...form, specialist: e.target.value })} placeholder="Dr. … (Cardiology)" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
                 <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Clinic</label><input value={form.facilityName} onChange={(e) => setForm({ ...form, facilityName: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
                 <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Preferred date</label><input type="date" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
                 <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Urgency</label><select value={form.urgency} onChange={(e) => setForm({ ...form, urgency: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/30">{["ROUTINE", "URGENT", "EMERGENCY"].map((u) => <option key={u} value={u}>{u}</option>)}</select></div>
-                <div className="col-span-2"><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Purpose <span className="text-[#C0573F]">*</span></label><input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
+                <div className="sm:col-span-2"><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Purpose <span className="text-[#C0573F]">*</span></label><input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
               </div>
             </div>
             <div className="sticky bottom-0 flex items-center justify-between border-t border-[#D6D8CD] bg-[#F0F1EA] px-6 py-4"><button onClick={() => setShowAdd(false)} disabled={busy} className="rounded-lg px-4 py-2 text-[#2B2B27] hover:bg-[#E1E3D9] disabled:opacity-50">Cancel</button><button onClick={submit} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-[#2E4A48] hover:bg-[#25403D] px-6 py-2 font-semibold text-white shadow-sm disabled:opacity-50"><Plus className="w-4 h-4" /> {busy ? "Submitting…" : "Submit"}</button></div>

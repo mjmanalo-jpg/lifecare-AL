@@ -242,10 +242,10 @@ export default function Home() {
           initial="hidden"
           animate="visible"
           variants={fadeInUp}
-          className="text-6xl md:text-8xl font-black tracking-tighter heading-gradient mb-6"
+          className="text-4xl sm:text-6xl md:text-8xl font-black tracking-tighter heading-gradient mb-6"
         >
           {sc("hero_title", "Care Redefined.")} <br />
-          <span className="text-muted-foreground font-light italic text-4xl md:text-6xl">{sc("hero_subtitle", "For Peaceful Living.")}</span>
+          <span className="text-muted-foreground font-light italic text-2xl sm:text-4xl md:text-6xl">{sc("hero_subtitle", "For Peaceful Living.")}</span>
         </motion.h1>
 
         <motion.p 

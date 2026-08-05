@@ -264,7 +264,7 @@ function CreateModal({ tab, residents, clinicianName, onClose, onSaved }: { tab:
 
           {/* Tab-specific fields */}
           {tab === "elimination" && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label className={labelCls}>Type</label><select value={form.type || ""} onChange={e => set("type", e.target.value)} className={inputCls}><option value="URINATION">Urination</option><option value="BOWEL_MOVEMENT">Bowel Movement</option><option value="BOTH">Both</option></select></div>
               <div><label className={labelCls}>Continence</label><select value={form.continenceStatus || ""} onChange={e => set("continenceStatus", e.target.value)} className={inputCls}><option value="CONTINENT">Continent</option><option value="OCCASIONAL_INCONTINENCE">Occasional</option><option value="FREQUENT_INCONTINENCE">Frequent</option><option value="INCONTINENT">Incontinent</option><option value="CATHETER">Catheter</option><option value="OSTOMY">Ostomy</option></select></div>
               <div><label className={labelCls}>Volume</label><select value={form.volume || ""} onChange={e => set("volume", e.target.value)} className={inputCls}><option value="">--</option><option value="HIGH">High</option><option value="NORMAL">Normal</option><option value="LOW">Low</option><option value="NONE">None</option></select></div>
@@ -273,7 +273,7 @@ function CreateModal({ tab, residents, clinicianName, onClose, onSaved }: { tab:
           )}
 
           {tab === "pain" && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label className={labelCls}>Pain Level *</label><select value={form.painScale || ""} onChange={e => set("painScale", e.target.value)} className={inputCls} required><option value="NONE">None (0)</option><option value="MILD">Mild (1-3)</option><option value="MODERATE">Moderate (4-6)</option><option value="SEVERE">Severe (7-8)</option><option value="VERY_SEVERE">Very Severe (9)</option><option value="WORST_POSSIBLE">Worst Possible (10)</option></select></div>
               <div><label className={labelCls}>Numeric (0-10)</label><input type="number" min="0" max="10" value={form.numericScore || ""} onChange={e => set("numericScore", e.target.value)} className={inputCls} /></div>
               <div><label className={labelCls}>Location</label><input value={form.location || ""} onChange={e => set("location", e.target.value)} className={inputCls} placeholder="Head, Chest, Back..." /></div>
@@ -283,7 +283,7 @@ function CreateModal({ tab, residents, clinicianName, onClose, onSaved }: { tab:
           )}
 
           {tab === "wound" && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label className={labelCls}>Wound Type *</label><select value={form.woundType || ""} onChange={e => set("woundType", e.target.value)} className={inputCls} required><option value="PRESSURE_ULCER">Pressure Ulcer</option><option value="SURGICAL">Surgical</option><option value="SKIN_TEAR">Skin Tear</option><option value="IV_SITE">IV Site</option><option value="OTHER">Other</option></select></div>
               <div><label className={labelCls}>Location *</label><input value={form.woundLocation || ""} onChange={e => set("woundLocation", e.target.value)} className={inputCls} required placeholder="Sacrum, Heel..." /></div>
               <div><label className={labelCls}>Stage</label><select value={form.stage || ""} onChange={e => set("stage", e.target.value)} className={inputCls}><option value="EPISODE">New Episode</option><option value="HEALING">Healing</option><option value="HEALED">Healed</option><option value="DETERIORATED">Deteriorated</option></select></div>
@@ -295,7 +295,7 @@ function CreateModal({ tab, residents, clinicianName, onClose, onSaved }: { tab:
           )}
 
           {tab === "sleep" && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label className={labelCls}>Bedtime</label><input type="datetime-local" value={form.bedtime || ""} onChange={e => set("bedtime", e.target.value)} className={inputCls} /></div>
               <div><label className={labelCls}>Wake Time</label><input type="datetime-local" value={form.wakeTime || ""} onChange={e => set("wakeTime", e.target.value)} className={inputCls} /></div>
               <div><label className={labelCls}>Hours Slept</label><input type="number" step="0.5" value={form.totalHours || ""} onChange={e => set("totalHours", e.target.value)} className={inputCls} /></div>
@@ -305,7 +305,7 @@ function CreateModal({ tab, residents, clinicianName, onClose, onSaved }: { tab:
           )}
 
           {tab === "mobility" && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label className={labelCls}>Type *</label><select value={form.mobilityType || ""} onChange={e => set("mobilityType", e.target.value)} className={inputCls} required><option value="WALKING">Walking</option><option value="WHEELCHAIR">Wheelchair</option><option value="TRANSFER">Transfer</option><option value="EXERCISE">Exercise</option><option value="BED_REST">Bed Rest</option><option value="STANDING">Standing</option></select></div>
               <div><label className={labelCls}>Duration (min)</label><input type="number" min="0" value={form.duration || ""} onChange={e => set("duration", e.target.value)} className={inputCls} /></div>
               <div><label className={labelCls}>Assistance Level</label><select value={form.assistanceLevel || ""} onChange={e => set("assistanceLevel", e.target.value)} className={inputCls}><option value="INDEPENDENT">Independent</option><option value="MINIMAL">Minimal</option><option value="MODERATE">Moderate</option><option value="MAXIMAL">Maximal</option><option value="DEPENDENT">Dependent</option></select></div>

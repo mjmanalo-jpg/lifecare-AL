@@ -167,7 +167,7 @@ export default function InventoryAlertsPanel() {
 
       {creating && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4 rounded-t-xl flex items-center justify-between">
               <h3 className="text-white font-bold text-lg">New Inventory Alert</h3>
               <button onClick={() => setCreating(false)} className="text-white/80 hover:text-white cursor-pointer"><X className="w-5 h-5" /></button>

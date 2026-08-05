@@ -244,7 +244,7 @@ function MARModal({ residents, me, onClose, onSaved }: { residents: any[]; me: {
               {medsForResident.map((m: any) => <option key={m.id} value={m.id}>{m.name} — {m.dosage || "—"}</option>)}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className={lbl}>Dose</label><input value={form.dosage} onChange={(e) => set("dosage", e.target.value)} className={inputCls} placeholder="10mg" /></div>
             <div><label className={lbl}>Route</label><select value={form.route} onChange={(e) => set("route", e.target.value)} className={inputCls}>
               {["ORAL", "IV", "IM", "SUBCUTANEOUS", "TOPICAL", "INHALATION", "RECTAL", "OTHER"].map((r) => <option key={r} value={r}>{r}</option>)}

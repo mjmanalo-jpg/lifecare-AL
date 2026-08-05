@@ -266,7 +266,7 @@ export default function AmbulanceBooking() {
               <Field label="Destination *">
                 <input value={form.destination} onChange={(e) => set("destination", e.target.value)} placeholder="e.g. Makati Medical Center" className={inputCls} />
               </Field>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <Field label="Date"><input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} className={inputCls} /></Field>
                 <Field label="Start"><input type="time" value={form.startTime} onChange={(e) => set("startTime", e.target.value)} className={inputCls} /></Field>
                 <Field label="Duration">

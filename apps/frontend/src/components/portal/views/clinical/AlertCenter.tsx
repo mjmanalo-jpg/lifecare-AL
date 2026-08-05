@@ -199,7 +199,7 @@ export default function AlertCenter() {
       </div>
 
       {/* Severity summary */}
-      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         {(["CRITICAL", "WARNING", "INFO"] as Sev[]).map((s) => {
           const meta = SEVERITY[s];
           const open = lanes[s].filter((a) => !a.isRead).length;

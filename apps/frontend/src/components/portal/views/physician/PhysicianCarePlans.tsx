@@ -209,7 +209,7 @@ export default function PhysicianCarePlans() {
                 <button onClick={() => setViewing(null)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition flex-shrink-0"><X className="w-6 h-6" /></button>
               </div>
               <div className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <div><p className="text-xs font-semibold text-gray-500 mb-0.5 flex items-center gap-1"><UserRound className="w-3.5 h-3.5" /> Patient</p><p className="text-gray-900">{r?.name ?? "Unknown"}</p><p className="text-xs text-gray-400">Room {r?.room ?? "—"}</p></div>
                   <div><p className="text-xs font-semibold text-gray-500 mb-0.5 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Set</p><p className="text-gray-900">{viewing.goalDate || viewing.createdAt ? new Date(viewing.goalDate || viewing.createdAt).toLocaleDateString() : "—"}</p>{viewing.isCompleted && viewing.completedAt && <p className="text-xs text-green-600">Achieved {new Date(viewing.completedAt).toLocaleDateString()}</p>}</div>
                 </div>

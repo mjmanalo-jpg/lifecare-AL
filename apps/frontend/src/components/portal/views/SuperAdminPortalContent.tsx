@@ -351,7 +351,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+            <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
               Staff Registry
             </h1>
             <p className="text-gray-600">Manage facility staff members, positions, and status</p>
@@ -617,7 +617,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-semibold text-gray-600 mb-2">Email</label>
                     <p className="text-lg text-gray-900">{viewingStaff.email}</p>
@@ -725,7 +725,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
 
               {/* Edit Form */}
               <div className="p-8 space-y-6">
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
                     <input
