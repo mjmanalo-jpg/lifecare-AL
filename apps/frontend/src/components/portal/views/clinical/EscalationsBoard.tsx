@@ -39,7 +39,7 @@ type Row = Record<string, unknown>;
 const asStr = (v: unknown): string => (v == null ? "" : String(v));
 const rel = (v: unknown): Row => (v && typeof v === "object" ? (v as Row) : {});
 
-const PER_PAGE = 8;
+const PER_PAGE = 12;
 const RESPONDER_ROLES: ClinicianRole[] = ["PHYSICIAN", "FACILITY_ADMIN"];
 
 type EscVM = {
@@ -100,9 +100,14 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
       if (q && !e.residentName.toLowerCase().includes(q) && !e.situation.toLowerCase().includes(q) && !e.raisedBy.toLowerCase().includes(q)) return false;
       return true;
     }).sort((a, b) => {
-      // Breached + higher priority first, then newest.
+      // Triage order: SLA-breached first, then by priority (EMERGENCY → URGENT →
+      // ROUTINE, using the shorter SLA window as the urgency proxy), then newest.
+      // The priority + recency tiebreaks keep a just-raised urgent SBAR near the
+      // top of the un-breached group instead of buried at the bottom.
       const rank = (e: EscVM) => (slaState(e.createdAt, e.priority, e.status, nowTs).overdue ? 0 : 1);
       if (rank(a) !== rank(b)) return rank(a) - rank(b);
+      const sla = (e: EscVM) => PRIORITY_META[e.priority]?.slaMin ?? 999;
+      if (sla(a) !== sla(b)) return sla(a) - sla(b);
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
   }, [escalations, search, statusFilter, priorityFilter, nowTs]);
