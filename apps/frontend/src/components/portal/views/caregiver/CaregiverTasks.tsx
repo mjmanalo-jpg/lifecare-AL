@@ -81,6 +81,10 @@ export default function CaregiverTasks() {
       .catch(() => { /* Non-fatal: hides the assign button. */ });
   }, []);
   const canAssign = sessionRole ? SUPERVISOR_ROLES.has(sessionRole) : false;
+  // Supervisors (nurse/admin) delegate tasks; caregivers execute them. So the
+  // start/complete/reopen controls are shown only to executors — a nurse sees
+  // the board and the notes read-only, but cannot start or complete a task.
+  const canExecute = !canAssign;
 
   const allFilteredTasks = useMemo(() => {
     const createdTs = (task: CaregiverTask) => {
@@ -297,7 +301,9 @@ export default function CaregiverTasks() {
           )}
 
           <div className="flex items-center gap-1 flex-shrink-0">
-            {task.completed ? (
+            {/* Execution controls (start / complete / reopen) — executors only.
+                Supervisors delegate and observe; they don't perform the task. */}
+            {canExecute && (task.completed ? (
               <button
                 onClick={() => handleSetStatus(task.id, "PENDING")}
                 title="Reopen task"
@@ -332,7 +338,7 @@ export default function CaregiverTasks() {
                   <CheckCircle2 className="w-4 h-4" />
                 </button>
               </>
-            )}
+            ))}
             <button
               onClick={() => void handleAddNote(task)}
               title="Add note"
@@ -563,10 +569,34 @@ export default function CaregiverTasks() {
 
               {viewingTask.notes && (
                 <div className="bg-[#F3F4EE] border-l-4 border-[#2E4A48] p-4 rounded">
-                  <MicroLabel className="mb-2">Notes</MicroLabel>
+                  <MicroLabel className="mb-2">Description</MicroLabel>
                   <p className="text-[#2B2B27]">{viewingTask.notes}</p>
                 </div>
               )}
+
+              {/* Caregiver task notes / blockers (documentationRequired) — the
+                  same notes shown on the board card, surfaced here so the nurse
+                  sees them when opening the task. */}
+              {(() => {
+                const tnotes = taskNotesOf(viewingTask.raw as Record<string, unknown>);
+                if (!tnotes.length) return null;
+                return (
+                  <div>
+                    <MicroLabel className="mb-2">Task Notes</MicroLabel>
+                    <div className="space-y-2">
+                      {tnotes.map((n) => (
+                        <div key={n.id} className="flex items-start gap-2 rounded-md border border-[#E7DFC8] bg-[#FBF7EC] px-3 py-2">
+                          <StickyNote className="w-4 h-4 text-[#C39A3E] mt-0.5 flex-shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm text-[#3C3C36]">{n.text}</p>
+                            <p className="text-[11px] text-[#8A8D82]">{n.author}{n.at ? ` · ${new Date(n.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Modal Footer */}
@@ -577,33 +607,35 @@ export default function CaregiverTasks() {
               >
                 Close
               </button>
-              <div className="flex flex-wrap items-center gap-2">
-                {viewingTask.completed ? (
-                  <button
-                    onClick={() => { handleSetStatus(viewingTask.id, "PENDING"); setViewingTask(null); }}
-                    className="px-4 sm:px-6 py-2 text-white font-semibold rounded-lg transition text-sm bg-[#2E4A48] hover:bg-[#25403D]"
-                  >
-                    Reopen Task
-                  </button>
-                ) : (
-                  <>
-                    {String((viewingTask.raw as { status?: string } | undefined)?.status ?? "").toUpperCase() !== "IN_PROGRESS" && (
-                      <button
-                        onClick={() => { handleSetStatus(viewingTask.id, "IN_PROGRESS"); setViewingTask(null); }}
-                        className="px-4 sm:px-6 py-2 font-semibold rounded-lg transition text-sm border border-[#C39A3E] text-[#9A7A2E] hover:bg-[#C39A3E]/10"
-                      >
-                        Start Task
-                      </button>
-                    )}
+              {canExecute && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {viewingTask.completed ? (
                     <button
-                      onClick={() => { handleSetStatus(viewingTask.id, "COMPLETED"); setViewingTask(null); }}
-                      className="px-4 sm:px-6 py-2 text-white font-semibold rounded-lg transition text-sm bg-[#7E9B6F] hover:bg-[#6E8A5F]"
+                      onClick={() => { handleSetStatus(viewingTask.id, "PENDING"); setViewingTask(null); }}
+                      className="px-4 sm:px-6 py-2 text-white font-semibold rounded-lg transition text-sm bg-[#2E4A48] hover:bg-[#25403D]"
                     >
-                      Mark Complete
+                      Reopen Task
                     </button>
-                  </>
-                )}
-              </div>
+                  ) : (
+                    <>
+                      {String((viewingTask.raw as { status?: string } | undefined)?.status ?? "").toUpperCase() !== "IN_PROGRESS" && (
+                        <button
+                          onClick={() => { handleSetStatus(viewingTask.id, "IN_PROGRESS"); setViewingTask(null); }}
+                          className="px-4 sm:px-6 py-2 font-semibold rounded-lg transition text-sm border border-[#C39A3E] text-[#9A7A2E] hover:bg-[#C39A3E]/10"
+                        >
+                          Start Task
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { handleSetStatus(viewingTask.id, "COMPLETED"); setViewingTask(null); }}
+                        className="px-4 sm:px-6 py-2 text-white font-semibold rounded-lg transition text-sm bg-[#7E9B6F] hover:bg-[#6E8A5F]"
+                      >
+                        Mark Complete
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -387,6 +387,14 @@ export default function NurseDashboard() {
               <div key={t.id} className="p-2.5 rounded-lg bg-amber-50 border border-amber-100">
                 <p className="font-medium text-gray-900 text-sm truncate">{t.title}</p>
                 <p className="text-xs text-gray-600 truncate">{t.resident} • Room {t.room} • Unassigned</p>
+                {(t.dueDate || (t.raw as { createdAt?: string } | null)?.createdAt) && (
+                  <p className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5">
+                    <Clock className="w-3 h-3 flex-shrink-0" />
+                    {t.dueDate
+                      ? `Due ${new Date(t.dueDate).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`
+                      : `Requested ${new Date(String((t.raw as { createdAt?: string }).createdAt)).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`}
+                  </p>
+                )}
               </div>
             ))}
           </div>
