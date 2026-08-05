@@ -6,7 +6,7 @@ import { useMemo, useState, useEffect } from "react";
 import {
   Package, Search, AlertTriangle, Plus, X, Edit, Trash2, RefreshCw,
   LayoutGrid, Table2, Minus, Plus as PlusIcon, Eye, Building2,
-  Calendar, Hash, MapPin,
+  Calendar, Hash, MapPin, Printer,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -20,6 +20,8 @@ import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { StatusPill, MicroLabel, ClinicalHeader, ClinicalCard } from "./clinical/clinical-ui";
 import InventoryOpsPanel from "./InventoryOpsPanel";
 import Barcode from "@/components/portal/Barcode";
+import BarcodeLabelSheet, { type BarcodeLabel } from "@/components/portal/BarcodeLabelSheet";
+import InventoryBarcodeScanner from "@/components/portal/InventoryBarcodeScanner";
 import { generateBarcode } from "@/lib/inventoryOps";
 
 type InventoryItem = ReturnType<typeof adaptInventoryItem>;
@@ -67,7 +69,24 @@ export default function FacilityInventory() {
   const [createForm, setCreateForm] = useState(emptyForm);
   const [editForm, setEditForm] = useState(emptyForm);
   const [page, setPage] = useState(1);
+  const [printLabels, setPrintLabels] = useState<BarcodeLabel[] | null>(null);
   const perPage = 24;
+
+  // Build printable barcode labels from inventory items (skips items with no code).
+  const toLabels = (list: InventoryItem[]): BarcodeLabel[] =>
+    list
+      .map((i) => {
+        const code = String((i.raw as { batchNumber?: string | number | null }).batchNumber ?? "").trim();
+        if (!code) return null;
+        return {
+          code,
+          itemName: i.itemName,
+          category: i.category,
+          location: i.location !== "—" ? i.location : undefined,
+          sub: `Min ${i.minimumStock} · ${i.quantity} ${i.unit}`,
+        } as BarcodeLabel;
+      })
+      .filter(Boolean) as BarcodeLabel[];
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -105,6 +124,10 @@ export default function FacilityInventory() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const start = (page - 1) * perPage;
   const paginated = filtered.slice(start, start + perPage);
+
+  // Live view of the item open in the detail modal, so quick-adjust reflects
+  // the latest quantity after refetch (the captured `viewing` snapshot is stale).
+  const viewingLive = viewing ? (items.find((i) => i.id === viewing.id) ?? viewing) : null;
 
   const handleQuickAdjust = async (item: InventoryItem, delta: number) => {
     const newQty = Math.max(0, item.quantity + delta);
@@ -332,6 +355,16 @@ export default function FacilityInventory() {
             <X className="w-3.5 h-3.5" /> Clear ({activeFilterCount})
           </button>
         )}
+        <InventoryBarcodeScanner items={items} onFound={(item) => setViewing(item)} />
+        <button
+          type="button"
+          onClick={() => setPrintLabels(toLabels(filtered))}
+          disabled={filtered.length === 0}
+          title="Print barcode labels for the items in view"
+          className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium border border-[#D6D8CD] bg-white text-[#2B2B27] hover:bg-[#F5F6F1] transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Printer className="w-4 h-4" /> Print labels
+        </button>
         <div className="flex rounded-lg border border-[#D6D8CD] overflow-hidden">
           <button onClick={() => { setViewMode("grid"); setPage(1); }}
             className={`px-3 py-2.5 text-sm transition ${viewMode === "grid" ? "bg-[#2E4A48] text-white font-semibold" : "bg-white text-[#8A8D82] hover:bg-[#F5F6F1]"}`}>
@@ -480,63 +513,75 @@ export default function FacilityInventory() {
       )}
 
       {/* View Modal */}
-      {viewing && (
+      {viewingLive && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-[#2E4A48] text-white p-5 flex items-center justify-between z-10">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#C39A3E]">Inventory Item</p>
-                <h2 className="text-xl font-bold">{viewing.itemName}</h2>
+                <h2 className="text-xl font-bold">{viewingLive.itemName}</h2>
               </div>
               <button onClick={() => setViewing(null)} className="p-2 hover:bg-white/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
             <div className="p-6 space-y-4">
-              {/* Stock level bar */}
+              {/* Stock level bar + quick adjust */}
               <div>
                 <div className="flex items-center justify-between text-sm mb-1">
                   <span className="font-semibold text-[#2B2B27]">Stock Level</span>
-                  <span className={`font-bold ${viewing.lowStock ? "text-[#C0573F]" : "text-[#7E9B6F]"}`}>
-                    {viewing.quantity} / {viewing.minimumStock} min
+                  <span className={`font-bold ${viewingLive.outOfStock ? "text-[#9E3B2A]" : viewingLive.lowStock ? "text-[#C0573F]" : "text-[#7E9B6F]"}`}>
+                    {viewingLive.quantity} / {viewingLive.minimumStock} min
                   </span>
                 </div>
                 <div className="h-3 bg-[#EBEDE4] rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all ${viewing.lowStock ? "bg-[#C0573F]" : "bg-[#7E9B6F]"}`}
-                    style={{ width: `${Math.min(100, (viewing.quantity / Math.max(viewing.minimumStock, 1)) * 100)}%` }}
+                    className={`h-full rounded-full transition-all ${viewingLive.lowStock ? "bg-[#C0573F]" : "bg-[#7E9B6F]"}`}
+                    style={{ width: `${Math.min(100, (viewingLive.quantity / Math.max(viewingLive.minimumStock, 1)) * 100)}%` }}
                   />
                 </div>
-                <p className="text-xs text-[#8A8D82] mt-1">{viewing.unit}</p>
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-xs text-[#8A8D82]">{viewingLive.unit}</p>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => handleQuickAdjust(viewingLive, -1)} disabled={viewingLive.quantity <= 0} className="p-1.5 rounded-lg border border-[#D6D8CD] hover:bg-[#C0573F]/10 text-[#C0573F] transition disabled:opacity-40 disabled:cursor-not-allowed" title="Remove one"><Minus className="w-4 h-4" /></button>
+                    <span className="text-lg font-bold tabular-nums min-w-[3ch] text-center text-[#2B2B27]">{viewingLive.quantity}</span>
+                    <button onClick={() => handleQuickAdjust(viewingLive, 1)} className="p-1.5 rounded-lg border border-[#D6D8CD] hover:bg-[#7E9B6F]/15 text-[#7E9B6F] transition" title="Add one"><PlusIcon className="w-4 h-4" /></button>
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <DetailField icon={Building2} label="Category" value={viewing.category} />
-                <DetailField icon={Hash} label="Quantity" value={`${viewing.quantity} ${viewing.unit}`} />
-                <DetailField icon={AlertTriangle} label="Min Stock" value={String(viewing.minimumStock)} />
-                <DetailField icon={MapPin} label="Location" value={viewing.location !== "—" ? viewing.location : "—"} />
-                <DetailField icon={Package} label="Supplier" value={viewing.supplier !== "—" ? viewing.supplier : "—"} />
-                <DetailField icon={Calendar} label="Expiry" value={viewing.expiryDate ? new Date(viewing.expiryDate).toLocaleDateString() : "—"} />
+                <DetailField icon={Building2} label="Category" value={viewingLive.category} />
+                <DetailField icon={Hash} label="Quantity" value={`${viewingLive.quantity} ${viewingLive.unit}`} />
+                <DetailField icon={AlertTriangle} label="Min Stock" value={String(viewingLive.minimumStock)} />
+                <DetailField icon={MapPin} label="Location" value={viewingLive.location !== "—" ? viewingLive.location : "—"} />
+                <DetailField icon={Package} label="Supplier" value={viewingLive.supplier !== "—" ? viewingLive.supplier : "—"} />
+                <DetailField icon={Calendar} label="Expiry" value={viewingLive.expiryDate ? new Date(viewingLive.expiryDate).toLocaleDateString() : "—"} />
               </div>
-              {(viewing.raw as { batchNumber?: string }).batchNumber && (
+              {(viewingLive.raw as { batchNumber?: string }).batchNumber && (
                 <div className="mt-3 rounded-lg border border-[#D6D8CD] bg-white p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8A8D82] mb-1">Barcode / Batch No.</p>
-                  <div className="flex justify-center"><Barcode value={String((viewing.raw as { batchNumber?: string }).batchNumber)} /></div>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8A8D82]">Barcode / Batch No.</p>
+                    <button onClick={() => setPrintLabels(toLabels([viewingLive]))} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-[#D6D8CD] text-xs font-semibold text-[#2B2B27] hover:bg-[#F5F6F1] transition" title="Print this label">
+                      <Printer className="w-3.5 h-3.5" /> Print label
+                    </button>
+                  </div>
+                  <div className="flex justify-center"><Barcode value={String((viewingLive.raw as { batchNumber?: string }).batchNumber)} /></div>
                 </div>
               )}
 
-              {viewing.notes && (
+              {viewingLive.notes && (
                 <div className="bg-[#C39A3E]/10 border-l-4 border-[#C39A3E] p-3 rounded">
                   <p className="text-xs font-semibold text-[#C39A3E] mb-1">Notes</p>
-                  <p className="text-sm text-[#2B2B27]">{viewing.notes}</p>
+                  <p className="text-sm text-[#2B2B27]">{viewingLive.notes}</p>
                 </div>
               )}
             </div>
             <div className="sticky bottom-0 bg-[#F5F6F1] border-t border-[#E1E3D9] px-6 py-4 flex items-center justify-between">
               <button onClick={() => setViewing(null)} className="px-6 py-2 text-[#2B2B27] hover:bg-[#EBEDE4] rounded-lg transition font-medium">Close</button>
               <div className="flex gap-2">
-                <button onClick={() => { setViewing(null); startEditing(viewing); }} className="px-4 py-2 bg-[#C39A3E] hover:bg-[#AD892F] text-white font-semibold rounded-lg transition text-sm">
+                <button onClick={() => { const v = viewingLive; setViewing(null); startEditing(v); }} className="px-4 py-2 bg-[#C39A3E] hover:bg-[#AD892F] text-white font-semibold rounded-lg transition text-sm">
                   <Edit className="w-4 h-4 inline mr-1" /> Edit
                 </button>
-                <button onClick={() => { handleDelete(viewing); setViewing(null); }} className="px-4 py-2 bg-[#C0573F] hover:bg-[#A8482F] text-white font-semibold rounded-lg transition text-sm">
+                <button onClick={() => { handleDelete(viewingLive); setViewing(null); }} className="px-4 py-2 bg-[#C0573F] hover:bg-[#A8482F] text-white font-semibold rounded-lg transition text-sm">
                   <Trash2 className="w-4 h-4 inline mr-1" /> Delete
                 </button>
               </div>
@@ -550,6 +595,9 @@ export default function FacilityInventory() {
 
       {/* Edit Modal */}
       {editing && <ItemFormModal title="Edit Item" form={editForm} onChange={setEditForm} onSave={handleSaveEdit} onCancel={() => setEditing(null)} saveLabel="Save Changes" />}
+
+      {/* Print-only barcode label sheet */}
+      {printLabels && <BarcodeLabelSheet labels={printLabels} onDone={() => setPrintLabels(null)} />}
     </div>
   );
 }
