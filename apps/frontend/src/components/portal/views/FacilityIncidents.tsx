@@ -265,7 +265,7 @@ export default function FacilityIncidents({ readOnly = false }: { readOnly?: boo
           </h1>
           <p className="text-gray-600 text-sm">Facility-wide incident tracking, management, and analytics</p>
         </div>
-        <div className="flex items-center gap-2 self-start">
+        <div className="flex flex-wrap items-center gap-2 self-start">
           <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           <button onClick={() => { setForm(emptyForm); setCreating(true); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition text-sm font-semibold shadow">
             <Plus className="w-4 h-4" /> Report Incident
@@ -594,10 +594,10 @@ export default function FacilityIncidents({ readOnly = false }: { readOnly?: boo
                 </div>
               )}
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setViewing(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Close</button>
               {!readOnly && (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {!viewing.resolved ? (
                     <button onClick={() => { void handleResolve(viewing.id); setViewing(null); }} className="px-5 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm">
                       <CheckCircle className="w-4 h-4 inline mr-1" /> Review &amp; Close
@@ -697,7 +697,7 @@ export default function FacilityIncidents({ readOnly = false }: { readOnly?: boo
               </label>
               {form.followUpRequired && <textarea value={form.followUpNotes} onChange={e => setF("followUpNotes", e.target.value)} rows={2} placeholder="Follow-up notes…" className={incInp} />}
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setCreating(false)} disabled={saving} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition text-sm disabled:opacity-50">Cancel</button>
               <button onClick={() => void handleCreate()} disabled={saving} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm disabled:opacity-50">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} {saving ? "Saving…" : "Submit Report"}

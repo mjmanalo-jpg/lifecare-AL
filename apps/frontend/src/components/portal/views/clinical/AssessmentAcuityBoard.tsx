@@ -183,7 +183,7 @@ export default function AssessmentAcuityBoard({ clinicianRole = "NURSE" }: { cli
           </h2>
           <span className="text-xs text-gray-400">Room {current?.room}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => void assessQ.refetch()} className={btnSecondary}><RefreshCw className="w-3.5 h-3.5 inline mr-1" /> Refresh</button>
           <button onClick={() => setShowForm((v) => !v)} className={btnPrimary}><Plus className="w-4 h-4 inline mr-1" /> New Assessment</button>
         </div>
@@ -217,7 +217,7 @@ export default function AssessmentAcuityBoard({ clinicianRole = "NURSE" }: { cli
                     {acuity && <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${ACUITY_BADGE[acuity.acuityLevel]}`}>Acuity: {acuity.acuityLevel}</span>}
                     {acuity && <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${CARE_BADGE[acuity.careLevel]}`}>{acuity.careLevel}</span>}
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <span className="text-[11px] text-gray-400 flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(a.completedAt || a.createdAt).toLocaleDateString()}</span>
                     <button onClick={() => handleDelete(a.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
@@ -242,7 +242,7 @@ export default function AssessmentAcuityBoard({ clinicianRole = "NURSE" }: { cli
                 <div className="flex items-center justify-between text-xs border-t pt-2 flex-wrap gap-2">
                   <span className="text-gray-500">Raw score <b className="text-gray-800">{a.totalRawScore}</b>/{a.maxPossibleScore} · by {a.assessedByName}</span>
                   {acuity && (
-                    <div className="flex items-center gap-3 text-gray-600">
+                    <div className="flex items-center gap-3 text-gray-600 flex-wrap">
                       <span className="flex items-center gap-1"><TrendingUp className="w-3 h-3 text-emerald-500" /> {acuity.dailyCareMinutes} care min/day</span>
                       <span className="text-gray-400">
                         D {acuity.shiftBreakdown?.DAY ?? "—"} / E {acuity.shiftBreakdown?.EVENING ?? "—"} / N {acuity.shiftBreakdown?.NIGHT ?? "—"}

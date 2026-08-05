@@ -367,9 +367,9 @@ export default function BillingLedger() {
                 <input value={invoiceDesc} onChange={(e) => setInvoiceDesc(e.target.value)} placeholder="e.g. August services" className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400" />
               </div>
             </div>
-            <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-6 py-4">
+            <div className="sticky bottom-0 flex items-center justify-between flex-wrap gap-2 border-t border-gray-200 bg-gray-50 px-6 py-4">
               <button onClick={() => setShowInvoice(false)} disabled={busy} className="rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 disabled:opacity-50">Cancel</button>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center flex-wrap gap-2">
                 <button onClick={() => createInvoice(false)} disabled={busy || !dueDate} className="rounded-lg border border-gray-300 px-4 py-2 font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-50">Create Draft</button>
                 <button onClick={() => createInvoice(true)} disabled={busy || !dueDate} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 px-4 py-2 font-semibold text-white shadow hover:shadow-lg disabled:opacity-50">
                   <Send className="w-4 h-4" /> {busy ? "Working…" : "Create & Send"}

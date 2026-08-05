@@ -143,8 +143,8 @@ export default function BillingReceivables() {
                 <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
                   <div className="h-full bg-gradient-to-r from-blue-400 to-indigo-500 transition-all duration-500" style={{ width: `${(cell.amount / maxBucket) * 100}%` }} />
                 </div>
-                <span className="w-28 shrink-0 text-right font-semibold text-gray-900">{fmt(cell.amount)}</span>
-                <span className="w-14 shrink-0 text-right text-xs text-gray-500">{cell.count} item{cell.count === 1 ? "" : "s"}</span>
+                <span className="w-20 sm:w-28 shrink-0 text-right font-semibold text-gray-900">{fmt(cell.amount)}</span>
+                <span className="hidden sm:block w-14 shrink-0 text-right text-xs text-gray-500">{cell.count} item{cell.count === 1 ? "" : "s"}</span>
               </div>
             );
           })}

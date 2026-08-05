@@ -766,7 +766,7 @@ export default function FacilityDining() {
                 />
               </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2 z-10">
               <button onClick={() => setShowAddCompliance(false)} className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg font-bold">Cancel</button>
               <button onClick={handleSaveCompliance} className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-extrabold text-sm rounded-lg hover:shadow transition active:scale-95">Save Audit</button>
             </div>
@@ -821,7 +821,7 @@ export default function FacilityDining() {
                 />
               </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2 z-10">
               <button onClick={() => setShowAddConsult(false)} className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg font-bold">Cancel</button>
               <button onClick={handleSaveConsult} className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-extrabold text-sm rounded-lg hover:shadow transition active:scale-95">Send Request</button>
             </div>
@@ -897,7 +897,7 @@ export default function FacilityDining() {
                 />
               </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2 z-10">
               <button onClick={() => setShowAddMenu(false)} className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg font-bold">Cancel</button>
               <button onClick={handleSaveMenu} className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-extrabold text-sm rounded-lg hover:shadow transition active:scale-95">Schedule Meal</button>
             </div>

@@ -266,13 +266,13 @@ export default function FeatureMatrixDashboard({ initialTab = "overview" }: { in
         <div className="flex items-center gap-1 border-b border-gray-200 overflow-x-auto">
           <button
             onClick={() => setView("overview")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${view === "overview" ? "border-purple-600 text-purple-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`flex items-center gap-1.5 whitespace-nowrap shrink-0 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${view === "overview" ? "border-purple-600 text-purple-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}
           >
             <BarChart3 className="w-4 h-4" /> System Overview
           </button>
           <button
             onClick={() => setView("matrix")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${view === "matrix" ? "border-purple-600 text-purple-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`flex items-center gap-1.5 whitespace-nowrap shrink-0 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${view === "matrix" ? "border-purple-600 text-purple-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}
           >
             <ShieldCheck className="w-4 h-4" /> Access Control Matrix
           </button>

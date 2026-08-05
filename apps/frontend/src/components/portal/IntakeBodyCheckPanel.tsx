@@ -96,7 +96,7 @@ export default function IntakeBodyCheckPanel({ residentId, communityCode, examin
       </div>
 
       {!readOnly && dirty && (
-        <div className="flex justify-end gap-2 border-t border-gray-100 pt-3">
+        <div className="flex flex-wrap justify-end gap-2 border-t border-gray-100 pt-3">
           <button onClick={() => setDraft(null)} className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Cancel</button>
           <button onClick={() => void save()} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save intake

@@ -277,7 +277,7 @@ export default function SuperAdminDashboard() {
                   <div key={s.id} className="p-3 bg-amber-50/60 rounded-lg border border-amber-200">
                     <p className="text-sm font-semibold text-gray-900 truncate">{s.name}</p>
                     <p className="text-xs text-gray-600 truncate">{s.position}{s.department ? ` • ${s.department}` : ""}</p>
-                    <div className="flex items-center gap-2 mt-2">
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
                       <button onClick={() => void handleApprove(s.id, s.name)} disabled={approvingId === s.id}
                         className="flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r from-green-400 to-green-500 text-white rounded text-xs font-semibold hover:shadow transition disabled:opacity-50">
                         <CheckCircle2 className="w-3.5 h-3.5" /> Approve

@@ -510,7 +510,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                   </div>
                 )}
               </div>
-              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex items-center justify-between">
+              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex flex-wrap items-center justify-between gap-2">
                 <button onClick={() => setViewingStaff(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
                 <button onClick={() => { startEditing(viewingStaff); setViewingStaff(null); }} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Edit Staff Member</button>
               </div>
@@ -554,7 +554,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                   </div>
                 </div>
               </div>
-              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex items-center justify-between">
+              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex flex-wrap items-center justify-between gap-2">
                 <button onClick={() => setShowAddStaff(false)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
                 <button onClick={handleAddStaff} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Create Staff Account</button>
               </div>
@@ -644,7 +644,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                   </div>
                 </div>
               </div>
-              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex items-center justify-between">
+              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex flex-wrap items-center justify-between gap-2">
                 <button onClick={() => setEditingStaff(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
                 <button onClick={handleSaveEdit} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Save Changes</button>
               </div>

@@ -178,7 +178,7 @@ function DocumentUploadForm({ residents, onClose, onSaved }: { residents: any[];
       </div>
       <div><label className={labelCls}>File</label><input type="file" onChange={e => setFile(e.target.files?.[0] || null)} className={inputCls} /></div>
       <div><label className={labelCls}>Notes</label><textarea value={form.notes} onChange={e => set("notes", e.target.value)} className={inputCls} rows={2} /></div>
-      <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-3 -mx-6 -mb-6 rounded-b-xl flex justify-end gap-2">
+      <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-3 -mx-6 -mb-6 rounded-b-xl flex flex-wrap justify-end gap-2">
         <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 cursor-pointer">Cancel</button>
         <button type="submit" disabled={saving || !form.residentId || !form.title} className="px-5 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 disabled:opacity-50 cursor-pointer">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Upload"}

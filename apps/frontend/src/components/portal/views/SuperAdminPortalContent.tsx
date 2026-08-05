@@ -356,7 +356,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
             </h1>
             <p className="text-gray-600">Manage facility staff members, positions, and status</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             {selectedStaff.size > 0 && (
               <button
                 onClick={handleDeleteSelected}
@@ -527,7 +527,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                         <h3 className="font-semibold text-gray-900 truncate">{staff.name}</h3>
                       <span
                         className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
@@ -687,7 +687,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
               </div>
 
               {/* View Modal Footer */}
-              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex items-center justify-between">
+              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex flex-wrap items-center justify-between gap-3">
                 <button
                   onClick={() => setViewingStaff(null)}
                   className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
@@ -912,7 +912,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
               </div>
 
               {/* Edit Modal Footer */}
-              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex items-center justify-between">
+              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex flex-wrap items-center justify-between gap-3">
                 <button
                   onClick={() => setEditingStaff(null)}
                   className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
@@ -1034,7 +1034,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
               </div>
 
               {/* Modal Footer */}
-              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex items-center justify-between">
+              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex flex-wrap items-center justify-between gap-3">
                 <button
                   onClick={() => setCreatingStaff(false)}
                   className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"

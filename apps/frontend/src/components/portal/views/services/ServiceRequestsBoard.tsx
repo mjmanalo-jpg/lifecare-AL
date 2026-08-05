@@ -307,7 +307,7 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
           </h1>
           <p className="text-gray-600">Hotel-style ticket desk — aircon/HVAC · housekeeping · room service · laundry · repairs</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           {/* Tickets originate from residents or the Facility Admin front desk — crew
               portals (scoped via `categories`) work the queue but don't raise tickets. */}

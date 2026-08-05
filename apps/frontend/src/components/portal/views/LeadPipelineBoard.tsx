@@ -173,7 +173,7 @@ export default function LeadPipelineBoard() {
               <label className="text-xs font-medium text-gray-600">Stage<select className={input + " mt-1"} value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value as LeadStage })}>{LEAD_STAGES.map((s) => <option key={s} value={s}>{STAGE_META[s].label}</option>)}</select></label>
               <label className="text-xs font-medium text-gray-600 sm:col-span-2">Notes<textarea className={input + " mt-1 min-h-[60px]"} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
             </div>
-            <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-3">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-gray-100 px-5 py-3">
               <button onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Cancel</button>
               <button onClick={() => void saveForm()} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null} {editing ? "Save" : "Add lead"}</button>
             </div>

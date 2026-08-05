@@ -2060,7 +2060,7 @@ Vitals:
               </div>
             </div>
 
-            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex flex-wrap justify-end gap-3">
               <button
                 onClick={() => setRoomServiceModalOpen(false)}
                 className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm"
@@ -2159,7 +2159,7 @@ Vitals:
               </div>
             </div>
 
-            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex flex-wrap justify-end gap-3">
               <button
                 onClick={() => setCallBellModalOpen(false)}
                 className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm"

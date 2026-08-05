@@ -162,7 +162,7 @@ export default function AlertCenter() {
         </div>
 
         {/* RBAC-gated actions */}
-        <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-gray-100">
+        <div className="flex flex-wrap items-center justify-end gap-2 mt-3 pt-2 border-t border-gray-100">
           {!a.isRead && (
             <button onClick={() => void acknowledge(a)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition">
               <Check className="w-4 h-4" /> Acknowledge

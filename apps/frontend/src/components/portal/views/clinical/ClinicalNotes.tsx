@@ -257,7 +257,7 @@ export default function ClinicalNotes({ clinicianRole = "PHYSICIAN" }: { clinici
                 <p className="text-gray-900 text-sm whitespace-pre-wrap">{viewing.content || "No content"}</p>
               </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between gap-2">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setViewing(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
               <button onClick={() => void handleDelete(viewing)}
                 className="flex items-center gap-2 px-5 py-2 bg-red-50 text-red-600 border border-red-200 font-semibold rounded-lg hover:bg-red-100 transition">
@@ -428,7 +428,7 @@ function AddNoteModal({ residents, authorName, onClose, onSaved }: {
             <div>
               <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
                 <label className="block text-sm font-semibold text-gray-700">Content <span className="text-red-500">*</span></label>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button type="button" onClick={toggleDictation} disabled={!speechSupported}
                     title={speechSupported ? "Dictate with your microphone" : "Voice input not supported in this browser"}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed ${
@@ -451,7 +451,7 @@ function AddNoteModal({ residents, authorName, onClose, onSaved }: {
               </p>
             </div>
           </div>
-          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between gap-2">
+          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
             <button type="button" onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
             <button type="submit" disabled={!valid || saving}
               className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed">

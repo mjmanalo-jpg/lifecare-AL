@@ -220,7 +220,7 @@ export default function NurseRecordsWithCallBells() {
                       </p>
                     )}
 
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {bell.status === "PENDING" && (
                         <button
                           onClick={() => handleBellRespond(bell.id, selectedResidentData.firstName)}

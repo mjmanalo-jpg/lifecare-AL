@@ -463,7 +463,7 @@ export default function NurseRecords() {
             <Textarea label="Care Notes" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} />
             <p className="text-xs text-gray-500">Medications are managed as separate clinical records and are not edited here.</p>
           </div>
-          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex items-center justify-between">
+          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-3">
             <button onClick={() => setEditing(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
             <button onClick={() => void saveEdit()} disabled={saving} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-60">{saving ? "Saving…" : "Save Changes"}</button>
           </div>
@@ -830,8 +830,8 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
           </div>
         )}
       </div>
-      <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex items-center justify-between">
-        <div className="flex gap-2">
+      <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
           <button onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
           <button
             onClick={() => {

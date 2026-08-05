@@ -633,13 +633,13 @@ export default function AIAssistantContent() {
         {/* ── Chat column ─────────────────────────────────────────────── */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 flex flex-col h-[70vh] overflow-hidden">
           {/* header */}
-          <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-yellow-50 to-white">
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+          <div className="px-5 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2 bg-gradient-to-r from-yellow-50 to-white">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
                 <Bot className="w-5 h-5 text-black" />
               </div>
-              <div>
-                <p className="font-bold text-gray-900 leading-tight">{config.name || "AI Assistant"}</p>
+              <div className="min-w-0">
+                <p className="font-bold text-gray-900 leading-tight truncate">{config.name || "AI Assistant"}</p>
                 <p className="text-xs text-gray-500 flex items-center gap-1">
                   {speaking ? (
                     <><Volume2 className="w-3 h-3 text-yellow-600 animate-pulse" /> speaking…</>

@@ -294,7 +294,7 @@ export default function FamilyBilling() {
                           </p>
                         </div>
 
-                        <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
+                        <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-2">
                           {v.balance > 0 && v.status !== "DRAFT" && (
                             <button onClick={() => handlePayNow(v)} className="flex-1 py-2 bg-yellow-400 hover:bg-yellow-500 text-black font-extrabold rounded-lg text-xs transition shadow-sm active:scale-95 flex items-center justify-center gap-1.5">
                               <CreditCard className="w-3.5 h-3.5" /> Pay Balance Online
@@ -447,7 +447,7 @@ export default function FamilyBilling() {
               </div>
             </div>
 
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-between items-center">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap justify-between items-center gap-2">
               <button onClick={() => setPayingInvoice(null)} disabled={processingPayment} className="px-4 py-2 text-gray-600 hover:text-gray-900 text-sm font-semibold transition">
                 Cancel
               </button>
@@ -498,7 +498,7 @@ export default function FamilyBilling() {
                 Thank you for your payment. This receipt confirms that the funds have been successfully validated and processed.
               </p>
             </div>
-            <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-between">
+            <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap justify-between gap-2">
               <button onClick={() => setViewingReceipt(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-xs font-bold transition">Close</button>
               <button onClick={() => window.print()} className="flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-xs transition"><Printer className="w-3.5 h-3.5" /> Print Receipt</button>
             </div>

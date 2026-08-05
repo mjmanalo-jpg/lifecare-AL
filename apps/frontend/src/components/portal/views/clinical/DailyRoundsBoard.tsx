@@ -320,7 +320,7 @@ export default function DailyRoundsBoard({ clinicianRole = "CAREGIVER" }: { clin
           <div className="bg-white rounded-xl border p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-gray-800">{TABS.find(t => t.key === tab)?.label} Observations</h3>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <button onClick={refetchTab} className={btnSecondary}><RefreshCw className="w-3.5 h-3.5 inline mr-1" /> Refresh</button>
                 <button onClick={() => setShowForm(!showForm)} className={btnPrimary}><Plus className="w-4 h-4 inline mr-1" /> Add</button>
               </div>
@@ -473,7 +473,7 @@ function FormPanel({ tab, roundId, clinicianName, onDone }: { tab: TabKey; round
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <FormFields tab={tab} />
       </div>
-      <div className="mt-3 flex justify-end gap-2">
+      <div className="mt-3 flex justify-end gap-2 flex-wrap">
         <button type="button" onClick={onDone} className={btnSecondary}>Cancel</button>
         <button type="submit" disabled={loading} className={btnPrimary + " flex items-center gap-1"}>
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}

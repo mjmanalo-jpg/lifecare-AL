@@ -173,7 +173,7 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
                   </div>
                 )}
 
-                <div className="flex items-center gap-2 mt-3">
+                <div className="flex flex-wrap items-center gap-2 mt-3">
                   {st === "REQUESTED" && canApprove && (<>
                     <button onClick={() => approve(r)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#7E9B6F] text-white text-xs font-semibold hover:bg-[#6E8A60]"><Check className="w-3.5 h-3.5" /> Approve</button>
                     <button onClick={() => reject(r)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#C0573F] text-white text-xs font-semibold hover:bg-[#A94A34]"><Ban className="w-3.5 h-3.5" /> Reject</button>
@@ -201,7 +201,7 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
                 <div className="sm:col-span-2"><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Purpose <span className="text-[#C0573F]">*</span></label><input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
               </div>
             </div>
-            <div className="sticky bottom-0 flex items-center justify-between border-t border-[#D6D8CD] bg-[#F0F1EA] px-6 py-4"><button onClick={() => setShowAdd(false)} disabled={busy} className="rounded-lg px-4 py-2 text-[#2B2B27] hover:bg-[#E1E3D9] disabled:opacity-50">Cancel</button><button onClick={submit} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-[#2E4A48] hover:bg-[#25403D] px-6 py-2 font-semibold text-white shadow-sm disabled:opacity-50"><Plus className="w-4 h-4" /> {busy ? "Submitting…" : "Submit"}</button></div>
+            <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t border-[#D6D8CD] bg-[#F0F1EA] px-6 py-4"><button onClick={() => setShowAdd(false)} disabled={busy} className="rounded-lg px-4 py-2 text-[#2B2B27] hover:bg-[#E1E3D9] disabled:opacity-50">Cancel</button><button onClick={submit} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-[#2E4A48] hover:bg-[#25403D] px-6 py-2 font-semibold text-white shadow-sm disabled:opacity-50"><Plus className="w-4 h-4" /> {busy ? "Submitting…" : "Submit"}</button></div>
           </div>
         </div>
       )}

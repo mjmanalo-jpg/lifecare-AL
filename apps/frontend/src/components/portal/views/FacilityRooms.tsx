@@ -223,7 +223,7 @@ export default function FacilityRooms() {
               ))}
             </div>
           )}
-          <div className="flex gap-2 pt-1">
+          <div className="flex flex-wrap gap-2 pt-1">
             <button onClick={() => setViewing(room)} className="flex-1 px-3 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-sm font-medium transition flex items-center justify-center gap-1">
               <Eye className="w-3.5 h-3.5" /> View
             </button>
@@ -451,7 +451,7 @@ export default function FacilityRooms() {
                 })()}
               </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-8 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setViewing(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
               <button onClick={() => { startEditing(viewing); setViewing(null); }} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Edit</button>
             </div>
@@ -489,7 +489,7 @@ export default function FacilityRooms() {
                 <div className="col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-2">Notes</label><textarea value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
               </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-8 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setEditing(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
               <button onClick={handleSaveEdit} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Save Changes</button>
             </div>

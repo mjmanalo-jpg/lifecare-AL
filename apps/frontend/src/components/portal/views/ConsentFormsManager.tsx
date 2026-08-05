@@ -60,7 +60,7 @@ export default function ConsentFormsManager() {
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><FileSignature className="w-7 h-7 text-blue-600" /> Consent &amp; Move-in Forms</h1>
           <p className="text-gray-500 text-sm">Define the forms families e-sign during move-in and attach a viewable PDF to each.</p>
         </div>
-        <div className="flex items-center gap-2 self-start">
+        <div className="flex flex-wrap items-center gap-2 self-start">
           {forms.length === 0 && !dirty && <button onClick={() => setDraft(DEFAULT_FORMS.map((f) => ({ ...f, id: newId() })))} className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1.5"><RotateCcw className="w-4 h-4" /> Load default set</button>}
           <button onClick={add} className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1.5"><Plus className="w-4 h-4" /> Add form</button>
           {dirty && <button onClick={() => void save()} disabled={saving} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 inline-flex items-center gap-1.5">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save</button>}

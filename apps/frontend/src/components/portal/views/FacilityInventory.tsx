@@ -575,9 +575,9 @@ export default function FacilityInventory() {
                 </div>
               )}
             </div>
-            <div className="sticky bottom-0 bg-[#F5F6F1] border-t border-[#E1E3D9] px-6 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-[#F5F6F1] border-t border-[#E1E3D9] px-6 py-4 flex flex-wrap items-center justify-between gap-3">
               <button onClick={() => setViewing(null)} className="px-6 py-2 text-[#2B2B27] hover:bg-[#EBEDE4] rounded-lg transition font-medium">Close</button>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button onClick={() => { const v = viewingLive; setViewing(null); startEditing(v); }} className="px-4 py-2 bg-[#C39A3E] hover:bg-[#AD892F] text-white font-semibold rounded-lg transition text-sm">
                   <Edit className="w-4 h-4 inline mr-1" /> Edit
                 </button>
@@ -722,7 +722,7 @@ function ItemFormModal({ title, form, onChange, onSave, onCancel, saveLabel }: {
             </div>
           </div>
         </div>
-        <div className="sticky bottom-0 bg-[#F5F6F1] border-t border-[#E1E3D9] px-6 py-4 flex items-center justify-between">
+        <div className="sticky bottom-0 bg-[#F5F6F1] border-t border-[#E1E3D9] px-6 py-4 flex flex-wrap items-center justify-between gap-3">
           <button onClick={onCancel} className="px-5 py-2 text-[#2B2B27] hover:bg-[#EBEDE4] rounded-lg transition font-medium text-sm">Cancel</button>
           <button onClick={onSave} className="px-5 py-2 bg-[#2E4A48] hover:bg-[#25403D] text-white font-semibold rounded-lg transition active:scale-95 text-sm">{saveLabel}</button>
         </div>

@@ -286,7 +286,7 @@ export default function CameraActivityLog() {
               <option value={50}>50 / page</option>
             </select>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
               className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium flex items-center gap-1 text-sm">
               <ChevronLeft className="w-4 h-4" /> Prev

@@ -711,7 +711,7 @@ function AdmitResidentModal({ takenRooms, onClose, onAdmitted }: {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-200">
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-2 border-t border-gray-200">
               <button type="button" onClick={onClose} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Cancel</button>
               <button type="submit" disabled={!valid || saving} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}

@@ -570,14 +570,14 @@ export default function CaregiverTasks() {
             </div>
 
             {/* Modal Footer */}
-            <div className="sticky bottom-0 bg-[#F3F4EE] border-t border-[#D6D8CD] px-4 sm:px-6 md:px-8 py-3 sm:py-4 flex items-center justify-between gap-2">
+            <div className="sticky bottom-0 bg-[#F3F4EE] border-t border-[#D6D8CD] px-4 sm:px-6 md:px-8 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-2">
               <button
                 onClick={() => setViewingTask(null)}
                 className="px-4 sm:px-6 py-2 text-[#3C3C36] hover:bg-[#E1E3D9] rounded-lg transition text-sm"
               >
                 Close
               </button>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {viewingTask.completed ? (
                   <button
                     onClick={() => { handleSetStatus(viewingTask.id, "PENDING"); setViewingTask(null); }}

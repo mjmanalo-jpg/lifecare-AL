@@ -300,7 +300,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
                   })}
                   <p className="text-xs text-gray-500">Fill only what you measured. Abnormal values trigger alerts automatically.</p>
                 </div>
-                <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-5 py-3 flex items-center justify-end gap-2">
+                <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-5 py-3 flex flex-wrap items-center justify-end gap-2">
                   <button onClick={() => setShowLog(false)} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancel</button>
                   <button onClick={() => void submitLog()} disabled={savingLog} className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-sm disabled:opacity-50">{savingLog ? "Saving…" : "Save Vitals"}</button>
                 </div>

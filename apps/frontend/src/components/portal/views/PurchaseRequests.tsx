@@ -177,7 +177,7 @@ export default function PurchaseRequests() {
           </h1>
           <p className="text-gray-600">Restock &amp; procurement — request → approve → order → receive.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button onClick={exportCsv} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"><Download className="w-4 h-4" /> CSV</button>
           <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-semibold shadow hover:shadow-lg"><Plus className="w-4 h-4" /> New Request</button>
         </div>
@@ -280,7 +280,7 @@ export default function PurchaseRequests() {
                 <p className="text-sm text-gray-600">Estimated total: <span className="font-semibold text-gray-900">{money(Number(form.quantity) * Number(form.estimatedUnitCost))}</span></p>
               )}
             </div>
-            <div className="sticky bottom-0 flex items-center justify-between border-t border-gray-200 bg-gray-50 px-6 py-4">
+            <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
               <button onClick={() => setShowCreate(false)} disabled={busy} className="rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 disabled:opacity-50">Cancel</button>
               <button onClick={submit} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-2 font-semibold text-white shadow hover:shadow-lg disabled:opacity-50"><Plus className="w-4 h-4" /> {busy ? "Submitting…" : "Submit Request"}</button>
             </div>

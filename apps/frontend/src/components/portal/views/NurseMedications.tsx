@@ -562,7 +562,7 @@ export default function NurseMedications() {
               </div>
             </div>
           </div>
-          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex items-center justify-between">
+          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-2">
             <button onClick={() => setViewing(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
             {viewing.status !== "DISCONTINUED" && (
               <button onClick={() => void handleStatus(viewing, "DISCONTINUED", "Discontinue")}
@@ -801,7 +801,7 @@ function AddMedicationModal({ residents, onClose, onSaved }: {
             </div>
           </div>
         </div>
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex items-center justify-between gap-2">
+        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-2">
           <button type="button" onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
           <button type="submit" disabled={!valid || saving}
             className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed">

@@ -1248,7 +1248,7 @@ function BlogManager() {
                 <span className="text-xs text-gray-400">{form.published ? "Visible on landing page" : "Draft — hidden from public"}</span>
               </label>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap justify-end gap-3">
               <button onClick={() => setModalOpen(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Cancel</button>
               <button onClick={handleSubmit} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
                 {editingId ? "Update Post" : "Publish Post"}
@@ -1688,7 +1688,7 @@ function PagesManager() {
             )}
 
             {!showTemplates || editingId ? (
-              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
+              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap justify-end gap-3">
                 <button onClick={() => setModalOpen(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Cancel</button>
                 <button onClick={handleSubmit} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
                   {editingId ? "Update Page" : "Create Page"}

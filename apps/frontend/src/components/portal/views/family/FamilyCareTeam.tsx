@@ -209,7 +209,7 @@ export default function FamilyCareTeam() {
                   <div key={String(t.id ?? i)} className="p-2.5 rounded-lg bg-purple-50/60 border border-purple-100">
                     <div className="flex items-center justify-between gap-2">
                       <p className={`font-medium text-sm truncate ${status === "COMPLETED" ? "text-gray-500 line-through" : "text-gray-900"}`}>{String(t.title ?? "Care task")}</p>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <div className="flex flex-wrap items-center gap-1.5 flex-shrink-0">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${PRIORITY_BADGE[String(t.priority ?? "MEDIUM")] ?? PRIORITY_BADGE.MEDIUM}`}>{humanize(String(t.priority ?? "MEDIUM"))}</span>
                         <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${TASK_BADGE[status] ?? TASK_BADGE.PENDING}`}>{humanize(status)}</span>
                       </div>

@@ -214,7 +214,7 @@ export default function ClinicalMessages({ clinicianRole = "PHYSICIAN" }: { clin
           className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none">
           {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
           {DIRECTION_FILTERS.map((d) => (
             <button key={d} onClick={() => setDirectionFilter(d)}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold transition border ${directionFilter === d ? "bg-yellow-400 text-black border-yellow-400" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}>
@@ -222,7 +222,7 @@ export default function ClinicalMessages({ clinicianRole = "PHYSICIAN" }: { clin
             </button>
           ))}
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
           {READ_FILTERS.map((r) => (
             <button key={r} onClick={() => setReadFilter(r)}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold transition border ${readFilter === r ? "bg-yellow-400 text-black border-yellow-400" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}>
@@ -337,9 +337,9 @@ export default function ClinicalMessages({ clinicianRole = "PHYSICIAN" }: { clin
                 <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap leading-relaxed">{viewing.content}</p>
               </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between gap-2 flex-wrap">
               <button onClick={() => setViewing(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Close</button>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button onClick={() => handleReply(viewing)}
                   className="flex items-center gap-1.5 px-5 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg transition text-sm">
                   <Reply className="w-4 h-4" /> Reply
@@ -392,7 +392,7 @@ export default function ClinicalMessages({ clinicianRole = "PHYSICIAN" }: { clin
                 <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={5} placeholder="Handover summary, clinical update, or request…" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none resize-y" />
               </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between gap-2">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between gap-2 flex-wrap">
               <button onClick={() => setComposing(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
               <button onClick={() => void handleSend()} disabled={!recipientId || !content.trim() || sending}
                 className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-400 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed">

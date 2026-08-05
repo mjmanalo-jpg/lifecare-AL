@@ -318,7 +318,7 @@ function CreateModal({ tab, residents, clinicianName, onClose, onSaved }: { tab:
             <textarea value={form.notes || ""} onChange={e => set("notes", e.target.value)} className={inputCls} rows={3} placeholder="Additional observations..." />
           </div>
 
-          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-3 -mx-6 -mb-6 rounded-b-xl flex justify-end gap-2">
+          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-3 -mx-6 -mb-6 rounded-b-xl flex flex-wrap justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 cursor-pointer">Cancel</button>
             <button type="submit" disabled={saving || !form.residentId} className="px-5 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer">
               {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : "Save Entry"}

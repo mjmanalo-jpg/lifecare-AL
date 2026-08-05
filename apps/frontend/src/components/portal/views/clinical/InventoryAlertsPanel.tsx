@@ -100,7 +100,7 @@ export default function InventoryAlertsPanel() {
           <h2 className="text-lg font-bold flex items-center gap-2"><Bell className="w-5 h-5 text-yellow-500" /> Inventory Alerts</h2>
           <p className="text-sm text-gray-500">Low stock, expiry warnings, and medication inventory alerts</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {unresolved.length > 0 && (
             <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 text-sm font-semibold">{unresolved.length} active</span>
           )}
@@ -215,7 +215,7 @@ function AlertForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
         <div><label className={labelCls}>Current Qty</label><input type="number" min="0" value={form.currentQuantity} onChange={e => set("currentQuantity", e.target.value)} className={inputCls} /></div>
         <div><label className={labelCls}>Threshold</label><input type="number" min="0" value={form.threshold} onChange={e => set("threshold", e.target.value)} className={inputCls} /></div>
       </div>
-      <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-3 -mx-6 -mb-6 rounded-b-xl flex justify-end gap-2">
+      <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-3 -mx-6 -mb-6 rounded-b-xl flex flex-wrap justify-end gap-2">
         <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 cursor-pointer">Cancel</button>
         <button type="submit" disabled={saving || !form.itemName} className="px-5 py-2 rounded-lg bg-yellow-500 text-white text-sm font-semibold hover:bg-yellow-600 disabled:opacity-50 cursor-pointer">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create"}

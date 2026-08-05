@@ -232,7 +232,7 @@ export default function InventoryOpsPanel() {
                     <p className="text-sm font-semibold text-gray-900">{s(a.itemName)} <span className="text-xs font-normal text-gray-500">· {s(a.location) || "—"}</span></p>
                     <p className="text-xs text-gray-500">{sched?.nextService ? <>Next service {new Date(sched.nextService).toLocaleDateString()} {dleft != null ? `(${dleft}d)` : ""}</> : "No schedule set"}{sched?.lastService ? ` · last ${new Date(sched.lastService).toLocaleDateString()}` : ""}</p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <span className={`px-2 py-1 rounded-full text-[11px] font-semibold ${status === "overdue" ? "bg-rose-100 text-rose-700" : status === "due" ? "bg-amber-100 text-amber-700" : status === "ok" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>{status === "unscheduled" ? "No schedule" : status === "ok" ? "OK" : status === "due" ? "Due soon" : "Overdue"}</span>
                     <select className="rounded-lg border border-gray-300 px-2 py-1.5 text-xs bg-white" value={String(sched?.intervalDays ?? 90)} onChange={(e) => void setSchedule(s(a.id), { intervalDays: Number(e.target.value), nextService: sched?.lastService ? addDays(new Date(sched.lastService), Number(e.target.value)).toISOString() : sched?.nextService })}>
                       {[30, 60, 90, 180, 365].map((d) => <option key={d} value={d}>every {d}d</option>)}
@@ -248,9 +248,9 @@ export default function InventoryOpsPanel() {
 
       {/* Vendors */}
       <section className="bg-white rounded-xl border border-gray-200 p-5">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h3 className="text-base font-bold text-gray-900 flex items-center gap-2"><Truck className="w-5 h-5 text-blue-600" /> Vendor directory ({vlist.length})</h3>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => setDraftVendors([...(vlist), { id: newId("v"), name: "", contact: "", email: "", category: "" }])} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50"><Plus className="w-4 h-4" /> Add vendor</button>
             {draftVendors !== null && <button onClick={() => void saveVendors(vlist)} disabled={savingV} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{savingV ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save</button>}
           </div>

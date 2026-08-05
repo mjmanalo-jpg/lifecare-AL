@@ -187,7 +187,7 @@ export default function MARBoard() {
               </div>
               {/* Shift compliance bar */}
               <div className="flex items-center gap-3 px-4 py-3 border-t border-[#EBEDE4]">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8A8D82] whitespace-nowrap">Shift Compliance</span>
+                <span className="hidden sm:block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8A8D82] whitespace-nowrap">Shift Compliance</span>
                 <div className="flex-1 h-2 rounded-full bg-[#E1E3D9] overflow-hidden"><div className="h-full bg-[#2E4A48]" style={{ width: `${complianceOf(rows)}%` }} /></div>
                 <span className="text-sm font-bold text-[#2B2B27] tabular-nums">{complianceOf(rows)}%</span>
               </div>
@@ -260,7 +260,7 @@ function MARModal({ residents, me, onClose, onSaved }: { residents: any[]; me: {
           {form.status === "HELD" && <div><label className={lbl}>Hold Reason *</label><input value={form.heldReason} onChange={(e) => set("heldReason", e.target.value)} className={inputCls} required placeholder="Why is the medication being held?" /></div>}
           <div><label className={lbl}>Witness Name (for controlled substances)</label><input value={form.witnessName} onChange={(e) => set("witnessName", e.target.value)} className={inputCls} /></div>
           <div><label className={lbl}>Notes</label><textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} className={inputCls} rows={2} /></div>
-          <div className="sticky bottom-0 bg-[#F5F6F1] border-t border-[#E1E3D9] px-6 py-3 -mx-6 -mb-6 flex justify-end gap-2">
+          <div className="sticky bottom-0 bg-[#F5F6F1] border-t border-[#E1E3D9] px-6 py-3 -mx-6 -mb-6 flex flex-wrap justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-[#6B6E63] hover:bg-black/5 rounded-md">Cancel</button>
             <button type="submit" disabled={saving || !form.residentId || !form.medicationId} className="px-5 py-2 rounded-md bg-[#2E4A48] text-white text-sm font-semibold hover:bg-[#25403D] disabled:opacity-50">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}

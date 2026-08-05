@@ -294,7 +294,7 @@ export default function AmbulanceBooking() {
                 </div>
               )}
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-5 py-3 flex items-center justify-end gap-2">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-5 py-3 flex items-center justify-end gap-2 flex-wrap">
               <button onClick={() => setShowForm(false)} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancel</button>
               <button onClick={() => void submit()} disabled={busy || Boolean(liveConflict)} className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg text-sm disabled:opacity-50">
                 {busy ? "Booking…" : "Confirm Booking"}

@@ -581,7 +581,7 @@ export default function CaregiverReports() {
                   </p>
                 )}
 
-                <div className="mt-auto flex items-center gap-1 pt-2 border-t border-gray-100">
+                <div className="mt-auto flex flex-wrap items-center gap-1 pt-2 border-t border-gray-100">
                   <button
                     onClick={() => setViewing(r)}
                     className="flex items-center gap-1 px-2.5 py-1 text-blue-600 hover:bg-blue-50 rounded text-sm font-medium transition"
@@ -694,9 +694,9 @@ export default function CaregiverReports() {
               <p className="text-gray-900 text-sm">{viewing.handoverNotes ?? "—"}</p>
             </div>
           </div>
-          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex items-center justify-between gap-2">
+          <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-2">
             <button onClick={() => setViewing(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {!viewing.signedAt && isAuthor(viewing) && (
                 <button
                   onClick={() => void handleSign(viewing)}

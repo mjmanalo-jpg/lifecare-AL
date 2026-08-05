@@ -523,7 +523,7 @@ export default function PhysicianIncidents() {
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between gap-2 flex-wrap">
               <button onClick={() => { setViewing(null); setPhysicianNote(""); }}
                 className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Close</button>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {!viewing.resolved ? (
                   <button onClick={() => { void handleSignOff(viewing.id); setViewing(null); setPhysicianNote(""); }}
                     className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm active:scale-95">

@@ -104,7 +104,7 @@ export default function FamilyMessages() {
             Conversations with the care team
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <RefreshButton onRefresh={() => void refetchMessages()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           <button onClick={() => { setComposeForm({ subject: "", content: "", messageType: "GENERAL" }); setShowCompose(true); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm"><Plus className="w-4 h-4" /> New Message</button>
         </div>
@@ -183,7 +183,7 @@ export default function FamilyMessages() {
               <FormField label="Priority"><select value={composeForm.messageType} onChange={(e) => setComposeForm((f) => ({ ...f, messageType: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-blue-400 outline-none">{Object.keys(TYPE).map((k) => <option key={k} value={k}>{TYPE[k].label}</option>)}</select></FormField>
               <FormField label="Message *"><textarea value={composeForm.content} onChange={(e) => setComposeForm((f) => ({ ...f, content: e.target.value }))} rows={4} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-blue-400 outline-none resize-y" placeholder="Write your message to the care team…" /></FormField>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setShowCompose(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
               <button onClick={() => void sendMessage()} disabled={sendingMsg} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-60"><Send className="w-4 h-4" /> {sendingMsg ? "Sending…" : "Send"}</button>
             </div>

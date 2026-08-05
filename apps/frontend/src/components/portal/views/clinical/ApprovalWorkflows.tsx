@@ -194,7 +194,7 @@ export default function ApprovalWorkflows() {
                   </p>
                 </div>
                 {canDecide ? (
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
                     <button onClick={() => (isMed ? approveMed(m) : approveRef(m))} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-[#7E9B6F] text-white text-sm font-semibold hover:bg-[#6E8A5F]"><Check className="w-4 h-4" /> Approve</button>
                     <button onClick={() => (isMed ? rejectMed(m) : rejectRef(m))} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-[#C0573F]/30 text-[#C0573F] text-sm font-semibold hover:bg-[#C0573F]/[0.06]"><X className="w-4 h-4" /> Reject</button>
                   </div>
@@ -254,7 +254,7 @@ export default function ApprovalWorkflows() {
               <div><MicroLabel>Indication / reason</MicroLabel><textarea value={reqForm.reason} onChange={(e) => setReq("reason", e.target.value)} rows={2} placeholder="Why is this being prescribed?" className="mt-1 w-full rounded-md border border-[#D6D8CD] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E4A48]/30 resize-y" /></div>
               <p className="text-[11px] text-[#8A8D82]">Saved as <span className="font-semibold text-[#2B2B27]">Pending</span> — it won't activate in the MAR until a Care Manager approves it.</p>
             </div>
-            <div className="sticky bottom-0 flex items-center justify-between border-t border-[#E1E3D9] bg-[#F5F6F1] px-6 py-4">
+            <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t border-[#E1E3D9] bg-[#F5F6F1] px-6 py-4">
               <button onClick={() => setShowRequest(false)} disabled={saving} className="rounded-md px-4 py-2 text-[#6B6E63] hover:bg-black/5 disabled:opacity-50">Cancel</button>
               <button onClick={submitRequest} disabled={saving} className="inline-flex items-center gap-2 rounded-md bg-[#2E4A48] px-6 py-2 font-semibold text-white hover:bg-[#25403D] disabled:opacity-50">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} {saving ? "Submitting…" : "Submit request"}</button>
             </div>

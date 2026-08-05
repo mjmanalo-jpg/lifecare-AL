@@ -666,7 +666,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
               </div>
 
               {/* Modal Footer */}
-              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex items-center justify-between">
+              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex flex-wrap items-center justify-between gap-3">
                 <button
                   onClick={() => setViewingIncident(null)}
                   className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"

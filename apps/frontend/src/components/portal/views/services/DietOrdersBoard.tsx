@@ -192,7 +192,7 @@ export default function DietOrdersBoard() {
           </h1>
           <p className="text-gray-600">Nutritionist desk — set per-resident diet type, restrictions &amp; meal targeting. The kitchen cooks from the active orders.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           <button onClick={() => openCreate()} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
             <Plus className="w-4 h-4" /> New Diet Order

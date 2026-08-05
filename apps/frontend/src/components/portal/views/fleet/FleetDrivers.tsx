@@ -529,9 +529,9 @@ export default function FleetDrivers() {
                 </div>
               )}
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between gap-2 flex-wrap">
               <button onClick={() => setViewing(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Close</button>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <button onClick={() => handleToggleActive(viewing)}
                   className={`px-4 py-2 font-semibold rounded-lg transition text-sm ${viewing.isActive ? "bg-gray-500 hover:bg-gray-600 text-white" : "bg-green-500 hover:bg-green-600 text-white"}`}>
                   {viewing.isActive ? <><UserX className="w-4 h-4 inline mr-1" /> Deactivate</> : <><UserCheck className="w-4 h-4 inline mr-1" /> Activate</>}

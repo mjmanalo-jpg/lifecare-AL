@@ -503,7 +503,7 @@ export default function AdmissionsContent() {
                     <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition ${active ? "border-amber-500 bg-amber-500 text-white" : isDone ? "border-green-500 bg-green-500 text-white" : "border-gray-300 text-gray-400 group-hover:border-amber-300"}`}>
                       {isDone && !active ? <Check className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
                     </span>
-                    <span className={`text-[10px] text-center leading-tight ${active ? "text-amber-600 font-semibold" : "text-gray-500"}`}>
+                    <span className={`text-[10px] text-center leading-tight truncate max-w-full ${active ? "text-amber-600 font-semibold" : "text-gray-500"}`}>
                       {st.label}{st.required && <span className="text-red-400">*</span>}
                     </span>
                   </button>
@@ -632,7 +632,7 @@ export default function AdmissionsContent() {
             {/* Footer */}
             <div className="border-t border-gray-100 px-6 py-4 flex items-center justify-between bg-gray-50">
               <button onClick={() => setStep((n) => Math.max(1, n - 1))} disabled={step === 1} className="inline-flex items-center gap-1 px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 disabled:opacity-40 text-sm font-medium"><ChevronLeft className="w-4 h-4" /> Back</button>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 justify-end">
                 <button onClick={() => saveStep(false)} disabled={saving} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm font-medium disabled:opacity-60">{saving ? "Saving…" : "Save"}</button>
                 {step < STEP_COUNT ? (
                   <button onClick={() => saveStep(true)} disabled={saving || !!stepError(step)} title={stepError(step) ?? ""} className="inline-flex items-center gap-1 px-5 py-2 rounded-lg bg-amber-500 text-white font-semibold hover:bg-amber-600 text-sm disabled:opacity-50 disabled:cursor-not-allowed">Save &amp; Continue <ChevronRight className="w-4 h-4" /></button>
@@ -672,7 +672,7 @@ export default function AdmissionsContent() {
                     Admission ID: <code className="text-amber-400">{s(row.id)}</code> &bull; Progress: {done}/{STEP_COUNT} steps
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 justify-end">
                   {!isDone && !isCancelled && (
                     <button
                       onClick={() => {
@@ -916,7 +916,7 @@ export default function AdmissionsContent() {
               </div>
 
               {/* Footer */}
-              <div className="border-t border-gray-100 px-6 py-4 flex items-center justify-end bg-gray-50 gap-2">
+              <div className="border-t border-gray-100 px-6 py-4 flex flex-wrap items-center justify-end bg-gray-50 gap-2">
                 <button
                   onClick={() => setViewOpen(false)}
                   className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm font-medium"

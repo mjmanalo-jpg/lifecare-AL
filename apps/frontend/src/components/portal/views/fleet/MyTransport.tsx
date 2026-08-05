@@ -233,7 +233,7 @@ export default function MyTransport() {
                     </div>
                   ))}
                 </div>
-                <div className="flex justify-between text-[10px] text-gray-500 -mt-1">
+                <div className="hidden sm:flex justify-between text-[10px] text-gray-500 -mt-1">
                   <span>Scheduled</span><span>Inspection</span><span>En Route</span><span>Arrived</span><span>Return</span><span>Drop-Off</span>
                 </div>
 

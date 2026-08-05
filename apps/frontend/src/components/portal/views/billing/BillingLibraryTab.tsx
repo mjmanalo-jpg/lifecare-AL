@@ -99,7 +99,7 @@ export default function BillingLibraryTab() {
       <section className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
           <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Library className="w-5 h-5 text-blue-600" /> Customizable Charge Library</h3>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center flex-wrap gap-2">
             {templates.length === 0 && !templatesDirty && (
               <button onClick={() => setDraftTemplates(SEED_TEMPLATES.map((t) => ({ ...t, id: newId() })))} className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Load starter templates</button>
             )}
@@ -153,7 +153,7 @@ export default function BillingLibraryTab() {
 
       {/* ── Settings: GL accounts + online payments ── */}
       <section className="bg-white rounded-xl border border-gray-200 p-5">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
           <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Settings2 className="w-5 h-5 text-gray-600" /> Billing settings</h3>
           {settingsDirty && <button onClick={() => void saveSettings(set)} disabled={savingS} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{savingS ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save</button>}
         </div>

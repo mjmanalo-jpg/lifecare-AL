@@ -15,7 +15,7 @@ export default function OnboardingHub({ initialTab = "admissions" }: { initialTa
   const [view, setView] = useState<"admissions" | "registration">(initialTab);
 
   const tabCls = (active: boolean) =>
-    `flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+    `flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors whitespace-nowrap ${
       active ? "border-amber-500 text-amber-600" : "border-transparent text-gray-500 hover:text-gray-700"
     }`;
 

@@ -754,7 +754,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                       <td className="px-6 py-4">
                         <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${STATUS_BADGE[inv.status] || "bg-gray-100 text-gray-800"}`}>{inv.status}</span>
                       </td>
-                      <td className="px-6 py-4 text-right flex justify-end gap-2">
+                      <td className="px-6 py-4 text-right flex flex-wrap justify-end gap-2">
                         {inv.status === "DRAFT" && (
                           <button onClick={() => handleMarkSent(inv)} className="px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-bold transition">
                             Send / Dispatch
@@ -982,7 +982,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
               </div>
             </div>
             {/* Modal Actions */}
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap gap-2 justify-between">
               <button onClick={() => setViewingInvoice(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-semibold transition">
                 Close
               </button>
@@ -1032,7 +1032,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
               </p>
             </div>
             {/* Modal Actions */}
-            <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-between">
+            <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap gap-2 justify-between">
               <button onClick={() => setViewingReceipt(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-semibold transition">
                 Close
               </button>
@@ -1101,7 +1101,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                 <textarea value={invoiceForm.description} onChange={(e) => setInvoiceForm({ ...invoiceForm, description: e.target.value })} rows={2} placeholder="Monthly Care service fees and incidentals..." className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 resize-y" />
               </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setShowCreateInvoice(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-semibold transition">Cancel</button>
               <button onClick={handleCreateInvoice} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-extrabold rounded-lg hover:shadow-lg transition">Generate Draft Invoice</button>
             </div>
@@ -1167,7 +1167,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                 <textarea value={chargeForm.description} onChange={(e) => setChargeForm({ ...chargeForm, description: e.target.value })} rows={2} placeholder="Description of the service or supply provided..." className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 resize-y" />
               </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setShowRecordCharge(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-semibold transition">Cancel</button>
               <button onClick={handleRecordCharge} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-extrabold rounded-lg hover:shadow-lg transition">Record Charge</button>
             </div>
@@ -1214,7 +1214,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                 <textarea value={insuranceForm.coverageDetails} onChange={(e) => setInsuranceForm({ ...insuranceForm, coverageDetails: e.target.value })} rows={2} placeholder="e.g. 80% coverage for special medical therapies, ₱50 flat medication copay..." className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 resize-y" />
               </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setShowVerifyInsurance(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-semibold transition">Cancel</button>
               <button onClick={handleRecordInsurance} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-extrabold rounded-lg hover:shadow-lg transition">Submit Policy</button>
             </div>
@@ -1277,7 +1277,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                 <textarea value={paymentForm.notes} onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })} rows={2} placeholder="Add physical check number or card terminal auth info..." className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 resize-y" />
               </div>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setShowRecordPayment(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-semibold transition">Cancel</button>
               <button onClick={handleRecordPayment} className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-extrabold rounded-lg hover:shadow-lg transition">Log Payment Transaction</button>
             </div>
