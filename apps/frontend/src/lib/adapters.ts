@@ -134,6 +134,8 @@ export function adaptInventoryItem(i: any) {
     supplier: i.supplier ?? "—",
     expiryDate: i.expiryDate ?? null,
     notes: i.notes ?? "",
+    // out of stock = zero on hand; low = at/below minimum but still > 0.
+    outOfStock: (i.quantity ?? 0) <= 0,
     lowStock: (i.quantity ?? 0) <= (i.minimumStock ?? 5),
     raw: i,
   };

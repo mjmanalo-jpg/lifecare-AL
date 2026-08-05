@@ -365,7 +365,7 @@ export default function FacilityInventory() {
               <div className="p-3">
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <h3 className="font-semibold text-[#2B2B27] text-sm truncate flex-1">{item.itemName}</h3>
-                  <StatusPill status={item.lowStock ? "LOW" : "NORMAL"} />
+                  <StatusPill status={item.outOfStock ? "OUT_OF_STOCK" : item.lowStock ? "LOW" : "NORMAL"} />
                 </div>
                 <div className="flex items-center gap-2 text-xs mb-2">
                   <span className="text-[#C0573F] font-medium">{item.category.replace(/_/g, " ")}</span>
@@ -433,7 +433,7 @@ export default function FacilityInventory() {
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <StatusPill status={item.lowStock ? "LOW" : "NORMAL"} />
+                    <StatusPill status={item.outOfStock ? "OUT_OF_STOCK" : item.lowStock ? "LOW" : "NORMAL"} />
                     <div className="text-[10px] text-[#8A8D82] mt-1">Min {item.minimumStock}</div>
                   </td>
                   <td className="px-4 py-4">
