@@ -192,17 +192,6 @@ export default function CaregiverDashboard() {
     void refetchStats();
   };
 
-  const toggleTask = async (t: Task) => {
-    try {
-      await updateRecord("tasks", t.id, {
-        status: t.completed ? "PENDING" : "COMPLETED",
-        completedAt: t.completed ? null : new Date().toISOString(),
-      });
-      await refetchTasks();
-    } catch (err) {
-      Swal.fire({ title: "Update Failed", text: err instanceof Error ? err.message : "Could not update task.", icon: "error" });
-    }
-  };
 
   // Current user's name — stamped on task notes so the nurse / other caregivers
   // know who flagged the blocker.
@@ -295,14 +284,20 @@ export default function CaregiverDashboard() {
           {priorityTasks.length > 0 ? (
             <div className="space-y-2">
               {priorityTasks.map((t) => (
-                <div key={t.id} className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:border-yellow-300 hover:shadow-sm transition">
-                  <input type="checkbox" checked={t.completed} onChange={() => void toggleTask(t)}
-                    className="mt-1 w-5 h-5 rounded cursor-pointer flex-shrink-0" title="Mark complete" />
+                <div
+                  key={t.id}
+                  onClick={() => router.push("/caregiver/taskboard")}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push("/caregiver/taskboard"); } }}
+                  title="Open in Task Checklist"
+                  className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:border-yellow-300 hover:shadow-sm transition cursor-pointer"
+                >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <h4 className="font-semibold text-gray-900 truncate">{t.title}</h4>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <button onClick={() => void addTaskNote(t)} title="Add note" className="p-1 rounded text-[#C39A3E] hover:bg-amber-100 transition"><StickyNote className="w-4 h-4" /></button>
+                        <button onClick={(e) => { e.stopPropagation(); void addTaskNote(t); }} title="Add note" className="p-1 rounded text-[#C39A3E] hover:bg-amber-100 transition"><StickyNote className="w-4 h-4" /></button>
                         <span className={`px-2 py-0.5 rounded text-xs font-semibold border ${PRIORITY_BADGE[t.priority]}`}>
                           {t.priority.toUpperCase()}
                         </span>
@@ -321,7 +316,7 @@ export default function CaregiverDashboard() {
                                 <p className="text-[11px] leading-snug text-gray-700">{n.text}</p>
                                 <p className="text-[10px] text-gray-400">{n.author}{n.at ? ` · ${new Date(n.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}</p>
                               </div>
-                              <button onClick={() => void removeTaskNote(t, n.id)} title="Remove note" className="text-gray-300 hover:text-red-500 flex-shrink-0"><X className="w-3 h-3" /></button>
+                              <button onClick={(e) => { e.stopPropagation(); void removeTaskNote(t, n.id); }} title="Remove note" className="text-gray-300 hover:text-red-500 flex-shrink-0"><X className="w-3 h-3" /></button>
                             </div>
                           ))}
                         </div>
