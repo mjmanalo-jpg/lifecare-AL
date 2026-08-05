@@ -100,17 +100,12 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
       if (q && !e.residentName.toLowerCase().includes(q) && !e.situation.toLowerCase().includes(q) && !e.raisedBy.toLowerCase().includes(q)) return false;
       return true;
     }).sort((a, b) => {
-      // Triage order: SLA-breached first, then by priority (EMERGENCY → URGENT →
-      // ROUTINE, using the shorter SLA window as the urgency proxy), then newest.
-      // The priority + recency tiebreaks keep a just-raised urgent SBAR near the
-      // top of the un-breached group instead of buried at the bottom.
-      const rank = (e: EscVM) => (slaState(e.createdAt, e.priority, e.status, nowTs).overdue ? 0 : 1);
-      if (rank(a) !== rank(b)) return rank(a) - rank(b);
-      const sla = (e: EscVM) => PRIORITY_META[e.priority]?.slaMin ?? 999;
-      if (sla(a) !== sla(b)) return sla(a) - sla(b);
+      // Newest first — a just-raised SBAR always appears at the top of the list.
+      // (Breach status is still shown per-card via the "SLA breached" pill and
+      // counted in the SLA BREACHED stat, and priority filters remain available.)
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
-  }, [escalations, search, statusFilter, priorityFilter, nowTs]);
+  }, [escalations, search, statusFilter, priorityFilter]);
 
   useEffect(() => { setPage(1); }, [search, statusFilter, priorityFilter]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
