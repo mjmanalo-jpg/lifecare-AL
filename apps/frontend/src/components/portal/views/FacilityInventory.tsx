@@ -265,7 +265,7 @@ export default function FacilityInventory() {
         title="Inventory Management"
         subtitle="Track supplies, equipment, and stock levels across the facility"
         right={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-[#D6D8CD] bg-white rounded-lg text-[#2B2B27] hover:bg-[#F5F6F1] transition text-sm font-medium" />
             <button onClick={() => setOpsOpen(true)} className="flex items-center gap-2 px-3 py-2 border border-[#D6D8CD] bg-white rounded-lg text-[#2B2B27] hover:bg-[#F5F6F1] transition text-sm font-medium">
               <Package className="w-4 h-4" /> Operations

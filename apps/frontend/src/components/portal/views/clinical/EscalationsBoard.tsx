@@ -194,7 +194,7 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
         title="SBAR Escalations"
         subtitle={canRaise ? "Raise a clinical concern (Situation · Background · Assessment · Recommendation)" : canRespond ? "Acknowledge, respond with orders & resolve" : "Escalation oversight & SLA monitoring"}
         right={
-          <div className="flex items-center gap-2 self-start">
+          <div className="flex flex-wrap items-center gap-2 self-start">
             <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#7E9B6F] mr-1"><span className="w-2 h-2 rounded-full bg-[#7E9B6F] animate-pulse" /> Live</span>
             <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 bg-white border border-[#D6D8CD] rounded-lg text-[#2B2B27] hover:bg-[#F3F4EE] transition text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30" />
             {canRaise && (

@@ -80,7 +80,7 @@ export default function PhysicianCommsLog() {
           title="Physician Communications"
           subtitle="Every physician contact on record — with instructions received verbatim and follow-up tracking."
           right={
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-md border border-[#2E4A48]/25 bg-white px-4 py-2 text-sm font-semibold text-[#2B2B27] hover:bg-[#2E4A48]/5"><Printer className="w-4 h-4" /> Print</button>
               <button onClick={() => setShowAdd(true)} className="inline-flex items-center gap-2 rounded-md bg-[#2E4A48] px-4 py-2 text-sm font-semibold text-white hover:bg-[#25403D]"><Plus className="w-4 h-4" /> Log Contact</button>
             </div>

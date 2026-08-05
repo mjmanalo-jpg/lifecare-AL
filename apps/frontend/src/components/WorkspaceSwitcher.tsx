@@ -38,7 +38,7 @@ export default function WorkspaceSwitcher() {
   return (
     <label className="relative flex items-center gap-2 min-w-0" aria-label="Active workspace">
       <Building2 className="h-4 w-4 shrink-0 text-blue-500" />
-      <select value={active} disabled={busy} onChange={(event) => void selectWorkspace(event.target.value)} className="appearance-none max-w-[220px] truncate rounded-lg border border-blue-200 bg-white/80 py-1.5 pl-2 pr-7 text-xs font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-60">
+      <select value={active} disabled={busy} onChange={(event) => void selectWorkspace(event.target.value)} className="appearance-none max-w-[130px] sm:max-w-[220px] truncate rounded-lg border border-blue-200 bg-white/80 py-1.5 pl-2 pr-7 text-xs font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-60">
         {options.map(({ organization, community, value }) => <option key={value} value={value}>Company: {organization.name} | Community: {community.name}</option>)}
       </select>
       <ChevronDown className="pointer-events-none absolute right-2 h-3 w-3 text-gray-500" />
