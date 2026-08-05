@@ -762,7 +762,12 @@ async function handleSbar(body: Record<string, unknown>) {
     "nurse complete the Recommendation (the 'R') of an SBAR escalation to the physician/on-call. " +
     "Write ONLY the recommendation: a concise, specific, actionable set of next steps for the care " +
     "team and physician (2-4 short sentences, or a brief action list). Be clinically appropriate and " +
-    "safe; scale urgency to the stated priority. Do NOT restate the situation, background, or " +
+    "safe; scale urgency to the stated priority. " +
+    "Ground every step in the specific details given: address the exact problem in the Situation, " +
+    "reflect the clinical judgement in the Assessment, and account for the Background — especially " +
+    "the resident's documented allergies and current medications (avoid contraindicated or duplicate " +
+    "therapy, and note relevant interactions or that a relevant drug is already prescribed). " +
+    "Do NOT restate the situation, background, or " +
     "assessment. Do NOT add a preamble such as 'Request physician review for <name>' or 'Recommend:'. " +
     "Never invent specific vitals, doses, or diagnoses that were not provided. Output only the " +
     "recommendation text, no headings, no quotes.";

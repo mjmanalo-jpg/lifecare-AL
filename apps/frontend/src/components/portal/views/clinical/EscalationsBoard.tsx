@@ -378,17 +378,39 @@ function RaiseModal({ role, raisedBy, residents, meds, onClose, onSaved }: {
   const valid = form.residentId && form.situation.trim();
 
   // Offline fallback draft, used when no Gemini key is configured or the call fails.
+  // Builds an input-aware recommendation by scanning the Situation, Background and
+  // Assessment the nurse entered, so the draft still reflects the actual case
+  // rather than generic boilerplate.
   const templateDraft = () => {
-    const urgent = form.priority === "EMERGENCY";
-    const resp = /spo2|oxygen|breath|resp|desat/i.test(form.situation + form.assessment);
-    return `${urgent ? "Escalate immediately. " : ""}Reassess vitals now, ${resp ? "consider supplemental O₂, " : ""}monitor closely, and carry out physician orders. Document the response and re-escalate if there is no improvement within the SLA window.`;
+    const all = `${form.situation}\n${form.background}\n${form.assessment}`;
+    const has = (re: RegExp) => re.test(all);
+    const urgent = form.priority === "EMERGENCY" || form.priority === "URGENT";
+    const steps: string[] = [];
+
+    if (has(/blood pressure|hypertens|\bBP\b|\d{3}\/\d{2,3}/i)) steps.push("recheck blood pressure and prepare a short-acting antihypertensive per physician order");
+    if (has(/spo2|oxygen|breath|resp|desat|dyspn/i)) steps.push("apply supplemental O₂ and monitor SpO₂ continuously");
+    if (has(/chest pain|cardiac|angina|palpitation/i)) steps.push("obtain a 12-lead ECG and start cardiac monitoring");
+    if (has(/\bfall|fell|head injury|loss of consciousness|\bLOC\b|syncope/i)) steps.push("perform neuro checks and a head-to-toe injury assessment");
+    if (has(/fever|febrile|sepsis|infection|temp/i)) steps.push("recheck temperature and monitor for signs of sepsis");
+    if (has(/glucose|sugar|hypoglyc|hyperglyc|diabet/i)) steps.push("check blood glucose and treat per protocol");
+    if (has(/\bpain\b/i)) steps.push("assess and manage pain per standing orders");
+
+    // Surface documented allergies from the Background so any new med is safe.
+    const allergy = form.background.match(/allerg[^:\n]*:\s*([^\n]+)/i);
+    if (allergy) steps.push(`confirm documented allergies (${allergy[1].trim()}) before giving any new medication`);
+
+    if (!steps.length) steps.push("reassess vitals now and carry out physician orders");
+
+    const name = residentOpts.find((r) => r.id === form.residentId)?.name;
+    return `${urgent ? "Escalate immediately. " : ""}Care team to ${steps.join("; ")}. ` +
+      `Notify the physician of ${name || "the resident"}'s status, document the response, and re-escalate if there is no improvement within the SLA window.`;
   };
 
   // AI-assisted draft: asks Gemini for the Recommendation (the "R" of SBAR) from
   // the Situation / Background / Assessment; falls back to the template offline.
   const aiDraft = async () => {
     const sit = form.situation.trim();
-    if (!sit) { Swal.fire("Add a Situation first", "The draft uses the Situation and Assessment fields.", "info"); return; }
+    if (!sit) { Swal.fire("Add a Situation first", "The draft is built from the Situation, Background and Assessment fields.", "info"); return; }
     setDrafting(true);
     try {
       const resName = residentOpts.find((r) => r.id === form.residentId)?.name || "the resident";
@@ -544,17 +566,17 @@ function StatusStepper({ status }: { status: string }) {
     { key: "closed", active: isClosed, block: "bg-[#7E9B6F]", Icon: CheckCircle2, title: "Closed", sub: "Issue resolved" },
   ];
   return (
-    <div className="flex items-stretch gap-1">
+    <div className="flex items-stretch gap-0.5 sm:gap-1">
       {steps.map((s, i) => (
-        <div key={s.key} className="flex items-center gap-1 flex-1">
-          <div className={`flex-1 flex items-center gap-2 rounded-lg px-2.5 py-2 ${s.active ? "" : "opacity-40"}`}>
+        <div key={s.key} className="flex items-center gap-0.5 sm:gap-1 flex-1 min-w-0">
+          <div className={`flex-1 min-w-0 flex flex-col sm:flex-row items-center sm:gap-2 gap-1 text-center sm:text-left rounded-lg px-1 sm:px-2.5 py-2 ${s.active ? "" : "opacity-40"}`}>
             <span className={`inline-flex items-center justify-center w-8 h-8 rounded ${s.block} text-white flex-shrink-0`}><s.Icon className="w-4 h-4" /></span>
-            <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-[#2B2B27] leading-tight">{s.title}</p>
-              <p className="text-[10px] text-[#8A8D82] leading-tight truncate">{s.sub}</p>
+            <div className="min-w-0 w-full">
+              <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.05em] text-[#2B2B27] leading-tight truncate">{s.title}</p>
+              <p className="hidden sm:block text-[10px] text-[#8A8D82] leading-tight truncate">{s.sub}</p>
             </div>
           </div>
-          {i < steps.length - 1 && <ChevronRight className="w-4 h-4 text-[#8A8D82] flex-shrink-0" />}
+          {i < steps.length - 1 && <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#8A8D82] flex-shrink-0" />}
         </div>
       ))}
     </div>
