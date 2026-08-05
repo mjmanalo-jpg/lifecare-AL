@@ -548,7 +548,7 @@ export default function FacilityInventory() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <DetailField icon={Building2} label="Category" value={viewingLive.category} />
                 <DetailField icon={Hash} label="Quantity" value={`${viewingLive.quantity} ${viewingLive.unit}`} />
                 <DetailField icon={AlertTriangle} label="Min Stock" value={String(viewingLive.minimumStock)} />
@@ -673,7 +673,7 @@ function ItemFormModal({ title, form, onChange, onSave, onCancel, saveLabel }: {
           <button onClick={onCancel} className="p-2 hover:bg-white/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
         <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="block text-sm font-semibold text-[#2B2B27] mb-1">Item Name</label>
               <input type="text" value={form.itemName} onChange={set("itemName")} className="w-full px-3 py-2 border border-[#D6D8CD] rounded-lg text-sm focus:ring-2 focus:ring-[#2E4A48]/30 focus:border-[#2E4A48] outline-none" />

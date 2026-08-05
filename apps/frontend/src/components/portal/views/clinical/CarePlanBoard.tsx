@@ -194,7 +194,7 @@ function CarePlanModal({ plan, residents, onClose, onSaved }: { plan: any; resid
             </select>
           </div>
           <div><label className={labelCls}>Primary Diagnosis</label><input value={form.diagnosis} onChange={e => set("diagnosis", e.target.value)} className={inputCls} placeholder="e.g., Alzheimer's Disease, Stage 3" /></div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className={labelCls}>Status</label><select value={form.status} onChange={e => set("status", e.target.value)} className={inputCls}>
               {["DRAFT", "ACTIVE", "UNDER_REVIEW", "COMPLETED", "DISCONTINUED"].map(s => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
             </select></div>

@@ -84,7 +84,7 @@ export default function SleepMonitoring() {
       </h2>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -129,7 +129,7 @@ export default function SleepMonitoring() {
                 : "bg-green-500/10 border-green-500/30"
             }`}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex-1">
                 <h3 className="font-semibold text-foreground">{resident.name}</h3>
                 <p className="text-sm text-muted-foreground">
@@ -137,7 +137,7 @@ export default function SleepMonitoring() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-4">
                 {/* Sleep Status */}
                 <div className="flex items-center gap-2">
                   {resident.sleeping ? (

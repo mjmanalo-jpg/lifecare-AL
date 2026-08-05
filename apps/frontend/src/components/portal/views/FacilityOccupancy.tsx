@@ -461,7 +461,7 @@ export default function FacilityOccupancy() {
               <button onClick={() => setViewingRoom(null)} className="p-2 hover:bg-blue-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
             <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <DetailField icon={MapPin} label="Floor" value={String(viewingRoom.floor ?? "—")} />
                 <DetailField icon={Building2} label="Wing" value={viewingRoom.wing || "—"} />
                 <DetailField icon={BedDouble} label="Type" value={humanize(viewingRoom.roomType)} />

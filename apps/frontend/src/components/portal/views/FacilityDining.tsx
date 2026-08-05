@@ -684,7 +684,7 @@ export default function FacilityDining() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5">Category</label>
                   <select 
@@ -709,7 +709,7 @@ export default function FacilityDining() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5">Status</label>
                   <select 
@@ -840,7 +840,7 @@ export default function FacilityDining() {
               <button onClick={() => setShowAddMenu(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
             <div className="p-4 sm:p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1.5">Meal Type</label>
                   <select 

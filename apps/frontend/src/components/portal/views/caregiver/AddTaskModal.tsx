@@ -141,7 +141,7 @@ export default function AddTaskModal({ onClose, onSaved }: { onClose: () => void
                 ))}
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Priority</label>
                 <select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} className={inputCls}>

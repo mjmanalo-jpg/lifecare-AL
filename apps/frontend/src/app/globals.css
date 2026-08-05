@@ -77,6 +77,22 @@
     scroll-behavior: initial; /* Handled by Lenis */
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
   }
+
+  /* ── Responsive safety nets ──────────────────────────────────────────
+     Broad, low-risk guards so no single page can force the whole viewport
+     to scroll sideways on phones/tablets. `overflow-x: clip` (not hidden)
+     avoids creating a scroll container, so sticky/position ancestors keep
+     working. Wide content (tables, boards) still scrolls inside its own
+     overflow-x-auto wrapper. */
+  html { -webkit-text-size-adjust: 100%; }
+  body { overflow-x: clip; }
+
+  /* Media never overflows its container. */
+  img, video { max-width: 100%; height: auto; }
+
+  /* Long unbroken strings (IDs, emails, URLs) wrap instead of stretching
+     a card past the screen edge. */
+  .break-anywhere { overflow-wrap: anywhere; word-break: break-word; }
 }
 
 /* Glassmorphism Utilities */

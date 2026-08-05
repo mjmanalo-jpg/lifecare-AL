@@ -338,7 +338,7 @@ function CaseReviewInner() {
                 <button onClick={() => setViewNote(null)} className="p-2 hover:bg-white/20 rounded-lg transition flex-shrink-0"><X className="w-6 h-6" /></button>
               </div>
               <div className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   <div><p className="text-xs font-semibold text-gray-500 mb-0.5 flex items-center gap-1"><UserRound className="w-3.5 h-3.5" /> Author</p><p className="text-gray-900">{asStr(n.authorName) || "Care team"}</p></div>
                   <div><p className="text-xs font-semibold text-gray-500 mb-0.5 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Recorded</p><p className="text-gray-900">{n.createdAt ? new Date(asStr(n.createdAt)).toLocaleString() : "—"}</p></div>
                 </div>

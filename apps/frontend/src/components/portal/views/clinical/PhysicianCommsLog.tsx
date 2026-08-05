@@ -164,7 +164,7 @@ export default function PhysicianCommsLog() {
             <div className="sticky top-0 flex items-center justify-between bg-[#2E4A48] p-5 text-white"><h2 className="text-lg font-bold">Log Physician Contact</h2><button onClick={() => setShowAdd(false)} className="rounded-lg p-1.5 hover:bg-white/15"><X className="w-5 h-5" /></button></div>
             <div className="space-y-4 p-6">
               <div><MicroLabel>Resident *</MicroLabel><select value={form.residentId} onChange={(e) => setForm({ ...form, residentId: e.target.value, relatedEscalationId: "" })} className={`${inp} mt-1`}><option value="">Select resident…</option>{residents.map((r) => <option key={r.id} value={r.id}>{r.name} — Room {r.room}</option>)}</select></div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><MicroLabel>Method</MicroLabel><select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })} className={`${inp} mt-1 bg-white`}>{METHODS.map((m) => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}</select></div>
                 <div><MicroLabel>Physician *</MicroLabel><input value={form.physicianName} onChange={(e) => setForm({ ...form, physicianName: e.target.value })} placeholder="Dr. …" className={`${inp} mt-1`} /></div>
               </div>

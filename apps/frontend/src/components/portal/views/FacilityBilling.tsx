@@ -895,7 +895,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
               </div>
 
               {/* Billing / Metadata Info */}
-              <div className="grid grid-cols-2 gap-6 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
                 <div>
                   <h4 className="font-bold text-gray-400 uppercase text-xs mb-1.5">Billed To</h4>
                   <p className="font-extrabold text-gray-900">{viewingInvoice.residentName}</p>
@@ -1013,7 +1013,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
 
               {/* Receipt Body */}
               <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 space-y-4 text-sm mt-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div><span className="text-gray-500 text-xs block">Resident Name</span><strong className="text-gray-800">{viewingReceipt.residentName}</strong></div>
                   <div><span className="text-gray-500 text-xs block">Invoice Ref</span><strong className="text-gray-800">{viewingReceipt.invoiceNumber}</strong></div>
                   <div><span className="text-gray-500 text-xs block">Payment Date</span><strong className="text-gray-800">{viewingReceipt.paymentDate ? new Date(viewingReceipt.paymentDate).toLocaleString() : ""}</strong></div>
@@ -1080,7 +1080,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Billing Start *</label>
                   <input type="date" value={invoiceForm.billingPeriodStart} onChange={(e) => setInvoiceForm({ ...invoiceForm, billingPeriodStart: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 bg-white" />
@@ -1151,7 +1151,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Amount ($) *</label>
                   <input type="number" placeholder="250" value={chargeForm.amount} onChange={(e) => setChargeForm({ ...chargeForm, amount: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 bg-white" />
@@ -1198,7 +1198,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                 <input type="text" placeholder="Blue Cross Blue Shield" value={insuranceForm.provider} onChange={(e) => setInsuranceForm({ ...insuranceForm, provider: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 bg-white" />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Policy Number *</label>
                   <input type="text" placeholder="POL-992384" value={insuranceForm.policyNumber} onChange={(e) => setInsuranceForm({ ...insuranceForm, policyNumber: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 bg-white" />
@@ -1261,7 +1261,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Amount Paid ($) *</label>
                   <input type="number" placeholder="2500" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 bg-white" />

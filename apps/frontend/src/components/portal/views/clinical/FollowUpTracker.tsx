@@ -137,7 +137,7 @@ function FollowUpModal({ residents, onClose, onSaved }: { residents: any[]; onCl
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4 rounded-t-xl flex items-center justify-between">
           <h3 className="text-white font-bold text-lg">New Follow-up</h3>
           <button onClick={onClose} className="text-white/80 hover:text-white cursor-pointer"><X className="w-5 h-5" /></button>
@@ -155,7 +155,7 @@ function FollowUpModal({ residents, onClose, onSaved }: { residents: any[]; onCl
             {["Hospital Follow-up", "Specialist Appointment", "Lab Results", "Imaging", "Therapy", "Care Plan Review", "Family Consult", "Other"].map(t => <option key={t} value={t}>{t}</option>)}
           </select></div>
           <div><label className={labelCls}>Description</label><textarea value={form.description} onChange={e => set("description", e.target.value)} className={inputCls} rows={2} placeholder="Details about the follow-up..." /></div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className={labelCls}>Due Date *</label><input type="date" value={form.dueDate} onChange={e => set("dueDate", e.target.value)} className={inputCls} required /></div>
             <div><label className={labelCls}>Assigned To</label><input value={form.assignedToName} onChange={e => set("assignedToName", e.target.value)} className={inputCls} placeholder="Staff name or role" /></div>
           </div>

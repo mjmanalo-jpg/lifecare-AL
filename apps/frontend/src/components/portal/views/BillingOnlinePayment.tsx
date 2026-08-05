@@ -109,7 +109,7 @@ export default function BillingOnlinePayment() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2 flex items-center gap-3">
+        <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2 flex items-center gap-3">
           <CreditCard className="w-8 h-8 text-blue-500" /> Online Payment
         </h1>
         <p className="text-gray-600">Accept card / e-wallet payments against outstanding invoices through a secure hosted gateway.</p>

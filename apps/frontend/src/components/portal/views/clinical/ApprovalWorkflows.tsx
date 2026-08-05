@@ -161,7 +161,7 @@ export default function ApprovalWorkflows() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <ClinicalCard top="amber" className="p-4"><MicroLabel>Pending</MicroLabel><p className="text-2xl font-bold text-[#C39A3E] mt-1">{queue.length}</p></ClinicalCard>
         <ClinicalCard top="green" className="p-4"><MicroLabel>Approved</MicroLabel><p className="text-2xl font-bold text-[#7E9B6F] mt-1">{approvedCount}</p></ClinicalCard>
         <ClinicalCard top="coral" className="p-4"><MicroLabel>Rejected</MicroLabel><p className="text-2xl font-bold text-[#C0573F] mt-1">{rejectedCount}</p></ClinicalCard>
@@ -246,7 +246,7 @@ export default function ApprovalWorkflows() {
                 <MicroLabel>Medication *</MicroLabel>
                 <input value={reqForm.name} onChange={(e) => setReq("name", e.target.value)} placeholder="e.g. Amlodipine" className="mt-1 w-full rounded-md border border-[#D6D8CD] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E4A48]/30" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><MicroLabel>Dosage</MicroLabel><input value={reqForm.dosage} onChange={(e) => setReq("dosage", e.target.value)} placeholder="e.g. 5mg" className="mt-1 w-full rounded-md border border-[#D6D8CD] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
                 <div><MicroLabel>Route</MicroLabel><select value={reqForm.route} onChange={(e) => setReq("route", e.target.value)} className="mt-1 w-full rounded-md border border-[#D6D8CD] bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E4A48]/30">{["ORAL", "IV", "IM", "SUBCUTANEOUS", "TOPICAL", "INHALATION", "RECTAL", "OTHER"].map((r) => <option key={r} value={r}>{r}</option>)}</select></div>
               </div>

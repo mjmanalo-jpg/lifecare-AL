@@ -289,7 +289,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+            <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
               Staff Registry
             </h1>
             <p className="text-gray-600">Manage facility staff members, positions, and status</p>
@@ -469,7 +469,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                     <p className="text-sm text-gray-500">{viewingStaff.position} &middot; {viewingStaff.department}</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div><label className="block text-sm font-semibold text-gray-600 mb-2">Email</label><p className="text-lg text-gray-900">{viewingStaff.email}</p></div>
                   <div><label className="block text-sm font-semibold text-gray-600 mb-2">Phone</label><p className="text-lg text-gray-900">{viewingStaff.phone}</p></div>
                   <div>
@@ -526,7 +526,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                 <button onClick={() => setShowAddStaff(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
               </div>
               <div className="p-8 space-y-6">
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-2">Full Name</label><input type="text" value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} placeholder="e.g. Jane Smith" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
                   <div><label className="block text-sm font-semibold text-gray-700 mb-2">Email</label><input type="email" value={addForm.email} onChange={(e) => setAddForm({ ...addForm, email: e.target.value })} placeholder="e.g. jane.smith@goldenhearth.com" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
                   <div><label className="block text-sm font-semibold text-gray-700 mb-2">Phone</label><input type="tel" value={addForm.phone} onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })} placeholder="e.g. 555-0202" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
@@ -570,7 +570,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                 <button onClick={() => setEditingStaff(null)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
               </div>
               <div className="p-8 space-y-6">
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div><label className="block text-sm font-semibold text-gray-700 mb-2">Full Name</label><input type="text" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none" /></div>
                   <div><label className="block text-sm font-semibold text-gray-700 mb-2">Email</label><input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none" /></div>
                   <div><label className="block text-sm font-semibold text-gray-700 mb-2">Position</label><input type="text" value={editForm.position} onChange={(e) => setEditForm({ ...editForm, position: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none" /></div>

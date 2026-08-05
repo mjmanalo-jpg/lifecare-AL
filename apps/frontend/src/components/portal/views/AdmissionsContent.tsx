@@ -411,7 +411,7 @@ export default function AdmissionsContent() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         <Stat label="In Progress" value={count("IN_PROGRESS")} tone="amber" />
         <Stat label="Completed" value={count("COMPLETED")} tone="green" />
         <Stat label="Cancelled" value={count("CANCELLED")} tone="gray" />

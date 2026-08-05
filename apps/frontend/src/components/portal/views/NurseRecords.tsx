@@ -552,7 +552,7 @@ function CallBellsModal({ r, onClose, refetchCallBells }: { r: RecordVM; onClose
         <div className="p-6 space-y-4">
           {r.callBells.length > 0 ? (
             <>
-              <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <p className="text-xs text-red-700 font-semibold">PENDING</p>
                   <p className="text-2xl font-bold text-red-600 mt-1">
@@ -849,7 +849,7 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
     {/* Call Bell Action Modal */}
     {selectedBell && bellModalMode === "respond" && (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
           <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-6 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold">Respond to Call Bell</h2>
@@ -968,7 +968,7 @@ function CallBellResolveModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="bg-gradient-to-r from-green-400 to-green-500 text-white p-6 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold">Resolve Call Bell</h2>
