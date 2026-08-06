@@ -30,6 +30,7 @@ const RESIDENT_SCOPED = new Set([
   "resident-documents", "eliminations", "pain-assessments", "wound-cares",
   "sleep-logs", "mobility-logs", "care-plans", "hospital-referrals", "follow-ups",
   "care-timeline", "medication-administrations", "daily-rounds",
+  "lab-results", "allergies",
 ]);
 
 const ORG_ADMIN_ROLES = new Set(["OWNER", "ADMIN"]);

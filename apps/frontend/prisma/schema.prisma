@@ -665,6 +665,8 @@ model Resident {
   dailyRounds            DailyRound[]
   authorizedUsers        ResidentAccess[]
   invitations           Invitation[]
+  labResults            LabResult[]
+  allergyRecords        Allergy[]
 
   @@index([careLevel])
   @@index([roomNumber])
@@ -676,6 +678,55 @@ model Resident {
   @@index([organizationId])
   @@index([currentAcuityLevel])
   @@index([careDependencyLevel])
+}
+
+// Discrete lab/diagnostic results, part of the resident's EHR.
+model LabResult {
+  id               String    @id @default(uuid())
+  organizationId   String?
+  communityId      String?
+  residentId       String
+  resident         Resident  @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  testName         String
+  category         String?   // Hematology | Chemistry | Microbiology | Urinalysis | Imaging | Other
+  value            String
+  unit             String?
+  referenceRange   String?
+  flag             String    @default("NORMAL") // NORMAL | LOW | HIGH | CRITICAL | ABNORMAL
+  status           String    @default("RESULTED") // ORDERED | PENDING | RESULTED
+  specimen         String?
+  orderingProvider String?
+  collectedAt      DateTime?
+  resultedAt       DateTime  @default(now())
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([residentId])
+  @@index([resultedAt])
+  @@index([organizationId])
+  @@index([communityId])
+}
+
+// Structured allergy record (severity + reaction) feeding the medication-safety
+// check — richer than the free-text Resident.allergies summary field.
+model Allergy {
+  id             String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
+  residentId     String
+  resident       Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  allergen       String
+  type           String   @default("DRUG") // DRUG | FOOD | ENVIRONMENTAL | OTHER
+  severity       String   @default("MODERATE") // MILD | MODERATE | SEVERE | LIFE_THREATENING
+  reaction       String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([residentId])
+  @@index([organizationId])
+  @@index([communityId])
 }
 
 model Staff {

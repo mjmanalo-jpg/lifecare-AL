@@ -31,6 +31,8 @@ export const MODELS: Record<string, ModelDef> = {
   invoices: { delegate: prisma.invoice, table: "Invoice", orderBy: { dueDate: "desc" } },
   "resident-notes": { delegate: prisma.residentNote, table: "ResidentNote", orderBy: { createdAt: "desc" } },
   "medical-notes": { delegate: prisma.medicalNote, table: "MedicalNote", orderBy: { createdAt: "desc" } },
+  "lab-results": { delegate: prisma.labResult, table: "LabResult", orderBy: { resultedAt: "desc" } },
+  allergies: { delegate: prisma.allergy, table: "Allergy", orderBy: { createdAt: "desc" } },
   "call-bells": { delegate: prisma.callBell, table: "CallBell", orderBy: { createdAt: "desc" } },
   "time-tracking": { delegate: prisma.timeTracking, table: "TimeTracking", orderBy: { startTime: "desc" } },
   "knowledge-docs": { delegate: prisma.knowledgeDoc, table: "KnowledgeDoc", orderBy: { createdAt: "desc" } },
