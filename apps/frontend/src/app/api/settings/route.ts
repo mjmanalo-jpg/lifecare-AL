@@ -14,10 +14,20 @@ export async function GET() {
   return NextResponse.json({ data: Object.fromEntries(rows.filter((row) => !String(row.key || row.id).startsWith("__")).map((row) => [row.key || row.id, row.value])) });
 }
 
+// Roles allowed to write community-scoped app settings (assistant personality,
+// voice, etc.) beyond org owners/admins: the facility-level admins who own these
+// settings screens. Mirrors ai-assistant's ADMIN_STAFF so a Super Admin can save
+// the very personality they're editing on /superadmin/assistant.
+const SETTINGS_ADMIN_ROLES = new Set(["FACILITY_ADMIN", "SUPERADMIN"]);
+
 export async function POST(request: NextRequest) {
-  const context = await requireTenantContext({ requireCommunity: true });
+  const context = await requireTenantContext({ requireCommunity: true, allowPlatform: true });
   if (!context?.organizationId || !context.communityId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!canManageOrganization(context) && context.role !== "FACILITY_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Check both the resolved tenant role and the authoritative session role — a
+  // Super Admin's community-membership role can shadow context.role, so we must
+  // not rely on it alone or the owner of this settings page still gets a 403.
+  const canWrite = canManageOrganization(context) || SETTINGS_ADMIN_ROLES.has(context.role) || SETTINGS_ADMIN_ROLES.has(context.session.role);
+  if (!canWrite) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const body = await request.json().catch(() => ({}));
   const key = String(body.key || "").trim();
   if (!key || key.length > 100) return NextResponse.json({ error: "Invalid setting key" }, { status: 400 });

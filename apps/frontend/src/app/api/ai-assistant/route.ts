@@ -169,19 +169,27 @@ const RESIDENT_TOOLS = [
         name: "schedule_transport",
         description:
           "Schedule a transport / ride when the resident asks to arrange transportation — to a medical " +
-          "appointment, dialysis, therapy, a family outing, etc. Gather the destination and the pickup " +
-          "date-time before calling; resolve relative dates ('next Tuesday 9am') to ISO 8601 using the " +
-          "current date-time. Ask if they want a return trip or need a wheelchair when relevant.",
+          "appointment, dialysis, therapy, a family outing, etc. This is the conversational version of the " +
+          "Request Transport form: gather the same details by asking short, friendly follow-up questions — " +
+          "the trip type, the destination, the pickup date & time (resolve relative dates like 'next Tuesday " +
+          "9am' to ISO 8601 using the current date-time), the purpose of the trip, whether it is a round trip, " +
+          "whether a wheelchair-accessible vehicle is needed, whether they want a staff escort (and if so a " +
+          "nurse or a caregiver), and any extra notes. Only the destination and pickup date-time are strictly " +
+          "required — for anything the resident doesn't mention, ask once, and if they're unsure use sensible " +
+          "defaults (round trip, no wheelchair, no escort) rather than blocking the booking.",
         parameters: {
           type: "OBJECT",
           properties: {
             destination: { type: "STRING", description: "Where the resident wants to go (drop-off)" },
             requestedDate: { type: "STRING", description: "Requested pickup date-time in ISO 8601" },
             type: { type: "STRING", description: "One of: MEDICAL_APPOINTMENT, DIALYSIS, THERAPY, FAMILY_OUTING, EMERGENCY_TRANSFER, OTHER" },
-            purpose: { type: "STRING", description: "Short reason for the trip" },
+            purpose: { type: "STRING", description: "Short reason for the trip, e.g. 'Cardiology follow-up'" },
             pickupLocation: { type: "STRING", description: "Pickup point if not the facility" },
             wheelchairNeeded: { type: "BOOLEAN", description: "True if a wheelchair-accessible vehicle is needed" },
-            returnRequired: { type: "BOOLEAN", description: "True if a return trip back is needed" },
+            returnRequired: { type: "BOOLEAN", description: "True if a return trip back is needed (round trip)" },
+            escortRequired: { type: "BOOLEAN", description: "True if the resident wants a staff member to escort them" },
+            escortRole: { type: "STRING", description: "Who should escort: NURSE or CAREGIVER (only when escortRequired is true)" },
+            notes: { type: "STRING", description: "Any additional details the resident mentions about the trip" },
           },
           required: ["destination", "requestedDate"],
         },
@@ -302,6 +310,16 @@ async function executeResidentTool(
     if (!destination) return { ok: false, error: "Ask the resident where they would like to go." };
     const TYPES = ["MEDICAL_APPOINTMENT", "DIALYSIS", "THERAPY", "FAMILY_OUTING", "EMERGENCY_TRANSFER", "OTHER"];
     const type = (TYPES.includes(String(args.type)) ? String(args.type) : "MEDICAL_APPOINTMENT") as TransportRequestType;
+    // Only honour an escort role the resident actually asked for, and only when
+    // they requested an escort — mirrors the Request Transport form exactly.
+    const escortRequired = Boolean(args.escortRequired);
+    const escortRole = escortRequired
+      ? (["NURSE", "CAREGIVER"].includes(String(args.escortRole)) ? String(args.escortRole) : "NURSE")
+      : null;
+    // Emergency transfers jump the queue, same as the form's priority mapping.
+    const priority = type === "EMERGENCY_TRANSFER" ? "EMERGENCY" : "NORMAL";
+    // Keep the resident's own words; fall back to a marker when none were given.
+    const notes = args.notes ? String(args.notes).trim() : "Requested through the AI companion chat";
     const req = await prisma.transportRequest.create({
       data: {
         residentId: resident.id,
@@ -313,12 +331,15 @@ async function executeResidentTool(
         requestedDate: when,
         returnRequired: args.returnRequired !== false,
         wheelchairNeeded: Boolean(args.wheelchairNeeded),
+        escortRequired,
+        escortRole,
+        priority,
         source: "AI_COMPANION",
-        notes: "Requested through the AI companion chat",
+        notes,
         ...tenant,
       },
     });
-    return { ok: true, transportRequestId: req.id, destination, type, scheduledFor: when.toISOString() };
+    return { ok: true, transportRequestId: req.id, destination, type, escortRequired, wheelchairNeeded: Boolean(args.wheelchairNeeded), returnRequired: args.returnRequired !== false, scheduledFor: when.toISOString() };
   }
 
   if (name === "request_service") {

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, Calendar, Bus, ConciergeBell, Megaphone, Search, X, RefreshCw, Eye,
   ChevronLeft, ChevronRight, Plus, Trash2, Star, CheckCircle2, Clock,
   HeartPulse, AlertTriangle, Pill, Droplets, Wind, Thermometer, MessageSquare,
   MapPin, Navigation, User, Car, Accessibility, Stethoscope, Siren, TreePine,
   UtensilsCrossed, CalendarDays, SlidersHorizontal, Pin, Loader2, Phone, FileText,
+  Send, Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import Swal from "@/lib/swal";
@@ -789,6 +790,7 @@ function TransportTab({ onView }: { onView: (r: Row, title: string) => void }) {
   const { data: tripRows, refetch: refetchTrips } = useLiveQuery<Row>("trips", { query: "include=vehicle,driver&take=100", tables: ["Trip", "Vehicle", "Driver"], pollMs: 10000 });
 
   const [showForm, setShowForm] = useState(false);
+  const [showAIChat, setShowAIChat] = useState(false);
   const [form, setForm] = useState(emptyTransportForm);
   const [residentId, setResidentId] = useState("");
   const [search, setSearch] = useState("");
@@ -903,7 +905,7 @@ function TransportTab({ onView }: { onView: (r: Row, title: string) => void }) {
           <input type="text" placeholder="Search destination, type…" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none" />
         </div>
-        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm whitespace-nowrap">
+        <button onClick={() => setShowAIChat(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm whitespace-nowrap">
           <Plus className="w-4 h-4" /> Request Transport
         </button>
       </div>
@@ -976,6 +978,16 @@ function TransportTab({ onView }: { onView: (r: Row, title: string) => void }) {
 
       <Pagination page={page} totalPages={totalPages} total={filtered.length} label="requests" setPage={setPage} />
 
+      {/* AI Companion booking chat — asks for the trip details conversationally */}
+      {showAIChat && (
+        <TransportAIChat
+          residentName={residentName}
+          onClose={() => setShowAIChat(false)}
+          onBooked={refetch}
+          onSwitchToForm={() => { setShowAIChat(false); setShowForm(true); }}
+        />
+      )}
+
       {/* Request Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={() => setShowForm(false)}>
@@ -1041,6 +1053,109 @@ function TransportTab({ onView }: { onView: (r: Row, title: string) => void }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── AI Companion transport-booking chat ──
+ * The conversational counterpart to the Request Transport form: instead of the
+ * resident filling every field themselves, their companion asks for the trip
+ * details (destination, day/time, wheelchair, escort, notes…) and books it via
+ * the schedule_transport tool on /api/ai-assistant, which writes the same
+ * TransportRequest row the form does. The classic form stays one tap away. */
+type TransportChatMsg = { id: string; role: "user" | "assistant"; text: string };
+
+function TransportAIChat({ residentName, onClose, onBooked, onSwitchToForm }: {
+  residentName: string;
+  onClose: () => void;
+  onBooked: () => void;
+  onSwitchToForm: () => void;
+}) {
+  const firstName = residentName.split(" ")[0] || "there";
+  const [messages, setMessages] = useState<TransportChatMsg[]>([
+    { id: "welcome", role: "assistant", text: `Hi ${firstName}! I can arrange your transport. Where would you like to go, and on what day and time? Just let me know if you'll need a wheelchair or a staff escort too.` },
+  ]);
+  const [input, setInput] = useState("");
+  const [thinking, setThinking] = useState(false);
+  const [booked, setBooked] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, thinking]);
+
+  const send = async (text: string) => {
+    const query = text.trim();
+    if (!query || thinking) return;
+    setInput("");
+    setThinking(true);
+    setMessages(prev => [...prev, { id: `u-${Date.now()}`, role: "user", text: query }]);
+    const history = messages.filter(m => m.id !== "welcome").slice(-8).map(m => ({ role: m.role === "assistant" ? "model" : "user", text: m.text }));
+    // Focus the general resident companion on the transport-booking task and the
+    // exact set of fields the form captures, so nothing is lost by going verbal.
+    const context =
+      "The resident opened the Request Transport screen and wants to arrange a ride. Collect these trip " +
+      "details by asking short, friendly follow-up questions: trip type (medical appointment, dialysis, " +
+      "therapy, family outing, or other), destination, pickup date & time, purpose, whether it's a round " +
+      "trip, whether a wheelchair-accessible vehicle is needed, whether they want a staff escort (nurse or " +
+      "caregiver), and any extra notes. Only the destination and pickup date-time are required — for anything " +
+      "they don't mention, ask once, then book with sensible defaults. When you have enough, call schedule_transport.";
+    let reply = "";
+    let didBook = false;
+    try {
+      const res = await fetch("/api/ai-assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "chat", message: query, context, history, audience: "resident" }),
+      });
+      const data = await res.json();
+      reply = data.reply || "I'm here, but I couldn't respond just now. Please try again.";
+      const actions: { name: string; ok?: boolean }[] = Array.isArray(data.actions) ? data.actions : [];
+      if (actions.some(a => a.name === "schedule_transport" && a.ok)) didBook = true;
+    } catch {
+      reply = "I couldn't reach the companion service. Please check the connection, or fill in a form instead.";
+    }
+    setMessages(prev => [...prev, { id: `a-${Date.now()}`, role: "assistant", text: reply }]);
+    setThinking(false);
+    if (didBook) { setBooked(true); onBooked(); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl h-[85vh] max-h-[640px] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-4 sm:px-6 py-4 text-white flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0"><Bus className="w-5 h-5" /></div>
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold leading-tight">Request Transport</h2>
+              <p className="text-xs text-white/80 flex items-center gap-1"><Sparkles className="w-3 h-3" /> Your companion will ask for the details</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition flex-shrink-0"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+          {messages.map(m => (
+            <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${m.role === "user" ? "bg-blue-600 text-white rounded-br-sm" : "bg-white border border-gray-200 text-gray-800 rounded-bl-sm"}`}>{m.text}</div>
+            </div>
+          ))}
+          {thinking && (
+            <div className="flex justify-start"><div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-3.5 py-2.5"><Loader2 className="w-4 h-4 animate-spin text-blue-500" /></div></div>
+          )}
+          {booked && (
+            <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-3.5 py-2.5 text-sm flex items-center gap-2"><CheckCircle2 className="w-4 h-4 flex-shrink-0" /> Your transport request was sent to the dispatcher.</div>
+          )}
+        </div>
+
+        <div className="border-t border-gray-100 p-3 flex-shrink-0 space-y-2">
+          <form onSubmit={e => { e.preventDefault(); send(input); }} className="flex items-center gap-2">
+            <input value={input} onChange={e => setInput(e.target.value)} placeholder="Type your reply…" disabled={thinking} className="flex-1 px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition disabled:opacity-60" />
+            <button type="submit" disabled={thinking || !input.trim()} className="p-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:shadow-lg transition disabled:opacity-40 active:scale-95 flex-shrink-0"><Send className="w-4 h-4" /></button>
+          </form>
+          <button onClick={onSwitchToForm} className="w-full text-center text-xs text-gray-400 hover:text-gray-600 transition">Prefer to fill in a form instead?</button>
+        </div>
+      </div>
     </div>
   );
 }
