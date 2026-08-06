@@ -24,6 +24,7 @@ import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports"
 import InventoryAlertsPanel from "@/components/portal/views/clinical/InventoryAlertsPanel";
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
 import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
+import CameraRegistryBoard from "@/components/portal/views/CameraRegistryBoard";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import FeatureMatrixDashboard from "@/components/portal/views/superadmin/FeatureMatrixDashboard";
 import { Trash2, Search, Eye, Edit, X, UserPlus } from "lucide-react";
@@ -306,6 +307,9 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   }
   if (tab === "cameralogs") {
     return <CameraActivityLog />;
+  }
+  if (tab === "cameras") {
+    return <CameraRegistryBoard />;
   }
 
   // Core SLMS Modules Aligned

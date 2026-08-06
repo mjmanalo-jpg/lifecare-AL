@@ -186,6 +186,7 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   taskboard: "Task Assignment",
   securitylog: "Security & Incident Log",
   cameralogs: "Camera Activity Log",
+  cameras: "Camera Registry",
   dietorders: "Diet & Nutrition Orders",
   kitchen: "Kitchen — Cook List",
   dailyrounds: "Daily Rounds — Bedside Documentation",
@@ -280,6 +281,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Alert Center", icon: BellRing, route: "/superadmin/alertcenter", group: "Clinical Monitoring" },
       { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/superadmin/dailyrounds" },
       { name: "Camera Activity Log", icon: Activity, route: "/superadmin/cameralogs" },
+      { name: "Camera Registry", icon: Camera, route: "/superadmin/cameras" },
       // "Portal Matrix" is merged into "SLMS Feature Matrix" as its Access Control tab.
       { name: "CRM & Leads", icon: UserPlus, route: "/superadmin/crm" },
       { name: "Consent & Move-in Forms", icon: ClipboardList, route: "/superadmin/consentforms" },
@@ -445,6 +447,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "CRM & Leads", icon: UserPlus, route: "/facility_admin/crm" },
       { name: "Staff", icon: Users, route: "/facility_admin/staff" },
       { name: "Rooms", icon: DoorOpen, route: "/facility_admin/rooms" },
+      { name: "Camera Registry", icon: Camera, route: "/facility_admin/cameras" },
       { name: "Occupancy", icon: BedDouble, route: "/facility_admin/occupancy" },
       { name: "Purchase Requests", icon: ShoppingCart, route: "/facility_admin/purchaserequests" },
       { name: "Shift Endorsement & Continuity", icon: FileText, route: "/facility_admin/reports" },

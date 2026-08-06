@@ -37,6 +37,7 @@ import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports"
 import InventoryAlertsPanel from "@/components/portal/views/clinical/InventoryAlertsPanel";
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
 import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
+import CameraRegistryBoard from "@/components/portal/views/CameraRegistryBoard";
 import DietOrdersBoard from "@/components/portal/views/services/DietOrdersBoard";
 import KitchenCookList from "@/components/portal/views/services/KitchenCookList";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
@@ -263,6 +264,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
   if (tab === "vaccinations") return <VaccinationTracker />;
   if (tab === "documents") return <ResidentDocuments />;
   if (tab === "cameralogs") return <CameraActivityLog />;
+  if (tab === "cameras") return <CameraRegistryBoard />;
   if (tab === "dietorders") return <DietOrdersBoard />;
   if (tab === "kitchen") return <KitchenCookList />;
   if (tab === "mar") return <MARBoard />;

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { isDbConfigured } from "@/lib/models";
+import { resolveSensorKey } from "@/lib/sensorAuth";
 import type { IncidentType, IncidentSeverity } from "@prisma/client";
 
 export const runtime = "nodejs";
@@ -25,12 +25,6 @@ export const dynamic = "force-dynamic";
  *      the `communityId` to attach the event to.
  */
 
-function timingSafeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
-}
-
 // External event → (incidentType, severity, title). Unknown events log as OTHER.
 const EVENT_MAP: Record<string, { type: IncidentType; severity: IncidentSeverity; title: string }> = {
   FALL: { type: "FALL", severity: "CRITICAL", title: "Fall detected by sensor" },
@@ -41,28 +35,6 @@ const EVENT_MAP: Record<string, { type: IncidentType; severity: IncidentSeverity
   WANDERING: { type: "BEHAVIORAL", severity: "MODERATE", title: "Wandering detected by sensor" },
 };
 
-interface KeyMatch { communityId: string; organizationId: string | null; }
-
-async function resolveKey(apiKey: string, bodyCommunityId?: string): Promise<KeyMatch | null> {
-  // 1) Per-community key stored in app-settings.
-  const rows = await prisma.appSetting.findMany({
-    where: { key: "sensor_ingest_key" },
-    select: { value: true, communityId: true, organizationId: true },
-  });
-  for (const r of rows) {
-    if (r.value && r.communityId && timingSafeEqual(r.value, apiKey)) {
-      return { communityId: r.communityId, organizationId: r.organizationId ?? null };
-    }
-  }
-  // 2) Global env key — the body must name the community it's for.
-  const envKey = process.env.SENSOR_INGEST_API_KEY;
-  if (envKey && timingSafeEqual(envKey, apiKey) && bodyCommunityId) {
-    const comm = await prisma.community.findUnique({ where: { id: bodyCommunityId }, select: { id: true, organizationId: true } });
-    if (comm) return { communityId: comm.id, organizationId: comm.organizationId ?? null };
-  }
-  return null;
-}
-
 export async function POST(request: NextRequest) {
   if (!isDbConfigured()) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
 
@@ -72,7 +44,7 @@ export async function POST(request: NextRequest) {
   let body: Record<string, unknown>;
   try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
 
-  const match = await resolveKey(apiKey, body.communityId ? String(body.communityId) : undefined);
+  const match = await resolveSensorKey(apiKey, body.communityId ? String(body.communityId) : undefined);
   if (!match) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const eventKey = String(body.event ?? "").trim().toUpperCase();
