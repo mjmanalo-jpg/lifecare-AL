@@ -120,10 +120,13 @@ export async function GET() {
     try {
       const user = await prisma.user.findUnique({
         where: { id: session.userId },
-        select: { name: true, staff: { select: { id: true } } },
+        select: { name: true, email: true, staff: { select: { id: true } } },
       });
       if (user) {
         enriched.name = user.name;
+        // email lets client screens resolve the matching domain record — e.g.
+        // the Driver portal matches Driver.email to show the driver's own trips.
+        enriched.email = user.email;
         enriched.staffId = user.staff?.id ?? null;
       }
     } catch {

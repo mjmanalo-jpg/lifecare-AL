@@ -34,6 +34,32 @@ const rec = (v: unknown): Record<string, unknown> | null =>
 const fmtDT = (iso: string) => iso ? new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "—";
 const fmtCurrency = (n: number) => `₱${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
+/**
+ * The signed-in user, resolved once from the enriched session. GET
+ * /api/auth/session returns `{ authenticated, session: { userId, email, name } }`,
+ * so we read `session.email` — the key each driver tab matches against
+ * Driver.email to show only THAT driver's assigned trips. (The old code read
+ * `data.userId`/`r.success` which never matched, so every driver fell back to
+ * the first active driver and saw the wrong trips.)
+ */
+function useSessionUser() {
+  const [user, setUser] = useState<{ id: string; email: string; name: string } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((data) => {
+        const s = data?.session;
+        if (!cancelled && data?.authenticated && s?.userId) {
+          setUser({ id: String(s.userId), email: String(s.email ?? ""), name: String(s.name ?? "") });
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  return user;
+}
+
 /* ── Tab config ── */
 const TABS = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -180,7 +206,7 @@ export default function DriverHub({ initialTab = "dashboard" }: DriverHubProps) 
 /* ══════════════════════════════════════════════════════════════════════════════ */
 
 function DashboardTab() {
-  const { data: driverRows } = useLiveQuery<Row>("drivers", { query: "take=10", tables: ["Driver"] });
+  const { data: driverRows } = useLiveQuery<Row>("drivers", { query: "take=300", tables: ["Driver"] });
   const { data: tripRows } = useLiveQuery<Row>("trips", {
     query: "include=resident,vehicle,driver&orderBy=scheduledAt:desc&take=300",
     tables: ["Trip", "Vehicle", "Driver", "Resident"],
@@ -189,14 +215,7 @@ function DashboardTab() {
   const { data: incidentRows } = useLiveQuery<Row>("incidents", { query: "orderBy=createdAt:desc&take=20", tables: ["Incident"] });
   const { data: transportRows } = useLiveQuery<Row>("transport-requests", { query: "orderBy=requestedAt:desc&take=20", tables: ["TransportRequest"] });
 
-  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string } | null>(null);
-
-  useEffect(() => {
-    fetch("/api/auth/session").then(r => r.json()).then(data => {
-      if (data.authenticated && data.userId)
-        fetch(`/api/db/users/${data.userId}`).then(r => r.json()).then(r => { if (r.success && r.data) setCurrentUser(r.data); }).catch(() => {});
-    }).catch(() => {});
-  }, []);
+  const currentUser = useSessionUser();
 
   const activeDriver = useMemo(() => {
     const resolve = (row: Row) => ({
@@ -585,7 +604,7 @@ function DashboardTab() {
 /* ══════════════════════════════════════════════════════════════════════════════ */
 
 function TripsTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
-  const { data: driverRows } = useLiveQuery<Row>("drivers", { query: "take=10", tables: ["Driver"] });
+  const { data: driverRows } = useLiveQuery<Row>("drivers", { query: "take=300", tables: ["Driver"] });
   const { data: tripRows, loading, error, refetch } = useLiveQuery<Row>("trips", {
     query: "include=resident,vehicle,driver&orderBy=scheduledAt:desc&take=300",
     tables: ["Trip", "Vehicle", "Driver", "Resident"],
@@ -598,13 +617,7 @@ function TripsTab({ onView }: { onView: (r: Record<string, unknown>) => void }) 
   );
   const [showRequest, setShowRequest] = useState(false);
 
-  const [currentUser, setCurrentUser] = useState<{ id: string; email: string } | null>(null);
-  useEffect(() => {
-    fetch("/api/auth/session").then(r => r.json()).then(data => {
-      if (data.authenticated && data.userId)
-        fetch(`/api/db/users/${data.userId}`).then(r => r.json()).then(r => { if (r.success && r.data) setCurrentUser({ id: r.data.id, email: r.data.email }); }).catch(() => {});
-    }).catch(() => {});
-  }, []);
+  const currentUser = useSessionUser();
 
   const activeDriverId = useMemo(() => {
     if (currentUser?.email) { const r = driverRows.find(d => str(d.email).toLowerCase() === currentUser.email.toLowerCase()); if (r) return str(r.id); }
@@ -878,19 +891,13 @@ function DriverRequestModal({ passengers, onClose, onSaved }: {
 /* ══════════════════════════════════════════════════════════════════════════════ */
 
 function ChecklistTab() {
-  const { data: driverRows } = useLiveQuery<Row>("drivers", { query: "take=10", tables: ["Driver"] });
+  const { data: driverRows } = useLiveQuery<Row>("drivers", { query: "take=300", tables: ["Driver"] });
   const { data: tripRows, refetch } = useLiveQuery<Row>("trips", {
     query: "include=resident,vehicle,driver&orderBy=scheduledAt:desc&take=300",
     tables: ["Trip", "Vehicle", "Driver", "Resident"],
   });
 
-  const [currentUser, setCurrentUser] = useState<{ id: string; email: string } | null>(null);
-  useEffect(() => {
-    fetch("/api/auth/session").then(r => r.json()).then(data => {
-      if (data.authenticated && data.userId)
-        fetch(`/api/db/users/${data.userId}`).then(r => r.json()).then(r => { if (r.success && r.data) setCurrentUser({ id: r.data.id, email: r.data.email }); }).catch(() => {});
-    }).catch(() => {});
-  }, []);
+  const currentUser = useSessionUser();
 
   const activeDriverId = useMemo(() => {
     if (currentUser?.email) { const r = driverRows.find(d => str(d.email).toLowerCase() === currentUser.email.toLowerCase()); if (r) return str(r.id); }
@@ -1003,19 +1010,13 @@ function ChecklistTab() {
 /* ══════════════════════════════════════════════════════════════════════════════ */
 
 function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
-  const { data: driverRows } = useLiveQuery<Row>("drivers", { query: "take=10", tables: ["Driver"] });
+  const { data: driverRows } = useLiveQuery<Row>("drivers", { query: "take=300", tables: ["Driver"] });
   const { data: vehicleRows } = useLiveQuery<Row>("vehicles", { query: "take=50", tables: ["Vehicle"] });
   const { data: fuelRows, loading, error, refetch } = useLiveQuery<Row>("fuel-logs", {
     query: "include=vehicle&orderBy=logDate:desc&take=200", tables: ["FuelLog", "Vehicle"],
   });
 
-  const [currentUser, setCurrentUser] = useState<{ id: string; email: string } | null>(null);
-  useEffect(() => {
-    fetch("/api/auth/session").then(r => r.json()).then(data => {
-      if (data.authenticated && data.userId)
-        fetch(`/api/db/users/${data.userId}`).then(r => r.json()).then(r => { if (r.success && r.data) setCurrentUser({ id: r.data.id, email: r.data.email }); }).catch(() => {});
-    }).catch(() => {});
-  }, []);
+  const currentUser = useSessionUser();
 
   const activeDriverId = useMemo(() => {
     if (currentUser?.email) { const r = driverRows.find(d => str(d.email).toLowerCase() === currentUser.email.toLowerCase()); if (r) return str(r.id); }
