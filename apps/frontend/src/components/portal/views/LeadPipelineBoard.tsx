@@ -59,9 +59,35 @@ export default function LeadPipelineBoard() {
     } finally { setSaving(false); }
   };
 
+  // Create the Admission (move-in) record from a lead's details. Shared by the
+  // explicit "Convert" button and the auto-conversion when a lead reaches Move-In.
+  const createAdmissionForLead = async (lead: Lead): Promise<string | undefined> => {
+    const [first, ...rest] = String(lead.prospectiveResident || lead.name).trim().split(/\s+/);
+    const res = await createRecord("admissions", {
+      firstName: first || lead.name, lastName: rest.join(" ") || "—",
+      phone: lead.contact || null, email: lead.email || null,
+      status: "IN_PROGRESS", currentStep: 1, completedSteps: "[]",
+      sponsorName: lead.name, sponsorEmail: lead.email || null,
+    });
+    return (res.data as { id?: string })?.id;
+  };
+
   const moveStage = async (lead: Lead, stage: LeadStage) => {
-    const activity = [...(lead.activity ?? []), { at: new Date().toISOString(), by: me, note: `Moved to ${STAGE_META[stage].label}` }];
-    await persist(leads.map((l) => (l.id === lead.id ? { ...l, stage, activity } : l)));
+    // Reaching Move-In (Won) must create the admission if one doesn't exist yet —
+    // otherwise the lead shows as "won" with nothing in Admissions to work.
+    let convertedAdmissionId = lead.convertedAdmissionId;
+    let note = `Moved to ${STAGE_META[stage].label}`;
+    let madeAdmission = false;
+    if (stage === "MOVE_IN" && !convertedAdmissionId) {
+      try {
+        convertedAdmissionId = await createAdmissionForLead(lead);
+        note = "Moved to Move-In — admission created";
+        madeAdmission = true;
+      } catch { /* still advance the stage even if admission create failed */ }
+    }
+    const activity = [...(lead.activity ?? []), { at: new Date().toISOString(), by: me, note }];
+    await persist(leads.map((l) => (l.id === lead.id ? { ...l, stage, convertedAdmissionId, activity } : l)));
+    if (madeAdmission) Swal.fire({ title: "Moved in", text: "An admission was created — continue it in Admissions & Registration.", icon: "success", timer: 2400, showConfirmButton: false });
   };
 
   const removeLead = async (lead: Lead) => {
@@ -73,9 +99,7 @@ export default function LeadPipelineBoard() {
     const r = await Swal.fire({ title: "Convert to admission?", text: `Start the move-in process for ${lead.prospectiveResident || lead.name}.`, icon: "question", showCancelButton: true, confirmButtonText: "Convert", confirmButtonColor: "#16a34a" });
     if (!r.isConfirmed) return;
     try {
-      const [first, ...rest] = String(lead.prospectiveResident || lead.name).trim().split(/\s+/);
-      const res = await createRecord("admissions", { firstName: first || lead.name, lastName: rest.join(" ") || "—", phone: lead.contact || null, email: lead.email || null, status: "IN_PROGRESS", currentStep: 1, completedSteps: "[]", sponsorName: lead.name, sponsorEmail: lead.email || null });
-      const admissionId = (res.data as { id?: string })?.id;
+      const admissionId = await createAdmissionForLead(lead);
       await persist(leads.map((l) => (l.id === lead.id ? { ...l, stage: "MOVE_IN", convertedAdmissionId: admissionId, activity: [...(l.activity ?? []), { at: new Date().toISOString(), by: me, note: "Converted to admission" }] } : l)));
       Swal.fire({ title: "Converted", text: "A move-in (admission) was created. Continue it in Admissions.", icon: "success" });
     } catch (e) { Swal.fire({ title: "Failed", text: e instanceof Error ? e.message : "Try again", icon: "error" }); }
@@ -144,6 +168,7 @@ export default function LeadPipelineBoard() {
                         {next && next !== "LOST" && <button onClick={() => moveStage(lead, next)} className="text-[11px] px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 inline-flex items-center gap-0.5">{STAGE_META[next].label} <ChevronRight className="w-3 h-3" /></button>}
                         {OPEN_STAGES.includes(lead.stage) && <button onClick={() => moveStage(lead, "LOST")} className="text-[11px] px-2 py-1 rounded text-rose-600 hover:bg-rose-50">Lost</button>}
                         {(lead.stage === "APPLICATION" || lead.stage === "TOURED") && !lead.convertedAdmissionId && <button onClick={() => convert(lead)} className="text-[11px] px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700 inline-flex items-center gap-0.5"><ArrowRight className="w-3 h-3" /> Convert</button>}
+                        {lead.stage === "MOVE_IN" && !lead.convertedAdmissionId && <button onClick={() => convert(lead)} className="text-[11px] px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700 inline-flex items-center gap-0.5"><UserPlus className="w-3 h-3" /> Create admission</button>}
                       </div>
                     </div>
                   );
