@@ -20,6 +20,11 @@ export default function LeadPipelineBoard() {
   const { data: settingRows, refetch } = useLiveQuery<SettingRow>("app-settings", { tables: ["AppSetting"] });
   const leads = useMemo(() => parseLeads(settingRows.find((r) => (r.key || r.id) === CRM_LEADS_KEY)?.value), [settingRows]);
 
+  // Linked admissions, so a converted lead's card reflects how far the actual
+  // move-in has progressed (In progress · step N / Completed / Cancelled).
+  const { data: admissionRows } = useLiveQuery<{ id: string; status?: string; currentStep?: number; roomNumber?: string }>("admissions", { query: "take=500", tables: ["Admission"] });
+  const admissionById = useMemo(() => new Map(admissionRows.map((a) => [a.id, a])), [admissionRows]);
+
   const [me, setMe] = useState("");
   useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => setMe(d?.session?.name || d?.workspaces?.user?.name || "Staff")).catch(() => {}); }, []);
 
@@ -158,6 +163,15 @@ export default function LeadPipelineBoard() {
                         {lead.email && <p className="flex items-center gap-1 truncate"><Mail className="w-3 h-3" /> {lead.email}</p>}
                         {lead.source && <p className="text-gray-400">Source: {lead.source}</p>}
                       </div>
+                      {lead.convertedAdmissionId && (() => {
+                        const adm = admissionById.get(lead.convertedAdmissionId);
+                        if (!adm) return <p className="mt-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 inline-block">Admission removed</p>;
+                        const st = String(adm.status ?? "IN_PROGRESS");
+                        const meta = st === "COMPLETED" ? { c: "bg-green-100 text-green-700", t: "Admission · Completed" }
+                          : st === "CANCELLED" ? { c: "bg-rose-100 text-rose-600", t: "Admission · Cancelled" }
+                          : { c: "bg-amber-100 text-amber-700", t: `Admission · In progress${adm.currentStep ? ` (step ${adm.currentStep}/7)` : ""}` };
+                        return <p className={`mt-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded inline-flex items-center gap-1 ${meta.c}`}><UserPlus className="w-3 h-3" /> {meta.t}{adm.roomNumber ? ` · Rm ${adm.roomNumber}` : ""}</p>;
+                      })()}
                       {lead.followUpDate && (
                         <p className={`mt-1.5 text-[11px] font-semibold ${fd != null && fd < 0 ? "text-rose-600" : fd != null && fd <= 2 ? "text-amber-600" : "text-gray-500"}`}>
                           <CalendarClock className="w-3 h-3 inline mr-1" />Follow-up {new Date(lead.followUpDate).toLocaleDateString()}{fd != null ? ` (${fd < 0 ? `${Math.abs(fd)}d ago` : `${fd}d`})` : ""}
