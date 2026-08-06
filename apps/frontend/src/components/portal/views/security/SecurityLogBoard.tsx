@@ -4,12 +4,12 @@ import RefreshButton from "@/components/portal/RefreshButton";
 
 import { useMemo, useState, useEffect } from "react";
 import {
-  Shield, Plus, X, Trash2, Search, CheckCircle2, Loader2,
+  Shield, Plus, X, Search,
   MapPin, ClipboardList, AlertTriangle, DoorOpen, Camera, Upload, FileWarning,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
+import { createRecord } from "@/lib/api";
 
 /**
  * Guard/Security log desk — live via Supabase realtime + polling fallback.
@@ -149,7 +149,6 @@ export default function SecurityLogBoard() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(emptyForm);
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const perPage = 12;
 
@@ -243,31 +242,9 @@ export default function SecurityLogBoard() {
     }
   };
 
-  const handleResolve = async (l: SecurityLog) => {
-    setBusyId(l.id);
-    try {
-      await updateRecord("security-logs", l.id, { status: "RESOLVED" });
-      await refetch();
-    } catch (err) {
-      Swal.fire({ title: "Update Failed", text: err instanceof Error ? err.message : "Could not resolve log.", icon: "error" });
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const handleDelete = async (l: SecurityLog) => {
-    const confirmed = await Swal.fire({
-      title: "Delete Log?", text: "Remove this security log permanently?", icon: "warning",
-      showCancelButton: true, confirmButtonColor: "#ef4444", cancelButtonColor: "#6b7280", confirmButtonText: "Delete",
-    });
-    if (!confirmed.isConfirmed) return;
-    try {
-      await deleteRecord("security-logs", l.id);
-      await refetch();
-    } catch (err) {
-      Swal.fire({ title: "Delete Failed", text: err instanceof Error ? err.message : "Could not delete log.", icon: "error" });
-    }
-  };
+  // Security is a log-and-view desk: guards record logs but take no further
+  // action here. Resolution happens in the care team's Incident Report (for
+  // cross-posted incidents); this board just reflects the status read-only.
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -351,12 +328,10 @@ export default function SecurityLogBoard() {
                 <th className="text-left px-4 py-3 font-semibold text-gray-700">Location</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-700">Time</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-700">Status</th>
-                <th className="text-center px-4 py-3 font-semibold text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {paginated.map(l => {
-                const busy = busyId === l.id;
                 return (
                   <tr key={l.id} className="hover:bg-gray-50 transition">
                     <td className="px-4 py-3">
@@ -388,20 +363,6 @@ export default function SecurityLogBoard() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${STATUS_PILL[l.status] ?? "bg-gray-100 text-gray-700"}`}>{l.status}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-center gap-1 flex-wrap">
-                        {busy ? (
-                          <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
-                        ) : (
-                          <>
-                            {l.status === "OPEN" && (
-                              <button onClick={() => handleResolve(l)} className="p-1.5 rounded hover:bg-green-100 text-green-600 transition" title="Mark Resolved"><CheckCircle2 className="w-4 h-4" /></button>
-                            )}
-                            <button onClick={() => handleDelete(l)} className="p-1.5 rounded hover:bg-red-100 text-red-600 transition" title="Delete"><Trash2 className="w-4 h-4" /></button>
-                          </>
-                        )}
-                      </div>
                     </td>
                   </tr>
                 );
