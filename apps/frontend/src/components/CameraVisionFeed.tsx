@@ -834,6 +834,28 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     tapoStreamUrlRef.current = `/api/camera/tapo-feed?t=${Date.now()}`;
   }, [activeCamera]);
 
+  // Tapo readiness poller — the authoritative "frames are arriving" signal.
+  // MJPEG multipart/x-mixed-replace streams do NOT reliably fire the <img> onLoad
+  // event in Chrome/Edge, so we can't lean on it to (a) reveal the Tapo <img> or
+  // (b) flip camActive — and camActive gates the whole detection loop. Without a
+  // reliable trigger the loop never starts, so the Tapo feed gets ZERO detection
+  // even though video is on screen. Poll for real decoded pixels instead:
+  // naturalWidth > 0 means frames are genuinely being painted. Functional setState
+  // updaters bail out when unchanged, so this stops churning once connected.
+  useEffect(() => {
+    if (activeCamera !== "tapo") return;
+    const iv = setInterval(() => {
+      const img = tapoImgRef.current;
+      if (img && img.naturalWidth > 0) {
+        setTapoStatus((s) => (s === "connected" ? s : "connected"));
+        setCamActive((v) => (v ? v : true));
+        tapoRetryRef.current = 0;
+        if (tapoRetryTimerRef.current) clearTimeout(tapoRetryTimerRef.current);
+      }
+    }, 500);
+    return () => clearInterval(iv);
+  }, [activeCamera]);
+
   useEffect(() => {
     if (isMuted) {
       stopSpeaking();
