@@ -69,16 +69,16 @@ interface Scan {
 async function scanCommunity(communityId: string, organizationId: string | null): Promise<Scan> {
   const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, incidents: 0, sbarEscalations: 0 };
 
-  const recipientIds = [
-    ...new Set(
-      (
-        await prisma.communityMembership.findMany({
-          where: { communityId, status: "ACTIVE", role: { in: ["NURSE", "FACILITY_ADMIN"] } },
-          select: { userId: true },
-        })
-      ).map((m) => m.userId),
-    ),
-  ];
+  // Recipient sets by care tier. General alerts go to the on-floor + admin team
+  // (nurse + facility admin). SBAR SLA escalations follow the clinical chain of
+  // command: nurse → care manager → physician → admin.
+  const memberships = await prisma.communityMembership.findMany({
+    where: { communityId, status: "ACTIVE", role: { in: ["NURSE", "CARE_MANAGER", "PHYSICIAN", "FACILITY_ADMIN"] } },
+    select: { userId: true, role: true },
+  });
+  const idsForRoles = (roles: string[]) => [...new Set(memberships.filter((m) => roles.includes(m.role)).map((m) => m.userId))];
+  const recipientIds = idsForRoles(["NURSE", "FACILITY_ADMIN"]);
+  const escalationChainIds = idsForRoles(["NURSE", "CARE_MANAGER", "PHYSICIAN", "FACILITY_ADMIN"]);
 
   const now = new Date();
   const nowTs = now.getTime();
@@ -95,13 +95,13 @@ async function scanCommunity(communityId: string, organizationId: string | null)
   });
   const seen = new Set(existing.map((e) => `${e.type}|${e.relatedEntityId}`));
 
-  async function notify(type: string, relatedEntityType: string, relatedEntityId: string, title: string, message: string, severity: string = "WARNING"): Promise<boolean> {
+  async function notify(type: string, relatedEntityType: string, relatedEntityId: string, title: string, message: string, severity: string = "WARNING", recipients: string[] = recipientIds): Promise<boolean> {
     const key = `${type}|${relatedEntityId}`;
     if (seen.has(key)) return false;
     seen.add(key);
-    if (recipientIds.length) {
+    if (recipients.length) {
       await prisma.notification.createMany({
-        data: recipientIds.map((userId) => ({ userId, type: type as never, title, message, severity, relatedEntityId, relatedEntityType, organizationId, communityId })),
+        data: recipients.map((userId) => ({ userId, type: type as never, title, message, severity, relatedEntityId, relatedEntityType, organizationId, communityId })),
       });
     }
     return true;
@@ -331,6 +331,8 @@ async function scanCommunity(communityId: string, organizationId: string | null)
         "SBAR escalation breached — auto-escalated to on-call",
         `${rname(e.resident)} (Room ${room(e.resident)}): a ${String(e.priority).toLowerCase()} SBAR was not acknowledged within the ${slaMin}-minute SLA and has been escalated to on-call. Please respond now.`,
         "CRITICAL",
+        // Notify the full clinical chain of command: nurse → care manager → physician → admin.
+        escalationChainIds,
       )) counts.sbarEscalations++;
     }
   });
