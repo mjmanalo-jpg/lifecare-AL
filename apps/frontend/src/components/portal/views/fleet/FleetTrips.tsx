@@ -12,6 +12,7 @@ import {
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord } from "@/lib/api";
+import { FACILITY_LAT, FACILITY_LNG } from "@/lib/facilityLocation";
 
 /* ── Safe coercion helpers ── */
 const str = (v: unknown, d = ""): string => (typeof v === "string" ? v : v == null ? d : String(v));
@@ -93,8 +94,8 @@ const INSPECTION_ITEMS = [
   "First-aid kit & O2", "Interior sanitized",
 ];
 
-const BASE_LAT = parseFloat(process.env.NEXT_PUBLIC_FACILITY_LAT || "0");
-const BASE_LNG = parseFloat(process.env.NEXT_PUBLIC_FACILITY_LNG || "0");
+const BASE_LAT = FACILITY_LAT;
+const BASE_LNG = FACILITY_LNG;
 const ASSUMED_TRIP_MS = 30 * 60 * 1000; // assumed leg duration for progress/ETA
 
 /* ── Time helpers ── */

@@ -13,6 +13,7 @@ import Swal from "@/lib/swal";
 import dynamic from "next/dynamic";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
+import { FACILITY_LAT, FACILITY_LNG } from "@/lib/facilityLocation";
 import type { MapPoint } from "@/components/NavigationMap";
 
 const NavigationMap = dynamic(() => import("@/components/NavigationMap"), {
@@ -159,8 +160,6 @@ const STEP_LABELS: Record<string, string> = {
 const TRIP_STEPS = ["SCHEDULED", "INSPECTION", "EN_ROUTE", "ARRIVED", "RETURNING", "COMPLETED"];
 const TRIP_STATUS_CHIPS = ["all", ...TRIP_STEPS, "CANCELLED"];
 
-const FACILITY_LAT = Number(process.env.NEXT_PUBLIC_FACILITY_LAT) || 14.5547;
-const FACILITY_LNG = Number(process.env.NEXT_PUBLIC_FACILITY_LNG) || 121.0244;
 
 function computeTripHours(trip: Trip): number {
   if (!trip.departedAt || !trip.completedAt) return 0;

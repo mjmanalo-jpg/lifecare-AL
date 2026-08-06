@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { FACILITY_LAT, FACILITY_LNG } from "@/lib/facilityLocation";
 
 /* ── Fix default marker icons for bundled builds ── */
 if (typeof window !== "undefined") {
@@ -58,8 +59,6 @@ export interface NavigationMapProps {
   zoom?: number;
 }
 
-const FACILITY_LAT = Number(process.env.NEXT_PUBLIC_FACILITY_LAT) || 14.5547;
-const FACILITY_LNG = Number(process.env.NEXT_PUBLIC_FACILITY_LNG) || 121.0244;
 
 /* ── OSRM route fetching ── */
 async function fetchRoute(
