@@ -17,6 +17,7 @@ import {
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident, humanize } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
+import { medFlagLabels } from "@/lib/medSafety";
 
 /* ── Types ───────────────────────────────────────────────────────────── */
 
@@ -145,6 +146,21 @@ export default function NurseMedications() {
     }
     return m;
   }, [allergyRows]);
+
+  // Active (non-discontinued) medication names per resident, for the duplicate check.
+  const activeMedNamesByResident = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const row of medRows) {
+      if (String(row.status ?? "") === "DISCONTINUED") continue;
+      const rid = String(row.residentId ?? "");
+      const name = String(row.name ?? "").trim();
+      if (!rid || !name) continue;
+      const arr = m.get(rid) ?? [];
+      arr.push(name);
+      m.set(rid, arr);
+    }
+    return m;
+  }, [medRows]);
 
   const meds = useMemo<MedVM[]>(() => medRows.map((row) => {
     const rel = row.resident as { firstName?: string; lastName?: string; roomNumber?: string } | undefined;
@@ -597,6 +613,7 @@ export default function NurseMedications() {
       {adding && (
         <AddMedicationModal
           residents={residents.map((r) => ({ id: r.id, name: r.name, room: r.room, allergies: [r.allergies, ...(allergensByResident.get(r.id) ?? [])].filter(Boolean).join(", ") }))}
+          existingByResident={activeMedNamesByResident}
           onClose={() => setAdding(false)}
           onSaved={() => { void refetch(); setAdding(false); }}
         />
@@ -720,8 +737,9 @@ function allergyConflicts(medName: string, allergies: string | undefined): strin
   return [...hits];
 }
 
-function AddMedicationModal({ residents, onClose, onSaved }: {
+function AddMedicationModal({ residents, existingByResident, onClose, onSaved }: {
   residents: { id: string; name: string; room: string; allergies?: string }[];
+  existingByResident: Map<string, string[]>;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -739,11 +757,24 @@ function AddMedicationModal({ residents, onClose, onSaved }: {
   const valid = form.residentId && form.name.trim() && form.dosage.trim() && form.frequency && form.startDate;
   const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none text-sm";
 
+  const flagBadges = medFlagLabels(form.name);
+  const flagBadgeTone: Record<string, string> = { red: "bg-red-100 text-red-700", purple: "bg-purple-100 text-purple-700", amber: "bg-amber-100 text-amber-700", blue: "bg-blue-100 text-blue-700" };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid || saving) return;
-    // Allergy safety check: warn if the medication matches a documented allergy.
     const selected = residents.find((r) => r.id === form.residentId);
+    // Duplicate-medication check: warn if the resident already has this drug active.
+    const existing = existingByResident.get(form.residentId) ?? [];
+    if (existing.some((n) => n.trim().toLowerCase() === form.name.trim().toLowerCase())) {
+      const proceed = await Swal.fire({
+        title: "Possible duplicate",
+        html: `<b>${selected?.name ?? "This resident"}</b> already has an active order for <b>${form.name.trim()}</b>. Add it again?`,
+        icon: "warning", showCancelButton: true, confirmButtonColor: "#d97706", confirmButtonText: "Add anyway", cancelButtonText: "Cancel",
+      });
+      if (!proceed.isConfirmed) return;
+    }
+    // Allergy safety check: warn if the medication matches a documented allergy.
     const conflicts = allergyConflicts(form.name, selected?.allergies);
     if (conflicts.length) {
       const proceed = await Swal.fire({
@@ -794,6 +825,11 @@ function AddMedicationModal({ residents, onClose, onSaved }: {
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Medication Name <span className="text-red-500">*</span></label>
               <input type="text" value={form.name} onChange={set("name")} placeholder="Lisinopril" className={inputCls} />
+              {flagBadges.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {flagBadges.map((b) => <span key={b.label} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${flagBadgeTone[b.tone]}`}>{b.label}</span>)}
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Dosage <span className="text-red-500">*</span></label>

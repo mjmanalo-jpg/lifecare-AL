@@ -6,6 +6,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { StatusPill, ClinicalHeader, ClinicalCard, MicroLabel } from "./clinical-ui";
+import { classifyMedication, medFlagLabels, isPrn, prnIntervalHours } from "@/lib/medSafety";
 
 const inputCls = "w-full rounded-md border border-[#D6D8CD] bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E4A48]/30";
 // Keys MUST match the Prisma MARStatus enum.
@@ -14,6 +15,7 @@ const MAR_STATUSES = ["SCHEDULED", "GIVEN", "REFUSED", "HELD", "MISSED", "PARTIA
 export default function MARBoard() {
   const { data: marRows, loading, refetch } = useLiveQuery("medication-administrations", { query: "take=500", tables: ["MedicationAdministration"] });
   const { data: medRows } = useLiveQuery("medications", { query: "take=200", tables: ["Medication"] });
+  const { data: vitalsRows } = useLiveQuery("vitals", { query: "take=500", tables: ["VitalsLog"] });
   const { data: resQ } = useLiveQuery("residents", { tables: ["Resident"] });
   const residents = useMemo(() => (resQ || []).map(adaptResident), [resQ]);
   const resMap = useMemo(() => new Map(residents.map((r: any) => [r.id, r])), [residents]);
@@ -29,6 +31,70 @@ export default function MARBoard() {
 
   const rowTime = (m: any) => m.actualTime || m.scheduledTime || null;
   const today = new Date().toISOString().split("T")[0];
+
+  // Residents who already have a vitals reading recorded today (for the
+  // vitals-before-administration prompt on vitals-sensitive meds).
+  const vitalsTodayByResident = useMemo(() => {
+    const s = new Set<string>();
+    for (const v of (vitalsRows || []) as any[]) {
+      const t = v.recordedAt ? new Date(v.recordedAt).toISOString().split("T")[0] : null;
+      if (t === today && v.residentId) s.add(String(v.residentId));
+    }
+    return s;
+  }, [vitalsRows, today]);
+
+  // Run controlled-substance, vitals, and PRN-interval safety checks before a
+  // dose is marked GIVEN. Returns null to abort, or the witness name to record.
+  const runGiveChecks = async (mar: any): Promise<{ ok: boolean; witnessName?: string }> => {
+    const med: any = medMap.get(mar.medicationId);
+    const flags = classifyMedication(med?.name);
+    const resName = resMap.get(mar.residentId)?.name || "this resident";
+
+    // PRN over-dispensing guard: block if the last dose was within the interval.
+    if (isPrn(med?.frequency)) {
+      const interval = prnIntervalHours(med?.frequency);
+      const last = (marRows || [])
+        .filter((m: any) => m.medicationId === mar.medicationId && m.residentId === mar.residentId && m.status === "GIVEN" && m.actualTime && m.id !== mar.id)
+        .map((m: any) => new Date(m.actualTime).getTime())
+        .sort((a: number, b: number) => b - a)[0];
+      if (last) {
+        const hrsSince = (Date.now() - last) / 3_600_000;
+        if (hrsSince < interval) {
+          const proceed = await Swal.fire({
+            title: "PRN interval not met",
+            html: `<b>${med?.name}</b> was last given <b>${hrsSince.toFixed(1)}h</b> ago; the minimum interval is <b>${interval}h</b>. Giving again may be over-dispensing.<br/><br/>Give anyway?`,
+            icon: "warning", showCancelButton: true, confirmButtonColor: "#C0573F", confirmButtonText: "Give anyway",
+          });
+          if (!proceed.isConfirmed) return { ok: false };
+        }
+      }
+    }
+
+    // Vitals-before-administration prompt for vitals-sensitive meds.
+    if (flags.needsVitals && !vitalsTodayByResident.has(String(mar.residentId))) {
+      const proceed = await Swal.fire({
+        title: "Check vitals first",
+        html: `<b>${med?.name}</b> should be given after checking vitals, but none are recorded today for <b>${resName}</b>.<br/><br/>Record vitals first, or proceed?`,
+        icon: "info", showCancelButton: true, confirmButtonColor: "#2E4A48", confirmButtonText: "Proceed anyway", cancelButtonText: "Record vitals first",
+      });
+      if (!proceed.isConfirmed) return { ok: false };
+    }
+
+    // Controlled substances require a witness.
+    let witnessName: string | undefined = mar.witnessName || undefined;
+    if (flags.controlled) {
+      const res = await Swal.fire({
+        title: `Controlled substance${flags.deaSchedule ? ` (C-${flags.deaSchedule})` : ""}`,
+        input: "text", inputValue: witnessName || "",
+        inputLabel: `A witness is required to administer ${med?.name}. Enter the witness name:`,
+        showCancelButton: true, confirmButtonColor: "#2E4A48", confirmButtonText: "Confirm & give",
+        inputValidator: (v) => (!v || !v.trim() ? "Witness name is required for controlled substances" : null),
+      });
+      if (!res.isConfirmed) return { ok: false };
+      witnessName = String(res.value || "").trim();
+    }
+    return { ok: true, witnessName };
+  };
 
   const filtered = useMemo(() => {
     return (marRows || []).filter((m: any) => {
@@ -80,8 +146,14 @@ export default function MARBoard() {
     const r = await Swal.fire({ title: "Delete MAR Entry?", icon: "warning", showCancelButton: true, confirmButtonColor: "#C0573F" });
     if (r.isConfirmed) { await deleteRecord("medication-administrations", id); refetch(); Swal.fire("Deleted", "", "success"); }
   };
-  const markGiven = async (id: string) => {
-    await updateRecord("medication-administrations", id, { status: "GIVEN", actualTime: new Date().toISOString(), recordedById: me.id, recordedByName: me.name });
+  const markGiven = async (mar: any) => {
+    const chk = await runGiveChecks(mar);
+    if (!chk.ok) return;
+    await updateRecord("medication-administrations", mar.id, {
+      status: "GIVEN", actualTime: new Date().toISOString(),
+      recordedById: me.id, recordedByName: me.name,
+      ...(chk.witnessName ? { witnessName: chk.witnessName } : {}),
+    });
     refetch();
     Swal.fire({ icon: "success", title: "Recorded", timer: 1200, showConfirmButton: false });
   };
@@ -163,6 +235,11 @@ export default function MARBoard() {
                         <tr key={mar.id} className="hover:bg-[#F5F6F1]">
                           <td className="px-4 py-3">
                             <p className="font-bold text-[#2B2B27]">{med?.name || "—"}</p>
+                            {medFlagLabels(med?.name).length > 0 && (
+                              <span className="flex flex-wrap gap-1 mt-0.5">
+                                {medFlagLabels(med?.name).map((b) => <span key={b.label} className={`px-1 py-0.5 rounded text-[9px] font-bold ${b.tone === "red" ? "bg-red-100 text-red-700" : b.tone === "purple" ? "bg-purple-100 text-purple-700" : b.tone === "amber" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{b.label}</span>)}
+                              </span>
+                            )}
                             {med?.category ? <p className="text-[11px] text-[#C0573F]">{String(med.category)}</p> : null}
                             {mar.reasonForRefusal && <p className="text-[11px] text-[#C0573F] mt-0.5">Reason: {mar.reasonForRefusal}</p>}
                             {mar.heldReason && <p className="text-[11px] text-[#5B7A70] mt-0.5">Held: {mar.heldReason}</p>}
@@ -174,7 +251,7 @@ export default function MARBoard() {
                           <td className="px-4 py-3 text-right">
                             <div className="flex justify-end gap-1">
                               {mar.status === "SCHEDULED" && (
-                                <button onClick={() => markGiven(mar.id)} className="p-1.5 text-[#7E9B6F] hover:bg-[#7E9B6F]/12 rounded" title="Mark Given"><CheckCircle className="w-4 h-4" /></button>
+                                <button onClick={() => markGiven(mar)} className="p-1.5 text-[#7E9B6F] hover:bg-[#7E9B6F]/12 rounded" title="Mark Given"><CheckCircle className="w-4 h-4" /></button>
                               )}
                               <button onClick={() => handleDelete(mar.id)} className="p-1.5 text-[#C0573F] hover:bg-[#C0573F]/10 rounded" title="Delete"><Trash2 className="w-4 h-4" /></button>
                             </div>
@@ -207,9 +284,17 @@ function MARModal({ residents, me, onClose, onSaved }: { residents: any[]; me: {
   const [form, setForm] = useState({ residentId: "", medicationId: "", dosage: "", route: "ORAL", status: "GIVEN", reasonForRefusal: "", heldReason: "", witnessName: "", notes: "" });
   const set = (k: string, v: any) => setForm((f) => ({ ...f, [k]: v }));
 
+  const selectedMed: any = (medRows || []).find((m: any) => m.id === form.medicationId);
+  const medFlags = classifyMedication(selectedMed?.name);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.residentId || !form.medicationId) return;
+    // Controlled substances require a witness when recorded as given.
+    if (medFlags.controlled && form.status === "GIVEN" && !form.witnessName.trim()) {
+      Swal.fire("Witness required", `${selectedMed?.name} is a controlled substance — a witness name is required to record it as given.`, "warning");
+      return;
+    }
     setSaving(true);
     try {
       const now = new Date().toISOString();
@@ -243,6 +328,11 @@ function MARModal({ residents, me, onClose, onSaved }: { residents: any[]; me: {
               <option value="">Select…</option>
               {medsForResident.map((m: any) => <option key={m.id} value={m.id}>{m.name} — {m.dosage || "—"}</option>)}
             </select>
+            {medFlagLabels(selectedMed?.name).length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {medFlagLabels(selectedMed?.name).map((b) => <span key={b.label} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${b.tone === "red" ? "bg-red-100 text-red-700" : b.tone === "purple" ? "bg-purple-100 text-purple-700" : b.tone === "amber" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{b.label}</span>)}
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className={lbl}>Dose</label><input value={form.dosage} onChange={(e) => set("dosage", e.target.value)} className={inputCls} placeholder="10mg" /></div>
