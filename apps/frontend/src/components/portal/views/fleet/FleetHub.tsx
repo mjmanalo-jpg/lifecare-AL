@@ -145,6 +145,8 @@ const adaptRequest = (r: Row) => {
     escortRequired: bool(r.escortRequired), escortRole: str(r.escortRole),
     priority: str(r.priority, "NORMAL"), status: str(r.status, "PENDING"),
     source: str(r.source, "PORTAL"), notes: str(r.notes),
+    pickupLocation: str(r.pickupLocation), dropoffLocation: str(r.dropoffLocation),
+    createdAt: str(r.createdAt),
     declineReason: str(r.declineReason), hasTrip: !!rec(r.trip), raw: r,
   };
 };
@@ -679,9 +681,58 @@ function RequestsTab({ onView }: { onView: (r: Record<string, unknown>) => void 
     "transport-requests", { query: "include=resident,trip&take=300", tables: ["TransportRequest", "Trip", "Resident"] }
   );
   const { data: residentRows } = useLiveQuery<Row>("residents", { query: "take=300", tables: ["Resident"] });
+  const vehiclesQ = useLiveQuery<Row>("vehicles", { query: "take=300", tables: ["Vehicle"] });
+  const driversQ = useLiveQuery<Row>("drivers", { query: "take=300", tables: ["Driver"] });
 
   const requests = useMemo<TransportRequest[]>(() => requestRows.map(adaptRequest), [requestRows]);
   const residents = useMemo(() => residentRows.map(adaptResident), [residentRows]);
+  const vehicles = useMemo<Vehicle[]>(() => vehiclesQ.data.map(adaptVehicle), [vehiclesQ.data]);
+  const drivers = useMemo(() => driversQ.data.map(adaptDriver).filter((d: ReturnType<typeof adaptDriver>) => d.isActive), [driversQ.data]);
+
+  // Assign-a-driver flow: approving a request lets the dispatcher schedule a Trip
+  // (vehicle + driver + time). Creating the Trip fires the server-side driver
+  // notification and surfaces it on the driver's Trip Board.
+  const [assigning, setAssigning] = useState<TransportRequest | null>(null);
+  const [assignForm, setAssignForm] = useState({ vehicleId: "", driverId: "", scheduledAt: "", escortName: "" });
+  const [savingAssign, setSavingAssign] = useState(false);
+  const openAssign = (req: TransportRequest) => {
+    setAssignForm({ vehicleId: "", driverId: "", scheduledAt: toLocalInputValue(new Date(req.requestedDate || Date.now())), escortName: "" });
+    setAssigning(req);
+  };
+  const handleAssign = async () => {
+    if (!assigning) return;
+    if (!assignForm.vehicleId || !assignForm.driverId || !assignForm.scheduledAt) {
+      Swal.fire({ title: "Missing Fields", text: "Vehicle, driver, and pickup date/time are required.", icon: "warning" });
+      return;
+    }
+    setSavingAssign(true);
+    try {
+      await createRecord("trips", {
+        requestId: assigning.id,
+        residentId: assigning.residentId,
+        vehicleId: assignForm.vehicleId,
+        driverId: assignForm.driverId,
+        escortName: assigning.escortRequired ? (assignForm.escortName.trim() || null) : null,
+        escortRole: assigning.escortRequired ? (assigning.escortRole || null) : null,
+        pickupLocation: assigning.pickupLocation || null,
+        dropoffLocation: assigning.dropoffLocation || assigning.destination,
+        destination: assigning.destination,
+        origin: assigning.pickupLocation || "Golden Hearth Facility",
+        scheduledAt: new Date(assignForm.scheduledAt).toISOString(),
+        status: "SCHEDULED",
+        notes: assigning.purpose || null,
+      });
+      await updateRecord("transport-requests", assigning.id, { status: "SCHEDULED" });
+      await refetch();
+      const drv = drivers.find((d: ReturnType<typeof adaptDriver>) => d.id === assignForm.driverId);
+      setAssigning(null);
+      Swal.fire({ title: "Trip Scheduled", text: `${assigning.residentName}'s trip was assigned to ${drv?.name ?? "the driver"}, who has been notified.`, icon: "success", timer: 2200, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: "Assign Failed", text: err instanceof Error ? err.message : "Could not schedule the trip.", icon: "error" });
+    } finally {
+      setSavingAssign(false);
+    }
+  };
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -698,12 +749,8 @@ function RequestsTab({ onView }: { onView: (r: Record<string, unknown>) => void 
         if (q && !r.residentName.toLowerCase().includes(q) && !r.destination.toLowerCase().includes(q)) return false;
         return true;
       })
-      .sort((a, b) => {
-        const pa = a.status === "PENDING" ? 0 : 1;
-        const pb = b.status === "PENDING" ? 0 : 1;
-        if (pa !== pb) return pa - pb;
-        return new Date(a.requestedDate).getTime() - new Date(b.requestedDate).getTime();
-      });
+      // Most recently submitted request first.
+      .sort((a, b) => new Date(b.createdAt || b.requestedDate).getTime() - new Date(a.createdAt || a.requestedDate).getTime());
   }, [requests, search, statusFilter, typeFilter]);
 
   const stats = useMemo(() => ({
@@ -796,6 +843,7 @@ function RequestsTab({ onView }: { onView: (r: Record<string, unknown>) => void 
                           <button onClick={() => onView({ ...req, raw: req.raw, _tab: "requests" })} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
                           {req.status === "PENDING" && <button onClick={() => handleApprove(req)} className="p-1.5 rounded hover:bg-green-100 text-green-600 transition" title="Approve"><Check className="w-4 h-4" /></button>}
                           {req.status === "PENDING" && <button onClick={() => handleDecline(req)} className="p-1.5 rounded hover:bg-red-100 text-red-500 transition" title="Decline"><BanIcon className="w-4 h-4" /></button>}
+                          {req.status === "APPROVED" && <button onClick={() => openAssign(req)} className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold text-black bg-yellow-400 hover:bg-yellow-500 transition" title="Assign vehicle & driver"><Truck className="w-3.5 h-3.5" /> Assign</button>}
                         </div>
                       </Td>
                     </tr>
@@ -822,6 +870,7 @@ function RequestsTab({ onView }: { onView: (r: Record<string, unknown>) => void 
                     <button onClick={() => onView({ ...req, raw: req.raw, _tab: "requests" })} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition"><Eye className="w-3 h-3" /> View</button>
                     {req.status === "PENDING" && <button onClick={() => handleApprove(req)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-green-600 bg-green-50 hover:bg-green-100 rounded transition"><Check className="w-3 h-3" /> Approve</button>}
                     {req.status === "PENDING" && <button onClick={() => handleDecline(req)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded transition"><BanIcon className="w-3 h-3" /> Decline</button>}
+                    {req.status === "APPROVED" && <button onClick={() => openAssign(req)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-black bg-yellow-400 hover:bg-yellow-500 rounded transition"><Truck className="w-3 h-3" /> Assign Vehicle &amp; Driver</button>}
                   </div>
                 </div>
               );
@@ -831,6 +880,53 @@ function RequestsTab({ onView }: { onView: (r: Record<string, unknown>) => void 
       )}
 
       <Pagination page={page} totalPages={totalPages} total={filtered.length} label="requests" setPage={setPage} />
+
+      {/* Assign vehicle & driver — schedules the Trip and notifies the driver */}
+      {assigning && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setAssigning(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-5 flex items-center justify-between z-10">
+              <div>
+                <h2 className="text-lg font-bold flex items-center gap-2"><Truck className="w-5 h-5" /> Assign Vehicle &amp; Driver</h2>
+                <p className="text-sm text-white/80">{assigning.residentName} → {assigning.destination}</p>
+              </div>
+              <button onClick={() => setAssigning(null)} className="p-2 hover:bg-white/20 rounded-lg transition"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Vehicle</label>
+                <select value={assignForm.vehicleId} onChange={e => setAssignForm(f => ({ ...f, vehicleId: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-400 outline-none">
+                  <option value="">Select a vehicle…</option>
+                  {vehicles.filter(v => v.status !== "MAINTENANCE").map(v => <option key={v.id} value={v.id}>{v.name} ({v.licensePlate}){v.status && v.status !== "AVAILABLE" ? ` — ${v.status}` : ""}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Driver</label>
+                <select value={assignForm.driverId} onChange={e => setAssignForm(f => ({ ...f, driverId: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-400 outline-none">
+                  <option value="">Select a driver…</option>
+                  {drivers.map((d: ReturnType<typeof adaptDriver>) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Pickup Date &amp; Time</label>
+                <input type="datetime-local" value={assignForm.scheduledAt} onChange={e => setAssignForm(f => ({ ...f, scheduledAt: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-400 outline-none" />
+              </div>
+              {assigning.escortRequired && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Escort ({assigning.escortRole || "staff"}) name <span className="text-gray-400 normal-case">(optional)</span></label>
+                  <input type="text" value={assignForm.escortName} onChange={e => setAssignForm(f => ({ ...f, escortName: e.target.value }))} placeholder="Escort staff name" className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-400 outline-none" />
+                </div>
+              )}
+            </div>
+            <div className="px-5 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
+              <button onClick={() => setAssigning(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg text-sm font-semibold transition">Cancel</button>
+              <button onClick={handleAssign} disabled={savingAssign} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 text-sm flex items-center gap-2">
+                {savingAssign ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />} Schedule Trip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
