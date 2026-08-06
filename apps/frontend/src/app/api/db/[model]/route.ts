@@ -109,6 +109,49 @@ async function alertSevereIncident(
   }
 }
 
+// When the fleet manager assigns a trip (creates a Trip with a driverId), ping
+// the assigned driver so they know a new trip is waiting on their Trip Board.
+// Drivers have no direct user link, so we resolve their login by matching the
+// Driver's name (then email) to a community member. Best-effort — never blocks
+// the create.
+async function notifyDriverOfTrip(
+  context: NonNullable<Awaited<ReturnType<typeof requireTenantContext>>>,
+  trip: Record<string, unknown>,
+) {
+  try {
+    const driverId = trip.driverId ? String(trip.driverId) : "";
+    if (!driverId || !context.communityId) return;
+    const driver = await prisma.driver.findUnique({ where: { id: driverId }, select: { name: true, email: true } });
+    if (!driver) return;
+    const dn = (driver.name ?? "").trim().toLowerCase();
+    const de = (driver.email ?? "").trim().toLowerCase();
+    if (!dn && !de) return;
+    const members = await prisma.communityMembership.findMany({
+      where: { communityId: context.communityId, status: "ACTIVE" },
+      select: { user: { select: { id: true, name: true, email: true } } },
+    });
+    const target = members
+      .map((m) => m.user)
+      .find((u) => u && (((u.name ?? "").trim().toLowerCase() === dn) || (!!de && (u.email ?? "").trim().toLowerCase() === de)));
+    if (!target) return;
+    const when = trip.scheduledAt ? new Date(String(trip.scheduledAt)).toLocaleString() : "soon";
+    await prisma.notification.create({
+      data: {
+        userId: target.id,
+        type: "TRANSPORT_UPDATE" as const,
+        title: "New trip assigned",
+        message: `You've been assigned a trip to ${String(trip.destination ?? "a destination")} scheduled ${when}. Check your Trip Board.`,
+        relatedEntityId: String(trip.id),
+        relatedEntityType: "trip",
+        organizationId: context.organizationId ?? null,
+        communityId: context.communityId,
+      },
+    });
+  } catch (e) {
+    console.error("[trip assign notify] failed:", e instanceof Error ? e.message : e);
+  }
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ model: string }> }) {
   const context = await requireTenantContext({ allowPlatform: true });
   if (!context) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -154,6 +197,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // they're reported — they surface in the Alert Center with an SLA countdown.
     // The alerts cron dedups on INCIDENT_REPORT|<id>, so it won't double-fire.
     if (model === "incidents") await alertSevereIncident(context, created);
+    // Assigning a trip to a driver notifies that driver of their new trip.
+    if (model === "trips") await notifyDriverOfTrip(context, created);
     return NextResponse.json({ data: created }, { status: 201 });
   } catch (error) {
     if (error instanceof EntitlementError) return NextResponse.json({ error: error.message, code: error.code }, { status: 403 });

@@ -60,6 +60,21 @@ function useSessionUser() {
   return user;
 }
 
+/**
+ * Resolve which Driver record belongs to the signed-in user. Matches by NAME —
+ * the fleet manager assigns trips by driver name and the driver logs in under
+ * the same name, so no email link is required. Falls back to the first active
+ * driver only when nothing matches (demo logins).
+ */
+function matchDriverRow(driverRows: Row[], user: { name?: string; email?: string } | null): Row | null {
+  const name = user?.name?.trim().toLowerCase();
+  if (name) {
+    const r = driverRows.find((d) => str(d.name).trim().toLowerCase() === name);
+    if (r) return r;
+  }
+  return driverRows.find((d) => bool(d.isActive)) ?? driverRows[0] ?? null;
+}
+
 /* ── Tab config ── */
 const TABS = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -224,8 +239,7 @@ function DashboardTab() {
       licenseNumber: str(row.licenseNumber), certifications: str(row.certifications),
       isActive: bool(row.isActive),
     });
-    if (currentUser?.email) { const r = driverRows.find(d => str(d.email).toLowerCase() === currentUser.email.toLowerCase()); if (r) return resolve(r); }
-    const r = driverRows.find(d => bool(d.isActive)) ?? driverRows[0];
+    const r = matchDriverRow(driverRows, currentUser);
     return r ? resolve(r) : null;
   }, [driverRows, currentUser]);
 
@@ -620,9 +634,8 @@ function TripsTab({ onView }: { onView: (r: Record<string, unknown>) => void }) 
   const currentUser = useSessionUser();
 
   const activeDriverId = useMemo(() => {
-    if (currentUser?.email) { const r = driverRows.find(d => str(d.email).toLowerCase() === currentUser.email.toLowerCase()); if (r) return str(r.id); }
-    const fb = driverRows.find(d => bool(d.isActive)) ?? driverRows[0];
-    return fb ? str(fb.id) : "";
+    const r = matchDriverRow(driverRows, currentUser);
+    return r ? str(r.id) : "";
   }, [driverRows, currentUser]);
 
   const allTrips = useMemo<Trip[]>(() => tripRows.map(adaptTrip), [tripRows]);
@@ -900,9 +913,8 @@ function ChecklistTab() {
   const currentUser = useSessionUser();
 
   const activeDriverId = useMemo(() => {
-    if (currentUser?.email) { const r = driverRows.find(d => str(d.email).toLowerCase() === currentUser.email.toLowerCase()); if (r) return str(r.id); }
-    const fb = driverRows.find(d => bool(d.isActive)) ?? driverRows[0];
-    return fb ? str(fb.id) : "";
+    const r = matchDriverRow(driverRows, currentUser);
+    return r ? str(r.id) : "";
   }, [driverRows, currentUser]);
 
   const driverTrips = useMemo<Trip[]>(() =>
@@ -1019,9 +1031,8 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
   const currentUser = useSessionUser();
 
   const activeDriverId = useMemo(() => {
-    if (currentUser?.email) { const r = driverRows.find(d => str(d.email).toLowerCase() === currentUser.email.toLowerCase()); if (r) return str(r.id); }
-    const fb = driverRows.find(d => bool(d.isActive)) ?? driverRows[0];
-    return fb ? str(fb.id) : "";
+    const r = matchDriverRow(driverRows, currentUser);
+    return r ? str(r.id) : "";
   }, [driverRows, currentUser]);
 
   const driverLogs = useMemo<FuelLog[]>(() =>
