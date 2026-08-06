@@ -4,9 +4,9 @@ import RefreshButton from "@/components/portal/RefreshButton";
 
 import { useMemo, useState, useEffect } from "react";
 import {
-  Users, AlertTriangle, Building2, UserPlus, RefreshCw, Sun, Sunset, Moon,
+  Users, Building2, UserPlus, Sun, Sunset, Moon,
   Activity, BedDouble, ClipboardList, ChevronRight, Sparkles, Wrench, Ticket,
-  CheckCircle2, Timer, AlertCircle, Star, CalendarClock,
+  CheckCircle2, Timer, AlertCircle, CalendarClock, Package, ShoppingCart, TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -14,18 +14,13 @@ import {
   XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from "recharts";
 import { useLiveQuery, useStats } from "@/lib/useLiveQuery";
-import { adaptResident, adaptIncident, adaptStaff, humanize } from "@/lib/adapters";
+import { adaptResident, adaptStaff } from "@/lib/adapters";
 import { CATEGORY_META, REQUEST_STATUS_PILL } from "@/components/portal/views/services/serviceMeta";
+import { CRM_LEADS_KEY, OPEN_STAGES, LEAD_STAGES, STAGE_META, parseLeads } from "@/lib/crmLeads";
 
-type Incident = ReturnType<typeof adaptIncident>;
 type Staff = ReturnType<typeof adaptStaff>;
 interface ResidentVM { id: string; name: string; room: string; careLevel: string; alertsCount: number }
 
-const SEVERITY_BADGE: Record<string, string> = {
-  critical: "bg-red-100 text-red-700", high: "bg-orange-100 text-orange-700",
-  medium: "bg-yellow-100 text-yellow-700", low: "bg-blue-100 text-blue-700",
-};
-const CARE_COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#ef4444"];
 const TICKET_STATUS_COLORS: Record<string, string> = { Pending: "#f59e0b", Ongoing: "#3b82f6", Completed: "#22c55e", Cancelled: "#9ca3af" };
 const CAT_COLORS = ["#0ea5e9", "#22c55e", "#f97316", "#8b5cf6", "#ef4444"];
 
@@ -45,13 +40,15 @@ function relTime(iso: string | null, nowTs: number): string {
   return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h ago` : `${Math.floor(h / 24)}d ago`;
 }
 
+const num = (v: unknown, fallback = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+};
+
 export default function FacilityDashboard() {
   const { stats, refetch: refetchStats } = useStats();
   const { data: residentRows } = useLiveQuery<Record<string, unknown>>(
-    "residents", { query: "include=incidents&take=300", tables: ["Resident", "Incident"] }
-  );
-  const { data: incidentRows, refetch: refetchIncidents } = useLiveQuery<Record<string, unknown>>(
-    "incidents", { query: "include=resident&take=300", tables: ["Incident"] }
+    "residents", { query: "take=300", tables: ["Resident"] }
   );
   const { data: staffRows } = useLiveQuery<Record<string, unknown>>(
     "staff", { query: "include=user&take=300", tables: ["Staff", "User"] }
@@ -62,8 +59,15 @@ export default function FacilityDashboard() {
   const { data: serviceRows } = useLiveQuery<Record<string, unknown>>(
     "service-requests", { query: "include=resident&take=500", tables: ["ServiceRequest"] }
   );
-  const { data: maintRows } = useLiveQuery<Record<string, unknown>>(
-    "facility-maintenance", { query: "take=400", tables: ["FacilityMaintenance"] }
+  // ── Operations data: inventory, purchase requests, CRM leads ──
+  const { data: inventoryRows, refetch: refetchInventory } = useLiveQuery<Record<string, unknown>>(
+    "inventory", { query: "take=500", tables: ["InventoryItem"] }
+  );
+  const { data: prRows } = useLiveQuery<Record<string, unknown>>(
+    "purchase-requests", { query: "take=400", tables: ["PurchaseRequest"] }
+  );
+  const { data: settingRows } = useLiveQuery<{ id: string; key?: string; value: string }>(
+    "app-settings", { tables: ["AppSetting"] }
   );
 
   const [nowTs, setNowTs] = useState(0);
@@ -81,7 +85,6 @@ export default function FacilityDashboard() {
     }),
     [residentRows]
   );
-  const incidents = useMemo<Incident[]>(() => incidentRows.map(adaptIncident), [incidentRows]);
   const staff = useMemo<Staff[]>(() => staffRows.map(adaptStaff), [staffRows]);
 
   const admissions = useMemo(() => {
@@ -94,8 +97,6 @@ export default function FacilityDashboard() {
     };
   }, [admissionRows]);
 
-  const openIncidents = useMemo(() => incidents.filter((i) => !i.resolved), [incidents]);
-  const criticalIncidents = useMemo(() => openIncidents.filter((i) => i.severity === "critical" || i.severity === "high"), [openIncidents]);
   const activeStaff = useMemo(() => staff.filter((s) => s.active === "Active"), [staff]);
 
   const deptData = useMemo(() => {
@@ -104,13 +105,40 @@ export default function FacilityDashboard() {
     return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
   }, [staff]);
 
-  const careData = useMemo(() => {
-    const order = ["INDEPENDENT", "ASSISTED", "MEMORY", "SKILLED"];
-    return order.map((level) => ({
-      name: humanize(level),
-      value: residents.filter((r) => r.careLevel === level).length,
-    })).filter((d) => d.value > 0);
-  }, [residents]);
+  // ── CRM leads (stored in app-settings JSON) ──
+  const leads = useMemo(
+    () => parseLeads(settingRows.find((r) => (r.key || r.id) === CRM_LEADS_KEY)?.value),
+    [settingRows]
+  );
+  const activeLeads = useMemo(() => leads.filter((l) => OPEN_STAGES.includes(l.stage)).length, [leads]);
+  const leadPipeline = useMemo(
+    () => LEAD_STAGES.map((st) => ({ name: STAGE_META[st].label, value: leads.filter((l) => l.stage === st).length, color: STAGE_META[st].color })),
+    [leads]
+  );
+
+  // ── Inventory: on-hand vs reorder threshold ──
+  const inventory = useMemo(
+    () => inventoryRows.map((i) => ({
+      id: String(i.id),
+      name: String(i.itemName ?? "Item"),
+      category: String(i.category ?? "OTHER"),
+      quantity: num(i.quantity),
+      unit: String(i.unit ?? ""),
+      threshold: num(i.reorderPoint ?? i.minimumStock, 0),
+    })),
+    [inventoryRows]
+  );
+  const lowStock = useMemo(() => inventory.filter((i) => i.quantity <= i.threshold), [inventory]);
+
+  // ── Purchase requests by status ──
+  const prStats = useMemo(() => {
+    const rows = prRows as Array<Record<string, unknown>>;
+    const st = (r: Record<string, unknown>) => String(r.status ?? "REQUESTED");
+    return {
+      pending: rows.filter((r) => st(r) === "REQUESTED").length,
+      open: rows.filter((r) => ["REQUESTED", "APPROVED", "ORDERED"].includes(st(r))).length,
+    };
+  }, [prRows]);
 
   const recentAdmissions = useMemo(() => {
     const rows = admissionRows as Array<Record<string, unknown>>;
@@ -190,7 +218,7 @@ export default function FacilityDashboard() {
   const shift = shiftFor(nowTs ? new Date(nowTs).getHours() : 9);
   const ShiftIcon = shift.icon;
 
-  const refreshAll = () => { void refetchStats(); void refetchIncidents(); };
+  const refreshAll = () => { void refetchStats(); void refetchInventory(); };
 
   return (
     <div className="space-y-6">
@@ -198,7 +226,7 @@ export default function FacilityDashboard() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
             <ShiftIcon className="w-6 h-6 text-yellow-500 flex-shrink-0" />
-            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">{shift.greeting} — Facility Dashboard</span>
+            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">{shift.greeting} — Facility Operations</span>
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm mt-1">
             <span className="inline-flex items-center gap-1 text-green-600">
@@ -210,12 +238,14 @@ export default function FacilityDashboard() {
         <RefreshButton onRefresh={refreshAll} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium self-start" />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+      {/* Operations KPIs — occupancy, staff, leads, inventory, purchasing */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
         <Stat label="Total Residents" value={String(stats?.residents ?? residents.length)} icon={Users} tone="blue" />
-        <Stat label="Beds Occupancy" value={residents.length ? `${Math.round((residents.length / Math.max(residents.length + 5, 35)) * 100)}%` : "0%"} icon={BedDouble} tone="green" />
+        <Stat label="Occupancy" value={residents.length ? `${Math.round((residents.length / Math.max(residents.length + 5, 35)) * 100)}%` : "0%"} icon={BedDouble} tone="green" />
         <Stat label="Staff On Duty" value={String(activeStaff.length)} icon={Building2} tone="amber" />
-        <Stat label="Open Incidents" value={String(openIncidents.length)} icon={AlertTriangle} tone="red" />
-        <Stat label="Pending Admissions" value={String(admissions.pending)} icon={UserPlus} tone="purple" />
+        <Stat label="Active Leads" value={String(activeLeads)} icon={TrendingUp} tone="purple" />
+        <Stat label="Low-Stock Items" value={String(lowStock.length)} icon={Package} tone="rose" />
+        <Stat label="Purchase Requests" value={String(prStats.pending)} icon={ShoppingCart} tone="blue" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -242,17 +272,20 @@ export default function FacilityDashboard() {
           </ResponsiveContainer>
         </Card>
 
-        <Card title="Care Level Distribution" icon={Users}>
-          {careData.length > 0 ? (
+        <Card title="Lead Pipeline" icon={TrendingUp}>
+          {leads.length > 0 ? (
             <ResponsiveContainer width="100%" height={240}>
-              <PieChart>
-                <Pie data={careData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                  {careData.map((_, i) => <Cell key={i} fill={CARE_COLORS[i % CARE_COLORS.length]} />)}
-                </Pie>
-                <Tooltip /><Legend />
-              </PieChart>
+              <BarChart data={leadPipeline} layout="vertical" margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                <XAxis type="number" allowDecimals={false} fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis type="category" dataKey="name" fontSize={10} tickLine={false} axisLine={false} width={92} />
+                <Tooltip cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                  {leadPipeline.map((d, i) => <Cell key={i} fill={d.color} />)}
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
-          ) : <Empty text="No resident data." />}
+          ) : <Empty text="No leads in the pipeline yet." />}
         </Card>
       </div>
 
@@ -289,20 +322,20 @@ export default function FacilityDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title="Critical Incidents" icon={AlertTriangle} count={criticalIncidents.length}>
-          {criticalIncidents.length > 0 ? (
+        <Card title="Low-Stock Inventory" icon={Package} count={lowStock.length}>
+          {lowStock.length > 0 ? (
             <div className="space-y-2">
-              {criticalIncidents.slice(0, 6).map((i) => (
-                <div key={i.id} className="flex items-start justify-between gap-3 p-3 rounded-lg border border-red-100 bg-red-50/60">
+              {lowStock.slice(0, 6).map((i) => (
+                <div key={i.id} className="flex items-start justify-between gap-3 p-3 rounded-lg border border-rose-100 bg-rose-50/60">
                   <div className="min-w-0">
-                    <span className="font-semibold text-gray-900 text-sm">{i.type}</span>
-                    <p className="text-xs text-gray-600 truncate">{i.resident} • Room {i.room} • {relTime(String(i.timestamp), nowTs)}</p>
+                    <span className="font-semibold text-gray-900 text-sm">{i.name}</span>
+                    <p className="text-xs text-gray-600 truncate">{CATEGORY_META[i.category]?.label ?? i.category} • reorder at {i.threshold} {i.unit}</p>
                   </div>
-                  <span className={`px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0 ${SEVERITY_BADGE[i.severity]}`}>{i.severity.toUpperCase()}</span>
+                  <span className="px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0 bg-rose-100 text-rose-700">{i.quantity} {i.unit} left</span>
                 </div>
               ))}
             </div>
-          ) : <Empty text="No critical or high-severity incidents open." />}
+          ) : <Empty text="All items are above their reorder point." />}
         </Card>
 
         <Card title="Recent Admissions" icon={UserPlus} count={recentAdmissions.length}>

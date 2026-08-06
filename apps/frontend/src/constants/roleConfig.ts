@@ -142,7 +142,7 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   insurance: "Insurance Validation",
   receipts: "Receipts",
   onlinepayment: "Online Payment",
-  inventory: "Medication Management & Inventory",
+  inventory: "Inventory",
   purchaserequests: "Purchase Requests",
   medications: "Medication Management & Inventory",
   callbells: "Call Bells",
@@ -437,28 +437,27 @@ export const ROLES: Record<Role, RoleDetails> = {
     footerText: "Facility Admin Portal",
     sidebarLinks: [
       { name: "Reporting & Care Intelligence", icon: Grid, route: "/facility_admin/dashboard" },
+      // Operations
       { name: "CRM & Leads", icon: UserPlus, route: "/facility_admin/crm" },
-      { name: "Resident Profile & Care Record", icon: UserRound, route: "/facility_admin/residents" },
       { name: "Staff", icon: Users, route: "/facility_admin/staff" },
       { name: "Rooms", icon: DoorOpen, route: "/facility_admin/rooms" },
       { name: "Occupancy", icon: BedDouble, route: "/facility_admin/occupancy" },
-      { name: "Medication Management & Inventory", icon: Package, route: "/facility_admin/inventory" },
       { name: "Purchase Requests", icon: ShoppingCart, route: "/facility_admin/purchaserequests" },
       { name: "Shift Endorsement & Continuity", icon: FileText, route: "/facility_admin/reports" },
+      // Inventory (facility ops manages supply/medical-supply stock, not clinical MAR).
+      { name: "Inventory", icon: Package, route: "/facility_admin/inventory", group: "Inventory" },
+      { name: "Inventory Alerts", icon: Bell, route: "/facility_admin/inventory-alerts", group: "Inventory" },
       // Billing moved to the dedicated Billing & Finance portal (BILLING_ADMIN).
       // Dining / Diet Orders / Kitchen moved to the Nutritionist & Kitchen portals.
-      { name: "Camera Activity Log", icon: Activity, route: "/facility_admin/cameralogs" },
+      // Clinical modules (Resident Care Record, Camera Log, Daily Care Doc,
+      // Vaccinations, Resident Documents) live in the Care Manager / Nurse
+      // portals — Facility Operations is operations-only.
       { name: "Resident Services", icon: Ticket, route: "/facility_admin/services" },
       { name: "Facility Maintenance", icon: Wrench, route: "/facility_admin/maintenance" },
       { name: "Concierge", icon: ConciergeBell, route: "/facility_admin/concierge" },
       { name: "Front Desk", icon: DoorOpen, route: "/facility_admin/frontdesk" },
       { name: "Unit Turnover", icon: Repeat, route: "/facility_admin/turnover" },
       { name: "Community & Events", icon: CalendarDays, route: "/facility_admin/community" },
-      // Core SLMS Modules Aligned
-      { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/facility_admin/tasks" },
-      { name: "Vaccinations", icon: Syringe, route: "/facility_admin/vaccinations" },
-      { name: "Resident Documents", icon: FolderOpen, route: "/facility_admin/documents" },
-      { name: "Inventory Alerts", icon: Bell, route: "/facility_admin/inventory-alerts" },
     ],
   },
   BILLING_ADMIN: {
@@ -673,6 +672,7 @@ export const SIDEBAR_GROUP_ORDER = [
   "Medication",
   "Coordination & Comms",
   "Operations",
+  "Inventory",
   "Billing & Finance",
   "Hospitality & Services",
   "Fleet & Transport",
