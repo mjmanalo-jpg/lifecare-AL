@@ -9,7 +9,16 @@ const REFRESH_TOKEN_COOKIE = "lcms_sb_refresh";
 const SESSION_COOKIE_MAX_AGE = 8 * 60 * 60;
 const SESSION_SECRET = process.env.SESSION_SECRET || "golden-hearth-dev-secret-change-me";
 
-if (process.env.NODE_ENV === "production" && SESSION_SECRET.endsWith("change-me")) {
+// Fail closed in production if the secret was never configured — but NOT during
+// `next build`, where env-only-at-runtime secrets aren't present and a
+// module-load throw would abort page-data collection and fail the whole
+// deployment. At build time (NEXT_PHASE === "phase-production-build") we skip
+// the check; at runtime the throw still guards a misconfigured server.
+if (
+  process.env.NODE_ENV === "production" &&
+  SESSION_SECRET.endsWith("change-me") &&
+  process.env.NEXT_PHASE !== "phase-production-build"
+) {
   throw new Error("SESSION_SECRET must be configured in production");
 }
 
