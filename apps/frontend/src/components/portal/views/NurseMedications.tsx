@@ -577,7 +577,7 @@ export default function NurseMedications() {
       {/* ── Add medication modal ── */}
       {adding && (
         <AddMedicationModal
-          residents={residents.map((r) => ({ id: r.id, name: r.name, room: r.room }))}
+          residents={residents.map((r) => ({ id: r.id, name: r.name, room: r.room, allergies: r.allergies }))}
           onClose={() => setAdding(false)}
           onSaved={() => { void refetch(); setAdding(false); }}
         />
@@ -688,8 +688,21 @@ interface MedForm {
 
 const FREQUENCIES = ["Daily", "Twice daily", "Three times daily", "Four times daily", "Every 12 hours", "At bedtime", "PRN (as needed)"];
 
+// Name-based allergy screen: flags when a new medication's name matches (or is
+// matched by) a documented allergen. A heuristic safety net — not a full
+// drug-class interaction database — surfaced as a confirm before prescribing.
+function allergyConflicts(medName: string, allergies: string | undefined): string[] {
+  const med = medName.trim().toLowerCase();
+  if (!med || !allergies) return [];
+  const skip = new Set(["none", "nkda", "no known allergies", "n/a", "na", "nil"]);
+  const tokens = allergies.toLowerCase().split(/[,;/\n]|\band\b/).map((t) => t.trim()).filter((t) => t.length >= 3 && !skip.has(t));
+  const hits = new Set<string>();
+  for (const t of tokens) if (med.includes(t) || t.includes(med)) hits.add(t);
+  return [...hits];
+}
+
 function AddMedicationModal({ residents, onClose, onSaved }: {
-  residents: { id: string; name: string; room: string }[];
+  residents: { id: string; name: string; room: string; allergies?: string }[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -710,6 +723,18 @@ function AddMedicationModal({ residents, onClose, onSaved }: {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid || saving) return;
+    // Allergy safety check: warn if the medication matches a documented allergy.
+    const selected = residents.find((r) => r.id === form.residentId);
+    const conflicts = allergyConflicts(form.name, selected?.allergies);
+    if (conflicts.length) {
+      const proceed = await Swal.fire({
+        title: "Allergy alert",
+        html: `<b>${selected?.name ?? "This resident"}</b> has a documented allergy to <b>${conflicts.join(", ")}</b>, which may conflict with <b>${form.name.trim()}</b>.<br/><br/>Prescribe anyway?`,
+        icon: "warning", showCancelButton: true, confirmButtonColor: "#dc2626",
+        confirmButtonText: "Prescribe anyway", cancelButtonText: "Cancel",
+      });
+      if (!proceed.isConfirmed) return;
+    }
     setSaving(true);
     try {
       await createRecord("medications", {
