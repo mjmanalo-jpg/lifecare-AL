@@ -205,6 +205,13 @@ def ensure_grabber():
     _ensure_grabber()
 
 
+def open_rtsp(url):
+    """Public alias: open an RTSP capture (TCP + connect timeout) the same way
+    the shared grabber does. Used by the watchdog for secondary cameras that
+    aren't the primary Tapo."""
+    return _open_rtsp(url)
+
+
 def _ensure_grabber():
     global _grab_thread, _grab_run
     if _grab_thread is not None and _grab_thread.is_alive():

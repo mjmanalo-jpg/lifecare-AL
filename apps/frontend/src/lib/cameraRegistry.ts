@@ -16,6 +16,10 @@ export interface CameraDevice {
   type: CameraType;
   /** Browser-loadable stream (MJPEG/HLS/WebRTC) used for viewing + connection tests. */
   streamUrl: string;
+  /** Optional server-side RTSP URL (rtsp://…) for the backend 24/7 fall watchdog.
+   *  `tapo` cameras don't need this (the backend uses its configured Tapo RTSP);
+   *  set it for other IP cameras so they can be monitored server-side too. */
+  rtspUrl?: string;
   notes?: string;
   enabled: boolean;
   lastSeenAt?: string;   // ISO — last successful test or edge heartbeat

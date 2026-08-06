@@ -14,7 +14,7 @@ const TYPES: { v: CameraType; label: string }[] = [
   { v: "tapo", label: "Tapo (MJPEG proxy)" }, { v: "rtsp", label: "RTSP via gateway" },
   { v: "edge", label: "Edge worker" }, { v: "local", label: "Local webcam" },
 ];
-const EMPTY: Omit<CameraDevice, "id"> = { name: "", roomNumber: "", type: "tapo", streamUrl: TAPO_STREAM_URL, notes: "", enabled: true, healthAlerts: false };
+const EMPTY: Omit<CameraDevice, "id"> = { name: "", roomNumber: "", type: "tapo", streamUrl: TAPO_STREAM_URL, rtspUrl: "", notes: "", enabled: true, healthAlerts: false };
 
 /** Camera registry + health surface — the rooms' cameras, their stream URLs,
  *  and live online/offline status (test connection or edge heartbeat). */
@@ -141,6 +141,7 @@ export default function CameraRegistryBoard() {
               <label className="text-xs font-medium text-gray-600">Room number<input className={input + " mt-1"} value={form.roomNumber} onChange={(e) => setForm({ ...form, roomNumber: e.target.value })} placeholder="302" /></label>
               <label className="text-xs font-medium text-gray-600">Type<select className={input + " mt-1"} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as CameraType })}>{TYPES.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}</select></label>
               <label className="text-xs font-medium text-gray-600 sm:col-span-2">Stream URL * <button type="button" onClick={() => setForm({ ...form, type: "tapo", streamUrl: TAPO_STREAM_URL })} className="ml-2 text-blue-600 hover:underline">use Tapo preset</button><input className={input + " mt-1"} value={form.streamUrl} onChange={(e) => setForm({ ...form, streamUrl: e.target.value })} placeholder="/api/camera/tapo-feed or https://gateway/room302.m3u8" /></label>
+              <label className="text-xs font-medium text-gray-600 sm:col-span-2">Server-side RTSP URL <span className="text-gray-400">(for 24/7 backend fall monitoring; Tapo cameras can leave this blank)</span><input className={input + " mt-1"} value={form.rtspUrl ?? ""} onChange={(e) => setForm({ ...form, rtspUrl: e.target.value })} placeholder="rtsp://user:pass@192.168.1.50:554/stream1" /></label>
               <label className="text-xs font-medium text-gray-600 sm:col-span-2">Notes<input className={input + " mt-1"} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
               <label className="flex items-center gap-2 text-sm text-gray-700 sm:col-span-2"><input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} className="w-4 h-4 rounded" /> Enabled (monitored)</label>
               <label className="flex items-center gap-2 text-sm text-gray-700 sm:col-span-2"><input type="checkbox" checked={!!form.healthAlerts} onChange={(e) => setForm({ ...form, healthAlerts: e.target.checked })} className="w-4 h-4 rounded" /> Alert staff if this camera goes offline <span className="text-xs text-gray-400">(needs a heartbeat source)</span></label>
