@@ -212,6 +212,23 @@ const RESIDENT_TOOLS = [
           required: ["details"],
         },
       },
+      {
+        name: "request_meal_substitution",
+        description:
+          "Request a meal substitution when the resident doesn't want what's on the menu or has a food " +
+          "preference for a meal — e.g. 'I don't feel like salmon', 'can I have grilled chicken instead', " +
+          "'no salad for me tonight'. Before calling, ask which meal it's for (breakfast, lunch, dinner or " +
+          "a snack) and what they'd like INSTEAD, unless they already said. This alerts the kitchen so the " +
+          "chef can prepare the substitute.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            preference: { type: "STRING", description: "What the resident wants instead, in their words (e.g. 'grilled chicken instead of salmon')" },
+            meal: { type: "STRING", description: "Which meal it is for: breakfast, lunch, dinner, or snack (if known)" },
+          },
+          required: ["preference"],
+        },
+      },
     ],
   },
 ];
@@ -370,6 +387,34 @@ async function executeResidentTool(
     return { ok: true, serviceRequestId: req.id, category, subType: args.subType ?? null };
   }
 
+  if (name === "request_meal_substitution") {
+    const preference = String(args.preference ?? "").trim();
+    if (!preference) return { ok: false, error: "Ask the resident what they'd like to eat instead." };
+    const meal = String(args.meal ?? "").trim().toLowerCase();
+    const mealLabel = ["breakfast", "lunch", "dinner", "snack"].includes(meal)
+      ? meal.charAt(0).toUpperCase() + meal.slice(1)
+      : "";
+    const details = mealLabel ? `${mealLabel}: ${preference}` : preference;
+    const info = await prisma.resident.findUnique({ where: { id: resident.id }, select: { roomNumber: true } });
+    // Same kitchen ServiceRequest the "Request Meal Substitution" form creates,
+    // so it lands on the kitchen cook list (assignedTeam KITCHEN, not COMPLETED).
+    const req = await prisma.serviceRequest.create({
+      data: {
+        residentId: resident.id,
+        roomNumber: info?.roomNumber ?? null,
+        category: "ROOM_SERVICE",
+        subType: "Meal Substitution",
+        details,
+        priority: "ROUTINE",
+        status: "ASSIGNED",
+        source: "AI_COMPANION",
+        assignedTeam: "KITCHEN" as ServiceTeam,
+        ...tenant,
+      },
+    });
+    return { ok: true, serviceRequestId: req.id, meal: mealLabel || null, preference };
+  }
+
   return { ok: false, error: `Unknown tool '${name}'` };
 }
 
@@ -476,7 +521,9 @@ async function handleChat(body: Record<string, unknown>) {
         "staff and family can see; ring_call_bell alerts staff immediately; schedule_transport books a " +
         "ride to an appointment or outing (get the destination and the pickup day/time first); " +
         "request_service opens a hotel-services ticket for housekeeping, room service, laundry, aircon, " +
-        "or repairs. If a needed detail (visitor name, destination, day/time, or which service) is " +
+        "or repairs; request_meal_substitution alerts the kitchen when they don't want what's on the menu " +
+        "(ask which meal and what they'd like instead). If a needed detail (visitor name, destination, " +
+        "day/time, which service, or which meal and the substitute) is " +
         "unclear, ask one short follow-up question first. Once you have what you need you MUST call the " +
         "matching tool in that same turn — the request only becomes real when the tool runs, so never " +
         "merely say you 'will' or 'have' arranged something without actually calling the tool. After the " +
