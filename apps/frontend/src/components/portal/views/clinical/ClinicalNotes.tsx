@@ -36,6 +36,42 @@ const NOTE_TYPES = [
   { value: "ORDER_NOTE", label: "Order Note" },
 ];
 
+// The section structure each note type should follow. AI Draft organizes the
+// dictation into exactly these headings; the offline fallback lays out the same
+// skeleton so every note type is structured (not just SOAP).
+const NOTE_TEMPLATES: Record<string, string[]> = {
+  SOAP_NOTE: ["SUBJECTIVE", "OBJECTIVE", "ASSESSMENT", "PLAN"],
+  PROGRESS_NOTE: ["INTERVAL UPDATE", "CURRENT STATUS", "ASSESSMENT", "PLAN"],
+  DISCHARGE_SUMMARY: ["REASON FOR STAY", "COURSE OF CARE", "DISCHARGE DIAGNOSIS", "MEDICATIONS ON DISCHARGE", "FOLLOW-UP INSTRUCTIONS", "CONDITION AT DISCHARGE"],
+  CONSULTATION: ["REASON FOR CONSULTATION", "RELEVANT HISTORY", "EXAMINATION / FINDINGS", "IMPRESSION", "RECOMMENDATIONS"],
+  ORDER_NOTE: ["ORDERS", "INDICATION / RATIONALE", "FOLLOW-UP"],
+  CLINICAL_NOTE: ["REASON FOR VISIT", "FINDINGS", "ASSESSMENT", "PLAN"],
+};
+const SECTION_HINT: Record<string, string> = {
+  SUBJECTIVE: "patient-reported symptoms & history",
+  OBJECTIVE: "vitals, exam findings, labs",
+  ASSESSMENT: "clinical impression / diagnoses",
+  PLAN: "orders, treatments, follow-up",
+  "INTERVAL UPDATE": "changes since the last note",
+  "CURRENT STATUS": "current condition & vitals",
+  "REASON FOR STAY": "admitting reason / diagnosis",
+  "COURSE OF CARE": "summary of the stay & treatments",
+  "DISCHARGE DIAGNOSIS": "final diagnoses",
+  "MEDICATIONS ON DISCHARGE": "meds, doses, frequency",
+  "FOLLOW-UP INSTRUCTIONS": "appointments & care instructions",
+  "CONDITION AT DISCHARGE": "stable / improved / guarded",
+  "REASON FOR CONSULTATION": "why the consult was requested",
+  "RELEVANT HISTORY": "pertinent history",
+  "EXAMINATION / FINDINGS": "exam findings",
+  IMPRESSION: "clinical impression",
+  RECOMMENDATIONS: "recommended actions",
+  ORDERS: "new orders — meds, tests, activity, diet",
+  "INDICATION / RATIONALE": "why these orders",
+  "FOLLOW-UP": "monitoring & review",
+  "REASON FOR VISIT": "chief concern",
+  FINDINGS: "observations & findings",
+};
+
 const TYPE_BADGE: Record<string, string> = {
   CLINICAL_NOTE: "bg-blue-100 text-blue-700",
   SOAP_NOTE: "bg-green-100 text-green-700",
@@ -329,12 +365,14 @@ function AddNoteModal({ residents, authorName, onClose, onSaved }: {
     try { rec.start(); setListening(true); } catch { setListening(false); }
   }, [listening]);
 
-  const localDraft = (dictation: string, noteType: string, name: string) => {
+  // Offline / fallback draft: the note-type's section skeleton. Any dictation
+  // is placed under the first heading; the rest get a short guidance hint.
+  const localDraft = (dictation: string, noteType: string) => {
+    const sections = NOTE_TEMPLATES[noteType] ?? NOTE_TEMPLATES.CLINICAL_NOTE;
     const body = dictation.trim();
-    if (noteType === "SOAP_NOTE") {
-      return `SUBJECTIVE:\n${body || "(patient-reported findings)"}\n\nOBJECTIVE:\n(vitals, exam findings)\n\nASSESSMENT:\n(clinical impression)\n\nPLAN:\n(orders, follow-up)`;
-    }
-    return `${name ? `Patient: ${name}\n\n` : ""}${body || "(clinical findings)"}`;
+    return sections
+      .map((h, i) => `${h}:\n${i === 0 && body ? body : `(${SECTION_HINT[h] ?? "..."})`}`)
+      .join("\n\n");
   };
 
   const generateDraft = async () => {
@@ -342,35 +380,36 @@ function AddNoteModal({ residents, authorName, onClose, onSaved }: {
     if (listening) { try { recognitionRef.current?.stop(); } catch { /* noop */ } setListening(false); }
     setDrafting(true);
     const typeLabel = NOTE_TYPES.find((t) => t.value === form.noteType)?.label ?? "Clinical Note";
+    const sections = NOTE_TEMPLATES[form.noteType] ?? NOTE_TEMPLATES.CLINICAL_NOTE;
     const dictation = form.content.trim();
+    const setDraft = (content: string) =>
+      setForm((f) => ({ ...f, content, title: f.title.trim() || `${typeLabel}${patient ? ` — ${patient.name}` : ""}` }));
     try {
+      // No dictation → don't ask the model to invent content (that produced the
+      // cut-off "[Patient…]" placeholder). Lay out the note-type skeleton to fill.
+      if (!dictation) { setDraft(localDraft("", form.noteType)); return; }
+
       const persona =
         `You are an expert clinical documentation scribe at an assisted-living facility. ` +
-        `Turn the clinician's dictation into a well-structured ${typeLabel}` +
+        `Reorganize the clinician's dictation into a complete, well-structured ${typeLabel}` +
         (patient ? ` for ${patient.name} (Room ${patient.room})` : "") + `. ` +
-        `Use precise clinical language. For a SOAP Note use SUBJECTIVE / OBJECTIVE / ASSESSMENT / PLAN headings. ` +
-        `Only output the note body — no preamble, no markdown fences.`;
+        `Use EXACTLY these sections, each as an UPPERCASE heading on its own line followed by a colon:\n` +
+        sections.join("\n") + `\n` +
+        `Rules: use precise clinical language; use ONLY information present in the dictation; ` +
+        `if a section has no supporting information write "(not documented)"; ` +
+        `never invent vitals, doses, or diagnoses; do not output placeholders in brackets, ` +
+        `a preamble, a date line, or markdown fences. Output only the note body.`;
       const res = await fetch("/api/ai-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "chat",
-          audience: "admin",
-          persona,
-          message: dictation || `Draft a ${typeLabel} template${patient ? ` for ${patient.name}` : ""}.`,
-        }),
+        body: JSON.stringify({ action: "chat", audience: "admin", persona, message: dictation }),
       });
       const data = await res.json().catch(() => ({}));
       const reply = String(data?.reply ?? "").trim();
       // Only trust a real model draft; otherwise structure the dictation locally.
-      const draft = data?.source === "gemini" && reply ? reply : localDraft(dictation, form.noteType, patient?.name ?? "");
-      setForm((f) => ({
-        ...f,
-        content: draft,
-        title: f.title.trim() || `${typeLabel}${patient ? ` — ${patient.name}` : ""}`,
-      }));
+      setDraft(data?.source === "gemini" && reply ? reply : localDraft(dictation, form.noteType));
     } catch {
-      setForm((f) => ({ ...f, content: localDraft(dictation, form.noteType, patient?.name ?? "") }));
+      setDraft(localDraft(dictation, form.noteType));
     } finally {
       setDrafting(false);
     }
