@@ -23,7 +23,7 @@ const DIRECT_COMMUNITY = new Set([
 const RESIDENT_SCOPED = new Set([
   "vitals", "incidents", "medications", "resident-goals", "medication-logs",
   "medical-notes", "call-bells", "visits", "invoices", "resident-notes",
-  "admissions", "service-charges", "insurance-validations", "transport-requests",
+  "service-charges", "insurance-validations", "transport-requests",
   "trips", "dietitian-consults", "service-requests", "concierge-bookings",
   "front-desk-visits", "resident-preferences", "event-attendances",
   "dining-reservations", "escalations", "camera-monitoring-logs", "vaccinations",
@@ -260,6 +260,14 @@ export function tenantWhere(modelKey: string, context: TenantContext): Record<st
 
   const selfService = context.role === "FAMILY" || context.role === "RESIDENT";
   if (modelKey === "residents") return selfService ? residentAccessWhere(context) : { communityId: context.communityId };
+  if (modelKey === "admissions") {
+    // Admissions are community-scoped, NOT resident-scoped: an in-progress
+    // admission has no linked resident yet (the Resident is created only on
+    // completion), so scoping by the resident relation would hide every
+    // in-progress move-in. Staff see the community's admissions; a family/
+    // resident sees only their own resident's admission.
+    return selfService ? { resident: residentAccessWhere(context) } : { communityId: context.communityId };
+  }
   if (modelKey === "tasks") {
     // Tasks carry a required residentId. Staff see the whole community's tasks;
     // a resident/family may only see (and complete) their own.
