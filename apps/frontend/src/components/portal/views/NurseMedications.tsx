@@ -7,7 +7,7 @@ import {
   Pill, Search, X, Plus, RefreshCw, ListChecks, BarChart3, Clock,
   CheckCircle2, AlertTriangle, Eye, Trash2, PauseCircle, PlayCircle,
   Ban, Syringe, Sun, Sunrise, Sunset, Moon, HelpCircle, CalendarClock,
-  UserRound, Undo2, type LucideIcon,
+  UserRound, Undo2, ShieldAlert, type LucideIcon,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import {
@@ -18,12 +18,13 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident, humanize } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { medFlagLabels } from "@/lib/medSafety";
+import MedSafetyDashboard from "@/components/portal/views/clinical/MedSafetyDashboard";
 
 /* ── Types ───────────────────────────────────────────────────────────── */
 
 type MedStatus = "ACTIVE" | "DISCONTINUED" | "PENDING" | "ON_HOLD";
 type SlotKey = "MORNING" | "NOON" | "EVENING" | "NIGHT" | "PRN";
-type ViewKey = "rounds" | "list" | "analytics";
+type ViewKey = "rounds" | "list" | "analytics" | "safety";
 
 interface MedVM {
   id: string;
@@ -369,7 +370,7 @@ export default function NurseMedications() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
-            {([["rounds", CalendarClock, "Rounds"], ["list", ListChecks, "All Medications"], ["analytics", BarChart3, "Analytics"]] as [ViewKey, LucideIcon, string][]).map(([key, Icon, label], i) => (
+            {([["rounds", CalendarClock, "Rounds"], ["list", ListChecks, "All Medications"], ["analytics", BarChart3, "Analytics"], ["safety", ShieldAlert, "Safety"]] as [ViewKey, LucideIcon, string][]).map(([key, Icon, label], i) => (
               <button key={key} onClick={() => setView(key)}
                 className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition ${i > 0 ? "border-l border-gray-300" : ""} ${view === key ? "bg-yellow-400 text-black" : "bg-white text-gray-700 hover:bg-gray-50"}`}>
                 <Icon className="w-4 h-4" /> {label}
@@ -553,6 +554,8 @@ export default function NurseMedications() {
 
       {/* ── Analytics ── */}
       {view === "analytics" && <MedsAnalytics meds={meds} marEntries={marEntries} nowTs={nowTs} />}
+
+      {view === "safety" && <MedSafetyDashboard />}
 
       {/* ── Detail modal ── */}
       {viewing && (
