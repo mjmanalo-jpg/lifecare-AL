@@ -17,6 +17,7 @@ import NurseRecords from "@/components/portal/views/NurseRecords";
 import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
 import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
 import CarePlanBoard from "@/components/portal/views/clinical/CarePlanBoard";
+import LabsAllergiesBoard from "@/components/portal/views/clinical/LabsAllergiesBoard";
 import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
 import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
 import MARBoard from "@/components/portal/views/clinical/MARBoard";
@@ -50,6 +51,8 @@ export default function PhysicianPortalContent({ tab }: PhysicianPortalContentPr
       return <PhysicianOrders approveMode />;
     case "careplans":
       return <CarePlanBoard />;
+    case "labs":
+      return <LabsAllergiesBoard />;
     case "consults":
       return <PhysicianConsults />;
     case "physiciancomms":

@@ -7,6 +7,7 @@ import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import CarePlanBoard from "@/components/portal/views/clinical/CarePlanBoard";
+import LabsAllergiesBoard from "@/components/portal/views/clinical/LabsAllergiesBoard";
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
 import MARBoard from "@/components/portal/views/clinical/MARBoard";
 import ReferralsBoard from "@/components/portal/views/clinical/ReferralsBoard";
@@ -42,6 +43,8 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
       return <AssessmentAcuityBoard clinicianRole="FACILITY_ADMIN" />;
     case "careplans":
       return <CarePlanBoard />;
+    case "labs":
+      return <LabsAllergiesBoard />;
     case "referrals":
       return <ReferralsBoard canApprove />;
     case "physiciancomms":
