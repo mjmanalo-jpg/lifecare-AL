@@ -9,6 +9,8 @@
  * which on Windows 11 selected male voices (Guy/Andrew/Brian) for a female pick.
  */
 
+import { voiceServesLang } from "./speechLang";
+
 export const BROWSER_VOICE_MAP: Record<string, { namePattern?: RegExp; rate: number; pitch: number }> = {
   Zephyr: { namePattern: /aria|samantha|zoe|female/i, rate: 1.1, pitch: 1.15 },
   Puck: { namePattern: /jenny|siri|female/i, rate: 1.2, pitch: 1.3 },
@@ -34,14 +36,31 @@ const FEMALE_NAME = /\b(aria|jenny|zira|samantha|libby|michelle|veena|emma|clara
 /**
  * Pick the best browser voice for a selected Gemini voice id, guaranteeing the
  * gender matches so a female neural voice never falls back to a male OS voice.
- * Returns null only when the browser exposes no voices at all.
+ * When `langCode` is a non-English language (e.g. "fil-PH"), a voice that
+ * actually speaks that language is preferred so Tagalog isn't read with English
+ * phonetics. Returns null only when the browser exposes no voices at all.
  */
 export function pickBrowserVoice(
   voices: SpeechSynthesisVoice[],
-  voiceId: string
+  voiceId: string,
+  langCode = "en-US"
 ): SpeechSynthesisVoice | null {
   const cfg = BROWSER_VOICE_MAP[voiceId] ?? BROWSER_VOICE_MAP.Kore;
   const gender = VOICE_GENDER[voiceId] ?? "female";
+
+  // For a non-English reply, prefer a voice that actually speaks that language
+  // (matching the selected gender when possible). Falls through to the English
+  // logic when the OS has no such voice installed.
+  if (!langCode.toLowerCase().startsWith("en")) {
+    const localized = voices.filter((v) => voiceServesLang(v.lang, langCode));
+    if (localized.length) {
+      const sameGender = localized.find((v) =>
+        gender === "female" ? !MALE_NAME.test(v.name) : MALE_NAME.test(v.name)
+      );
+      return sameGender ?? localized[0];
+    }
+  }
+
   const en = voices.filter((v) => v.lang.toLowerCase().startsWith("en"));
   const pool = en.length ? en : voices;
   if (!pool.length) return null;

@@ -56,6 +56,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { ASSISTANT_CONFIG_KEY, parseAssistantConfig, TONE_PREVIEW } from "@/lib/assistantConfig";
 import { BROWSER_VOICE_MAP, pickBrowserVoice } from "@/lib/browserVoice";
+import { detectSpeechLang } from "@/lib/speechLang";
 
 // speechSynthesis.getVoices() is empty until the async voiceschanged event on
 // first load — a sync call then picks no voice and the OS default (often a
@@ -791,11 +792,14 @@ Vitals:
     stopTTS();
     setAssistantSpeaking(true);
     const toneStyle = TONE_PREVIEW[assistantCfg.tone] ?? TONE_PREVIEW.friendly;
+    // Detect the reply language so Tagalog/Taglish is spoken natively, not with
+    // an English accent, on both the Gemini and browser-fallback paths.
+    const lang = detectSpeechLang(text);
     try {
       const res = await fetch("/api/ai-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "tts", text, provider: "auto", voiceId: voice, style: toneStyle.style }),
+        body: JSON.stringify({ action: "tts", text, provider: "auto", voiceId: voice, style: toneStyle.style, langName: lang.name }),
       });
       const data = await res.json();
       if (!data.fallback && data.audio) {
@@ -821,13 +825,14 @@ Vitals:
       const voices = await getBrowserVoices();
       await new Promise<void>((resolve) => {
         const u = new SpeechSynthesisUtterance(text);
-        u.lang = "en-US";
+        u.lang = lang.code;
         // Honour the admin-selected voice: same gender + rate/pitch as the
-        // preview, so choosing "Leda" never speaks in a male OS voice.
+        // preview, so choosing "Leda" never speaks in a male OS voice; and a
+        // Filipino voice for Tagalog text when the OS has one.
         const cfg = BROWSER_VOICE_MAP[voice] ?? BROWSER_VOICE_MAP.Kore;
         u.rate = cfg.rate * toneStyle.rate;
         u.pitch = cfg.pitch * toneStyle.pitch;
-        const preferred = pickBrowserVoice(voices, voice);
+        const preferred = pickBrowserVoice(voices, voice, lang.code);
         if (preferred) u.voice = preferred;
         u.onend = () => resolve();
         u.onerror = () => resolve();

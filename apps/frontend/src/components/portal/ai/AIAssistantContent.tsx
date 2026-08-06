@@ -35,6 +35,7 @@ import {
   formatBytes,
 } from "@/lib/knowledgeBase";
 import { BROWSER_VOICE_MAP, pickBrowserVoice } from "@/lib/browserVoice";
+import { detectSpeechLang } from "@/lib/speechLang";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, deleteRecord } from "@/lib/api";
 
@@ -219,13 +220,16 @@ export default function AIAssistantContent() {
       if (!text) return;
       stopSpeaking();
       setSpeaking(true);
+      // Detect the reply's language so both Gemini and the browser fallback
+      // pronounce Tagalog/Taglish natively instead of with an English accent.
+      const lang = detectSpeechLang(text);
 
       // Google (Gemini) neural voice — falls back to browser speech if unavailable.
       try {
         const res = await fetch("/api/ai-assistant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "tts", text, provider: "auto", voiceId: voiceId ?? voice, style }),
+          body: JSON.stringify({ action: "tts", text, provider: "auto", voiceId: voiceId ?? voice, style, langName: lang.name }),
         });
         const data = await res.json();
         if (!data.fallback && data.audio) {
@@ -262,9 +266,10 @@ export default function AIAssistantContent() {
           const cfg = BROWSER_VOICE_MAP[voiceId ?? voice] ?? BROWSER_VOICE_MAP.Kore;
           u.rate = cfg.rate * (speechMod?.rate ?? 1);
           u.pitch = cfg.pitch * (speechMod?.pitch ?? 1);
-          u.lang = "en-US";
-          // Gender-aware pick so a female voice never falls back to a male one.
-          const preferred = pickBrowserVoice(voices, voiceId ?? voice);
+          u.lang = lang.code;
+          // Gender-aware pick (and language-aware, so Tagalog gets a Filipino
+          // voice when the OS has one) — a female voice never falls back to male.
+          const preferred = pickBrowserVoice(voices, voiceId ?? voice, lang.code);
           if (preferred) u.voice = preferred;
           u.onend = () => resolve();
           u.onerror = () => resolve();

@@ -611,6 +611,10 @@ async function handleTts(body: Record<string, unknown>) {
   // neural voice can be previewed friendly vs. calm vs. professional. Not
   // applied to ElevenLabs, which would read the instruction as content.
   const style = String(body.style ?? "").trim();
+  // Optional language of the text (e.g. "Filipino (Tagalog)") so the model
+  // pronounces non-English replies with the right phonetics instead of an
+  // English accent — the caller detects this from the reply text.
+  const langName = String(body.langName ?? "").trim();
 
   // 1) ElevenLabs — highest-quality neural voice, returns mp3 directly.
   if (ELEVENLABS_API_KEY && (provider === "auto" || provider === "elevenlabs")) {
@@ -654,10 +658,17 @@ async function handleTts(body: Record<string, unknown>) {
   // 2) Gemini TTS — returns raw PCM (L16 @ 24kHz); wrap it in a WAV container.
   if (GEMINI_API_KEY && (provider === "auto" || provider === "gemini")) {
     try {
-      // Prefix a style instruction so the delivery reflects the chosen tone.
-      // The TTS model speaks only the message, not the instruction line.
-      const geminiText = style
-        ? `Say the following in ${style}. Speak only the message itself; do not read this instruction aloud.\n\n${text}`
+      // Prefix instructions so delivery reflects the chosen tone AND non-English
+      // text is pronounced natively. The TTS model speaks only the message,
+      // not the instruction line.
+      const directives = [
+        langName && langName !== "English"
+          ? `Read the following ${langName} text aloud with clear, natural, native ${langName} pronunciation`
+          : "",
+        style ? `${langName && langName !== "English" ? "using" : "Say the following in"} ${style}` : "",
+      ].filter(Boolean).join(", ");
+      const geminiText = directives
+        ? `${directives}. Speak only the message itself; do not read this instruction aloud.\n\n${text}`
         : text;
       const res = await fetch(`${GEMINI_BASE}/${GEMINI_TTS_MODEL}:generateContent`, {
         method: "POST",
