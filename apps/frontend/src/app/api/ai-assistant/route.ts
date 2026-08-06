@@ -219,7 +219,7 @@ const RESIDENT_TOOLS = [
           "preference for a meal — e.g. 'I don't feel like salmon', 'can I have grilled chicken instead', " +
           "'no salad for me tonight'. Before calling, ask which meal it's for (breakfast, lunch, dinner or " +
           "a snack) and what they'd like INSTEAD, unless they already said. This alerts the kitchen so the " +
-          "chef can prepare the substitute.",
+          "chef can prepare the substitute, and notifies the resident's nurse and caregiver.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -395,7 +395,7 @@ async function executeResidentTool(
       ? meal.charAt(0).toUpperCase() + meal.slice(1)
       : "";
     const details = mealLabel ? `${mealLabel}: ${preference}` : preference;
-    const info = await prisma.resident.findUnique({ where: { id: resident.id }, select: { roomNumber: true } });
+    const info = await prisma.resident.findUnique({ where: { id: resident.id }, select: { firstName: true, lastName: true, roomNumber: true } });
     // Same kitchen ServiceRequest the "Request Meal Substitution" form creates,
     // so it lands on the kitchen cook list (assignedTeam KITCHEN, not COMPLETED).
     const req = await prisma.serviceRequest.create({
@@ -412,6 +412,37 @@ async function executeResidentTool(
         ...tenant,
       },
     });
+    // Also ping the care team via a call bell so nurses + caregivers know the
+    // resident asked for a substitution (kitchen prepares it; care staff aware).
+    // Best-effort — the kitchen ticket is the source of truth if this fails.
+    try {
+      const bell = await prisma.callBell.create({
+        data: { residentId: resident.id, reason: `Meal substitution — ${details}`, ...tenant },
+      });
+      const staff = resident.communityId
+        ? await prisma.communityMembership.findMany({
+            where: { communityId: resident.communityId, status: "ACTIVE", role: { in: ["NURSE", "CAREGIVER"] } },
+            select: { userId: true },
+          })
+        : [];
+      const who = info ? `${info.firstName} ${info.lastName}` : "A resident";
+      const room = info?.roomNumber ? `Room ${info.roomNumber}` : "their room";
+      if (staff.length) {
+        await prisma.notification.createMany({
+          data: staff.map((m) => ({
+            userId: m.userId,
+            type: "CALL_BELL" as const,
+            title: `Meal Substitution: ${who}`,
+            message: `${who} in ${room} requested a meal substitution via the AI companion: "${details}". Sent to the kitchen.`,
+            relatedEntityId: bell.id,
+            relatedEntityType: "CallBell",
+            ...tenant,
+          })),
+        });
+      }
+    } catch {
+      /* notification is best-effort; the kitchen ticket already exists */
+    }
     return { ok: true, serviceRequestId: req.id, meal: mealLabel || null, preference };
   }
 
