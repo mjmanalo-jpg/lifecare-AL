@@ -143,7 +143,8 @@ def _open_rtsp(url):
 # get fresh video with minimal latency, and multiple browser tabs share one RTSP
 # connection instead of each opening their own (which is what made it crawl).
 _grab_lock = threading.Lock()
-_grab_latest = None       # latest encoded JPEG bytes
+_grab_latest = None       # latest encoded JPEG bytes (for the MJPEG stream)
+_grab_latest_frame = None # latest decoded BGR frame (for server-side detection)
 _grab_thread = None
 _grab_run = False
 
@@ -154,7 +155,7 @@ MJPEG_QUALITY = int(os.getenv("MJPEG_QUALITY", "72"))
 
 
 def _grab_loop():
-    global _grab_latest, _grab_run
+    global _grab_latest, _grab_latest_frame, _grab_run
     url = _tapo_rtsp_url()
     cap = _open_rtsp(url)
     fails = 0
@@ -186,7 +187,22 @@ def _grab_loop():
         if ok2:
             with _grab_lock:
                 _grab_latest = jpeg.tobytes()
+                _grab_latest_frame = frame  # raw BGR for the server-side fall watchdog
     cap.release()
+
+
+def get_latest_frame():
+    """Return a copy of the latest decoded BGR frame (or None) for server-side
+    detection. Thread-safe; the watchdog reads this instead of touching RTSP or
+    re-decoding the JPEG stream."""
+    with _grab_lock:
+        return None if _grab_latest_frame is None else _grab_latest_frame.copy()
+
+
+def ensure_grabber():
+    """Public alias so other modules (the fall watchdog) can start the shared
+    RTSP grabber without reaching into a private name."""
+    _ensure_grabber()
 
 
 def _ensure_grabber():

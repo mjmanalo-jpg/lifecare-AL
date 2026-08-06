@@ -20,7 +20,19 @@ async def lifespan(app: FastAPI):
     if os.getenv("AUTO_CREATE_SCHEMA", "false").lower() == "true" and os.getenv("PYTHON_ENV") != "production":
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+    # Always-on, server-side fall monitoring — runs for as long as this process is
+    # up, independent of any logged-in nurse or open browser tab.
+    try:
+        from app.services.fall_watchdog import start_watchdog
+        start_watchdog()
+    except Exception as e:
+        print(f"[Watchdog] failed to start: {e}")
     yield
+    try:
+        from app.services.fall_watchdog import stop_watchdog
+        stop_watchdog()
+    except Exception:
+        pass
     await close_db()
 
 
