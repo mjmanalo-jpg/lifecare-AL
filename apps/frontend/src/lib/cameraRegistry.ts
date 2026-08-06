@@ -21,10 +21,17 @@ export interface CameraDevice {
   lastSeenAt?: string;   // ISO — last successful test or edge heartbeat
   lastEventAt?: string;  // ISO — last detection event forwarded from this camera
   lastStatus?: string;   // free-form status note (e.g. "error", HTTP code)
+  /** When true, staff are alerted if this camera stops checking in (needs a
+   *  heartbeat source). Off by default so cameras without a heartbeat wired
+   *  don't nuisance-alert. */
+  healthAlerts?: boolean;
+  offlineNotifiedAt?: string; // ISO — last offline alert sent (for dedup)
 }
 
-/** A camera counts as offline if it hasn't checked in within this window. */
+/** A camera counts as offline (UI badge) if it hasn't checked in within this window. */
 export const CAMERA_STALE_MS = 3 * 60 * 1000;
+/** Grace before the cron *alerts* staff a monitored camera is offline. */
+export const CAMERA_OFFLINE_ALERT_MS = 10 * 60 * 1000;
 
 export function parseCameras(raw: string | null | undefined): CameraDevice[] {
   if (!raw) return [];

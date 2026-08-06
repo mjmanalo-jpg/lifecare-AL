@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
 import { slaMinutes } from "@/lib/alertAccess";
+import { scanCameraHealth } from "@/lib/cameraHealth";
 import { isAbnormalVital, vitalSeverity } from "@/lib/vitalThresholds";
 
 export const runtime = "nodejs";
@@ -364,6 +365,9 @@ async function runScan(request: NextRequest) {
     } catch (e) {
       console.error("alerts scan failed for community", c.id, e instanceof Error ? e.message : "unknown");
     }
+    // Camera health watchdog — alert on offline monitored cameras (best-effort).
+    try { await scanCameraHealth(c.id, c.organizationId); }
+    catch (e) { console.error("camera-health scan failed for community", c.id, e instanceof Error ? e.message : "unknown"); }
   }
   const created = Object.values(totals).reduce((a, b) => a + b, 0);
   return NextResponse.json({ ok: true, communities: communities.length, created, breakdown: totals });
