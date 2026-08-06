@@ -606,6 +606,11 @@ async function handleTts(body: Record<string, unknown>) {
   const text = String(body.text ?? "").trim();
   if (!text) return NextResponse.json({ error: "No text" }, { status: 400 });
   const provider = String(body.provider ?? "auto");
+  // Optional delivery directive (e.g. "a calm, gentle tone"). Gemini's TTS
+  // follows a spoken-style instruction without reading it aloud, so the SAME
+  // neural voice can be previewed friendly vs. calm vs. professional. Not
+  // applied to ElevenLabs, which would read the instruction as content.
+  const style = String(body.style ?? "").trim();
 
   // 1) ElevenLabs — highest-quality neural voice, returns mp3 directly.
   if (ELEVENLABS_API_KEY && (provider === "auto" || provider === "elevenlabs")) {
@@ -649,11 +654,16 @@ async function handleTts(body: Record<string, unknown>) {
   // 2) Gemini TTS — returns raw PCM (L16 @ 24kHz); wrap it in a WAV container.
   if (GEMINI_API_KEY && (provider === "auto" || provider === "gemini")) {
     try {
+      // Prefix a style instruction so the delivery reflects the chosen tone.
+      // The TTS model speaks only the message, not the instruction line.
+      const geminiText = style
+        ? `Say the following in ${style}. Speak only the message itself; do not read this instruction aloud.\n\n${text}`
+        : text;
       const res = await fetch(`${GEMINI_BASE}/${GEMINI_TTS_MODEL}:generateContent`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
         body: JSON.stringify({
-          contents: [{ parts: [{ text }] }],
+          contents: [{ parts: [{ text: geminiText }] }],
           generationConfig: {
             responseModalities: ["AUDIO"],
             speechConfig: {

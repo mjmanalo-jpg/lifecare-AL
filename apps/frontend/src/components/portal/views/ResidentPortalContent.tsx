@@ -54,7 +54,7 @@ import Link from "next/link";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
-import { ASSISTANT_CONFIG_KEY, parseAssistantConfig } from "@/lib/assistantConfig";
+import { ASSISTANT_CONFIG_KEY, parseAssistantConfig, TONE_PREVIEW } from "@/lib/assistantConfig";
 
 // speechSynthesis.getVoices() is empty until the async voiceschanged event on
 // first load — a sync call then picks no voice and the OS default (often a
@@ -783,15 +783,17 @@ Vitals:
     return new Blob([bytes], { type: mime });
   };
 
-  // Text-To-Speech (Gemini with browser fallback)
+  // Text-To-Speech (Gemini with browser fallback). Uses the admin-selected
+  // voice AND tone so the companion speaks in the configured personality.
   const speakTTS = async (text: string) => {
     stopTTS();
     setAssistantSpeaking(true);
+    const toneStyle = TONE_PREVIEW[assistantCfg.tone] ?? TONE_PREVIEW.friendly;
     try {
       const res = await fetch("/api/ai-assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "tts", text, provider: "auto", voiceId: voice }),
+        body: JSON.stringify({ action: "tts", text, provider: "auto", voiceId: voice, style: toneStyle.style }),
       });
       const data = await res.json();
       if (!data.fallback && data.audio) {
@@ -818,8 +820,8 @@ Vitals:
       await new Promise<void>((resolve) => {
         const u = new SpeechSynthesisUtterance(text);
         u.lang = "en-US";
-        u.rate = 1.0;
-        u.pitch = 1.05;
+        u.rate = 1.0 * toneStyle.rate;
+        u.pitch = 1.05 * toneStyle.pitch;
         const preferred =
           voices.find((v) => /aria|jenny|natural/i.test(v.name) && v.lang.startsWith("en")) ??
           voices.find((v) => /zira|samantha|female/i.test(v.name) && v.lang.startsWith("en")) ??

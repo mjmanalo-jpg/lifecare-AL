@@ -23,6 +23,7 @@ import {
   ASSISTANT_CONFIG_KEY,
   DEFAULT_ASSISTANT_CONFIG,
   TONE_OPTIONS,
+  TONE_PREVIEW,
   parseAssistantConfig,
   type AssistantConfig,
 } from "@/lib/assistantConfig";
@@ -217,7 +218,14 @@ export default function AIAssistantContent() {
   }, []);
 
   const speak = useCallback(
-    async (text: string, voiceId?: string): Promise<void> => {
+    async (
+      text: string,
+      voiceId?: string,
+      // `style` steers the Gemini delivery (server-side); `speechMod` nudges the
+      // browser fallback's rate/pitch so the tone is audible even offline.
+      style?: string,
+      speechMod?: { rate?: number; pitch?: number }
+    ): Promise<void> => {
       if (!text) return;
       stopSpeaking();
       setSpeaking(true);
@@ -227,7 +235,7 @@ export default function AIAssistantContent() {
         const res = await fetch("/api/ai-assistant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "tts", text, provider: "auto", voiceId: voiceId ?? voice }),
+          body: JSON.stringify({ action: "tts", text, provider: "auto", voiceId: voiceId ?? voice, style }),
         });
         const data = await res.json();
         if (!data.fallback && data.audio) {
@@ -262,8 +270,8 @@ export default function AIAssistantContent() {
         await new Promise<void>((resolve) => {
           const u = new SpeechSynthesisUtterance(text);
           const cfg = BROWSER_VOICE_MAP[voiceId ?? voice] ?? BROWSER_VOICE_MAP.Kore;
-          u.rate = cfg.rate;
-          u.pitch = cfg.pitch;
+          u.rate = cfg.rate * (speechMod?.rate ?? 1);
+          u.pitch = cfg.pitch * (speechMod?.pitch ?? 1);
           u.lang = "en-US";
           // Match the Gemini voice's name pattern first, then prefer the OS's
           // neural "Natural" voices (far less robotic), then any English voice.
@@ -284,18 +292,29 @@ export default function AIAssistantContent() {
     [voice, stopSpeaking]
   );
 
-  // Select a voice, preview it, and persist the choice to Supabase (shared).
+  // Speak a sample in the given voice AND tone so the admin hears exactly how
+  // the assistant will sound — the same combination the resident companion uses.
+  const previewPersona = useCallback(
+    (voiceId: string, toneId: AssistantConfig["tone"]) => {
+      const t = TONE_PREVIEW[toneId] ?? TONE_PREVIEW.friendly;
+      const name = config.name?.trim() || "your companion";
+      speak(t.line(name), voiceId, t.style, { rate: t.rate, pitch: t.pitch });
+    },
+    [speak, config.name]
+  );
+
+  // Select a voice, preview it in the current tone, and persist to Supabase.
   const chooseVoice = useCallback(
     (id: string) => {
       setVoice(id);
-      speak(`Hi, I'm ${id}. This is how I'll sound in US English.`, id);
+      previewPersona(id, config.tone);
       fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key: "assistantVoice", value: id }),
       }).catch(() => {});
     },
-    [speak]
+    [previewPersona, config.tone]
   );
 
   // ── Speech-to-text (browser Web Speech API) ────────────────────────────
@@ -567,7 +586,7 @@ export default function AIAssistantContent() {
                 {TONE_OPTIONS.map((t) => (
                   <button
                     key={t.id}
-                    onClick={() => editConfig({ tone: t.id })}
+                    onClick={() => { editConfig({ tone: t.id }); previewPersona(voice, t.id); }}
                     className={`rounded-xl border p-2.5 text-left transition active:scale-[0.98] ${
                       config.tone === t.id
                         ? "border-yellow-400 bg-yellow-50 ring-1 ring-yellow-400"
