@@ -70,6 +70,22 @@ function computeAcuity(s: Scores) {
 
 const DEFAULT_SCORES: Scores = { adl: 2, cognition: 2, mobility: 2, medical: 2, behavioral: 1, nutrition: 2, hydration: 2, skinIntegrity: 1, socialEngagement: 2 };
 
+// Each dimension maps to a care goal + the care-team action it implies. When an
+// assessment flags a dimension (score ≥ 3) we seed the care plan with these, so
+// the plan is generated dynamically from the assessment rather than typed by hand.
+const DIM_PLAN: Record<DimKey, { goal: string; intervention: string }> = {
+  adl: { goal: "Maximize independence in daily self-care", intervention: "Assist with bathing, dressing, toileting and eating to ability; encourage self-care." },
+  cognition: { goal: "Support cognition and orientation", intervention: "Provide orientation cues, a consistent routine, and supervision for decisions." },
+  mobility: { goal: "Maintain safe mobility and prevent falls", intervention: "Assist with transfers/ambulation; apply fall precautions; consider PT referral." },
+  medical: { goal: "Stabilize and monitor medical conditions", intervention: "Monitor vitals and symptoms; administer medications and treatments on schedule." },
+  behavioral: { goal: "Promote emotional well-being and reduce agitation", intervention: "Use calm redirection; track mood/behavior; involve meaningful activities and family." },
+  nutrition: { goal: "Meet nutritional needs", intervention: "Provide the prescribed diet and feeding assistance; monitor intake and weight." },
+  hydration: { goal: "Maintain adequate hydration", intervention: "Offer fluids on a schedule; monitor intake and watch for dehydration." },
+  skinIntegrity: { goal: "Protect skin integrity", intervention: "Reposition on schedule; perform skin checks; pressure-injury prevention." },
+  socialEngagement: { goal: "Encourage social engagement", intervention: "Invite to activities/outings; reduce isolation; involve family." },
+};
+const REVIEW_BY_ACUITY: Record<string, string> = { LOW: "QUARTERLY", MODERATE: "MONTHLY", HIGH: "BIWEEKLY", CRITICAL: "WEEKLY" };
+
 export default function AssessmentAcuityBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   const { name: clinicianName, userId: clinicianId } = useClinician(clinicianRole);
   const [selectedResident, setSelectedResident] = useState<string>("");
@@ -122,6 +138,50 @@ export default function AssessmentAcuityBoard({ clinicianRole = "NURSE" }: { cli
     if (!result.isConfirmed) return;
     await deleteRecord("assessments", assessmentId); // AcuityScore cascades on delete
     await assessQ.refetch();
+  };
+
+  const [genPlanId, setGenPlanId] = useState("");
+  // Build a draft care plan straight from an assessment: every dimension scored
+  // ≥ 3 (moderate+) contributes a goal + the care-team action it implies.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const generateCarePlan = async (a: any) => {
+    if (genPlanId) return;
+    const communityId = resolveCommunityId(a.residentId);
+    if (!communityId) { Swal.fire("Missing community", "This resident isn't linked to a community yet.", "warning"); return; }
+    const res = resMap.get(a.residentId);
+    const acuity = a.acuityScore?.acuityLevel ? String(a.acuityScore.acuityLevel) : "MODERATE";
+    let flagged = DIMENSIONS.filter((d) => (a[`${d.key}Score`] ?? 0) >= 3);
+    if (!flagged.length) flagged = [...DIMENSIONS].sort((x, y) => (a[`${y.key}Score`] ?? 0) - (a[`${x.key}Score`] ?? 0)).slice(0, 2);
+    const confirm = await Swal.fire({
+      title: "Generate care plan?",
+      html: `Create a draft care plan for <b>${res?.name ?? "this resident"}</b> from this assessment — ${flagged.length} focus area${flagged.length === 1 ? "" : "s"} (goals + interventions). A nurse can review and activate it.`,
+      icon: "question", showCancelButton: true, confirmButtonColor: "#059669", confirmButtonText: "Generate",
+    });
+    if (!confirm.isConfirmed) return;
+    setGenPlanId(a.id);
+    try {
+      const planRes = await createRecord("care-plans", {
+        residentId: a.residentId, communityId,
+        title: `Care Plan — ${res?.name ?? "Resident"} (${acuity} acuity)`,
+        status: "DRAFT", startDate: new Date().toISOString(),
+        reviewFrequency: REVIEW_BY_ACUITY[acuity] ?? "MONTHLY",
+        careGoals: flagged.map((d) => `• ${DIM_PLAN[d.key].goal}`).join("\n"),
+        createdById: clinicianId || null, createdByName: clinicianName,
+        notes: `Generated from the ${String(a.assessmentType).replace(/_/g, " ").toLowerCase()} assessment on ${new Date(a.completedAt || a.createdAt).toLocaleDateString()}.`,
+      });
+      const planId = planRes?.data?.id;
+      if (!planId) throw new Error("Care plan did not return an id");
+      let order = 0;
+      for (const d of flagged) {
+        await createRecord("care-plan-items", { carePlanId: planId, communityId, category: "GOAL", title: DIM_PLAN[d.key].goal, description: `${d.label} assessed at ${a[`${d.key}Score`]}/5.`, status: "ACTIVE", sortOrder: order++ });
+        await createRecord("care-plan-items", { carePlanId: planId, communityId, category: "INTERVENTION", title: DIM_PLAN[d.key].intervention, status: "ACTIVE", sortOrder: order++ });
+      }
+      Swal.fire({ title: "Care plan drafted", text: `${flagged.length} focus area${flagged.length === 1 ? "" : "s"} added. Open Care Plans to review & activate.`, icon: "success", timer: 2400, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Couldn't generate", err instanceof Error ? err.message : String(err), "error");
+    } finally {
+      setGenPlanId("");
+    }
   };
 
   // ── Resident picker ──────────────────────────────────────────────────────
@@ -217,8 +277,12 @@ export default function AssessmentAcuityBoard({ clinicianRole = "NURSE" }: { cli
                     {acuity && <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${ACUITY_BADGE[acuity.acuityLevel]}`}>Acuity: {acuity.acuityLevel}</span>}
                     {acuity && <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${CARE_BADGE[acuity.careLevel]}`}>{acuity.careLevel}</span>}
                   </div>
-                  <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[11px] text-gray-400 flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(a.completedAt || a.createdAt).toLocaleDateString()}</span>
+                    <button onClick={() => generateCarePlan(a)} disabled={!!genPlanId} title="Generate a draft care plan from this assessment"
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition disabled:opacity-50">
+                      {genPlanId === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ClipboardList className="w-3 h-3" />} Generate care plan
+                    </button>
                     <button onClick={() => handleDelete(a.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
                 </div>

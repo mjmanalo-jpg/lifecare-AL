@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Target, Plus, X, Trash2, CheckCircle, Clock, AlertTriangle, FileText, Search, Loader2 } from "lucide-react";
+import { Target, Plus, X, Trash2, CheckCircle, Clock, AlertTriangle, FileText, Search, Loader2, ListChecks } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
@@ -59,6 +59,40 @@ export default function CarePlanBoard() {
   const handleStatusChange = async (id: string, status: string) => {
     await updateRecord("care-plans", id, { status });
     refetch();
+  };
+
+  const [genTaskId, setGenTaskId] = useState("");
+  // Turn a plan's interventions (the "specific actions required from the care
+  // team") into caregiver tasks so the plan drives the daily task list.
+  const generateTasks = async (plan: any) => {
+    if (genTaskId) return;
+    const items = (itemsByPlan[plan.id] || []).filter((i: any) => String(i.category) === "INTERVENTION" && String(i.status) !== "DISCONTINUED");
+    if (!items.length) { Swal.fire("No interventions", "Add intervention items to this plan first — those become the tasks.", "info"); return; }
+    const communityId = plan.communityId || resMap.get(plan.residentId)?.raw?.communityId || null;
+    const rName = resMap.get(plan.residentId)?.name || "the resident";
+    const confirm = await Swal.fire({
+      title: "Generate tasks?",
+      html: `Create <b>${items.length}</b> caregiver task${items.length === 1 ? "" : "s"} for <b>${rName}</b> from this plan's interventions. They appear on the caregiver task board.`,
+      icon: "question", showCancelButton: true, confirmButtonColor: "#eab308", confirmButtonText: "Generate",
+    });
+    if (!confirm.isConfirmed) return;
+    setGenTaskId(plan.id);
+    try {
+      const due = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // due within a day
+      for (const it of items) {
+        await createRecord("tasks", {
+          residentId: plan.residentId, communityId,
+          title: String(it.title), description: it.description ? String(it.description) : "From the resident's care plan.",
+          category: "Personal Care", status: "PENDING", priority: "MEDIUM",
+          dueDate: due, generatedFrom: plan.id,
+        });
+      }
+      Swal.fire({ title: "Tasks created", text: `${items.length} task${items.length === 1 ? "" : "s"} sent to the caregiver board.`, icon: "success", timer: 2200, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire("Couldn't generate", err instanceof Error ? err.message : String(err), "error");
+    } finally {
+      setGenTaskId("");
+    }
   };
 
   return (
@@ -123,6 +157,7 @@ export default function CarePlanBoard() {
                         <div className="flex items-center justify-end gap-1">
                           {plan.status === "DRAFT" && <button onClick={() => handleStatusChange(plan.id, "ACTIVE")} className="p-1.5 text-green-500 hover:bg-green-50 rounded cursor-pointer" title="Activate"><CheckCircle className="w-4 h-4" /></button>}
                           {plan.status === "ACTIVE" && <button onClick={() => handleStatusChange(plan.id, "COMPLETED")} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded cursor-pointer" title="Complete"><CheckCircle className="w-4 h-4" /></button>}
+                          <button onClick={() => generateTasks(plan)} disabled={!!genTaskId} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded cursor-pointer disabled:opacity-50" title="Generate caregiver tasks from interventions">{genTaskId === plan.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />}</button>
                           <button onClick={() => setEditing(plan)} className="p-1.5 text-yellow-500 hover:bg-yellow-50 rounded cursor-pointer" title="Edit"><FileText className="w-4 h-4" /></button>
                           <button onClick={() => handleDelete(plan.id)} className="p-1.5 text-red-400 hover:text-red-500 hover:bg-red-50 rounded cursor-pointer" title="Delete"><Trash2 className="w-4 h-4" /></button>
                         </div>
