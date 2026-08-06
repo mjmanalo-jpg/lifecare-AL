@@ -1094,12 +1094,14 @@ function TransportAIChat({ residentName, onClose, onBooked, onSwitchToForm }: {
     // Focus the general resident companion on the transport-booking task and the
     // exact set of fields the form captures, so nothing is lost by going verbal.
     const context =
-      "The resident opened the Request Transport screen and wants to arrange a ride. Collect these trip " +
-      "details by asking short, friendly follow-up questions: trip type (medical appointment, dialysis, " +
-      "therapy, family outing, or other), destination, pickup date & time, purpose, whether it's a round " +
-      "trip, whether a wheelchair-accessible vehicle is needed, whether they want a staff escort (nurse or " +
-      "caregiver), and any extra notes. Only the destination and pickup date-time are required — for anything " +
-      "they don't mention, ask once, then book with sensible defaults. When you have enough, call schedule_transport.";
+      "The resident opened the Request Transport screen and wants to arrange a ride. Before booking, ASK the " +
+      "resident about EACH of these, one or two short friendly questions at a time (skip only what they've " +
+      "already told you): 1) the trip type (medical appointment, dialysis, therapy, family outing, or other); " +
+      "2) the pickup date & time; 3) the destination; 4) the purpose of the trip; 5) whether it's a round trip; " +
+      "6) whether they need a wheelchair-accessible vehicle; 7) whether they want a staff escort — and if yes, a " +
+      "nurse or a caregiver. Do not assume the round-trip, wheelchair, or escort answers — actually ask. Only " +
+      "once you've asked about all seven, call schedule_transport with what they said (a 'no preference' answer " +
+      "is fine for the optional ones). Then confirm the booking warmly in one sentence.";
     let reply = "";
     let didBook = false;
     try {

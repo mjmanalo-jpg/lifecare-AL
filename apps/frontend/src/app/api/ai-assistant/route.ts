@@ -170,28 +170,29 @@ const RESIDENT_TOOLS = [
         description:
           "Schedule a transport / ride when the resident asks to arrange transportation — to a medical " +
           "appointment, dialysis, therapy, a family outing, etc. This is the conversational version of the " +
-          "Request Transport form: gather the same details by asking short, friendly follow-up questions — " +
-          "the trip type, the destination, the pickup date & time (resolve relative dates like 'next Tuesday " +
-          "9am' to ISO 8601 using the current date-time), the purpose of the trip, whether it is a round trip, " +
-          "whether a wheelchair-accessible vehicle is needed, whether they want a staff escort (and if so a " +
-          "nurse or a caregiver), and any extra notes. Only the destination and pickup date-time are strictly " +
-          "required — for anything the resident doesn't mention, ask once, and if they're unsure use sensible " +
-          "defaults (round trip, no wheelchair, no escort) rather than blocking the booking.",
+          "Request Transport form, so you MUST ask the resident for EACH of these details (one or two short, " +
+          "friendly questions at a time) before booking, unless they've already told you: " +
+          "(1) trip type, (2) the pickup date & time — resolve relative dates like 'next Tuesday 9am' to " +
+          "ISO 8601 using the current date-time, (3) the destination, (4) the purpose of the trip, " +
+          "(5) whether it is a round trip, (6) whether they need a wheelchair-accessible vehicle, and " +
+          "(7) whether they want a staff escort — and if yes, a nurse or a caregiver. Do not silently assume " +
+          "the round-trip / wheelchair / escort answers — actually ask. Only call the tool once you have asked " +
+          "about all seven; if the resident says 'no preference' for an optional one, that's a valid answer.",
         parameters: {
           type: "OBJECT",
           properties: {
+            type: { type: "STRING", description: "Trip type the resident chose — one of: MEDICAL_APPOINTMENT, DIALYSIS, THERAPY, FAMILY_OUTING, EMERGENCY_TRANSFER, OTHER" },
+            requestedDate: { type: "STRING", description: "Requested pickup date & time in ISO 8601" },
             destination: { type: "STRING", description: "Where the resident wants to go (drop-off)" },
-            requestedDate: { type: "STRING", description: "Requested pickup date-time in ISO 8601" },
-            type: { type: "STRING", description: "One of: MEDICAL_APPOINTMENT, DIALYSIS, THERAPY, FAMILY_OUTING, EMERGENCY_TRANSFER, OTHER" },
             purpose: { type: "STRING", description: "Short reason for the trip, e.g. 'Cardiology follow-up'" },
+            returnRequired: { type: "BOOLEAN", description: "True if a round trip / return ride back is needed — ask the resident" },
+            wheelchairNeeded: { type: "BOOLEAN", description: "True if a wheelchair-accessible vehicle is needed — ask the resident" },
+            escortRequired: { type: "BOOLEAN", description: "True if the resident wants a staff member to escort them — ask the resident" },
+            escortRole: { type: "STRING", description: "Who should escort: NURSE or CAREGIVER (ask this whenever escortRequired is true)" },
             pickupLocation: { type: "STRING", description: "Pickup point if not the facility" },
-            wheelchairNeeded: { type: "BOOLEAN", description: "True if a wheelchair-accessible vehicle is needed" },
-            returnRequired: { type: "BOOLEAN", description: "True if a return trip back is needed (round trip)" },
-            escortRequired: { type: "BOOLEAN", description: "True if the resident wants a staff member to escort them" },
-            escortRole: { type: "STRING", description: "Who should escort: NURSE or CAREGIVER (only when escortRequired is true)" },
             notes: { type: "STRING", description: "Any additional details the resident mentions about the trip" },
           },
-          required: ["destination", "requestedDate"],
+          required: ["type", "requestedDate", "destination", "purpose", "returnRequired", "wheelchairNeeded", "escortRequired"],
         },
       },
       {
