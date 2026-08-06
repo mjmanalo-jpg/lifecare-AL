@@ -201,8 +201,9 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
     tables: ["VitalsLog"],
   });
 
-  // Fetch app settings (voice sync)
-  const { data: settingRows } = useLiveQuery<{ id: string; value: string }>("app-settings", {
+  // Fetch app settings (voice + personality). Rows are stored tenant-scoped with
+  // a composite id ("<org>:<comm>:<key>"), so look them up by `key`, not `id`.
+  const { data: settingRows } = useLiveQuery<{ id: string; key?: string; value: string }>("app-settings", {
     tables: ["AppSetting"],
   });
 
@@ -224,7 +225,7 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
   });
 
   useEffect(() => {
-    const saved = settingRows.find((r) => r.id === "assistantVoice")?.value;
+    const saved = settingRows.find((r) => r.key === "assistantVoice" || r.id === "assistantVoice")?.value;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (saved) setVoice(saved);
   }, [settingRows]);
@@ -232,7 +233,7 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
   // Personality configured by the Super Admin — live-synced via AppSetting,
   // so name/tone/greeting changes reach this dashboard without a refresh.
   const assistantCfg = useMemo(
-    () => parseAssistantConfig(settingRows.find((r) => r.id === ASSISTANT_CONFIG_KEY)?.value),
+    () => parseAssistantConfig(settingRows.find((r) => r.key === ASSISTANT_CONFIG_KEY || r.id === ASSISTANT_CONFIG_KEY)?.value),
     [settingRows]
   );
 

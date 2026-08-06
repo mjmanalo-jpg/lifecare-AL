@@ -124,7 +124,10 @@ export default function AIAssistantContent() {
   const [dragOver, setDragOver] = useState(false);
 
   // ── Voice preference — live from Supabase/Prisma (shared across sessions) ──
-  const { data: settingRows } = useLiveQuery<{ id: string; value: string }>("app-settings", {
+  // Settings are written tenant-scoped with a COMPOSITE id ("<org>:<comm>:<key>")
+  // by POST /api/settings, so rows must be looked up by `key`, not `id` — matching
+  // by id silently missed the row and reverted the personality to defaults.
+  const { data: settingRows } = useLiveQuery<{ id: string; key?: string; value: string }>("app-settings", {
     tables: ["AppSetting"],
   });
 
@@ -142,13 +145,13 @@ export default function AIAssistantContent() {
 
   // Sync the selected voice from the shared DB setting when it changes.
   useEffect(() => {
-    const saved = settingRows.find((r) => r.id === "assistantVoice")?.value;
+    const saved = settingRows.find((r) => r.key === "assistantVoice" || r.id === "assistantVoice")?.value;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing external DB state
     if (saved) setVoice(saved);
   }, [settingRows]);
   // Sync the personality config too — unless the admin has unsaved edits.
   useEffect(() => {
-    const raw = settingRows.find((r) => r.id === ASSISTANT_CONFIG_KEY)?.value;
+    const raw = settingRows.find((r) => r.key === ASSISTANT_CONFIG_KEY || r.id === ASSISTANT_CONFIG_KEY)?.value;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing external DB state
     if (raw && !configDirty) setConfig(parseAssistantConfig(raw));
   }, [settingRows, configDirty]);

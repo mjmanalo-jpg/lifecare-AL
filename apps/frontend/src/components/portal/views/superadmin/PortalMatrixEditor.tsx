@@ -74,6 +74,7 @@ type MatrixState = Record<string, Record<string, boolean>>;
 export default function PortalMatrixEditor() {
   const { data: settingRows, refetch } = useLiveQuery<{
     id: string;
+    key?: string;
     value: string;
   }>("app-settings", { tables: ["AppSetting"] });
 
@@ -82,7 +83,7 @@ export default function PortalMatrixEditor() {
 
   // Hydrate matrix from the database setting, defaulting native features to true, others to false.
   const [matrix, setMatrix] = useState<MatrixState>(() => {
-    const stored = settingRows.find((s) => s.id === "portal_matrix")?.value;
+    const stored = settingRows.find((s) => (s.key || s.id) === "portal_matrix")?.value;
     const parsed: MatrixState = stored ? JSON.parse(stored) : {};
     const state: MatrixState = {};
     ALL_ROLES.forEach((r) => {
@@ -100,7 +101,7 @@ export default function PortalMatrixEditor() {
 
   // Keep local matrix state updated if the database changes externally, as long as we're not currently saving.
   useEffect(() => {
-    const stored = settingRows.find((s) => s.id === "portal_matrix")?.value;
+    const stored = settingRows.find((s) => (s.key || s.id) === "portal_matrix")?.value;
     if (stored && savingStatus !== "saving") {
       try {
         const parsed: MatrixState = JSON.parse(stored);
