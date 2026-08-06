@@ -1,4 +1,4 @@
-import { prisma } from "./prisma";
+import { prisma, withDbRetry } from "./prisma";
 import { getSession, type SessionData } from "./auth";
 
 export interface TenantContext {
@@ -89,7 +89,9 @@ export async function listWorkspaces(userId: string) {
 }
 
 async function loadWorkspaces(userId: string) {
-  const user = await prisma.user.findUnique({
+  // Retry transient pooler timeouts — this runs during sign-in, so a cold
+  // pooler here would otherwise fail the login with a 500.
+  const user = await withDbRetry(() => prisma.user.findUnique({
     where: { id: userId },
     select: {
       id: true,
@@ -112,7 +114,7 @@ async function loadWorkspaces(userId: string) {
         include: { community: { include: { organization: true } } },
       },
     },
-  });
+  }));
   if (!user) return null;
 
   const communityRoles = new Map(user.communityMemberships.map((membership) => [membership.communityId, membership.role]));
@@ -159,7 +161,10 @@ export async function requireTenantContext(options: { allowPlatform?: boolean; r
   const cachedContext = contextCache.get(cacheKey);
   if (cachedContext) return cachedContext;
 
-  const user = await prisma.user.findUnique({
+  // Retry transient pooler timeouts: this runs in the [role] SSR layout, so an
+  // uncaught throw here becomes a full "This page hit a snag" crash on every
+  // portal page. A quick retry rides out a cold/saturated Supabase pooler.
+  const user = await withDbRetry(() => prisma.user.findUnique({
     where: { id: session.userId },
     select: {
       isActive: true,
@@ -171,7 +176,7 @@ export async function requireTenantContext(options: { allowPlatform?: boolean; r
         ? { where: { communityId: session.activeCommunityId, status: "ACTIVE" }, include: { community: true } }
         : { where: { id: "__none__" }, include: { community: true } },
     },
-  });
+  }));
   if (!user?.isActive) return null;
 
   const isPlatform = Boolean(user.platformRole);
