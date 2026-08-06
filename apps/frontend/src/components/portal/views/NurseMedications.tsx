@@ -104,6 +104,11 @@ export default function NurseMedications() {
   const { data: marRows, refetch: refetchMar } = useLiveQuery<Record<string, unknown>>(
     "medical-notes", { query: `f_noteType=${MAR_NOTE_TYPE}&take=500`, tables: ["MedicalNote"] }
   );
+  // Structured allergy records feed the prescribing safety check alongside the
+  // resident's free-text allergies summary.
+  const { data: allergyRows } = useLiveQuery<Record<string, unknown>>(
+    "allergies", { query: "take=500", tables: ["Allergy"] }
+  );
 
   const [nowTs, setNowTs] = useState(0);
   useEffect(() => {
@@ -126,6 +131,20 @@ export default function NurseMedications() {
 
   const residents = useMemo(() => residentRows.map(adaptResident), [residentRows]);
   const residentById = useMemo(() => new Map(residents.map((r) => [r.id, r])), [residents]);
+  // Merge structured allergens per resident so the add-medication check screens
+  // against both the free-text summary and the discrete Allergy records.
+  const allergensByResident = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const a of allergyRows) {
+      const rid = String(a.residentId ?? "");
+      const allergen = String(a.allergen ?? "").trim();
+      if (!rid || !allergen) continue;
+      const arr = m.get(rid) ?? [];
+      arr.push(allergen);
+      m.set(rid, arr);
+    }
+    return m;
+  }, [allergyRows]);
 
   const meds = useMemo<MedVM[]>(() => medRows.map((row) => {
     const rel = row.resident as { firstName?: string; lastName?: string; roomNumber?: string } | undefined;
@@ -577,7 +596,7 @@ export default function NurseMedications() {
       {/* ── Add medication modal ── */}
       {adding && (
         <AddMedicationModal
-          residents={residents.map((r) => ({ id: r.id, name: r.name, room: r.room, allergies: r.allergies }))}
+          residents={residents.map((r) => ({ id: r.id, name: r.name, room: r.room, allergies: [r.allergies, ...(allergensByResident.get(r.id) ?? [])].filter(Boolean).join(", ") }))}
           onClose={() => setAdding(false)}
           onSaved={() => { void refetch(); setAdding(false); }}
         />

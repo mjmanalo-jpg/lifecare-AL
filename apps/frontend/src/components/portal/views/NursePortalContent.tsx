@@ -25,6 +25,7 @@ import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoar
 import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import CarePlanBoard from "@/components/portal/views/clinical/CarePlanBoard";
+import LabsAllergiesBoard from "@/components/portal/views/clinical/LabsAllergiesBoard";
 import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
 import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
 import MARBoard from "@/components/portal/views/clinical/MARBoard";
@@ -748,6 +749,9 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   if (tab === "referrals") return <ReferralsBoard />;
   if (tab === "cameralogs") {
     return <CameraActivityLog />;
+  }
+  if (tab === "labs") {
+    return <LabsAllergiesBoard />;
   }
   if (tab === "careplans") {
     return <CarePlanBoard />;
