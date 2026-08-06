@@ -2,5 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "npm install --legacy-peer-deps --include=optional && npm rebuild lightningcss",
   "regions": ["sin1"],
-  "crons": [{ "path": "/api/cron/alerts", "schedule": "0 * * * *" }]
+  "crons": [{ "path": "/api/cron/alerts", "schedule": "*/15 * * * *" }]
 }

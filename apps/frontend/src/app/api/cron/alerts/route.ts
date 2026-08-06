@@ -27,7 +27,12 @@ export const dynamic = "force-dynamic";
 // signed-in NURSE / FACILITY_ADMIN / SUPERADMIN scans only their community.
 // ─────────────────────────────────────────────────────────────
 
-const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "incident"];
+const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "incident", "slaBreach", "escalation"];
+
+// SBAR SLA response windows (minutes) by priority — single source of truth is
+// escalationMeta.PRIORITY_META in the UI; mirrored here so the server can
+// enforce the same deadlines without importing client-side constants.
+const SBAR_SLA_MIN: Record<string, number> = { EMERGENCY: 5, URGENT: 30, ROUTINE: 240 };
 
 const VITAL_LABEL: Record<string, string> = {
   HEART_RATE: "heart rate",
@@ -58,10 +63,11 @@ interface Scan {
   missedDocs: number;
   weightLoss: number;
   incidents: number;
+  sbarEscalations: number;
 }
 
 async function scanCommunity(communityId: string, organizationId: string | null): Promise<Scan> {
-  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, incidents: 0 };
+  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, incidents: 0, sbarEscalations: 0 };
 
   const recipientIds = [
     ...new Set(
@@ -294,6 +300,41 @@ async function scanCommunity(communityId: string, organizationId: string | null)
     }
   });
 
+  // 9) SBAR SLA auto-escalation — an SBAR clinical escalation still OPEN
+  //    (unacknowledged) past its priority response window is auto-escalated to
+  //    the on-call/admin tier: status → ESCALATED and assignedToRole →
+  //    FACILITY_ADMIN, mirroring the nurse/physician "On-call" action, then the
+  //    team is notified. The status flip is itself the idempotency guard — once
+  //    ESCALATED the SBAR is no longer OPEN, so it is never re-processed. Scoped
+  //    via the resident's community; a 24h floor ignores stale rows.
+  await runSource("sbar-escalation", async () => {
+    const open = await prisma.escalation.findMany({
+      where: {
+        resident: { communityId },
+        status: "OPEN",
+        createdAt: { gte: new Date(nowTs - 24 * 3_600_000) },
+      },
+      select: {
+        id: true, priority: true, createdAt: true,
+        resident: { select: { firstName: true, lastName: true, roomNumber: true } },
+      },
+    });
+    for (const e of open) {
+      const slaMin = SBAR_SLA_MIN[String(e.priority)] ?? 30;
+      if (nowTs - new Date(e.createdAt).getTime() < slaMin * 60_000) continue; // still within SLA
+      await prisma.escalation.update({
+        where: { id: e.id },
+        data: { status: "ESCALATED", assignedToRole: "FACILITY_ADMIN" },
+      });
+      if (await notify(
+        "SYSTEM_ALERT", "escalation", `sbar-sla:${e.id}`,
+        "SBAR escalation breached — auto-escalated to on-call",
+        `${rname(e.resident)} (Room ${room(e.resident)}): a ${String(e.priority).toLowerCase()} SBAR was not acknowledged within the ${slaMin}-minute SLA and has been escalated to on-call. Please respond now.`,
+        "CRITICAL",
+      )) counts.sbarEscalations++;
+    }
+  });
+
   return counts;
 }
 
@@ -313,7 +354,7 @@ async function runScan(request: NextRequest) {
     communities = [{ id: ctx.communityId, organizationId: ctx.organizationId ?? null }];
   }
 
-  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, incidents: 0 };
+  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, incidents: 0, sbarEscalations: 0 };
   for (const c of communities) {
     try {
       const s = await scanCommunity(c.id, c.organizationId);
