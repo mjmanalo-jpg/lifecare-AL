@@ -1,25 +1,29 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { ShieldCheck, ToggleLeft, ToggleRight, CheckSquare, Square } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { ROLES, type Role, GLOBAL_FEATURES } from "@/constants/roleConfig";
+import { ROLES, type Role } from "@/constants/roleConfig";
 
 /* ─── Portal Matrix Editor ─────────────────────────────────────────────── */
 
-/** All roles we want to configure. */
-const ALL_ROLES: Role[] = [
-  "SUPERADMIN",
-  "FACILITY_ADMIN",
-  "PHYSICIAN",
-  "NURSE",
-  "CAREGIVER",
-  "FAMILY",
-  "RESIDENT",
-  "FLEET_MANAGEMENT",
-  "DRIVER",
-  "SECURITY",
-];
+/** Every configurable role — derived from the role registry so a newly added
+ *  role automatically appears here instead of going stale. */
+const ALL_ROLES: Role[] = Object.keys(ROLES) as Role[];
+
+/** Every sidebar module across all roles (unique, in first-appearance order).
+ *  Derived from each role's sidebarLinks so any link we add or rename anywhere
+ *  (e.g. "Inventory") shows up as a controllable column automatically. */
+const ALL_FEATURES: string[] = (() => {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const r of ALL_ROLES) {
+    for (const link of ROLES[r].sidebarLinks) {
+      if (!seen.has(link.name)) { seen.add(link.name); out.push(link.name); }
+    }
+  }
+  return out;
+})();
 
 /** Friendly labels for the role keys. */
 const ROLE_LABELS: Record<Role, string> = {
@@ -73,10 +77,8 @@ export default function PortalMatrixEditor() {
     value: string;
   }>("app-settings", { tables: ["AppSetting"] });
 
-  // Build the unique superset of all feature names across all roles.
-  const allFeatures = useMemo(() => {
-    return Object.keys(GLOBAL_FEATURES);
-  }, []);
+  // The controllable modules (columns) — every sidebar link across all roles.
+  const allFeatures = ALL_FEATURES;
 
   // Hydrate matrix from the database setting, defaulting native features to true, others to false.
   const [matrix, setMatrix] = useState<MatrixState>(() => {
@@ -86,7 +88,7 @@ export default function PortalMatrixEditor() {
     ALL_ROLES.forEach((r) => {
       state[r] = {};
       const roleFeatures = ROLES[r].sidebarLinks.map((l) => l.name);
-      Object.keys(GLOBAL_FEATURES).forEach((f) => {
+      ALL_FEATURES.forEach((f) => {
         state[r][f] = parsed[r]?.[f] ?? roleFeatures.includes(f);
       });
     });
@@ -106,7 +108,7 @@ export default function PortalMatrixEditor() {
         ALL_ROLES.forEach((r) => {
           state[r] = {};
           const roleFeatures = ROLES[r].sidebarLinks.map((l) => l.name);
-          Object.keys(GLOBAL_FEATURES).forEach((f) => {
+          ALL_FEATURES.forEach((f) => {
             state[r][f] = parsed[r]?.[f] ?? roleFeatures.includes(f);
           });
         });
@@ -151,9 +153,9 @@ export default function PortalMatrixEditor() {
   const toggleEntireRole = useCallback(
     (role: string) => {
       setMatrix((prev) => {
-        const allOn = Object.keys(GLOBAL_FEATURES).every((f) => prev[role]?.[f] === true);
+        const allOn = ALL_FEATURES.every((f) => prev[role]?.[f] === true);
         const updated = { ...prev[role] };
-        Object.keys(GLOBAL_FEATURES).forEach((f) => {
+        ALL_FEATURES.forEach((f) => {
           updated[f] = !allOn;
         });
         const next = { ...prev, [role]: updated };
