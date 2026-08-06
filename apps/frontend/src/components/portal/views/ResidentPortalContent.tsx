@@ -55,6 +55,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { ASSISTANT_CONFIG_KEY, parseAssistantConfig, TONE_PREVIEW } from "@/lib/assistantConfig";
+import { BROWSER_VOICE_MAP, pickBrowserVoice } from "@/lib/browserVoice";
 
 // speechSynthesis.getVoices() is empty until the async voiceschanged event on
 // first load — a sync call then picks no voice and the OS default (often a
@@ -820,13 +821,12 @@ Vitals:
       await new Promise<void>((resolve) => {
         const u = new SpeechSynthesisUtterance(text);
         u.lang = "en-US";
-        u.rate = 1.0 * toneStyle.rate;
-        u.pitch = 1.05 * toneStyle.pitch;
-        const preferred =
-          voices.find((v) => /aria|jenny|natural/i.test(v.name) && v.lang.startsWith("en")) ??
-          voices.find((v) => /zira|samantha|female/i.test(v.name) && v.lang.startsWith("en")) ??
-          voices.find((v) => v.lang === "en-US") ??
-          null;
+        // Honour the admin-selected voice: same gender + rate/pitch as the
+        // preview, so choosing "Leda" never speaks in a male OS voice.
+        const cfg = BROWSER_VOICE_MAP[voice] ?? BROWSER_VOICE_MAP.Kore;
+        u.rate = cfg.rate * toneStyle.rate;
+        u.pitch = cfg.pitch * toneStyle.pitch;
+        const preferred = pickBrowserVoice(voices, voice);
         if (preferred) u.voice = preferred;
         u.onend = () => resolve();
         u.onerror = () => resolve();

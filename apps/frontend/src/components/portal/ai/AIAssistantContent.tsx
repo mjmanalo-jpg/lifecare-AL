@@ -34,6 +34,7 @@ import {
   totalBytes,
   formatBytes,
 } from "@/lib/knowledgeBase";
+import { BROWSER_VOICE_MAP, pickBrowserVoice } from "@/lib/browserVoice";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, deleteRecord } from "@/lib/api";
 
@@ -53,20 +54,6 @@ interface GeminiVoice {
   accent: string; // tailwind ring/text accent when selected
 }
 // Maps each Gemini voice to a distinct browser-voice config for the fallback
-// path. Uses different name patterns + rate/pitch combos so voices sound
-// perceptibly different even when Gemini TTS is unavailable.
-// Patterns must name specific voices — a generic vendor word like "microsoft"
-// previously matched "Microsoft David" and turned every female pick male.
-const BROWSER_VOICE_MAP: Record<string, { namePattern?: RegExp; rate: number; pitch: number }> = {
-  Zephyr:  { namePattern: /aria|samantha|zoe|female/i,   rate: 1.1, pitch: 1.15 },
-  Puck:    { namePattern: /jenny|siri|female/i,          rate: 1.2, pitch: 1.3 },
-  Charon:  { namePattern: /guy|david|daniel|male/i,      rate: 0.9, pitch: 0.85 },
-  Kore:    { namePattern: /aria|jenny|zira|female/i,     rate: 0.95, pitch: 1.05 },
-  Fenrir:  { namePattern: /guy|alex|fred|male/i,         rate: 1.05, pitch: 0.7 },
-  Orus:    { namePattern: /ryan|george|tom|male/i,       rate: 0.85, pitch: 0.9 },
-  Leda:    { namePattern: /jenny|samantha|female/i,      rate: 1.0,  pitch: 1.4 },
-  Aoede:   { namePattern: /libby|michelle|veena|female/i, rate: 1.15, pitch: 1.2 },
-};
 
 // speechSynthesis.getVoices() is empty until the async voiceschanged event on
 // first load — the old sync call then picked no voice and the OS default
@@ -273,14 +260,8 @@ export default function AIAssistantContent() {
           u.rate = cfg.rate * (speechMod?.rate ?? 1);
           u.pitch = cfg.pitch * (speechMod?.pitch ?? 1);
           u.lang = "en-US";
-          // Match the Gemini voice's name pattern first, then prefer the OS's
-          // neural "Natural" voices (far less robotic), then any English voice.
-          const preferred =
-            (cfg.namePattern ? voices.find((v) => cfg.namePattern!.test(v.name) && v.lang.startsWith("en")) : null) ??
-            voices.find((v) => /natural/i.test(v.name) && v.lang.startsWith("en")) ??
-            voices.find((v) => v.lang === "en-US") ??
-            voices.find((v) => v.lang.startsWith("en")) ??
-            null;
+          // Gender-aware pick so a female voice never falls back to a male one.
+          const preferred = pickBrowserVoice(voices, voiceId ?? voice);
           if (preferred) u.voice = preferred;
           u.onend = () => resolve();
           u.onerror = () => resolve();
