@@ -40,6 +40,7 @@ function adaptRequest(row: Record<string, unknown>) {
     dropoffLocation: str(row.dropoffLocation) || str(row.destination, "—"),
     purpose: str(row.purpose),
     requestedDate: str(row.requestedDate),
+    createdAt: str(row.createdAt),
     returnRequired: bool(row.returnRequired),
     wheelchairNeeded: bool(row.wheelchairNeeded),
     escortRequired: bool(row.escortRequired),
@@ -102,7 +103,6 @@ const TYPE_META: Record<string, { label: string; icon: LucideIcon; color: string
 };
 const TYPES = Object.keys(TYPE_META);
 
-const PRIORITY_RANK: Record<string, number> = { EMERGENCY: 0, HIGH: 1, NORMAL: 2, LOW: 3 };
 const PRIORITY_PILL: Record<string, string> = {
   EMERGENCY: "bg-red-100 text-red-700 border-red-300 animate-pulse",
   HIGH: "bg-orange-50 text-orange-700 border-orange-200",
@@ -195,14 +195,12 @@ export default function FleetRequests() {
         if (q && !r.residentName.toLowerCase().includes(q) && !r.destination.toLowerCase().includes(q)) return false;
         return true;
       })
+      // Most recently submitted request first (falls back to the requested
+      // pickup date when a row has no createdAt).
       .sort((a, b) => {
-        const pa = a.status === "PENDING" ? 0 : 1;
-        const pb = b.status === "PENDING" ? 0 : 1;
-        if (pa !== pb) return pa - pb;
-        const ra = PRIORITY_RANK[a.priority] ?? 2;
-        const rb = PRIORITY_RANK[b.priority] ?? 2;
-        if (ra !== rb) return ra - rb;
-        return new Date(a.requestedDate).getTime() - new Date(b.requestedDate).getTime();
+        const ta = new Date(a.createdAt || a.requestedDate).getTime();
+        const tb = new Date(b.createdAt || b.requestedDate).getTime();
+        return tb - ta;
       });
   }, [requests, search, statusFilter, typeFilter]);
 
