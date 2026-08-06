@@ -2,10 +2,10 @@
 
 import RefreshButton from "@/components/portal/RefreshButton";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
-  Shield, RefreshCw, Plus, X, Trash2, Search, CheckCircle2, Loader2,
-  MapPin, ClipboardList, AlertTriangle, DoorOpen,
+  Shield, Plus, X, Trash2, Search, CheckCircle2, Loader2,
+  MapPin, ClipboardList, AlertTriangle, DoorOpen, Camera, Upload, FileWarning,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -79,17 +79,69 @@ const emptyForm = {
   description: "",
   location: "",
   severity: "MINOR",
-  residentName: "",
+  residentId: "",
   guardName: "",
+  photoUrl: "",
   occurredAt: nowLocalInput(),
 };
+
+// Log types that are filed as an Incident Report visible to the care team.
+const INCIDENT_TYPES = new Set(["INCIDENT", "HAZARD"]);
 
 export default function SecurityLogBoard() {
   const { data: rows, loading, error, refetch } = useLiveQuery<Row>(
     "security-logs", { query: "take=300", tables: ["SecurityLog"] }
   );
+  // Residents — so an incident/hazard log can be linked to the resident involved
+  // and cross-posted to the care team's Incident Report feed.
+  const { data: residentRows } = useLiveQuery<Row>(
+    "residents", { query: "take=300", tables: ["Resident"] }
+  );
+  const residentOpts = useMemo(
+    () => residentRows
+      .map((r) => ({ id: String(r.id), name: `${String(r.firstName ?? "")} ${String(r.lastName ?? "")}`.trim() || "Resident", room: String(r.roomNumber ?? "") }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [residentRows]
+  );
 
   const logs = useMemo<SecurityLog[]>(() => rows.map(adaptLog), [rows]);
+
+  // The signed-in guard — auto-fills their name on new logs and links the
+  // cross-posted incident's reporter (Staff) when available.
+  const [me, setMe] = useState<{ name: string; staffId: string | null }>({ name: "", staffId: null });
+  useEffect(() => {
+    let active = true;
+    fetch("/api/auth/session", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((b) => { if (active) setMe({ name: String(b?.session?.name ?? ""), staffId: b?.session?.staffId ? String(b.session.staffId) : null }); })
+      .catch(() => { /* non-fatal */ });
+    return () => { active = false; };
+  }, []);
+
+  // Downscale + read the scene photo to a data URI (no external storage needed);
+  // stored on the cross-posted Incident, which carries the photoUrl column.
+  const onPhoto = (file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onload = () => {
+        const maxW = 1200;
+        const scale = Math.min(1, maxW / img.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { setForm((f) => ({ ...f, photoUrl: String(reader.result) })); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        setForm((f) => ({ ...f, photoUrl: canvas.toDataURL("image/jpeg", 0.7) }));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const openCreate = () => { setForm({ ...emptyForm, guardName: me.name, occurredAt: nowLocalInput() }); setShowCreate(true); };
 
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -134,6 +186,10 @@ export default function SecurityLogBoard() {
       Swal.fire({ title: "Missing Fields", text: "A log title is required.", icon: "warning" });
       return;
     }
+    const isIncident = INCIDENT_TYPES.has(form.logType);
+    const resident = residentOpts.find((r) => r.id === form.residentId);
+    const guard = form.guardName.trim() || me.name || "Security";
+    const occurredIso = form.occurredAt ? new Date(form.occurredAt).toISOString() : new Date().toISOString();
     try {
       await createRecord("security-logs", {
         logType: form.logType,
@@ -141,15 +197,47 @@ export default function SecurityLogBoard() {
         description: form.description || null,
         location: form.location || null,
         severity: form.severity,
-        residentName: form.residentName || null,
-        guardName: form.guardName || null,
+        residentId: form.residentId || null,
+        residentName: resident?.name || null,
+        guardName: guard,
+        guardStaffId: me.staffId || null,
         status: "OPEN",
-        occurredAt: form.occurredAt ? new Date(form.occurredAt).toISOString() : new Date().toISOString(),
+        occurredAt: occurredIso,
       });
+
+      // Cross-post incident/hazard logs to the shared Incident feed so the Care
+      // Manager, Nurse & Caregiver see them in their Incident Reports. The
+      // Incident model requires a resident, so it only cross-posts when one is
+      // selected; the guard's name + submitted time are recorded in the body
+      // (there is no reporter-name column) and the photo rides on the Incident.
+      let crossPosted = false;
+      if (isIncident && form.residentId) {
+        const stamp = `Filed by Security: ${guard} — logged ${new Date().toLocaleString()}.`;
+        const body = form.description.trim() ? `${stamp}\n\n${form.description.trim()}` : stamp;
+        await createRecord("incidents", {
+          residentId: form.residentId,
+          incidentType: form.logType === "HAZARD" ? "SAFETY_HAZARD" : "OTHER",
+          severity: form.severity,
+          title: form.title.trim(),
+          description: body,
+          location: form.location || null,
+          photoUrl: form.photoUrl || null,
+          reportedById: me.staffId || null,
+          incidentDate: occurredIso,
+        });
+        crossPosted = true;
+      }
+
       await refetch();
       setShowCreate(false);
       setForm({ ...emptyForm, occurredAt: nowLocalInput() });
-      Swal.fire({ title: "Log Recorded", text: `${TYPE_LABEL[form.logType]} entry saved.`, icon: "success", timer: 1600, showConfirmButton: false });
+      if (crossPosted) {
+        Swal.fire({ title: "Incident Reported", text: "Security log saved and filed as an incident report — visible to the Care Manager, Nurse & Caregiver.", icon: "success", timer: 2400, showConfirmButton: false });
+      } else if (isIncident && !form.residentId) {
+        Swal.fire({ title: "Log Recorded", text: "Saved as a security log. Tip: select the resident involved to also file it as an incident report (with the photo) for the care team.", icon: "info" });
+      } else {
+        Swal.fire({ title: "Log Recorded", text: `${TYPE_LABEL[form.logType]} entry saved.`, icon: "success", timer: 1600, showConfirmButton: false });
+      }
     } catch (err) {
       Swal.fire({ title: "Save Failed", text: err instanceof Error ? err.message : "Could not record log.", icon: "error" });
     }
@@ -198,7 +286,7 @@ export default function SecurityLogBoard() {
         </div>
         <div className="flex flex-wrap gap-2">
           <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
-          <button onClick={() => { setForm({ ...emptyForm, occurredAt: nowLocalInput() }); setShowCreate(true); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-slate-700 to-slate-900 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+          <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-slate-700 to-slate-900 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
             <Plus className="w-4 h-4" /> New Log
           </button>
         </div>
@@ -376,14 +464,48 @@ export default function SecurityLogBoard() {
                   <input type="datetime-local" value={form.occurredAt} onChange={set("occurredAt")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 outline-none" />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Resident <span className="text-gray-400 font-normal">(optional)</span></label>
-                  <input type="text" value={form.residentName} onChange={set("residentName")} placeholder="Resident involved" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 outline-none" />
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Resident {INCIDENT_TYPES.has(form.logType) ? <span className="text-slate-500 font-normal">(needed to file as incident)</span> : <span className="text-gray-400 font-normal">(optional)</span>}</label>
+                  <select value={form.residentId} onChange={set("residentId")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-slate-400 outline-none">
+                    <option value="">Not resident-related…</option>
+                    {residentOpts.map((r) => <option key={r.id} value={r.id}>{r.name}{r.room ? ` — Room ${r.room}` : ""}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Guard <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Guard <span className="text-gray-400 font-normal">(reporting)</span></label>
                   <input type="text" value={form.guardName} onChange={set("guardName")} placeholder="Reporting guard" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 outline-none" />
                 </div>
               </div>
+
+              {/* Incident report — photo + cross-post notice (incident/hazard logs only) */}
+              {INCIDENT_TYPES.has(form.logType) && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-3">
+                  <p className="flex items-start gap-2 text-xs text-slate-600">
+                    <FileWarning className="w-4 h-4 flex-shrink-0 mt-0.5 text-slate-500" />
+                    Filed as an <strong>Incident Report</strong> — visible to the Care Manager, Nurse &amp; Caregiver, stamped with your name and the submit time. Select the resident involved to include it.
+                  </p>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Photo <span className="text-gray-400 font-normal">(optional)</span></label>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* capture="environment" opens the rear camera on a phone. */}
+                      <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-700 text-white text-sm font-semibold hover:bg-slate-800 cursor-pointer">
+                        <Camera className="w-4 h-4" /> Take Photo
+                        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => onPhoto(e.target.files?.[0])} />
+                      </label>
+                      <label className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
+                        <Upload className="w-4 h-4" /> Upload
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => onPhoto(e.target.files?.[0])} />
+                      </label>
+                      {form.photoUrl && (
+                        <div className="flex items-center gap-2">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={form.photoUrl} alt="incident" className="h-12 w-12 object-cover rounded border border-gray-200" />
+                          <button type="button" onClick={() => setForm((f) => ({ ...f, photoUrl: "" }))} className="text-xs text-red-600 hover:underline">Remove</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setShowCreate(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
