@@ -3,7 +3,7 @@ import { useMemo, useState, useCallback } from "react";
 import {
   Stethoscope, Search, Plus, X, RefreshCw, ChevronRight, ChevronLeft, Clock,
   CheckCircle2, AlertTriangle, Smile, Moon, Footprints, Utensils,
-  Activity, Droplets, ClipboardList, Trash2, Loader2,
+  Activity, Droplets, ClipboardList, Trash2, Loader2, Bluetooth,
   type LucideIcon, Wind, Frown, Meh, SmilePlus, Annoyed,
 } from "lucide-react";
 import Swal from "@/lib/swal";
@@ -11,6 +11,11 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { useClinician, type ClinicianRole } from "./useClinician";
+import { validateVital, VITAL_META } from "@/lib/vitalThresholds";
+import { encodeVitalNotes, type VitalProvenance } from "@/lib/vitalsProvenance";
+import { connectVitalsDevice, isBluetoothSupported, DEVICE_KINDS, type DeviceVitalKind } from "@/lib/vitalsDevices";
+
+type VitalCapture = { source: "MANUAL" | "DEVICE"; deviceId?: string };
 
 const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent outline-none text-sm";
 const labelCls = "block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1";
@@ -326,7 +331,7 @@ export default function DailyRoundsBoard({ clinicianRole = "CAREGIVER" }: { clin
               </div>
             </div>
 
-            {showForm && <FormPanel tab={formTab} roundId={currentRoundId} clinicianName={clinicianName} onDone={() => { setShowForm(false); refetchTab(); }} />}
+            {showForm && <FormPanel tab={formTab} roundId={currentRoundId} residentId={String(currentRound?.residentId ?? "")} clinicianName={clinicianName} onDone={() => { setShowForm(false); refetchTab(); }} />}
 
             <TabContent tab={tab} rows={getTabRows()} onDelete={(id: string) => handleDeleteRecord(getModelSlug(tab), id)} />
           </div>
@@ -350,9 +355,75 @@ function getCreateModel(tab: TabKey): string {
   return getModelSlug(tab);
 }
 
-function FormPanel({ tab, roundId, clinicianName, onDone }: { tab: TabKey; roundId: string; clinicianName: string; onDone: () => void }) {
+function FormPanel({ tab, roundId, residentId, clinicianName, onDone }: { tab: TabKey; roundId: string; residentId: string; clinicianName: string; onDone: () => void }) {
   const [loading, setLoading] = useState(false);
   const now = timeNow();
+
+  // ── Vitals capture (Module 02) — controlled values + provenance so a BLE
+  // device can fill fields, and so each reading records how it was measured.
+  const [vForm, setVForm] = useState<Record<string, string>>({});
+  const [vProv, setVProv] = useState<Record<string, VitalCapture>>({});
+  const [connecting, setConnecting] = useState<DeviceVitalKind | null>(null);
+  const setV = (k: string, val: string) => {
+    setVForm((f) => ({ ...f, [k]: val }));
+    setVProv((p) => ({ ...p, [k]: { source: "MANUAL" } }));
+  };
+
+  // Pull a reading from a BLE device and fill the Daily Rounds fields (which use
+  // °F for temperature and lbs for weight, so convert from the device's canonical
+  // °C / kg).
+  const captureFromDevice = async (kind: DeviceVitalKind) => {
+    if (!isBluetoothSupported()) {
+      Swal.fire({ title: "Bluetooth unavailable", text: "Use Chrome/Edge on desktop or Chrome on Android over HTTPS, or enter the reading manually.", icon: "info" });
+      return;
+    }
+    setConnecting(kind);
+    try {
+      const reading = await connectVitalsDevice(kind);
+      const v = reading.values;
+      const filled: Record<string, string> = {};
+      if (v.OXYGEN) filled.spo2 = v.OXYGEN;
+      if (v.HEART_RATE) filled.heartRate = v.HEART_RATE;
+      if (v.RESPIRATORY_RATE) filled.respRate = v.RESPIRATORY_RATE;
+      if (v.BLOOD_GLUCOSE) filled.bloodSugarLevel = v.BLOOD_GLUCOSE;
+      if (v.BLOOD_PRESSURE) { const [s, d] = v.BLOOD_PRESSURE.split("/"); if (s) filled.systolic = s.trim(); if (d) filled.diastolic = d.trim(); }
+      if (v.TEMPERATURE) filled.temperature = String(Math.round((parseFloat(v.TEMPERATURE) * 9 / 5 + 32) * 10) / 10);
+      if (v.WEIGHT) filled.weight = String(Math.round((parseFloat(v.WEIGHT) / 0.453592) * 10) / 10);
+      const keys = Object.keys(filled);
+      if (!keys.length) { Swal.fire({ title: "No reading parsed", text: "The device connected but sent no recognisable measurement.", icon: "info" }); return; }
+      setVForm((f) => ({ ...f, ...filled }));
+      setVProv((p) => { const n = { ...p }; for (const k of keys) n[k] = { source: "DEVICE", deviceId: reading.deviceName }; return n; });
+      Swal.fire({ toast: true, position: "top-end", icon: "success", showConfirmButton: false, timer: 2600, title: `Captured from ${reading.deviceName}` });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not read the device.";
+      if (!/cancel/i.test(msg)) Swal.fire({ title: "Device capture failed", text: msg, icon: "info" });
+    } finally {
+      setConnecting(null);
+    }
+  };
+
+  // Mirror the saved vitals into VitalsLog (canonical units) so the monitoring
+  // view + resident "Latest Vital Signs" cards + the alert engine pick them up.
+  const mirrorVitalsToLog = async (rid: string, d: Record<string, any>) => {
+    const provOf = (k: string): VitalProvenance => {
+      const c = vProv[k];
+      return { source: c?.source === "DEVICE" ? "DEVICE" : "MANUAL", ...(c?.deviceId ? { deviceId: c.deviceId, confidence: 1 } : {}) };
+    };
+    const posts: { type: string; value: string; unit: string; key: string }[] = [];
+    if (d.systolic != null && d.diastolic != null) posts.push({ type: "BLOOD_PRESSURE", value: `${d.systolic}/${d.diastolic}`, unit: "mmHg", key: "systolic" });
+    if (d.heartRate != null) posts.push({ type: "HEART_RATE", value: String(d.heartRate), unit: "bpm", key: "heartRate" });
+    if (d.temperature != null) posts.push({ type: "TEMPERATURE", value: String(Math.round(((d.temperature - 32) * 5 / 9) * 10) / 10), unit: "°C", key: "temperature" });
+    if (d.respRate != null) posts.push({ type: "RESPIRATORY_RATE", value: String(d.respRate), unit: "/min", key: "respRate" });
+    if (d.spo2 != null) posts.push({ type: "OXYGEN", value: String(d.spo2), unit: "%", key: "spo2" });
+    if (d.bloodSugarLevel != null) posts.push({ type: "BLOOD_GLUCOSE", value: String(d.bloodSugarLevel), unit: "mg/dL", key: "bloodSugarLevel" });
+    if (d.weight != null) posts.push({ type: "WEIGHT", value: String(Math.round((d.weight * 0.453592) * 10) / 10), unit: "kg", key: "weight" });
+    await Promise.allSettled(
+      posts.map((p) => fetch("/api/vitals", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ residentId: rid, type: p.type, value: p.value, unit: p.unit, notes: encodeVitalNotes(provOf(p.key)) }),
+      })),
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -443,19 +514,54 @@ function FormPanel({ tab, roundId, clinicianName, onDone }: { tab: TabKey; round
         data.chokingRisk = fd.get("chokingRisk") === "on";
         data.notes = fd.get("notes") || null;
       } else if (tab === "vitals") {
-        data.systolic = Number(fd.get("systolic")) || null;
-        data.diastolic = Number(fd.get("diastolic")) || null;
-        data.heartRate = Number(fd.get("heartRate")) || null;
-        data.temperature = Number(fd.get("temperature")) || null;
-        data.respRate = Number(fd.get("respRate")) || null;
-        data.spo2 = Number(fd.get("spo2")) || null;
-        data.bloodSugarLevel = Number(fd.get("bloodSugarLevel")) || null;
-        data.weight = Number(fd.get("weight")) || null;
-        data.painScore = Number(fd.get("painScore")) || null;
-        data.notes = fd.get("notes") || null;
+        const systolic = Number(fd.get("systolic")) || null;
+        const diastolic = Number(fd.get("diastolic")) || null;
+        const heartRate = Number(fd.get("heartRate")) || null;
+        const temperatureF = Number(fd.get("temperature")) || null;
+        const respRate = Number(fd.get("respRate")) || null;
+        const spo2 = Number(fd.get("spo2")) || null;
+        const bloodSugarLevel = Number(fd.get("bloodSugarLevel")) || null;
+        const weightLbs = Number(fd.get("weight")) || null;
+        const painScore = Number(fd.get("painScore")) || null;
+
+        // #3 — validate before saving (canonical units: °C, kg).
+        const checks: { type: string; value: string }[] = [];
+        if (systolic != null && diastolic != null) checks.push({ type: "BLOOD_PRESSURE", value: `${systolic}/${diastolic}` });
+        if (heartRate != null) checks.push({ type: "HEART_RATE", value: String(heartRate) });
+        if (temperatureF != null) checks.push({ type: "TEMPERATURE", value: String(Math.round(((temperatureF - 32) * 5 / 9) * 10) / 10) });
+        if (respRate != null) checks.push({ type: "RESPIRATORY_RATE", value: String(respRate) });
+        if (spo2 != null) checks.push({ type: "OXYGEN", value: String(spo2) });
+        if (bloodSugarLevel != null) checks.push({ type: "BLOOD_GLUCOSE", value: String(bloodSugarLevel) });
+        if (weightLbs != null) checks.push({ type: "WEIGHT", value: String(Math.round((weightLbs * 0.453592) * 10) / 10) });
+
+        const problems: string[] = [];
+        const abnormal: string[] = [];
+        for (const c of checks) {
+          const rv = validateVital(c.type, c.value);
+          if (!rv.ok) problems.push(`${VITAL_META[c.type]?.label ?? c.type}: ${rv.error}`);
+          else if (rv.abnormal) abnormal.push(`${VITAL_META[c.type]?.label ?? c.type} — ${c.value} ${VITAL_META[c.type]?.unit ?? ""} (${rv.severity})`);
+        }
+        if (problems.length) { Swal.fire({ title: "Check these readings", html: problems.map((p) => `• ${p}`).join("<br>"), icon: "warning" }); setLoading(false); return; }
+        if (abnormal.length) {
+          const conf = await Swal.fire({ title: "Confirm abnormal readings", html: `These are outside the normal range:<br><br>${abnormal.map((a) => `• ${a}`).join("<br>")}<br><br>Confirm they're correct, or re-measure.`, icon: "warning", showCancelButton: true, confirmButtonText: "Confirm & save", cancelButtonText: "Re-measure", confirmButtonColor: "#dc2626" });
+          if (!conf.isConfirmed) { setLoading(false); return; }
+        }
+
+        data.systolic = systolic; data.diastolic = diastolic; data.heartRate = heartRate;
+        data.temperature = temperatureF; data.respRate = respRate; data.spo2 = spo2;
+        data.bloodSugarLevel = bloodSugarLevel; data.weight = weightLbs; data.painScore = painScore;
+
+        // #2 — provenance token in notes (batch source + human note).
+        const anyDevice = Object.values(vProv).some((p) => p.source === "DEVICE");
+        const deviceName = Object.values(vProv).find((p) => p.source === "DEVICE")?.deviceId;
+        const prov: VitalProvenance = { source: anyDevice ? "DEVICE" : "MANUAL", ...(deviceName ? { deviceId: deviceName, confidence: 1 } : {}) };
+        data.notes = encodeVitalNotes(prov, String(fd.get("notes") || ""));
       }
 
       await createRecord(getCreateModel(tab), data);
+      // Mirror vitals into VitalsLog so the monitoring view + resident "Latest
+      // Vital Signs" cards + alert engine reflect the reading immediately.
+      if (tab === "vitals" && residentId) { try { await mirrorVitalsToLog(residentId, data); } catch { /* best-effort */ } }
       onDone();
     } catch (err) {
       Swal.fire("Error", String(err), "error");
@@ -471,7 +577,7 @@ function FormPanel({ tab, roundId, clinicianName, onDone }: { tab: TabKey; round
         <button type="button" onClick={onDone} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <FormFields tab={tab} />
+        <FormFields tab={tab} vForm={vForm} setV={setV} vProv={vProv} connecting={connecting} onCapture={captureFromDevice} />
       </div>
       <div className="mt-3 flex justify-end gap-2 flex-wrap">
         <button type="button" onClick={onDone} className={btnSecondary}>Cancel</button>
@@ -484,9 +590,43 @@ function FormPanel({ tab, roundId, clinicianName, onDone }: { tab: TabKey; round
   );
 }
 
-function FormFields({ tab }: { tab: TabKey }) {
+function FormFields({ tab, vForm, setV, vProv, connecting, onCapture }: {
+  tab: TabKey;
+  vForm: Record<string, string>;
+  setV: (k: string, v: string) => void;
+  vProv: Record<string, VitalCapture>;
+  connecting: DeviceVitalKind | null;
+  onCapture: (k: DeviceVitalKind) => void;
+}) {
   const fieldCls = inputCls;
   const lblCls = labelCls;
+
+  // Vitals helpers — controlled numeric field + "captured from device" badge.
+  const devBadge = (k: string) => vProv?.[k]?.source === "DEVICE" ? (
+    <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700"><Bluetooth className="w-2.5 h-2.5" /> {vProv[k].deviceId}</span>
+  ) : null;
+  const numField = (name: string, label: string, extra?: { step?: string; placeholder?: string }) => (
+    <div>
+      <label className={lblCls}>{label}</label>
+      <input name={name} type="number" step={extra?.step} placeholder={extra?.placeholder} value={vForm[name] ?? ""} onChange={(e) => setV(name, e.target.value)} className={fieldCls} />
+      {devBadge(name)}
+    </div>
+  );
+  const deviceRow = (
+    <div className="sm:col-span-2 lg:col-span-3 rounded-lg border border-blue-200 bg-blue-50/60 p-2.5">
+      <p className="text-[11px] font-semibold text-blue-900 mb-1.5 flex items-center gap-1.5"><Bluetooth className="w-3.5 h-3.5" /> Capture from device</p>
+      <div className="flex flex-wrap gap-1.5">
+        {(Object.keys(DEVICE_KINDS) as DeviceVitalKind[]).map((kind) => (
+          <button key={kind} type="button" onClick={() => onCapture(kind)} disabled={connecting !== null}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-blue-300 bg-white text-blue-700 text-xs font-medium hover:bg-blue-100 disabled:opacity-50 transition">
+            {connecting === kind ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bluetooth className="w-3 h-3" />}
+            {DEVICE_KINDS[kind].label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1.5 text-[10px] text-blue-800/70">Reads the instrument directly — no transcription error. Falls back to manual entry.</p>
+    </div>
+  );
 
   if (tab === "bowel") return (
     <>
@@ -881,38 +1021,15 @@ function FormFields({ tab }: { tab: TabKey }) {
 
   if (tab === "vitals") return (
     <>
-      <div>
-        <label className={lblCls}>Systolic BP</label>
-        <input name="systolic" type="number" className={fieldCls} placeholder="mmHg" />
-      </div>
-      <div>
-        <label className={lblCls}>Diastolic BP</label>
-        <input name="diastolic" type="number" className={fieldCls} placeholder="mmHg" />
-      </div>
-      <div>
-        <label className={lblCls}>Heart Rate</label>
-        <input name="heartRate" type="number" className={fieldCls} placeholder="bpm" />
-      </div>
-      <div>
-        <label className={lblCls}>Temperature (°F)</label>
-        <input name="temperature" type="number" step="0.1" className={fieldCls} placeholder="98.6" />
-      </div>
-      <div>
-        <label className={lblCls}>Resp Rate</label>
-        <input name="respRate" type="number" className={fieldCls} placeholder="breaths/min" />
-      </div>
-      <div>
-        <label className={lblCls}>SpO2 (%)</label>
-        <input name="spo2" type="number" className={fieldCls} placeholder="99" />
-      </div>
-      <div>
-        <label className={lblCls}>Blood Sugar (mg/dL)</label>
-        <input name="bloodSugarLevel" type="number" className={fieldCls} placeholder="120" />
-      </div>
-      <div>
-        <label className={lblCls}>Weight (lbs)</label>
-        <input name="weight" type="number" step="0.1" className={fieldCls} />
-      </div>
+      {deviceRow}
+      {numField("systolic", "Systolic BP", { placeholder: "mmHg" })}
+      {numField("diastolic", "Diastolic BP", { placeholder: "mmHg" })}
+      {numField("heartRate", "Heart Rate", { placeholder: "bpm" })}
+      {numField("temperature", "Temperature (°F)", { step: "0.1", placeholder: "98.6" })}
+      {numField("respRate", "Resp Rate", { placeholder: "breaths/min" })}
+      {numField("spo2", "SpO2 (%)", { placeholder: "99" })}
+      {numField("bloodSugarLevel", "Blood Sugar (mg/dL)", { placeholder: "120" })}
+      {numField("weight", "Weight (lbs)", { step: "0.1" })}
       <div>
         <label className={lblCls}>Pain Score (0-10)</label>
         <input name="painScore" type="number" min="0" max="10" className={fieldCls} />

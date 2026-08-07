@@ -52,6 +52,67 @@ export function isAbnormalVital(type: string, value: string): boolean {
   }
 }
 
+// ── Plausibility bounds ──────────────────────────────────────────────
+// Physiologically-possible limits. A value outside these is almost certainly a
+// data-entry error (typo, wrong field, device glitch) and is REJECTED at capture
+// rather than logged and alerted on. Distinct from "abnormal" (real but out of
+// the normal range).
+export const VITAL_PLAUSIBLE: Record<string, { min: number; max: number }> = {
+  HEART_RATE:       { min: 20, max: 250 },
+  OXYGEN:           { min: 50, max: 100 },
+  TEMPERATURE:      { min: 30, max: 45 },
+  RESPIRATORY_RATE: { min: 3, max: 60 },
+  BLOOD_GLUCOSE:    { min: 10, max: 800 },
+  WEIGHT:           { min: 1, max: 400 },
+};
+const BP_PLAUSIBLE = { sysMin: 40, sysMax: 300, diaMin: 20, diaMax: 200 };
+
+export interface VitalValidation {
+  ok: boolean;
+  error?: string;
+  abnormal: boolean;
+  severity?: "CRITICAL" | "WARNING";
+}
+
+/**
+ * Validate a single reading before it is saved: correct format + physiologically
+ * plausible. When valid, also reports whether it is abnormal (and how severe) so
+ * the UI can require confirmation before logging + alerting.
+ */
+export function validateVital(type: string, raw: string): VitalValidation {
+  const value = String(raw ?? "").trim();
+  if (value === "") return { ok: false, error: "Enter a value.", abnormal: false };
+
+  if (type === "BLOOD_PRESSURE") {
+    if (!/^\d{1,3}\s*\/\s*\d{1,3}$/.test(value)) return { ok: false, error: "Use systolic/diastolic, e.g. 120/80.", abnormal: false };
+    const [sys, dia] = parseBP(value);
+    if (isNaN(sys) || isNaN(dia)) return { ok: false, error: "Enter both systolic and diastolic.", abnormal: false };
+    if (sys < BP_PLAUSIBLE.sysMin || sys > BP_PLAUSIBLE.sysMax) return { ok: false, error: `Systolic ${sys} is outside the plausible range (${BP_PLAUSIBLE.sysMin}–${BP_PLAUSIBLE.sysMax}).`, abnormal: false };
+    if (dia < BP_PLAUSIBLE.diaMin || dia > BP_PLAUSIBLE.diaMax) return { ok: false, error: `Diastolic ${dia} is outside the plausible range (${BP_PLAUSIBLE.diaMin}–${BP_PLAUSIBLE.diaMax}).`, abnormal: false };
+    if (sys <= dia) return { ok: false, error: "Systolic must be higher than diastolic.", abnormal: false };
+  } else {
+    const n = parseFloat(value);
+    if (isNaN(n)) return { ok: false, error: "Enter a number.", abnormal: false };
+    const b = VITAL_PLAUSIBLE[type];
+    if (b && (n < b.min || n > b.max)) {
+      return { ok: false, error: `Outside the plausible range (${b.min}–${b.max} ${VITAL_META[type]?.unit ?? ""}) — re-check the reading.`, abnormal: false };
+    }
+  }
+
+  const abnormal = isAbnormalVital(type, value);
+  return { ok: true, abnormal, severity: abnormal ? vitalSeverity(type, value) : undefined };
+}
+
+// ── Measurement context / method ─────────────────────────────────────
+// The context that changes how a reading is interpreted (SpO₂ on room air vs
+// supplemental O₂, temperature route, BP posture). Stored with each reading as
+// provenance so "94%" is never ambiguous.
+export const VITAL_METHODS: Record<string, string[]> = {
+  OXYGEN:         ["Room air", "On O₂ 1L", "On O₂ 2L", "On O₂ 3L", "On O₂ 4L+"],
+  TEMPERATURE:    ["Oral", "Tympanic", "Temporal", "Axillary", "Rectal"],
+  BLOOD_PRESSURE: ["Sitting", "Standing", "Supine"],
+};
+
 /** Dangerously-out-of-range readings escalate to CRITICAL; other abnormals are WARNING. */
 export function vitalSeverity(type: string, value: string): "CRITICAL" | "WARNING" {
   const n = parseFloat(value);

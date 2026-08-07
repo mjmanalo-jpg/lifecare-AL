@@ -32,6 +32,6 @@ export async function POST(request: NextRequest) {
   if (!residentId || !Object.values(VitalType).includes(type as VitalType) || body.value === undefined) return NextResponse.json({ error: "Resident, vital type, and value are required" }, { status: 400 });
   if (!(await canAccessResident(context, residentId))) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!isDbConfigured()) return NextResponse.json({ data: { id: `demo-${Date.now()}`, residentId, type, value: String(body.value) }, demo: true }, { status: 201 });
-  const data = await withTenantDb(context, (tx) => tx.vitalsLog.create({ data: { organizationId: context.organizationId, communityId: context.communityId, residentId, type: type as VitalType, value: String(body.value), unit: body.unit || null, recordedAt: new Date(), recordedBy: context.userId } }));
+  const data = await withTenantDb(context, (tx) => tx.vitalsLog.create({ data: { organizationId: context.organizationId, communityId: context.communityId, residentId, type: type as VitalType, value: String(body.value), unit: body.unit || null, notes: body.notes != null ? String(body.notes) : null, recordedAt: new Date(), recordedBy: context.userId } }));
   return NextResponse.json({ data }, { status: 201 });
 }
