@@ -152,6 +152,65 @@ async function notifyDriverOfTrip(
   }
 }
 
+// Real-time facility-operations alerts: when a resident/staff creates one of
+// these operational records, notify facility admins immediately (instead of
+// waiting for the alerts-cron tick). Same SYSTEM_ALERT + operational entity type
+// the cron uses, so its dedup (type|id) won't double-fire. Best-effort.
+const FACILITY_OPS_NOTIFY: Record<string, { entityType: string; build: (r: Record<string, unknown>) => { title: string; message: string } }> = {
+  "dining-reservations": {
+    entityType: "diningReservation",
+    build: (r) => ({ title: "New dining reservation", message: `${String(r.mealType ?? "meal").toLowerCase()} · party of ${r.partySize ?? 1}${r.reservedAt ? ` — ${new Date(String(r.reservedAt)).toLocaleString()}` : ""}.` }),
+  },
+  "service-requests": {
+    entityType: "serviceRequest",
+    build: (r) => ({ title: "New service request", message: `${String(r.category ?? "service").replace(/_/g, " ").toLowerCase()} request submitted.` }),
+  },
+  "purchase-requests": {
+    entityType: "purchaseRequest",
+    build: (r) => ({ title: "Purchase request submitted", message: `${r.itemName ?? "Item"} ×${r.quantity ?? 1} is awaiting approval.` }),
+  },
+  "facility-maintenance": {
+    entityType: "maintenance",
+    build: (r) => ({ title: "New maintenance request", message: `${r.title ?? "Maintenance"}${r.scheduledDate ? ` — scheduled ${new Date(String(r.scheduledDate)).toLocaleDateString()}` : ""}.` }),
+  },
+  "concierge-bookings": {
+    entityType: "conciergeBooking",
+    build: (r) => ({ title: "New concierge booking", message: `${String(r.serviceType ?? r.category ?? "Booking")} requested.` }),
+  },
+};
+
+async function notifyFacilityOps(
+  context: NonNullable<Awaited<ReturnType<typeof requireTenantContext>>>,
+  model: string,
+  record: Record<string, unknown>,
+) {
+  try {
+    const cfg = FACILITY_OPS_NOTIFY[model];
+    if (!cfg || !context.communityId) return;
+    const recipients = await prisma.communityMembership.findMany({
+      where: { communityId: context.communityId, status: "ACTIVE", role: "FACILITY_ADMIN" },
+      select: { userId: true },
+    });
+    if (!recipients.length) return;
+    const { title, message } = cfg.build(record);
+    await prisma.notification.createMany({
+      data: recipients.map((m) => ({
+        userId: m.userId,
+        type: "SYSTEM_ALERT" as const,
+        title,
+        message,
+        severity: "INFO",
+        relatedEntityId: String(record.id),
+        relatedEntityType: cfg.entityType,
+        organizationId: context.organizationId ?? null,
+        communityId: context.communityId,
+      })),
+    });
+  } catch (e) {
+    console.error("[facility ops notify] failed:", e instanceof Error ? e.message : e);
+  }
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ model: string }> }) {
   const context = await requireTenantContext({ allowPlatform: true });
   if (!context) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -199,6 +258,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (model === "incidents") await alertSevereIncident(context, created);
     // Assigning a trip to a driver notifies that driver of their new trip.
     if (model === "trips") await notifyDriverOfTrip(context, created);
+    // Operational records (dining/service/purchase/maintenance/concierge)
+    // notify facility admins in real time.
+    if (FACILITY_OPS_NOTIFY[model]) await notifyFacilityOps(context, model, created);
     return NextResponse.json({ data: created }, { status: 201 });
   } catch (error) {
     if (error instanceof EntitlementError) return NextResponse.json({ error: error.message, code: error.code }, { status: 403 });
