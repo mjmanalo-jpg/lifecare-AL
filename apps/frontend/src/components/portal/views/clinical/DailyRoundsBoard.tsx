@@ -3,7 +3,7 @@ import { useMemo, useState, useCallback } from "react";
 import {
   Stethoscope, Search, Plus, X, RefreshCw, ChevronRight, ChevronLeft, Clock,
   CheckCircle2, AlertTriangle, Smile, Moon, Footprints, Utensils,
-  Activity, Droplets, ClipboardList, Trash2, Loader2, Bluetooth,
+  Activity, Droplets, ClipboardList, Trash2, Loader2, Bluetooth, HelpCircle,
   type LucideIcon, Wind, Frown, Meh, SmilePlus, Annoyed,
 } from "lucide-react";
 import Swal from "@/lib/swal";
@@ -600,6 +600,7 @@ function FormFields({ tab, vForm, setV, vProv, connecting, onCapture }: {
 }) {
   const fieldCls = inputCls;
   const lblCls = labelCls;
+  const [showHelp, setShowHelp] = useState(false);
 
   // Vitals helpers — controlled numeric field + "captured from device" badge.
   const devBadge = (k: string) => vProv?.[k]?.source === "DEVICE" ? (
@@ -614,7 +615,24 @@ function FormFields({ tab, vForm, setV, vProv, connecting, onCapture }: {
   );
   const deviceRow = (
     <div className="sm:col-span-2 lg:col-span-3 rounded-lg border border-blue-200 bg-blue-50/60 p-2.5">
-      <p className="text-[11px] font-semibold text-blue-900 mb-1.5 flex items-center gap-1.5"><Bluetooth className="w-3.5 h-3.5" /> Capture from device</p>
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[11px] font-semibold text-blue-900 flex items-center gap-1.5"><Bluetooth className="w-3.5 h-3.5" /> Capture from device</p>
+        <button type="button" onClick={() => setShowHelp((s) => !s)} aria-expanded={showHelp} className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 hover:text-blue-900">
+          <HelpCircle className="w-3.5 h-3.5" /> How to connect
+        </button>
+      </div>
+      {showHelp && (
+        <div className="mb-2 rounded-md border border-blue-200 bg-white p-2.5 text-[11px] leading-relaxed text-slate-600">
+          <p className="font-semibold text-slate-700 mb-1">Connecting a Bluetooth device</p>
+          <ol className="list-decimal ml-4 space-y-0.5">
+            <li>Use Chrome or Edge over HTTPS (or localhost), with Bluetooth on.</li>
+            <li>Turn the device on / put it in pairing mode so it&apos;s discoverable.</li>
+            <li>Click its button below, pick it in the pop-up, and pair.</li>
+            <li>Take a reading on the device — it sends within ~45s and auto-fills the fields.</li>
+          </ol>
+          <p className="mt-1.5 text-[10px] text-slate-400">Needs a standard Bluetooth LE medical device. Not connecting? Re-enter pairing mode, or enter the reading manually.</p>
+        </div>
+      )}
       <div className="flex flex-wrap gap-1.5">
         {(Object.keys(DEVICE_KINDS) as DeviceVitalKind[]).map((kind) => (
           <button key={kind} type="button" onClick={() => onCapture(kind)} disabled={connecting !== null}
