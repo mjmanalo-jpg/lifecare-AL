@@ -1044,14 +1044,17 @@ async function handleShiftRecap(
   const medLine = (m: (typeof meds)[number]) => `${m.medication?.name ?? "medication"}${m.dosage ? ` ${m.dosage}` : ""}${m.route ? ` ${m.route}` : ""} — ${rn(m.resident)}`;
   const pick = (s: string) => meds.filter((m) => m.status === s);
   const given = pick("GIVEN"), partial = pick("PARTIAL"), held = pick("HELD"), refused = pick("REFUSED");
-  const medsParts: string[] = [];
-  if (given.length) medsParts.push(`Given: ${given.map(medLine).join("; ")}.`);
-  if (partial.length) medsParts.push(`Partial: ${partial.map(medLine).join("; ")}.`);
-  if (held.length) medsParts.push(`Held: ${held.map((m) => `${medLine(m)}${m.heldReason ? ` (${m.heldReason})` : ""}`).join("; ")}.`);
-  if (refused.length) medsParts.push(`Refused: ${refused.map((m) => `${medLine(m)}${m.reasonForRefusal ? ` (${m.reasonForRefusal})` : ""}`).join("; ")}.`);
-  const medicationsAdministered = medsParts.join(" ");
+  // One bullet per medication pass (grouped by outcome), so the textarea reads
+  // as a clean list rather than a run-on line.
+  const medRows: string[] = [
+    ...given.map((m) => `Given — ${medLine(m)}`),
+    ...partial.map((m) => `Partial — ${medLine(m)}`),
+    ...held.map((m) => `Held — ${medLine(m)}${m.heldReason ? ` (${m.heldReason})` : ""}`),
+    ...refused.map((m) => `Refused — ${medLine(m)}${m.reasonForRefusal ? ` (${m.reasonForRefusal})` : ""}`),
+  ];
+  const medicationsAdministered = medRows.map((l) => `• ${l}`).join("\n");
 
-  const taskCompleted = tasksDone.map((t) => `${t.title} — ${rn(t.resident)}`).join("; ");
+  const taskCompleted = tasksDone.map((t) => `• ${t.title} — ${rn(t.resident)}`).join("\n");
   const incidentsOccurred = incidents.length > 0;
   const incidentDetails = incidents.map((i) => `${String(i.severity)} ${String(i.incidentType).replace(/_/g, " ").toLowerCase()} — ${rn(i.resident)}: ${i.description}`).join(" | ");
 
@@ -1060,11 +1063,14 @@ async function handleShiftRecap(
   for (const c of comms) updates.push(`Contacted ${c.physicianName} (${String(c.method)}) re ${rn(c.resident)}: ${c.reason}`);
   const residentUpdates = updates.join(" | ");
 
+  // One bullet per carry-over item (each open escalation on its own line, then
+  // the pending-work counts).
   const carry: string[] = [];
-  if (openEsc.length) carry.push(`${openEsc.length} open escalation(s): ${openEsc.slice(0, 5).map((e) => `${rn(e.resident)} — ${e.situation}`).join("; ")}${openEsc.length > 5 ? "…" : ""}.`);
-  if (pendingTasks) carry.push(`${pendingTasks} pending task(s).`);
-  if (dueFollowups) carry.push(`${dueFollowups} follow-up(s) due.`);
-  const handoverNotes = carry.join(" ");
+  for (const e of openEsc.slice(0, 8)) carry.push(`Open escalation — ${rn(e.resident)}: ${e.situation}`);
+  if (openEsc.length > 8) carry.push(`…and ${openEsc.length - 8} more open escalation(s)`);
+  if (pendingTasks) carry.push(`${pendingTasks} pending task(s)`);
+  if (dueFollowups) carry.push(`${dueFollowups} follow-up(s) due`);
+  const handoverNotes = carry.map((c) => `• ${c}`).join("\n");
 
   const fields = { residentUpdates, incidentsOccurred, incidentDetails, medicationsAdministered, taskCompleted, handoverNotes };
   const empty = !medicationsAdministered && !taskCompleted && !incidentsOccurred && !residentUpdates && !handoverNotes;
