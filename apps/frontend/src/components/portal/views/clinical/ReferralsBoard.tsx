@@ -80,13 +80,6 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
   const schedule = async (r: Row) => { const res = await Swal.fire({ title: "Confirm & schedule", input: "text", inputLabel: "Appointment date (YYYY-MM-DD)", inputValue: new Date().toISOString().slice(0, 10), showCancelButton: true }); if (!res.isConfirmed) return; await patch(r, { status: "SCHEDULED", scheduledDate: new Date(res.value || Date.now()).toISOString() }); };
   const complete = async (r: Row) => { const res = await Swal.fire({ title: "Document outcome", input: "textarea", inputLabel: "Findings, follow-up & notes", showCancelButton: true, confirmButtonText: "Complete", confirmButtonColor: "#16a34a" }); if (!res.isConfirmed) return; await patch(r, { status: "COMPLETED", outcome: res.value || "Completed", completedAt: new Date().toISOString() }); };
 
-  const STEPS = [
-    { n: "1", label: "Submit Referral", cap: "Clinician logs request" },
-    { n: "2", label: "Pending Approval", cap: "Care Manager review" },
-    { n: "3", label: "Confirmed", cap: "Appointment scheduled" },
-    { n: "4", label: "Outcome Documented", cap: "Findings recorded" },
-  ];
-
   return (
     <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-6" style={{ background: "#FFFFFF" }}>
       {/* Header banner */}
@@ -100,19 +93,6 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
           </div>
           <button onClick={() => setShowAdd(true)} className="self-start sm:self-auto shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-[#2E4A48] text-sm font-semibold shadow-sm hover:bg-[#F0F1EA]"><Plus className="w-4 h-4" /> New Referral</button>
         </div>
-      </div>
-
-      {/* 4-step process bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-        {STEPS.map((step, i) => (
-          <div key={step.n} className={`rounded-lg px-4 py-3 flex items-start gap-3 ${i === STEPS.length - 1 ? "bg-[#C0573F]" : "bg-[#2E4A48]"}`}>
-            <span className="mt-0.5 w-6 h-6 shrink-0 rounded-full bg-white/15 text-white text-xs font-bold flex items-center justify-center">{step.n}</span>
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-white leading-tight">{step.label}</p>
-              <MicroLabel className="!text-white/70 mt-0.5 normal-case tracking-normal">{step.cap}</MicroLabel>
-            </div>
-          </div>
-        ))}
       </div>
 
       {/* Stat cards */}

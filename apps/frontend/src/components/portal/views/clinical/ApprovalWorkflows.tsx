@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, X, Clock, Pill, CalendarClock, Send, Eye, Gavel, ShieldCheck, Plus, Loader2 } from "lucide-react";
+import { Check, X, Clock, Pill, CalendarClock, ShieldCheck, Plus, Loader2 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord } from "@/lib/api";
@@ -131,11 +131,6 @@ export default function ApprovalWorkflows() {
   };
 
   const loading = mLoading || rLoading;
-  const STEPS = [
-    { n: 1, icon: Send, label: "Nurse submits request", sub: "Prescription or referral with full clinical context", tone: "#2E4A48" },
-    { n: 2, icon: Eye, label: "Reviewer checks context", sub: "Resident, medication/appointment details, prescriber", tone: "#2E4A48" },
-    { n: 3, icon: Gavel, label: "Decision with notes", sub: "Approve or reject with reviewer notes + timestamp", tone: "#C0573F" },
-  ];
 
   return (
     <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5" style={{ background: "#FFFFFF" }}>
@@ -146,19 +141,6 @@ export default function ApprovalWorkflows() {
           <button onClick={() => setShowRequest(true)} className="self-start inline-flex items-center gap-2 rounded-md bg-[#2E4A48] px-4 py-2 text-sm font-semibold text-white hover:bg-[#25403D]"><Plus className="w-4 h-4" /> Request Meds</button>
         ) : undefined}
       />
-
-      {/* Process strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {STEPS.map((st) => (
-          <div key={st.n} className="flex items-start gap-3 rounded-lg p-3.5" style={{ background: st.tone }}>
-            <span className="flex-shrink-0 w-7 h-7 rounded-full bg-white/20 text-white grid place-items-center text-sm font-bold">{st.n}</span>
-            <div className="min-w-0">
-              <p className="text-white font-semibold text-sm flex items-center gap-1.5"><st.icon className="w-3.5 h-3.5" /> {st.label}</p>
-              <p className="text-[12px] text-white/70 mt-0.5">{st.sub}</p>
-            </div>
-          </div>
-        ))}
-      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
