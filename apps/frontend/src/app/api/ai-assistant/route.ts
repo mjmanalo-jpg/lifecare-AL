@@ -996,9 +996,16 @@ function shiftWindow(shiftType: string, dateStr: string): { start: Date; end: Da
   const base = new Date(dateStr);
   const d = isNaN(base.getTime()) ? new Date() : base;
   const [sh, eh] = SHIFT_WINDOWS[shiftType.toUpperCase()] ?? [0, 24];
-  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), sh, 0, 0, 0);
-  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), eh, 0, 0, 0);
-  if (eh <= sh) end.setDate(end.getDate() + 1); // overnight wraps past midnight
+  // Capture the shift DATE's full day rather than a narrow server-local hour
+  // band. Records are stored in UTC while the form's shift time is local wall-
+  // clock, so an hour band pushed real activity (meds/tasks the nurse actually
+  // logged) out of window whenever the community timezone differed from the
+  // server's — they went missing from the auto-fill. The recap is reviewed
+  // before saving, so day-granularity is the safe, timezone-robust choice.
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  if (eh <= sh) end.setHours(end.getHours() + 8); // overnight spills into the next morning
   return { start, end };
 }
 type ResLite = { firstName?: string | null; lastName?: string | null; roomNumber?: string | null } | null;
