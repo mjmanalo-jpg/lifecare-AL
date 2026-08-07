@@ -59,7 +59,9 @@ interface PortalShellProps {
 const NOTIFICATION_ROUTE_KEYWORDS: Record<string, string[]> = {
   INCIDENT_REPORT: ["incident", "escalation", "alert"],
   VITAL_ALERT: ["vital", "record"],
-  MEDICATION_REMINDER: ["medication", "mar", "pharmacy"],
+  // Refused/missed-dose alerts land on the MAR (administration statuses live
+  // there); "medication" stays as a fallback for roles without a MAR tab.
+  MEDICATION_REMINDER: ["mar", "pharmacy", "medication"],
   CALL_BELL: ["callbell", "call-bell", "record", "monitoring"],
   TASK_ASSIGNMENT: ["task", "care", "round"],
   MESSAGE: ["message", "comms", "secure", "inbox"],
