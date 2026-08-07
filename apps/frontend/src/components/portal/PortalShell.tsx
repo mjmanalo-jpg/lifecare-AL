@@ -70,16 +70,44 @@ const NOTIFICATION_ROUTE_KEYWORDS: Record<string, string[]> = {
   SYSTEM_ALERT: ["alert", "dashboard", "overview"],
 };
 
-/** Best matching tab route for a notification within the current role's nav. */
-function routeForNotification(type: string, links: SidebarLink[], fallback: string): string {
-  const keywords = NOTIFICATION_ROUTE_KEYWORDS[type] ?? [];
-  for (const keyword of keywords) {
-    const match = links.find(
-      (link) => link.route.toLowerCase().includes(keyword) || link.name.toLowerCase().includes(keyword)
-    );
-    if (match) return match.route;
+// Many alerts share a generic notification type (SYSTEM_ALERT covers inventory,
+// dining, maintenance, service, SLA, …). The ENTITY the alert points at is the
+// precise routing signal, so it's checked before the broad type keywords. An
+// optional `query` deep-links to the right sub-tab (e.g. Dining Reservations).
+const ENTITY_ROUTE_KEYWORDS: Record<string, { keywords: string[]; query?: string }> = {
+  diningReservation: { keywords: ["community"], query: "subtab=dining" },
+  purchaseRequest: { keywords: ["purchaserequest", "purchase"] },
+  serviceRequest: { keywords: ["services", "service"] },
+  maintenance: { keywords: ["maintenance"] },
+  conciergeBooking: { keywords: ["concierge"] },
+  inventoryItem: { keywords: ["inventory-alerts", "inventory"] },
+  incident: { keywords: ["incident"] },
+  escalation: { keywords: ["escalation", "coordination"] },
+  vitalsLog: { keywords: ["monitoring", "vital", "record"] },
+  medicationAdministration: { keywords: ["mar", "medication"] },
+  followUp: { keywords: ["follow"] },
+  task: { keywords: ["task"] },
+  assessment: { keywords: ["assessment", "rounds"] },
+};
+
+/** Best matching tab route for a notification within the current role's nav —
+ *  by the alert's entity type first (precise), then its notification type
+ *  (broad), else the dashboard fallback. */
+function routeForNotification(type: string, relatedEntityType: string | null | undefined, links: SidebarLink[], fallback: string): string {
+  const findByKeywords = (keywords: string[]): SidebarLink | undefined => {
+    for (const k of keywords) {
+      const m = links.find((l) => l.route.toLowerCase().includes(k) || l.name.toLowerCase().includes(k));
+      if (m) return m;
+    }
+    return undefined;
+  };
+  const entity = relatedEntityType ? ENTITY_ROUTE_KEYWORDS[relatedEntityType] : undefined;
+  if (entity) {
+    const match = findByKeywords(entity.keywords);
+    if (match) return entity.query ? `${match.route}?${entity.query}` : match.route;
   }
-  return fallback;
+  const typeMatch = findByKeywords(NOTIFICATION_ROUTE_KEYWORDS[type] ?? []);
+  return typeMatch ? typeMatch.route : fallback;
 }
 
 export default function PortalShell({
@@ -232,13 +260,13 @@ export default function PortalShell({
   // Clicking a notification marks it read and navigates to the page most
   // relevant to its content (incident → Incidents, call bell → Records, …),
   // scoped to the current role's available tabs.
-  const handleNotificationClick = (n: { id: string; type: string; isRead: boolean }) => {
+  const handleNotificationClick = (n: { id: string; type: string; isRead: boolean; relatedEntityType?: string | null }) => {
     if (!n.isRead) void handleMarkSingleRead(n.id);
     setBellDropdownOpen(false);
     const fallback =
       roleDetails.sidebarLinks[0]?.route ||
       `/${pathname.split("/")[1] || String(userRole).toLowerCase()}/dashboard`;
-    router.push(routeForNotification(n.type, roleDetails.sidebarLinks, fallback));
+    router.push(routeForNotification(n.type, n.relatedEntityType, roleDetails.sidebarLinks, fallback));
   };
 
 

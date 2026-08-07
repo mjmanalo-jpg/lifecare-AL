@@ -2,7 +2,7 @@
 
 import RefreshButton from "@/components/portal/RefreshButton";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   RefreshCw, Plus, X, Trash2, CalendarDays, Megaphone, UtensilsCrossed,
   Users, CheckCircle2, Ban, Loader2, Pin, Play, Search, ChevronLeft, ChevronRight, Eye,
@@ -36,6 +36,12 @@ const annForm0 = { title: "", body: "", audience: "ALL", priority: "NORMAL", pin
 
 export default function CommunityBoard() {
   const [subtab, setSubtab] = useState("events");
+  // Deep-link support: a notification (e.g. a new dining reservation) can open
+  // this board straight to a sub-tab via ?subtab=dining.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("subtab");
+    if (q && SUBTABS.some((t) => t.key === q)) setSubtab(q);
+  }, []);
 
   const eventsQ = useLiveQuery<Row>("community-events", { query: "include=attendances&take=300", tables: ["CommunityEvent", "EventAttendance"] });
   const diningQ = useLiveQuery<Row>("dining-reservations", { query: "include=resident&take=300", tables: ["DiningReservation"] });
