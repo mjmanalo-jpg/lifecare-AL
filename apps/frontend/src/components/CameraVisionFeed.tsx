@@ -22,7 +22,27 @@ if (typeof window !== "undefined") {
     }
   };
   console.warn = warnFilter;
+
+  // MediaPipe/TFLite (WASM) routes benign start-up notices — e.g. "INFO: Created
+  // TensorFlow Lite XNNPACK delegate for CPU." — through console.error via
+  // Emscripten's printErr, which Next.js's dev overlay then surfaces as a
+  // "Console Error". Drop only these known-benign runtime lines; real errors
+  // still pass through untouched.
+  const TFLITE_NOISE = ["XNNPACK", "TensorFlow Lite", "absl::InitializeLog", "InitializeLog"];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const isTfliteNoise = (args: any[]) => { const m = args.join(" "); return TFLITE_NOISE.some((s) => m.includes(s)); };
+  const originalError = console.error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  console.error = (...args: any[]) => { if (!isTfliteNoise(args)) originalError(...args); };
+  const originalInfo = console.info;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  console.info = (...args: any[]) => { if (!isTfliteNoise(args)) originalInfo(...args); };
 }
+
+// Toggle the on-camera "AI Vitals" (rPPG) HUD. Camera-derived vitals aren't
+// clinical-grade, so the overlay is hidden by default; flip to true to show it
+// (e.g. during rPPG testing).
+const SHOW_AI_VITALS_HUD = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -2216,9 +2236,9 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
           {analysis.confused && <p className="text-[8px] text-red-400 font-bold mt-0.5">⚠ Confused</p>}
         </div>
 
-        {/* AI Vitals (rPPG Remote Sensing) */}
+        {/* AI Vitals (rPPG Remote Sensing) — hidden by default via SHOW_AI_VITALS_HUD */}
         {/* eslint-disable-next-line react-hooks/refs */}
-        {posesRef.current[0] && (
+        {SHOW_AI_VITALS_HUD && posesRef.current[0] && (
           <div className="bg-black/78 backdrop-blur-md border border-white/10 rounded-lg px-2.5 py-2 min-w-[92px] transition-all animate-fade-in">
             <p className="text-[8px] text-zinc-500 uppercase tracking-wider font-bold flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block animate-pulse"/> AI Vitals
