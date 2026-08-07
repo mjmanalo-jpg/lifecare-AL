@@ -419,6 +419,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Alert Center", icon: BellRing, route: "/care_manager/alertcenter", group: "Clinical Monitoring" },
       { name: "Incidents", icon: AlertTriangle, route: "/care_manager/incidents", group: "Clinical Monitoring" },
       { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/care_manager/dailyrounds", group: "Clinical Monitoring" },
+      { name: "Vitals & Camera Monitoring", icon: Activity, route: "/care_manager/monitoring", group: "Clinical Monitoring" },
       { name: "Clinical Coordination", icon: Siren, route: "/care_manager/escalations", group: "Clinical Monitoring" },
       { name: "Medication Approvals", icon: ClipboardCheck, route: "/care_manager/approvalworkflows", group: "Medication" },
       { name: "Medication Administration Record", icon: Pill, route: "/care_manager/mar", group: "Medication" },

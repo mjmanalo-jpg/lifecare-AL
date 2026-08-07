@@ -4,11 +4,10 @@ import RefreshButton from "@/components/portal/RefreshButton";
 import IntakeBodyCheckPanel from "@/components/portal/IntakeBodyCheckPanel";
 
 import { useMemo, useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import {
   Users, Search, X, Heart, Droplets, Wind, Thermometer, AlertTriangle,
   Pill, Activity, Clock, RefreshCw, ListChecks, BarChart3, HeartPulse,
-  Camera, UserPlus, Loader2, CheckCircle2, type LucideIcon,
+  UserPlus, Loader2, CheckCircle2, type LucideIcon,
 } from "lucide-react";
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Legend, Tooltip, BarChart, Bar,
@@ -87,7 +86,6 @@ export default function FacilityResidents() {
     "vitals", { query: "include=resident&take=500", tables: ["VitalsLog"] }
   );
 
-  const router = useRouter();
   const [nowTs, setNowTs] = useState(0);
   useEffect(() => {
     const tick = () => setNowTs(Date.now());
@@ -513,15 +511,9 @@ export default function FacilityResidents() {
                 </div>
               )}
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-8 py-4 flex items-center justify-between gap-2 flex-wrap">
-              <button
-                onClick={() => {
-                  router.push(`/facility_admin/monitoring?resident=${encodeURIComponent(viewing.name)}&room=${encodeURIComponent(viewing.room)}`);
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-400 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
-              >
-                <Camera className="w-4 h-4" /> View Monitoring
-              </button>
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-8 py-4 flex items-center justify-end gap-2 flex-wrap">
+              {/* Clinical vitals/camera monitoring lives in the Care Manager portal
+                  now — Facility Operations is operations-only. */}
               <button onClick={() => setViewing(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
             </div>
           </div>

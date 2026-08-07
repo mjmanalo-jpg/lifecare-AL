@@ -16,6 +16,7 @@ import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker"
 import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
 import AuditLogViewer from "@/components/portal/views/clinical/AuditLogViewer";
 import ConsentFormsManager from "@/components/portal/views/ConsentFormsManager";
+import MonitoringView from "@/components/portal/views/MonitoringView";
 
 /**
  * Care Manager portal — clinical oversight split out of Facility Operations:
@@ -39,6 +40,8 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
       return <ApprovalWorkflows />;
     case "mar":
       return <MARBoard />;
+    case "monitoring":
+      return <MonitoringView />;
     case "rounds":
       return <AssessmentAcuityBoard clinicianRole="FACILITY_ADMIN" />;
     case "careplans":

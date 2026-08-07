@@ -163,7 +163,15 @@ export default function PortalShell({
   // Compute unread count
   // Snoozed alerts drop out of the queue until their snooze window elapses.
   const isSnoozed = (n: { snoozedUntil?: string | null }) => !!n.snoozedUntil && new Date(n.snoozedUntil).getTime() >= Date.now();
-  const visibleNotifications = (notificationsData || []).filter((n) => !isSnoozed(n));
+  // Facility Operations is not a clinical role — its bell only carries operational
+  // alerts (inventory, maintenance/tickets, camera/device, occupancy, system).
+  // Care-system notification types are hidden here (they live in the clinical
+  // portals: nurse / care manager / physician).
+  const CLINICAL_NOTIF_TYPES = new Set(["VITAL_ALERT", "MEDICATION_REMINDER", "CALL_BELL", "SBAR_ESCALATION", "SHIFT_REMINDER", "TASK_ASSIGNMENT"]);
+  const facilityOps = String(userRole) === "FACILITY_ADMIN";
+  const visibleNotifications = (notificationsData || []).filter(
+    (n) => !isSnoozed(n) && !(facilityOps && CLINICAL_NOTIF_TYPES.has(String(n.type))),
+  );
   const unreadNotifications = visibleNotifications.filter((n) => !n.isRead);
   const unreadCount = unreadNotifications.length;
 
