@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { ScanLine, PackageMinus, PackagePlus, Truck, Wrench, Plus, Trash2, Save, Loader2, CalendarClock, CheckCircle2, X } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { updateRecord, upsertRecord } from "@/lib/api";
+import { createRecord, updateRecord, upsertRecord } from "@/lib/api";
 import {
   INVENTORY_VENDORS_KEY, INVENTORY_ASSETS_KEY,
   parseVendors, parseAssetSchedules, fefoAllocate, byExpiry, daysUntil, addDays, newId, generateBarcode,
@@ -126,8 +126,23 @@ export default function InventoryOpsPanel() {
   const markServiced = async (itemId: string) => {
     const sched = assetMap[itemId] ?? { intervalDays: 90 };
     const now = new Date();
-    await setSchedule(itemId, { lastService: now.toISOString(), nextService: addDays(now, sched.intervalDays || 90).toISOString() });
-    Swal.fire({ title: "Serviced", icon: "success", timer: 1200, showConfirmButton: false });
+    const interval = sched.intervalDays || 90;
+    const nextService = addDays(now, interval);
+    await setSchedule(itemId, { lastService: now.toISOString(), nextService: nextService.toISOString() });
+    // Raise a Facility Maintenance ticket for the next scheduled check so the
+    // recurring service is tracked in the Maintenance portal (and notifies the
+    // facility). Community is stamped server-side. Best-effort — the schedule is
+    // already saved regardless.
+    const assetName = s(itemRows.find((r) => s(r.id) === itemId)?.itemName) || "Equipment";
+    try {
+      await createRecord("facility-maintenance", {
+        title: `${assetName} — scheduled maintenance check`,
+        description: `Recurring durable-equipment service every ${interval} days. Auto-created when marked serviced on ${now.toLocaleDateString()}.`,
+        status: "SCHEDULED",
+        scheduledDate: nextService.toISOString(),
+      });
+    } catch { /* ticket is best-effort */ }
+    Swal.fire({ title: "Serviced", text: `Next check ticketed in the Maintenance portal for ${nextService.toLocaleDateString()} (every ${interval}d).`, icon: "success", timer: 2200, showConfirmButton: false });
   };
 
   return (
