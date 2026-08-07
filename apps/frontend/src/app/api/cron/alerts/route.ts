@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic";
 // signed-in NURSE / FACILITY_ADMIN / SUPERADMIN scans only their community.
 // ─────────────────────────────────────────────────────────────
 
-const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "incident", "slaBreach", "escalation", "assessment"];
+const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "incident", "slaBreach", "escalation", "assessment", "purchaseRequest", "serviceRequest", "maintenance", "diningReservation"];
 
 // SBAR SLA response windows (minutes) by priority — single source of truth is
 // escalationMeta.PRIORITY_META in the UI; mirrored here so the server can
@@ -274,6 +274,36 @@ async function scanCommunity(communityId: string, organizationId: string | null)
         const r = arr[arr.length - 1].resident;
         if (await notify("SYSTEM_ALERT", "weightTrend", `weight:${residentId}:${monthKey}`, "Weight loss detected", `${rname(r)} (Room ${room(r)}) is down ${dropPct.toFixed(1)}% (${first} → ${last}) over the past weeks. Consider a nutrition review.`)) counts.weightLoss++;
       }
+    }
+  });
+
+  // 7a2) Facility operations queue — pending purchase (inventory) requests, open
+  //      resident service tickets, due/overdue maintenance, and pending dining
+  //      reservations. Operational (non-clinical) entity types so they surface
+  //      in the Facility Operations bell. Sent to facility admins.
+  await runSource("facility-ops", async () => {
+    const opsIds = idsForRoles(["FACILITY_ADMIN"]);
+    if (!opsIds.length) return;
+
+    const prs = await prisma.purchaseRequest.findMany({ where: { communityId, status: "REQUESTED" }, select: { id: true, itemName: true, quantity: true, priority: true } });
+    for (const pr of prs) {
+      const pri = pr.priority && pr.priority !== "NORMAL" ? ` (${pr.priority})` : "";
+      await notify("SYSTEM_ALERT", "purchaseRequest", pr.id, "Purchase request pending", `${pr.itemName} ×${pr.quantity} is awaiting approval${pri}.`, "INFO", opsIds);
+    }
+
+    const svc = await prisma.serviceRequest.findMany({ where: { communityId, status: "OPEN" }, select: { id: true, category: true, resident: { select: { firstName: true, lastName: true, roomNumber: true } } } });
+    for (const sr of svc) {
+      await notify("SYSTEM_ALERT", "serviceRequest", sr.id, "Service request open", `${String(sr.category).replace(/_/g, " ").toLowerCase()} request for ${rname(sr.resident)} (Room ${room(sr.resident)}).`, "INFO", opsIds);
+    }
+
+    const mnt = await prisma.facilityMaintenance.findMany({ where: { communityId, status: "SCHEDULED", scheduledDate: { lte: now } }, select: { id: true, title: true, scheduledDate: true } });
+    for (const m of mnt) {
+      await notify("SYSTEM_ALERT", "maintenance", m.id, "Maintenance due", `${m.title}${m.scheduledDate ? ` — scheduled ${fmtDate(m.scheduledDate)}` : ""}.`, "INFO", opsIds);
+    }
+
+    const din = await prisma.diningReservation.findMany({ where: { communityId, status: "REQUESTED", reservedAt: { gte: now } }, select: { id: true, mealType: true, reservedAt: true, partySize: true, resident: { select: { firstName: true, lastName: true, roomNumber: true } } } });
+    for (const d of din) {
+      await notify("SYSTEM_ALERT", "diningReservation", d.id, "Dining reservation", `${String(d.mealType).toLowerCase()} · party of ${d.partySize} for ${rname(d.resident)} — ${fmtDate(d.reservedAt)}.`, "INFO", opsIds);
     }
   });
 
