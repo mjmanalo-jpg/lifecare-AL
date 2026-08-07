@@ -18,6 +18,7 @@ import AuditLogViewer from "@/components/portal/views/clinical/AuditLogViewer";
 import ConsentFormsManager from "@/components/portal/views/ConsentFormsManager";
 import MonitoringView from "@/components/portal/views/MonitoringView";
 import QualityMonitoringBoard from "@/components/portal/views/clinical/QualityMonitoringBoard";
+import MedSafetyDashboard from "@/components/portal/views/clinical/MedSafetyDashboard";
 
 /**
  * Care Manager portal — clinical oversight split out of Facility Operations:
@@ -41,6 +42,8 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
       return <ApprovalWorkflows />;
     case "mar":
       return <MARBoard />;
+    case "medsafety":
+      return <MedSafetyDashboard />;
     case "monitoring":
       return <MonitoringView />;
     case "rounds":
