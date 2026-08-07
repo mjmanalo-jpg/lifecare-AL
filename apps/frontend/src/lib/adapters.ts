@@ -122,21 +122,38 @@ export function adaptRoom(r: any) {
 }
 
 /** Inventory item row -> Inventory view model. */
+/** Module 14 stock levels — Out of Stock / Critical / Low / Normal — classified
+ *  from quantity vs the reorder-or-minimum threshold. */
+export type StockStatus = "OUT_OF_STOCK" | "CRITICAL" | "LOW" | "NORMAL";
+export function classifyStock(qty: number, threshold: number): StockStatus {
+  if (qty <= 0) return "OUT_OF_STOCK";
+  if (threshold > 0 && qty <= Math.ceil(threshold / 2)) return "CRITICAL";
+  if (threshold > 0 && qty <= threshold) return "LOW";
+  return "NORMAL";
+}
+
 export function adaptInventoryItem(i: any) {
+  const quantity = i.quantity ?? 0;
+  const minimumStock = i.minimumStock ?? 5;
+  // Reorder threshold drives the stock badge (falls back to the minimum stock).
+  const reorderThreshold = i.reorderPoint ?? minimumStock;
   return {
     id: i.id,
     itemName: i.itemName ?? "—",
     category: humanize(i.category) || "Other",
-    quantity: i.quantity ?? 0,
+    quantity,
     unit: i.unit ?? "pcs",
-    minimumStock: i.minimumStock ?? 5,
+    minimumStock,
+    reorderThreshold,
     location: i.location ?? "—",
     supplier: i.supplier ?? "—",
     expiryDate: i.expiryDate ?? null,
     notes: i.notes ?? "",
     // out of stock = zero on hand; low = at/below minimum but still > 0.
-    outOfStock: (i.quantity ?? 0) <= 0,
-    lowStock: (i.quantity ?? 0) <= (i.minimumStock ?? 5),
+    outOfStock: quantity <= 0,
+    lowStock: quantity <= minimumStock,
+    // 4-level badge: Out of Stock / Critical / Low / Normal.
+    stockStatus: classifyStock(quantity, reorderThreshold),
     raw: i,
   };
 }

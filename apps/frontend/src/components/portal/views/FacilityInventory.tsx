@@ -6,7 +6,7 @@ import { useMemo, useState, useEffect } from "react";
 import {
   Package, Search, AlertTriangle, Plus, X, Edit, Trash2, RefreshCw,
   LayoutGrid, Table2, Minus, Plus as PlusIcon, Eye, Building2,
-  Calendar, Hash, MapPin, Printer,
+  Calendar, Hash, MapPin, Printer, SlidersHorizontal, ShoppingCart,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -19,6 +19,7 @@ import { adaptInventoryItem } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { StatusPill, MicroLabel, ClinicalHeader, ClinicalCard } from "./clinical/clinical-ui";
 import InventoryOpsPanel from "./InventoryOpsPanel";
+import PurchaseRequests from "./PurchaseRequests";
 import Barcode from "@/components/portal/Barcode";
 import BarcodeLabelSheet, { type BarcodeLabel } from "@/components/portal/BarcodeLabelSheet";
 import InventoryBarcodeScanner from "@/components/portal/InventoryBarcodeScanner";
@@ -27,11 +28,12 @@ import { generateBarcode } from "@/lib/inventoryOps";
 type InventoryItem = ReturnType<typeof adaptInventoryItem>;
 
 const CATEGORIES = [
-  "MEDICAL_SUPPLIES", "PERSONAL_CARE", "LINEN", "FOOD", "CLEANING",
+  "MEDICATION", "MEDICAL_SUPPLIES", "PERSONAL_CARE", "LINEN", "FOOD", "CLEANING",
   "OFFICE", "FURNITURE", "EQUIPMENT", "PPE", "OTHER",
 ];
 
 const CATEGORY_COLORS: Record<string, string> = {
+  MEDICATION: "#14b8a6",
   MEDICAL_SUPPLIES: "#3b82f6", PERSONAL_CARE: "#ec4899", LINEN: "#8b5cf6",
   FOOD: "#22c55e", CLEANING: "#06b6d4", OFFICE: "#f59e0b",
   FURNITURE: "#a855f7", EQUIPMENT: "#ef4444", PPE: "#10b981", OTHER: "#6b7280",
@@ -57,12 +59,16 @@ export default function FacilityInventory() {
     [prRows],
   );
 
+  const [tab, setTab] = useState<"inventory" | "purchase">("inventory");
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [locationFilter, setLocationFilter] = useState("all");
-  const [showLowStock, setShowLowStock] = useState(false);
+  const [stockFilter, setStockFilter] = useState<"all" | "OUT_OF_STOCK" | "CRITICAL" | "LOW">("all");
+  const [expiryFilter, setExpiryFilter] = useState<"all" | "expired" | "7" | "30">("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [viewing, setViewing] = useState<InventoryItem | null>(null);
+  const [adjusting, setAdjusting] = useState<InventoryItem | null>(null);
+  const [adjustMode, setAdjustMode] = useState<"add" | "subtract">("add");
   const [showCreate, setShowCreate] = useState(false);
   const [opsOpen, setOpsOpen] = useState(false);
   const [editing, setEditing] = useState<InventoryItem | null>(null);
@@ -90,14 +96,22 @@ export default function FacilityInventory() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const now = Date.now();
     return items.filter(item => {
       if (q && !item.itemName.toLowerCase().includes(q) && !item.category.toLowerCase().includes(q) && !item.location.toLowerCase().includes(q) && !item.supplier.toLowerCase().includes(q)) return false;
       if (categoryFilter !== "all" && item.raw.category !== categoryFilter) return false;
       if (locationFilter !== "all" && item.raw.location !== locationFilter) return false;
-      if (showLowStock && !item.lowStock) return false;
+      if (stockFilter !== "all" && item.stockStatus !== stockFilter) return false;
+      if (expiryFilter !== "all") {
+        const days = item.expiryDate ? Math.floor((new Date(item.expiryDate).getTime() - now) / 86_400_000) : null;
+        if (days === null) return false;
+        if (expiryFilter === "expired" && days >= 0) return false;
+        if (expiryFilter === "7" && !(days >= 0 && days <= 7)) return false;
+        if (expiryFilter === "30" && !(days >= 0 && days <= 30)) return false;
+      }
       return true;
     });
-  }, [items, search, categoryFilter, locationFilter, showLowStock]);
+  }, [items, search, categoryFilter, locationFilter, stockFilter, expiryFilter]);
 
   const stats = useMemo(() => ({
     total: items.length,
@@ -129,36 +143,57 @@ export default function FacilityInventory() {
   // the latest quantity after refetch (the captured `viewing` snapshot is stale).
   const viewingLive = viewing ? (items.find((i) => i.id === viewing.id) ?? viewing) : null;
 
-  const handleQuickAdjust = async (item: InventoryItem, delta: number) => {
-    const newQty = Math.max(0, item.quantity + delta);
-    try {
-      await updateRecord("inventory", item.id, { quantity: newQty });
+  // ⚡ Auto purchase request — when a decrease drops stock to/below the reorder
+  // threshold and no request is already open, queue one for admin approval.
+  const maybeAutoReorder = async (item: InventoryItem, newQty: number, delta: number) => {
+    const raw = item.raw as { reorderPoint?: number | null; unitCost?: number | null };
+    const threshold = raw?.reorderPoint ?? item.minimumStock;
+    if (delta < 0 && threshold > 0 && newQty <= threshold && !openPrItemIds.has(item.id)) {
+      const restockQty = Math.max((raw?.reorderPoint ?? item.minimumStock) * 2 - newQty, item.minimumStock);
+      await createRecord("purchase-requests", {
+        inventoryItemId: item.id,
+        itemName: item.itemName,
+        category: item.category,
+        quantity: restockQty,
+        unit: item.unit,
+        estimatedUnitCost: raw?.unitCost ?? null,
+        supplier: item.supplier && item.supplier !== "—" ? item.supplier : null,
+        reason: `Auto-reorder: stock fell to ${newQty} (reorder at ${threshold}).`,
+        priority: newQty === 0 ? "URGENT" : "HIGH",
+        status: "REQUESTED",
+        requestedByName: "Auto Reorder",
+        autoGenerated: true,
+      });
+      Swal.fire({ title: "Reorder queued", text: `${item.itemName} fell below its reorder point — a purchase request was auto-created for approval.`, icon: "info", timer: 2800, showConfirmButton: false });
+    }
+  };
 
-      // ⚡ Auto purchase request — when a decrease drops stock to/below the reorder
-      // threshold and no request is already open, queue one for admin approval.
-      const raw = item.raw as { reorderPoint?: number | null; unitCost?: number | null };
-      const threshold = raw?.reorderPoint ?? item.minimumStock;
-      if (delta < 0 && threshold > 0 && newQty <= threshold && !openPrItemIds.has(item.id)) {
-        const restockQty = Math.max((raw?.reorderPoint ?? item.minimumStock) * 2 - newQty, item.minimumStock);
-        await createRecord("purchase-requests", {
-          inventoryItemId: item.id,
-          itemName: item.itemName,
-          category: item.category,
-          quantity: restockQty,
-          unit: item.unit,
-          estimatedUnitCost: raw?.unitCost ?? null,
-          supplier: item.supplier && item.supplier !== "—" ? item.supplier : null,
-          reason: `Auto-reorder: stock fell to ${newQty} (reorder at ${threshold}).`,
-          priority: newQty === 0 ? "URGENT" : "HIGH",
-          status: "REQUESTED",
-          requestedByName: "Auto Reorder",
-          autoGenerated: true,
-        });
-        Swal.fire({ title: "Reorder queued", text: `${item.itemName} fell below its reorder point — a purchase request was auto-created for approval.`, icon: "info", timer: 2800, showConfirmButton: false });
-      }
+  // The −/+ buttons no longer mutate quantity directly — they open the Adjust
+  // Stock dialog (pre-set to subtract/add) so every change carries a reason note.
+  const openAdjust = (item: InventoryItem, mode: "add" | "subtract" = "add") => {
+    setAdjustMode(mode);
+    setAdjusting(item);
+  };
+
+  // Adjust stock by an arbitrary amount with a reason note — the reason is
+  // appended to the item's notes as a dated audit line.
+  const handleAdjustWithReason = async (item: InventoryItem, delta: number, reason: string) => {
+    const newQty = Math.max(0, item.quantity + delta);
+    const stamp = new Date().toISOString().slice(0, 10);
+    const line = `[${stamp}] ${delta >= 0 ? "+" : ""}${delta} → ${newQty}${reason ? ` — ${reason}` : ""}`;
+    const nextNotes = item.notes ? `${item.notes}\n${line}` : line;
+    try {
+      await updateRecord("inventory", item.id, {
+        quantity: newQty,
+        notes: nextNotes,
+        ...(delta > 0 ? { lastRestocked: new Date().toISOString() } : {}),
+      });
+      await maybeAutoReorder(item, newQty, delta);
       await refetch();
+      setAdjusting(null);
+      Swal.fire({ title: "Stock adjusted", text: `${item.itemName}: ${item.quantity} → ${newQty} ${item.unit}.`, icon: "success", timer: 1800, showConfirmButton: false });
     } catch (err) {
-      Swal.fire({ title: "Update Failed", text: err instanceof Error ? err.message : "Could not update quantity.", icon: "error" });
+      Swal.fire({ title: "Adjustment Failed", text: err instanceof Error ? err.message : "Could not adjust stock.", icon: "error" });
     }
   };
 
@@ -247,19 +282,38 @@ export default function FacilityInventory() {
   const activeFilterCount =
     (categoryFilter !== "all" ? 1 : 0) +
     (locationFilter !== "all" ? 1 : 0) +
-    (showLowStock ? 1 : 0) +
+    (stockFilter !== "all" ? 1 : 0) +
+    (expiryFilter !== "all" ? 1 : 0) +
     (search.trim() ? 1 : 0);
 
   const clearFilters = () => {
     setSearch("");
     setCategoryFilter("all");
     setLocationFilter("all");
-    setShowLowStock(false);
+    setStockFilter("all");
+    setExpiryFilter("all");
     setPage(1);
   };
 
   return (
     <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5" style={{ background: "#FFFFFF" }}>
+      {/* Tabs — Inventory stock list + embedded Purchase Requests workflow */}
+      <div className="flex gap-1 border-b border-[#E1E3D9]">
+        {([["inventory", "Inventory", Package], ["purchase", "Purchase Requests", ShoppingCart]] as const).map(([key, label, Icon]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${tab === key ? "border-[#2E4A48] text-[#2E4A48]" : "border-transparent text-[#8A8D82] hover:text-[#2B2B27]"}`}
+          >
+            <Icon className="w-4 h-4" /> {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "purchase" ? (
+        <PurchaseRequests />
+      ) : (
+      <div className="space-y-5">
       {/* Header */}
       <ClinicalHeader
         title="Inventory Management"
@@ -339,13 +393,20 @@ export default function FacilityInventory() {
           <option value="all">All Locations</option>
           {locations.map(l => <option key={l} value={l}>{l}</option>)}
         </select>
-        <button
-          type="button"
-          onClick={() => { setShowLowStock(v => !v); setPage(1); }}
-          className={`flex items-center gap-2 px-3 py-2.5 rounded-lg transition text-sm font-medium select-none border ${showLowStock ? "bg-[#2E4A48] text-white border-[#2E4A48]" : "bg-white text-[#2B2B27] border-[#D6D8CD] hover:bg-[#F5F6F1]"}`}
-        >
-          <AlertTriangle className="w-4 h-4" /> Low stock only
-        </button>
+        <select value={stockFilter} onChange={e => { setStockFilter(e.target.value as typeof stockFilter); setPage(1); }}
+          className="px-3 py-2.5 border border-[#D6D8CD] rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#2E4A48]/30 focus:border-[#2E4A48] outline-none">
+          <option value="all">All Stock Levels</option>
+          <option value="OUT_OF_STOCK">Out of Stock</option>
+          <option value="CRITICAL">Critical</option>
+          <option value="LOW">Low</option>
+        </select>
+        <select value={expiryFilter} onChange={e => { setExpiryFilter(e.target.value as typeof expiryFilter); setPage(1); }}
+          className="px-3 py-2.5 border border-[#D6D8CD] rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#2E4A48]/30 focus:border-[#2E4A48] outline-none">
+          <option value="all">Any Expiry</option>
+          <option value="expired">Expired</option>
+          <option value="7">Expiring ≤ 7 days</option>
+          <option value="30">Expiring ≤ 30 days</option>
+        </select>
         {activeFilterCount > 0 && (
           <button
             type="button"
@@ -398,7 +459,7 @@ export default function FacilityInventory() {
               <div className="p-3">
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <h3 className="font-semibold text-[#2B2B27] text-sm truncate flex-1">{item.itemName}</h3>
-                  <StatusPill status={item.outOfStock ? "OUT_OF_STOCK" : item.lowStock ? "LOW" : "NORMAL"} />
+                  <StatusPill status={item.stockStatus} />
                 </div>
                 <div className="flex items-center gap-2 text-xs mb-2">
                   <span className="text-[#C0573F] font-medium">{item.category.replace(/_/g, " ")}</span>
@@ -408,9 +469,9 @@ export default function FacilityInventory() {
                 {/* Qty display */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1">
-                    <button onClick={() => handleQuickAdjust(item, -1)} className="p-1 rounded hover:bg-[#C0573F]/10 text-[#C0573F] transition" title="Decrease"><Minus className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => openAdjust(item, "subtract")} className="p-1 rounded hover:bg-[#C0573F]/10 text-[#C0573F] transition" title="Adjust stock — subtract"><Minus className="w-3.5 h-3.5" /></button>
                     <span className={`text-lg font-bold min-w-[3ch] text-center tabular-nums ${item.lowStock ? "text-[#C0573F]" : "text-[#2B2B27]"}`}>{item.quantity}</span>
-                    <button onClick={() => handleQuickAdjust(item, 1)} className="p-1 rounded hover:bg-[#7E9B6F]/15 text-[#7E9B6F] transition" title="Increase"><PlusIcon className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => openAdjust(item, "add")} className="p-1 rounded hover:bg-[#7E9B6F]/15 text-[#7E9B6F] transition" title="Adjust stock — add"><PlusIcon className="w-3.5 h-3.5" /></button>
                   </div>
                   <span className="text-xs text-[#8A8D82]">{item.unit} &middot; Min: {item.minimumStock}</span>
                 </div>
@@ -421,6 +482,9 @@ export default function FacilityInventory() {
                   </button>
                   <button onClick={() => startEditing(item)} className="flex-1 px-2 py-1.5 text-xs font-medium text-[#C39A3E] bg-[#C39A3E]/10 hover:bg-[#C39A3E]/20 rounded transition flex items-center justify-center gap-1">
                     <Edit className="w-3 h-3" /> Edit
+                  </button>
+                  <button onClick={() => setAdjusting(item)} title="Adjust stock" className="px-2 py-1.5 text-xs font-medium text-[#2E4A48] bg-[#2E4A48]/10 hover:bg-[#2E4A48]/20 rounded transition">
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
                   </button>
                   <button onClick={() => handleDelete(item)} className="px-2 py-1.5 text-xs font-medium text-[#C0573F] bg-[#C0573F]/10 hover:bg-[#C0573F]/20 rounded transition">
                     <Trash2 className="w-3.5 h-3.5" />
@@ -457,16 +521,16 @@ export default function FacilityInventory() {
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex items-center gap-1.5">
-                      <button onClick={() => handleQuickAdjust(item, -1)} className="p-0.5 rounded hover:bg-[#C0573F]/10 text-[#C0573F] transition" title="Decrease"><Minus className="w-3 h-3" /></button>
+                      <button onClick={() => openAdjust(item, "subtract")} className="p-0.5 rounded hover:bg-[#C0573F]/10 text-[#C0573F] transition" title="Adjust stock — subtract"><Minus className="w-3 h-3" /></button>
                       <div className="text-center">
                         <div className={`text-xl font-bold tabular-nums leading-none ${item.lowStock ? "text-[#C0573F]" : "text-[#2B2B27]"}`}>{item.quantity}</div>
                         <div className="text-[10px] text-[#8A8D82] mt-0.5">{item.unit}</div>
                       </div>
-                      <button onClick={() => handleQuickAdjust(item, 1)} className="p-0.5 rounded hover:bg-[#7E9B6F]/15 text-[#7E9B6F] transition" title="Increase"><PlusIcon className="w-3 h-3" /></button>
+                      <button onClick={() => openAdjust(item, "add")} className="p-0.5 rounded hover:bg-[#7E9B6F]/15 text-[#7E9B6F] transition" title="Adjust stock — add"><PlusIcon className="w-3 h-3" /></button>
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <StatusPill status={item.outOfStock ? "OUT_OF_STOCK" : item.lowStock ? "LOW" : "NORMAL"} />
+                    <StatusPill status={item.stockStatus} />
                     <div className="text-[10px] text-[#8A8D82] mt-1">Min {item.minimumStock}</div>
                   </td>
                   <td className="px-4 py-4">
@@ -487,6 +551,7 @@ export default function FacilityInventory() {
                     <div className="flex items-center justify-center gap-1">
                       <button onClick={() => setViewing(item)} className="p-1.5 rounded hover:bg-[#2E4A48]/10 text-[#2E4A48] transition" title="View"><Eye className="w-4 h-4" /></button>
                       <button onClick={() => startEditing(item)} className="p-1.5 rounded hover:bg-[#C39A3E]/15 text-[#C39A3E] transition" title="Edit"><Edit className="w-4 h-4" /></button>
+                      <button onClick={() => setAdjusting(item)} className="p-1.5 rounded hover:bg-[#2E4A48]/10 text-[#2E4A48] transition" title="Adjust stock"><SlidersHorizontal className="w-4 h-4" /></button>
                       <button onClick={() => handleDelete(item)} className="p-1.5 rounded hover:bg-[#C0573F]/10 text-[#C0573F] transition" title="Delete"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </td>
@@ -510,6 +575,8 @@ export default function FacilityInventory() {
               className="px-4 py-2 border border-[#D6D8CD] bg-white rounded-lg text-[#2B2B27] hover:bg-[#F5F6F1] disabled:opacity-50 disabled:cursor-not-allowed transition font-medium text-sm">Next</button>
           </div>
         </div>
+      )}
+      </div>
       )}
 
       {/* View Modal */}
@@ -541,9 +608,9 @@ export default function FacilityInventory() {
                 <div className="flex items-center justify-between mt-2">
                   <p className="text-xs text-[#8A8D82]">{viewingLive.unit}</p>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => handleQuickAdjust(viewingLive, -1)} disabled={viewingLive.quantity <= 0} className="p-1.5 rounded-lg border border-[#D6D8CD] hover:bg-[#C0573F]/10 text-[#C0573F] transition disabled:opacity-40 disabled:cursor-not-allowed" title="Remove one"><Minus className="w-4 h-4" /></button>
+                    <button onClick={() => openAdjust(viewingLive, "subtract")} disabled={viewingLive.quantity <= 0} className="p-1.5 rounded-lg border border-[#D6D8CD] hover:bg-[#C0573F]/10 text-[#C0573F] transition disabled:opacity-40 disabled:cursor-not-allowed" title="Adjust stock — subtract"><Minus className="w-4 h-4" /></button>
                     <span className="text-lg font-bold tabular-nums min-w-[3ch] text-center text-[#2B2B27]">{viewingLive.quantity}</span>
-                    <button onClick={() => handleQuickAdjust(viewingLive, 1)} className="p-1.5 rounded-lg border border-[#D6D8CD] hover:bg-[#7E9B6F]/15 text-[#7E9B6F] transition" title="Add one"><PlusIcon className="w-4 h-4" /></button>
+                    <button onClick={() => openAdjust(viewingLive, "add")} className="p-1.5 rounded-lg border border-[#D6D8CD] hover:bg-[#7E9B6F]/15 text-[#7E9B6F] transition" title="Adjust stock — add"><PlusIcon className="w-4 h-4" /></button>
                   </div>
                 </div>
               </div>
@@ -578,6 +645,9 @@ export default function FacilityInventory() {
             <div className="sticky bottom-0 bg-[#F5F6F1] border-t border-[#E1E3D9] px-6 py-4 flex flex-wrap items-center justify-between gap-3">
               <button onClick={() => setViewing(null)} className="px-6 py-2 text-[#2B2B27] hover:bg-[#EBEDE4] rounded-lg transition font-medium">Close</button>
               <div className="flex flex-wrap gap-2">
+                <button onClick={() => { const v = viewingLive; setViewing(null); setAdjusting(v); }} className="px-4 py-2 bg-[#2E4A48] hover:bg-[#25403D] text-white font-semibold rounded-lg transition text-sm">
+                  <SlidersHorizontal className="w-4 h-4 inline mr-1" /> Adjust
+                </button>
                 <button onClick={() => { const v = viewingLive; setViewing(null); startEditing(v); }} className="px-4 py-2 bg-[#C39A3E] hover:bg-[#AD892F] text-white font-semibold rounded-lg transition text-sm">
                   <Edit className="w-4 h-4 inline mr-1" /> Edit
                 </button>
@@ -595,6 +665,9 @@ export default function FacilityInventory() {
 
       {/* Edit Modal */}
       {editing && <ItemFormModal title="Edit Item" form={editForm} onChange={setEditForm} onSave={handleSaveEdit} onCancel={() => setEditing(null)} saveLabel="Save Changes" />}
+
+      {/* Adjust Stock Modal */}
+      {adjusting && <AdjustStockModal item={adjusting} initialMode={adjustMode} onApply={handleAdjustWithReason} onCancel={() => setAdjusting(null)} />}
 
       {/* Print-only barcode label sheet */}
       {printLabels && <BarcodeLabelSheet labels={printLabels} onDone={() => setPrintLabels(null)} />}
@@ -615,6 +688,69 @@ function StatBox({ label, value, icon: Icon, tone }: { label: string; value: str
       </div>
       <p className="text-2xl sm:text-3xl font-bold tabular-nums" style={{ color: hex }}>{value}</p>
     </ClinicalCard>
+  );
+}
+
+/** Adjust stock by an arbitrary amount with a required reason note (Module 14). */
+function AdjustStockModal({
+  item, initialMode = "add", onApply, onCancel,
+}: {
+  item: InventoryItem;
+  initialMode?: "add" | "subtract";
+  onApply: (item: InventoryItem, delta: number, reason: string) => void | Promise<void>;
+  onCancel: () => void;
+}) {
+  const [mode, setMode] = useState<"add" | "subtract">(initialMode);
+  const [qty, setQty] = useState("1");
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const amount = Math.max(0, Number(qty) || 0);
+  const delta = mode === "add" ? amount : -amount;
+  const nextQty = Math.max(0, item.quantity + delta);
+
+  const submit = async () => {
+    if (amount <= 0) return;
+    setSaving(true);
+    await onApply(item, delta, reason.trim());
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+        <div className="bg-[#2E4A48] text-white p-5 flex items-center justify-between rounded-t-xl">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#C39A3E]">Adjust Stock</p>
+            <h2 className="text-lg font-bold">{item.itemName}</h2>
+          </div>
+          <button onClick={onCancel} className="p-2 hover:bg-white/20 rounded-lg transition"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="flex rounded-lg border border-[#D6D8CD] overflow-hidden">
+            <button type="button" onClick={() => setMode("add")} className={`flex-1 py-2 text-sm font-semibold flex items-center justify-center gap-1.5 transition ${mode === "add" ? "bg-[#7E9B6F] text-white" : "bg-white text-[#2B2B27] hover:bg-[#F5F6F1]"}`}><PlusIcon className="w-4 h-4" /> Add</button>
+            <button type="button" onClick={() => setMode("subtract")} className={`flex-1 py-2 text-sm font-semibold flex items-center justify-center gap-1.5 transition ${mode === "subtract" ? "bg-[#C0573F] text-white" : "bg-white text-[#2B2B27] hover:bg-[#F5F6F1]"}`}><Minus className="w-4 h-4" /> Subtract</button>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[#8A8D82] mb-1">Quantity ({item.unit})</label>
+            <input type="number" min="0" value={qty} onChange={e => setQty(e.target.value)} className="w-full px-3 py-2 border border-[#D6D8CD] rounded-lg text-sm focus:ring-2 focus:ring-[#2E4A48]/30 focus:border-[#2E4A48] outline-none" />
+          </div>
+          <div className="flex items-center justify-between rounded-lg bg-[#F5F6F1] px-4 py-3 text-sm">
+            <span className="text-[#8A8D82]">On hand</span>
+            <span className="font-bold text-[#2B2B27] tabular-nums">{item.quantity} → {nextQty} {item.unit}</span>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[#8A8D82] mb-1">Reason note</label>
+            <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} placeholder="e.g. Delivery received, damaged units removed, cycle-count correction…" className="w-full px-3 py-2 border border-[#D6D8CD] rounded-lg text-sm focus:ring-2 focus:ring-[#2E4A48]/30 focus:border-[#2E4A48] outline-none resize-none" />
+          </div>
+        </div>
+        <div className="bg-[#F5F6F1] border-t border-[#E1E3D9] px-6 py-4 flex justify-end gap-2 rounded-b-xl">
+          <button type="button" onClick={onCancel} className="px-4 py-2 text-sm font-medium text-[#2B2B27] hover:bg-[#EBEDE4] rounded-lg transition">Cancel</button>
+          <button type="button" onClick={submit} disabled={saving || amount <= 0} className="px-5 py-2 rounded-lg bg-[#2E4A48] text-white text-sm font-semibold hover:bg-[#25403D] disabled:opacity-50 transition">
+            {saving ? "Saving…" : "Apply adjustment"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
