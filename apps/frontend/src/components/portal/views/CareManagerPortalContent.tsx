@@ -17,6 +17,7 @@ import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports"
 import AuditLogViewer from "@/components/portal/views/clinical/AuditLogViewer";
 import ConsentFormsManager from "@/components/portal/views/ConsentFormsManager";
 import MonitoringView from "@/components/portal/views/MonitoringView";
+import QualityMonitoringBoard from "@/components/portal/views/clinical/QualityMonitoringBoard";
 
 /**
  * Care Manager portal — clinical oversight split out of Facility Operations:
@@ -56,6 +57,8 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
       return <FollowUpTracker />;
     case "clinicalreports":
       return <ClinicalReports />;
+    case "quality":
+      return <QualityMonitoringBoard />;
     case "auditlog":
       return <AuditLogViewer focus="clinical" />;
     case "consentforms":

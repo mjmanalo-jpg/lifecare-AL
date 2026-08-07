@@ -431,6 +431,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Follow-up Tracker", icon: CalendarCheck, route: "/care_manager/followups", group: "Resident Care" },
       { name: "Consent & Move-in Forms", icon: ClipboardList, route: "/care_manager/consentforms", group: "Resident Care" },
       { name: "Clinical Reports", icon: BarChart3, route: "/care_manager/clinicalreports", group: "Administration" },
+      { name: "Quality Monitoring", icon: BarChart3, route: "/care_manager/quality", group: "Administration" },
       { name: "Audit Log", icon: Shield, route: "/care_manager/auditlog", group: "Administration" },
     ],
   },
