@@ -153,6 +153,7 @@ export default function PortalShell({
     createdAt: string;
     severity?: string | null;
     snoozedUntil?: string | null;
+    relatedEntityType?: string | null;
   }>("notifications", {
     query: sessionUserId ? `f_userId=${sessionUserId}` : undefined,
     tables: ["Notification"],
@@ -164,13 +165,19 @@ export default function PortalShell({
   // Snoozed alerts drop out of the queue until their snooze window elapses.
   const isSnoozed = (n: { snoozedUntil?: string | null }) => !!n.snoozedUntil && new Date(n.snoozedUntil).getTime() >= Date.now();
   // Facility Operations is not a clinical role — its bell only carries operational
-  // alerts (inventory, maintenance/tickets, camera/device, occupancy, system).
-  // Care-system notification types are hidden here (they live in the clinical
-  // portals: nurse / care manager / physician).
+  // alerts (inventory, maintenance/tickets, camera/device, occupancy). Care-system
+  // alerts are hidden by BOTH notification type AND the entity they point at:
+  // SYSTEM_ALERT is shared by operational inventory alerts and clinical
+  // SLA/escalation/follow-up/doc alerts, so the entity type is the reliable
+  // discriminator. Those clinical alerts live in the nurse / care-manager /
+  // physician portals.
   const CLINICAL_NOTIF_TYPES = new Set(["VITAL_ALERT", "MEDICATION_REMINDER", "CALL_BELL", "SBAR_ESCALATION", "SHIFT_REMINDER", "TASK_ASSIGNMENT"]);
+  const CLINICAL_ENTITY_TYPES = new Set(["vitalsLog", "medicationAdministration", "incident", "escalation", "slaBreach", "assessment", "dailyDoc", "weightTrend", "followUp", "task"]);
   const facilityOps = String(userRole) === "FACILITY_ADMIN";
+  const isClinicalNotif = (n: { type?: string; relatedEntityType?: string | null }) =>
+    CLINICAL_NOTIF_TYPES.has(String(n.type)) || CLINICAL_ENTITY_TYPES.has(String(n.relatedEntityType ?? ""));
   const visibleNotifications = (notificationsData || []).filter(
-    (n) => !isSnoozed(n) && !(facilityOps && CLINICAL_NOTIF_TYPES.has(String(n.type))),
+    (n) => !isSnoozed(n) && !(facilityOps && isClinicalNotif(n)),
   );
   const unreadNotifications = visibleNotifications.filter((n) => !n.isRead);
   const unreadCount = unreadNotifications.length;
