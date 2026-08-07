@@ -9,7 +9,7 @@ import {
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
-import { createRecord, deleteRecord } from "@/lib/api";
+import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { useClinician, type ClinicianRole } from "./useClinician";
 
 const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent outline-none text-sm";
@@ -333,6 +333,10 @@ function AssessmentForm({ clinicianName, clinicianId, communityId, residentId, o
   const [type, setType] = useState("QUARTERLY");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  // Care packages, to auto-assign the one matching the derived care level.
+  const pkgQ = useLiveQuery<{ id: string; careLevel: string; isDefault?: boolean; communityId?: string }>(
+    "care-packages", { query: "take=100", tables: ["CarePackage"] },
+  );
 
   const preview = useMemo(() => computeAcuity(scores), [scores]);
 
@@ -365,7 +369,55 @@ function AssessmentForm({ clinicianName, clinicianId, communityId, residentId, o
         weightsUsed: { perDimension: 1, dimensions: 9 }, weightVersion: "v1.0",
         scoredById: clinicianId || null, isCurrent: true,
       });
-      Swal.fire({ title: "Assessment saved", text: `Acuity ${c.acuityLevel} · Care level ${c.careLevel}`, icon: "success", timer: 1600, showConfirmButton: false });
+
+      // Wire the decision engine to the resident: apply the derived acuity level,
+      // the matching care package, and the next-review date — so the monitoring
+      // views, the reassessment-due check, and billing/care-package reflect this
+      // assessment automatically instead of needing a manual match. Best-effort:
+      // a failure here never loses the saved assessment + acuity score.
+      try {
+        const FREQ_DAYS: Record<string, number> = { WEEKLY: 7, BIWEEKLY: 14, MONTHLY: 30, QUARTERLY: 90, ANNUAL: 365 };
+        const freq = REVIEW_BY_ACUITY[c.acuityLevel] ?? "MONTHLY";
+        const nextAssessmentDue = new Date(Date.now() + (FREQ_DAYS[freq] ?? 30) * 86_400_000).toISOString();
+        const pkgs = (pkgQ.data || []).filter((p) => !p.communityId || p.communityId === communityId);
+        const matchPkg = pkgs.find((p) => String(p.careLevel) === c.careLevel && p.isDefault)
+          || pkgs.find((p) => String(p.careLevel) === c.careLevel);
+        await updateRecord("residents", residentId, {
+          currentAcuityLevel: c.acuityLevel,
+          nextAssessmentDue,
+          ...(matchPkg ? { currentCarePackageId: matchPkg.id } : {}),
+        });
+      } catch { /* resident sync is best-effort */ }
+
+      // Auto-generate a draft care plan + caregiver tasks from the flagged
+      // dimensions, so daily care flows straight from the assessment (no manual
+      // "generate plan" / "generate tasks" clicks). Kept DRAFT so a nurse still
+      // reviews & activates; best-effort so it never loses the saved assessment.
+      let flagged = DIMENSIONS.filter((d) => (scores[d.key] ?? 0) >= 3);
+      if (!flagged.length) flagged = [...DIMENSIONS].sort((x, y) => (scores[y.key] ?? 0) - (scores[x.key] ?? 0)).slice(0, 2);
+      try {
+        const planRes = await createRecord("care-plans", {
+          residentId, communityId,
+          title: `Care Plan — ${c.acuityLevel} acuity`,
+          status: "DRAFT", startDate: new Date().toISOString(),
+          reviewFrequency: REVIEW_BY_ACUITY[c.acuityLevel] ?? "MONTHLY",
+          careGoals: flagged.map((d) => `• ${DIM_PLAN[d.key].goal}`).join("\n"),
+          createdById: clinicianId || null, createdByName: clinicianName,
+          notes: `Auto-generated from the ${String(type).replace(/_/g, " ").toLowerCase()} assessment on ${new Date().toLocaleDateString()}.`,
+        });
+        const planId = planRes?.data?.id;
+        if (planId) {
+          const dueDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+          let order = 0;
+          for (const d of flagged) {
+            await createRecord("care-plan-items", { carePlanId: planId, communityId, category: "GOAL", title: DIM_PLAN[d.key].goal, description: `${d.label} assessed at ${scores[d.key]}/5.`, status: "ACTIVE", sortOrder: order++ });
+            await createRecord("care-plan-items", { carePlanId: planId, communityId, category: "INTERVENTION", title: DIM_PLAN[d.key].intervention, status: "ACTIVE", sortOrder: order++ });
+            await createRecord("tasks", { residentId, communityId, title: DIM_PLAN[d.key].intervention, description: `From the ${c.acuityLevel}-acuity care plan (${d.label}).`, category: "Personal Care", status: "PENDING", priority: "MEDIUM", dueDate, generatedFrom: planId });
+          }
+        }
+      } catch { /* care-plan / task generation is best-effort */ }
+
+      Swal.fire({ title: "Assessment saved", text: `Acuity ${c.acuityLevel} · Care level ${c.careLevel}. Draft care plan + tasks generated.`, icon: "success", timer: 2200, showConfirmButton: false });
       onDone();
     } catch (err) {
       Swal.fire("Save failed", err instanceof Error ? err.message : String(err), "error");

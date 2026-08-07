@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic";
 // signed-in NURSE / FACILITY_ADMIN / SUPERADMIN scans only their community.
 // ─────────────────────────────────────────────────────────────
 
-const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "incident", "slaBreach", "escalation"];
+const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "incident", "slaBreach", "escalation", "assessment"];
 
 // SBAR SLA response windows (minutes) by priority — single source of truth is
 // escalationMeta.PRIORITY_META in the UI; mirrored here so the server can
@@ -274,6 +274,28 @@ async function scanCommunity(communityId: string, organizationId: string | null)
         const r = arr[arr.length - 1].resident;
         if (await notify("SYSTEM_ALERT", "weightTrend", `weight:${residentId}:${monthKey}`, "Weight loss detected", `${rname(r)} (Room ${room(r)}) is down ${dropPct.toFixed(1)}% (${first} → ${last}) over the past weeks. Consider a nutrition review.`)) counts.weightLoss++;
       }
+    }
+  });
+
+  // 7b) Reassessment overdue — residents whose scheduled next assessment date
+  //     has passed (set from the acuity level when an assessment is saved).
+  //     Clinical-only recipients (nurse / care manager / physician) so it never
+  //     reaches the operations-only Facility bell.
+  await runSource("reassessment-due", async () => {
+    const clinicalIds = idsForRoles(["NURSE", "CARE_MANAGER", "PHYSICIAN"]);
+    if (!clinicalIds.length) return;
+    const due = await prisma.resident.findMany({
+      where: { communityId, status: { not: "DISCHARGED" }, nextAssessmentDue: { not: null, lte: now } },
+      select: { id: true, firstName: true, lastName: true, roomNumber: true, nextAssessmentDue: true, currentAcuityLevel: true },
+    });
+    for (const r of due) {
+      const dayKey = r.nextAssessmentDue ? new Date(r.nextAssessmentDue).toISOString().slice(0, 10) : "na";
+      await notify(
+        "SYSTEM_ALERT", "assessment", `reassess:${r.id}:${dayKey}`,
+        "Reassessment due",
+        `${rname(r)} (Room ${room(r)}) is due for reassessment${r.currentAcuityLevel ? ` (${r.currentAcuityLevel} acuity)` : ""}. Complete an updated assessment.`,
+        "WARNING", clinicalIds,
+      );
     }
   });
 
