@@ -374,3 +374,171 @@ p, blockquote, li {
     scroll-behavior: auto !important;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   SweetAlert2 skin (prompts, choice dialogs, rich-HTML & loading popups)
+
+   Applied via the `al-swal2-*` custom classes injected in lib/swal.ts, so
+   every raw SweetAlert2 dialog across the app matches the shadcn Dialog /
+   AlertDialog look. Uses the same design tokens (--card-bg, --foreground,
+   --border, --input, --secondary, --ring …) so it adapts to dark/light with
+   zero extra rules. Plain notifications/confirms never reach here — they're
+   already routed to the toast / AlertDialog components.
+   ───────────────────────────────────────────────────────────── */
+
+/* Backdrop — dim + blur, matching the shadcn dialog overlay. */
+.swal2-container.al-swal2-container {
+  background: rgba(9, 9, 11, 0.55) !important;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  padding: 1rem;
+}
+
+/* Popup shell — card surface, soft border, generous radius & shadow.
+   Every selector chains the base `.swal2-*` class so it outweighs SweetAlert2's
+   own stylesheet, which is injected into <head> at runtime (after globals.css)
+   and would otherwise win at equal specificity — e.g. keeping the popup white
+   in dark mode. */
+.swal2-popup.al-swal2-popup {
+  width: 100%;
+  max-width: 30rem;
+  padding: 1.75rem 1.75rem 1.5rem;
+  border-radius: 1rem;
+  background: var(--card-bg);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+/* Entrance/exit — a gentle scale+fade instead of the default bounce. */
+.swal2-popup.al-swal2-popup.swal2-show { animation: al-swal2-in 0.22s cubic-bezier(0.16, 1, 0.3, 1); }
+.swal2-popup.al-swal2-popup.swal2-hide { animation: al-swal2-out 0.14s ease-in forwards; }
+@keyframes al-swal2-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes al-swal2-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.97); }
+}
+
+/* Title — clear, weighty, tracks the AlertDialog title scale. */
+.swal2-title.al-swal2-title {
+  margin: 0.25rem 0 0.35rem;
+  padding: 0;
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+}
+
+/* Supporting text / html body — muted, readable. */
+.swal2-html-container.al-swal2-html {
+  margin: 0.25rem 0 0;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--muted-foreground);
+}
+
+/* Inputs (text / textarea / select all share the al-swal2-input class). */
+.swal2-input.al-swal2-input,
+.swal2-textarea.al-swal2-input,
+.swal2-select.al-swal2-input {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 1rem 0 0.25rem;
+  padding: 0.7rem 0.85rem;
+  font-size: 0.9375rem;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--input);
+  border-radius: 0.625rem;
+  box-shadow: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.swal2-textarea.al-swal2-input { min-height: 7.5rem; resize: vertical; line-height: 1.5; }
+.al-swal2-input::placeholder { color: var(--muted-foreground); opacity: 0.7; }
+.swal2-input.al-swal2-input:focus,
+.swal2-textarea.al-swal2-input:focus,
+.swal2-select.al-swal2-input:focus,
+.swal2-input.al-swal2-input:focus-visible,
+.swal2-textarea.al-swal2-input:focus-visible,
+.swal2-select.al-swal2-input:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+}
+.swal2-input-label.al-swal2-input-label {
+  justify-content: flex-start;
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+.swal2-validation-message.al-swal2-validation {
+  margin-top: 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--destructive);
+  font-weight: 500;
+}
+.swal2-validation-message.al-swal2-validation::before { display: none; }
+
+/* Action row + buttons — token-driven, with hover lift. */
+.swal2-actions.al-swal2-actions {
+  gap: 0.625rem;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+}
+.al-swal2-btn {
+  appearance: none;
+  min-width: 6.5rem;
+  margin: 0;
+  padding: 0.6rem 1.15rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.2;
+  border-radius: 0.625rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.1s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.al-swal2-btn:hover { transform: translateY(-1px); filter: brightness(1.06); }
+.al-swal2-btn:active { transform: translateY(0); filter: brightness(0.96); }
+.al-swal2-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* Confirm — semantic variants derived from the call's intent. */
+.swal2-confirm.al-swal2-confirm { color: #ffffff; background: var(--color-primary); box-shadow: 0 4px 12px -4px rgba(59, 130, 246, 0.5); }
+.swal2-confirm.al-swal2-confirm--info { background: var(--color-primary); box-shadow: 0 4px 12px -4px rgba(59, 130, 246, 0.5); }
+.swal2-confirm.al-swal2-confirm--success { background: #16a34a; box-shadow: 0 4px 12px -4px rgba(22, 163, 74, 0.6); }
+.swal2-confirm.al-swal2-confirm--warning { background: #d97706; box-shadow: 0 4px 12px -4px rgba(217, 119, 6, 0.6); }
+.swal2-confirm.al-swal2-confirm--danger { background: var(--destructive); box-shadow: 0 4px 12px -4px rgba(239, 68, 68, 0.5); }
+
+/* Cancel — neutral secondary surface. */
+.swal2-cancel.al-swal2-cancel {
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  border-color: var(--border);
+}
+/* Deny — destructive middle option. */
+.swal2-deny.al-swal2-deny { color: #ffffff; background: var(--destructive); }
+
+/* Close button + footer. */
+.swal2-close.al-swal2-close { color: var(--muted-foreground); box-shadow: none; }
+.swal2-close.al-swal2-close:hover { color: var(--foreground); background: var(--surface-hover); border-radius: 0.5rem; }
+.swal2-footer.al-swal2-footer {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+}
+.swal2-loader.al-swal2-loader { border-color: var(--color-primary) transparent var(--color-primary) transparent; }
+.swal2-timer-progress-bar.al-swal2-timer { background: var(--color-primary); }
+
+@media (max-width: 480px) {
+  .swal2-popup.al-swal2-popup { padding: 1.35rem 1.25rem 1.25rem; border-radius: 0.875rem; }
+  .swal2-title.al-swal2-title { font-size: 1.2rem; }
+  .al-swal2-btn { min-width: 0; flex: 1 1 auto; }
+}
