@@ -542,3 +542,37 @@ p, blockquote, li {
   .swal2-title.al-swal2-title { font-size: 1.2rem; }
   .al-swal2-btn { min-width: 0; flex: 1 1 auto; }
 }
+
+/* Custom-HTML dialog form controls — bespoke Swal `html` popups (e.g. "Log
+   physician communication", referral/schedule prompts) render their own plain
+   <input>/<select>/<textarea>, which the native-input rules above don't reach.
+   Style them from the same tokens so every dialog looks consistent, not
+   browser-default. Scoped inside .al-swal2-popup so nothing else is affected. */
+.al-swal2-popup input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.al-swal2-popup select,
+.al-swal2-popup textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9375rem;
+  color: var(--foreground);
+  background: var(--background);
+  border: 1px solid var(--input);
+  border-radius: 0.625rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.al-swal2-popup input:not([type="checkbox"]):not([type="radio"]):not([type="range"])::placeholder,
+.al-swal2-popup textarea::placeholder {
+  color: var(--muted-foreground);
+  opacity: 0.7;
+}
+.al-swal2-popup input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+.al-swal2-popup select:focus,
+.al-swal2-popup textarea:focus {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+}
+.al-swal2-popup textarea { min-height: 6rem; resize: vertical; line-height: 1.5; }
+/* Labels inside custom dialogs read as muted micro-labels. */
+.al-swal2-popup label { color: var(--muted-foreground); }
