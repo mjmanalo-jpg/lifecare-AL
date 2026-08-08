@@ -52,62 +52,84 @@ interface PortalShellProps {
   onLogout?: () => void;
 }
 
-// Keywords used to route a notification to the most relevant tab. Matched
-// against the current role's sidebar link routes/names, so a click only ever
-// navigates to a tab that actually exists for that role (otherwise it falls
-// back to the dashboard). Order matters — earlier keywords win.
-const NOTIFICATION_ROUTE_KEYWORDS: Record<string, string[]> = {
-  INCIDENT_REPORT: ["incident", "escalation", "alert"],
-  VITAL_ALERT: ["vital", "record"],
-  // Refused/missed-dose alerts land on the MAR (administration statuses live
-  // there); "medication" stays as a fallback for roles without a MAR tab.
-  MEDICATION_REMINDER: ["mar", "pharmacy", "medication"],
-  CALL_BELL: ["callbell", "call-bell", "record", "monitoring"],
-  TASK_ASSIGNMENT: ["task", "care", "round"],
-  MESSAGE: ["message", "comms", "secure", "inbox"],
-  SHIFT_REMINDER: ["shift", "continuity", "endorsement", "report"],
-  TRANSPORT_UPDATE: ["transport", "trip", "fleet", "ambulance", "dispatch"],
-  SYSTEM_ALERT: ["alert", "dashboard", "overview"],
+// Every notification resolves to an explicit sidebar tab. The ENTITY a
+// notification points at is the precise signal (many types are shared —
+// SYSTEM_ALERT alone covers inventory, camera, subscription, system health,
+// …), so it's checked first; the notification TYPE is the fallback for alerts
+// without an entity (e.g. demo data). Each key maps to an ordered list of
+// candidate route segments; the first tab the current role actually has in its
+// sidebar wins, so a click always lands on a real page (vitals → Vitals Monitor
+// when present, else Vitals Trends), never a 404 or the wrong dashboard.
+const NOTIF_TARGET_ROUTES: Record<string, string[]> = {
+  // Care system
+  vitalsLog: ["monitoring", "vitals", "records", "dashboard"],
+  weightTrend: ["monitoring", "vitals", "records", "dashboard"],
+  medicationAdministration: ["mar", "medications", "orders", "dashboard"],
+  incident: ["incidents", "alertcenter", "records", "dashboard"],
+  escalation: ["escalations", "alertcenter", "dashboard"],
+  slaBreach: ["alertcenter", "alerts", "escalations", "dashboard"],
+  followUp: ["followups", "records", "dashboard"],
+  assessment: ["rounds", "casereview", "dashboard"],
+  task: ["taskboard", "tasks", "documentation", "dashboard"],
+  dailyDoc: ["dailyrounds", "documentation", "tasks", "reports", "dashboard"],
+  callbell: ["callbells", "alertcenter", "monitoring", "dashboard"],
+  // Facility operations
+  inventoryItem: ["inventory-alerts", "inventory", "dashboard"],
+  camera: ["cameras", "cameralogs", "securitylog", "dashboard"],
+  purchaseRequest: ["purchaserequests", "inventory", "dashboard"],
+  serviceRequest: ["services", "frontdesk", "dashboard"],
+  maintenance: ["maintenance", "dashboard"],
+  diningReservation: ["community", "dining", "dashboard"],
+  conciergeBooking: ["concierge", "services", "dashboard"],
+  trip: ["trips", "requests", "transport", "dashboard"],
+  // Billing & subscriptions
+  invoice: ["invoices", "expenses", "billing", "ledger", "dashboard"],
+  subscription: ["subscription", "usage", "invoices", "dashboard"],
+  "subscription-payment": ["subscription", "usage", "dashboard"],
+  "saas-invoice": ["invoices", "workspaces", "dashboard"],
+  // Organizations & access
+  organization: ["workspaces", "communities", "dashboard"],
+  community: ["communities", "dashboard"],
+  "staff-account": ["staff", "people", "dashboard"],
+  invitation: ["invitations", "people", "dashboard"],
+  // Platform / system health
+  systemHealth: ["health", "dashboard"],
 };
 
-// Many alerts share a generic notification type (SYSTEM_ALERT covers inventory,
-// dining, maintenance, service, SLA, …). The ENTITY the alert points at is the
-// precise routing signal, so it's checked before the broad type keywords. An
-// optional `query` deep-links to the right sub-tab (e.g. Dining Reservations).
-const ENTITY_ROUTE_KEYWORDS: Record<string, { keywords: string[]; query?: string }> = {
-  diningReservation: { keywords: ["community"], query: "subtab=dining" },
-  purchaseRequest: { keywords: ["purchaserequest", "purchase"] },
-  serviceRequest: { keywords: ["services", "service"] },
-  maintenance: { keywords: ["maintenance"] },
-  conciergeBooking: { keywords: ["concierge"] },
-  inventoryItem: { keywords: ["inventory-alerts", "inventory"] },
-  incident: { keywords: ["incident"] },
-  escalation: { keywords: ["escalation", "coordination"] },
-  vitalsLog: { keywords: ["monitoring", "vital", "record"] },
-  medicationAdministration: { keywords: ["mar", "medication"] },
-  followUp: { keywords: ["follow"] },
-  task: { keywords: ["task"] },
-  assessment: { keywords: ["assessment", "rounds"] },
+const NOTIF_ROUTE_BY_TYPE: Record<string, string[]> = {
+  VITAL_ALERT: ["monitoring", "vitals", "records", "dashboard"],
+  MEDICATION_REMINDER: ["mar", "medications", "orders", "dashboard"],
+  INCIDENT_REPORT: ["incidents", "alertcenter", "records", "dashboard"],
+  CALL_BELL: ["callbells", "alertcenter", "monitoring", "dashboard"],
+  TASK_ASSIGNMENT: ["taskboard", "tasks", "documentation", "dashboard"],
+  SHIFT_REMINDER: ["reports", "dashboard"],
+  MESSAGE: ["messages", "dashboard"],
+  TRANSPORT_UPDATE: ["trips", "requests", "transport", "dashboard"],
+  SBAR_ESCALATION: ["escalations", "alertcenter", "dashboard"],
+  SYSTEM_ALERT: ["health", "dashboard"],
+  BILLING_UPDATE: ["invoices", "expenses", "subscription", "billing", "dashboard"],
 };
 
-/** Best matching tab route for a notification within the current role's nav —
- *  by the alert's entity type first (precise), then its notification type
- *  (broad), else the dashboard fallback. */
+// Optional deep-link appended when the resolved tab supports sub-tabs.
+const NOTIF_ROUTE_QUERY: Record<string, string> = {
+  diningReservation: "subtab=dining",
+};
+
+/** Best matching sidebar route for a notification — by its related entity type
+ *  first (precise), then its notification type (fallback), else the role's
+ *  dashboard. Candidates are matched against the current role's sidebar links
+ *  so a click always lands on a tab that exists for that role. */
 function routeForNotification(type: string, relatedEntityType: string | null | undefined, links: SidebarLink[], fallback: string): string {
-  const findByKeywords = (keywords: string[]): SidebarLink | undefined => {
-    for (const k of keywords) {
-      const m = links.find((l) => l.route.toLowerCase().includes(k) || l.name.toLowerCase().includes(k));
-      if (m) return m;
+  const entity = relatedEntityType ? String(relatedEntityType).toLowerCase() : "";
+  const candidates = (entity ? NOTIF_TARGET_ROUTES[entity] : undefined) ?? NOTIF_ROUTE_BY_TYPE[type] ?? [];
+  for (const segment of candidates) {
+    const match = links.find((l) => l.route.endsWith(`/${segment}`));
+    if (match) {
+      const query = entity ? NOTIF_ROUTE_QUERY[entity] : undefined;
+      return query ? `${match.route}?${query}` : match.route;
     }
-    return undefined;
-  };
-  const entity = relatedEntityType ? ENTITY_ROUTE_KEYWORDS[relatedEntityType] : undefined;
-  if (entity) {
-    const match = findByKeywords(entity.keywords);
-    if (match) return entity.query ? `${match.route}?${entity.query}` : match.route;
   }
-  const typeMatch = findByKeywords(NOTIFICATION_ROUTE_KEYWORDS[type] ?? []);
-  return typeMatch ? typeMatch.route : fallback;
+  return fallback;
 }
 
 export default function PortalShell({
@@ -192,21 +214,36 @@ export default function PortalShell({
   // Compute unread count
   // Snoozed alerts drop out of the queue until their snooze window elapses.
   const isSnoozed = (n: { snoozedUntil?: string | null }) => !!n.snoozedUntil && new Date(n.snoozedUntil).getTime() >= Date.now();
-  // Facility Operations is not a clinical role — its bell only carries operational
-  // alerts (inventory, maintenance/tickets, camera/device, occupancy). Care-system
-  // alerts are hidden by BOTH notification type AND the entity they point at:
-  // SYSTEM_ALERT is shared by operational inventory alerts and clinical
-  // SLA/escalation/follow-up/doc alerts, so the entity type is the reliable
-  // discriminator. Those clinical alerts live in the nurse / care-manager /
-  // physician portals.
-  const CLINICAL_NOTIF_TYPES = new Set(["VITAL_ALERT", "MEDICATION_REMINDER", "CALL_BELL", "SBAR_ESCALATION", "SHIFT_REMINDER", "TASK_ASSIGNMENT"]);
+  // Admin tiers only surface alerts within their function. Facility Operations is
+  // not a clinical role — its bell only carries operational alerts (inventory,
+  // maintenance/tickets, camera/device, occupancy). Care-system alerts are hidden
+  // by BOTH notification type AND the entity they point at: SYSTEM_ALERT is shared
+  // by operational inventory alerts and clinical SLA/escalation/follow-up/doc
+  // alerts, so the entity type is the reliable discriminator. Those clinical
+  // alerts live in the nurse / care-manager / physician portals.
+  // Platform & Organization admins additionally exclude facility-operational
+  // alerts (purchase/service/maintenance/dining/concierge/inventory/camera/
+  // transport) and resident-family billing — their bells only carry subscription,
+  // billing, security and system-level alerts.
+  const CLINICAL_NOTIF_TYPES = new Set(["VITAL_ALERT", "MEDICATION_REMINDER", "CALL_BELL", "SBAR_ESCALATION", "SHIFT_REMINDER", "TASK_ASSIGNMENT", "INCIDENT_REPORT"]);
   const CLINICAL_ENTITY_TYPES = new Set(["vitalsLog", "medicationAdministration", "incident", "escalation", "slaBreach", "assessment", "dailyDoc", "weightTrend", "followUp", "task"]);
-  const facilityOps = String(userRole) === "FACILITY_ADMIN";
+  const FACILITY_NOTIF_TYPES = new Set(["TRANSPORT_UPDATE"]);
+  const FACILITY_ENTITY_TYPES = new Set(["purchaseRequest", "serviceRequest", "maintenance", "diningReservation", "conciergeBooking", "inventoryItem", "camera", "trip"]);
   const isClinicalNotif = (n: { type?: string; relatedEntityType?: string | null }) =>
     CLINICAL_NOTIF_TYPES.has(String(n.type)) || CLINICAL_ENTITY_TYPES.has(String(n.relatedEntityType ?? ""));
-  const visibleNotifications = (notificationsData || []).filter(
-    (n) => !isSnoozed(n) && !(facilityOps && isClinicalNotif(n)),
-  );
+  const isFacilityNotif = (n: { type?: string; relatedEntityType?: string | null }) =>
+    FACILITY_NOTIF_TYPES.has(String(n.type)) || FACILITY_ENTITY_TYPES.has(String(n.relatedEntityType ?? ""));
+  // Resident/family invoice notifications (entity "invoice") are out of scope for
+  // the admin tiers; SaaS subscription billing (entity "subscription") is not.
+  const isResidentBilling = (n: { type?: string; relatedEntityType?: string | null }) =>
+    String(n.type) === "BILLING_UPDATE" && String(n.relatedEntityType ?? "") === "invoice";
+  const scopeRole = String(userRole);
+  const visibleNotifications = (notificationsData || []).filter((n) => {
+    if (isSnoozed(n)) return false;
+    if (scopeRole === "FACILITY_ADMIN") return !isClinicalNotif(n);
+    if (scopeRole === "ORGANIZATION_ADMIN" || scopeRole === "PLATFORM_ADMIN") return !isClinicalNotif(n) && !isFacilityNotif(n) && !isResidentBilling(n);
+    return true;
+  });
   const unreadNotifications = visibleNotifications.filter((n) => !n.isRead);
   const unreadCount = unreadNotifications.length;
 
