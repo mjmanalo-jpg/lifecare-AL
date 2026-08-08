@@ -15,6 +15,7 @@ const STATIC_LINKS: NavLink[] = [
   { name: "Features", href: "#features" },
   { name: "Technology", href: "#technology" },
   { name: "Showcase", href: "#showcase" },
+  { name: "Plans", href: "#plans" },
   { name: "Contact", href: "#contact" },
   { name: "About Us", href: "#about" },
 ];

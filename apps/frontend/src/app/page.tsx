@@ -143,6 +143,11 @@ export default function Home() {
     id: string; title: string; description: string; imageUrl?: string;
     author: string; publishedAt: string; published: boolean;
   }>>([]);
+  const [plans, setPlans] = useState<Array<{
+    id: string; key: string; name: string; description?: string | null;
+    maxCommunities?: number | null; maxActiveResidents?: number | null; maxStaffSeats?: number | null;
+    modules: number; priceMonthly: number | null; currency: string; tagline: string; highlight: boolean;
+  }>>([]);
 
   useEffect(() => {
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
@@ -180,7 +185,21 @@ export default function Home() {
       .then((r) => r.json())
       .then((json) => setBlogPosts(json.data || []))
       .catch(() => {});
+
+    // Fetch live subscription plans created by the platform admin
+    fetch("/api/public/plans", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((json) => setPlans(json.plans || []))
+      .catch(() => {});
   }, []);
+
+  const formatPrice = (amount: number, currency: string) => {
+    try {
+      return new Intl.NumberFormat("en-PH", { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
+    } catch {
+      return `${currency} ${amount.toLocaleString()}`;
+    }
+  };
 
   const sc = (key: string, fallback: string) => siteContent[key] || fallback;
   // Scroll hooks for cinematic parallax scroll effect
@@ -510,6 +529,86 @@ export default function Home() {
         </motion.div>
       </section>
       
+      {/* Plans / Pricing Section — live from the platform admin's plans */}
+      {plans.length > 0 && (
+        <section id="plans" className="relative z-10 w-full px-6 py-24 max-w-7xl mx-auto border-t border-white/5 flex flex-col items-center">
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground mb-4">
+              {sc("plans_title", "Plans & Pricing")}
+            </h2>
+            <p className="text-muted-foreground font-light max-w-2xl mx-auto text-sm md:text-base leading-relaxed">
+              {sc("plans_subtitle", "Choose the plan that fits your organization. Scale communities, residents, and staff seats as you grow.")}
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full items-stretch">
+            {plans.map((plan, i) => {
+              const bullets = [
+                `${plan.maxCommunities ?? "Unlimited"} ${plan.maxCommunities === 1 ? "community" : "communities"}`,
+                `${plan.maxActiveResidents ?? "Unlimited"} residents`,
+                `${plan.maxStaffSeats ?? "Unlimited"} staff seats`,
+                plan.modules > 0 ? `${plan.modules} care modules included` : "Core clinical modules",
+              ];
+              return (
+                <motion.div
+                  key={plan.id}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.5, delay: i * 0.1 }}
+                  className={`relative glass-panel rounded-3xl p-8 flex flex-col hover:-translate-y-2 transition-all duration-500 ${plan.highlight ? "border-2 border-[var(--lp-accent,#f59e0b)]/50 shadow-[0_0_40px_var(--lp-accent-20,rgba(245,158,11,0.15))]" : "border border-white/5"}`}
+                >
+                  {plan.highlight && (
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-[var(--lp-accent,#f59e0b)] text-background">
+                      Most Popular
+                    </span>
+                  )}
+                  <h3 className="text-xl font-bold text-foreground">{plan.name}</h3>
+                  {plan.tagline ? (
+                    <p className="mt-1 text-sm text-muted-foreground font-light">{plan.tagline}</p>
+                  ) : plan.description ? (
+                    <p className="mt-1 text-sm text-muted-foreground font-light line-clamp-2">{plan.description}</p>
+                  ) : null}
+
+                  <div className="mt-6 mb-6">
+                    {plan.priceMonthly !== null ? (
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-4xl font-black tracking-tight text-foreground">{formatPrice(plan.priceMonthly, plan.currency)}</span>
+                        <span className="text-sm text-muted-foreground font-light">/ month</span>
+                      </div>
+                    ) : (
+                      <span className="text-2xl font-bold tracking-tight text-foreground">Custom pricing</span>
+                    )}
+                  </div>
+
+                  <ul className="space-y-3 mb-8 flex-1">
+                    {bullets.map((bullet, bIdx) => (
+                      <li key={bIdx} className="flex items-center gap-3 text-sm text-muted-foreground font-light">
+                        <CheckCircle className="w-4 h-4 text-[var(--lp-accent,#f59e0b)] shrink-0" />
+                        <span>{bullet}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Link
+                    href="/signup"
+                    className={`w-full py-3 rounded-xl text-center text-sm font-semibold transition-all flex items-center justify-center gap-2 ${plan.highlight ? "bg-foreground text-background hover:scale-105 shadow-lg" : "glass-panel text-foreground hover:bg-foreground/5"}`}
+                  >
+                    Get Started <ChevronRight className="w-4 h-4" />
+                  </Link>
+                </motion.div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Blog Section */}
       {blogPosts.length > 0 && (
         <section id="blog" className="relative z-10 w-full px-6 py-24 max-w-7xl mx-auto border-t border-white/5">
