@@ -131,3 +131,25 @@ Root cause: Golden Hearth org had 24 members but only 8 Staff rows (community sh
 - **Client realtime:** `OrganizationAdminPortalContent` now polls `/api/organization-admin/overview` silently every 20s (loading spinner suppressed on background refresh; replaces the single on-mount fetch). useLiveQuery not used here — its realtime channel + generic API are single-community scoped, but the org-admin view spans all communities.
 - Uncommitted (from earlier): org-admin invoice amounts use `PHP/₱` only (removed `$`) via `Intl.NumberFormat("en-PH", { maximumFractionDigits: 0 })`.
 - Build: `npx next build` clean (exit 0) after all edits.
+
+## Admin bells scoped to function — no clinical/facility alerts for platform/org admin (2026-08-08)
+`PortalShell.tsx` notification filter extended so admin tiers only see alerts within their function:
+- `FACILITY_ADMIN` (unchanged): hides clinical types + clinical entity types; still sees operational facility alerts (inventory, maintenance, dining, concierge, camera).
+- `ORGANIZATION_ADMIN` / `PLATFORM_ADMIN` (new): also exclude facility-operational alerts (`TRANSPORT_UPDATE` type + entities purchaseRequest/serviceRequest/maintenance/diningReservation/conciergeBooking/inventoryItem/camera/trip) and resident/family billing (`BILLING_UPDATE` + entity `invoice`). They keep subscription billing (`BILLING_UPDATE` + entity `subscription`), security, and system-level alerts.
+- Added `INCIDENT_REPORT` to `CLINICAL_NOTIF_TYPES` (previously only caught via the `incident` entity). `facilityOps` flag → `scopeRole` switch.
+- Build: `npx next build` clean (exit 0). Single file change, not yet committed.
+
+## Platform admin notified on new customer signups + subscription payments (2026-08-08)
+New `lib/platformNotify.ts` helper fans a business alert out to every active PLATFORM_ADMIN user (best-effort, never throws). Wired into:
+- `api/register/organization/route.ts` — "New organization registered": org name + owner + email + plan (30-day trial), severity WARNING, entity `organization`. Fires on the public `/signup` + `/checkout/[plan]` path.
+- `api/organization-admin/billing/route.ts` — "Subscription payment received": org name + amount + plan + invoice number, severity WARNING, entity `subscription`. Fires when a payment settles and the subscription advances to ACTIVE (simulated-checkout path; real hosted-checkout stays PENDING — no webhook/confirmation handler exists yet).
+- These pass the new bell scope filter (SYSTEM_ALERT type, entities `organization`/`subscription` are not in the clinical/facility exclusion sets).
+- Build: `npx next build` clean (exit 0). Not yet committed.
+
+## Notifications now route to their exact sidebar tab (2026-08-08)
+Replaced the fuzzy keyword routing in `PortalShell.tsx` with an explicit notification→sidebar-tab map:
+- `NOTIF_TARGET_ROUTES` — keyed by `relatedEntityType` (precise: SYSTEM_ALERT alone covers inventory/camera/subscription/system-health/…). Each key maps to an ordered list of candidate route segments; the first tab the role actually has in its sidebar wins (`l.route.endsWith("/segment")` exact match), so clicks land on a real page.
+- `NOTIF_ROUTE_BY_TYPE` — type-based fallback for alerts without an entity (demo data): SYSTEM_ALERT → `health` (System Health) when present else dashboard; BILLING_UPDATE → invoices/expenses/subscription.
+- `NOTIF_ROUTE_QUERY` — preserved deep-links, e.g. diningReservation → `/facility_admin/community?subtab=dining`.
+- Examples that now land correctly: platform-admin "Supabase Connection Healthy"/system alerts → System Health; org "New organization registered" → Customer Workspaces; org-admin subscription reminders → Usage & Subscription; platform subscription payments → Usage & Capacity; camera offline → Camera Registry; trips → Trip Board; family invoice → Family Billing.
+- Build: `npx next build` clean (exit 0). `PortalShell.tsx` only, not yet committed.
