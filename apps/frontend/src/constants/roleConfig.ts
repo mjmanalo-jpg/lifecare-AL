@@ -263,6 +263,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Pending Approvals", icon: ClipboardCheck, route: "/organization_admin/approvals" },
       { name: "Add Staff Account", icon: UserPlus, route: "/organization_admin/invitations" },
       { name: "Usage & Subscription", icon: Gauge, route: "/organization_admin/subscription" },
+      { name: "Invoices", icon: Receipt, route: "/organization_admin/invoices" },
       { name: "Organization Branding", icon: Palette, route: "/organization_admin/branding" },
       { name: "Organization Audit", icon: Shield, route: "/organization_admin/audit" },
     ],
