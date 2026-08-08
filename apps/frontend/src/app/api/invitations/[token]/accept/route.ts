@@ -3,6 +3,17 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hashInvitationToken } from "@/lib/invitations";
 
+const STAFF_COMMUNITY_ROLES = new Set(["FACILITY_ADMIN", "BILLING_ADMIN", "PHYSICIAN", "NURSE", "CAREGIVER", "FLEET_MANAGEMENT", "DRIVER"]);
+const POSITION_BY_ROLE: Record<string, string> = {
+  FACILITY_ADMIN: "Facility Admin",
+  BILLING_ADMIN: "Billing Admin",
+  PHYSICIAN: "Physician",
+  NURSE: "Registered Nurse",
+  CAREGIVER: "Caregiver",
+  FLEET_MANAGEMENT: "Fleet Manager",
+  DRIVER: "Driver",
+};
+
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const session = await getSession();
   if (!session?.userId) return NextResponse.json({ error: "Sign in before accepting this invitation" }, { status: 401 });
@@ -16,6 +27,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { email: true } });
   if (!user || user.email.toLowerCase() !== invitation.email.toLowerCase()) return NextResponse.json({ error: "Invitation was issued to a different email" }, { status: 403 });
   if (invitation.organization.status !== "ACTIVE") return NextResponse.json({ error: "Organization is not active" }, { status: 403 });
+
+  const existingStaff = invitation.communityId && invitation.communityRole && STAFF_COMMUNITY_ROLES.has(invitation.communityRole)
+    ? await prisma.staff.findUnique({ where: { userId: session.userId! } })
+    : null;
 
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('app.user_id', ${session.userId!}, true)`;
@@ -40,6 +55,29 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         where: { userId_communityId: { userId: session.userId!, communityId: invitation.communityId } },
         create: { userId: session.userId!, communityId: invitation.communityId, role: invitation.communityRole, status: "ACTIVE" },
         update: { role: invitation.communityRole, status: "ACTIVE" },
+      });
+    }
+    if (invitation.communityId && invitation.communityRole && STAFF_COMMUNITY_ROLES.has(invitation.communityRole) && (!existingStaff || existingStaff.organizationId === invitation.organizationId)) {
+      const communityConnector = invitation.communityId ? { community: { connect: { id: invitation.communityId } } } : {};
+      const staffCreate = {
+        position: POSITION_BY_ROLE[invitation.communityRole] || invitation.communityRole,
+        hireDate: new Date(),
+        isActive: true,
+        isApproved: true,
+        user: { connect: { id: session.userId! } },
+        organization: { connect: { id: invitation.organizationId } },
+        ...communityConnector,
+      };
+      const staffUpdate = {
+        isActive: true,
+        isApproved: true,
+        organization: { connect: { id: invitation.organizationId } },
+        ...communityConnector,
+      };
+      await tx.staff.upsert({
+        where: { userId: session.userId! },
+        create: staffCreate,
+        update: staffUpdate,
       });
     }
     if (invitation.residentId && invitation.communityRole === "RESIDENT") {

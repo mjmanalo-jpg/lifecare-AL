@@ -18,7 +18,7 @@ export async function GET() {
         where: { id: organizationId },
         include: {
           subscription: { include: { plan: { include: { entitlements: true } } } },
-          communities: { orderBy: { name: "asc" }, include: { _count: { select: { residents: true, staff: true } } } },
+          communities: { orderBy: { name: "asc" }, include: { _count: { select: { residents: true, staff: true, rooms: true } } } },
           memberships: { orderBy: { createdAt: "asc" }, include: { user: { select: { id: true, name: true, email: true, isActive: true, lastLogin: true, communityMemberships: { where: { community: { organizationId } }, include: { community: { select: { id: true, name: true } } } } } } } },
           invitations: { take: 100, orderBy: { createdAt: "desc" }, include: { community: { select: { id: true, name: true } } } },
           staff: { orderBy: { createdAt: "desc" }, include: { user: { select: { id: true, name: true, email: true, phone: true, role: true, isActive: true } }, community: { select: { id: true, name: true } } } },

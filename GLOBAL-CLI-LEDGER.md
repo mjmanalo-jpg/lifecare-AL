@@ -121,3 +121,13 @@ The login page had no path to registration; the wizard lived only behind the Sup
 - Login page (`app/login/page.tsx`): added "New resident? Create an account" → /register link under the Sign In button.
 - Build: npx next build clean (exit 0); routes now include ○ /register.
 Note: /register + /api/register/resident are intentionally public (no auth) so prospective residents can self-enroll. Flag if this should instead be staff-gated.
+
+## Staff/Room/Resident counts now realtime in org-admin Communities (2026-08-08)
+Root cause: Golden Hearth org had 24 members but only 8 Staff rows (community showed 8 Staff). Staff-like accounts created via seed/leadership flows lacked a Staff profile. Fix = data repair + flow guard + realtime counts:
+- **Backfill (production):** created 14 missing Staff profiles across Golden Hearth (12), DevTest (1), Sunrise (1) — position derived from role, linked to their active community membership, isActive/isApproved true. Golden Hearth community Staff now 20 (= active community memberships), org staff 20, community memberships 20. Residents (7) + rooms (12) already had communityId — no backfill needed. Temp audit/backfill scripts deleted after run.
+- **Flow fix:** `api/invitations/[token]/accept/route.ts` now upserts a Staff profile (checked-input form: `user/`organization`/`community` connect + required `hireDate`) when accepting a staff community role (FACILITY_ADMIN/BILLING_ADMIN/PHYSICIAN/NURSE/CAREGIVER/FLEET_MANAGEMENT/DRIVER) and the user has no Staff row in another org. (POST invite route already created Staff rows.)
+- **Beds realtime:** `api/organization-admin/overview/route.ts` `_count` now includes `rooms: true`; Communities card Beds shows live Room count (`rooms / capacity` when bedsTotal set) instead of static bedsTotal.
+- **Cache invalidation:** generic `/api/db/[model]` POST and `/api/db/[model]/[id]` PATCH/DELETE now `invalidatePortalDataPrefix("org-admin:{orgId}:")` on residents/rooms/staff changes so overview counts refresh on next poll.
+- **Client realtime:** `OrganizationAdminPortalContent` now polls `/api/organization-admin/overview` silently every 20s (loading spinner suppressed on background refresh; replaces the single on-mount fetch). useLiveQuery not used here — its realtime channel + generic API are single-community scoped, but the org-admin view spans all communities.
+- Uncommitted (from earlier): org-admin invoice amounts use `PHP/₱` only (removed `$`) via `Intl.NumberFormat("en-PH", { maximumFractionDigits: 0 })`.
+- Build: `npx next build` clean (exit 0) after all edits.

@@ -8,9 +8,12 @@ import { logAudit, snapshot } from "@/lib/audit";
 import { transactionDelegate, withTenantDb } from "@/lib/tenantDb";
 import { prisma } from "@/lib/prisma";
 import { canAlertAction } from "@/lib/alertAccess";
+import { invalidatePortalDataPrefix } from "@/lib/dataCache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const OVERVIEW_COUNT_MODELS = new Set(["residents", "rooms", "staff"]);
 
 const EXPLICIT_ADMIN_MODELS = new Set(["organizations", "communities", "users", "plans", "subscriptions", "organization-memberships", "community-memberships", "invitations"]);
 const SELF_PATCH_FIELDS: Record<string, Set<string>> = {
@@ -96,6 +99,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     if (context.organizationId) await assertMutationEntitled(context, model);
     const updated = await withTenantDb(context, async (tx) => transactionDelegate(definition, tx).update({ where: { id }, data }));
+    if (OVERVIEW_COUNT_MODELS.has(model) && context.organizationId) invalidatePortalDataPrefix(`org-admin:${context.organizationId}:`);
 
     // Approving/disapproving a staff member must also flip their login access:
     // the login gate + tenant context key off membership STATUS, not Staff.isApproved.
@@ -140,6 +144,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   try {
     if (context.organizationId) await assertMutationEntitled(context, model);
     await withTenantDb(context, async (tx) => transactionDelegate(definition, tx).delete({ where: { id } }));
+    if (OVERVIEW_COUNT_MODELS.has(model) && context.organizationId) invalidatePortalDataPrefix(`org-admin:${context.organizationId}:`);
     logAudit({ actorId: context.userId, actorRole: context.role, action: "DELETE", entityType: model, entityId: id, organizationId: context.organizationId, communityId: context.communityId, before: snapshot(existing) });
     return NextResponse.json({ ok: true });
   } catch (error) {

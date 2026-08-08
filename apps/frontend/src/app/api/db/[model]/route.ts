@@ -7,6 +7,7 @@ import { assertMutationEntitled, EntitlementError } from "@/lib/entitlements";
 import { logAudit, snapshot } from "@/lib/audit";
 import { transactionDelegate, withTenantDb } from "@/lib/tenantDb";
 import { prisma } from "@/lib/prisma";
+import { invalidatePortalDataPrefix } from "@/lib/dataCache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +24,11 @@ const EXPLICIT_ADMIN_MODELS = new Set([
   "organizations", "communities", "users", "plans", "subscriptions",
   "organization-memberships", "community-memberships", "invitations",
 ]);
+
+// Counts the org-admin overview derives from these tables (per-community
+// residents / staff / rooms); drop the cached portal payload on changes so the
+// Communities cards and usage stats reflect live data on the next poll.
+const OVERVIEW_COUNT_MODELS = new Set(["residents", "rooms", "staff"]);
 
 function buildQuery(url: URL, defaultOrderBy?: Record<string, unknown>) {
   const params = url.searchParams;
@@ -242,6 +248,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     if (context.organizationId) await assertMutationEntitled(context, model);
     const created = await withTenantDb(context, async (tx) => transactionDelegate(definition, tx).create({ data }));
+    if (OVERVIEW_COUNT_MODELS.has(model) && context.organizationId) invalidatePortalDataPrefix(`org-admin:${context.organizationId}:`);
     logAudit({
       actorId: context.userId,
       actorRole: context.role,
