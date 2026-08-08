@@ -135,6 +135,9 @@ export default function Home() {
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [invitationCallback, setInvitationCallback] = useState<string | null>(null);
+  // When arriving from the login page's "Register your organization" link, the
+  // post-payment checkout should return to gate entry instead of signup.
+  const [checkoutReturn, setCheckoutReturn] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Dynamic CMS content
@@ -150,6 +153,7 @@ export default function Home() {
   }>>([]);
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("from") === "login") setCheckoutReturn("/login");
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     const accessToken = hash.get("access_token");
     const refreshToken = hash.get("refresh_token");
@@ -597,7 +601,7 @@ export default function Home() {
                   </ul>
 
                   <Link
-                    href={`/checkout/${plan.key}`}
+                    href={`/checkout/${plan.key}${checkoutReturn ? `?next=${encodeURIComponent(checkoutReturn)}` : ""}`}
                     className={`w-full py-3 rounded-xl text-center text-sm font-semibold transition-all flex items-center justify-center gap-2 ${plan.highlight ? "bg-foreground text-background hover:scale-105 shadow-lg" : "glass-panel text-foreground hover:bg-foreground/5"}`}
                   >
                     Get Started <ChevronRight className="w-4 h-4" />

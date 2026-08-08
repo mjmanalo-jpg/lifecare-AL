@@ -31,6 +31,13 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [method, setMethod] = useState("CARD");
   const [stage, setStage] = useState<"form" | "processing" | "done">("form");
+  // Optional return destination (e.g. /login when the flow began at gate entry).
+  // Only same-origin absolute paths are honored, to avoid open redirects.
+  const [nextUrl, setNextUrl] = useState("");
+  useEffect(() => {
+    const candidate = new URLSearchParams(window.location.search).get("next") || "";
+    if (candidate.startsWith("/") && !candidate.startsWith("//")) setNextUrl(candidate);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,7 +59,8 @@ export default function CheckoutPage() {
     setStage("processing");
     setTimeout(() => {
       setStage("done");
-      setTimeout(() => router.push(`/signup?plan=${encodeURIComponent(planKey)}`), 1400);
+      const destination = nextUrl || `/signup?plan=${encodeURIComponent(planKey)}`;
+      setTimeout(() => router.push(destination), 1400);
     }, 1600);
   };
 
@@ -112,7 +120,7 @@ export default function CheckoutPage() {
                 <motion.div key="done" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-1 flex-col items-center justify-center text-center py-10">
                   <div className="w-16 h-16 rounded-full bg-emerald-500/15 flex items-center justify-center mb-4"><CheckCircle className="w-9 h-9 text-emerald-500" /></div>
                   <h2 className="text-xl font-bold">Payment successful</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">Redirecting you to register your organization…</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{nextUrl ? "Returning you to gate entry…" : "Redirecting you to register your organization…"}</p>
                   <Loader2 className="w-5 h-5 animate-spin text-[var(--lp-accent,#f59e0b)] mt-4" />
                 </motion.div>
               ) : (
@@ -146,7 +154,7 @@ export default function CheckoutPage() {
                     <button onClick={pay} disabled={stage === "processing"} className="w-full py-4 rounded-xl font-bold bg-foreground text-background hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-60">
                       {stage === "processing" ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing payment…</> : <>{plan.priceMonthly !== null ? `Pay ${formatPrice(plan.priceMonthly, plan.currency)}` : "Continue"} <ArrowLeft className="w-4 h-4 rotate-180" /></>}
                     </button>
-                    <p className="text-center text-[11px] text-muted-foreground mt-3">After payment you&apos;ll register your organization.</p>
+                    <p className="text-center text-[11px] text-muted-foreground mt-3">{nextUrl ? "After payment you’ll return to gate entry." : "After payment you’ll register your organization."}</p>
                   </div>
                 </motion.div>
               )}

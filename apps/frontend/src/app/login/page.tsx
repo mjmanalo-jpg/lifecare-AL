@@ -333,7 +333,7 @@ export default function LoginPage() {
               {/* Organization self-signup */}
               <p className="text-center text-sm text-muted-foreground">
                 Setting up a new company?{" "}
-                <Link href="/signup" className="font-semibold hover:underline" style={{ color: accent }}>
+                <Link href="/?from=login#plans" className="font-semibold hover:underline" style={{ color: accent }}>
                   Register your organization
                 </Link>
               </p>
