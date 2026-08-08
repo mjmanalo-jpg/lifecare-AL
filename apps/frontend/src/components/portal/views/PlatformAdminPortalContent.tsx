@@ -3,13 +3,17 @@
 import Link from "next/link";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
-  Activity, AlertTriangle, Building2, CheckCircle2, CircleDollarSign, Database,
+  Activity, AlertTriangle, Building2, CheckCircle2, CircleDollarSign, CreditCard, Database,
   Gauge, KeyRound, Loader2, Mail, Pencil, Plus, RefreshCw, ServerCog, Shield, ShieldCheck,
   Trash2, Users, X, XCircle,
 } from "lucide-react";
 import SaasPlatformConsole from "@/components/portal/views/superadmin/SaasPlatformConsole";
 
 interface PlanMeta { priceMonthly: number | null; currency: string; public: boolean; order: number; tagline: string; highlight: boolean; }
+interface PayMethodDetail { type: string; label: string; accountName: string; accountNumber: string; instructions: string; }
+interface PaymentDetails { provider: string; businessName: string; methods: PayMethodDetail[]; notes: string; }
+const PAY_METHOD_TYPES: [string, string][] = [["BANK_TRANSFER", "Bank Transfer"], ["GCASH", "GCash"], ["MAYA", "Maya"], ["CARD", "Card"], ["OTHER", "Other"]];
+const PAY_PROVIDERS: [string, string][] = [["DEMO", "Demo (no live gateway)"], ["MANUAL", "Manual (bank / e-wallet)"], ["PAYMONGO", "PayMongo"], ["STRIPE", "Stripe"]];
 interface Plan {
   id: string; key: string; name: string; description?: string | null;
   maxCommunities?: number | null; maxActiveResidents?: number | null;
@@ -63,6 +67,8 @@ export default function PlatformAdminPortalContent({ tab = "dashboard" }: { tab?
   const [creatingPlan, setCreatingPlan] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [savingPlan, setSavingPlan] = useState(false);
+  const [payDetails, setPayDetails] = useState<PaymentDetails>({ provider: "MANUAL", businessName: "", methods: [], notes: "" });
+  const [savingPay, setSavingPay] = useState(false);
 
   async function load() {
     setLoading(true); setError("");
@@ -144,6 +150,13 @@ export default function PlatformAdminPortalContent({ tab = "dashboard" }: { tab?
   }
   const priceText = (plan: Plan) => (plan.meta && plan.meta.priceMonthly !== null ? `${plan.meta.currency} ${plan.meta.priceMonthly.toLocaleString()}/mo` : "No price set");
 
+  useEffect(() => { let cancelled = false; void fetch("/api/platform/payment-details", { cache: "no-store" }).then((response) => (response.ok ? response.json() : null)).then((data) => { if (!cancelled && data?.paymentDetails) setPayDetails(data.paymentDetails); }).catch(() => {}); return () => { cancelled = true; }; }, []);
+  const updatePay = (field: "provider" | "businessName" | "notes", value: string) => setPayDetails((prev) => ({ ...prev, [field]: value }));
+  const addPayMethod = () => setPayDetails((prev) => ({ ...prev, methods: [...prev.methods, { type: "BANK_TRANSFER", label: "", accountName: "", accountNumber: "", instructions: "" }] }));
+  const removePayMethod = (index: number) => setPayDetails((prev) => ({ ...prev, methods: prev.methods.filter((_, i) => i !== index) }));
+  const updatePayMethod = (index: number, field: keyof PayMethodDetail, value: string) => setPayDetails((prev) => ({ ...prev, methods: prev.methods.map((method, i) => (i === index ? { ...method, [field]: value } : method)) }));
+  async function savePaymentDetails() { setSavingPay(true); setError(""); const response = await fetch("/api/platform/payment-details", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payDetails) }); if (response.ok) setPayDetails((await response.json()).paymentDetails); else setError((await response.json()).error || "Failed to save payment details"); setSavingPay(false); }
+
   const overview = <div className="space-y-5">
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Stat label="Customer organizations" value={organizations.length} icon={<Building2 className="h-5 w-5"/>}/><Stat label="Active communities" value={totals.communities} icon={<Activity className="h-5 w-5"/>} tone="emerald"/><Stat label="Pending invitations" value={pendingInvitations} icon={<Mail className="h-5 w-5"/>} tone="amber"/><Stat label="Capacity warnings" value={limitWarnings} icon={<AlertTriangle className="h-5 w-5"/>} tone={limitWarnings ? "rose" : "emerald"}/></div>
     <Panel title="Control-plane overview" subtitle="Customer metadata and SaaS operations only; resident clinical records remain outside this portal." icon={<Gauge className="h-5 w-5"/>}>
@@ -156,7 +169,27 @@ export default function PlatformAdminPortalContent({ tab = "dashboard" }: { tab?
     </Panel>
   </div>;
 
-  const planView = <div className="space-y-5"><Panel title="Create subscription plan" subtitle="Commercial limits are enforced by server-side entitlements. Price, tagline, and visibility control how the plan appears on the public landing page." icon={<Plus className="h-5 w-5"/>}>
+  const planView = <div className="space-y-5"><Panel title="Payment details" subtitle="Where customers pay their subscription. Applies to every plan and subscription you create." icon={<CreditCard className="h-5 w-5"/>}>
+    <div className="grid gap-3 sm:grid-cols-2">
+      <label className="text-xs font-semibold text-slate-600">Business / payee name<input value={payDetails.businessName} onChange={(event) => updatePay("businessName", event.target.value)} placeholder="ResoluteAI Inc." className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"/></label>
+      <label className="text-xs font-semibold text-slate-600">Payment mode<select value={payDetails.provider} onChange={(event) => updatePay("provider", event.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 text-sm">{PAY_PROVIDERS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+    </div>
+    <div className="mt-4 space-y-3">
+      {payDetails.methods.map((method, index) => <div key={index} className="rounded-xl border border-slate-200 p-3">
+        <div className="mb-2 flex items-center justify-between"><span className="text-xs font-bold text-slate-500">Method {index + 1}</span><button type="button" onClick={() => removePayMethod(index)} className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-600"><Trash2 className="h-3.5 w-3.5"/>Remove</button></div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <select value={method.type} onChange={(event) => updatePayMethod(index, "type", event.target.value)} className="rounded-lg border px-3 py-2 text-sm">{PAY_METHOD_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+          <input placeholder="Label (e.g. BDO Savings)" value={method.label} onChange={(event) => updatePayMethod(index, "label", event.target.value)} className="rounded-lg border px-3 py-2 text-sm"/>
+          <input placeholder="Account name" value={method.accountName} onChange={(event) => updatePayMethod(index, "accountName", event.target.value)} className="rounded-lg border px-3 py-2 text-sm"/>
+          <input placeholder="Account number / handle" value={method.accountNumber} onChange={(event) => updatePayMethod(index, "accountNumber", event.target.value)} className="rounded-lg border px-3 py-2 text-sm"/>
+        </div>
+        <input placeholder="Instructions (optional)" value={method.instructions} onChange={(event) => updatePayMethod(index, "instructions", event.target.value)} className="mt-2 w-full rounded-lg border px-3 py-2 text-sm"/>
+      </div>)}
+      <button type="button" onClick={addPayMethod} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"><Plus className="h-3.5 w-3.5"/>Add payment method</button>
+    </div>
+    <label className="mt-4 block text-xs font-semibold text-slate-600">Notes shown to customers<textarea value={payDetails.notes} onChange={(event) => updatePay("notes", event.target.value)} rows={2} placeholder="e.g. Send proof of payment to billing@resoluteai.com" className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"/></label>
+    <button disabled={savingPay} onClick={() => void savePaymentDetails()} className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{savingPay && <Loader2 className="h-4 w-4 animate-spin"/>}Save payment details</button>
+  </Panel><Panel title="Create subscription plan" subtitle="Commercial limits are enforced by server-side entitlements. Price, tagline, and visibility control how the plan appears on the public landing page." icon={<Plus className="h-5 w-5"/>}>
     <form onSubmit={createPlan} className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"><input required name="key" placeholder="Plan key (e.g. GROWTH)" className="rounded-lg border px-3 py-2 text-sm"/><input required name="name" placeholder="Plan name" className="rounded-lg border px-3 py-2 text-sm"/><input name="description" placeholder="Description" className="rounded-lg border px-3 py-2 text-sm"/><input type="number" min="1" name="maxCommunities" placeholder="Community limit" className="rounded-lg border px-3 py-2 text-sm"/><input type="number" min="1" name="maxActiveResidents" placeholder="Resident limit" className="rounded-lg border px-3 py-2 text-sm"/><input type="number" min="1" name="maxStaffSeats" placeholder="Staff-seat limit" className="rounded-lg border px-3 py-2 text-sm"/><input type="number" min="0" name="priceMonthly" placeholder="Monthly price" className="rounded-lg border px-3 py-2 text-sm"/><input name="currency" defaultValue="PHP" placeholder="Currency" className="rounded-lg border px-3 py-2 text-sm"/><input name="tagline" placeholder="Landing tagline" className="rounded-lg border px-3 py-2 text-sm"/><label className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-slate-700"><input type="checkbox" name="public" defaultChecked className="h-4 w-4"/>Show on landing page</label><button disabled={creatingPlan} className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 xl:col-span-2">{creatingPlan && <Loader2 className="h-4 w-4 animate-spin"/>}Create plan</button></form>
   </Panel><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{plans.map((plan) => <article key={plan.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-start justify-between"><div><h3 className="font-bold text-slate-900">{plan.name}</h3><code className="text-xs text-indigo-600">{plan.key}</code></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${plan.meta?.public === false ? "bg-slate-200 text-slate-600" : "bg-emerald-100 text-emerald-700"}`}>{plan.meta?.public === false ? "HIDDEN" : "PUBLIC"}</span></div><p className="mt-2 min-h-8 text-xs text-slate-500">{plan.meta?.tagline || plan.description || "No description"}</p><div className="mt-3 flex items-center gap-2 text-sm font-bold text-indigo-600"><CircleDollarSign className="h-4 w-4"/>{priceText(plan)}{plan.meta?.highlight && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">POPULAR</span>}</div><div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs"><span className="rounded-lg bg-slate-50 p-2"><b className="block">{plan.maxCommunities ?? "∞"}</b>Communities</span><span className="rounded-lg bg-slate-50 p-2"><b className="block">{plan.maxActiveResidents ?? "∞"}</b>Residents</span><span className="rounded-lg bg-slate-50 p-2"><b className="block">{plan.maxStaffSeats ?? "∞"}</b>Staff</span></div><p className="mt-3 text-xs text-slate-500">{plan.entitlements?.filter((item) => item.enabled).length || 0} enabled module entitlements</p><div className="mt-4 flex gap-2"><button onClick={() => setEditingPlan(plan)} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><Pencil className="h-3.5 w-3.5"/>Edit</button><button onClick={() => void deletePlan(plan)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5"/></button></div></article>)}{!plans.length && <p className="text-sm text-slate-500">No plans yet. Create one above and it will appear on the landing page.</p>}</div></div>;
 

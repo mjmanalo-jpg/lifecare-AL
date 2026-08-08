@@ -35,9 +35,11 @@ export default function CheckoutPage() {
   // Optional return destination (e.g. /login when the flow began at gate entry).
   // Only same-origin absolute paths are honored, to avoid open redirects.
   const [nextUrl, setNextUrl] = useState("");
+  const [payInfo, setPayInfo] = useState<{ businessName: string; notes: string; methods: { type: string; label: string; accountName: string; accountNumber: string; instructions: string }[] } | null>(null);
   useEffect(() => {
     const candidate = new URLSearchParams(window.location.search).get("next") || "";
     if (candidate.startsWith("/") && !candidate.startsWith("//")) setNextUrl(candidate);
+    fetch("/api/public/payment-details", { cache: "no-store" }).then((response) => (response.ok ? response.json() : null)).then((data) => { if (data?.paymentDetails) setPayInfo(data.paymentDetails); }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -174,6 +176,18 @@ export default function CheckoutPage() {
                       <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-500 flex items-center gap-2">
                         <Lock className="w-3.5 h-3.5 shrink-0" /> Demo mode — no live payment gateway is configured, so no real charge is made.
                       </div>
+
+                      {payInfo && payInfo.methods.length > 0 && (
+                        <div className="mb-4 rounded-xl border border-white/10 bg-foreground/5 p-3 text-xs">
+                          <p className="font-semibold text-foreground">Where to send payment{payInfo.businessName ? ` · ${payInfo.businessName}` : ""}</p>
+                          <div className="mt-2 space-y-1.5">
+                            {payInfo.methods.map((m, i) => (
+                              <div key={i} className="text-muted-foreground"><span className="font-semibold text-foreground">{m.label || m.type.replaceAll("_", " ")}:</span> {m.accountName}{m.accountNumber ? ` · ${m.accountNumber}` : ""}</div>
+                            ))}
+                          </div>
+                          {payInfo.notes && <p className="mt-2 text-muted-foreground/80">{payInfo.notes}</p>}
+                        </div>
+                      )}
 
                       <div className="mt-auto">
                         <div className="flex items-center justify-between text-sm mb-3"><span className="text-muted-foreground">Due today</span><span className="font-bold">{plan.priceMonthly !== null ? `${formatPrice(plan.priceMonthly, plan.currency)} / month` : "Custom"}</span></div>

@@ -5,6 +5,7 @@ import { requireTenantContext, requiresPrivilegedMfa } from "@/lib/tenant";
 import { readPlanMeta } from "@/lib/planMeta";
 import { readSubscriptionBilling, writeSubscriptionBilling, periodLabel, computeNextBilling, type SubscriptionPayment } from "@/lib/subscriptionBilling";
 import { createCheckout } from "@/lib/payments";
+import { readPaymentDetails } from "@/lib/paymentDetails";
 import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
@@ -37,6 +38,7 @@ async function billingState(organizationId: string) {
     paidThisPeriod,
     onlinePaymentEnabled: amountDue !== null,
     payments: store.payments.slice(0, 12),
+    paymentDetails: await readPaymentDetails(),
   };
 }
 
