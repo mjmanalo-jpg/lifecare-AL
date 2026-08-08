@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
-import { Activity, Building2, CheckCircle2, ClipboardCheck, DollarSign, ExternalLink, Gauge, Loader2, Mail, Palette, Plus, RefreshCw, Shield, UserPlus, Users, Wallet, XCircle } from "lucide-react";
+import { Activity, Building2, CheckCircle2, ClipboardCheck, CreditCard, DollarSign, ExternalLink, Gauge, Loader2, Mail, Palette, Plus, Receipt, RefreshCw, Shield, UserPlus, Users, Wallet, XCircle } from "lucide-react";
 
 type Community = { id: string; name: string; code?: string | null; timezone: string; isActive: boolean; bedsTotal?: number | null; _count: { residents: number; staff: number } };
 type Member = { id: string; role: string; status: string; user: { id: string; name: string; email: string; isActive: boolean; lastLogin?: string | null; communityMemberships: { id: string; role: string; status: string; community: { id: string; name: string } }[] } };
@@ -30,6 +30,10 @@ export default function OrganizationAdminPortalContent({ tab = "dashboard" }: { 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  type Billing = { planName: string | null; status: string; amountDue: number | null; currency: string; dueDate: string | null; paidThisPeriod: boolean; onlinePaymentEnabled: boolean; payments: { id: string; amount: number; currency: string; method: string; provider: string; status: string; periodLabel: string; paidAt: string }[] };
+  const [billing, setBilling] = useState<Billing | null>(null);
+  const [payMethod, setPayMethod] = useState("CARD");
+  const [paying, setPaying] = useState(false);
 
   async function load() {
     setLoading(true); setError("");
@@ -40,6 +44,7 @@ export default function OrganizationAdminPortalContent({ tab = "dashboard" }: { 
     setLoading(false);
   }
   useEffect(() => { let cancelled = false; void fetch("/api/organization-admin/overview", { cache: "no-store" }).then(async (response) => { const body = await response.json(); if (cancelled) return; if (!response.ok) throw new Error(body.code === "MFA_REQUIRED" ? "Organization owners and admins must verify MFA. Open Account Settings → Authenticator MFA, then retry." : body.error || "Unable to load organization administration data"); setOrganization(body.organization); setAuditEvents(body.auditEvents || []); }).catch((cause) => { if (!cancelled) setError(cause instanceof Error ? cause.message : "Unable to load organization administration data"); }).finally(() => { if (!cancelled) setLoading(false); }); return () => { cancelled = true; }; }, []);
+  useEffect(() => { let cancelled = false; void fetch("/api/organization-admin/billing", { cache: "no-store" }).then((response) => (response.ok ? response.json() : null)).then((data) => { if (!cancelled && data) setBilling(data); }).catch(() => {}); return () => { cancelled = true; }; }, []);
 
   const totals = useMemo(() => (organization?.communities || []).reduce((sum, community) => ({ residents: sum.residents + community._count.residents, staff: sum.staff + community._count.staff }), { residents: 0, staff: 0 }), [organization]);
   const pendingStaff = (organization?.staff || []).filter((staff) => !staff.isApproved);
@@ -56,6 +61,17 @@ export default function OrganizationAdminPortalContent({ tab = "dashboard" }: { 
     const body = await response.json().catch(() => ({})); if (response.ok) { form.reset(); setNotice(`Account created for ${email}. Share the email and initial password so they can sign in.`); await load(); } else setError(body.error || "Account creation failed"); setBusy(false);
   }
   async function decideStaff(id: string, status: "APPROVED" | "REJECTED") { setBusy(true); const response = await fetch(`/api/organization-admin/staff/${id}/approval`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) }); const body = await response.json(); if (response.ok) await load(); else setError(body.error || "Approval failed"); setBusy(false); }
+  async function refreshBilling() { try { const response = await fetch("/api/organization-admin/billing", { cache: "no-store" }); if (response.ok) setBilling(await response.json()); } catch { /* non-fatal */ } }
+  async function payNow() {
+    setPaying(true); setError(""); setNotice("");
+    const response = await fetch("/api/organization-admin/billing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ method: payMethod }) });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) { setError(body.error || "Payment failed"); setPaying(false); return; }
+    if (body.checkoutUrl) { window.location.href = body.checkoutUrl; return; }
+    setNotice(body.simulated ? "Payment recorded. No live payment gateway is configured, so this was processed in demo mode." : "Payment successful.");
+    await Promise.all([load(), refreshBilling()]);
+    setPaying(false);
+  }
   async function saveBranding(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!organization) return; const data = new FormData(event.currentTarget); setBusy(true); const response = await fetch(`/api/organizations/${organization.id}/branding`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.fromEntries(data.entries())) }); const body = await response.json(); if (response.ok) await load(); else setError(body.error || "Branding update failed"); setBusy(false); }
 
   const overview = <div className="space-y-5"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Stat label="Communities" value={organization?.communities.length || 0} icon={<Building2 className="h-5 w-5"/>}/><Stat label="Active residents" value={totals.residents} icon={<Activity className="h-5 w-5"/>}/><Stat label="Staff profiles" value={totals.staff} icon={<Users className="h-5 w-5"/>}/><Stat label="Pending invitations" value={pendingInvitations.length} icon={<Mail className="h-5 w-5"/>}/></div><Card title="Organization control center" subtitle="Manage company-wide access here, then enter a community for clinical and facility operations." icon={<Shield className="h-5 w-5"/>} action={<Link href="/facility_admin/dashboard" className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white">Open Facility Operations <ExternalLink className="h-4 w-4"/></Link>}><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-slate-50 p-4"><b className="text-sm">Subscription</b><p className="mt-1 text-xs text-slate-500">{organization?.subscription?.plan.name || "No plan"} · {organization?.subscription?.status || "UNASSIGNED"}</p></div><div className="rounded-xl bg-slate-50 p-4"><b className="text-sm">People with access</b><p className="mt-1 text-xs text-slate-500">{organization?.memberships.filter((item) => item.status === "ACTIVE").length || 0} active organization memberships</p></div><div className="rounded-xl bg-slate-50 p-4"><b className="text-sm">Approval queue</b><p className="mt-1 text-xs text-slate-500">{pendingStaff.length} staff records awaiting review</p></div></div></Card></div>;
@@ -92,6 +108,14 @@ export default function OrganizationAdminPortalContent({ tab = "dashboard" }: { 
       <Card title="Subscription" subtitle="Plan changes are handled by the SLMS Platform Administrator." icon={<Gauge className="h-5 w-5"/>}>
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-4"><div><b>{plan?.name || "No plan assigned"}</b><p className="text-xs text-slate-500">{plan?.key} · {plan?.entitlements.filter((item) => item.enabled).length || 0} enabled module entitlements</p></div><Badge value={sub?.status || "UNASSIGNED"}/></div>
         <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded-xl border p-3"><span className="text-slate-500">Started</span><b className="mt-0.5 block text-slate-900">{sub?.startsAt ? new Date(sub.startsAt).toLocaleDateString() : "—"}</b></div><div className="rounded-xl border p-3"><span className="text-slate-500">{billingLabel}</span><b className="mt-0.5 block text-slate-900">{billingDate ? new Date(billingDate).toLocaleDateString() : "—"}</b></div></div>
+      </Card>
+    </div>
+    <div className="grid gap-3 lg:grid-cols-2">
+      <Card title="Payment options" subtitle="Pay your monthly subscription securely." icon={<CreditCard className="h-5 w-5"/>}>
+        {billing?.amountDue != null ? <><p className="mb-2 text-xs font-semibold text-slate-500">Choose a payment method</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{([["CARD", "Credit / Debit"], ["GCASH", "GCash"], ["MAYA", "Maya"], ["BANK_TRANSFER", "Bank Transfer"]] as [string, string][]).map(([value, label]) => <button key={value} type="button" onClick={() => setPayMethod(value)} className={`rounded-xl border px-3 py-2.5 text-xs font-semibold transition ${payMethod === value ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-600 hover:border-blue-300"}`}>{label}</button>)}</div><button disabled={paying || billing.paidThisPeriod} onClick={() => void payNow()} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50">{paying && <Loader2 className="h-4 w-4 animate-spin"/>}{billing.paidThisPeriod ? "Paid for this period" : `Pay ${fmtMoney(billing.amountDue)}`}</button><p className="mt-2 text-[11px] text-slate-400">Secured checkout. When a payment provider is configured you are redirected to complete payment; otherwise it is recorded in demo mode.</p></> : <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">Online payment becomes available once your plan has a price. Contact the SLMS Platform Administrator.</p>}
+      </Card>
+      <Card title="Payment history" subtitle="Your recent subscription payments." icon={<Receipt className="h-5 w-5"/>}>
+        <div className="space-y-2">{billing?.payments?.length ? billing.payments.map((payment) => { const money = (() => { try { return new Intl.NumberFormat("en-PH", { style: "currency", currency: payment.currency, maximumFractionDigits: 0 }).format(payment.amount); } catch { return `${payment.currency} ${payment.amount.toLocaleString()}`; } })(); return <div key={payment.id} className="flex items-center justify-between gap-3 rounded-xl border p-3 text-sm"><div><b className="text-slate-900">{money}</b><p className="text-xs text-slate-500">{new Date(payment.paidAt).toLocaleDateString()} · {payment.method.replaceAll("_", " ")} · {payment.provider}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${payment.status === "PAID" ? "bg-emerald-100 text-emerald-700" : payment.status === "PENDING" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>{payment.status}</span></div>; }) : <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">No payments yet.</p>}</div>
       </Card>
     </div>
     <Card title="Usage this period" subtitle="Current consumption against your plan's included capacity." icon={<Wallet className="h-5 w-5"/>}>
