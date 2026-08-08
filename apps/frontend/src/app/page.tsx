@@ -600,12 +600,21 @@ export default function Home() {
                     ))}
                   </ul>
 
-                  <Link
-                    href={`/checkout/${plan.key}${checkoutReturn ? `?next=${encodeURIComponent(checkoutReturn)}` : ""}`}
-                    className={`w-full py-3 rounded-xl text-center text-sm font-semibold transition-all flex items-center justify-center gap-2 ${plan.highlight ? "bg-foreground text-background hover:scale-105 shadow-lg" : "glass-panel text-foreground hover:bg-foreground/5"}`}
-                  >
-                    Get Started <ChevronRight className="w-4 h-4" />
-                  </Link>
+                  <div className="mt-auto space-y-2">
+                    <Link
+                      href={`/checkout/${plan.key}${checkoutReturn ? `?next=${encodeURIComponent(checkoutReturn)}` : ""}`}
+                      className={`w-full py-3 rounded-xl text-center text-sm font-semibold transition-all flex items-center justify-center gap-2 ${plan.highlight ? "bg-foreground text-background hover:scale-105 shadow-lg" : "glass-panel text-foreground hover:bg-foreground/5"}`}
+                    >
+                      Get Started <ChevronRight className="w-4 h-4" />
+                    </Link>
+                    <Link
+                      href={`/signup?plan=${plan.key}&trial=1`}
+                      className="w-full py-2.5 rounded-xl text-center text-xs font-semibold text-[var(--lp-accent,#f59e0b)] border border-[var(--lp-accent,#f59e0b)]/30 hover:bg-[var(--lp-accent,#f59e0b)]/10 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      Start 30-day free trial
+                    </Link>
+                    <p className="text-center text-[11px] text-muted-foreground">No charge today · cancel anytime</p>
+                  </div>
                 </motion.div>
               );
             })}

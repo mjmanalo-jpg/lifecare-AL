@@ -30,6 +30,7 @@ export default function CheckoutPage() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [loading, setLoading] = useState(true);
   const [method, setMethod] = useState("CARD");
+  const [mode, setMode] = useState<"pay" | "trial">("pay");
   const [stage, setStage] = useState<"form" | "processing" | "done">("form");
   // Optional return destination (e.g. /login when the flow began at gate entry).
   // Only same-origin absolute paths are honored, to avoid open redirects.
@@ -63,6 +64,10 @@ export default function CheckoutPage() {
       setTimeout(() => router.push(destination), 1400);
     }, 1600);
   };
+
+  // The 30-day free trial skips payment entirely and goes straight to
+  // organization registration; billing is requested when the trial ends.
+  const startTrial = () => router.push(`/signup?plan=${encodeURIComponent(planKey)}&trial=1`);
 
   const bullets = plan ? [
     `${plan.maxCommunities ?? "Unlimited"} ${plan.maxCommunities === 1 ? "community" : "communities"}`,
@@ -125,37 +130,60 @@ export default function CheckoutPage() {
                 </motion.div>
               ) : (
                 <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col flex-1">
-                  <div className="mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5 text-[var(--lp-accent,#f59e0b)]" /><h2 className="text-lg font-bold">Payment method</h2></div>
-
-                  <div className="grid grid-cols-2 gap-2 mb-5">
-                    {METHODS.map(([value, label]) => (
-                      <button key={value} type="button" onClick={() => setMethod(value)} disabled={stage === "processing"} className={`rounded-xl border px-3 py-2.5 text-xs font-semibold transition ${method === value ? "border-[var(--lp-accent,#f59e0b)] bg-[var(--lp-accent,#f59e0b)]/10 text-foreground" : "border-white/10 text-muted-foreground hover:border-white/20"}`}>{label}</button>
-                    ))}
+                  {/* Choose to pay now or start the 30-day free trial. Trial hides payment. */}
+                  <div className="grid grid-cols-2 gap-1 mb-5 rounded-xl bg-foreground/5 p-1">
+                    <button type="button" onClick={() => setMode("trial")} className={`rounded-lg px-3 py-2 text-xs font-bold transition ${mode === "trial" ? "bg-[var(--lp-accent,#f59e0b)] text-background" : "text-muted-foreground hover:text-foreground"}`}>30-day free trial</button>
+                    <button type="button" onClick={() => setMode("pay")} className={`rounded-lg px-3 py-2 text-xs font-bold transition ${mode === "pay" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}>Pay monthly</button>
                   </div>
 
-                  {method === "CARD" ? (
-                    <div className="space-y-3 mb-5">
-                      <input disabled defaultValue="4242 4242 4242 4242" className="w-full rounded-xl bg-foreground/5 border border-border px-3.5 py-3 text-sm" />
-                      <div className="grid grid-cols-2 gap-3">
-                        <input disabled defaultValue="12 / 30" className="w-full rounded-xl bg-foreground/5 border border-border px-3.5 py-3 text-sm" />
-                        <input disabled defaultValue="123" className="w-full rounded-xl bg-foreground/5 border border-border px-3.5 py-3 text-sm" />
+                  {mode === "trial" ? (
+                    <div className="flex flex-col flex-1">
+                      <div className="mb-4 flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-[var(--lp-accent,#f59e0b)]" /><h2 className="text-lg font-bold">Start your 30-day free trial</h2></div>
+                      <ul className="space-y-3 mb-5">
+                        {["No charge today — full access for 30 days", "Set up your organization immediately", plan.priceMonthly !== null ? `We'll ask for ${formatPrice(plan.priceMonthly, plan.currency)}/month when the trial ends` : "We'll discuss pricing before the trial ends", "Cancel anytime during the trial"].map((line, index) => (
+                          <li key={index} className="flex items-center gap-3 text-sm text-muted-foreground font-light"><Check className="w-4 h-4 text-[var(--lp-accent,#f59e0b)] shrink-0" /><span>{line}</span></li>
+                        ))}
+                      </ul>
+                      <div className="mt-auto">
+                        <button onClick={startTrial} className="w-full py-4 rounded-xl font-bold bg-[var(--lp-accent,#f59e0b)] text-background hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2">Start 30-day free trial <ArrowLeft className="w-4 h-4 rotate-180" /></button>
+                        <p className="text-center text-[11px] text-muted-foreground mt-3">No payment required now — you&apos;ll register your organization next.</p>
                       </div>
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground font-light mb-5 rounded-xl bg-foreground/5 p-4">In production you would be redirected to {METHODS.find(([v]) => v === method)?.[1]} to authorize this payment.</p>
+                    <div className="flex flex-col flex-1">
+                      <div className="mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5 text-[var(--lp-accent,#f59e0b)]" /><h2 className="text-lg font-bold">Payment method</h2></div>
+
+                      <div className="grid grid-cols-2 gap-2 mb-5">
+                        {METHODS.map(([value, label]) => (
+                          <button key={value} type="button" onClick={() => setMethod(value)} disabled={stage === "processing"} className={`rounded-xl border px-3 py-2.5 text-xs font-semibold transition ${method === value ? "border-[var(--lp-accent,#f59e0b)] bg-[var(--lp-accent,#f59e0b)]/10 text-foreground" : "border-white/10 text-muted-foreground hover:border-white/20"}`}>{label}</button>
+                        ))}
+                      </div>
+
+                      {method === "CARD" ? (
+                        <div className="space-y-3 mb-5">
+                          <input disabled defaultValue="4242 4242 4242 4242" className="w-full rounded-xl bg-foreground/5 border border-border px-3.5 py-3 text-sm" />
+                          <div className="grid grid-cols-2 gap-3">
+                            <input disabled defaultValue="12 / 30" className="w-full rounded-xl bg-foreground/5 border border-border px-3.5 py-3 text-sm" />
+                            <input disabled defaultValue="123" className="w-full rounded-xl bg-foreground/5 border border-border px-3.5 py-3 text-sm" />
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground font-light mb-5 rounded-xl bg-foreground/5 p-4">In production you would be redirected to {METHODS.find(([v]) => v === method)?.[1]} to authorize this payment.</p>
+                      )}
+
+                      <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-500 flex items-center gap-2">
+                        <Lock className="w-3.5 h-3.5 shrink-0" /> Demo mode — no live payment gateway is configured, so no real charge is made.
+                      </div>
+
+                      <div className="mt-auto">
+                        <div className="flex items-center justify-between text-sm mb-3"><span className="text-muted-foreground">Due today</span><span className="font-bold">{plan.priceMonthly !== null ? `${formatPrice(plan.priceMonthly, plan.currency)} / month` : "Custom"}</span></div>
+                        <button onClick={pay} disabled={stage === "processing"} className="w-full py-4 rounded-xl font-bold bg-foreground text-background hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-60">
+                          {stage === "processing" ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing payment…</> : <>{plan.priceMonthly !== null ? `Pay ${formatPrice(plan.priceMonthly, plan.currency)}` : "Continue"} <ArrowLeft className="w-4 h-4 rotate-180" /></>}
+                        </button>
+                        <p className="text-center text-[11px] text-muted-foreground mt-3">{nextUrl ? "After payment you’ll return to gate entry." : "After payment you’ll register your organization."}</p>
+                      </div>
+                    </div>
                   )}
-
-                  <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-500 flex items-center gap-2">
-                    <Lock className="w-3.5 h-3.5 shrink-0" /> Demo mode — no live payment gateway is configured, so no real charge is made.
-                  </div>
-
-                  <div className="mt-auto">
-                    <div className="flex items-center justify-between text-sm mb-3"><span className="text-muted-foreground">Due today</span><span className="font-bold">{plan.priceMonthly !== null ? `${formatPrice(plan.priceMonthly, plan.currency)} / month` : "Custom"}</span></div>
-                    <button onClick={pay} disabled={stage === "processing"} className="w-full py-4 rounded-xl font-bold bg-foreground text-background hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-60">
-                      {stage === "processing" ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing payment…</> : <>{plan.priceMonthly !== null ? `Pay ${formatPrice(plan.priceMonthly, plan.currency)}` : "Continue"} <ArrowLeft className="w-4 h-4 rotate-180" /></>}
-                    </button>
-                    <p className="text-center text-[11px] text-muted-foreground mt-3">{nextUrl ? "After payment you’ll return to gate entry." : "After payment you’ll register your organization."}</p>
-                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

@@ -57,15 +57,19 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const [selectedPlanKey, setSelectedPlanKey] = useState<string | null>(null);
+  const [isTrial, setIsTrial] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const savedTheme = localStorage.getItem("theme") as "dark" | "light" | null;
     setTheme(savedTheme || loginConfig.baseTheme);
-    // Plan chosen (and paid for, in demo) on the checkout page before signup.
-    const plan = new URLSearchParams(window.location.search).get("plan");
-    if (plan) setSelectedPlan(plan.replaceAll("_", " "));
+    // Plan chosen on the checkout page — either paid (demo) or a 30-day trial.
+    const params = new URLSearchParams(window.location.search);
+    const plan = params.get("plan");
+    if (plan) { setSelectedPlan(plan.replaceAll("_", " ")); setSelectedPlanKey(plan); }
+    setIsTrial(params.get("trial") === "1");
   }, [loginConfig.baseTheme]);
 
   useEffect(() => {
@@ -92,7 +96,7 @@ export default function SignupPage() {
       const response = await fetch("/api/register/organization", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyName, communityName, ownerName, email, password }),
+        body: JSON.stringify({ companyName, communityName, ownerName, email, password, planKey: selectedPlanKey }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Signup failed");
@@ -237,7 +241,7 @@ export default function SignupPage() {
               </p>
               {selectedPlan && (
                 <div className="mt-3 inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold" style={{ background: accentRgba(accent, 0.12), color: accent }}>
-                  <ShieldCheck className="w-3.5 h-3.5" /> {selectedPlan} plan · payment complete
+                  <ShieldCheck className="w-3.5 h-3.5" /> {selectedPlan} plan · {isTrial ? "free 30-day trial" : "payment complete"}
                 </div>
               )}
             </div>

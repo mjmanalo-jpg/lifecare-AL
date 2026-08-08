@@ -33,7 +33,13 @@ function assuranceLevel(accessToken?: string): "aal1" | "aal2" | undefined {
 // Resolves the plan a self-serve organization is placed on. Prefers the
 // configured public plan, then any active plan, and finally provisions a
 // default self-serve trial plan so signup works even on a fresh database.
-async function resolveSignupPlan() {
+async function resolveSignupPlan(preferredKey?: string) {
+  // Honor the plan the visitor picked on the landing page / checkout, when it
+  // exists and is active. Falls back to the configured public signup plan.
+  if (preferredKey) {
+    const chosen = await prisma.plan.findFirst({ where: { key: preferredKey.trim().toUpperCase(), isActive: true } });
+    if (chosen) return chosen;
+  }
   const key = (process.env.PUBLIC_SIGNUP_PLAN_KEY || "STARTER").toUpperCase();
   const byKey = await prisma.plan.findFirst({ where: { key, isActive: true } });
   if (byKey) return byKey;
@@ -91,7 +97,7 @@ export async function POST(request: NextRequest) {
   const existingUser = await prisma.user.findUnique({ where: { email }, select: { id: true } });
   if (existingUser) return NextResponse.json({ error: "An account with this email already exists" }, { status: 409 });
 
-  const plan = await resolveSignupPlan();
+  const plan = await resolveSignupPlan(typeof body.planKey === "string" ? body.planKey : undefined);
 
   // Create the identity first so the User row can be linked to it. No email is
   // sent — the Supabase user is created already-confirmed via the admin API.
