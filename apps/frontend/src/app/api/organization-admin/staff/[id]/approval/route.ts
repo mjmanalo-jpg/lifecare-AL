@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext, requiresPrivilegedMfa } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
+import { invalidatePortalDataPrefix } from "@/lib/dataCache";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const context = await requireTenantContext();
@@ -19,5 +20,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     ...(staff.communityId ? [prisma.communityMembership.updateMany({ where: { userId: staff.userId, communityId: staff.communityId }, data: { status: approved ? "ACTIVE" : "REVOKED" } })] : []),
   ]);
   logAudit({ actorId: context.userId, actorRole: context.role, action: "UPDATE", entityType: "staff_approval", entityId: id, organizationId: context.organizationId, communityId: staff.communityId || undefined, reason: body.reason ? String(body.reason) : undefined, after: { isApproved: approved, isActive: approved } });
+  invalidatePortalDataPrefix(`org-admin:${context.organizationId}:`);
   return NextResponse.json({ success: true, status });
 }

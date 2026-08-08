@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { canManageOrganization, requireTenantContext } from "@/lib/tenant";
 import { isSupabaseAuthConfigured, createSupabaseUser, deleteSupabaseUser, SupabaseUserExistsError } from "@/lib/supabaseAuth";
 import { logAudit } from "@/lib/audit";
+import { invalidatePortalDataPrefix } from "@/lib/dataCache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -87,6 +88,7 @@ export async function POST(request: NextRequest) {
     });
 
     logAudit({ actorId: context.userId, actorRole: context.role, action: "CREATE", entityType: "staff-account", entityId: userId, organizationId: context.organizationId, communityId, after: { role, email } });
+    invalidatePortalDataPrefix(`org-admin:${context.organizationId}:`);
     return NextResponse.json({ success: true, userId }, { status: 201 });
   } catch (error) {
     if (authUserId) await deleteSupabaseUser(authUserId).catch(() => undefined);

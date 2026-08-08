@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext, requiresPrivilegedMfa } from "@/lib/tenant";
 import { createInvitation } from "@/lib/invitations";
+import { cachedPortalData, invalidatePortalData } from "@/lib/dataCache";
 
 function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -11,19 +12,21 @@ export async function GET() {
   const context = await requireTenantContext({ allowPlatform: true });
   if (context && requiresPrivilegedMfa(context)) return NextResponse.json({ error: "MFA required", code: "MFA_REQUIRED" }, { status: 403 });
   if (!context?.platformRole) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const organizations = await prisma.organization.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      subscription: { include: { plan: true } },
-      _count: { select: { communities: true, residents: true, staff: true } },
-      // Leadership account(s) for each customer workspace (owner or org admin).
-      memberships: {
-        where: { status: "ACTIVE", role: { in: ["OWNER", "ADMIN"] } },
-        orderBy: { createdAt: "asc" },
-        select: { id: true, role: true, status: true, user: { select: { id: true, name: true, email: true, isActive: true, lastLogin: true } } },
+  const organizations = await cachedPortalData("platform:organizations", () =>
+    prisma.organization.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        subscription: { include: { plan: true } },
+        _count: { select: { communities: true, residents: true, staff: true } },
+        // Leadership account(s) for each customer workspace (owner or org admin).
+        memberships: {
+          where: { status: "ACTIVE", role: { in: ["OWNER", "ADMIN"] } },
+          orderBy: { createdAt: "asc" },
+          select: { id: true, role: true, status: true, user: { select: { id: true, name: true, email: true, isActive: true, lastLogin: true } } },
+        },
       },
-    },
-  });
+    }),
+  );
   return NextResponse.json({ organizations });
 }
 export async function POST(request: NextRequest) {
@@ -81,6 +84,8 @@ export async function POST(request: NextRequest) {
       createdById: context.userId,
       baseUrl: new URL(request.url).origin,
     });
+    invalidatePortalData("platform:organizations");
+    invalidatePortalData("platform:insights");
     return NextResponse.json({
       organization,
       invitation: { id: invitation.invitation.id, expiresAt: invitation.invitation.expiresAt, ...(process.env.NODE_ENV !== "production" ? { acceptUrl: invitation.acceptUrl } : {}) },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext, requiresPrivilegedMfa } from "@/lib/tenant";
 import { readSubscriptionBilling, writeSubscriptionBilling } from "@/lib/subscriptionBilling";
+import { invalidatePortalData } from "@/lib/dataCache";
 
 const ALLOWED = new Set(["ACTIVE", "SUSPENDED", "ARCHIVED"]);
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -27,5 +28,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       await writeSubscriptionBilling(id, store);
     }
   }
+  invalidatePortalData("platform:organizations");
+  invalidatePortalData("platform:insights");
   return NextResponse.json({ organization });
 }

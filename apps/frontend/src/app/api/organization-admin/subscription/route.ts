@@ -4,6 +4,7 @@ import { requireTenantContext, requiresPrivilegedMfa, type TenantContext } from 
 import { readPlanMeta } from "@/lib/planMeta";
 import { readSubscriptionBilling, writeSubscriptionBilling, computeNextBilling } from "@/lib/subscriptionBilling";
 import { logAudit } from "@/lib/audit";
+import { cachedPortalData, invalidatePortalDataPrefix } from "@/lib/dataCache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,38 +36,42 @@ export async function GET() {
   if (error) return error;
   const organizationId = context!.organizationId!;
 
-  const [subscription, plans, meta, store, usage] = await Promise.all([
-    prisma.subscription.findUnique({ where: { organizationId }, include: { plan: true } }),
-    prisma.plan.findMany({ where: { isActive: true } }),
-    readPlanMeta(),
-    readSubscriptionBilling(organizationId),
-    usageCounts(organizationId),
-  ]);
+  const payload = await cachedPortalData(`org-admin:${organizationId}:subscription`, async () => {
+    const [subscription, plans, meta, store, usage] = await Promise.all([
+      prisma.subscription.findUnique({ where: { organizationId }, include: { plan: true } }),
+      prisma.plan.findMany({ where: { isActive: true } }),
+      readPlanMeta(),
+      readSubscriptionBilling(organizationId),
+      usageCounts(organizationId),
+    ]);
 
-  // Offer public plans plus the org's current plan (even if since hidden).
-  const options = plans
-    .filter((plan) => meta[plan.id]?.public !== false || plan.id === subscription?.planId)
-    .map((plan) => ({
-      id: plan.id,
-      key: plan.key,
-      name: plan.name,
-      description: plan.description,
-      maxCommunities: plan.maxCommunities,
-      maxActiveResidents: plan.maxActiveResidents,
-      maxStaffSeats: plan.maxStaffSeats,
-      priceMonthly: meta[plan.id]?.priceMonthly ?? null,
-      currency: meta[plan.id]?.currency || "PHP",
-      isCurrent: plan.id === subscription?.planId,
-    }))
-    .sort((a, b) => (meta[a.id]?.order ?? 100) - (meta[b.id]?.order ?? 100));
+    // Offer public plans plus the org's current plan (even if since hidden).
+    const options = plans
+      .filter((plan) => meta[plan.id]?.public !== false || plan.id === subscription?.planId)
+      .map((plan) => ({
+        id: plan.id,
+        key: plan.key,
+        name: plan.name,
+        description: plan.description,
+        maxCommunities: plan.maxCommunities,
+        maxActiveResidents: plan.maxActiveResidents,
+        maxStaffSeats: plan.maxStaffSeats,
+        priceMonthly: meta[plan.id]?.priceMonthly ?? null,
+        currency: meta[plan.id]?.currency || "PHP",
+        isCurrent: plan.id === subscription?.planId,
+      }))
+      .sort((a, b) => (meta[a.id]?.order ?? 100) - (meta[b.id]?.order ?? 100));
 
-  return NextResponse.json({
-    currentPlanId: subscription?.planId ?? null,
-    status: subscription?.status ?? "UNASSIGNED",
-    cancelScheduledFor: store.cancelScheduledFor,
-    usage,
-    plans: options,
+    return {
+      currentPlanId: subscription?.planId ?? null,
+      status: subscription?.status ?? "UNASSIGNED",
+      cancelScheduledFor: store.cancelScheduledFor,
+      usage,
+      plans: options,
+    };
   });
+
+  return NextResponse.json(payload);
 }
 
 export async function PATCH(request: NextRequest) {
@@ -97,6 +102,7 @@ export async function PATCH(request: NextRequest) {
 
   await prisma.subscription.update({ where: { organizationId }, data: { planId: plan.id } });
   logAudit({ actorId: context!.userId, actorRole: context!.role, action: "UPDATE", entityType: "subscription", entityId: subscription.id, organizationId, reason: "Plan change", before: { planId: subscription.planId }, after: { planId: plan.id } });
+  invalidatePortalDataPrefix(`org-admin:${organizationId}:`);
   return NextResponse.json({ ok: true, planId: plan.id, message: `Switched to ${plan.name}. The new price applies from your next billing date.` });
 }
 
@@ -121,6 +127,7 @@ export async function POST(request: NextRequest) {
     store.cancelScheduledFor = effective.toISOString();
     await writeSubscriptionBilling(organizationId, store);
     logAudit({ actorId: context!.userId, actorRole: context!.role, action: "UPDATE", entityType: "subscription", entityId: subscription.id, organizationId, reason: "Cancellation scheduled", after: { cancelScheduledFor: store.cancelScheduledFor } });
+    invalidatePortalDataPrefix(`org-admin:${organizationId}:`);
     return NextResponse.json({ ok: true, cancelScheduledFor: store.cancelScheduledFor, message: `Your subscription will cancel on ${effective.toLocaleDateString()}. You keep access until then.` });
   }
 
@@ -128,6 +135,7 @@ export async function POST(request: NextRequest) {
     store.cancelScheduledFor = null;
     await writeSubscriptionBilling(organizationId, store);
     logAudit({ actorId: context!.userId, actorRole: context!.role, action: "UPDATE", entityType: "subscription", entityId: subscription.id, organizationId, reason: "Cancellation reversed", after: { cancelScheduledFor: null } });
+    invalidatePortalDataPrefix(`org-admin:${organizationId}:`);
     return NextResponse.json({ ok: true, cancelScheduledFor: null, message: "Cancellation reversed. Your subscription stays active." });
   }
 

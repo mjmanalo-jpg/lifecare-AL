@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext, requiresPrivilegedMfa } from "@/lib/tenant";
 import { readPlanMeta, writePlanMeta, deletePlanMeta, DEFAULT_PLAN_META } from "@/lib/planMeta";
+import { invalidatePortalData } from "@/lib/dataCache";
+
+function invalidatePlanCaches() {
+  invalidatePortalData("platform:plans");
+  invalidatePortalData("platform:insights");
+}
 
 async function guard() {
   const context = await requireTenantContext({ allowPlatform: true });
@@ -44,6 +50,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   });
 
   const meta = (await readPlanMeta())[id] || DEFAULT_PLAN_META;
+  invalidatePlanCaches();
   return NextResponse.json({ plan: { ...plan, maxStorageBytes: plan.maxStorageBytes?.toString() || null, meta } });
 }
 
@@ -58,5 +65,6 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   }
   await prisma.plan.delete({ where: { id } });
   await deletePlanMeta(id);
+  invalidatePlanCaches();
   return NextResponse.json({ success: true });
 }

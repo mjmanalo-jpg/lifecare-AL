@@ -2,16 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext, requiresPrivilegedMfa } from "@/lib/tenant";
 import { readPlanMeta, writePlanMeta, DEFAULT_PLAN_META } from "@/lib/planMeta";
+import { cachedPortalData, invalidatePortalData } from "@/lib/dataCache";
 
 export async function GET() {
   const context = await requireTenantContext({ allowPlatform: true });
   if (context && requiresPrivilegedMfa(context)) return NextResponse.json({ error: "MFA required", code: "MFA_REQUIRED" }, { status: 403 });
   if (!context?.platformRole) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const [plans, meta] = await Promise.all([
-    prisma.plan.findMany({ where: { isActive: true }, include: { entitlements: true }, orderBy: { name: "asc" } }),
-    readPlanMeta(),
-  ]);
-  return NextResponse.json({ plans: plans.map((plan) => ({ ...plan, maxStorageBytes: plan.maxStorageBytes?.toString() || null, meta: meta[plan.id] || DEFAULT_PLAN_META })) });
+  const plans = await cachedPortalData("platform:plans", async () => {
+    const [rows, meta] = await Promise.all([
+      prisma.plan.findMany({ where: { isActive: true }, include: { entitlements: true }, orderBy: { name: "asc" } }),
+      readPlanMeta(),
+    ]);
+    return rows.map((plan) => ({ ...plan, maxStorageBytes: plan.maxStorageBytes?.toString() || null, meta: meta[plan.id] || DEFAULT_PLAN_META }));
+  });
+  return NextResponse.json({ plans });
 }
 
 export async function POST(request: NextRequest) {
@@ -27,6 +31,8 @@ export async function POST(request: NextRequest) {
     // Persist the public-facing metadata (price, visibility, order, …) that the
     // landing page uses. Stored separately so it needs no schema migration.
     await writePlanMeta(plan.id, { priceMonthly: body.priceMonthly, currency: body.currency, public: body.public, order: body.order, tagline: body.tagline, highlight: body.highlight });
+    invalidatePortalData("platform:plans");
+    invalidatePortalData("platform:insights");
     return NextResponse.json({ plan: { ...plan, maxStorageBytes: plan.maxStorageBytes?.toString() || null, meta: { ...DEFAULT_PLAN_META, priceMonthly: body.priceMonthly ?? null } } }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Plan key already exists" }, { status: 409 });

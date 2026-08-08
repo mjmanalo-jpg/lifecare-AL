@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext, requiresPrivilegedMfa } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
+import { invalidatePortalDataPrefix } from "@/lib/dataCache";
 
 function code(value: string) { return value.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 
@@ -19,6 +20,7 @@ export async function POST(request: NextRequest) {
   try {
     const community = await prisma.community.create({ data: { organizationId: context.organizationId, name, code: communityCode, timezone: String(body.timezone || "America/New_York"), address: body.address || null, city: body.city || null, state: body.state || null, zip: body.zip || null, phone: body.phone || null, email: body.email || null, bedsTotal: body.bedsTotal ? Number(body.bedsTotal) : null } });
     logAudit({ actorId: context.userId, actorRole: context.role, action: "CREATE", entityType: "community", entityId: community.id, organizationId: context.organizationId, communityId: community.id });
+    invalidatePortalDataPrefix(`org-admin:${context.organizationId}:`);
     return NextResponse.json({ community }, { status: 201 });
   } catch { return NextResponse.json({ error: "Community code already exists in this organization" }, { status: 409 }); }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { canManageOrganization, requireTenantContext, requiresPrivilegedMfa } from "@/lib/tenant";
+import { invalidatePortalDataPrefix } from "@/lib/dataCache";
 
 const FIELDS = ["logoUrl", "primaryColor", "secondaryColor", "emailFromName", "branding"] as const;
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -19,5 +20,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const body = await request.json();
   const data = Object.fromEntries(FIELDS.filter((key) => key in body).map((key) => [key, body[key]]));
   const organization = await prisma.organization.update({ where: { id }, data });
+  invalidatePortalDataPrefix(`org-admin:${id}:`);
   return NextResponse.json({ organization });
 }

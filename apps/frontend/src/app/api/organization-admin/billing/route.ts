@@ -7,6 +7,7 @@ import { readSubscriptionBilling, writeSubscriptionBilling, periodLabel, compute
 import { createCheckout } from "@/lib/payments";
 import { readPaymentDetails } from "@/lib/paymentDetails";
 import { logAudit } from "@/lib/audit";
+import { cachedPortalData, invalidatePortalDataPrefix } from "@/lib/dataCache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,7 +62,7 @@ function sanitizeProfile(input: unknown): BillingProfile {
 export async function GET() {
   const { context, error } = await loadContext();
   if (error) return error;
-  return NextResponse.json(await billingState(context!.organizationId!));
+  return NextResponse.json(await cachedPortalData(`org-admin:${context!.organizationId!}:billing`, () => billingState(context!.organizationId!)));
 }
 
 // Save the org's billing contact / preferred payment method.
@@ -73,6 +74,7 @@ export async function PUT(request: NextRequest) {
   const store = await readSubscriptionBilling(organizationId);
   store.profile = sanitizeProfile(body.profile ?? body);
   await writeSubscriptionBilling(organizationId, store);
+  invalidatePortalDataPrefix(`org-admin:${organizationId}:`);
   return NextResponse.json({ ok: true, profile: store.profile });
 }
 
@@ -130,6 +132,7 @@ export async function POST(request: NextRequest) {
     const payment: SubscriptionPayment = { id: crypto.randomUUID(), amount, currency, method, reference: result.referenceId || reference, provider: result.provider, status: "PENDING", periodLabel: label, paidAt: new Date().toISOString(), invoiceNumber };
     store.payments.unshift(payment);
     await writeSubscriptionBilling(organizationId, store);
+    invalidatePortalDataPrefix(`org-admin:${organizationId}:`);
     return NextResponse.json({ ok: true, checkoutUrl: result.checkoutUrl, payment });
   }
 
@@ -149,5 +152,6 @@ export async function POST(request: NextRequest) {
   }
   await writeSubscriptionBilling(organizationId, store);
   logAudit({ actorId: context!.userId, actorRole: context!.role, action: "CREATE", entityType: "subscription-payment", entityId: payment.id, organizationId, after: { amount, currency, method, provider: result.provider, invoiceId: invoiceId || null } });
+  invalidatePortalDataPrefix(`org-admin:${organizationId}:`);
   return NextResponse.json({ ok: true, simulated: result.provider === "simulated", payment });
 }
