@@ -8,6 +8,7 @@ import {
   Trash2, Users, X, XCircle,
 } from "lucide-react";
 import SaasPlatformConsole from "@/components/portal/views/superadmin/SaasPlatformConsole";
+import { openGlobalConfirm } from "@/components/ui/global-confirm";
 
 interface PlanMeta { priceMonthly: number | null; currency: string; public: boolean; order: number; tagline: string; highlight: boolean; }
 interface PayMethodDetail { type: string; label: string; accountName: string; accountNumber: string; instructions: string; }
@@ -186,6 +187,17 @@ export default function PlatformAdminPortalContent({ tab = "dashboard" }: { tab?
     if (!invoiceOrg) return;
     const lineItems = invLines.map((line) => ({ description: line.description.trim(), amount: Number(line.amount) })).filter((line) => line.description && line.amount > 0);
     if (!lineItems.length) { setError("Add at least one line item with a description and a positive amount"); return; }
+    const total = lineItems.reduce((sum, line) => sum + line.amount, 0);
+    const currency = invoiceOrg.subscription?.plan?.meta?.currency || "PHP";
+    let totalText = `${currency} ${total.toLocaleString()}`;
+    try { totalText = new Intl.NumberFormat("en-PH", { style: "currency", currency, maximumFractionDigits: 0 }).format(total); } catch { /* keep fallback */ }
+    const { confirmed } = await openGlobalConfirm({
+      title: "Issue this invoice?",
+      description: `${invoiceOrg.name} will be billed ${lineItems.length} line item(s) totaling ${totalText}. The invoice is issued immediately and appears on the customer&rsquo;s billing page.`,
+      confirmText: "Issue invoice",
+      variant: "warning",
+    });
+    if (!confirmed) return;
     setInvBusy(true); setError("");
     const response = await fetch(`/api/platform/organizations/${invoiceOrg.id}/invoices`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lineItems, advancesPeriod: invAdvances, notes: invNotes }) });
     if (response.ok) { setInvLines([{ description: "", amount: "" }]); setInvNotes(""); await refreshInvoices(); } else setError((await response.json().catch(() => ({}))).error || "Could not issue invoice");

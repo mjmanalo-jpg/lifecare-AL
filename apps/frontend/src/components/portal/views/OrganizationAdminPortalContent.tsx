@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { Activity, Building2, CheckCircle2, ClipboardCheck, CreditCard, DollarSign, ExternalLink, Gauge, Loader2, Mail, Palette, Plus, Receipt, RefreshCw, Shield, UserPlus, Users, Wallet, XCircle } from "lucide-react";
+import { openGlobalConfirm } from "@/components/ui/global-confirm";
 
 type Community = { id: string; name: string; code?: string | null; timezone: string; isActive: boolean; bedsTotal?: number | null; _count: { residents: number; staff: number; rooms: number } };
 type Member = { id: string; role: string; status: string; user: { id: string; name: string; email: string; isActive: boolean; lastLogin?: string | null; communityMemberships: { id: string; role: string; status: string; community: { id: string; name: string } }[] } };
@@ -95,7 +96,16 @@ export default function OrganizationAdminPortalContent({ tab = "dashboard" }: { 
     setSubBusy(false);
   }
   async function setCancellation(action: "cancel" | "resume") {
-    if (action === "cancel" && !window.confirm("Cancel your subscription at the end of the current period? You keep access until then.")) return;
+    if (action === "cancel") {
+      const { confirmed } = await openGlobalConfirm({
+        title: "Cancel your subscription?",
+        description: "Your subscription cancels at the end of the current billing period. You keep full access until then, and can resume at any time before the cancellation date.",
+        confirmText: "Cancel subscription",
+        cancelText: "Keep subscription",
+        variant: "danger",
+      });
+      if (!confirmed) return;
+    }
     setSubBusy(true); setError(""); setNotice("");
     const response = await fetch("/api/organization-admin/subscription", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
     const body = await response.json().catch(() => ({}));
