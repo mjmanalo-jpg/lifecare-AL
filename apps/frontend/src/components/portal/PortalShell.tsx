@@ -446,35 +446,6 @@ export default function PortalShell({
     }
   };
 
-  const handleMfaSetup = async () => {
-    const enrollmentResponse = await fetch("/api/auth/mfa/enroll", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-    const enrollment = await enrollmentResponse.json();
-    if (!enrollmentResponse.ok) {
-      await Swal.fire({ title: "MFA setup failed", text: enrollment.error || "Unable to start enrollment", icon: "error" });
-      return;
-    }
-    const existingFactor = Boolean(enrollment.requiresVerification);
-    const result = await Swal.fire({
-      title: existingFactor ? "Verify authenticator MFA" : "Set up authenticator MFA",
-      text: existingFactor
-        ? "This account already has MFA. Enter the current code from its authenticator app."
-        : enrollment.secret ? `Scan the QR code or enter secret: ${enrollment.secret}` : "Scan the QR code with your authenticator app.",
-      ...(enrollment.qrCode ? { imageUrl: enrollment.qrCode } : {}),
-      imageWidth: 220,
-      input: "text",
-      inputLabel: "Six-digit verification code",
-      inputAttributes: { inputmode: "numeric", maxlength: "6", autocomplete: "one-time-code" },
-      showCancelButton: true,
-      confirmButtonText: "Verify",
-      preConfirm: (value) => /^\d{6}$/.test(String(value || "")) ? value : Swal.showValidationMessage("Enter a six-digit code"),
-    });
-    if (!result.isConfirmed) return;
-    const verifyResponse = await fetch("/api/auth/mfa/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ factorId: enrollment.id, code: result.value }) });
-    const verified = await verifyResponse.json();
-    await Swal.fire(verifyResponse.ok ? { title: "MFA enabled", icon: "success" } : { title: "Verification failed", text: verified.error, icon: "error" });
-    if (verifyResponse.ok) window.location.reload();
-  };
-
   const handleSaveSettings = async () => {
     const cleanName = profileName.trim();
     if (cleanName.length < 2) {
@@ -977,7 +948,7 @@ export default function PortalShell({
 
                 <section className={`rounded-2xl border p-4 sm:p-5 md:col-span-2 ${theme === "dark" ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
                   <div className="mb-4 flex items-center gap-3"><span className="rounded-xl bg-rose-100 p-2.5 text-rose-600"><Lock className="h-5 w-5" /></span><div><h2 className="font-bold">Security</h2><p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Manage credentials for your own account.</p></div></div>
-                  <div className="grid gap-3 sm:grid-cols-2"><button onClick={() => void handleChangePassword()} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>Change password</button><button onClick={() => void handleMfaSetup()} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>Authenticator MFA</button><button onClick={() => setShowPinSetup(true)} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>4-digit signing PIN</button></div>
+                  <div className="grid gap-3 sm:grid-cols-2"><button onClick={() => void handleChangePassword()} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>Change password</button><button onClick={() => setShowPinSetup(true)} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>4-digit signing PIN</button></div>
                 </section>
               </div>
             </div>

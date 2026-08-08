@@ -317,9 +317,10 @@ export function canManageOrganization(context: TenantContext): boolean {
 export function isDeniedWhere(where: Record<string, unknown> | null): boolean {
   return Boolean(where && where.id === DENY.id);
 }
-export function requiresPrivilegedMfa(context: TenantContext): boolean {
-  const privileged = Boolean(context.platformRole) || ORG_ADMIN_ROLES.has(context.organizationRole || "");
-  if (!privileged) return false;
-  if (process.env.NODE_ENV !== "production" && !context.session.authUserId) return false;
-  return context.session.authAssuranceLevel !== "aal2";
+export function requiresPrivilegedMfa(_context: TenantContext): boolean {
+  // MFA enforcement is disabled for all users. No account — privileged or
+  // otherwise — is gated behind authenticator MFA. This is the single
+  // chokepoint every API route calls, so returning false here clears the
+  // MFA_REQUIRED gate everywhere at once.
+  return false;
 }

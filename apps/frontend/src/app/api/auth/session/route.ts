@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         role,
         platformRole: user.platformRole,
-        mfaRequired: Boolean((user.platformRole || ["OWNER", "ADMIN"].includes(organization?.role || "")) && assuranceLevel(tokens?.access_token) !== "aal2"),
+        mfaRequired: false,
         activeOrganizationId: organization?.id,
         activeCommunityId: community?.id,
       },
