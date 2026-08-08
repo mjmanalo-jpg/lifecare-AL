@@ -1,5 +1,6 @@
 import { prisma, withDbRetry } from "./prisma";
 import { getSession, type SessionData } from "./auth";
+import { ACCESS_STATUSES } from "./subscriptionStatus";
 
 export interface TenantContext {
   session: SessionData;
@@ -34,7 +35,6 @@ const RESIDENT_SCOPED = new Set([
 ]);
 
 const ORG_ADMIN_ROLES = new Set(["OWNER", "ADMIN"]);
-const ACTIVE_SUBSCRIPTIONS = new Set(["TRIALING", "ACTIVE"]);
 const DENY = { id: "__tenant_access_denied__" };
 
 // ---------------------------------------------------------------------------
@@ -151,14 +151,14 @@ async function loadWorkspaces(userId: string) {
   };
 }
 
-export async function requireTenantContext(options: { allowPlatform?: boolean; requireCommunity?: boolean } = {}): Promise<TenantContext | null> {
+export async function requireTenantContext(options: { allowPlatform?: boolean; requireCommunity?: boolean; allowInactiveSubscription?: boolean } = {}): Promise<TenantContext | null> {
   const session = await getSession();
   if (!session?.userId) return null;
 
   // Reuse a recently-resolved context for the same session state. The key
   // folds in the fields that change access (active workspace, role, MFA level)
   // plus the option flags, so any change re-resolves against the DB.
-  const cacheKey = `${session.userId}|${session.activeOrganizationId || ""}|${session.activeCommunityId || ""}|${session.role}|${session.authAssuranceLevel || ""}|${options.allowPlatform ? 1 : 0}|${options.requireCommunity ? 1 : 0}`;
+  const cacheKey = `${session.userId}|${session.activeOrganizationId || ""}|${session.activeCommunityId || ""}|${session.role}|${session.authAssuranceLevel || ""}|${options.allowPlatform ? 1 : 0}|${options.requireCommunity ? 1 : 0}|${options.allowInactiveSubscription ? 1 : 0}`;
   const cachedContext = contextCache.get(cacheKey);
   if (cachedContext) return cachedContext;
 
@@ -199,7 +199,9 @@ export async function requireTenantContext(options: { allowPlatform?: boolean; r
   const orgMembership = user.organizationMemberships[0];
   if (!orgMembership || orgMembership.organization.status !== "ACTIVE") return null;
   const subscriptionStatus = orgMembership.organization.subscription?.status;
-  if (subscriptionStatus && !ACTIVE_SUBSCRIPTIONS.has(subscriptionStatus)) return null;
+  // Lapsed subscriptions (SUSPENDED/CANCELED) are locked out — unless the caller
+  // explicitly allows it (the billing route, so an org can pay to reactivate).
+  if (!options.allowInactiveSubscription && subscriptionStatus && !ACCESS_STATUSES.has(subscriptionStatus)) return null;
 
   const communityMembership = user.communityMemberships[0];
   const isOrganizationAdmin = ORG_ADMIN_ROLES.has(orgMembership.role);

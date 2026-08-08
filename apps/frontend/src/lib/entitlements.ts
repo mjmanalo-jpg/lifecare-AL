@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import type { TenantContext } from "./tenant";
 import { withTenantDb } from "./tenantDb";
+import { MUTATION_STATUSES } from "./subscriptionStatus";
 
 const MUTATION_FEATURES: Record<string, string> = {
   "camera-monitoring-logs": "camera_monitoring",
@@ -53,7 +54,7 @@ export async function getUsage(context: TenantContext) {
 export async function assertMutationEntitled(context: TenantContext, modelKey: string): Promise<void> {
   if (!context.organizationId) throw new EntitlementError("An organization workspace is required", "SUBSCRIPTION_INACTIVE");
   const [entitlements, usage] = await Promise.all([getEntitlements(context.organizationId), getUsage(context)]);
-  if (!entitlements || !["TRIALING", "ACTIVE"].includes(entitlements.status)) {
+  if (!entitlements || !MUTATION_STATUSES.has(entitlements.status)) {
     throw new EntitlementError("The organization subscription is not active", "SUBSCRIPTION_INACTIVE");
   }
   const featureKey = MUTATION_FEATURES[modelKey];

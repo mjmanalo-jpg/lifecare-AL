@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext, requiresPrivilegedMfa } from "@/lib/tenant";
 import { readPlanMeta } from "@/lib/planMeta";
-import { readSubscriptionBilling, writeSubscriptionBilling, periodLabel, computeNextBilling, type SubscriptionPayment } from "@/lib/subscriptionBilling";
+import { readSubscriptionBilling, writeSubscriptionBilling, periodLabel, computeNextBilling, buildInvoiceNumber, type SubscriptionPayment, type BillingProfile } from "@/lib/subscriptionBilling";
 import { createCheckout } from "@/lib/payments";
 import { readPaymentDetails } from "@/lib/paymentDetails";
 import { logAudit } from "@/lib/audit";
@@ -14,7 +14,9 @@ export const dynamic = "force-dynamic";
 const METHODS = new Set(["CARD", "GCASH", "BANK_TRANSFER", "MAYA"]);
 
 async function loadContext() {
-  const context = await requireTenantContext();
+  // allowInactiveSubscription: a lapsed (SUSPENDED/CANCELED) org must still be
+  // able to open billing and pay to reactivate.
+  const context = await requireTenantContext({ allowInactiveSubscription: true });
   if (!context?.organizationId || !["OWNER", "ADMIN"].includes(context.organizationRole || "")) return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   if (requiresPrivilegedMfa(context)) return { error: NextResponse.json({ error: "MFA required", code: "MFA_REQUIRED" }, { status: 403 }) };
   return { context };
@@ -38,7 +40,21 @@ async function billingState(organizationId: string) {
     paidThisPeriod,
     onlinePaymentEnabled: amountDue !== null,
     payments: store.payments.slice(0, 12),
+    profile: store.profile,
+    cancelScheduledFor: store.cancelScheduledFor,
+    invoices: store.invoices,
     paymentDetails: await readPaymentDetails(),
+  };
+}
+
+function sanitizeProfile(input: unknown): BillingProfile {
+  const data = (input || {}) as Record<string, unknown>;
+  const method = String(data.preferredMethod || "CARD").toUpperCase();
+  const str = (value: unknown, max: number) => (typeof value === "string" ? value.slice(0, max) : "");
+  return {
+    preferredMethod: METHODS.has(method) ? method : "CARD",
+    billingEmail: str(data.billingEmail, 160),
+    billingName: str(data.billingName, 160),
   };
 }
 
@@ -48,47 +64,90 @@ export async function GET() {
   return NextResponse.json(await billingState(context!.organizationId!));
 }
 
+// Save the org's billing contact / preferred payment method.
+export async function PUT(request: NextRequest) {
+  const { context, error } = await loadContext();
+  if (error) return error;
+  const organizationId = context!.organizationId!;
+  const body = await request.json().catch(() => ({}));
+  const store = await readSubscriptionBilling(organizationId);
+  store.profile = sanitizeProfile(body.profile ?? body);
+  await writeSubscriptionBilling(organizationId, store);
+  return NextResponse.json({ ok: true, profile: store.profile });
+}
+
 export async function POST(request: NextRequest) {
   const { context, error } = await loadContext();
   if (error) return error;
   const organizationId = context!.organizationId!;
   const body = await request.json().catch(() => ({}));
-  const method = String(body.method || "").toUpperCase();
+  const store0 = await readSubscriptionBilling(organizationId);
+  const method = String(body.method || store0.profile?.preferredMethod || "").toUpperCase();
   if (!METHODS.has(method)) return NextResponse.json({ error: "Choose a valid payment method" }, { status: 400 });
 
   const subscription = await prisma.subscription.findUnique({ where: { organizationId }, include: { plan: true } });
-  if (!subscription?.plan) return NextResponse.json({ error: "No active subscription plan" }, { status: 400 });
-  const meta = (await readPlanMeta())[subscription.plan.id];
-  const amount = meta?.priceMonthly ?? null;
-  const currency = meta?.currency || "PHP";
-  if (amount === null || amount <= 0) return NextResponse.json({ error: "This plan has no price set. Contact the SLMS Platform Administrator." }, { status: 400 });
+  const invoiceId = body.invoiceId ? String(body.invoiceId) : "";
+
+  // Two charge sources: a specific platform-issued invoice, or the plan's
+  // recurring monthly price. Resolve amount/currency/period/rollFrom for each.
+  let amount: number, currency: string, label: string, invoiceNumber: string, description: string, advancesPeriod: boolean;
+  let rollFrom: Date;
+  if (invoiceId) {
+    const invoice = store0.invoices.find((item) => item.id === invoiceId);
+    if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    if (invoice.status !== "ISSUED") return NextResponse.json({ error: `This invoice is already ${invoice.status.toLowerCase()}.` }, { status: 409 });
+    amount = invoice.total; currency = invoice.currency; label = invoice.periodLabel;
+    invoiceNumber = invoice.number; description = `SLMS invoice ${invoice.number}`;
+    advancesPeriod = invoice.advancesPeriod;
+    rollFrom = subscription?.currentPeriodEnd ?? new Date();
+  } else {
+    if (!subscription?.plan) return NextResponse.json({ error: "No active subscription plan" }, { status: 400 });
+    const meta = (await readPlanMeta())[subscription.plan.id];
+    const price = meta?.priceMonthly ?? null;
+    if (price === null || price <= 0) return NextResponse.json({ error: "This plan has no price set. Contact the SLMS Platform Administrator." }, { status: 400 });
+    amount = price; currency = meta?.currency || "PHP";
+    const dueDate = computeNextBilling(subscription) || new Date();
+    rollFrom = dueDate;
+    // Label by the period actually being covered; for a lapsed org the due date
+    // is past, so anchor to "now" rather than a stale month.
+    label = periodLabel(new Date(Math.max(new Date(dueDate).getTime(), Date.now())));
+    const ordinal = store0.payments.filter((payment) => payment.periodLabel === label).length + 1;
+    invoiceNumber = buildInvoiceNumber(label, organizationId, ordinal);
+    description = `SLMS subscription — ${subscription.plan.name}`;
+    advancesPeriod = true;
+  }
 
   const reference = `SUBS-${organizationId.slice(0, 8)}-${crypto.randomBytes(3).toString("hex")}`;
-  const result = await createCheckout({ amount, currency, description: `SLMS subscription — ${subscription.plan.name}`, referenceId: reference });
+  const result = await createCheckout({ amount, currency, description, referenceId: reference });
   if (!result.ok) return NextResponse.json({ error: result.error || "Payment could not be started" }, { status: 502 });
 
-  const dueDate = computeNextBilling(subscription) || new Date();
   const store = await readSubscriptionBilling(organizationId);
 
   // A real hosted-checkout URL means the charge completes off-site (confirmed by
   // the provider) — record it as PENDING and hand the URL back to redirect. When
-  // no provider is configured the layer simulates success, so we settle it now:
-  // mark PAID and roll the billing period forward a month.
+  // no provider is configured the layer simulates success, so we settle it now.
   if (result.checkoutUrl) {
-    const payment: SubscriptionPayment = { id: crypto.randomUUID(), amount, currency, method, reference: result.referenceId || reference, provider: result.provider, status: "PENDING", periodLabel: periodLabel(new Date(dueDate)), paidAt: new Date().toISOString() };
+    const payment: SubscriptionPayment = { id: crypto.randomUUID(), amount, currency, method, reference: result.referenceId || reference, provider: result.provider, status: "PENDING", periodLabel: label, paidAt: new Date().toISOString(), invoiceNumber };
     store.payments.unshift(payment);
     await writeSubscriptionBilling(organizationId, store);
     return NextResponse.json({ ok: true, checkoutUrl: result.checkoutUrl, payment });
   }
 
-  const nextPeriodEnd = new Date(dueDate);
-  if (nextPeriodEnd.getTime() < Date.now()) nextPeriodEnd.setTime(Date.now());
-  nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 1);
-  const payment: SubscriptionPayment = { id: crypto.randomUUID(), amount, currency, method, reference: result.referenceId || reference, provider: result.provider, status: "PAID", periodLabel: periodLabel(new Date(dueDate)), paidAt: new Date().toISOString() };
+  const payment: SubscriptionPayment = { id: crypto.randomUUID(), amount, currency, method, reference: result.referenceId || reference, provider: result.provider, status: "PAID", periodLabel: label, paidAt: new Date().toISOString(), invoiceNumber };
   store.payments.unshift(payment);
-  store.lastReminderPeriod = null; // paid — clear so the next cycle can remind again
+  // Settle the invoice if this payment was for one.
+  if (invoiceId) {
+    const invoice = store.invoices.find((item) => item.id === invoiceId);
+    if (invoice && invoice.status === "ISSUED") { invoice.status = "PAID"; invoice.paidAt = payment.paidAt; invoice.paymentId = payment.id; invoice.paymentMethod = method; }
+  }
+  if (advancesPeriod && subscription) {
+    const nextPeriodEnd = new Date(Math.max(new Date(rollFrom).getTime(), Date.now()));
+    nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 1);
+    store.lastReminderPeriod = null; // paid — clear so the next cycle can remind again
+    store.pastDueSince = null; // paid — clear the grace-window anchor
+    await prisma.subscription.update({ where: { organizationId }, data: { status: "ACTIVE", currentPeriodEnd: nextPeriodEnd } });
+  }
   await writeSubscriptionBilling(organizationId, store);
-  await prisma.subscription.update({ where: { organizationId }, data: { status: "ACTIVE", currentPeriodEnd: nextPeriodEnd } });
-  logAudit({ actorId: context!.userId, actorRole: context!.role, action: "CREATE", entityType: "subscription-payment", entityId: payment.id, organizationId, after: { amount, currency, method, provider: result.provider } });
-  return NextResponse.json({ ok: true, simulated: result.provider === "simulated", payment, nextPeriodEnd: nextPeriodEnd.toISOString() });
+  logAudit({ actorId: context!.userId, actorRole: context!.role, action: "CREATE", entityType: "subscription-payment", entityId: payment.id, organizationId, after: { amount, currency, method, provider: result.provider, invoiceId: invoiceId || null } });
+  return NextResponse.json({ ok: true, simulated: result.provider === "simulated", payment });
 }

@@ -16,6 +16,12 @@ export async function GET() {
     include: {
       subscription: { include: { plan: true } },
       _count: { select: { communities: true, residents: true, staff: true } },
+      // Accounts that can access each customer workspace (who has access).
+      memberships: {
+        where: { status: "ACTIVE" },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, role: true, status: true, user: { select: { id: true, name: true, email: true, isActive: true, lastLogin: true } } },
+      },
     },
   });
   return NextResponse.json({ organizations });
