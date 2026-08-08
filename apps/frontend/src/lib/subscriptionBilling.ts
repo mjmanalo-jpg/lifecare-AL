@@ -53,3 +53,28 @@ export async function writeSubscriptionBilling(organizationId: string, data: Sub
 export function periodLabel(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
+
+// The next billing date, derived so display and automation never diverge:
+//   1. an explicit currentPeriodEnd (set after a payment) wins,
+//   2. else a still-running trial bills when it ends,
+//   3. else the next monthly anniversary of the start date after `now`
+//      (e.g. started 2026-07-23, today 2026-08-08 -> 2026-08-23).
+export function computeNextBilling(
+  input: { currentPeriodEnd?: Date | string | null; trialEndsAt?: Date | string | null; startsAt?: Date | string | null },
+  now: Date = new Date(),
+): Date | null {
+  if (input.currentPeriodEnd) return new Date(input.currentPeriodEnd);
+  if (input.trialEndsAt) {
+    const trialEnd = new Date(input.trialEndsAt);
+    if (!Number.isNaN(trialEnd.getTime()) && trialEnd.getTime() > now.getTime()) return trialEnd;
+  }
+  if (!input.startsAt) return null;
+  const next = new Date(input.startsAt);
+  if (Number.isNaN(next.getTime())) return null;
+  let guard = 0;
+  while (next.getTime() <= now.getTime() && guard < 1200) {
+    next.setMonth(next.getMonth() + 1);
+    guard += 1;
+  }
+  return next;
+}

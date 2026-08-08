@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext, requiresPrivilegedMfa } from "@/lib/tenant";
 import { readPlanMeta, DEFAULT_PLAN_META } from "@/lib/planMeta";
+import { computeNextBilling } from "@/lib/subscriptionBilling";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +29,11 @@ export async function GET() {
   // Attach the plan's public pricing metadata (stored migration-free) so the
   // org admin can see their monthly subscription charge.
   const planMeta = plan ? (await readPlanMeta())[plan.id] || DEFAULT_PLAN_META : null;
+  const nextBillingDate = organization.subscription ? computeNextBilling(organization.subscription) : null;
   return NextResponse.json({
     organization: {
       ...organization,
-      subscription: organization.subscription ? { ...organization.subscription, plan: plan ? { ...plan, maxStorageBytes: plan.maxStorageBytes?.toString() || null, priceMonthly: planMeta?.priceMonthly ?? null, currency: planMeta?.currency || "PHP" } : null } : null,
+      subscription: organization.subscription ? { ...organization.subscription, nextBillingDate: nextBillingDate?.toISOString() || null, plan: plan ? { ...plan, maxStorageBytes: plan.maxStorageBytes?.toString() || null, priceMonthly: planMeta?.priceMonthly ?? null, currency: planMeta?.currency || "PHP" } : null } : null,
     },
     auditEvents,
   });

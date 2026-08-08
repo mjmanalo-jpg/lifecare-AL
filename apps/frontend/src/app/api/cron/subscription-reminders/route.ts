@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { readPlanMeta } from "@/lib/planMeta";
-import { readSubscriptionBilling, writeSubscriptionBilling, periodLabel } from "@/lib/subscriptionBilling";
+import { readSubscriptionBilling, writeSubscriptionBilling, periodLabel, computeNextBilling } from "@/lib/subscriptionBilling";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 // BILLING_UPDATE notification for the org's owners/admins. De-duplicated per due
 // date via lastReminderPeriod so it never spams the same cycle.
 
-const REMINDER_DAYS = 7;
+const REMINDER_DAYS = 5;
 
 async function run(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -36,10 +36,9 @@ async function run(request: NextRequest) {
   let orgsNotified = 0;
 
   for (const subscription of subscriptions) {
-    const dueRaw = subscription.currentPeriodEnd || subscription.trialEndsAt;
-    if (!dueRaw) continue;
-    const due = new Date(dueRaw);
-    // Only upcoming-within-window or already-overdue due dates.
+    const due = computeNextBilling(subscription, now);
+    if (!due) continue;
+    // Only upcoming-within-window (5 days) or already-overdue due dates.
     if (due.getTime() > windowEnd.getTime()) continue;
 
     const organizationId = subscription.organization.id;

@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext, requiresPrivilegedMfa } from "@/lib/tenant";
 import { readPlanMeta } from "@/lib/planMeta";
-import { readSubscriptionBilling, writeSubscriptionBilling, periodLabel, type SubscriptionPayment } from "@/lib/subscriptionBilling";
+import { readSubscriptionBilling, writeSubscriptionBilling, periodLabel, computeNextBilling, type SubscriptionPayment } from "@/lib/subscriptionBilling";
 import { createCheckout } from "@/lib/payments";
 import { logAudit } from "@/lib/audit";
 
@@ -25,8 +25,8 @@ async function billingState(organizationId: string) {
   const store = await readSubscriptionBilling(organizationId);
   const currency = meta?.currency || "PHP";
   const amountDue = meta?.priceMonthly ?? null;
-  const dueDate = subscription?.currentPeriodEnd || subscription?.trialEndsAt || null;
-  const currentPeriod = periodLabel(dueDate ? new Date(dueDate) : new Date());
+  const dueDate = subscription ? computeNextBilling(subscription) : null;
+  const currentPeriod = periodLabel(dueDate || new Date());
   const paidThisPeriod = store.payments.some((payment) => payment.status === "PAID" && payment.periodLabel === currentPeriod);
   return {
     planName: subscription?.plan?.name || null,
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
   const result = await createCheckout({ amount, currency, description: `SLMS subscription — ${subscription.plan.name}`, referenceId: reference });
   if (!result.ok) return NextResponse.json({ error: result.error || "Payment could not be started" }, { status: 502 });
 
-  const dueDate = subscription.currentPeriodEnd || subscription.trialEndsAt || new Date();
+  const dueDate = computeNextBilling(subscription) || new Date();
   const store = await readSubscriptionBilling(organizationId);
 
   // A real hosted-checkout URL means the charge completes off-site (confirmed by
