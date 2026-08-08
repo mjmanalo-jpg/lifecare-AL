@@ -16,9 +16,9 @@ export async function GET() {
     include: {
       subscription: { include: { plan: true } },
       _count: { select: { communities: true, residents: true, staff: true } },
-      // Accounts that can access each customer workspace (who has access).
+      // Leadership account(s) for each customer workspace (owner or org admin).
       memberships: {
-        where: { status: "ACTIVE" },
+        where: { status: "ACTIVE", role: { in: ["OWNER", "ADMIN"] } },
         orderBy: { createdAt: "asc" },
         select: { id: true, role: true, status: true, user: { select: { id: true, name: true, email: true, isActive: true, lastLogin: true } } },
       },
