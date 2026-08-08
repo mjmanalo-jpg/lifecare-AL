@@ -712,6 +712,7 @@ const LINK_GROUP_MAP: Record<string, SidebarGroup> = {
   "Pending Approvals": "Administration",
   "Add Staff Account": "Administration",
   "Usage & Subscription": "Administration",
+  "Invoices": "Administration",
   "Organization Branding": "Administration",
   "Organization Audit": "Administration",
   // Resident Care (Modules 1–4)
