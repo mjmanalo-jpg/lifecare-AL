@@ -597,7 +597,7 @@ export default function Home() {
                   </ul>
 
                   <Link
-                    href="/signup"
+                    href={`/checkout/${plan.key}`}
                     className={`w-full py-3 rounded-xl text-center text-sm font-semibold transition-all flex items-center justify-center gap-2 ${plan.highlight ? "bg-foreground text-background hover:scale-105 shadow-lg" : "glass-panel text-foreground hover:bg-foreground/5"}`}
                   >
                     Get Started <ChevronRight className="w-4 h-4" />

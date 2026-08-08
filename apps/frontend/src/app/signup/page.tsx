@@ -56,12 +56,16 @@ export default function SignupPage() {
   const [mounted, setMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const savedTheme = localStorage.getItem("theme") as "dark" | "light" | null;
     setTheme(savedTheme || loginConfig.baseTheme);
+    // Plan chosen (and paid for, in demo) on the checkout page before signup.
+    const plan = new URLSearchParams(window.location.search).get("plan");
+    if (plan) setSelectedPlan(plan.replaceAll("_", " "));
   }, [loginConfig.baseTheme]);
 
   useEffect(() => {
@@ -231,6 +235,11 @@ export default function SignupPage() {
               <p className="text-muted-foreground text-sm font-light">
                 Set up your company workspace and become the owner.
               </p>
+              {selectedPlan && (
+                <div className="mt-3 inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold" style={{ background: accentRgba(accent, 0.12), color: accent }}>
+                  <ShieldCheck className="w-3.5 h-3.5" /> {selectedPlan} plan · payment complete
+                </div>
+              )}
             </div>
 
             <AnimatePresence mode="wait">
