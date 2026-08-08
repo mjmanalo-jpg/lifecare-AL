@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext, requiresPrivilegedMfa } from "@/lib/tenant";
+import { readPlanMeta, DEFAULT_PLAN_META } from "@/lib/planMeta";
 
 export const dynamic = "force-dynamic";
 
@@ -24,10 +25,13 @@ export async function GET() {
   ]);
   if (!organization) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
   const plan = organization.subscription?.plan;
+  // Attach the plan's public pricing metadata (stored migration-free) so the
+  // org admin can see their monthly subscription charge.
+  const planMeta = plan ? (await readPlanMeta())[plan.id] || DEFAULT_PLAN_META : null;
   return NextResponse.json({
     organization: {
       ...organization,
-      subscription: organization.subscription ? { ...organization.subscription, plan: plan ? { ...plan, maxStorageBytes: plan.maxStorageBytes?.toString() || null } : null } : null,
+      subscription: organization.subscription ? { ...organization.subscription, plan: plan ? { ...plan, maxStorageBytes: plan.maxStorageBytes?.toString() || null, priceMonthly: planMeta?.priceMonthly ?? null, currency: planMeta?.currency || "PHP" } : null } : null,
     },
     auditEvents,
   });
