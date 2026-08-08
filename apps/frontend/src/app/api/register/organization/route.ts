@@ -12,6 +12,7 @@ import {
   SupabaseUserExistsError,
 } from "@/lib/supabaseAuth";
 import { logAudit } from "@/lib/audit";
+import { notifyPlatformAdmins } from "@/lib/platformNotify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -166,6 +167,18 @@ export async function POST(request: NextRequest) {
       : "Organization provisioning failed";
     return NextResponse.json({ error: message }, { status: 409 });
   }
+
+  // Notify platform admins that a new customer signed up (new org account +
+  // owner), so they can onboard them. Best-effort — never blocks signup.
+  await notifyPlatformAdmins({
+    title: "New organization registered",
+    message: `${companyName} signed up — ${ownerName} (${email}) provisioned on the ${plan.name} plan (30-day trial).`,
+    severity: "WARNING",
+    relatedEntityId: provisioned.organizationId,
+    relatedEntityType: "organization",
+    organizationId: provisioned.organizationId,
+    communityId: provisioned.communityId,
+  });
 
   // Auto sign-in the new owner. Owners resolve to the ORGANIZATION_ADMIN portal
   // role — the same derivation used by the login route.

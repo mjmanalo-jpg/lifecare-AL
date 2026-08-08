@@ -7,6 +7,7 @@ import { readSubscriptionBilling, writeSubscriptionBilling, periodLabel, compute
 import { createCheckout } from "@/lib/payments";
 import { readPaymentDetails } from "@/lib/paymentDetails";
 import { logAudit } from "@/lib/audit";
+import { notifyPlatformAdmins } from "@/lib/platformNotify";
 import { cachedPortalData, invalidatePortalDataPrefix } from "@/lib/dataCache";
 
 export const runtime = "nodejs";
@@ -149,6 +150,16 @@ export async function POST(request: NextRequest) {
     store.lastReminderPeriod = null; // paid — clear so the next cycle can remind again
     store.pastDueSince = null; // paid — clear the grace-window anchor
     await prisma.subscription.update({ where: { organizationId }, data: { status: "ACTIVE", currentPeriodEnd: nextPeriodEnd } });
+    // Notify platform admins that a customer subscribed / renewed. Best-effort.
+    const org = await prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true } });
+    await notifyPlatformAdmins({
+      title: "Subscription payment received",
+      message: `${org?.name ?? "An organization"} paid ${currency} ${amount.toLocaleString()} for ${subscription.plan?.name ?? "subscription"} (${invoiceNumber}).`,
+      severity: "WARNING",
+      relatedEntityId: subscription.id,
+      relatedEntityType: "subscription",
+      organizationId,
+    });
   }
   await writeSubscriptionBilling(organizationId, store);
   logAudit({ actorId: context!.userId, actorRole: context!.role, action: "CREATE", entityType: "subscription-payment", entityId: payment.id, organizationId, after: { amount, currency, method, provider: result.provider, invoiceId: invoiceId || null } });
