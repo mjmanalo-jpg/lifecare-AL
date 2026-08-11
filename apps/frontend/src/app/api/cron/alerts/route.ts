@@ -74,12 +74,15 @@ async function scanCommunity(communityId: string, organizationId: string | null)
   // (nurse + facility admin). SBAR SLA escalations follow the clinical chain of
   // command: nurse → care manager → physician → admin.
   const memberships = await prisma.communityMembership.findMany({
-    where: { communityId, status: "ACTIVE", role: { in: ["NURSE", "CARE_MANAGER", "PHYSICIAN", "FACILITY_ADMIN"] } },
+    where: { communityId, status: "ACTIVE", role: { in: ["CAREGIVER", "NURSE", "CARE_MANAGER", "PHYSICIAN", "FACILITY_ADMIN"] } },
     select: { userId: true, role: true },
   });
   const idsForRoles = (roles: string[]) => [...new Set(memberships.filter((m) => roles.includes(m.role)).map((m) => m.userId))];
   const recipientIds = idsForRoles(["NURSE", "FACILITY_ADMIN"]);
   const escalationChainIds = idsForRoles(["NURSE", "CARE_MANAGER", "PHYSICIAN", "FACILITY_ADMIN"]);
+  // Vital-sign alerts reach the bedside + clinical team — caregiver, nurse, care
+  // manager, physician — not the operations-only facility admin bell.
+  const vitalRecipientIds = idsForRoles(["CAREGIVER", "NURSE", "CARE_MANAGER", "PHYSICIAN"]);
 
   const now = new Date();
   const nowTs = now.getTime();
@@ -119,18 +122,50 @@ async function scanCommunity(communityId: string, organizationId: string | null)
     }
   };
 
-  // 1) Abnormal vitals (last 6h)
+  // 1) Abnormal vitals (last 6h). Alerts the bedside + clinical team (caregiver,
+  //    nurse, care manager, physician). A CRITICAL vital ALSO auto-raises an SBAR
+  //    escalation to the physician so it enters the clinical chain of command —
+  //    raised exactly once per reading (guarded by relatedVitalId).
   await runSource("vitals", async () => {
     const vitals = await prisma.vitalsLog.findMany({
       where: { resident: { communityId }, recordedAt: { gte: new Date(nowTs - 6 * 3_600_000) } },
-      select: { id: true, type: true, value: true, resident: { select: { firstName: true, lastName: true, roomNumber: true } } },
+      select: { id: true, type: true, value: true, residentId: true, resident: { select: { firstName: true, lastName: true, roomNumber: true } } },
     });
+    // Vitals that already opened an SBAR (last 30d) — so we never double-raise.
+    const priorEscalations = await prisma.escalation.findMany({
+      where: { communityId, relatedVitalId: { not: null }, createdAt: { gte: new Date(nowTs - 30 * 86_400_000) } },
+      select: { relatedVitalId: true },
+    });
+    const escalatedVitalIds = new Set(priorEscalations.map((e) => e.relatedVitalId));
     for (const v of vitals) {
       if (!isAbnormal(v.type, v.value)) continue;
       const l = VITAL_LABEL[v.type] ?? v.type.toLowerCase();
       const sev = vitalSeverity(v.type, v.value);
       const lead = sev === "CRITICAL" ? "Critically abnormal" : "Abnormal";
-      if (await notify("VITAL_ALERT", "vitalsLog", v.id, `${lead} ${l}`, `${rname(v.resident)} (Room ${room(v.resident)}) recorded ${l} of ${v.value}.${sev === "CRITICAL" ? " Immediate review required." : " Please review."}`, sev)) counts.abnormalVitals++;
+      if (await notify("VITAL_ALERT", "vitalsLog", v.id, `${lead} ${l}`, `${rname(v.resident)} (Room ${room(v.resident)}) recorded ${l} of ${v.value}.${sev === "CRITICAL" ? " Immediate review required." : " Please review."}`, sev, vitalRecipientIds)) counts.abnormalVitals++;
+
+      // CRITICAL vital → auto-raise an SBAR escalation into the clinical chain of
+      // command (assigned to the physician). Idempotent per reading.
+      if (sev === "CRITICAL" && !escalatedVitalIds.has(v.id)) {
+        escalatedVitalIds.add(v.id);
+        try {
+          await prisma.escalation.create({
+            data: {
+              organizationId, communityId, residentId: v.residentId,
+              situation: `${rname(v.resident)} (Room ${room(v.resident)}) — ${l} of ${v.value} is critically abnormal. Auto-raised from vitals monitoring; immediate clinical review required.`,
+              recommendation: "Assess the resident, re-verify the reading, and intervene per protocol.",
+              priority: "EMERGENCY",
+              status: "OPEN",
+              raisedBy: "Vitals Monitor",
+              raisedByRole: "SYSTEM",
+              assignedToRole: "PHYSICIAN",
+              relatedVitalId: v.id,
+            },
+          });
+        } catch (e) {
+          console.error(`auto-SBAR from vital ${v.id} failed for community ${communityId}:`, e instanceof Error ? e.message : "unknown");
+        }
+      }
     }
   });
 
