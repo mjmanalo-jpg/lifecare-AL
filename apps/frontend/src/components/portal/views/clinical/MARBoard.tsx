@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { Pill, Plus, X, Trash2, Search, CheckCircle, Loader2 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -28,6 +29,16 @@ export default function MARBoard() {
   // The signed-in clinician — recorded as who administered/logged each dose.
   const [me, setMe] = useState<{ id: string | null; name: string | null }>({ id: null, name: null });
   useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => { if (d?.authenticated) setMe({ id: d.session?.userId ?? null, name: d.session?.name ?? "Clinician" }); }).catch(() => {}); }, []);
+
+  const router = useRouter();
+  const pathname = usePathname();
+  // Send the clinician to Daily Rounds → Vitals for this resident so they can
+  // record the reading; the MAR block clears automatically once it's saved (the
+  // vitals live-query picks up the new VitalsLog row).
+  const goRecordVitals = (residentId: string) => {
+    const role = pathname?.split("/")[1] || "nurse";
+    router.push(`/${role}/dailyrounds?resident=${encodeURIComponent(String(residentId))}&focus=vitals`);
+  };
 
   const rowTime = (m: any) => m.actualTime || m.scheduledTime || null;
   const today = new Date().toISOString().split("T")[0];
@@ -70,14 +81,25 @@ export default function MARBoard() {
       }
     }
 
-    // Vitals-before-administration prompt for vitals-sensitive meds.
+    // Vitals-before-administration check for vitals-sensitive meds.
     if (flags.needsVitals && !vitalsTodayByResident.has(String(mar.residentId))) {
+      if (flags.highRiskVitals) {
+        // High-risk cardio/glycemic meds: vitals are mandatory — hard block, no override.
+        await Swal.fire({
+          title: "Vitals required",
+          html: `<b>${med?.name}</b> is a high-risk medication and cannot be given until vitals are recorded today for <b>${resName}</b>.<br/><br/>You'll be taken to Daily Rounds to record vitals now.`,
+          icon: "error", confirmButtonColor: "#C0573F", confirmButtonText: "Record vitals first",
+        });
+        goRecordVitals(mar.residentId);
+        return { ok: false };
+      }
+      // Other vitals-sensitive meds: soft prompt, nurse may proceed.
       const proceed = await Swal.fire({
         title: "Check vitals first",
         html: `<b>${med?.name}</b> should be given after checking vitals, but none are recorded today for <b>${resName}</b>.<br/><br/>Record vitals first, or proceed?`,
         icon: "info", showCancelButton: true, confirmButtonColor: "#2E4A48", confirmButtonText: "Proceed anyway", cancelButtonText: "Record vitals first",
       });
-      if (!proceed.isConfirmed) return { ok: false };
+      if (!proceed.isConfirmed) { goRecordVitals(mar.residentId); return { ok: false }; }
     }
 
     // Controlled substances require a witness.
@@ -273,12 +295,12 @@ export default function MARBoard() {
         </div>
       )}
 
-      {creating && <MARModal residents={residents} me={me} onClose={() => setCreating(false)} onSaved={() => { refetch(); setCreating(false); }} />}
+      {creating && <MARModal residents={residents} me={me} vitalsTodayByResident={vitalsTodayByResident} onRecordVitals={goRecordVitals} onClose={() => setCreating(false)} onSaved={() => { refetch(); setCreating(false); }} />}
     </div>
   );
 }
 
-function MARModal({ residents, me, onClose, onSaved }: { residents: any[]; me: { id: string | null; name: string | null }; onClose: () => void; onSaved: () => void }) {
+function MARModal({ residents, me, vitalsTodayByResident, onRecordVitals, onClose, onSaved }: { residents: any[]; me: { id: string | null; name: string | null }; vitalsTodayByResident: Set<string>; onRecordVitals: (residentId: string) => void; onClose: () => void; onSaved: () => void }) {
   const { data: medRows } = useLiveQuery("medications", { query: "take=200", tables: ["Medication"] });
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ residentId: "", medicationId: "", dosage: "", route: "ORAL", status: "GIVEN", reasonForRefusal: "", heldReason: "", witnessName: "", notes: "" });
@@ -290,6 +312,27 @@ function MARModal({ residents, me, onClose, onSaved }: { residents: any[]; me: {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.residentId || !form.medicationId) return;
+    // Vitals-before-administration check (mirrors the row "Mark Given" action).
+    if (form.status === "GIVEN" && medFlags.needsVitals && !vitalsTodayByResident.has(String(form.residentId))) {
+      const resName = residents.find((r: any) => r.id === form.residentId)?.name || "this resident";
+      if (medFlags.highRiskVitals) {
+        // High-risk cardio/glycemic meds: vitals are mandatory — hard block, no override.
+        await Swal.fire({
+          title: "Vitals required",
+          html: `<b>${selectedMed?.name}</b> is a high-risk medication and cannot be recorded as given until vitals are recorded today for <b>${resName}</b>.<br/><br/>You'll be taken to Daily Rounds to record vitals now.`,
+          icon: "error", confirmButtonColor: "#C0573F", confirmButtonText: "Record vitals first",
+        });
+        onRecordVitals(form.residentId);
+        return;
+      }
+      // Other vitals-sensitive meds: soft prompt, nurse may proceed.
+      const proceed = await Swal.fire({
+        title: "Check vitals first",
+        html: `<b>${selectedMed?.name}</b> should be given after checking vitals, but none are recorded today for <b>${resName}</b>.<br/><br/>Record vitals first, or proceed?`,
+        icon: "info", showCancelButton: true, confirmButtonColor: "#2E4A48", confirmButtonText: "Proceed anyway", cancelButtonText: "Record vitals first",
+      });
+      if (!proceed.isConfirmed) { onRecordVitals(form.residentId); return; }
+    }
     // Controlled substances require a witness when recorded as given.
     if (medFlags.controlled && form.status === "GIVEN" && !form.witnessName.trim()) {
       Swal.fire("Witness required", `${selectedMed?.name} is a controlled substance — a witness name is required to record it as given.`, "warning");

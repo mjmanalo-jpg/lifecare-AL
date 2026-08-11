@@ -21,6 +21,13 @@ const HAZARDOUS = ["warfarin", "coumadin", "methotrexate", "mycophenolate", "cel
 // Meds where BP/HR/glucose should be checked before giving.
 const NEEDS_VITALS = ["lisinopril", "enalapril", "ramipril", "losartan", "valsartan", "amlodipine", "metoprolol", "atenolol", "carvedilol", "bisoprolol", "hydrochlorothiazide", "furosemide", "lasix", "clonidine", "digoxin", "insulin", "metformin", "glipizide", "glimepiride", "glyburide", "warfarin", "oxycodone", "morphine", "fentanyl", "hydromorphone", "hydrocodone"];
 
+// High-risk "hold-parameter" meds: cardiovascular + glycemic drugs where a low
+// BP/HR/glucose is a genuine contraindication for the dose. For these, a vitals
+// reading is MANDATORY before administration — the MAR blocks the dose (no
+// "proceed anyway") until vitals are recorded. A subset of NEEDS_VITALS; opioids,
+// warfarin and metformin stay on the softer "check vitals" prompt.
+const HIGH_RISK_VITALS = ["lisinopril", "enalapril", "ramipril", "losartan", "valsartan", "amlodipine", "metoprolol", "atenolol", "carvedilol", "bisoprolol", "hydrochlorothiazide", "furosemide", "lasix", "clonidine", "digoxin", "insulin", "glipizide", "glimepiride", "glyburide"];
+
 const has = (name: string, list: string[]) => { const n = name.toLowerCase(); return list.some((k) => n.includes(k)); };
 
 export interface MedFlags {
@@ -29,18 +36,23 @@ export interface MedFlags {
   psychotropic: boolean;
   hazardous: boolean;
   needsVitals: boolean;
+  /** Vitals are mandatory before this dose — the MAR blocks (no override) until recorded. */
+  highRiskVitals: boolean;
 }
 
 export function classifyMedication(name: string | undefined | null): MedFlags {
   const n = (name ?? "").trim();
   const sII = has(n, SCHEDULE_II);
   const sLow = has(n, SCHEDULE_LOW);
+  const highRiskVitals = has(n, HIGH_RISK_VITALS);
   return {
     controlled: sII || sLow,
     deaSchedule: sII ? "II" : sLow ? "III-V" : null,
     psychotropic: has(n, PSYCHOTROPIC),
     hazardous: has(n, HAZARDOUS),
-    needsVitals: has(n, NEEDS_VITALS),
+    // High-risk vitals meds always need vitals; keep the softer list too.
+    needsVitals: highRiskVitals || has(n, NEEDS_VITALS),
+    highRiskVitals,
   };
 }
 
@@ -51,7 +63,8 @@ export function medFlagLabels(name: string | undefined | null): { label: string;
   if (f.controlled) out.push({ label: f.deaSchedule === "II" ? "Controlled C-II" : "Controlled", tone: "red" });
   if (f.psychotropic) out.push({ label: "Psychotropic", tone: "purple" });
   if (f.hazardous) out.push({ label: "Hazardous", tone: "amber" });
-  if (f.needsVitals) out.push({ label: "Vitals first", tone: "blue" });
+  if (f.highRiskVitals) out.push({ label: "Vitals required", tone: "red" });
+  else if (f.needsVitals) out.push({ label: "Vitals first", tone: "blue" });
   return out;
 }
 

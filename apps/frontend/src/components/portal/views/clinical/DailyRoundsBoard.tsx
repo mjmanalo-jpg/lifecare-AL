@@ -1,5 +1,6 @@
 "use client";
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Stethoscope, Search, Plus, X, RefreshCw, ChevronRight, ChevronLeft, Clock,
   CheckCircle2, AlertTriangle, Smile, Moon, Footprints, Utensils,
@@ -48,6 +49,16 @@ const MOOD_ICONS: Record<string, LucideIcon> = {
 const timeNow = () => new Date().toISOString();
 const todayDate = () => { const d = new Date(); d.setHours(0,0,0,0); return d.toISOString(); };
 
+// Current care shift by wall-clock time (matches the DAY/EVENING/NIGHT rounds):
+// day 07:00–14:59, evening 15:00–22:59, night 23:00–06:59.
+type Shift = "DAY" | "EVENING" | "NIGHT";
+const shiftNow = (): Shift => {
+  const h = new Date().getHours();
+  if (h >= 7 && h < 15) return "DAY";
+  if (h >= 15 && h < 23) return "EVENING";
+  return "NIGHT";
+};
+
 export default function DailyRoundsBoard({ clinicianRole = "CAREGIVER" }: { clinicianRole?: ClinicianRole }) {
   const { name: clinicianName, userId: clinicianId } = useClinician(clinicianRole);
   const [tab, setTab] = useState<TabKey>("bowel");
@@ -62,6 +73,12 @@ export default function DailyRoundsBoard({ clinicianRole = "CAREGIVER" }: { clin
   const shiftDay = (delta: number) => { setSelectedRoundId(""); setViewDate((d) => new Date(new Date(d).getTime() + delta * 86_400_000).toISOString()); };
   // Only the Care Manager / nurse (not caregivers) may sign off a completed round.
   const canReview = clinicianRole !== "CAREGIVER";
+
+  // Deep-link target from the MAR "Record vitals first" prompt:
+  //   ?resident=<id>&focus=vitals
+  // Handled once, after today's rounds load, by the effect below the handlers.
+  const searchParams = useSearchParams();
+  const deepLinkRef = useRef(false);
 
   const resQ = useLiveQuery("residents", { tables: ["Resident"] });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -155,6 +172,35 @@ export default function DailyRoundsBoard({ clinicianRole = "CAREGIVER" }: { clin
       refetchTab();
     }
   };
+
+  // Auto-route from the MAR: preselect the resident, land on the round for the
+  // CURRENT shift (creating it if none exists today), and open the Vitals form
+  // so the reading can be entered immediately — which then clears the MAR block.
+  // Runs once, after today's rounds have loaded so we can match the shift.
+  useEffect(() => {
+    if (deepLinkRef.current) return;
+    const rid = searchParams?.get("resident");
+    if (!rid) { deepLinkRef.current = true; return; }
+    if (roundQ.loading) return; // wait until we know which rounds exist today
+    deepLinkRef.current = true;
+    setSelectedResident(rid);
+    if (searchParams?.get("focus") !== "vitals") return;
+    const shift = shiftNow();
+    const day = todayDate().split("T")[0];
+    const existing = (roundQ.data || []).find((r: any) =>
+      r.residentId === rid &&
+      new Date(r.roundDate).toISOString().split("T")[0] === day &&
+      String(r.shift) === shift
+    );
+    (async () => {
+      if (existing) setSelectedRoundId(existing.id);
+      else await handleCreateRound(rid, shift); // sets the new round as current
+      setTab("vitals");
+      setFormTab("vitals");
+      setShowForm(true);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roundQ.loading, roundQ.data, searchParams]);
 
   if (!selectedResident) {
     return (
