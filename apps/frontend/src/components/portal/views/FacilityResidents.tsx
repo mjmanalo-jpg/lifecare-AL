@@ -7,8 +7,9 @@ import { useMemo, useState, useEffect } from "react";
 import {
   Users, Search, X, Heart, Droplets, Wind, Thermometer, AlertTriangle,
   Pill, Activity, Clock, RefreshCw, ListChecks, BarChart3, HeartPulse,
-  UserPlus, Loader2, CheckCircle2, type LucideIcon,
+  UserPlus, Loader2, CheckCircle2, QrCode, type LucideIcon,
 } from "lucide-react";
+import ResidentQRModal from "@/components/ResidentQRModal";
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Legend, Tooltip, BarChart, Bar,
   XAxis, YAxis, CartesianGrid,
@@ -110,6 +111,7 @@ export default function FacilityResidents({ canManageProfile = false }: { canMan
   const [page, setPage] = useState(1);
   const [viewing, setViewing] = useState<ResidentVM | null>(null);
   const [admitting, setAdmitting] = useState(false);
+  const [qrResident, setQrResident] = useState<{ id: string; name: string; room: string } | null>(null);
 
   const vitalIndex = useMemo(() => {
     const byId = new Map<string, VitalRow[]>();
@@ -396,7 +398,10 @@ export default function FacilityResidents({ canManageProfile = false }: { canMan
                         <td className="px-4 py-3 text-center text-gray-700">{r.meds.length}</td>
                         <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{relTime(r.lastCheckIn, nowTs)}</td>
                         <td className="px-4 py-3 text-right">
-                          <button onClick={() => setViewing(r)} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition">View</button>
+                          <div className="inline-flex items-center gap-1.5">
+                            <button onClick={() => setQrResident({ id: r.id, name: r.name, room: r.room })} className="inline-flex items-center gap-1 px-2.5 py-1 border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition" title="View QR — opens the resident's full care card"><QrCode className="w-3.5 h-3.5" /> QR</button>
+                            <button onClick={() => setViewing(r)} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition">View</button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -428,6 +433,14 @@ export default function FacilityResidents({ canManageProfile = false }: { canMan
           onAdmitted={() => { void refetch(); }}
         />
       )}
+
+      <ResidentQRModal
+        open={!!qrResident}
+        onClose={() => setQrResident(null)}
+        residentId={qrResident?.id ?? ""}
+        name={qrResident?.name ?? ""}
+        room={qrResident?.room}
+      />
 
       {viewing && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -561,6 +574,7 @@ export default function FacilityResidents({ canManageProfile = false }: { canMan
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-8 py-4 flex items-center justify-end gap-2 flex-wrap">
               {/* Clinical vitals/camera monitoring lives in the Care Manager portal
                   now — Facility Operations is operations-only. */}
+              <button onClick={() => setQrResident({ id: viewing.id, name: viewing.name, room: viewing.room })} className="inline-flex items-center gap-1.5 px-5 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-100 transition"><QrCode className="w-4 h-4" /> View QR</button>
               <button onClick={() => setViewing(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
             </div>
           </div>
