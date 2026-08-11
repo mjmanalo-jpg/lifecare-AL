@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { VitalType } from "@prisma/client";
+import { VitalType, IncidentType, IncidentSeverity } from "@prisma/client";
 import { requireTenantContext, tenantWhere } from "@/lib/tenant";
 import { withTenantDb } from "@/lib/tenantDb";
 import { isDbConfigured } from "@/lib/models";
 import { DEMO } from "@/lib/demoData";
+import { isAbnormalVital, vitalSeverity, VITAL_META } from "@/lib/vitalThresholds";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,6 +33,40 @@ export async function POST(request: NextRequest) {
   if (!residentId || !Object.values(VitalType).includes(type as VitalType) || body.value === undefined) return NextResponse.json({ error: "Resident, vital type, and value are required" }, { status: 400 });
   if (!(await canAccessResident(context, residentId))) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!isDbConfigured()) return NextResponse.json({ data: { id: `demo-${Date.now()}`, residentId, type, value: String(body.value) }, demo: true }, { status: 201 });
-  const data = await withTenantDb(context, (tx) => tx.vitalsLog.create({ data: { organizationId: context.organizationId, communityId: context.communityId, residentId, type: type as VitalType, value: String(body.value), unit: body.unit || null, notes: body.notes != null ? String(body.notes) : null, recordedAt: new Date(), recordedBy: context.userId } }));
+  const valueStr = String(body.value);
+  const data = await withTenantDb(context, (tx) => tx.vitalsLog.create({ data: { organizationId: context.organizationId, communityId: context.communityId, residentId, type: type as VitalType, value: valueStr, unit: body.unit || null, notes: body.notes != null ? String(body.notes) : null, recordedAt: new Date(), recordedBy: context.userId } }));
+
+  // Abnormal reading → also log a clinical Incident so it surfaces in the
+  // resident's "Recent Incidents" (visible to caregiver/nurse/care manager),
+  // attributed to the staff who recorded the vital. Best-effort — a failure here
+  // must never block the vital write.
+  if (isAbnormalVital(type, valueStr)) {
+    try {
+      const critical = vitalSeverity(type, valueStr) === "CRITICAL";
+      const label = VITAL_META[type]?.label ?? type;
+      const unit = VITAL_META[type]?.unit ?? "";
+      await withTenantDb(context, async (tx) => {
+        const staff = context.userId
+          ? await tx.staff.findFirst({ where: { userId: context.userId, communityId: context.communityId }, select: { id: true } })
+          : null;
+        await tx.incident.create({
+          data: {
+            organizationId: context.organizationId,
+            communityId: context.communityId,
+            residentId,
+            incidentType: IncidentType.MEDICAL_EMERGENCY,
+            severity: critical ? IncidentSeverity.CRITICAL : IncidentSeverity.MODERATE,
+            title: `${critical ? "Critical" : "Abnormal"} ${label}`,
+            description: `${critical ? "Critically abnormal" : "Abnormal"} ${label} of ${valueStr}${unit ? ` ${unit}` : ""} recorded. Auto-logged from vitals monitoring — clinical review required.`,
+            reportedById: staff?.id ?? null,
+            followUpRequired: critical,
+            incidentDate: new Date(),
+          },
+        });
+      });
+    } catch (e) {
+      console.error("[vitals POST] abnormal-vital incident create failed:", e instanceof Error ? e.message : "unknown");
+    }
+  }
   return NextResponse.json({ data }, { status: 201 });
 }
