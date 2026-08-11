@@ -600,6 +600,23 @@ function AdmitResidentModal({ takenRooms, onClose, onAdmitted }: {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Registered physicians (active staff whose linked user has the PHYSICIAN role)
+  // — the CM/SA picks the attending physician from this list, not free text.
+  const { data: staffRows } = useLiveQuery<Record<string, unknown>>(
+    "staff", { query: "include=user&f_isActive=true&take=100", tables: ["Staff", "User"] }
+  );
+  const physicians = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const s of staffRows) {
+      const u = s.user as { role?: string; firstName?: string; lastName?: string; name?: string; email?: string } | undefined;
+      if (!u || u.role !== "PHYSICIAN") continue;
+      const name = (u.name || `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email || "").trim();
+      if (name && !seen.has(name)) { seen.add(name); out.push(name); }
+    }
+    return out.sort((a, b) => a.localeCompare(b));
+  }, [staffRows]);
+
   const set = (key: keyof AdmissionForm) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -740,7 +757,10 @@ function AdmitResidentModal({ takenRooms, onClose, onAdmitted }: {
                 </Field>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Primary Physician">
-                    <input type="text" value={form.primaryPhysician} onChange={set("primaryPhysician")} placeholder="Dr. Reyes" className={inputCls} />
+                    <select value={form.primaryPhysician} onChange={set("primaryPhysician")} className={inputCls} disabled={!physicians.length}>
+                      <option value="">{physicians.length ? "Select physician…" : "No physicians registered"}</option>
+                      {physicians.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
                   </Field>
                   <Field label="Diet Restriction">
                     <input type="text" value={form.dietRestriction} onChange={set("dietRestriction")} placeholder="Low sodium, diabetic" className={inputCls} />
