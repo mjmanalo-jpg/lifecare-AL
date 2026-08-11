@@ -574,7 +574,6 @@ export default function FacilityResidents({ canManageProfile = false }: { canMan
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-8 py-4 flex items-center justify-end gap-2 flex-wrap">
               {/* Clinical vitals/camera monitoring lives in the Care Manager portal
                   now — Facility Operations is operations-only. */}
-              <button onClick={() => setQrResident({ id: viewing.id, name: viewing.name, room: viewing.room })} className="inline-flex items-center gap-1.5 px-5 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-100 transition"><QrCode className="w-4 h-4" /> View QR</button>
               <button onClick={() => setViewing(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
             </div>
           </div>
