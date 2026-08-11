@@ -87,6 +87,11 @@ export default function FacilityResidents({ canManageProfile = false }: { canMan
   const { data: vitalRows, refetch: refetchVitals } = useLiveQuery<Record<string, unknown>>(
     "vitals", { query: "include=resident&take=500", tables: ["VitalsLog"] }
   );
+  // Diet Restriction on the profile mirrors the resident's ACTIVE diet order
+  // (authored by the Nutritionist on the Diet Orders board) — read-only here.
+  const { data: dietOrderRows } = useLiveQuery<Record<string, unknown>>(
+    "diet-orders", { query: "f_active=true&take=500", tables: ["DietOrder"] }
+  );
 
   const [nowTs, setNowTs] = useState(0);
   useEffect(() => {
@@ -127,6 +132,22 @@ export default function FacilityResidents({ canManageProfile = false }: { canMan
     return { byId, byRoom };
   }, [vitalRows]);
 
+  // Latest active diet order per resident, formatted for the profile card.
+  const dietByResident = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const row of dietOrderRows) {
+      const rid = row.residentId ? String(row.residentId) : "";
+      if (!rid || m.has(rid)) continue; // rows are newest-first — keep the latest active
+      const dietType = String(row.dietType ?? "REGULAR");
+      const restrictions = String(row.restrictions ?? "").trim();
+      const parts: string[] = [];
+      if (dietType && dietType !== "REGULAR") parts.push(humanize(dietType));
+      if (restrictions) parts.push(restrictions);
+      m.set(rid, parts.length ? parts.join(" — ") : "Regular — no restriction");
+    }
+    return m;
+  }, [dietOrderRows]);
+
   const residents = useMemo<ResidentVM[]>(() => {
     return residentRows.map((row) => {
       const r = adaptResident(row);
@@ -158,7 +179,7 @@ export default function FacilityResidents({ canManageProfile = false }: { canMan
         emergencyContactPhone: r.emergencyContactPhone || "",
         diagnosis: r.diagnosis || "",
         primaryPhysician: r.primaryPhysician || "",
-        dietRestriction: r.dietRestriction || "",
+        dietRestriction: dietByResident.get(r.id) ?? "",
         meds: rawMeds.map((m) => ({
           name: asStr(m.name), dosage: asStr(m.dosage), frequency: asStr(m.frequency), status: asStr(m.status) || "ACTIVE",
         })),
@@ -176,7 +197,7 @@ export default function FacilityResidents({ canManageProfile = false }: { canMan
         lastCheckIn,
       };
     });
-  }, [residentRows, vitalIndex]);
+  }, [residentRows, vitalIndex, dietByResident]);
 
   const stats = useMemo(() => ({
     total: residents.length,
@@ -554,7 +575,7 @@ interface AdmissionForm {
   phone: string; email: string; roomNumber: string; careLevel: CareLevel;
   admissionDate: string; emergencyContact: string; emergencyContactPhone: string;
   medicalHistory: string; allergies: string; notes: string;
-  primaryPhysician: string; dietRestriction: string;
+  primaryPhysician: string;
 }
 
 const EMPTY_FORM: AdmissionForm = {
@@ -563,7 +584,7 @@ const EMPTY_FORM: AdmissionForm = {
   admissionDate: new Date().toISOString().slice(0, 10),
   emergencyContact: "", emergencyContactPhone: "",
   medicalHistory: "", allergies: "", notes: "",
-  primaryPhysician: "", dietRestriction: "",
+  primaryPhysician: "",
 };
 
 const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none text-sm";
@@ -648,7 +669,6 @@ function AdmitResidentModal({ takenRooms, onClose, onAdmitted }: {
         medicalHistory: form.medicalHistory.trim() || null,
         allergies: form.allergies.trim() || null,
         primaryPhysician: form.primaryPhysician.trim() || null,
-        dietRestriction: form.dietRestriction.trim() || null,
         notes: form.notes.trim() || null,
       });
       setSaved(true);
@@ -755,17 +775,13 @@ function AdmitResidentModal({ takenRooms, onClose, onAdmitted }: {
                 <Field label="Allergies">
                   <input type="text" value={form.allergies} onChange={set("allergies")} placeholder="Penicillin, Shellfish" className={inputCls} />
                 </Field>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field label="Primary Physician">
-                    <select value={form.primaryPhysician} onChange={set("primaryPhysician")} className={inputCls} disabled={!physicians.length}>
-                      <option value="">{physicians.length ? "Select physician…" : "No physicians registered"}</option>
-                      {physicians.map((p) => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Diet Restriction">
-                    <input type="text" value={form.dietRestriction} onChange={set("dietRestriction")} placeholder="Low sodium, diabetic" className={inputCls} />
-                  </Field>
-                </div>
+                <Field label="Primary Physician">
+                  <select value={form.primaryPhysician} onChange={set("primaryPhysician")} className={inputCls} disabled={!physicians.length}>
+                    <option value="">{physicians.length ? "Select physician…" : "No physicians registered"}</option>
+                    {physicians.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  <p className="text-[11px] text-gray-400 mt-1">Diet restriction is set by the Nutritionist via Diet Orders and appears on the profile automatically.</p>
+                </Field>
                 <Field label="Care Notes">
                   <textarea value={form.notes} onChange={set("notes")} rows={3} placeholder="Special care instructions, preferences, mobility needs…" className={`${inputCls} resize-none`} />
                 </Field>
