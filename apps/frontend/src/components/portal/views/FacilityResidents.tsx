@@ -39,6 +39,8 @@ interface ResidentVM {
   id: string; name: string; room: string; age: number | string;
   careLevel: CareLevel; status: ResidentStatus; alertsCount: number;
   allergies: string; conditions: string[]; notes: string;
+  emergencyContact: string; emergencyContactPhone: string;
+  diagnosis: string; primaryPhysician: string; dietRestriction: string;
   meds: MedVM[]; incidents: IncidentVM[];
   vitalsLatest: Record<string, { value: string; unit: string; recordedAt: string | null }>;
   vitalsAll: { type: string; value: string; unit: string; recordedAt: string | null }[];
@@ -78,7 +80,7 @@ function relTime(iso: string | null, nowTs: number): string {
 const newer = (a: string | null, b: string | null) =>
   !b ? true : !a ? false : new Date(a).getTime() > new Date(b).getTime();
 
-export default function FacilityResidents() {
+export default function FacilityResidents({ canManageProfile = false }: { canManageProfile?: boolean } = {}) {
   const { data: residentRows, loading, error, refetch } = useLiveQuery<Record<string, unknown>>(
     "residents", { query: "include=incidents,medications&take=300", tables: ["Resident", "Incident", "Medication"] }
   );
@@ -152,6 +154,11 @@ export default function FacilityResidents() {
         allergies: r.allergies || "",
         conditions: r.medicalHistory ? r.medicalHistory.split(",").map((c) => c.trim()).filter(Boolean) : [],
         notes: r.notes || "",
+        emergencyContact: r.emergencyContact || "",
+        emergencyContactPhone: r.emergencyContactPhone || "",
+        diagnosis: r.diagnosis || "",
+        primaryPhysician: r.primaryPhysician || "",
+        dietRestriction: r.dietRestriction || "",
         meds: rawMeds.map((m) => ({
           name: asStr(m.name), dosage: asStr(m.dosage), frequency: asStr(m.frequency), status: asStr(m.status) || "ACTIVE",
         })),
@@ -234,9 +241,11 @@ export default function FacilityResidents() {
             </button>
           </div>
           <RefreshButton onRefresh={() => { void refetch(); void refetchVitals(); }} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
-          <button onClick={() => setAdmitting(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
-            <UserPlus className="w-4 h-4" /> Admit Resident
-          </button>
+          {canManageProfile && (
+            <button onClick={() => setAdmitting(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+              <UserPlus className="w-4 h-4" /> Admit Resident
+            </button>
+          )}
         </div>
       </div>
 
@@ -391,7 +400,7 @@ export default function FacilityResidents() {
         </>
       )}
 
-      {admitting && (
+      {admitting && canManageProfile && (
         <AdmitResidentModal
           takenRooms={residents.map((r) => r.room)}
           onClose={() => setAdmitting(false)}
@@ -408,19 +417,23 @@ export default function FacilityResidents() {
                 <p className="text-blue-100 text-sm">Room {viewing.room} • Age {viewing.age} • {humanize(viewing.careLevel)}</p>
                 <div className="mt-2 flex items-center gap-2">
                   <span className="text-xs text-blue-100">Status:</span>
-                  <select
-                    value={viewing.status}
-                    onChange={async (e) => {
-                      const st = e.target.value as ResidentStatus;
-                      try { await updateRecord("residents", viewing.id, { status: st }); setViewing({ ...viewing, status: st }); }
-                      catch (err) { Swal.fire("Failed", err instanceof Error ? err.message : "Could not update status.", "error"); }
-                    }}
-                    className="text-xs font-semibold rounded-lg px-2 py-1 text-gray-800 bg-white/90 outline-none cursor-pointer"
-                  >
-                    {(["ACTIVE", "DISCHARGED", "ON_LEAVE", "DECEASED"] as ResidentStatus[]).map((st) => (
-                      <option key={st} value={st}>{RESIDENT_STATUS_LABEL[st]}</option>
-                    ))}
-                  </select>
+                  {canManageProfile ? (
+                    <select
+                      value={viewing.status}
+                      onChange={async (e) => {
+                        const st = e.target.value as ResidentStatus;
+                        try { await updateRecord("residents", viewing.id, { status: st }); setViewing({ ...viewing, status: st }); }
+                        catch (err) { Swal.fire("Failed", err instanceof Error ? err.message : "Could not update status.", "error"); }
+                      }}
+                      className="text-xs font-semibold rounded-lg px-2 py-1 text-gray-800 bg-white/90 outline-none cursor-pointer"
+                    >
+                      {(["ACTIVE", "DISCHARGED", "ON_LEAVE", "DECEASED"] as ResidentStatus[]).map((st) => (
+                        <option key={st} value={st}>{RESIDENT_STATUS_LABEL[st]}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-xs font-semibold rounded-lg px-2 py-1 bg-white/20 text-white">{RESIDENT_STATUS_LABEL[viewing.status]}</span>
+                  )}
                 </div>
               </div>
               <button onClick={() => setViewing(null)} className="p-2 hover:bg-blue-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
@@ -428,6 +441,19 @@ export default function FacilityResidents() {
             <div className="p-4 sm:p-8 space-y-6">
               {/* Patient ID + intake / move-in body-check record */}
               <IntakeBodyCheckPanel residentId={viewing.id} />
+
+              {/* Profile snapshot — diagnosis, physician, diet, emergency contact */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 bg-gray-50 border border-gray-200 rounded-xl p-4">
+                <ProfileField label="Primary Diagnosis" value={viewing.diagnosis || viewing.conditions.join(", ")} />
+                <ProfileField label="Care Level" value={humanize(viewing.careLevel)} />
+                <ProfileField label="Primary Physician" value={viewing.primaryPhysician} />
+                <ProfileField label="Diet Restriction" value={viewing.dietRestriction} />
+                <ProfileField
+                  label="Emergency Contact"
+                  value={[viewing.emergencyContact, viewing.emergencyContactPhone].filter(Boolean).join(" · ")}
+                  emphasis
+                />
+              </div>
 
               {viewing.allergies && (
                 <div className="bg-red-50 border-l-4 border-red-400 p-3 rounded">
@@ -528,6 +554,7 @@ interface AdmissionForm {
   phone: string; email: string; roomNumber: string; careLevel: CareLevel;
   admissionDate: string; emergencyContact: string; emergencyContactPhone: string;
   medicalHistory: string; allergies: string; notes: string;
+  primaryPhysician: string; dietRestriction: string;
 }
 
 const EMPTY_FORM: AdmissionForm = {
@@ -536,9 +563,21 @@ const EMPTY_FORM: AdmissionForm = {
   admissionDate: new Date().toISOString().slice(0, 10),
   emergencyContact: "", emergencyContactPhone: "",
   medicalHistory: "", allergies: "", notes: "",
+  primaryPhysician: "", dietRestriction: "",
 };
 
 const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none text-sm";
+
+function ProfileField({ label, value, emphasis }: { label: string; value?: string; emphasis?: boolean }) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{label}</p>
+      <p className={`text-sm mt-0.5 ${value ? (emphasis ? "text-blue-700 font-semibold" : "text-gray-900 font-medium") : "text-gray-400 italic"}`}>
+        {value || "Not recorded"}
+      </p>
+    </div>
+  );
+}
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
@@ -591,6 +630,8 @@ function AdmitResidentModal({ takenRooms, onClose, onAdmitted }: {
         emergencyContactPhone: form.emergencyContactPhone.trim() || null,
         medicalHistory: form.medicalHistory.trim() || null,
         allergies: form.allergies.trim() || null,
+        primaryPhysician: form.primaryPhysician.trim() || null,
+        dietRestriction: form.dietRestriction.trim() || null,
         notes: form.notes.trim() || null,
       });
       setSaved(true);
@@ -697,6 +738,14 @@ function AdmitResidentModal({ takenRooms, onClose, onAdmitted }: {
                 <Field label="Allergies">
                   <input type="text" value={form.allergies} onChange={set("allergies")} placeholder="Penicillin, Shellfish" className={inputCls} />
                 </Field>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field label="Primary Physician">
+                    <input type="text" value={form.primaryPhysician} onChange={set("primaryPhysician")} placeholder="Dr. Reyes" className={inputCls} />
+                  </Field>
+                  <Field label="Diet Restriction">
+                    <input type="text" value={form.dietRestriction} onChange={set("dietRestriction")} placeholder="Low sodium, diabetic" className={inputCls} />
+                  </Field>
+                </div>
                 <Field label="Care Notes">
                   <textarea value={form.notes} onChange={set("notes")} rows={3} placeholder="Special care instructions, preferences, mobility needs…" className={`${inputCls} resize-none`} />
                 </Field>

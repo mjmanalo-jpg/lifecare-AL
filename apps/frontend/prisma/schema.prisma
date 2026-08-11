@@ -597,6 +597,8 @@ model Resident {
   maritalStatus       MaritalStatus?
   language            String?
   diagnosis           String?
+  primaryPhysician    String?
+  dietRestriction     String?
   surgeries           String?         @db.Text
   hospitalizations    String?         @db.Text
   causeOfDeath        String?

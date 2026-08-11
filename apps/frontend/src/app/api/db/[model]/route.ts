@@ -9,6 +9,7 @@ import { transactionDelegate, withTenantDb } from "@/lib/tenantDb";
 import { prisma } from "@/lib/prisma";
 import { invalidatePortalDataPrefix } from "@/lib/dataCache";
 import { createMedTaskForSchedule } from "@/lib/medTaskSync";
+import { canEditResidentProfile } from "@/lib/residentAccess";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -228,6 +229,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const selfService = context.role === "FAMILY" || context.role === "RESIDENT";
   if (selfService && !SELF_WRITABLE.has(model)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!context.isPlatform && !context.communityId && model !== "app-settings") return NextResponse.json({ error: "Select a community" }, { status: 409 });
+  // Module 01 — admitting a resident creates the master profile, so it is limited
+  // to the profile-edit roles (Care Manager / Administrator).
+  if (model === "residents" && !canEditResidentProfile(context.role, context.isPlatform)) {
+    return NextResponse.json({ error: "Only a Care Manager or Administrator can admit or edit residents." }, { status: 403 });
+  }
 
   const input = await request.json();
   if (typeof input !== "object" || !input || Array.isArray(input)) return NextResponse.json({ error: "Invalid request body" }, { status: 400 });

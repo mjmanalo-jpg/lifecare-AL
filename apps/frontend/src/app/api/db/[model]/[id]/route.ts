@@ -8,6 +8,7 @@ import { logAudit, snapshot } from "@/lib/audit";
 import { transactionDelegate, withTenantDb } from "@/lib/tenantDb";
 import { prisma } from "@/lib/prisma";
 import { canAlertAction } from "@/lib/alertAccess";
+import { residentProfileEditDenied } from "@/lib/residentAccess";
 import { invalidatePortalDataPrefix } from "@/lib/dataCache";
 import { syncMarFromCompletedTask, deleteMedTaskForSchedule } from "@/lib/medTaskSync";
 
@@ -93,6 +94,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   // but only full-control roles (Administrator/Care Manager/Nurse) may snooze it.
   if (model === "notifications" && "snoozedUntil" in data && !canAlertAction(context.role, "snooze")) {
     return NextResponse.json({ error: "Your role cannot snooze alerts." }, { status: 403 });
+  }
+  // Module 01 — a resident's master profile (demographics/status/care preferences)
+  // may only be edited by a Care Manager or Administrator. Clinical-only field
+  // updates (acuity, assessment schedule, care package) still pass through.
+  if (model === "residents" && residentProfileEditDenied(context.role, context.isPlatform, Object.keys(data))) {
+    return NextResponse.json({ error: "Only a Care Manager or Administrator can edit a resident's profile." }, { status: 403 });
   }
   if (!Object.keys(data).length) return NextResponse.json({ error: "No permitted fields" }, { status: 422 });
   if (!isDbConfigured()) return NextResponse.json({ data: { id, ...data }, demo: true });

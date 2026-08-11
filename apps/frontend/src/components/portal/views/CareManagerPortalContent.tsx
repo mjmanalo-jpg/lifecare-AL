@@ -19,6 +19,7 @@ import ConsentFormsManager from "@/components/portal/views/ConsentFormsManager";
 import MonitoringView from "@/components/portal/views/MonitoringView";
 import QualityMonitoringBoard from "@/components/portal/views/clinical/QualityMonitoringBoard";
 import MedSafetyDashboard from "@/components/portal/views/clinical/MedSafetyDashboard";
+import FacilityResidents from "@/components/portal/views/FacilityResidents";
 
 /**
  * Care Manager portal — clinical oversight split out of Facility Operations:
@@ -30,6 +31,9 @@ import MedSafetyDashboard from "@/components/portal/views/clinical/MedSafetyDash
  */
 export default function CareManagerPortalContent({ tab }: { tab: string }) {
   switch (tab) {
+    case "residents":
+    case "records":
+      return <FacilityResidents canManageProfile />;
     case "alertcenter":
       return <AlertCenter />;
     case "incidents":

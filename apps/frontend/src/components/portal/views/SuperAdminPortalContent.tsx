@@ -314,7 +314,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
 
   // Core SLMS Modules Aligned
   if (tab === "records") {
-    return <FacilityResidents />;
+    return <FacilityResidents canManageProfile />;
   }
   if (tab === "rounds") {
     return <AssessmentAcuityBoard clinicianRole="FACILITY_ADMIN" />;

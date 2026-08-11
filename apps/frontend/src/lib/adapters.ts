@@ -64,6 +64,11 @@ export function adaptResident(r: any) {
     allergies: r.allergies ?? "",
     medicalHistory: r.medicalHistory ?? "",
     notes: r.notes ?? "",
+    emergencyContact: r.emergencyContact ?? "",
+    emergencyContactPhone: r.emergencyContactPhone ?? "",
+    diagnosis: r.diagnosis ?? "",
+    primaryPhysician: r.primaryPhysician ?? "",
+    dietRestriction: r.dietRestriction ?? "",
     raw: r,
   };
 }
