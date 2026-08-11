@@ -8,6 +8,7 @@ import { logAudit, snapshot } from "@/lib/audit";
 import { transactionDelegate, withTenantDb } from "@/lib/tenantDb";
 import { prisma } from "@/lib/prisma";
 import { invalidatePortalDataPrefix } from "@/lib/dataCache";
+import { createMedTaskForSchedule } from "@/lib/medTaskSync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -268,6 +269,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Operational records (dining/service/purchase/maintenance/concierge)
     // notify facility admins in real time.
     if (FACILITY_OPS_NOTIFY[model]) await notifyFacilityOps(context, model, created);
+    // A SCHEDULED dose opens an unassigned task for on-duty caregivers/nurses;
+    // completing that task records the dose as GIVEN (see [id] PATCH hook).
+    if (model === "medication-administrations") await createMedTaskForSchedule(context, created);
     return NextResponse.json({ data: created }, { status: 201 });
   } catch (error) {
     if (error instanceof EntitlementError) return NextResponse.json({ error: error.message, code: error.code }, { status: 403 });

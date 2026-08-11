@@ -13,6 +13,16 @@ const inputCls = "w-full rounded-md border border-[#D6D8CD] bg-white px-3 py-2 t
 // Keys MUST match the Prisma MARStatus enum.
 const MAR_STATUSES = ["SCHEDULED", "GIVEN", "REFUSED", "HELD", "MISSED", "PARTIAL"] as const;
 
+// Local calendar day (YYYY-MM-DD). MAR filtering must key off the LOCAL day the
+// nurse sees/picks (the datetime-local scheduler and the date input are both
+// local); using UTC (toISOString) would drop a dose whose scheduled local time
+// falls on a different UTC day — e.g. an early- or late-day dose in a non-UTC
+// timezone would silently vanish from "today".
+const localDay = (d: Date | string) => {
+  const x = typeof d === "string" ? new Date(d) : d;
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+};
+
 export default function MARBoard() {
   const { data: marRows, loading, refetch } = useLiveQuery("medication-administrations", { query: "take=500", tables: ["MedicationAdministration"] });
   const { data: medRows } = useLiveQuery("medications", { query: "take=200", tables: ["Medication"] });
@@ -24,7 +34,7 @@ export default function MARBoard() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("ALL");
   const [creating, setCreating] = useState(false);
-  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split("T")[0]);
+  const [dateFilter, setDateFilter] = useState(localDay(new Date()));
 
   // The signed-in clinician — recorded as who administered/logged each dose.
   const [me, setMe] = useState<{ id: string | null; name: string | null }>({ id: null, name: null });
@@ -41,14 +51,14 @@ export default function MARBoard() {
   };
 
   const rowTime = (m: any) => m.actualTime || m.scheduledTime || null;
-  const today = new Date().toISOString().split("T")[0];
+  const today = localDay(new Date());
 
   // Residents who already have a vitals reading recorded today (for the
   // vitals-before-administration prompt on vitals-sensitive meds).
   const vitalsTodayByResident = useMemo(() => {
     const s = new Set<string>();
     for (const v of (vitalsRows || []) as any[]) {
-      const t = v.recordedAt ? new Date(v.recordedAt).toISOString().split("T")[0] : null;
+      const t = v.recordedAt ? localDay(v.recordedAt) : null;
       if (t === today && v.residentId) s.add(String(v.residentId));
     }
     return s;
@@ -125,7 +135,7 @@ export default function MARBoard() {
       if (filter !== "ALL" && m.status !== filter) return false;
       if (dateFilter) {
         const t = rowTime(m);
-        const mDate = t ? new Date(t).toISOString().split("T")[0] : null;
+        const mDate = t ? localDay(t) : null;
         if (mDate && mDate !== dateFilter) return false;
       }
       if (search && !name.toLowerCase().includes(search.toLowerCase()) && !medName.toLowerCase().includes(search.toLowerCase())) return false;
@@ -148,7 +158,7 @@ export default function MARBoard() {
   }, [filtered, resMap]);
 
   const stats = useMemo(() => {
-    const todays = (marRows || []).filter((m: any) => { const t = rowTime(m); return t && new Date(t).toISOString().split("T")[0] === today; });
+    const todays = (marRows || []).filter((m: any) => { const t = rowTime(m); return t && localDay(t) === today; });
     const given = todays.filter((m: any) => m.status === "GIVEN").length;
     const refused = todays.filter((m: any) => m.status === "REFUSED").length;
     const held = todays.filter((m: any) => m.status === "HELD").length;
@@ -303,7 +313,7 @@ export default function MARBoard() {
 function MARModal({ residents, me, vitalsTodayByResident, onRecordVitals, onClose, onSaved }: { residents: any[]; me: { id: string | null; name: string | null }; vitalsTodayByResident: Set<string>; onRecordVitals: (residentId: string) => void; onClose: () => void; onSaved: () => void }) {
   const { data: medRows } = useLiveQuery("medications", { query: "take=200", tables: ["Medication"] });
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ residentId: "", medicationId: "", dosage: "", route: "ORAL", status: "GIVEN", reasonForRefusal: "", heldReason: "", witnessName: "", notes: "" });
+  const [form, setForm] = useState({ residentId: "", medicationId: "", dosage: "", route: "ORAL", status: "GIVEN", scheduledAt: "", reasonForRefusal: "", heldReason: "", witnessName: "", notes: "" });
   const set = (k: string, v: any) => setForm((f) => ({ ...f, [k]: v }));
 
   const selectedMed: any = (medRows || []).find((m: any) => m.id === form.medicationId);
@@ -338,10 +348,19 @@ function MARModal({ residents, me, vitalsTodayByResident, onRecordVitals, onClos
       Swal.fire("Witness required", `${selectedMed?.name} is a controlled substance — a witness name is required to record it as given.`, "warning");
       return;
     }
+    // A SCHEDULED dose needs its planned date & time.
+    if (form.status === "SCHEDULED" && !form.scheduledAt) {
+      Swal.fire("Schedule required", "Pick the date and time this dose is scheduled for.", "warning");
+      return;
+    }
     setSaving(true);
     try {
       const now = new Date().toISOString();
-      await createRecord("medication-administrations", { ...form, scheduledTime: now, actualTime: form.status === "SCHEDULED" ? null : now, recordedById: me.id, recordedByName: me.name });
+      // For SCHEDULED, use the nurse-picked date/time; otherwise the dose is
+      // acted on now. `scheduledAt` is a form-only field — keep it out of the payload.
+      const { scheduledAt, ...rest } = form;
+      const scheduledTime = form.status === "SCHEDULED" && scheduledAt ? new Date(scheduledAt).toISOString() : now;
+      await createRecord("medication-administrations", { ...rest, scheduledTime, actualTime: form.status === "SCHEDULED" ? null : now, recordedById: me.id, recordedByName: me.name });
       onSaved();
       Swal.fire({ icon: "success", title: "Recorded!", timer: 1500, showConfirmButton: false });
     } catch { Swal.fire("Error", "Could not save the MAR entry.", "error"); } finally { setSaving(false); }
@@ -389,6 +408,7 @@ function MARModal({ residents, me, vitalsTodayByResident, onRecordVitals, onClos
               {MAR_STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
             </select>
           </div>
+          {form.status === "SCHEDULED" && <div><label className={lbl}>Scheduled Date &amp; Time *</label><input type="datetime-local" value={form.scheduledAt} onChange={(e) => set("scheduledAt", e.target.value)} className={inputCls} required /></div>}
           {form.status === "REFUSED" && <div><label className={lbl}>Refusal Reason *</label><input value={form.reasonForRefusal} onChange={(e) => set("reasonForRefusal", e.target.value)} className={inputCls} required placeholder="Why was the medication refused?" /></div>}
           {form.status === "HELD" && <div><label className={lbl}>Hold Reason *</label><input value={form.heldReason} onChange={(e) => set("heldReason", e.target.value)} className={inputCls} required placeholder="Why is the medication being held?" /></div>}
           <div><label className={lbl}>Witness Name (for controlled substances)</label><input value={form.witnessName} onChange={(e) => set("witnessName", e.target.value)} className={inputCls} /></div>

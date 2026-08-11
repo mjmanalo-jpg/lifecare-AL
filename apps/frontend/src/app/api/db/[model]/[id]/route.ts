@@ -9,6 +9,7 @@ import { transactionDelegate, withTenantDb } from "@/lib/tenantDb";
 import { prisma } from "@/lib/prisma";
 import { canAlertAction } from "@/lib/alertAccess";
 import { invalidatePortalDataPrefix } from "@/lib/dataCache";
+import { syncMarFromCompletedTask, deleteMedTaskForSchedule } from "@/lib/medTaskSync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -113,6 +114,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
     }
 
+    // Completing a medication task records its linked scheduled dose as GIVEN in
+    // the MAR (`existing` is the pre-update task, carrying category + generatedFrom).
+    if (model === "tasks" && data.status === "COMPLETED") {
+      await syncMarFromCompletedTask(context, existing as Record<string, unknown>, context.userId);
+    }
+
     logAudit({ actorId: context.userId, actorRole: context.role, action: "UPDATE", entityType: model, entityId: id, organizationId: context.organizationId, communityId: context.communityId, before: snapshot(existing), after: snapshot(updated) });
     return NextResponse.json({ data: updated });
   } catch (error) {
@@ -145,6 +152,8 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     if (context.organizationId) await assertMutationEntitled(context, model);
     await withTenantDb(context, async (tx) => transactionDelegate(definition, tx).delete({ where: { id } }));
     if (OVERVIEW_COUNT_MODELS.has(model) && context.organizationId) invalidatePortalDataPrefix(`org-admin:${context.organizationId}:`);
+    // Deleting a scheduled dose removes the open task it generated (+ its notifications).
+    if (model === "medication-administrations") await deleteMedTaskForSchedule(context, existing as Record<string, unknown>);
     logAudit({ actorId: context.userId, actorRole: context.role, action: "DELETE", entityType: model, entityId: id, organizationId: context.organizationId, communityId: context.communityId, before: snapshot(existing) });
     return NextResponse.json({ ok: true });
   } catch (error) {
