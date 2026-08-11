@@ -292,7 +292,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "AI Assistant", icon: Sparkles, route: "/superadmin/assistant" },
       { name: "Landing Studio", icon: Palette, route: "/superadmin/appearance" },
       // Core SLMS Modules Aligned
-      { name: "Resident Profile & Care Record", icon: ShieldCheck, route: "/superadmin/records" },
+      { name: "Residents", icon: Users, route: "/superadmin/records" },
       { name: "Assessment & Level of Care", icon: ClipboardList, route: "/superadmin/rounds" },
       { name: "Care Planning", icon: Target, route: "/superadmin/careplans" },
       { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/superadmin/tasks" },
@@ -426,7 +426,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Medication Approvals", icon: ClipboardCheck, route: "/care_manager/approvalworkflows", group: "Medication" },
       { name: "Medication Administration Record", icon: Pill, route: "/care_manager/mar", group: "Medication" },
       { name: "Medication Safety", icon: ShieldCheck, route: "/care_manager/medsafety", group: "Medication" },
-      { name: "Resident Records", icon: Users, route: "/care_manager/residents", group: "Resident Care" },
+      { name: "Residents", icon: Users, route: "/care_manager/residents", group: "Resident Care" },
       { name: "Assessment & Level of Care", icon: ClipboardList, route: "/care_manager/rounds", group: "Resident Care" },
       { name: "Care Planning", icon: Target, route: "/care_manager/careplans", group: "Resident Care" },
       { name: "Labs & Allergies", icon: Activity, route: "/care_manager/labs", group: "Resident Care" },
