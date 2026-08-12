@@ -29,27 +29,44 @@ export default function SignatureModal({ open, onClose, onSigned, mode = "sign",
   const [reveal, setReveal] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [openTracked, setOpenTracked] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  // The current user's own PIN, prefetched on open so signing verifies instantly
+  // (client-side compare) instead of paying a network + bcrypt round-trip per
+  // attempt — that round-trip was the "delay" felt when signing off.
+  const expectedRef = useRef<string>("");
+
+  // Reset transient state the moment the modal opens (render-phase reset — the
+  // React-recommended way to adjust state on a prop change, no effect cascade).
+  if (open && !openTracked) { setOpenTracked(true); setPin(""); setError(""); setReveal(false); setLoading(mode === "manage"); }
+  if (!open && openTracked) setOpenTracked(false);
 
   useEffect(() => {
     if (!open) return;
-    setPin(""); setError(""); setReveal(false); setLoading(true);
+    expectedRef.current = "";
     if (mode === "manage") {
       getSigningPin().then((r) => { setMyPin(r.pin || ""); setLoading(false); });
     } else {
-      setLoading(false);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      // Prefetch the signer's own PIN for instant local verification + focus.
+      getSigningPin().then((r) => { if (r.pin) expectedRef.current = r.pin; }).catch(() => {});
+      const t = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(t);
     }
   }, [open, mode]);
 
   if (!open) return null;
 
-  const doSign = async () => {
+  const doSign = async (candidate = pin) => {
+    if (busy) return;
     setError(""); setBusy(true);
     try {
-      if (!isFourDigitPin(pin)) { setError("Enter your 4-digit PIN."); return; }
-      const res = await verifySigningPin(pin);
-      if (!res.ok) { setError("Incorrect PIN. You can view it in Account settings."); return; }
+      if (!isFourDigitPin(candidate)) { setError("Enter your 4-digit PIN."); return; }
+      // Instant path: compare against the prefetched PIN. Fall back to the
+      // server verify only if the prefetch hasn't landed yet.
+      let ok: boolean;
+      if (isFourDigitPin(expectedRef.current)) ok = candidate === expectedRef.current;
+      else ok = (await verifySigningPin(candidate)).ok;
+      if (!ok) { setError("Incorrect PIN. You can view it in Account settings."); setPin(""); inputRef.current?.focus(); return; }
       await onSigned?.();
       onClose();
     } finally { setBusy(false); }
@@ -90,7 +107,7 @@ export default function SignatureModal({ open, onClose, onSigned, mode = "sign",
           ) : (
             <form onSubmit={(e) => { e.preventDefault(); void doSign(); }} className="space-y-3">
               <p className="text-sm text-gray-600">{description || "Enter your 4-digit signing PIN to finalise and lock this record. Once signed it can no longer be edited."}</p>
-              <input ref={inputRef} type="password" inputMode="numeric" autoComplete="off" value={pin} onChange={(e) => setPin(digitsOnly(e.target.value))} className={box} placeholder="••••" />
+              <input ref={inputRef} type="password" inputMode="numeric" autoComplete="off" value={pin} onChange={(e) => { const v = digitsOnly(e.target.value); setPin(v); setError(""); if (v.length === 4) void doSign(v); }} className={box} placeholder="••••" />
               {error && <p className="text-sm text-red-600">{error}</p>}
               <button type="submit" disabled={busy} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#2E4A48] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#25403D] disabled:opacity-60">
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Sign

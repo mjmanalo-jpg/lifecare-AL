@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, Plus, X, Check, Ban, ClipboardCheck, UserRound } from "lucide-react";
+import { CalendarClock, Plus, X, Check, Ban, ClipboardCheck, UserRound, Truck } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
@@ -11,6 +11,31 @@ import { StatusPill, MicroLabel, ClinicalCard } from "./clinical-ui";
 type Row = Record<string, unknown>;
 const s = (v: unknown) => (v == null ? "" : String(v));
 const fmtD = (v: unknown) => (v ? new Date(s(v)).toLocaleDateString() : "—");
+const toLocalInputValue = (d: Date) => {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+// The specialist/doctor name is persisted as the FIRST line of `notes`
+// ("Specialist: <name>") — the appointment's structured extras (type,
+// documents, escort, pre-appt notes, family-notified) follow on later lines.
+// The card + transport modal only want the doctor name, so read line 1 only.
+const specialistFromNotes = (v: unknown) => s(v).split("\n")[0].replace(/^Specialist:\s*/, "").trim();
+const APPOINTMENT_TYPES = ["GP / Family Doctor", "Specialist", "Dental", "Laboratory", "Imaging / Radiology", "Therapy", "Follow-up", "Other"];
+const APPT_STATUS = ["Scheduled", "Pending", "Completed", "Cancelled"];
+// The board's own status flow (REQUESTED/APPROVED/…) drives the card + approval
+// gate; the form's human status maps onto it so the new referral lands in the
+// right bucket without new columns.
+const APPT_STATUS_TO_REFERRAL: Record<string, string> = { Scheduled: "SCHEDULED", Pending: "REQUESTED", Completed: "COMPLETED", Cancelled: "CANCELLED" };
+// The transport request the appointment/referral is wired to (if any). Status
+// mirrors TransportRequest.status in the Fleet board.
+const TRANSPORT_STATUS_LABEL: Record<string, string> = {
+  PENDING: "Transport requested — awaiting dispatch",
+  APPROVED: "Transport approved — awaiting driver assignment",
+  SCHEDULED: "Driver assigned",
+  DECLINED: "Transport declined",
+  COMPLETED: "Transport completed",
+  CANCELLED: "Transport cancelled",
+};
 
 /**
  * Referrals & Appointments (Modules 13 + 15) — specialist referrals follow the
@@ -22,13 +47,32 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
   const { data: residentRows } = useLiveQuery<Row>("residents", { query: "take=300", tables: ["Resident"] });
   const residents = useMemo(() => residentRows.map(adaptResident), [residentRows]);
 
+  // Fleet wiring: the same TransportRequest resource the Fleet board (FleetHub
+  // → RequestsTab) and Driver portal read. A "Request Transport" action here
+  // creates a PENDING request that surfaces on both boards for assignment.
+  const { data: transportRows, refetch: refetchTransport } = useLiveQuery<Row>("transport-requests", { query: "take=400", tables: ["TransportRequest"] });
+  const { data: driverRows } = useLiveQuery<Row>("drivers", { query: "take=300", tables: ["Driver"] });
+  const { data: vehicleRows } = useLiveQuery<Row>("vehicles", { query: "take=300", tables: ["Vehicle"] });
+  const drivers = useMemo(() => driverRows.map((d) => ({ id: s(d.id), name: s(d.name) || "Driver", isActive: d.isActive === true })).filter((d) => d.isActive), [driverRows]);
+  const vehicles = useMemo(() => vehicleRows.map((v) => ({ id: s(v.id), name: s(v.name) || "Vehicle", plate: s(v.licensePlate), status: s(v.status) })), [vehicleRows]);
+  // referralId → its transport request status/driver, resolved from transportRequestId on the referral.
+  const transportById = useMemo(() => {
+    const m = new Map<string, Row>();
+    transportRows.forEach((t) => m.set(s(t.id), t));
+    return m;
+  }, [transportRows]);
+
   const [session, setSession] = useState<{ id: string | null; name: string | null }>({ id: null, name: null });
   useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => { if (d?.authenticated) setSession({ id: d.session?.userId ?? null, name: d.session?.name ?? "Clinician" }); }).catch(() => {}); }, []);
 
   const [statusFilter, setStatusFilter] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({ residentId: "", specialist: "", facilityName: "", scheduledDate: "", reason: "", urgency: "ROUTINE" });
+  const [form, setForm] = useState({
+    residentId: "", appointmentType: APPOINTMENT_TYPES[0], apptStatus: "Scheduled",
+    specialist: "", facilityName: "", scheduledDate: "", reason: "", urgency: "ROUTINE",
+    documentsNeeded: "", companion: "", preApptNotes: "", familyNotified: false,
+  });
 
   const rname = (c: Row) => { const r = (c.resident ?? {}) as Row; return `${s(r.firstName)} ${s(r.lastName)}`.trim() || "—"; };
   // Card header leads with the RESIDENT — "Last, First · Room N" — since the
@@ -45,27 +89,50 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
     pending: rows.filter((r) => s(r.status) === "REQUESTED").length,
     scheduled: rows.filter((r) => s(r.status) === "SCHEDULED").length,
     completed: rows.filter((r) => s(r.status) === "COMPLETED").length,
-  }), [rows]);
+    // Open appointments without an active transport request wired to the Fleet board.
+    needsTransport: rows.filter((r) => {
+      if (["COMPLETED", "CANCELLED"].includes(s(r.status))) return false;
+      const req = s(r.transportRequestId) ? transportById.get(s(r.transportRequestId)) : undefined;
+      return !req || ["DECLINED", "CANCELLED"].includes(s(req.status));
+    }).length,
+  }), [rows, transportById]);
 
   const submit = async () => {
-    if (!form.residentId || !form.specialist.trim() || !form.reason.trim()) { Swal.fire("Missing fields", "Resident, specialist, and purpose are required.", "warning"); return; }
+    if (!form.residentId || !form.scheduledDate || !form.reason.trim()) { Swal.fire("Missing fields", "Resident, date & time, and referral reason are required.", "warning"); return; }
     setBusy(true);
     try {
+      // Migration-free packing: only appointmentType, documentsNeeded, companion,
+      // pre-appointment notes and familyNotified have no dedicated column, so they
+      // ride in the free-text `notes` column as a readable block. Line 1 stays
+      // "Specialist: <name>" so the card + transport modal keep extracting the
+      // doctor name unchanged.
+      const noteLines = [
+        `Specialist: ${form.specialist.trim()}`,
+        `Appointment Type: ${form.appointmentType}`,
+        form.documentsNeeded.trim() && `Documents Needed: ${form.documentsNeeded.trim()}`,
+        form.companion.trim() && `Companion / Escort: ${form.companion.trim()}`,
+        `Family Notified: ${form.familyNotified ? "Yes" : "No"}`,
+        form.preApptNotes.trim() && `Pre-Appointment Notes: ${form.preApptNotes.trim()}`,
+      ].filter(Boolean);
       await createRecord("hospital-referrals", {
         residentId: form.residentId,
         facilityName: form.facilityName.trim() || "—",
         reason: form.reason.trim(),
         urgency: form.urgency,
-        status: "REQUESTED",
+        status: APPT_STATUS_TO_REFERRAL[form.apptStatus] ?? "REQUESTED",
         referredById: session.id,
         referredByName: session.name,
         scheduledDate: form.scheduledDate ? new Date(form.scheduledDate).toISOString() : null,
-        notes: `Specialist: ${form.specialist.trim()}`,
+        notes: noteLines.join("\n"),
       });
       await refetch();
       setShowAdd(false);
-      setForm({ residentId: "", specialist: "", facilityName: "", scheduledDate: "", reason: "", urgency: "ROUTINE" });
-      Swal.fire({ title: "Referral submitted", text: "Awaiting Care Manager approval.", icon: "success", timer: 1600, showConfirmButton: false });
+      setForm({
+        residentId: "", appointmentType: APPOINTMENT_TYPES[0], apptStatus: "Scheduled",
+        specialist: "", facilityName: "", scheduledDate: "", reason: "", urgency: "ROUTINE",
+        documentsNeeded: "", companion: "", preApptNotes: "", familyNotified: false,
+      });
+      Swal.fire({ title: "Appointment scheduled", text: "Saved to the appointments board.", icon: "success", timer: 1600, showConfirmButton: false });
     } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not submit.", "error"); }
     finally { setBusy(false); }
   };
@@ -79,6 +146,69 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
   const reject = async (r: Row) => { const res = await Swal.fire({ title: "Reject referral?", input: "textarea", inputLabel: "Reason", showCancelButton: true, confirmButtonColor: "#dc2626", confirmButtonText: "Reject" }); if (!res.isConfirmed) return; await patch(r, { status: "CANCELLED", rejectionReason: res.value || "Rejected" }); };
   const schedule = async (r: Row) => { const res = await Swal.fire({ title: "Confirm & schedule", input: "text", inputLabel: "Appointment date (YYYY-MM-DD)", inputValue: new Date().toISOString().slice(0, 10), showCancelButton: true }); if (!res.isConfirmed) return; await patch(r, { status: "SCHEDULED", scheduledDate: new Date(res.value || Date.now()).toISOString() }); };
   const complete = async (r: Row) => { const res = await Swal.fire({ title: "Document outcome", input: "textarea", inputLabel: "Findings, follow-up & notes", showCancelButton: true, confirmButtonText: "Complete", confirmButtonColor: "#16a34a" }); if (!res.isConfirmed) return; await patch(r, { status: "COMPLETED", outcome: res.value || "Completed", completedAt: new Date().toISOString() }); };
+
+  // ── Transport-request wiring ──────────────────────────────────────────────
+  // The referral carries transportRequestId (Prisma column) once wired, so no
+  // link map is needed. Fleet dispatch (FleetHub → RequestsTab) reads the same
+  // "transport-requests" resource and, once assigned, the Driver portal sees it.
+  const [reqFor, setReqFor] = useState<Row | null>(null);
+  const [reqForm, setReqForm] = useState({ pickupLocation: "Golden Hearth Facility", destination: "", requestedDate: "", driverId: "", vehicleId: "" });
+  const [reqBusy, setReqBusy] = useState(false);
+  const openRequest = (r: Row) => {
+    setReqForm({
+      pickupLocation: "Golden Hearth Facility",
+      destination: s(r.facilityName) || s(r.reason) || "",
+      requestedDate: toLocalInputValue(s(r.scheduledDate) ? new Date(s(r.scheduledDate)) : new Date()),
+      driverId: "", vehicleId: "",
+    });
+    setReqFor(r);
+  };
+  const submitRequest = async () => {
+    if (!reqFor) return;
+    if (!reqForm.destination.trim() || !reqForm.requestedDate) { Swal.fire("Missing fields", "Destination and pickup date/time are required.", "warning"); return; }
+    // If a driver is picked, a vehicle is required so a Trip can be scheduled.
+    if (reqForm.driverId && !reqForm.vehicleId) { Swal.fire("Vehicle needed", "Select a vehicle to assign the chosen driver.", "warning"); return; }
+    setReqBusy(true);
+    try {
+      const specialist = specialistFromNotes(reqFor.notes);
+      const created = await createRecord("transport-requests", {
+        residentId: s(reqFor.residentId),
+        type: "MEDICAL_APPOINTMENT",
+        pickupLocation: reqForm.pickupLocation.trim() || "Golden Hearth Facility",
+        dropoffLocation: reqForm.destination.trim(),
+        destination: reqForm.destination.trim(),
+        purpose: s(reqFor.reason) || (specialist ? `Appointment — ${specialist}` : "Medical appointment"),
+        requestedDate: new Date(reqForm.requestedDate).toISOString(),
+        priority: s(reqFor.urgency) === "EMERGENCY" ? "EMERGENCY" : s(reqFor.urgency) === "URGENT" ? "HIGH" : "NORMAL",
+        status: reqForm.driverId ? "SCHEDULED" : "PENDING",
+        source: "PORTAL",
+        notes: `Auto-created from Medical Appointment for ${rname(reqFor)}.`,
+      });
+      const requestId = s((created as { data?: Row })?.data?.id);
+      // Assign-on-create: build the Trip so the driver sees it immediately.
+      if (requestId && reqForm.driverId && reqForm.vehicleId) {
+        await createRecord("trips", {
+          requestId,
+          residentId: s(reqFor.residentId),
+          vehicleId: reqForm.vehicleId,
+          driverId: reqForm.driverId,
+          pickupLocation: reqForm.pickupLocation.trim() || "Golden Hearth Facility",
+          dropoffLocation: reqForm.destination.trim(),
+          destination: reqForm.destination.trim(),
+          origin: reqForm.pickupLocation.trim() || "Golden Hearth Facility",
+          scheduledAt: new Date(reqForm.requestedDate).toISOString(),
+          status: "SCHEDULED",
+          notes: s(reqFor.reason) || null,
+        });
+      }
+      // Link the request back onto the referral + flip the transport flag.
+      if (requestId) await updateRecord("hospital-referrals", s(reqFor.id), { transportRequestId: requestId, transportArranged: true });
+      await Promise.all([refetch(), refetchTransport()]);
+      setReqFor(null);
+      Swal.fire({ title: reqForm.driverId ? "Transport assigned" : "Transport requested", text: reqForm.driverId ? "Trip scheduled — the driver has been notified." : "Sent to Fleet dispatch for driver assignment.", icon: "success", timer: 2000, showConfirmButton: false });
+    } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not create transport request.", "error"); }
+    finally { setReqBusy(false); }
+  };
 
   return (
     <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-6" style={{ background: "#FFFFFF" }}>
@@ -96,10 +226,11 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="Pending Approval" value={String(stats.pending)} color="#C39A3E" />
         <Stat label="Scheduled" value={String(stats.scheduled)} color="#2E4A48" />
         <Stat label="Completed" value={String(stats.completed)} color="#7E9B6F" />
+        <Stat label="Needs Transport" value={String(stats.needsTransport)} color="#C0573F" icon="transport" />
       </div>
 
       {/* Filter chips */}
@@ -115,14 +246,20 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
           : filtered.length === 0 ? <ClinicalCard className="p-8 text-center text-[#8A8D82]">No referrals.</ClinicalCard>
           : filtered.map((r) => {
             const st = s(r.status);
-            const specialist = s(r.notes).replace(/^Specialist:\s*/, "");
+            const specialist = specialistFromNotes(r.notes);
             const top = st === "REQUESTED" ? "amber" : st === "COMPLETED" ? "green" : "teal";
+            const linkedReqId = s(r.transportRequestId);
+            const transportReq = linkedReqId ? transportById.get(linkedReqId) : undefined;
+            const transportStatus = transportReq ? s(transportReq.status) : "";
+            // Active transport requests block a duplicate; declined/cancelled re-open the button.
+            const transportActive = !!transportReq && !["DECLINED", "CANCELLED"].includes(transportStatus);
             return (
               <ClinicalCard key={s(r.id)} top={top} className="p-4 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusPill status={s(r.urgency) || "ROUTINE"} />
                     <StatusPill status={st} />
+                    {transportActive && <span className="inline-flex items-center gap-1 rounded-full border border-[#2E4A48]/25 bg-[#2E4A48]/8 px-2.5 py-0.5 text-xs font-semibold text-[#2E4A48]"><Truck className="w-3.5 h-3.5" /> Transport</span>}
                     <span className="inline-flex items-center gap-1.5 font-bold text-[#2B2B27]"><UserRound className="w-4 h-4 text-[#2E4A48]" />{rHeader(r)}</span>
                   </div>
                   {s(r.scheduledDate) && <span className="text-sm font-semibold text-[#2E4A48]">{fmtD(r.scheduledDate)}</span>}
@@ -153,7 +290,19 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
                   </div>
                 )}
 
+                {/* Transport — wired to Fleet Management as a driver-assignable request */}
+                {transportActive ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-[#2E4A48]/8 border border-[#2E4A48]/20 px-3 py-2 text-sm text-[#2E4A48]">
+                    <Truck className="w-4 h-4 shrink-0" />
+                    <span className="font-semibold">{TRANSPORT_STATUS_LABEL[transportStatus] || `Transport: ${transportStatus}`}</span>
+                    {transportStatus === "DECLINED" && transportReq && s(transportReq.declineReason) && <span className="text-[#C0573F]">— {s(transportReq.declineReason)}</span>}
+                  </div>
+                ) : null}
+
                 <div className="flex flex-wrap items-center gap-2 mt-3">
+                  {!transportActive && st !== "CANCELLED" && (
+                    <button onClick={() => openRequest(r)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#2E4A48] text-white text-xs font-semibold hover:bg-[#25403D]"><Truck className="w-3.5 h-3.5" /> Request Transport</button>
+                  )}
                   {st === "REQUESTED" && canApprove && (<>
                     <button onClick={() => approve(r)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#7E9B6F] text-white text-xs font-semibold hover:bg-[#6E8A60]"><Check className="w-3.5 h-3.5" /> Approve</button>
                     <button onClick={() => reject(r)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#C0573F] text-white text-xs font-semibold hover:bg-[#A94A34]"><Ban className="w-3.5 h-3.5" /> Reject</button>
@@ -169,19 +318,54 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
-            <div className="sticky top-0 flex items-center justify-between bg-[#2E4A48] p-5 text-white"><h2 className="text-xl font-bold flex items-center gap-2" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}><CalendarClock className="w-5 h-5" /> New Referral</h2><button onClick={() => setShowAdd(false)} className="rounded-lg p-1.5 hover:bg-white/20"><X className="w-5 h-5" /></button></div>
+            <div className="sticky top-0 flex items-center justify-between bg-[#2E4A48] p-5 text-white"><h2 className="text-xl font-bold flex items-center gap-2" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}><CalendarClock className="w-5 h-5" /> New Referral / Appointment</h2><button onClick={() => setShowAdd(false)} className="rounded-lg p-1.5 hover:bg-white/20"><X className="w-5 h-5" /></button></div>
             <div className="space-y-4 p-6">
               <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Resident <span className="text-[#C0573F]">*</span></label>
-                <select value={form.residentId} onChange={(e) => setForm({ ...form, residentId: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30"><option value="">Select…</option>{residents.map((r) => <option key={r.id} value={r.id}>{r.name} — Room {r.room}</option>)}</select></div>
+                <select value={form.residentId} onChange={(e) => setForm({ ...form, residentId: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/30"><option value="">Select resident…</option>{residents.map((r) => <option key={r.id} value={r.id}>{r.name} — Room {r.room}</option>)}</select></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Specialist <span className="text-[#C0573F]">*</span></label><input value={form.specialist} onChange={(e) => setForm({ ...form, specialist: e.target.value })} placeholder="Dr. … (Cardiology)" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
-                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Clinic</label><input value={form.facilityName} onChange={(e) => setForm({ ...form, facilityName: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
-                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Preferred date</label><input type="date" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
+                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Appointment Type <span className="text-[#C0573F]">*</span></label><select value={form.appointmentType} onChange={(e) => setForm({ ...form, appointmentType: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/30">{APPOINTMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Status</label><select value={form.apptStatus} onChange={(e) => setForm({ ...form, apptStatus: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/30">{APPT_STATUS.map((st) => <option key={st} value={st}>{st}</option>)}</select></div>
+                <div className="sm:col-span-2"><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Date &amp; Time <span className="text-[#C0573F]">*</span></label><input type="datetime-local" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
+                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Specialist / Doctor Name</label><input value={form.specialist} onChange={(e) => setForm({ ...form, specialist: e.target.value })} placeholder="e.g. Dr. Santos" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
+                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Clinic / Hospital</label><input value={form.facilityName} onChange={(e) => setForm({ ...form, facilityName: e.target.value })} placeholder="e.g. St. Luke's Medical Center" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
+                <div className="sm:col-span-2"><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Referral Reason / Purpose <span className="text-[#C0573F]">*</span></label><textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} rows={2} placeholder="Reason for appointment or referral details…" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
+                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Documents Needed</label><input value={form.documentsNeeded} onChange={(e) => setForm({ ...form, documentsNeeded: e.target.value })} placeholder="e.g. Lab results, referral letter, ID" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
+                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Companion / Escort Assigned</label><input value={form.companion} onChange={(e) => setForm({ ...form, companion: e.target.value })} placeholder="e.g. Nurse Maria, Family member" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
+                <div className="sm:col-span-2"><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Pre-Appointment Notes</label><textarea value={form.preApptNotes} onChange={(e) => setForm({ ...form, preApptNotes: e.target.value })} rows={2} placeholder="Preparation instructions, fasting requirements, items to bring…" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
                 <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Urgency</label><select value={form.urgency} onChange={(e) => setForm({ ...form, urgency: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/30">{["ROUTINE", "URGENT", "EMERGENCY"].map((u) => <option key={u} value={u}>{u}</option>)}</select></div>
-                <div className="sm:col-span-2"><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Purpose <span className="text-[#C0573F]">*</span></label><input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
               </div>
+              {/* Family Notified toggle — no Transport Required control (transport is arranged separately via the Request Transport action on each card). */}
+              <label className="flex items-center justify-between gap-3 rounded-lg bg-[#F0F1EA] px-4 py-3 cursor-pointer">
+                <span className="flex items-center gap-3">
+                  <UserRound className="w-5 h-5 text-[#2E4A48]" />
+                  <span><span className="block text-sm font-semibold text-[#2B2B27]">Family Notified</span><span className="block text-xs text-[#8A8D82]">Family has been informed of this appointment</span></span>
+                </span>
+                <button type="button" role="switch" aria-checked={form.familyNotified} onClick={() => setForm({ ...form, familyNotified: !form.familyNotified })} className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${form.familyNotified ? "bg-[#2E4A48]" : "bg-[#C7CABD]"}`}>
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${form.familyNotified ? "translate-x-5" : "translate-x-0.5"}`} />
+                </button>
+              </label>
             </div>
-            <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t border-[#D6D8CD] bg-[#F0F1EA] px-6 py-4"><button onClick={() => setShowAdd(false)} disabled={busy} className="rounded-lg px-4 py-2 text-[#2B2B27] hover:bg-[#E1E3D9] disabled:opacity-50">Cancel</button><button onClick={submit} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-[#2E4A48] hover:bg-[#25403D] px-6 py-2 font-semibold text-white shadow-sm disabled:opacity-50"><Plus className="w-4 h-4" /> {busy ? "Submitting…" : "Submit"}</button></div>
+            <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t border-[#D6D8CD] bg-[#F0F1EA] px-6 py-4"><button onClick={() => setShowAdd(false)} disabled={busy} className="rounded-lg px-4 py-2 text-[#2B2B27] hover:bg-[#E1E3D9] disabled:opacity-50">Cancel</button><button onClick={submit} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-[#2E4A48] hover:bg-[#25403D] px-6 py-2 font-semibold text-white shadow-sm disabled:opacity-50"><CalendarClock className="w-4 h-4" /> {busy ? "Scheduling…" : "Schedule Appointment"}</button></div>
+          </div>
+        </div>
+      )}
+
+      {reqFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
+            <div className="sticky top-0 flex items-center justify-between bg-[#2E4A48] p-5 text-white"><h2 className="text-xl font-bold flex items-center gap-2" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}><Truck className="w-5 h-5" /> Request Transport</h2><button onClick={() => setReqFor(null)} className="rounded-lg p-1.5 hover:bg-white/20"><X className="w-5 h-5" /></button></div>
+            <div className="space-y-4 p-6">
+              <div className="rounded-lg bg-[#F0F1EA] px-3 py-2 text-sm text-[#2B2B27]"><span className="font-semibold">{rname(reqFor)}</span>{s(reqFor.scheduledDate) && <> · {fmtD(reqFor.scheduledDate)}</>}</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Pickup</label><input value={reqForm.pickupLocation} onChange={(e) => setReqForm({ ...reqForm, pickupLocation: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
+                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Destination <span className="text-[#C0573F]">*</span></label><input value={reqForm.destination} onChange={(e) => setReqForm({ ...reqForm, destination: e.target.value })} placeholder="Clinic / hospital" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
+                <div className="sm:col-span-2"><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Pickup date &amp; time <span className="text-[#C0573F]">*</span></label><input type="datetime-local" value={reqForm.requestedDate} onChange={(e) => setReqForm({ ...reqForm, requestedDate: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
+                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Assign driver <span className="text-[#8A8D82] font-normal">(optional)</span></label><select value={reqForm.driverId} onChange={(e) => setReqForm({ ...reqForm, driverId: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/30"><option value="">Leave to dispatch</option>{drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
+                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Vehicle {reqForm.driverId && <span className="text-[#C0573F]">*</span>}</label><select value={reqForm.vehicleId} onChange={(e) => setReqForm({ ...reqForm, vehicleId: e.target.value })} disabled={!reqForm.driverId} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/30 disabled:opacity-50"><option value="">Select…</option>{vehicles.filter((v) => v.status !== "MAINTENANCE").map((v) => <option key={v.id} value={v.id}>{v.name}{v.plate ? ` (${v.plate})` : ""}</option>)}</select></div>
+              </div>
+              <p className="text-xs text-[#8A8D82]">Creates a Fleet transport request. Leave the driver unassigned to send it to dispatch, or assign a driver &amp; vehicle now to schedule the trip directly.</p>
+            </div>
+            <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t border-[#D6D8CD] bg-[#F0F1EA] px-6 py-4"><button onClick={() => setReqFor(null)} disabled={reqBusy} className="rounded-lg px-4 py-2 text-[#2B2B27] hover:bg-[#E1E3D9] disabled:opacity-50">Cancel</button><button onClick={submitRequest} disabled={reqBusy} className="inline-flex items-center gap-2 rounded-lg bg-[#2E4A48] hover:bg-[#25403D] px-6 py-2 font-semibold text-white shadow-sm disabled:opacity-50"><Truck className="w-4 h-4" /> {reqBusy ? "Sending…" : reqForm.driverId ? "Assign & schedule" : "Request transport"}</button></div>
           </div>
         </div>
       )}
@@ -189,12 +373,13 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
   );
 }
 
-function Stat({ label, value, color }: { label: string; value: string; color: string }) {
+function Stat({ label, value, color, icon }: { label: string; value: string; color: string; icon?: "transport" }) {
+  const Icon = icon === "transport" ? Truck : CalendarClock;
   return (
     <ClinicalCard className="p-4">
       <div className="flex items-center justify-between mb-2">
         <MicroLabel>{label}</MicroLabel>
-        <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${color}1A`, color }}><CalendarClock className="w-4 h-4" /></span>
+        <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${color}1A`, color }}><Icon className="w-4 h-4" /></span>
       </div>
       <p className="text-2xl font-bold" style={{ color }}>{value}</p>
     </ClinicalCard>

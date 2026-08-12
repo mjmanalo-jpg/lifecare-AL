@@ -1,39 +1,59 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, X, Clock, Pill, CalendarClock, ShieldCheck, Plus, Loader2 } from "lucide-react";
+import { Check, X, Clock, Pill, CalendarClock, TestTube, ClipboardList, Plus, Loader2, User } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { createRecord, updateRecord } from "@/lib/api";
-import { ClinicalHeader, ClinicalCard, StatusPill, MicroLabel, Eyebrow } from "./clinical-ui";
+import { createRecord, updateRecord, upsertRecord } from "@/lib/api";
 
 type Row = Record<string, unknown>;
 const s = (v: unknown) => (v == null ? "" : String(v));
 const rname = (o: Row) => { const r = (o.resident ?? {}) as Row; return `${s(r.firstName)} ${s(r.lastName)}`.trim() || "—"; };
-const rroom = (o: Row) => s((o.resident as Row)?.roomNumber) || "—";
+const rroom = (o: Row) => s((o.resident as Row)?.roomNumber) || "";
+const fmt = (v: unknown) => { const d = new Date(s(v)); return isNaN(d.getTime()) ? "" : d.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }); };
+const pickApptDate = (m: Row) => m.appointmentDate || m.scheduledDate || m.scheduledAt || m.preferredDate || m.date || m.createdAt;
 
-type Item =
-  | { kind: "med"; id: string; row: Row }
-  | { kind: "referral"; id: string; row: Row };
+// Lab-order approvals are stored migration-free (LabResult has no approval column):
+// an app-setting map { [labResultId]: { decision, by, at, reason } }.
+const LAB_DECISIONS_KEY = "lab_order_decisions";
+type LabDecision = { decision: "APPROVED" | "REJECTED"; by: string; at: string; reason?: string };
+
+type Kind = "appointment" | "med" | "lab";
+type Item = { kind: Kind; id: string; row: Row; state: "PENDING" | "APPROVED" | "REJECTED"; when: number };
+
+const KIND_META: Record<Kind, { label: string; Icon: typeof Pill; tint: string; ring: string }> = {
+  appointment: { label: "Medical Appointment", Icon: CalendarClock, tint: "bg-blue-50 text-blue-600", ring: "border-blue-200" },
+  med: { label: "Medication", Icon: Pill, tint: "bg-purple-50 text-purple-600", ring: "border-purple-200" },
+  lab: { label: "Lab Order", Icon: TestTube, tint: "bg-amber-50 text-amber-600", ring: "border-amber-200" },
+};
 
 /**
- * Approval Workflows (Module 13) — the single review queue where the right
- * authority (Care Manager / Administrator) signs off before a clinical decision
- * goes active. Two request types flow through it:
- *   • Medication prescriptions — PENDING until approved, then ACTIVE in the MAR.
- *   • Appointment referrals    — REQUESTED until approved, then confirmed/scheduled.
+ * Pending Approvals — the single review queue where the Care Manager / Administrator
+ * signs off on requests raised by staff before they go active:
+ *   • Appointments (hospital referrals)  — REQUESTED → APPROVED / CANCELLED
+ *   • Medications  (new prescriptions)   — PENDING   → ACTIVE / DISCONTINUED
+ *   • Lab orders   (lab results ordered) — ORDERED   → APPROVED / REJECTED (app-setting map)
  * Every decision records a reviewer + timestamp and notifies the submitter.
  */
 export default function ApprovalWorkflows() {
-  const { data: meds, loading: mLoading, refetch: refetchMeds } = useLiveQuery<Row>("medications", { query: "include=resident&take=400", tables: ["Medication", "Resident"] });
-  const { data: referrals, loading: rLoading, refetch: refetchRefs } = useLiveQuery<Row>("hospital-referrals", { query: "include=resident&take=400", tables: ["HospitalReferral"] });
+  const { data: meds, refetch: refetchMeds } = useLiveQuery<Row>("medications", { query: "include=resident&take=400", tables: ["Medication", "Resident"] });
+  const { data: referrals, refetch: refetchRefs } = useLiveQuery<Row>("hospital-referrals", { query: "include=resident&take=400", tables: ["HospitalReferral"] });
+  const { data: labs, refetch: refetchLabs } = useLiveQuery<Row>("lab-results", { query: "include=resident&take=400", tables: ["LabResult", "Resident"] });
+  const settingsQ = useLiveQuery<Row>("app-settings", { tables: ["AppSetting"] });
 
   const [session, setSession] = useState<{ id: string | null; name: string | null; role: string | null }>({ id: null, name: null, role: null });
   useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => { if (d?.authenticated) setSession({ id: d.session?.userId ?? null, name: d.session?.name ?? d.session?.role ?? "Care Manager", role: d.session?.role ?? null }); }).catch(() => {}); }, []);
-  // Only the approving authority decides; submitters (nurses) request + see status.
   const canDecide = session.role === "FACILITY_ADMIN" || session.role === "SUPERADMIN" || session.role === "CARE_MANAGER";
 
-  // Residents for the "Request Meds" submission form.
+  const [tab, setTab] = useState<"pending" | "all">("pending");
+
+  // Lab-order decision map (migration-free).
+  const labDecisions = useMemo<Record<string, LabDecision>>(() => {
+    const row = (settingsQ.data || []).find((r) => s(r.key || r.id) === LAB_DECISIONS_KEY);
+    try { return row ? (JSON.parse(s(row.value)) as Record<string, LabDecision>) : {}; } catch { return {}; }
+  }, [settingsQ.data]);
+
+  // Residents for the "Request Meds" submission form (non-deciders).
   const { data: residentRows } = useLiveQuery<Row>("residents", { query: "take=300", tables: ["Resident"] });
   const residents = useMemo(() => residentRows.map((r) => ({ id: s(r.id), name: `${s(r.firstName)} ${s(r.lastName)}`.trim() || "—", room: s(r.roomNumber) })), [residentRows]);
   const [showRequest, setShowRequest] = useState(false);
@@ -45,9 +65,6 @@ export default function ApprovalWorkflows() {
     if (!reqForm.residentId || !reqForm.name.trim() || !reqForm.dosage.trim() || !reqForm.frequency.trim()) { Swal.fire("Missing fields", "Resident, medication name, dosage, and frequency are all required.", "warning"); return; }
     setSaving(true);
     try {
-      // dosage, frequency and startDate are required, non-null columns on
-      // Medication — omitting them makes the whole create 400. A pending
-      // request starts today; the reviewer activates it in the MAR on approval.
       await createRecord("medications", {
         residentId: reqForm.residentId, name: reqForm.name.trim(), dosage: reqForm.dosage.trim(),
         route: reqForm.route, frequency: reqForm.frequency.trim(), reason: reqForm.reason.trim() || null,
@@ -62,187 +79,208 @@ export default function ApprovalWorkflows() {
     finally { setSaving(false); }
   };
 
-  const pendingMeds = useMemo(() => meds.filter((m) => s(m.status) === "PENDING"), [meds]);
-  const pendingRefs = useMemo(() => referrals.filter((r) => s(r.status) === "REQUESTED"), [referrals]);
+  // ── Build the unified item list ──────────────────────────────────────────
+  const items = useMemo<Item[]>(() => {
+    const out: Item[] = [];
+    for (const row of referrals) {
+      const st = s(row.status);
+      const state = row.approvedAt ? "APPROVED" : (row.rejectionReason && st === "CANCELLED") ? "REJECTED" : st === "REQUESTED" ? "PENDING" : null;
+      if (state) out.push({ kind: "appointment", id: s(row.id), row, state, when: new Date(s(row.updatedAt || row.createdAt)).getTime() || 0 });
+    }
+    for (const row of meds) {
+      const st = s(row.status);
+      const state = row.approvedAt ? "APPROVED" : (row.rejectionReason && st === "DISCONTINUED") ? "REJECTED" : st === "PENDING" ? "PENDING" : null;
+      if (state) out.push({ kind: "med", id: s(row.id), row, state, when: new Date(s(row.updatedAt || row.createdAt)).getTime() || 0 });
+    }
+    for (const row of labs) {
+      const st = s(row.status).toUpperCase();
+      if (st !== "ORDERED" && st !== "PENDING" && st !== "REQUESTED") continue; // only lab orders awaiting sign-off
+      const dec = labDecisions[s(row.id)];
+      const state = dec ? (dec.decision === "APPROVED" ? "APPROVED" : "REJECTED") : "PENDING";
+      out.push({ kind: "lab", id: s(row.id), row, state, when: dec ? new Date(dec.at).getTime() || 0 : new Date(s(row.createdAt)).getTime() || 0 });
+    }
+    return out.sort((a, b) => b.when - a.when);
+  }, [referrals, meds, labs, labDecisions]);
 
-  const queue = useMemo<Item[]>(() => [
-    ...pendingMeds.map((row) => ({ kind: "med" as const, id: s(row.id), row })),
-    ...pendingRefs.map((row) => ({ kind: "referral" as const, id: s(row.id), row })),
-  ], [pendingMeds, pendingRefs]);
-
-  const decided = useMemo(() => {
-    const m = meds.filter((x) => x.approvedAt || (x.rejectionReason && s(x.status) === "DISCONTINUED")).map((row) => ({ kind: "med" as const, row }));
-    const r = referrals.filter((x) => x.approvedAt || (x.rejectionReason && s(x.status) === "CANCELLED")).map((row) => ({ kind: "referral" as const, row }));
-    return [...m, ...r].sort((a, b) => new Date(s(b.row.updatedAt)).getTime() - new Date(s(a.row.updatedAt)).getTime()).slice(0, 40);
-  }, [meds, referrals]);
-
-  const approvedCount = meds.filter((m) => m.approvedAt).length + referrals.filter((r) => r.approvedAt).length;
-  const rejectedCount = meds.filter((m) => m.rejectionReason && s(m.status) === "DISCONTINUED").length + referrals.filter((r) => r.rejectionReason && s(r.status) === "CANCELLED").length;
+  const pending = useMemo(() => items.filter((i) => i.state === "PENDING"), [items]);
+  const counts = useMemo(() => ({
+    total: pending.length,
+    appointment: pending.filter((i) => i.kind === "appointment").length,
+    med: pending.filter((i) => i.kind === "med").length,
+    lab: pending.filter((i) => i.kind === "lab").length,
+  }), [pending]);
 
   const notifySubmitter = async (userId: string, title: string, message: string, relatedId: string, relatedType: string) => {
     if (!userId) return;
     try { await createRecord("notifications", { userId, type: "SYSTEM_ALERT", title, message, relatedEntityId: relatedId, relatedEntityType: relatedType, severity: "INFO" }); } catch { /* non-critical */ }
   };
 
-  // ── Medication decisions ──
-  const approveMed = async (m: Row) => {
-    const res = await Swal.fire({ title: "Approve prescription?", text: `Activate ${s(m.name)} ${s(m.dosage)} for ${rname(m)} in the MAR?`, icon: "question", showCancelButton: true, confirmButtonColor: "#2E4A48", confirmButtonText: "Approve" });
+  // ── Decisions ─────────────────────────────────────────────────────────────
+  const approve = async (it: Item) => {
+    const m = it.row;
+    const label = it.kind === "med" ? `${s(m.name)} ${s(m.dosage)}` : it.kind === "lab" ? s(m.testName) : "this appointment";
+    const res = await Swal.fire({ title: "Approve request?", text: `Approve ${label} for ${rname(m)}?`, icon: "question", showCancelButton: true, confirmButtonColor: "#2563eb", confirmButtonText: "Approve" });
     if (!res.isConfirmed) return;
     try {
-      await updateRecord("medications", s(m.id), { status: "ACTIVE", approvedByName: session.name, approvedAt: new Date().toISOString(), rejectionReason: null });
-      await notifySubmitter(s(m.submittedById), "Prescription approved", `${s(m.name)} for ${rname(m)} was approved and is now active in the MAR.`, s(m.id), "medication");
-      await refetchMeds();
-      Swal.fire({ title: "Approved", text: "Now active in the MAR.", icon: "success", timer: 1500, showConfirmButton: false });
+      if (it.kind === "med") {
+        await updateRecord("medications", it.id, { status: "ACTIVE", approvedByName: session.name, approvedAt: new Date().toISOString(), rejectionReason: null });
+        await notifySubmitter(s(m.submittedById), "Prescription approved", `${s(m.name)} for ${rname(m)} is now active in the MAR.`, it.id, "medication");
+        await refetchMeds();
+      } else if (it.kind === "appointment") {
+        await updateRecord("hospital-referrals", it.id, { status: "APPROVED", approvedByName: session.name, approvedAt: new Date().toISOString(), rejectionReason: null });
+        await notifySubmitter(s(m.referredById), "Appointment approved", `The appointment for ${rname(m)} was approved and can now be scheduled.`, it.id, "hospitalReferral");
+        await refetchRefs();
+      } else {
+        await saveLabDecision(it.id, { decision: "APPROVED", by: session.name || "Reviewer", at: new Date().toISOString() });
+      }
+      Swal.fire({ title: "Approved", icon: "success", timer: 1400, showConfirmButton: false });
     } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not approve.", "error"); }
   };
-  const rejectMed = async (m: Row) => {
-    const res = await Swal.fire({ title: "Reject prescription?", input: "textarea", inputLabel: "Reason (sent back to the submitting clinician)", inputPlaceholder: "e.g. dose too high for renal function…", showCancelButton: true, confirmButtonColor: "#C0573F", confirmButtonText: "Reject" });
+
+  const reject = async (it: Item) => {
+    const m = it.row;
+    const res = await Swal.fire({ title: "Reject request?", input: "textarea", inputLabel: "Reason (sent back to the submitter)", inputPlaceholder: "e.g. not clinically indicated…", showCancelButton: true, confirmButtonColor: "#dc2626", confirmButtonText: "Reject" });
     if (!res.isConfirmed) return;
     const reason = res.value || "Rejected";
     try {
-      await updateRecord("medications", s(m.id), { status: "DISCONTINUED", rejectionReason: reason, approvedByName: null, approvedAt: null });
-      await notifySubmitter(s(m.submittedById), "Prescription rejected", `${s(m.name)} for ${rname(m)} was rejected: ${reason}`, s(m.id), "medication");
-      await refetchMeds();
-      Swal.fire({ title: "Rejected", text: "The submitting clinician has been notified.", icon: "success", timer: 1600, showConfirmButton: false });
+      if (it.kind === "med") {
+        await updateRecord("medications", it.id, { status: "DISCONTINUED", rejectionReason: reason, approvedByName: null, approvedAt: null });
+        await notifySubmitter(s(m.submittedById), "Prescription rejected", `${s(m.name)} for ${rname(m)} was rejected: ${reason}`, it.id, "medication");
+        await refetchMeds();
+      } else if (it.kind === "appointment") {
+        await updateRecord("hospital-referrals", it.id, { status: "CANCELLED", rejectionReason: reason });
+        await notifySubmitter(s(m.referredById), "Appointment rejected", `The appointment for ${rname(m)} was rejected: ${reason}`, it.id, "hospitalReferral");
+        await refetchRefs();
+      } else {
+        await saveLabDecision(it.id, { decision: "REJECTED", by: session.name || "Reviewer", at: new Date().toISOString(), reason });
+      }
+      Swal.fire({ title: "Rejected", text: "The submitter has been notified.", icon: "success", timer: 1500, showConfirmButton: false });
     } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not reject.", "error"); }
   };
 
-  // ── Referral decisions ──
-  const approveRef = async (r: Row) => {
-    const res = await Swal.fire({ title: "Approve referral?", text: `Approve ${rname(r)}'s referral? It can then be confirmed & scheduled.`, icon: "question", showCancelButton: true, confirmButtonColor: "#2E4A48", confirmButtonText: "Approve" });
-    if (!res.isConfirmed) return;
-    try {
-      await updateRecord("hospital-referrals", s(r.id), { status: "APPROVED", approvedByName: session.name, approvedAt: new Date().toISOString(), rejectionReason: null });
-      await notifySubmitter(s(r.referredById), "Referral approved", `The referral for ${rname(r)} was approved and can now be scheduled.`, s(r.id), "hospitalReferral");
-      await refetchRefs();
-      Swal.fire({ title: "Approved", text: "Ready to schedule.", icon: "success", timer: 1500, showConfirmButton: false });
-    } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not approve.", "error"); }
-  };
-  const rejectRef = async (r: Row) => {
-    const res = await Swal.fire({ title: "Reject referral?", input: "textarea", inputLabel: "Reason (sent back to the submitting nurse)", showCancelButton: true, confirmButtonColor: "#C0573F", confirmButtonText: "Reject" });
-    if (!res.isConfirmed) return;
-    const reason = res.value || "Rejected";
-    try {
-      await updateRecord("hospital-referrals", s(r.id), { status: "CANCELLED", rejectionReason: reason });
-      await notifySubmitter(s(r.referredById), "Referral rejected", `The referral for ${rname(r)} was rejected: ${reason}`, s(r.id), "hospitalReferral");
-      await refetchRefs();
-      Swal.fire({ title: "Rejected", text: "The submitting nurse has been notified.", icon: "success", timer: 1600, showConfirmButton: false });
-    } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not reject.", "error"); }
+  const saveLabDecision = async (labId: string, dec: LabDecision) => {
+    const next = { ...labDecisions, [labId]: dec };
+    await upsertRecord("app-settings", LAB_DECISIONS_KEY, { key: LAB_DECISIONS_KEY, value: JSON.stringify(next) });
+    await Promise.allSettled([settingsQ.refetch(), refetchLabs()]);
   };
 
-  const loading = mLoading || rLoading;
+  const shown = tab === "pending" ? pending : items;
 
   return (
-    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5" style={{ background: "#FFFFFF" }}>
-      <ClinicalHeader
-        title="Medication Approvals"
-        subtitle="Clinical decisions require the right authority — new prescriptions and referrals are signed off here before they go active."
-        right={!canDecide ? (
-          <button onClick={() => setShowRequest(true)} className="self-start inline-flex items-center gap-2 rounded-md bg-[#2E4A48] px-4 py-2 text-sm font-semibold text-white hover:bg-[#25403D]"><Plus className="w-4 h-4" /> Request Meds</button>
-        ) : undefined}
-      />
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <ClinicalCard top="amber" className="p-4"><MicroLabel>Pending</MicroLabel><p className="text-2xl font-bold text-[#C39A3E] mt-1">{queue.length}</p></ClinicalCard>
-        <ClinicalCard top="green" className="p-4"><MicroLabel>Approved</MicroLabel><p className="text-2xl font-bold text-[#7E9B6F] mt-1">{approvedCount}</p></ClinicalCard>
-        <ClinicalCard top="coral" className="p-4"><MicroLabel>Rejected</MicroLabel><p className="text-2xl font-bold text-[#C0573F] mt-1">{rejectedCount}</p></ClinicalCard>
+    <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2"><ClipboardList className="w-6 h-6 text-blue-500" /> Pending Approvals</h1>
+          <p className="text-sm text-slate-500 mt-1">Review and action requests from staff</p>
+        </div>
+        {!canDecide && <button onClick={() => setShowRequest(true)} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"><Plus className="w-4 h-4" /> Request Meds</button>}
       </div>
 
-      <Eyebrow>Awaiting Approval</Eyebrow>
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <ApprovalStat value={counts.total} label="Total Pending" tone="#d97706" ring="border-amber-200" />
+        <ApprovalStat value={counts.appointment} label="Appointments" tone="#2563eb" ring="border-blue-200" />
+        <ApprovalStat value={counts.med} label="Medications" tone="#7c3aed" ring="border-purple-200" />
+        <ApprovalStat value={counts.lab} label="Lab Orders" tone="#d97706" ring="border-amber-200" />
+      </div>
+
+      {/* Tabs */}
+      <div className="inline-flex gap-1 bg-slate-100 rounded-xl p-1 mb-5">
+        <button onClick={() => setTab("pending")} className={`px-3.5 py-1.5 rounded-lg text-sm font-medium inline-flex items-center gap-1.5 ${tab === "pending" ? "bg-white shadow-sm text-slate-800" : "text-slate-500"}`}>Pending {pending.length > 0 && <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-amber-500 text-white text-[11px] font-bold">{pending.length}</span>}</button>
+        <button onClick={() => setTab("all")} className={`px-3.5 py-1.5 rounded-lg text-sm font-medium ${tab === "all" ? "bg-white shadow-sm text-slate-800" : "text-slate-500"}`}>All Requests</button>
+      </div>
+
+      {/* Queue */}
       <div className="space-y-3">
-        {loading && queue.length === 0 ? (
-          <ClinicalCard className="p-8 text-center text-[#8A8D82]">Loading…</ClinicalCard>
-        ) : queue.length === 0 ? (
-          <ClinicalCard className="p-8 text-center text-[#8A8D82]">Nothing awaiting approval. 🎉</ClinicalCard>
-        ) : queue.map((it) => {
-          const m = it.row;
-          const isMed = it.kind === "med";
-          const specialist = isMed ? "" : s(m.notes).replace(/^Specialist:\s*/, "");
+        {shown.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-slate-400">{tab === "pending" ? "Nothing awaiting approval. 🎉" : "No requests yet."}</div>
+        ) : shown.map((it) => {
+          const m = it.row; const meta = KIND_META[it.kind]; const Icon = meta.Icon;
+          const room = rroom(m);
+          const detail = it.kind === "med"
+            ? `${s(m.dosage)} · ${s(m.route) || "PO"} · ${s(m.frequency)}`
+            : it.kind === "lab"
+              ? [s(m.category), s(m.specimen)].filter(Boolean).join(" · ")
+              : [s(m.notes).replace(/^Specialist:\s*/, ""), s(m.facilityName), fmt(pickApptDate(m))].filter(Boolean).join(" · ");
+          const subtitle = it.kind === "med" ? s(m.name) : it.kind === "lab" ? s(m.testName) : (s(m.reason) || "Referral");
+          const requester = it.kind === "med" ? s(m.submittedByName) : it.kind === "appointment" ? s(m.referredByName) : s(m.orderingProvider);
+          const requestedAt = fmt(m.createdAt);
           return (
-            <ClinicalCard key={`${it.kind}:${it.id}`} top={isMed ? "teal" : "coral"} className="p-4">
+            <div key={`${it.kind}:${it.id}`} className={`rounded-2xl border bg-white p-4 ${it.state === "PENDING" ? meta.ring : "border-slate-200"}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <StatusPill status={isMed ? "SCHEDULED" : "REQUESTED"}>{isMed ? <><Pill className="w-3 h-3 mr-1 inline" />Medication</> : <><CalendarClock className="w-3 h-3 mr-1 inline" />Referral</>}</StatusPill>
-                    <span className="font-bold text-[#2B2B27]">{isMed ? s(m.name) : (specialist || s(m.facilityName))}</span>
-                    {isMed && <span className="text-[13px] text-[#6B6E63]">{s(m.dosage)} · {s(m.route) || "PO"} · {s(m.frequency)}</span>}
+                <div className="flex gap-3 min-w-0">
+                  <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${meta.tint}`}><Icon className="w-5 h-5" /></span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-slate-900">{meta.label}</span>
+                      <StatePill state={it.state} />
+                    </div>
+                    <p className="text-sm text-slate-700 mt-0.5 flex items-center gap-1.5"><User className="w-3.5 h-3.5 text-slate-400" />{rname(m)}{room && <span className="text-[11px] text-slate-500 border border-slate-200 rounded px-1.5 py-0.5">Rm {room}</span>}</p>
+                    {subtitle && <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>}
+                    {detail && <p className="text-[13px] text-slate-500">{detail}</p>}
+                    {(requester || requestedAt) && <p className="text-xs text-slate-400 mt-0.5">{requester ? `Requested by ${requester}` : "Requested"}{requestedAt ? ` · ${requestedAt}` : ""}</p>}
+                    {it.state === "REJECTED" && m.rejectionReason && <p className="text-xs text-red-500 mt-0.5">Reason: {s(m.rejectionReason)}</p>}
                   </div>
-                  <p className="text-[13px] text-[#6B6E63]">
-                    {rname(m)} · Room {rroom(m)}
-                    {isMed
-                      ? `${m.submittedByName ? ` · submitted by ${s(m.submittedByName)}` : ""}${m.reason ? ` · ${s(m.reason)}` : ""}`
-                      : `${m.facilityName ? ` · ${s(m.facilityName)}` : ""}${m.reason ? ` · ${s(m.reason)}` : ""}${m.referredByName ? ` · submitted by ${s(m.referredByName)}` : ""}`}
-                  </p>
                 </div>
-                {canDecide ? (
-                  <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
-                    <button onClick={() => (isMed ? approveMed(m) : approveRef(m))} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-[#7E9B6F] text-white text-sm font-semibold hover:bg-[#6E8A5F]"><Check className="w-4 h-4" /> Approve</button>
-                    <button onClick={() => (isMed ? rejectMed(m) : rejectRef(m))} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-[#C0573F]/30 text-[#C0573F] text-sm font-semibold hover:bg-[#C0573F]/[0.06]"><X className="w-4 h-4" /> Reject</button>
+                {it.state === "PENDING" && canDecide ? (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={() => reject(it)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50"><X className="w-4 h-4" /> Reject</button>
+                    <button onClick={() => approve(it)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700"><Check className="w-4 h-4" /> Approve</button>
                   </div>
-                ) : (
-                  <span className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-[#C39A3E]/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-[#8a6d1e]"><Clock className="w-3.5 h-3.5" /> Pending Approval</span>
-                )}
+                ) : it.state === "PENDING" ? (
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-amber-700"><Clock className="w-3.5 h-3.5" /> Pending</span>
+                ) : null}
               </div>
-            </ClinicalCard>
+            </div>
           );
         })}
       </div>
 
-      {decided.length > 0 && (
-        <>
-          <Eyebrow>Recent Decisions</Eyebrow>
-          <ClinicalCard className="divide-y divide-[#EBEDE4]">
-            {decided.map((d, i) => {
-              const m = d.row; const isMed = d.kind === "med";
-              const approved = Boolean(m.approvedAt);
-              return (
-                <div key={i} className="px-4 py-3 flex items-center justify-between gap-3 text-sm">
-                  <span className="text-[#2B2B27] inline-flex items-center gap-1.5">{isMed ? <Pill className="w-3.5 h-3.5 text-[#2E4A48]" /> : <CalendarClock className="w-3.5 h-3.5 text-[#C0573F]" />}{isMed ? s(m.name) : (s(m.notes).replace(/^Specialist:\s*/, "") || s(m.facilityName))} · {rname(m)}</span>
-                  {approved
-                    ? <span className="inline-flex items-center gap-1 text-[#5F7A52] font-medium"><ShieldCheck className="w-3.5 h-3.5" /> Approved{m.approvedByName ? ` · ${s(m.approvedByName)}` : ""}</span>
-                    : <span className="inline-flex items-center gap-1 text-[#C0573F] font-medium" title={s(m.rejectionReason)}><X className="w-3.5 h-3.5" /> Rejected</span>}
-                </div>
-              );
-            })}
-          </ClinicalCard>
-        </>
-      )}
-
       {showRequest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg bg-white shadow-2xl">
-            <div className="sticky top-0 flex items-center justify-between bg-[#2E4A48] p-5 text-white">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <div className="sticky top-0 flex items-center justify-between bg-blue-600 p-5 text-white">
               <h2 className="text-lg font-bold flex items-center gap-2"><Pill className="w-5 h-5" /> Request Medication</h2>
               <button onClick={() => setShowRequest(false)} className="rounded-lg p-1.5 hover:bg-white/15"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-4 p-6">
               <div>
-                <MicroLabel>Resident *</MicroLabel>
-                <select value={reqForm.residentId} onChange={(e) => setReq("residentId", e.target.value)} className="mt-1 w-full rounded-md border border-[#D6D8CD] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E4A48]/30">
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">Resident *</label>
+                <select value={reqForm.residentId} onChange={(e) => setReq("residentId", e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400/40">
                   <option value="">Select resident…</option>
-                  {residents.map((r) => <option key={r.id} value={r.id}>{r.name} — Room {r.room}</option>)}
+                  {residents.map((r) => <option key={r.id} value={r.id}>{r.name}{r.room ? ` — Room ${r.room}` : ""}</option>)}
                 </select>
               </div>
-              <div>
-                <MicroLabel>Medication *</MicroLabel>
-                <input value={reqForm.name} onChange={(e) => setReq("name", e.target.value)} placeholder="e.g. Amlodipine" className="mt-1 w-full rounded-md border border-[#D6D8CD] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E4A48]/30" />
-              </div>
+              <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Medication *</label><input value={reqForm.name} onChange={(e) => setReq("name", e.target.value)} placeholder="e.g. Amlodipine" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><MicroLabel>Dosage</MicroLabel><input value={reqForm.dosage} onChange={(e) => setReq("dosage", e.target.value)} placeholder="e.g. 5mg" className="mt-1 w-full rounded-md border border-[#D6D8CD] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
-                <div><MicroLabel>Route</MicroLabel><select value={reqForm.route} onChange={(e) => setReq("route", e.target.value)} className="mt-1 w-full rounded-md border border-[#D6D8CD] bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E4A48]/30">{["ORAL", "IV", "IM", "SUBCUTANEOUS", "TOPICAL", "INHALATION", "RECTAL", "OTHER"].map((r) => <option key={r} value={r}>{r}</option>)}</select></div>
+                <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Dosage</label><input value={reqForm.dosage} onChange={(e) => setReq("dosage", e.target.value)} placeholder="e.g. 5mg" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
+                <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Route</label><select value={reqForm.route} onChange={(e) => setReq("route", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400/40">{["ORAL", "IV", "IM", "SUBCUTANEOUS", "TOPICAL", "INHALATION", "RECTAL", "OTHER"].map((r) => <option key={r} value={r}>{r}</option>)}</select></div>
               </div>
-              <div><MicroLabel>Frequency</MicroLabel><input value={reqForm.frequency} onChange={(e) => setReq("frequency", e.target.value)} placeholder="e.g. Once daily, BID, PRN" className="mt-1 w-full rounded-md border border-[#D6D8CD] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
-              <div><MicroLabel>Indication / reason</MicroLabel><textarea value={reqForm.reason} onChange={(e) => setReq("reason", e.target.value)} rows={2} placeholder="Why is this being prescribed?" className="mt-1 w-full rounded-md border border-[#D6D8CD] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E4A48]/30 resize-y" /></div>
-              <p className="text-[11px] text-[#8A8D82]">Saved as <span className="font-semibold text-[#2B2B27]">Pending</span> — it won't activate in the MAR until a Care Manager approves it.</p>
+              <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Frequency</label><input value={reqForm.frequency} onChange={(e) => setReq("frequency", e.target.value)} placeholder="e.g. Once daily, BID, PRN" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
+              <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Indication / reason</label><textarea value={reqForm.reason} onChange={(e) => setReq("reason", e.target.value)} rows={2} placeholder="Why is this being prescribed?" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400/40 resize-y" /></div>
+              <p className="text-[11px] text-slate-400">Saved as <span className="font-semibold text-slate-600">Pending</span> — it won&apos;t activate in the MAR until a Care Manager approves it.</p>
             </div>
-            <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t border-[#E1E3D9] bg-[#F5F6F1] px-6 py-4">
-              <button onClick={() => setShowRequest(false)} disabled={saving} className="rounded-md px-4 py-2 text-[#6B6E63] hover:bg-black/5 disabled:opacity-50">Cancel</button>
-              <button onClick={submitRequest} disabled={saving} className="inline-flex items-center gap-2 rounded-md bg-[#2E4A48] px-6 py-2 font-semibold text-white hover:bg-[#25403D] disabled:opacity-50">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} {saving ? "Submitting…" : "Submit request"}</button>
+            <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4">
+              <button onClick={() => setShowRequest(false)} disabled={saving} className="rounded-xl px-4 py-2 text-slate-600 hover:bg-black/5 disabled:opacity-50">Cancel</button>
+              <button onClick={submitRequest} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2 font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} {saving ? "Submitting…" : "Submit request"}</button>
             </div>
           </div>
         </div>
       )}
     </div>
   );
+}
+
+function ApprovalStat({ value, label, tone, ring }: { value: number; label: string; tone: string; ring: string }) {
+  return <div className={`rounded-2xl border bg-white p-4 ${ring}`}><p className="text-3xl font-bold" style={{ color: tone }}>{value}</p><p className="text-sm text-slate-500 mt-0.5">{label}</p></div>;
+}
+
+function StatePill({ state }: { state: "PENDING" | "APPROVED" | "REJECTED" }) {
+  const map = {
+    PENDING: { cls: "bg-amber-50 text-amber-700 border-amber-200", label: "Pending", Icon: Clock },
+    APPROVED: { cls: "bg-green-50 text-green-700 border-green-200", label: "Approved", Icon: Check },
+    REJECTED: { cls: "bg-red-50 text-red-700 border-red-200", label: "Rejected", Icon: X },
+  }[state];
+  const Icon = map.Icon;
+  return <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${map.cls}`}><Icon className="w-3 h-3" /> {map.label}</span>;
 }

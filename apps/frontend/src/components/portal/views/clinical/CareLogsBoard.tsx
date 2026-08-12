@@ -1,0 +1,848 @@
+"use client";
+
+/**
+ * Care documentation over the DailyRounds models (Stage 10–11), migration-free.
+ * Two views share one data hook:
+ *   • CareLogsBoard (default)  — the Residents tab: level filters, level badge,
+ *     per-shift domain progress, 10 domain quick-log shortcuts, QR + View modal.
+ *   • CareLogsTimeline (named) — the Care Logs tab: resident cards showing today's
+ *     logged entries with "+ Log" and expand.
+ * Both open the shared 10-domain quick-log modal (Vitals, Meals, Bowel, Urine,
+ * Edema, Concerns, Mood, Pain, Mobility, Sleep — the ten Daily Rounds areas).
+ */
+
+import { useMemo, useState, useRef } from "react";
+import {
+  Activity, Utensils, Droplets, Smile, Zap, Footprints, Moon, Wind, AlertTriangle,
+  CalendarDays, Sun, Clock,
+  Search, X, ChevronUp, ChevronDown, Plus, QrCode, Eye, Download, Sparkles,
+  UserRound, Pill, Check, Camera, Image as ImageIcon, Trash2, Pencil, UserX,
+  ExternalLink, type LucideIcon,
+} from "lucide-react";
+import Swal from "@/lib/swal";
+import { useLiveQuery } from "@/lib/useLiveQuery";
+import { adaptResident } from "@/lib/adapters";
+import { createRecord, upsertRecord, updateRecord } from "@/lib/api";
+import { qrDataUrl } from "@/lib/qr";
+import { useClinician, type ClinicianRole } from "./useClinician";
+
+type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+type DomainKey = "vitals" | "meals" | "bowel" | "urine" | "edema" | "concerns" | "mood" | "pain" | "mobility" | "sleep";
+
+// Local calendar day (YYYY-MM-DD). Rounds are created at LOCAL midnight, so the
+// "today" filter must compare on the local day too — comparing UTC dates dropped
+// same-day rounds in ahead-of-UTC timezones (e.g. UTC+8), showing "0 logs today".
+const localDayKey = (v: unknown) => { const d = v instanceof Date ? v : new Date(String(v ?? "")); return isNaN(d.getTime()) ? "" : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const todayKey = () => localDayKey(new Date());
+const todayDate = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString(); };
+const shiftNow = (): "DAY" | "EVENING" | "NIGHT" => { const h = new Date().getHours(); return h >= 7 && h < 15 ? "DAY" : h >= 15 && h < 23 ? "EVENING" : "NIGHT"; };
+const s = (v: unknown) => (v == null ? "" : String(v));
+const fmtBool = (v: unknown) => (v ? "true" : "false");
+const rel = (iso: string) => {
+  const sec = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (!isFinite(sec)) return "";
+  if (sec < 60) return "just now";
+  const m = sec / 60; if (m < 60) return `about ${Math.round(m)} min ago`;
+  const h = m / 60; if (h < 24) return `about ${Math.round(h)} hour${Math.round(h) === 1 ? "" : "s"} ago`;
+  return `${Math.round(h / 24)} day${Math.round(h / 24) === 1 ? "" : "s"} ago`;
+};
+
+// careLevel enum → LifeCare "Level N · label" badge (adjust mapping if needed).
+const LEVELS: Record<string, { n: number; label: string; badge: string }> = {
+  INDEPENDENT: { n: 1, label: "Independent", badge: "bg-green-100 text-green-700" },
+  ASSISTED: { n: 3, label: "Moderate Assist", badge: "bg-amber-100 text-amber-700" },
+  MEMORY: { n: 4, label: "Memory Care", badge: "bg-orange-100 text-orange-700" },
+  SKILLED: { n: 4, label: "Skilled Care", badge: "bg-red-100 text-red-700" },
+};
+export const levelOf = (r: Row) => LEVELS[s(r.careLevel)] || { n: 2, label: "Assisted", badge: "bg-blue-100 text-blue-700" };
+const genderSym = (g: unknown) => { const v = s(g).toLowerCase(); return v.startsWith("m") ? "♂" : v.startsWith("f") ? "♀" : "•"; };
+const BOWEL_REF_KEY = "bowel_reference_photo"; // migration-free: one community reference image (data URL), set by nurse/care manager
+
+// Downscale an image file to a JPEG data URL so the app-settings JSON stays small.
+async function toDataUrl(file: File, maxDim = 900, quality = 0.7): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d"); if (!ctx) { reject(new Error("no canvas")); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+const DOMAINS: { key: DomainKey; label: string; icon: LucideIcon; tint: string; bg: string; pill: string; resource: string }[] = [
+  { key: "vitals", label: "Vitals", icon: Activity, tint: "text-rose-500", bg: "bg-rose-50", pill: "bg-rose-100 text-rose-600", resource: "vital-signs" },
+  { key: "meals", label: "Meals", icon: Utensils, tint: "text-green-600", bg: "bg-green-50", pill: "bg-green-100 text-green-700", resource: "meal-records" },
+  { key: "bowel", label: "Bowel", icon: Droplets, tint: "text-amber-600", bg: "bg-amber-50", pill: "bg-amber-100 text-amber-700", resource: "bowel-records" },
+  { key: "urine", label: "Urine", icon: Droplets, tint: "text-yellow-600", bg: "bg-yellow-50", pill: "bg-yellow-100 text-yellow-700", resource: "urine-records" },
+  { key: "edema", label: "Edema", icon: Wind, tint: "text-sky-600", bg: "bg-sky-50", pill: "bg-sky-100 text-sky-700", resource: "edema-records" },
+  { key: "concerns", label: "Concerns", icon: AlertTriangle, tint: "text-red-600", bg: "bg-red-50", pill: "bg-red-100 text-red-700", resource: "concern-records" },
+  { key: "mood", label: "Mood", icon: Smile, tint: "text-purple-500", bg: "bg-purple-50", pill: "bg-purple-100 text-purple-700", resource: "mood-records" },
+  { key: "pain", label: "Pain", icon: Zap, tint: "text-orange-500", bg: "bg-orange-50", pill: "bg-orange-100 text-orange-700", resource: "pain-records" },
+  { key: "mobility", label: "Mobility", icon: Footprints, tint: "text-teal-600", bg: "bg-teal-50", pill: "bg-teal-100 text-teal-700", resource: "mobility-records" },
+  { key: "sleep", label: "Sleep", icon: Moon, tint: "text-indigo-500", bg: "bg-indigo-50", pill: "bg-indigo-100 text-indigo-700", resource: "round-sleep-records" },
+];
+
+const summarize = (domain: DomainKey, r: Row): string => {
+  const p: string[] = [];
+  const add = (k: string, v: unknown) => { if (v !== undefined && v !== null && v !== "") p.push(`${k}: ${v}`); };
+  switch (domain) {
+    case "vitals": add("diastolic", r.diastolic); add("heartRate", r.heartRate); add("respiratoryRate", r.respRate); add("systolic", r.systolic); add("temp", r.temperature); add("spo2", r.spo2); break;
+    case "meals": add("assistanceLevel", s(r.feedingAssist).toLowerCase()); add("hydrationMl", r.fluidAmountMl); add("mealType", s(r.mealType).toLowerCase()); add("intake", r.intakeLevel); break;
+    case "bowel": add("bloodPresent", fmtBool(r.hasBlood)); add("bristolType", r.bristolType); add("continent", r.containment === "Continent" ? "true" : undefined); break;
+    case "urine": add("outputMl", r.outputMl); add("bloodPresent", fmtBool(r.hasBlood)); add("color", s(r.color).toLowerCase()); break;
+    case "edema": add("location", r.location); add("severity", s(r.severity).toLowerCase()); break;
+    case "concerns": add("category", s(r.category).toLowerCase()); add("severity", s(r.severity).toLowerCase()); break;
+    case "mood": add("mood", s(r.mood).toLowerCase()); if (r.behaviorNotes) p.push(s(r.behaviorNotes)); break;
+    case "pain": add("painScore", r.score); add("location", r.location); add("type", s(r.type).toLowerCase()); break;
+    case "mobility": add("assistanceLevel", s(r.assistanceLevel).toLowerCase()); add("assistiveDevice", r.assistiveDevice); add("fallIncident", fmtBool(r.fallOccurred)); break;
+    case "sleep": add("hoursSlept", r.totalHours); add("quality", s(r.quality).toLowerCase()); add("disturbances", r.interruptionReason); break;
+  }
+  return p.join(" · ") || "logged";
+};
+
+// ── Shared data layer ────────────────────────────────────────────────────────
+type Entry = { id: string; resId: string; domain: DomainKey; at: string; summary: string };
+
+export function useCareLogData(clinicianRole: ClinicianRole) {
+  const { name: clinicianName, userId: clinicianId } = useClinician(clinicianRole);
+  const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
+  const roundQ = useLiveQuery<Row>("daily-rounds", { query: "take=2000", tables: ["DailyRound"] });
+  const vitQ = useLiveQuery<Row>("vital-signs", { query: "take=800", tables: ["VitalSigns"] });
+  const mealQ = useLiveQuery<Row>("meal-records", { query: "take=800", tables: ["MealRecord"] });
+  const bowQ = useLiveQuery<Row>("bowel-records", { query: "take=800", tables: ["BowelRecord"] });
+  const uriQ = useLiveQuery<Row>("urine-records", { query: "take=800", tables: ["UrineRecord"] });
+  const edeQ = useLiveQuery<Row>("edema-records", { query: "take=800", tables: ["EdemaRecord"] });
+  const conQ = useLiveQuery<Row>("concern-records", { query: "take=800", tables: ["ConcernRecord"] });
+  const moodQ = useLiveQuery<Row>("mood-records", { query: "take=800", tables: ["MoodRecord"] });
+  const painQ = useLiveQuery<Row>("pain-records", { query: "take=800", tables: ["PainRecord"] });
+  const mobQ = useLiveQuery<Row>("mobility-records", { query: "take=800", tables: ["MobilityRecord"] });
+  const sleepQ = useLiveQuery<Row>("round-sleep-records", { query: "take=800", tables: ["SleepRecord"] });
+  const { data: settingRows, refetch: refetchSettings } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
+
+  const refetchAll = async () => { await Promise.allSettled([roundQ.refetch(), vitQ.refetch(), mealQ.refetch(), bowQ.refetch(), uriQ.refetch(), edeQ.refetch(), conQ.refetch(), moodQ.refetch(), painQ.refetch(), mobQ.refetch(), sleepQ.refetch(), refetchSettings()]); };
+  const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
+
+  const roundToRes = useMemo(() => {
+    const m = new Map<string, string>(); const day = todayKey();
+    (roundQ.data || []).forEach((r) => { if (s(r.roundDate).slice(0, 10) === day) m.set(s(r.id), s(r.residentId)); });
+    return m;
+  }, [roundQ.data]);
+
+  const entries = useMemo<Entry[]>(() => {
+    const out: Entry[] = [];
+    const collect = (rows: Row[] | undefined, domain: DomainKey) => (rows || []).forEach((r) => {
+      const resId = roundToRes.get(s(r.dailyRoundId)); if (resId) out.push({ id: s(r.id), resId, domain, at: s(r.time || r.createdAt || todayDate()), summary: summarize(domain, r) });
+    });
+    collect(vitQ.data, "vitals"); collect(mealQ.data, "meals"); collect(bowQ.data, "bowel"); collect(uriQ.data, "urine");
+    collect(edeQ.data, "edema"); collect(conQ.data, "concerns"); collect(moodQ.data, "mood"); collect(painQ.data, "pain");
+    collect(mobQ.data, "mobility"); collect(sleepQ.data, "sleep");
+    return out.sort((a, b) => b.at.localeCompare(a.at));
+  }, [roundToRes, vitQ.data, mealQ.data, bowQ.data, uriQ.data, edeQ.data, conQ.data, moodQ.data, painQ.data, mobQ.data, sleepQ.data]);
+
+  const byResident = useMemo(() => {
+    const m = new Map<string, Entry[]>();
+    entries.forEach((e) => { const a = m.get(e.resId); if (a) a.push(e); else m.set(e.resId, [e]); });
+    return m;
+  }, [entries]);
+
+  const domainsByRes = useMemo(() => {
+    const m = new Map<string, Set<DomainKey>>();
+    entries.forEach((e) => { const set = m.get(e.resId); if (set) set.add(e.domain); else m.set(e.resId, new Set([e.domain])); });
+    return m;
+  }, [entries]);
+
+  const bowelRef = useMemo(() => s(settingRows.find((r) => (r.key || r.id) === BOWEL_REF_KEY)?.value), [settingRows]);
+  const saveBowelRef = async (dataUrl: string | null) => {
+    await upsertRecord("app-settings", BOWEL_REF_KEY, { key: BOWEL_REF_KEY, value: dataUrl || "" });
+    await refetchSettings();
+  };
+
+  const ensureRound = async (residentId: string): Promise<string> => {
+    const existing = (roundQ.data || []).find((r) => s(r.residentId) === residentId && s(r.roundDate).slice(0, 10) === todayKey());
+    if (existing) return s(existing.id);
+    // roundDate is a @db.Date column — send today's LOCAL date at UTC-midnight so
+    // Postgres stores exactly that calendar day (no timezone-shift truncation),
+    // and the bare-date comparison above matches it back in any timezone.
+    const r = await createRecord("daily-rounds", { residentId, caregiverId: clinicianId, caregiverName: clinicianName, shift: shiftNow(), roundDate: `${todayKey()}T00:00:00.000Z`, status: "IN_PROGRESS" });
+    await roundQ.refetch();
+    return s(r?.id ?? r?.data?.id);
+  };
+
+  // Every entry across ALL dates (not just today) — powers history/analytics
+  // views (e.g. Care History), where entries must appear on their own dates.
+  const roundToResAll = useMemo(() => {
+    const m = new Map<string, { resId: string; date: string }>();
+    (roundQ.data || []).forEach((r) => m.set(s(r.id), { resId: s(r.residentId), date: s(r.roundDate) }));
+    return m;
+  }, [roundQ.data]);
+  const allEntries = useMemo<Entry[]>(() => {
+    const out: Entry[] = [];
+    const collect = (rows: Row[] | undefined, domain: DomainKey) => (rows || []).forEach((r) => {
+      const info = roundToResAll.get(s(r.dailyRoundId));
+      if (info) out.push({ id: s(r.id), resId: info.resId, domain, at: s(r.time || r.createdAt || info.date), summary: summarize(domain, r) });
+    });
+    collect(vitQ.data, "vitals"); collect(mealQ.data, "meals"); collect(bowQ.data, "bowel"); collect(uriQ.data, "urine");
+    collect(edeQ.data, "edema"); collect(conQ.data, "concerns"); collect(moodQ.data, "mood"); collect(painQ.data, "pain");
+    collect(mobQ.data, "mobility"); collect(sleepQ.data, "sleep");
+    return out.sort((a, b) => b.at.localeCompare(a.at));
+  }, [roundToResAll, vitQ.data, mealQ.data, bowQ.data, uriQ.data, edeQ.data, conQ.data, moodQ.data, painQ.data, mobQ.data, sleepQ.data]);
+
+  const refetchResidents = () => resQ.refetch();
+
+  return { residents, entries, allEntries, byResident, domainsByRes, bowelRef, saveBowelRef, ensureRound, refetchAll, refetchResidents, loading: resQ.loading };
+}
+
+// ── Residents tab — quick-log list (Image 15) ────────────────────────────────
+export default function CareLogsBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
+  const { residents, domainsByRes, ensureRound, refetchAll, refetchResidents, bowelRef, saveBowelRef } = useCareLogData(clinicianRole);
+
+  const [search, setSearch] = useState("");
+  const [levelFilter, setLevelFilter] = useState<number | null>(null);
+  const [logFor, setLogFor] = useState<Row | null>(null);
+  const [logTab, setLogTab] = useState<DomainKey>("vitals");
+  const [qrFor, setQrFor] = useState<Row | null>(null);
+  const [viewFor, setViewFor] = useState<Row | null>(null);
+  const [editFor, setEditFor] = useState<Row | null>(null);
+
+  const q = search.trim().toLowerCase();
+  const filtered = residents.filter((r: Row) => {
+    const okQ = !q || s(r.name).toLowerCase().includes(q) || s(r.room).toLowerCase().includes(q);
+    return okQ && (levelFilter == null || levelOf(r).n === levelFilter);
+  });
+  const openLog = (r: Row, tab: DomainKey) => { setLogTab(tab); setLogFor(r); };
+
+  // Deactivate = discharge from the active roster. Mirrors FacilityResidents'
+  // status control: updateRecord("residents", id, { status }). We use DISCHARGED
+  // (the established "off the active roster" status) rather than a new field.
+  const deactivate = async (r: Row) => {
+    const res = await Swal.fire({
+      title: "Deactivate resident?",
+      text: `${s(r.name)} will be marked Discharged and removed from the active roster.`,
+      icon: "warning", showCancelButton: true, confirmButtonColor: "#dc2626",
+      cancelButtonColor: "#6b7280", confirmButtonText: "Deactivate",
+    });
+    if (!res.isConfirmed) return;
+    try {
+      await updateRecord("residents", s(r.id), { status: "DISCHARGED" });
+      await refetchResidents();
+      Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Resident deactivated", showConfirmButton: false, timer: 1600 });
+    } catch (err) {
+      Swal.fire({ title: "Could not deactivate", text: err instanceof Error ? err.message : "Update failed.", icon: "error" });
+    }
+  };
+
+  return (
+    <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
+      <div className="mb-4">
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Residents</h1>
+        <p className="text-sm text-slate-500 mt-1">{residents.length} active resident{residents.length === 1 ? "" : "s"}</p>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 mb-5">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or room…" className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40" />
+        </div>
+        <div className="inline-flex gap-1.5">
+          {[null, 1, 2, 3, 4].map((lv) => (
+            <button key={lv ?? "all"} onClick={() => setLevelFilter(lv)} className={`px-3.5 py-2 rounded-xl text-sm font-semibold border ${levelFilter === lv ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}>{lv == null ? "All" : `L${lv}`}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {filtered.map((r: Row) => {
+          const lvl = levelOf(r);
+          const diet = s(r.dietRestriction) || s(r.raw?.dietType) || "Regular";
+          return (
+            <div key={s(r.id)} className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-slate-100 flex flex-col items-center justify-center leading-none shrink-0"><span className="text-[9px] font-semibold text-slate-400">Rm</span><span className="text-sm font-bold text-slate-700">{s(r.room)}</span></div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-bold text-slate-900 truncate">{s(r.name)}</p>
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${lvl.badge}`}>Level {lvl.n} · {lvl.label}</span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">{genderSym(r.raw?.gender)} · {diet}</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button onClick={() => setViewFor(r)} title="View profile" className="w-9 h-9 rounded-lg flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-500"><Eye className="w-4 h-4" /></button>
+                  <button onClick={() => setEditFor(r)} title="Edit resident" className="w-9 h-9 rounded-lg flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-600"><Pencil className="w-4 h-4" /></button>
+                  <button onClick={() => deactivate(r)} title="Deactivate resident" className="w-9 h-9 rounded-lg flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600"><UserX className="w-4 h-4" /></button>
+                  <button onClick={() => setQrFor(r)} title="Resident QR" className="w-9 h-9 rounded-lg flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-500"><QrCode className="w-4 h-4" /></button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {filtered.length === 0 && <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-400">No residents match.</div>}
+      </div>
+
+      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} ensureRound={ensureRound} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
+      {qrFor && <QrModal resident={qrFor} onClose={() => setQrFor(null)} />}
+      {viewFor && <ViewModal resident={viewFor} loggedDomains={domainsByRes.get(s(viewFor.id)) || new Set()} onOpenLog={(t) => { setViewFor(null); openLog(viewFor, t); }} onClose={() => setViewFor(null)} />}
+      {editFor && <EditResidentModal resident={editFor} onSaved={refetchResidents} onClose={() => setEditFor(null)} />}
+    </div>
+  );
+}
+
+// ── Care Logs tab — today's log timeline (Image 18) ──────────────────────────
+export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
+  const { residents, entries, byResident, domainsByRes, bowelRef, saveBowelRef, ensureRound, refetchAll } = useCareLogData(clinicianRole);
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [logFor, setLogFor] = useState<Row | null>(null);
+  const [logTab, setLogTab] = useState<DomainKey>("vitals");
+
+  const q = search.trim().toLowerCase();
+  const filtered = residents.filter((r: Row) => !q || s(r.name).toLowerCase().includes(q) || s(r.room).toLowerCase().includes(q));
+  const toggle = (id: string) => setExpanded((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
+  return (
+    <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Care Logs</h1>
+          <p className="text-sm text-slate-500 mt-1">{entries.length} entr{entries.length === 1 ? "y" : "ies"} today</p>
+        </div>
+        {(() => {
+          const now = new Date();
+          const dateLabel = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+          const sm = { DAY: { label: "Day Shift", Icon: Sun, cls: "bg-amber-50 text-amber-700 border-amber-200" }, EVENING: { label: "Evening Shift", Icon: Clock, cls: "bg-orange-50 text-orange-700 border-orange-200" }, NIGHT: { label: "Night Shift", Icon: Moon, cls: "bg-indigo-50 text-indigo-700 border-indigo-200" } }[shiftNow()];
+          const SIcon = sm.Icon;
+          return (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700"><CalendarDays className="w-4 h-4 text-blue-500" /> {dateLabel}</span>
+              <span className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold ${sm.cls}`}><SIcon className="w-4 h-4" /> {sm.label}</span>
+            </div>
+          );
+        })()}
+      </div>
+
+      <div className="relative mb-5">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search residents…" className="w-full pl-11 pr-4 py-3.5 rounded-2xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40" />
+      </div>
+
+      <div className="space-y-3">
+        {filtered.map((r: Row) => {
+          const list = byResident.get(s(r.id)) || [];
+          const open = expanded.has(s(r.id));
+          return (
+            <div key={s(r.id)} className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center gap-3 p-4">
+                <div className="w-11 h-11 rounded-xl bg-slate-100 flex flex-col items-center justify-center leading-none shrink-0"><span className="text-[9px] font-semibold text-slate-400">Rm</span><span className="text-sm font-bold text-slate-700">{s(r.room)}</span></div>
+                <div className="flex-1 min-w-0"><p className="font-bold text-slate-900 truncate">{s(r.name)}</p><p className="text-xs text-slate-500">{list.length} log{list.length === 1 ? "" : "s"} today</p></div>
+                <button onClick={() => { setLogTab("vitals"); setLogFor(r); }} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Plus className="w-4 h-4" /> Log</button>
+                {list.length > 0 && <button onClick={() => toggle(s(r.id))} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400">{open ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}</button>}
+              </div>
+              {open && list.length > 0 && (
+                <div className="border-t border-slate-100 px-4 py-3 space-y-2.5">
+                  {list.map((e, i) => { const d = DOMAINS.find((x) => x.key === e.domain)!; return (
+                    <div key={i} className="flex items-start gap-3">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${d.pill} shrink-0 mt-0.5`}>{d.label}</span>
+                      <span className="text-sm text-slate-600 flex-1 min-w-0">{e.summary}</span>
+                      <span className="text-xs text-slate-400 shrink-0">{rel(e.at)}</span>
+                    </div>
+                  ); })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {filtered.length === 0 && <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-400">No residents match.</div>}
+      </div>
+
+      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} ensureRound={ensureRound} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
+    </div>
+  );
+}
+
+// ── Quick-log modal (10 domains) ─────────────────────────────────────────────
+const chip = "px-2.5 py-1.5 rounded-lg border text-xs font-medium transition text-center";
+const chipOn = "bg-blue-600 text-white border-blue-600";
+const chipOff = "bg-white text-slate-600 border-slate-200 hover:border-blue-300";
+const num = "w-full px-3 py-2 rounded-lg border border-slate-200 text-base font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-400/40";
+const txt = "w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
+
+function Chips({ options, value, onChange, cols = 4 }: { options: { v: string; label: string }[]; value: string; onChange: (v: string) => void; cols?: number }) {
+  return <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}>{options.map((o) => <button key={o.v} type="button" onClick={() => onChange(value === o.v ? "" : o.v)} className={`${chip} ${value === o.v ? chipOn : chipOff}`}>{o.label}</button>)}</div>;
+}
+function Multi({ options, value, onChange }: { options: string[]; value: string[]; onChange: (v: string[]) => void }) {
+  const set = new Set(value);
+  return <div className="flex flex-wrap gap-1.5">{options.map((o) => { const on = set.has(o); return <button key={o} type="button" onClick={() => { const n = new Set(set); if (on) n.delete(o); else n.add(o); onChange([...n]); }} className={`px-2.5 py-1 rounded-full border text-xs font-medium ${on ? chipOn : chipOff}`}>{o}</button>; })}</div>;
+}
+function Label({ children }: { children: React.ReactNode }) { return <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">{children}</p>; }
+function Toggle({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) { return <button type="button" onClick={onClick} className={`py-2 rounded-lg border text-xs font-medium ${on ? chipOn : chipOff}`}>{on ? "✓ " : ""}{label}</button>; }
+// Bowel reference image — a Bristol-type identification aid. Nurse/Care Manager
+// uploads it once (community-scoped, persists by default); caregivers see it
+// read-only in the Bowel form to identify the type.
+function BowelReference({ photo, canEdit, onSave }: { photo?: string; canEdit: boolean; onSave: (d: string | null) => Promise<void> }) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const pick = async (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setBusy(true); try { await onSave(await toDataUrl(file)); } catch { Swal.fire({ title: "Could not save photo", icon: "error" }); } finally { setBusy(false); e.target.value = ""; } };
+  return (
+    <div>
+      <Label>Stool Reference {canEdit ? "— upload to help caregivers identify the type" : "— identify the type"}</Label>
+      <input ref={ref} type="file" accept="image/*" capture="environment" onChange={pick} className="hidden" />
+      {photo ? (
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={photo} alt="Stool reference" className="w-full h-44 object-contain bg-slate-50 rounded-xl border border-slate-200" />
+          {canEdit && (
+            <div className="absolute top-2 right-2 flex gap-1.5">
+              <button type="button" onClick={() => ref.current?.click()} disabled={busy} className="px-2 py-1 rounded-lg bg-black/50 text-white text-xs font-semibold hover:bg-black/70">Replace</button>
+              <button type="button" onClick={() => onSave(null)} className="p-1.5 rounded-lg bg-black/50 text-white hover:bg-black/70"><Trash2 className="w-4 h-4" /></button>
+            </div>
+          )}
+        </div>
+      ) : canEdit ? (
+        <button type="button" onClick={() => ref.current?.click()} disabled={busy} className="w-full flex flex-col items-center justify-center gap-1.5 py-5 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-500 disabled:opacity-60"><div className="flex items-center gap-2"><Camera className="w-5 h-5" /><ImageIcon className="w-5 h-5" /></div><span className="text-sm font-medium">{busy ? "Saving…" : "Upload reference photo"}</span></button>
+      ) : (
+        <p className="text-xs text-slate-400 py-4 text-center border-2 border-dashed border-slate-200 rounded-xl">No reference photo yet — a nurse or care manager can add one.</p>
+      )}
+    </div>
+  );
+}
+function VitalField({ label, unit, hint, value, onChange }: { label: string; unit: string; hint: string; value: string | undefined; onChange: (v: string) => void }) {
+  return <div><Label>{label}</Label><div className="relative"><input inputMode="decimal" value={value ?? ""} onChange={(e) => onChange(e.target.value)} className={num} /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">{unit}</span></div><p className="text-[10px] text-slate-400 mt-1">Normal {hint}</p></div>;
+}
+
+// MealRecord.appetite (AppetiteLevel) is required — derive it from the % consumed.
+const APPETITE_BY_INTAKE: Record<string, string> = { "0%": "REFUSED", "25%": "POOR", "50%": "FAIR", "75%": "GOOD", "100%": "GOOD" };
+const MOOD_MAP: Record<string, string> = { Calm: "CALM", Happy: "HAPPY", Anxious: "ANXIOUS", Agitated: "AGITATED", Confused: "CONFUSED", Withdrawn: "WITHDRAWN", Distressed: "SAD", Combative: "AGGRESSIVE" };
+const SLEEP_MAP: Record<string, string> = { Excellent: "RESTFUL", Good: "FAIR", Fair: "RESTLESS", Poor: "POOR", "Very Poor": "INSOMNIA" };
+
+function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianRole, bowelRef, saveBowelRef, onDone, onClose }: {
+  resident: Row; initialTab: DomainKey; loggedDomains: Set<DomainKey>; ensureRound: (id: string) => Promise<string>; clinicianRole: ClinicianRole; bowelRef: string; saveBowelRef: (dataUrl: string | null) => Promise<void>; onDone: () => Promise<void>; onClose: () => void;
+}) {
+  const [tab, setTab] = useState<DomainKey>(initialTab);
+  const [f, setF] = useState<Row>({});
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  // Domains logged during this modal session (added to the prop set from today).
+  const [savedNow, setSavedNow] = useState<Set<DomainKey>>(new Set());
+  const set = (patch: Row) => setF((p) => ({ ...p, ...patch }));
+  const switchTab = (t: DomainKey) => { setTab(t); setF({}); setNotes(""); };
+  const logged = new Set(loggedDomains);
+  const nowT = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const dom = DOMAINS.find((d) => d.key === tab)!;
+
+  const aiNote = () => {
+    const bits = Object.entries(f).filter(([, v]) => v !== "" && v != null && v !== false && !(Array.isArray(v) && !v.length)).map(([k, v]) => `${k} ${Array.isArray(v) ? v.join(", ") : v}`);
+    setNotes(bits.length ? `${resident.name}: ${tab} — ${bits.join("; ")}.` : `${resident.name}: ${tab} log recorded.`);
+  };
+
+  const buildPayload = (roundId: string): { resource: string; data: Row } | null => {
+    const base = { dailyRoundId: roundId, time: new Date().toISOString(), notes: notes || null };
+    switch (tab) {
+      case "vitals": {
+        const d: Row = { ...base, temperatureUnit: "°C", weightUnit: "kg" };
+        ["systolic", "diastolic", "heartRate", "respRate", "spo2", "weight", "temperature"].forEach((k) => { if (f[k] !== "" && f[k] != null) d[k] = Number(f[k]); });
+        if (d.systolic == null && d.heartRate == null && d.temperature == null && d.spo2 == null && d.respRate == null && d.weight == null) return null;
+        return { resource: "vital-signs", data: d };
+      }
+      case "meals":
+        if (!f.mealType) return null;
+        return { resource: "meal-records", data: { ...base, mealType: f.mealType, appetite: APPETITE_BY_INTAKE[s(f.intakeLevel)] || "FAIR", intakeLevel: s(f.intakeLevel) || "0%", feedingAssist: f.feedingAssist || null, fluidAmountMl: f.fluidAmountMl ? Number(f.fluidAmountMl) : null } };
+      case "bowel":
+        if (f.bristolType == null && !f.containment) return null;
+        return { resource: "bowel-records", data: { ...base, bristolType: f.bristolType ? Number(f.bristolType) : null, hasBlood: !!f.hasBlood, containment: f.containment || null } };
+      case "urine":
+        return { resource: "urine-records", data: { ...base, color: f.color || null, outputMl: f.outputMl ? Number(f.outputMl) : null, hasBlood: !!f.hasBlood, containment: f.containment || null } };
+      case "edema":
+        if (!f.severity && !f.location) return null;
+        return { resource: "edema-records", data: { ...base, location: f.location || "", severity: f.severity || "NONE", pitting: !!f.pitting } };
+      case "concerns":
+        if (!f.description && !notes) return null;
+        return { resource: "concern-records", data: { ...base, category: f.category || "PHYSICAL", description: f.description || notes || "", severity: f.severity || "LOW" } };
+      case "mood":
+        if (!f.mood) return null;
+        return { resource: "mood-records", data: { ...base, mood: MOOD_MAP[f.mood] || "CALM", behaviorNotes: [f.baseline ? `Baseline: ${f.baseline}` : "", (f.tags || []).length ? `Tags: ${(f.tags || []).join(", ")}` : ""].filter(Boolean).join(" · ") || null } };
+      case "pain":
+        return { resource: "pain-records", data: { ...base, score: Number(f.score) || 0, location: f.location || "", type: f.type || null, reliefActions: (f.interventions || []).join(", ") || null } };
+      case "mobility":
+        if (!f.assistanceLevel) return null;
+        return { resource: "mobility-records", data: { ...base, activityType: f.ambulated === false ? "BED_REST" : "AMBULATION", assistanceLevel: f.assistanceLevel, assistiveDevice: f.assistiveDevice || null, fallOccurred: !!f.fallOccurred } };
+      case "sleep":
+        if (!f.totalHours) return null;
+        return { resource: "round-sleep-records", data: { ...base, totalHours: Number(f.totalHours), quality: SLEEP_MAP[f.quality] || "FAIR", interruptionReason: (f.disturbances || []).join(", ") || null } };
+    }
+  };
+
+  const mirrorVitals = async (d: Row) => {
+    const posts: { type: string; value: string; unit: string }[] = [];
+    if (d.systolic != null && d.diastolic != null) posts.push({ type: "BLOOD_PRESSURE", value: `${d.systolic}/${d.diastolic}`, unit: "mmHg" });
+    if (d.heartRate != null) posts.push({ type: "HEART_RATE", value: String(d.heartRate), unit: "bpm" });
+    if (d.temperature != null) posts.push({ type: "TEMPERATURE", value: String(d.temperature), unit: "°C" });
+    if (d.respRate != null) posts.push({ type: "RESPIRATORY_RATE", value: String(d.respRate), unit: "/min" });
+    if (d.spo2 != null) posts.push({ type: "OXYGEN", value: String(d.spo2), unit: "%" });
+    if (d.weight != null) posts.push({ type: "WEIGHT", value: String(d.weight), unit: "kg" });
+    await Promise.allSettled(posts.map((p) => fetch("/api/vitals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ residentId: s(resident.id), type: p.type, value: p.value, unit: p.unit }) })));
+  };
+
+  const save = async () => {
+    // One entry per domain per day — flag a duplicate and let the user override
+    // (e.g. to correct an earlier entry).
+    if (logged.has(tab) || savedNow.has(tab)) {
+      const proceed = await Swal.fire({
+        title: `${dom.label} already logged today`,
+        text: `A ${dom.label} entry already exists for ${s(resident.name)} today — one entry per domain per day is expected. Log another anyway?`,
+        icon: "warning", showCancelButton: true, confirmButtonColor: "#2563eb", confirmButtonText: "Log anyway", cancelButtonText: "Cancel",
+      });
+      if (!proceed.isConfirmed) return;
+    }
+    setSaving(true);
+    try {
+      const roundId = await ensureRound(s(resident.id));
+      if (!roundId) throw new Error("Could not open a care round for this resident.");
+      const built = buildPayload(roundId);
+      if (!built) { Swal.fire({ title: "Nothing to save", text: "Enter at least one value for this domain.", icon: "info" }); setSaving(false); return; }
+      await createRecord(built.resource, built.data);
+      if (tab === "vitals") { try { await mirrorVitals(built.data); } catch { /* best-effort */ } }
+      setSavedNow((prev) => new Set(prev).add(tab));
+      await onDone();
+      Swal.fire({ toast: true, position: "top-end", icon: "success", title: `${dom.label} logged`, showConfirmButton: false, timer: 1500 });
+      setF({}); setNotes("");
+    } catch (e) { Swal.fire({ title: "Save failed", text: e instanceof Error ? e.message : "Could not save.", icon: "error" }); }
+    finally { setSaving(false); }
+  };
+
+  const ActiveIcon = dom.icon;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[95vh] flex flex-col overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
+          <div className="w-8 h-8 rounded-lg bg-rose-500 flex items-center justify-center text-white"><ActiveIcon className="w-4 h-4" /></div>
+          <div className="flex-1 min-w-0"><p className="font-bold text-slate-900 text-[13px] truncate">{dom.label} — {s(resident.name)}</p><p className="text-[10px] text-slate-400">Room {s(resident.room)} · {nowT}</p></div>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-4 h-4" /></button>
+        </div>
+
+        <div className="flex items-center gap-0.5 px-1.5 py-1.5 border-b border-slate-100 overflow-x-auto">
+          {DOMAINS.map((d) => { const on = d.key === tab; const doneD = logged.has(d.key) || savedNow.has(d.key); const Icon = d.icon; return (
+            <button key={d.key} onClick={() => switchTab(d.key)} className={`relative flex flex-col items-center gap-0.5 px-1.5 py-1 rounded-lg min-w-[46px] shrink-0 ${on ? "bg-slate-100" : "hover:bg-slate-50"}`}>
+              <Icon className={`w-3.5 h-3.5 ${on ? d.tint : "text-slate-400"}`} />
+              <span className={`text-[9px] font-medium ${on ? "text-slate-700" : "text-slate-400"}`}>{d.label}</span>
+              {doneD && <span className="absolute top-0.5 right-1 w-1.5 h-1.5 rounded-full bg-green-500" />}
+            </button>
+          ); })}
+        </div>
+
+        <div className="p-4 overflow-y-auto flex-1 space-y-4">
+          {tab === "vitals" && (<>
+            <div><Label>Blood Pressure</Label><div className="grid grid-cols-2 gap-2">
+              <div><input inputMode="numeric" value={f.systolic ?? ""} onChange={(e) => set({ systolic: e.target.value })} placeholder="Systolic" className={num} /><p className="text-[10px] text-slate-400 mt-1">90–139 mmHg</p></div>
+              <div><input inputMode="numeric" value={f.diastolic ?? ""} onChange={(e) => set({ diastolic: e.target.value })} placeholder="Diastolic" className={num} /><p className="text-[10px] text-slate-400 mt-1">60–89 mmHg</p></div>
+            </div></div>
+            <VitalField label="Heart Rate" unit="bpm" hint="60–100 bpm" value={f.heartRate} onChange={(v) => set({ heartRate: v })} />
+            <VitalField label="Temperature" unit="°C" hint="36.1–37.2 °C" value={f.temperature} onChange={(v) => set({ temperature: v })} />
+            <VitalField label="Oxygen Saturation" unit="%" hint="≥ 95 %" value={f.spo2} onChange={(v) => set({ spo2: v })} />
+            <VitalField label="Respiratory Rate" unit="/min" hint="12–20 /min" value={f.respRate} onChange={(v) => set({ respRate: v })} />
+            <VitalField label="Weight" unit="kg" hint="per baseline" value={f.weight} onChange={(v) => set({ weight: v })} />
+          </>)}
+          {tab === "meals" && (<>
+            <div><Label>Meal Type</Label><Chips cols={4} value={f.mealType || ""} onChange={(v) => set({ mealType: v })} options={[{ v: "BREAKFAST", label: "Breakfast" }, { v: "LUNCH", label: "Lunch" }, { v: "DINNER", label: "Dinner" }, { v: "SNACK", label: "Snack" }]} /></div>
+            <div><Label>% Consumed</Label><Chips cols={5} value={f.intakeLevel || ""} onChange={(v) => set({ intakeLevel: v })} options={["0%", "25%", "50%", "75%", "100%"].map((x) => ({ v: x, label: x }))} /></div>
+            <div><Label>Assistance</Label><Chips cols={2} value={f.feedingAssist || ""} onChange={(v) => set({ feedingAssist: v })} options={[{ v: "Independent", label: "Independent" }, { v: "Setup Only", label: "Setup Only" }, { v: "Partial Assist", label: "Partial Assist" }, { v: "Full Assist", label: "Full Assist" }]} /></div>
+            <div><Label>Hydration (mL)</Label><div className="flex flex-wrap gap-1.5 items-center">{[0, 100, 150, 200, 250, 300].map((n) => <button key={n} type="button" onClick={() => set({ fluidAmountMl: (Number(f.fluidAmountMl) || 0) + n })} className={`${chip} ${chipOff}`}>+{n}</button>)}<span className="ml-1 text-xs font-bold text-blue-600">{Number(f.fluidAmountMl) || 0}mL</span><button type="button" onClick={() => set({ fluidAmountMl: 0 })} className="text-[10px] text-slate-400 underline">reset</button></div></div>
+          </>)}
+          {tab === "bowel" && (<>
+            <Label>Bristol Stool Scale</Label>
+            <Chips cols={4} value={s(f.bristolType)} onChange={(v) => set({ bristolType: v })} options={[1, 2, 3, 4, 5, 6, 7].map((n) => ({ v: String(n), label: `Type ${n}` })).concat([{ v: "", label: "None" }])} />
+            <div className="grid grid-cols-2 gap-2"><Toggle label="No Blood" on={f.hasBlood === false} onClick={() => set({ hasBlood: f.hasBlood === false ? undefined : false })} /><Toggle label="Continent" on={f.containment === "Continent"} onClick={() => set({ containment: f.containment === "Continent" ? "" : "Continent" })} /></div>
+            <BowelReference photo={bowelRef} canEdit={clinicianRole === "NURSE" || clinicianRole === "FACILITY_ADMIN"} onSave={saveBowelRef} />
+          </>)}
+          {tab === "urine" && (<>
+            <div><Label>Color</Label><Chips cols={4} value={f.color || ""} onChange={(v) => set({ color: v })} options={["Clear", "Pale", "Yellow", "Dark"].map((x) => ({ v: x, label: x }))} /></div>
+            <div><Label>Output (mL)</Label><input inputMode="numeric" value={f.outputMl ?? ""} onChange={(e) => set({ outputMl: e.target.value })} placeholder="mL" className={num} /></div>
+            <div className="grid grid-cols-2 gap-2"><Toggle label="No Blood" on={f.hasBlood === false} onClick={() => set({ hasBlood: f.hasBlood === false ? undefined : false })} /><Toggle label="Continent" on={f.containment === "Continent"} onClick={() => set({ containment: f.containment === "Continent" ? "" : "Continent" })} /></div>
+          </>)}
+          {tab === "edema" && (<>
+            <div><Label>Location</Label><input value={f.location ?? ""} onChange={(e) => set({ location: e.target.value })} placeholder="e.g. Ankles, bilateral" className={txt} /></div>
+            <div><Label>Severity</Label><Chips cols={3} value={f.severity || ""} onChange={(v) => set({ severity: v })} options={["NONE", "TRACE", "MILD", "MODERATE", "SEVERE", "DEEP"].map((x) => ({ v: x, label: x[0] + x.slice(1).toLowerCase() }))} /></div>
+            <Toggle label="Pitting" on={!!f.pitting} onClick={() => set({ pitting: !f.pitting })} />
+          </>)}
+          {tab === "concerns" && (<>
+            <div><Label>Category</Label><Chips cols={3} value={f.category || ""} onChange={(v) => set({ category: v })} options={["PHYSICAL", "BEHAVIORAL", "SKIN", "PAIN", "HYDRATION", "OTHER"].map((x) => ({ v: x, label: x[0] + x.slice(1).toLowerCase() }))} /></div>
+            <div><Label>Severity</Label><Chips cols={4} value={f.severity || ""} onChange={(v) => set({ severity: v })} options={["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((x) => ({ v: x, label: x[0] + x.slice(1).toLowerCase() }))} /></div>
+            <div><Label>Description</Label><textarea rows={2} value={f.description ?? ""} onChange={(e) => set({ description: e.target.value })} className={txt} /></div>
+          </>)}
+          {tab === "mood" && (<>
+            <div><Label>Current Mood</Label><Chips cols={4} value={f.mood || ""} onChange={(v) => set({ mood: v })} options={["Calm", "Happy", "Anxious", "Agitated", "Confused", "Withdrawn", "Distressed", "Combative"].map((x) => ({ v: x, label: x }))} /></div>
+            <div><Label>Baseline Mood</Label><Chips cols={4} value={f.baseline || ""} onChange={(v) => set({ baseline: v })} options={["Calm", "Happy", "Anxious", "Variable"].map((x) => ({ v: x, label: x }))} /></div>
+            <div><Label>Behavior Tags</Label><Multi value={f.tags || []} onChange={(v) => set({ tags: v })} options={["Cooperative", "Resistive", "Wandering", "Calling out", "Sleeping excessively", "Appetite change", "Sundowning"]} /></div>
+          </>)}
+          {tab === "pain" && (<>
+            <div><Label>Pain Score (0–10)</Label><Chips cols={6} value={s(f.score)} onChange={(v) => set({ score: v })} options={Array.from({ length: 11 }, (_, i) => ({ v: String(i), label: String(i) }))} /></div>
+            <div><Label>Location</Label><Multi value={f.location ? [f.location] : []} onChange={(v) => set({ location: v[v.length - 1] || "" })} options={["Head", "Chest", "Abdomen", "Back", "Hip", "Leg", "Arm", "Shoulder", "Knee", "Foot", "Generalized"]} /></div>
+            <div><Label>Pain Type</Label><Chips cols={3} value={f.type || ""} onChange={(v) => set({ type: v })} options={["Aching", "Sharp", "Burning", "Throbbing", "Cramping", "Pressure"].map((x) => ({ v: x, label: x }))} /></div>
+            <div><Label>Intervention</Label><Multi value={f.interventions || []} onChange={(v) => set({ interventions: v })} options={["Repositioned", "Medication given", "Ice/Heat applied", "Notified nurse", "Family notified"]} /></div>
+          </>)}
+          {tab === "mobility" && (<>
+            <div><Label>Assistance Level</Label><Chips cols={2} value={f.assistanceLevel || ""} onChange={(v) => set({ assistanceLevel: v })} options={[{ v: "INDEPENDENT", label: "Independent" }, { v: "SUPERVISED", label: "Supervision" }, { v: "MINIMAL", label: "Minimal Assist" }, { v: "MODERATE", label: "Moderate Assist" }, { v: "MAXIMAL", label: "Maximum Assist" }, { v: "DEPENDENT", label: "Dependent" }]} /></div>
+            <div><Label>Mobility Aid</Label><Chips cols={3} value={f.assistiveDevice || ""} onChange={(v) => set({ assistiveDevice: v })} options={["None", "Cane", "Walker", "Wheelchair", "Bed-bound", "Gait belt"].map((x) => ({ v: x, label: x }))} /></div>
+            <Toggle label="Did not ambulate" on={f.ambulated === false} onClick={() => set({ ambulated: f.ambulated === false ? undefined : false })} />
+            <button type="button" onClick={() => set({ fallOccurred: !f.fallOccurred })} className={`w-full py-2 rounded-lg border text-xs font-semibold ${f.fallOccurred ? "bg-red-600 text-white border-red-600" : "border-red-200 text-red-600 hover:bg-red-50"}`}>⚠ Report Fall Incident</button>
+          </>)}
+          {tab === "sleep" && (<>
+            <div><Label>Hours of Sleep</Label><Chips cols={5} value={s(f.totalHours)} onChange={(v) => set({ totalHours: v })} options={[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({ v: String(n), label: `${n}h` }))} /></div>
+            <div><Label>Sleep Quality</Label><Chips cols={5} value={f.quality || ""} onChange={(v) => set({ quality: v })} options={["Excellent", "Good", "Fair", "Poor", "Very Poor"].map((x) => ({ v: x, label: x }))} /></div>
+            <div><Label>Disturbances</Label><Multi value={f.disturbances || []} onChange={(v) => set({ disturbances: v })} options={["Pain", "Anxiety", "Noise", "Nocturia", "Confusion", "Nightmares", "Restlessness"]} /></div>
+          </>)}
+
+          <button onClick={save} disabled={saving} className="w-full py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? "Saving…" : "Save Log"}</button>
+          <div>
+            <div className="flex items-center justify-between mb-1"><Label>Clinical Notes (optional)</Label><button onClick={aiNote} className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600"><Sparkles className="w-3 h-3" /> AI Note</button></div>
+            <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observations… or tap AI Note" className={txt} />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between px-3 py-2.5 border-t border-slate-100">
+          <button onClick={onClose} className="px-4 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50">Close</button>
+          <span className="text-[11px] text-slate-400">{new Set([...logged, ...savedNow]).size}/10 logged</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── QR modal ─────────────────────────────────────────────────────────────────
+// The QR encodes the resident's full care-card URL (/rcard/<id>) — the same
+// scannable payload FacilityResidents / ResidentQRModal use — so scanning it
+// (or tapping "Open card") resolves in-system to the full profile.
+function QrModal({ resident, onClose }: { resident: Row; onClose: () => void }) {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const cardUrl = `${origin}/rcard/${s(resident.id)}`;
+  const download = () => { const a = document.createElement("a"); a.href = qrDataUrl(cardUrl, { size: 400 }); a.download = `QR-${s(resident.name).replace(/\s+/g, "-")}.svg`; a.click(); };
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6 text-center" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3"><p className="font-bold text-slate-900">{s(resident.name)}</p><button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button></div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={qrDataUrl(cardUrl, { size: 220 })} alt="Resident QR" width={220} height={220} className="mx-auto rounded-xl border border-slate-200" />
+        <p className="text-[11px] text-slate-400 mt-2">Scan to open the full care card.</p>
+        <div className="mt-4 flex flex-col gap-2">
+          <button onClick={download} className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Download className="w-4 h-4" /> Download QR</button>
+          <a href={cardUrl} target="_blank" rel="noopener noreferrer" className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"><ExternalLink className="w-4 h-4" /> Open card</a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── View modal — profile + today's logging + meds, View Full Profile at bottom
+function MedsList({ residentId }: { residentId: string }) {
+  const { data } = useLiveQuery<Row>("medications", { query: `take=100&f_residentId=${residentId}`, tables: ["Medication"] });
+  if (!data.length) return <p className="text-sm text-slate-400">No medications on file.</p>;
+  return (
+    <div className="space-y-2">
+      {data.map((m) => {
+        const name = s(m.name || m.medicationName || m.drugName) || "Medication";
+        const dose = s(m.dosage || m.dose || m.strength);
+        const sub = [s(m.route), s(m.frequency || m.schedule || m.time || m.scheduleTime)].filter(Boolean).join(" · ");
+        return <div key={s(m.id)} className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold text-slate-800">{name}</p>{sub && <p className="text-xs text-slate-400">{sub}</p>}</div><span className="text-sm text-slate-500 shrink-0">{dose || "—"}</span></div>;
+      })}
+    </div>
+  );
+}
+
+function ViewModal({ resident, loggedDomains, onOpenLog, onClose }: { resident: Row; loggedDomains: Set<DomainKey>; onOpenLog: (t: DomainKey) => void; onClose: () => void }) {
+  const raw = (resident.raw || {}) as Row;
+  const lvl = levelOf(resident);
+  const goFull = () => { try { const seg = window.location.pathname.split("/")[1] || "care_manager"; window.location.href = `/${seg}/records?resident=${s(resident.id)}`; } catch { /* noop */ } };
+  const field = (label: string, value: string) => <div><p className="text-[11px] text-slate-400">{label}</p><p className="text-sm font-semibold text-slate-800">{value || "—"}</p></div>;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[95vh] flex flex-col overflow-hidden">
+        <div className="flex items-center gap-2.5 px-4 py-3 border-b border-slate-100 bg-blue-50/40">
+          <div className="w-10 h-10 rounded-xl bg-blue-100 flex flex-col items-center justify-center leading-none"><span className="text-[9px] font-semibold text-blue-400">Rm</span><span className="text-sm font-bold text-blue-700">{s(resident.room)}</span></div>
+          <div className="flex-1 min-w-0"><p className="font-bold text-slate-900 truncate">{s(resident.name)}</p><span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${lvl.badge}`}>Level {lvl.n} · {lvl.label}</span></div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-4 overflow-y-auto flex-1 space-y-5">
+          <div className="grid grid-cols-2 gap-3">
+            {field("Date of Birth", s(raw.dateOfBirth).slice(0, 10))}
+            {field("Gender", s(raw.gender))}
+            {field("Admission Date", s(raw.admissionDate).slice(0, 10))}
+            {field("Diet Type", s(resident.dietRestriction) || s(raw.dietType) || "Regular")}
+            {field("Mobility Aid", s(raw.mobility) || s(raw.mobilityAid))}
+            {field("Assigned Nurse", s(raw.assignedNurse))}
+          </div>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Today&apos;s Care Logging</p>
+            <div className="grid grid-cols-4 gap-2">
+              {DOMAINS.map((d) => { const on = loggedDomains.has(d.key); const Icon = d.icon; return (
+                <button key={d.key} onClick={() => onOpenLog(d.key)} className={`rounded-xl border p-2 flex flex-col items-center gap-1 ${on ? "border-green-200 bg-green-50" : "border-slate-200 hover:bg-slate-50"}`}>
+                  <Icon className={`w-4 h-4 ${on ? "text-green-600" : d.tint}`} />
+                  <span className="text-[10px] text-slate-600">{d.label}</span>
+                  {on ? <Check className="w-3 h-3 text-green-600" /> : <span className="text-[9px] text-slate-300">log</span>}
+                </button>
+              ); })}
+            </div>
+          </div>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5"><Pill className="w-3.5 h-3.5" /> Medications</p>
+            <MedsList residentId={s(resident.id)} />
+          </div>
+        </div>
+
+        <div className="px-4 py-3 border-t border-slate-100">
+          <button onClick={goFull} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800"><UserRound className="w-4 h-4" /> View Full Profile</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Edit modal (Image 76) ────────────────────────────────────────────────────
+// Replicates NurseRecords' updateRecord("residents", id, {...}) mapping, expanded
+// to the LifeCare Basic Information layout + collapsible sections. Every field
+// persisted here maps to a real Resident column (no invented fields).
+const CARE_OPTIONS: { v: string; label: string }[] = [
+  { v: "INDEPENDENT", label: "Level 1 · Independent" },
+  { v: "ASSISTED", label: "Level 3 · Moderate Assist" },
+  { v: "MEMORY", label: "Level 4 · Memory Care" },
+  { v: "SKILLED", label: "Level 4 · Skilled Care" },
+];
+const editInput = "w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50/60 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-400/40 focus:bg-white";
+
+function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-xl border border-slate-200 overflow-hidden">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3.5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+        <span>{title}{subtitle ? <span className="text-slate-400 font-normal"> {subtitle}</span> : null}</span>
+        {open ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+      </button>
+      {open && <div className="px-3.5 pb-3.5 pt-1 space-y-3">{children}</div>}
+    </div>
+  );
+}
+function EditLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return <p className="text-[12px] font-semibold text-slate-600 mb-1">{children}{required && <span className="text-red-500"> *</span>}</p>;
+}
+
+function EditResidentModal({ resident, onSaved, onClose }: { resident: Row; onSaved: () => Promise<void> | void; onClose: () => void }) {
+  const raw = (resident.raw || {}) as Row;
+  const initialName = s(resident.name);
+  const sp = initialName.indexOf(" ");
+  const [firstName, setFirstName] = useState(s(raw.firstName) || (sp === -1 ? initialName : initialName.slice(0, sp)));
+  const [lastName, setLastName] = useState(s(raw.lastName) || (sp === -1 ? "" : initialName.slice(sp + 1)));
+  const [room, setRoom] = useState(s(resident.room) === "—" ? "" : s(resident.room));
+  const [gender, setGender] = useState(s(raw.gender));
+  const [dob, setDob] = useState(s(raw.dateOfBirth).slice(0, 10));
+  const [admission, setAdmission] = useState(s(raw.admissionDate).slice(0, 10));
+  const [careLevel, setCareLevel] = useState(s(raw.careLevel) || "ASSISTED");
+  const [dnr, setDnr] = useState(!!raw.dnrStatus);
+  const [conditions, setConditions] = useState(s(resident.medicalHistory) || s(raw.medicalHistory));
+  const [allergies, setAllergies] = useState(s(resident.allergies) || s(raw.allergies));
+  const [notes, setNotes] = useState(s(resident.notes) || s(raw.notes));
+  const [saving, setSaving] = useState(false);
+
+  const nConditions = conditions.split(",").map((c) => c.trim()).filter(Boolean).length;
+  const nAllergies = allergies.split(",").map((c) => c.trim()).filter(Boolean).length;
+  const valid = firstName.trim() && lastName.trim() && room.trim() && dob && admission;
+
+  const save = async () => {
+    if (!valid || saving) return;
+    setSaving(true);
+    try {
+      await updateRecord("residents", s(resident.id), {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        roomNumber: room.trim(),
+        gender: gender || null,
+        dateOfBirth: dob ? new Date(dob).toISOString() : null,
+        admissionDate: new Date(admission).toISOString(),
+        careLevel,
+        dnrStatus: dnr,
+        medicalHistory: conditions.trim() || null,
+        allergies: allergies.trim() || null,
+        notes: notes.trim() || null,
+      });
+      await onSaved();
+      Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Resident updated", showConfirmButton: false, timer: 1500 });
+      onClose();
+    } catch (err) {
+      Swal.fire({ title: "Update failed", text: err instanceof Error ? err.message : "Could not save changes.", icon: "error" });
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[95vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h2 className="text-lg font-bold text-slate-900">Edit — {s(resident.name)}</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-3">
+          <div className="rounded-xl border border-slate-200 px-3.5 py-3.5 space-y-3">
+            <p className="text-sm font-semibold text-slate-700">Basic Information</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><EditLabel required>First Name</EditLabel><input value={firstName} onChange={(e) => setFirstName(e.target.value)} className={editInput} /></div>
+              <div><EditLabel required>Last Name</EditLabel><input value={lastName} onChange={(e) => setLastName(e.target.value)} className={editInput} /></div>
+              <div><EditLabel required>Room Number</EditLabel><input value={room} onChange={(e) => setRoom(e.target.value)} className={editInput} /></div>
+              <div><EditLabel>Gender</EditLabel>
+                <select value={gender} onChange={(e) => setGender(e.target.value)} className={editInput}>
+                  <option value="">Not specified</option>
+                  <option value="Female">Female</option>
+                  <option value="Male">Male</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div><EditLabel required>Date of Birth</EditLabel><input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className={editInput} /></div>
+              <div><EditLabel required>Admission Date</EditLabel><input type="date" value={admission} onChange={(e) => setAdmission(e.target.value)} className={editInput} /></div>
+            </div>
+          </div>
+
+          <Section title="Care Level & Clinical Flags">
+            <div><EditLabel>Care Level</EditLabel>
+              <select value={careLevel} onChange={(e) => setCareLevel(e.target.value)} className={editInput}>
+                {CARE_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+              </select>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+              <input type="checkbox" checked={dnr} onChange={(e) => setDnr(e.target.checked)} className="w-4 h-4 rounded" />
+              DNR (Do Not Resuscitate)
+            </label>
+          </Section>
+
+          <Section title="Medical Conditions" subtitle={`(${nConditions} selected)`}>
+            <EditLabel>Conditions (comma-separated)</EditLabel>
+            <textarea rows={2} value={conditions} onChange={(e) => setConditions(e.target.value)} placeholder="Hypertension, Type 2 Diabetes" className={editInput} />
+          </Section>
+
+          <Section title="Allergies" subtitle={`(${nAllergies} selected)`}>
+            <EditLabel>Allergies (comma-separated)</EditLabel>
+            <textarea rows={2} value={allergies} onChange={(e) => setAllergies(e.target.value)} placeholder="Penicillin, Shellfish" className={editInput} />
+          </Section>
+
+          <Section title="Care Plan Notes">
+            <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Special care instructions, preferences…" className={editInput} />
+          </Section>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-5 py-3.5 border-t border-slate-100">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button onClick={save} disabled={!valid || saving} className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? "Saving…" : "Save Changes"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}

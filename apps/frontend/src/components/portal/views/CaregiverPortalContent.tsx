@@ -2,6 +2,9 @@
 
 import CaregiverDashboard from "@/components/portal/views/caregiver/CaregiverDashboard";
 import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
+import TaskAssignmentBoard from "@/components/portal/views/clinical/TaskAssignmentBoard";
+import ResidentCareHistory from "@/components/portal/views/clinical/ResidentCareHistory";
+import VitalsTrendBoard from "@/components/portal/views/clinical/VitalsTrendBoard";
 import CaregiverCallBells from "@/components/portal/views/caregiver/CaregiverCallBells";
 import CaregiverResidents from "@/components/portal/views/caregiver/CaregiverResidents";
 import CaregiverTimeClock from "@/components/portal/views/caregiver/CaregiverTimeClock";
@@ -19,6 +22,11 @@ import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocume
 import MARBoard from "@/components/portal/views/clinical/MARBoard";
 import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker";
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
+import { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
+import ADLMonitoringBoard from "@/components/portal/views/clinical/ADLMonitoringBoard";
+import ShiftEndorsementBoard from "@/components/portal/views/clinical/ShiftEndorsementBoard";
+import WeightMonitoringBoard from "@/components/portal/views/clinical/WeightMonitoringBoard";
+import ShiftSummaryBoard from "@/components/portal/views/clinical/ShiftSummaryBoard";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
 
@@ -37,10 +45,26 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
     case "tasks":
     case "taskboard":
       return <CaregiverTasks />;
+    case "taskassignment":
+      return <TaskAssignmentBoard clinicianRole="CAREGIVER" />;
+    case "carehistory":
+      return <ResidentCareHistory clinicianRole="CAREGIVER" />;
+    case "vitalstrend":
+      return <VitalsTrendBoard clinicianRole="CAREGIVER" />;
     case "cameralogs":
       return <CameraActivityLog />;
     case "dailyrounds":
       return <DailyRoundsBoard clinicianRole="CAREGIVER" />;
+    case "carelogs":
+      return <CareLogsTimeline clinicianRole="CAREGIVER" />;
+    case "adlmonitoring":
+      return <ADLMonitoringBoard clinicianRole="CAREGIVER" />;
+    case "shiftendorsements":
+      return <ShiftEndorsementBoard clinicianRole="CAREGIVER" />;
+    case "weightmonitoring":
+      return <WeightMonitoringBoard clinicianRole="CAREGIVER" />;
+    case "shiftsummary":
+      return <ShiftSummaryBoard clinicianRole="CAREGIVER" />;
     case "callbells":
       return <CaregiverCallBells />;
     case "residents":

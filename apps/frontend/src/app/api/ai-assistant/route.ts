@@ -459,7 +459,7 @@ async function executeResidentTool(
 //                              Physician clinical-notes chat
 //   chat/resident, tts, stt  → the resident AI companion
 //   sbar, endorsement        → Nurse/Caregiver clinical drafts
-const CLINICAL_STAFF = new Set(["SUPERADMIN", "FACILITY_ADMIN", "NURSE", "CAREGIVER", "PHYSICIAN"]);
+const CLINICAL_STAFF = new Set(["SUPERADMIN", "FACILITY_ADMIN", "CARE_MANAGER", "NURSE", "CAREGIVER", "PHYSICIAN"]);
 const ADMIN_STAFF = new Set(["SUPERADMIN", "FACILITY_ADMIN"]);
 
 function actionAllowed(action: string, audience: string, role: string, isPlatform: boolean): boolean {

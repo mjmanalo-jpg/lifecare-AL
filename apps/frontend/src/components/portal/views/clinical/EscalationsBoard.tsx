@@ -4,7 +4,7 @@ import RefreshButton from "@/components/portal/RefreshButton";
 
 import { useMemo, useState, useEffect } from "react";
 import {
-  Siren, Search, RefreshCw, Plus, X, CheckCircle2, Clock, AlertTriangle,
+  Siren, Search, Plus, X, CheckCircle2, Clock, AlertTriangle,
   Eye, Loader2, ChevronLeft, ChevronRight, UserRound, ArrowUpCircle,
   Stethoscope, ClipboardList, Printer, Link2, type LucideIcon,
 } from "lucide-react";
@@ -40,7 +40,7 @@ const asStr = (v: unknown): string => (v == null ? "" : String(v));
 const rel = (v: unknown): Row => (v && typeof v === "object" ? (v as Row) : {});
 
 const PER_PAGE = 12;
-const RESPONDER_ROLES: ClinicianRole[] = ["PHYSICIAN", "FACILITY_ADMIN"];
+const RESPONDER_ROLES: ClinicianRole[] = ["PHYSICIAN", "FACILITY_ADMIN", "NURSE"];
 
 type EscVM = {
   id: string; residentId: string; residentName: string; room: string;
@@ -69,13 +69,15 @@ const adapt = (r: Row): EscVM => {
 export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
   const canRaise = role === "NURSE" || role === "CAREGIVER";
   const canRespond = RESPONDER_ROLES.includes(role);
+  // Anyone on this board can raise a new escalation (responders/oversight too).
+  const canCreate = canRaise || canRespond;
   const clinician = useClinician(role);
 
   const { data: rows, loading, error, refetch } = useLiveQuery<Row>(
     "escalations", { query: "include=resident&take=400", tables: ["Escalation"], pollMs: 12000 }
   );
-  const residentsQ = useLiveQuery<Row>("residents", { query: "take=300", tables: ["Resident"], enabled: canRaise });
-  const medsQ = useLiveQuery<Row>("medications", { query: "take=500", tables: ["Medication"], enabled: canRaise });
+  const residentsQ = useLiveQuery<Row>("residents", { query: "take=300", tables: ["Resident"], enabled: canCreate });
+  const medsQ = useLiveQuery<Row>("medications", { query: "take=500", tables: ["Medication"], enabled: canCreate });
 
   const [nowTs, setNowTs] = useState(0);
   useEffect(() => { const t = () => setNowTs(Date.now()); t(); const i = setInterval(t, 30_000); return () => clearInterval(i); }, []);
@@ -107,7 +109,11 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
     });
   }, [escalations, search, statusFilter, priorityFilter]);
 
-  useEffect(() => { setPage(1); }, [search, statusFilter, priorityFilter]);
+  // Reset to page 1 when filters change — render-phase reset (React-recommended;
+  // avoids a set-state-in-effect cascade).
+  const filterKey = `${search}|${statusFilter}|${priorityFilter}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (filterKey !== prevFilterKey) { setPrevFilterKey(filterKey); setPage(1); }
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const pageClamped = Math.min(page, totalPages);
   const paginated = filtered.slice((pageClamped - 1) * PER_PAGE, pageClamped * PER_PAGE);
@@ -197,9 +203,9 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
           <div className="flex flex-wrap items-center gap-2 self-start">
             <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#7E9B6F] mr-1"><span className="w-2 h-2 rounded-full bg-[#7E9B6F] animate-pulse" /> Live</span>
             <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 bg-white border border-[#D6D8CD] rounded-lg text-[#2B2B27] hover:bg-[#F3F4EE] transition text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30" />
-            {canRaise && (
+            {canCreate && (
               <button onClick={() => setShowRaise(true)} className="flex items-center gap-2 px-4 py-2 bg-[#2E4A48] hover:bg-[#25403D] text-white font-semibold rounded-lg transition active:scale-95 text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30">
-                <Plus className="w-4 h-4" /> New SBAR Escalation
+                <Plus className="w-4 h-4" /> New Escalation
               </button>
             )}
           </div>
@@ -376,6 +382,11 @@ function RaiseModal({ role, raisedBy, residents, meds, onClose, onSaved }: {
   const [drafting, setDrafting] = useState(false);
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const valid = form.residentId && form.situation.trim();
+  const inputCls = "w-full px-3 py-2 bg-white border border-[#D6D8CD] rounded-lg text-sm text-[#2B2B27] focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30";
+  const residentOpts = useMemo(() => residents.map((r) => ({
+    id: asStr(r.id), name: `${asStr(r.firstName)} ${asStr(r.lastName)}`.trim(), room: asStr(r.roomNumber),
+    allergies: asStr(r.allergies), history: asStr(r.medicalHistory),
+  })).sort((a, b) => a.name.localeCompare(b.name)), [residents]);
 
   // Offline fallback draft, used when no Gemini key is configured or the call fails.
   // Builds an input-aware recommendation by scanning the Situation, Background and
@@ -441,12 +452,6 @@ function RaiseModal({ role, raisedBy, residents, meds, onClose, onSaved }: {
       setDrafting(false);
     }
   };
-  const inputCls = "w-full px-3 py-2 bg-white border border-[#D6D8CD] rounded-lg text-sm text-[#2B2B27] focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30";
-  const residentOpts = useMemo(() => residents.map((r) => ({
-    id: asStr(r.id), name: `${asStr(r.firstName)} ${asStr(r.lastName)}`.trim(), room: asStr(r.roomNumber),
-    allergies: asStr(r.allergies), history: asStr(r.medicalHistory),
-  })).sort((a, b) => a.name.localeCompare(b.name)), [residents]);
-
   // Auto-prefill Background from the resident's record + active meds.
   const onPickResident = (id: string) => {
     const r = residentOpts.find((x) => x.id === id);

@@ -32,6 +32,8 @@ export default function PhysicianCommsLog() {
   useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => { if (d?.authenticated) setSession({ id: d.session?.userId ?? null, name: d.session?.name ?? "Clinician" }); }).catch(() => {}); }, []);
 
   const [search, setSearch] = useState("");
+  const [resFilter, setResFilter] = useState("");
+  const [nowMs] = useState(() => Date.now());
   const [showAdd, setShowAdd] = useState(false);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ residentId: "", method: "PHONE", physicianName: "", reason: "", instructionsReceived: "", followUpRequired: false, followUpDeadline: "", relatedEscalationId: "" });
@@ -44,12 +46,12 @@ export default function PhysicianCommsLog() {
 
   const rname = (c: Row) => { const r = (c.resident ?? {}) as Row; return `${s(r.firstName)} ${s(r.lastName)}`.trim() || "—"; };
   const rroom = (c: Row) => s((c.resident as Row)?.roomNumber) || "—";
-  const isOverdue = (c: Row) => c.followUpRequired && !c.followUpCompletedAt && c.followUpDeadline && new Date(s(c.followUpDeadline)).getTime() < Date.now();
+  const isOverdue = (c: Row) => c.followUpRequired && !c.followUpCompletedAt && c.followUpDeadline && new Date(s(c.followUpDeadline)).getTime() < nowMs;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rows.filter((c) => !q || rname(c).toLowerCase().includes(q) || s(c.physicianName).toLowerCase().includes(q) || s(c.reason).toLowerCase().includes(q));
-  }, [rows, search]);
+    return rows.filter((c) => (!resFilter || s(c.residentId) === resFilter) && (!q || rname(c).toLowerCase().includes(q) || s(c.physicianName).toLowerCase().includes(q) || s(c.reason).toLowerCase().includes(q)));
+  }, [rows, search, resFilter]);
   const overdueCount = rows.filter(isOverdue).length;
 
   const submit = async () => {
@@ -93,6 +95,10 @@ export default function PhysicianCommsLog() {
           <Search className="absolute left-3 top-2.5 w-4 h-4 text-[#8A8D82]" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search resident, physician, or reason…" className="w-full rounded-md border border-[#D6D8CD] bg-white pl-9 pr-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E4A48]/30" />
         </div>
+        <select value={resFilter} onChange={(e) => setResFilter(e.target.value)} className="rounded-md border border-[#D6D8CD] bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E4A48]/30">
+          <option value="">All residents</option>
+          {residents.map((r) => <option key={r.id} value={r.id}>{r.name} — Rm {r.room}</option>)}
+        </select>
         {overdueCount > 0 && <StatusPill status="OVERDUE" className="!text-xs">{`${overdueCount} follow-up${overdueCount === 1 ? "" : "s"} overdue`}</StatusPill>}
       </div>
 

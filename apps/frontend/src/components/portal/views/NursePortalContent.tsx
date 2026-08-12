@@ -24,11 +24,27 @@ import DailyDocumentation from "@/components/portal/views/clinical/DailyDocument
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
 import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
-import CarePlanBoard from "@/components/portal/views/clinical/CarePlanBoard";
+import PreAdmissionAssessmentForm from "@/components/portal/views/clinical/PreAdmissionAssessmentForm";
+import CareLogsBoard, { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
+import ADLMonitoringBoard from "@/components/portal/views/clinical/ADLMonitoringBoard";
+import WeightMonitoringBoard from "@/components/portal/views/clinical/WeightMonitoringBoard";
+import ShiftSummaryBoard from "@/components/portal/views/clinical/ShiftSummaryBoard";
+import CareAcuityBoard from "@/components/portal/views/clinical/CareAcuityBoard";
+import WoundCareBoard from "@/components/portal/views/clinical/WoundCareBoard";
+import ShiftEndorsementBoard from "@/components/portal/views/clinical/ShiftEndorsementBoard";
+import MedicationComplianceBoard from "@/components/portal/views/clinical/MedicationComplianceBoard";
+import ResidentProgressReport from "@/components/portal/views/clinical/ResidentProgressReport";
+import TaskAssignmentBoard from "@/components/portal/views/clinical/TaskAssignmentBoard";
+import ResidentCareHistory from "@/components/portal/views/clinical/ResidentCareHistory";
+import VitalsTrendBoard from "@/components/portal/views/clinical/VitalsTrendBoard";
+import ClinicalRecordsBoard from "@/components/portal/views/clinical/ClinicalRecordsBoard";
+import AppointmentCalendar from "@/components/portal/AppointmentCalendar";
+import MedicationInventoryBoard from "@/components/portal/views/clinical/MedicationInventoryBoard";
+import CarePlanReviewsBoard from "@/components/portal/views/clinical/CarePlanReviewsBoard";
 import LabsAllergiesBoard from "@/components/portal/views/clinical/LabsAllergiesBoard";
 import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
 import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
-import MARBoard from "@/components/portal/views/clinical/MARBoard";
+import MARDailyBoard from "@/components/portal/views/clinical/MARDailyBoard";
 import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker";
 import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
 import AuditLogViewer from "@/components/portal/views/clinical/AuditLogViewer";
@@ -389,7 +405,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-2xl sm:text-4xl font-bold text-slate-900 mb-2">
             Incident Log
           </h1>
           <p className="text-gray-600">Track and manage resident incidents and safety events</p>
@@ -514,7 +530,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
                     <p className="text-sm text-gray-900 mb-2">{incident.description}</p>
 
                     {incident.notes && (
-                      <p className="text-sm text-gray-600 p-2 bg-gray-100 rounded border-l-2 border-yellow-400 mb-3">
+                      <p className="text-sm text-gray-600 p-2 bg-gray-100 rounded border border-gray-200 mb-3">
                         📝 {incident.notes}
                       </p>
                     )}
@@ -659,7 +675,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
                 </div>
 
                 {viewingIncident.notes && (
-                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+                  <div className="bg-yellow-50 border border-yellow-200 p-4 rounded">
                     <h3 className="font-bold text-gray-900 mb-2">Notes</h3>
                     <p className="text-gray-900">{viewingIncident.notes}</p>
                   </div>
@@ -701,6 +717,30 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   // Shared clinical modules — the Head Nurse portal mirrors the physician's
   // clinical toolset (rounds, orders, notes, vitals, secure messages), all live
   // and scoped to the NURSE role for authorship/attribution.
+  if (tab === "prescreen") {
+    return <PreAdmissionAssessmentForm clinicianRole="NURSE" />;
+  }
+  if (tab === "carelogs") {
+    return <CareLogsTimeline clinicianRole="NURSE" />;
+  }
+  if (tab === "adlmonitoring") {
+    return <ADLMonitoringBoard clinicianRole="NURSE" />;
+  }
+  if (tab === "weightmonitoring") {
+    return <WeightMonitoringBoard clinicianRole="NURSE" />;
+  }
+  if (tab === "shiftsummary") {
+    return <ShiftSummaryBoard clinicianRole="NURSE" />;
+  }
+  if (tab === "careacuity") {
+    return <CareAcuityBoard clinicianRole="NURSE" />;
+  }
+  if (tab === "woundcare") {
+    return <WoundCareBoard clinicianRole="NURSE" />;
+  }
+  if (tab === "shiftendorsements") {
+    return <ShiftEndorsementBoard clinicianRole="NURSE" />;
+  }
   if (tab === "rounds") {
     return <AssessmentAcuityBoard clinicianRole="NURSE" />;
   }
@@ -733,6 +773,12 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   if (tab === "records") {
     return <NurseRecords />;
   }
+  if (tab === "residents") {
+    return <CareLogsBoard clinicianRole="NURSE" />;
+  }
+  if (tab === "clinicalrecords") {
+    return <ClinicalRecordsBoard clinicianRole="NURSE" />;
+  }
 
   if (tab === "tasks") {
     return <DailyDocumentation clinicianRole="NURSE" />;
@@ -754,7 +800,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     return <LabsAllergiesBoard />;
   }
   if (tab === "careplans") {
-    return <CarePlanBoard />;
+    return <CarePlanReviewsBoard clinicianRole="NURSE" />;
   }
   if (tab === "vaccinations") {
     return <VaccinationTracker />;
@@ -763,7 +809,28 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     return <ResidentDocuments />;
   }
   if (tab === "mar") {
-    return <MARBoard />;
+    return <MARDailyBoard clinicianRole="NURSE" />;
+  }
+  if (tab === "medcompliance") {
+    return <MedicationComplianceBoard />;
+  }
+  if (tab === "progressreport") {
+    return <ResidentProgressReport clinicianRole="NURSE" />;
+  }
+  if (tab === "appointmentcalendar") {
+    return <AppointmentCalendar title="Appointments Calendar" canSchedule={false} />;
+  }
+  if (tab === "taskassignment") {
+    return <TaskAssignmentBoard clinicianRole="NURSE" />;
+  }
+  if (tab === "carehistory") {
+    return <ResidentCareHistory clinicianRole="NURSE" />;
+  }
+  if (tab === "vitalstrend") {
+    return <VitalsTrendBoard clinicianRole="NURSE" />;
+  }
+  if (tab === "medinventory") {
+    return <MedicationInventoryBoard clinicianRole="NURSE" />;
   }
   if (tab === "followups") {
     return <FollowUpTracker />;

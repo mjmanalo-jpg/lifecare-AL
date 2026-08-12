@@ -6,10 +6,26 @@ import ApprovalWorkflows from "@/components/portal/views/clinical/ApprovalWorkfl
 import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
-import CarePlanBoard from "@/components/portal/views/clinical/CarePlanBoard";
+import PreAdmissionAssessmentForm from "@/components/portal/views/clinical/PreAdmissionAssessmentForm";
+import CareLogsBoard, { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
+import ADLMonitoringBoard from "@/components/portal/views/clinical/ADLMonitoringBoard";
+import WeightMonitoringBoard from "@/components/portal/views/clinical/WeightMonitoringBoard";
+import ShiftSummaryBoard from "@/components/portal/views/clinical/ShiftSummaryBoard";
+import CareAcuityBoard from "@/components/portal/views/clinical/CareAcuityBoard";
+import WoundCareBoard from "@/components/portal/views/clinical/WoundCareBoard";
+import ShiftEndorsementBoard from "@/components/portal/views/clinical/ShiftEndorsementBoard";
+import MedicationComplianceBoard from "@/components/portal/views/clinical/MedicationComplianceBoard";
+import ResidentProgressReport from "@/components/portal/views/clinical/ResidentProgressReport";
+import TaskAssignmentBoard from "@/components/portal/views/clinical/TaskAssignmentBoard";
+import ResidentCareHistory from "@/components/portal/views/clinical/ResidentCareHistory";
+import VitalsTrendBoard from "@/components/portal/views/clinical/VitalsTrendBoard";
+import ClinicalRecordsBoard from "@/components/portal/views/clinical/ClinicalRecordsBoard";
+import AppointmentCalendar from "@/components/portal/AppointmentCalendar";
+import MedicationInventoryBoard from "@/components/portal/views/clinical/MedicationInventoryBoard";
+import CarePlanReviewsBoard from "@/components/portal/views/clinical/CarePlanReviewsBoard";
 import LabsAllergiesBoard from "@/components/portal/views/clinical/LabsAllergiesBoard";
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
-import MARBoard from "@/components/portal/views/clinical/MARBoard";
+import MARDailyBoard from "@/components/portal/views/clinical/MARDailyBoard";
 import ReferralsBoard from "@/components/portal/views/clinical/ReferralsBoard";
 import PhysicianCommsLog from "@/components/portal/views/clinical/PhysicianCommsLog";
 import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker";
@@ -32,6 +48,7 @@ import FacilityResidents from "@/components/portal/views/FacilityResidents";
 export default function CareManagerPortalContent({ tab }: { tab: string }) {
   switch (tab) {
     case "residents":
+      return <CareLogsBoard clinicianRole="FACILITY_ADMIN" />;
     case "records":
       return <FacilityResidents canManageProfile />;
     case "alertcenter":
@@ -40,20 +57,52 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
       return <FacilityIncidents />;
     case "dailyrounds":
       return <DailyRoundsBoard clinicianRole="FACILITY_ADMIN" />;
+    case "carelogs":
+      return <CareLogsTimeline clinicianRole="FACILITY_ADMIN" />;
+    case "adlmonitoring":
+      return <ADLMonitoringBoard clinicianRole="FACILITY_ADMIN" />;
+    case "weightmonitoring":
+      return <WeightMonitoringBoard clinicianRole="FACILITY_ADMIN" />;
+    case "shiftsummary":
+      return <ShiftSummaryBoard clinicianRole="FACILITY_ADMIN" />;
+    case "careacuity":
+      return <CareAcuityBoard clinicianRole="FACILITY_ADMIN" />;
+    case "woundcare":
+      return <WoundCareBoard clinicianRole="FACILITY_ADMIN" />;
+    case "shiftendorsements":
+      return <ShiftEndorsementBoard clinicianRole="FACILITY_ADMIN" />;
     case "escalations":
       return <EscalationsBoard role="FACILITY_ADMIN" />;
     case "approvalworkflows":
       return <ApprovalWorkflows />;
     case "mar":
-      return <MARBoard />;
+      return <MARDailyBoard clinicianRole="FACILITY_ADMIN" />;
     case "medsafety":
       return <MedSafetyDashboard />;
+    case "medcompliance":
+      return <MedicationComplianceBoard />;
+    case "progressreport":
+      return <ResidentProgressReport clinicianRole="FACILITY_ADMIN" />;
+    case "appointmentcalendar":
+      return <AppointmentCalendar title="Appointments Calendar" canSchedule={false} />;
+    case "taskassignment":
+      return <TaskAssignmentBoard clinicianRole="FACILITY_ADMIN" />;
+    case "carehistory":
+      return <ResidentCareHistory clinicianRole="FACILITY_ADMIN" />;
+    case "clinicalrecords":
+      return <ClinicalRecordsBoard clinicianRole="FACILITY_ADMIN" />;
+    case "vitalstrend":
+      return <VitalsTrendBoard clinicianRole="FACILITY_ADMIN" />;
+    case "medinventory":
+      return <MedicationInventoryBoard clinicianRole="FACILITY_ADMIN" />;
     case "monitoring":
       return <MonitoringView />;
+    case "prescreen":
+      return <PreAdmissionAssessmentForm clinicianRole="FACILITY_ADMIN" />;
     case "rounds":
       return <AssessmentAcuityBoard clinicianRole="FACILITY_ADMIN" />;
     case "careplans":
-      return <CarePlanBoard />;
+      return <CarePlanReviewsBoard clinicianRole="FACILITY_ADMIN" />;
     case "labs":
       return <LabsAllergiesBoard />;
     case "referrals":
