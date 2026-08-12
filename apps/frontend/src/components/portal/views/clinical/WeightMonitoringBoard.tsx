@@ -10,12 +10,13 @@
  */
 
 import { useMemo, useState } from "react";
-import { Scale, Plus, X, Calendar, History, AlertTriangle, CheckCircle2, Clock, XCircle, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Plus, Calendar, History, AlertTriangle, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
+import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, StatCard, DataState, FieldLabel, controlClass, SERIF } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const WEIGHT_KEY = "weight_logs";
@@ -40,10 +41,21 @@ const parseLogs = (raw: string | null | undefined): WeightLog[] => { if (!raw) r
 
 type Status = "completed" | "due" | "overdue" | "unable";
 
+const ACCENT_VAR: Record<"green" | "teal" | "coral" | "amber", string> = { green: "var(--clinical-green)", teal: "var(--clinical-panel)", coral: "var(--clinical-coral)", amber: "var(--clinical-amber)" };
+
+// Theme-safe status chip: ink label + a coloured dot (no per-theme contrast traps).
+function StatusChip({ label, accent }: { label: string; accent: "green" | "teal" | "coral" | "amber" }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>
+      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ACCENT_VAR[accent] }} />{label}
+    </span>
+  );
+}
+
 export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   const { name: clinicianName } = useClinician(clinicianRole);
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
-  const { data: settingRows, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
+  const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
 
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
   const logs = useMemo(() => parseLogs(settingRows.find((r) => (r.key || r.id) === WEIGHT_KEY)?.value), [settingRows]);
@@ -85,53 +97,57 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
   const contextType: EntryType = view === "history" ? historyType : "weekly";
 
   return (
-    <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2"><Scale className="w-6 h-6 text-blue-500" /> Weekly Weight Monitoring</h1>
-          <p className="text-sm text-slate-500 mt-1">Sunday morning weight checks for all residents</p>
-        </div>
-        <button onClick={() => openRecord(null, contextType)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"><Plus className="w-4 h-4" /> Record Weight</button>
-      </div>
+    <ClinicalPage>
+      <ClinicalHeader
+        title="Weekly Weight Monitoring"
+        subtitle="Sunday morning weight checks for all residents"
+        right={<ClinicalButton variant="accent" onClick={() => openRecord(null, contextType)}><Plus className="h-4 w-4" /> Record Weight</ClinicalButton>}
+      />
 
-      <div className="inline-flex gap-1 bg-slate-100 rounded-xl p-1 mb-5">
+      <div className="mt-5 mb-5 inline-flex gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
         {([["schedule", "Sunday Schedule", Calendar], ["history", "Resident History", History], ["concerns", "Weight Concerns", AlertTriangle]] as const).map(([v, label, Icon]) => (
-          <button key={v} onClick={() => setView(v)} className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-medium ${view === v ? "bg-white shadow-sm text-slate-800" : "text-slate-500"}`}><Icon className="w-4 h-4" /> {label}</button>
+          <button key={v} onClick={() => setView(v)} aria-pressed={view === v} className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition ${view === v ? "bg-[var(--clinical-surface)] text-[var(--clinical-ink)] shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}><Icon className="h-4 w-4" /> {label}</button>
         ))}
       </div>
 
       {view === "schedule" && (
         <>
-          <div className="flex items-center gap-2 mb-5">
-            <button onClick={() => setWeekOf((w) => addDays(w, -7))} className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-600 hover:bg-slate-50"><ChevronLeft className="w-4 h-4" /> Previous</button>
-            <span className="px-3 py-2 text-sm font-semibold text-slate-700">Sunday {fmtSunday(weekOf)}</span>
-            <button onClick={() => setWeekOf((w) => addDays(w, 7))} disabled={weekOf >= thisSunday} className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Next <ChevronRight className="w-4 h-4" /></button>
+          <div className="mb-5 flex items-center gap-2">
+            <ClinicalButton variant="secondary" size="sm" onClick={() => setWeekOf((w) => addDays(w, -7))}><ChevronLeft className="h-4 w-4" /> Previous</ClinicalButton>
+            <span className="px-3 py-2 text-sm font-semibold text-[var(--clinical-ink)]">Sunday {fmtSunday(weekOf)}</span>
+            <ClinicalButton variant="secondary" size="sm" onClick={() => setWeekOf((w) => addDays(w, 7))} disabled={weekOf >= thisSunday}>Next <ChevronRight className="h-4 w-4" /></ClinicalButton>
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            <StatCard icon={CheckCircle2} label="Completed" value={counts.completed} tone="#16a34a" bg="bg-green-50 border-green-200" />
-            <StatCard icon={Clock} label="Due" value={counts.due} tone="#2563eb" bg="bg-blue-50 border-blue-200" />
-            <StatCard icon={XCircle} label="Overdue" value={counts.overdue} tone="#dc2626" bg="bg-red-50 border-red-200" />
-            <StatCard icon={AlertTriangle} label="Unable" value={counts.unable} tone="#ca8a04" bg="bg-yellow-50 border-yellow-200" />
+          <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatCard value={counts.completed} label="Completed" accent="green" />
+            <StatCard value={counts.due} label="Due" accent="teal" />
+            <StatCard value={counts.overdue} label="Overdue" accent="coral" />
+            <StatCard value={counts.unable} label="Unable" accent="amber" />
           </div>
-          <div className="space-y-2">
-            {rows.map(({ r, status, log }) => {
-              const tint = status === "completed" ? "bg-green-50/60 border-green-100" : status === "overdue" ? "bg-red-50/50 border-red-100" : status === "unable" ? "bg-yellow-50/50 border-yellow-100" : "bg-blue-50/40 border-blue-100";
-              return (
-                <div key={s(r.id)} className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${tint}`}>
-                  <div><p className="font-bold text-slate-900">{s(r.name)}</p><p className="text-xs text-slate-500">Room {s(r.room)}</p></div>
+          <DataState
+            loading={loading && logs.length === 0 && residents.length === 0}
+            error={error}
+            empty={rows.length === 0}
+            emptyTitle="No residents"
+            emptyHint="Add residents to start weekly weight checks."
+            onRetry={() => void refetch()}
+            skeletonRows={4}
+          >
+            <div className="space-y-2">
+              {rows.map(({ r, status, log }) => (
+                <div key={s(r.id)} className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+                  <div><p className="font-semibold text-[var(--clinical-ink)]">{s(r.name)}</p><p className="text-xs text-[var(--clinical-muted)]">Room {s(r.room)}</p></div>
                   <div className="flex items-center gap-2">
-                    {status === "completed" && <span className="text-sm font-bold text-white bg-green-600 px-2.5 py-1 rounded-lg">{kg(log!.weightKg!)} kg</span>}
-                    {status === "unable" && <span className="text-xs font-bold text-white bg-yellow-500 px-2.5 py-1 rounded-lg">Unable</span>}
-                    {status === "overdue" && <span className="text-xs font-bold text-white bg-red-600 px-2.5 py-1 rounded-lg">Overdue</span>}
-                    {status === "due" && <span className="text-xs font-bold text-white bg-blue-600 px-2.5 py-1 rounded-lg">Due</span>}
-                    {status !== "completed" && <button onClick={() => openRecord(r, "weekly")} className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50">Record</button>}
-                    {status === "completed" && <button onClick={() => openRecord(r, "weekly")} className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:bg-white">Edit</button>}
+                    {status === "completed" && <StatusChip label={`${kg(log!.weightKg!)} kg`} accent="green" />}
+                    {status === "unable" && <StatusChip label="Unable" accent="amber" />}
+                    {status === "overdue" && <StatusChip label="Overdue" accent="coral" />}
+                    {status === "due" && <StatusChip label="Due" accent="teal" />}
+                    {status !== "completed" && <ClinicalButton variant="secondary" size="sm" onClick={() => openRecord(r, "weekly")}>Record</ClinicalButton>}
+                    {status === "completed" && <ClinicalButton variant="ghost" size="sm" onClick={() => openRecord(r, "weekly")}>Edit</ClinicalButton>}
                   </div>
                 </div>
-              );
-            })}
-            {rows.length === 0 && <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-400">No residents.</div>}
-          </div>
+              ))}
+            </div>
+          </DataState>
         </>
       )}
 
@@ -139,12 +155,8 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
       {view === "concerns" && <ConcernsView residents={residents} logs={logs} onViewHistory={(id) => { setHistoryResId(id); setView("history"); }} />}
 
       {rec && <RecordModal residents={residents} resident={rec.resident} type={rec.type} defaultDate={rec.type === "weekly" ? weekOf : todayIso} onClose={() => setRec(null)} onSave={saveRecord} />}
-    </div>
+    </ClinicalPage>
   );
-}
-
-function StatCard({ icon: Icon, label, value, tone, bg }: { icon: typeof CheckCircle2; label: string; value: number; tone: string; bg: string }) {
-  return <div className={`rounded-2xl border p-5 text-center ${bg}`}><Icon className="w-6 h-6 mx-auto mb-2" style={{ color: tone }} /><p className="text-3xl font-bold" style={{ color: tone }}>{value}</p><p className="text-sm mt-1" style={{ color: tone }}>{label}</p></div>;
 }
 
 // ── Resident History (Image 20) ──────────────────────────────────────────────
@@ -161,43 +173,44 @@ function HistoryView({ residents, logs, resId, setResId, entryType, setEntryType
 
   return (
     <div className="space-y-4">
-      <div><p className="text-sm font-semibold text-slate-700 mb-1">Select Resident</p>
-        <select value={resId} onChange={(e) => setResId(e.target.value)} className="w-full max-w-sm px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40">
+      <div>
+        <FieldLabel htmlFor="wt-hist-res">Select Resident</FieldLabel>
+        <select id="wt-hist-res" value={resId} onChange={(e) => setResId(e.target.value)} className={`${controlClass} max-w-sm`}>
           <option value="">Select a resident…</option>
           {residents.map((r) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Room {s(r.room)}</option>)}
         </select>
       </div>
 
-      {!resId ? <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-400">Choose a resident to see their weight history.</div> : (<>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-400">Baseline Weight</p><p className="text-2xl font-bold text-slate-800 mt-1">{baseline?.weightKg != null ? `${kg(baseline.weightKg)} kg` : "—"}</p></div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-400">Latest Weight</p><p className="text-2xl font-bold text-slate-800 mt-1">{latest?.weightKg != null ? `${kg(latest.weightKg)} kg` : "—"}</p>{latest && <p className="text-xs text-slate-400 mt-1">{fmtDate(latest.date)}</p>}</div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-400">Trend</p>{trend == null ? <p className="text-2xl font-bold text-slate-800 mt-1">—</p> : <p className={`text-2xl font-bold mt-1 inline-flex items-center gap-1 ${trend > 0 ? "text-red-600" : trend < 0 ? "text-blue-600" : "text-slate-500"}`}>{trend > 0 ? <TrendingUp className="w-5 h-5" /> : trend < 0 ? <TrendingDown className="w-5 h-5" /> : <Minus className="w-5 h-5" />}{trend > 0 ? "+" : ""}{trend.toFixed(1)} kg</p>}</div>
+      {!resId ? <div className="rounded-xl border p-8 text-center text-sm text-[var(--clinical-muted)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>Choose a resident to see their weight history.</div> : (<>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">Baseline Weight</p><p className="mt-1 text-2xl font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>{baseline?.weightKg != null ? `${kg(baseline.weightKg)} kg` : "—"}</p></div>
+          <div className="rounded-xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">Latest Weight</p><p className="mt-1 text-2xl font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>{latest?.weightKg != null ? `${kg(latest.weightKg)} kg` : "—"}</p>{latest && <p className="mt-1 text-xs text-[var(--clinical-muted)]">{fmtDate(latest.date)}</p>}</div>
+          <div className="rounded-xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">Trend</p>{trend == null ? <p className="mt-1 text-2xl font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>—</p> : <p className="mt-1 inline-flex items-center gap-1 text-2xl font-bold" style={{ fontFamily: SERIF, color: trend > 0 ? "var(--clinical-coral)" : trend < 0 ? "var(--clinical-panel)" : "var(--clinical-muted)" }}>{trend > 0 ? <TrendingUp className="h-5 w-5" /> : trend < 0 ? <TrendingDown className="h-5 w-5" /> : <Minus className="h-5 w-5" />}{trend > 0 ? "+" : ""}{trend.toFixed(1)} kg</p>}</div>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="inline-flex gap-1.5">
             {(["weekly", "baseline", "additional"] as EntryType[]).map((t) => (
-              <button key={t} onClick={() => setEntryType(t)} className={`px-3.5 py-2 rounded-lg text-sm font-semibold border ${entryType === t ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>{TYPE_LABEL[t]}</button>
+              <ClinicalButton key={t} variant={entryType === t ? "primary" : "secondary"} size="sm" onClick={() => setEntryType(t)}>{TYPE_LABEL[t]}</ClinicalButton>
             ))}
           </div>
-          <button onClick={() => onRecord(entryType)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50"><Plus className="w-4 h-4" /> Record {TYPE_LABEL[entryType]}</button>
+          <ClinicalButton variant="secondary" size="sm" onClick={() => onRecord(entryType)}><Plus className="h-4 w-4" /> Record {TYPE_LABEL[entryType]}</ClinicalButton>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white overflow-x-auto">
+        <div className="overflow-x-auto rounded-xl border" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-slate-400 border-b border-slate-100">
-              <th className="font-semibold px-4 py-2.5">Date</th><th className="font-semibold px-4 py-2.5">Weight</th><th className="font-semibold px-4 py-2.5">Type</th><th className="font-semibold px-4 py-2.5">Logged By</th><th className="font-semibold px-4 py-2.5">Notes</th>
+            <thead><tr className="border-b text-left text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line)" }}>
+              <th className="px-4 py-2.5 font-semibold">Date</th><th className="px-4 py-2.5 font-semibold">Weight</th><th className="px-4 py-2.5 font-semibold">Type</th><th className="px-4 py-2.5 font-semibold">Logged By</th><th className="px-4 py-2.5 font-semibold">Notes</th>
             </tr></thead>
             <tbody>
-              {table.length === 0 ? <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">No {TYPE_LABEL[entryType].toLowerCase()} entries.</td></tr>
+              {table.length === 0 ? <tr><td colSpan={5} className="px-4 py-8 text-center text-[var(--clinical-muted)]">No {TYPE_LABEL[entryType].toLowerCase()} entries.</td></tr>
                 : table.map((l) => (
-                  <tr key={l.id} className="border-b border-slate-50 last:border-0">
-                    <td className="px-4 py-2.5 text-slate-700">{fmtDate(l.date)}</td>
-                    <td className="px-4 py-2.5 font-semibold text-slate-800">{l.unable ? "Unable" : l.weightKg != null ? `${kg(l.weightKg)} kg` : "—"}</td>
-                    <td className="px-4 py-2.5"><span className="text-xs font-medium px-2 py-0.5 rounded-full border border-slate-200 text-slate-600">{TYPE_BADGE[l.type]}</span></td>
-                    <td className="px-4 py-2.5 text-slate-600">{s(l.by) || "—"}</td>
-                    <td className="px-4 py-2.5 text-slate-500">{s(l.note) || "—"}</td>
+                  <tr key={l.id} className="border-b last:border-0" style={{ borderColor: "var(--clinical-line)" }}>
+                    <td className="px-4 py-2.5 text-[var(--clinical-ink-soft)]">{fmtDate(l.date)}</td>
+                    <td className="px-4 py-2.5 font-semibold text-[var(--clinical-ink)]">{l.unable ? "Unable" : l.weightKg != null ? `${kg(l.weightKg)} kg` : "—"}</td>
+                    <td className="px-4 py-2.5"><span className="rounded-full border px-2 py-0.5 text-xs font-medium text-[var(--clinical-ink-soft)]" style={{ borderColor: "var(--clinical-line-strong)" }}>{TYPE_BADGE[l.type]}</span></td>
+                    <td className="px-4 py-2.5 text-[var(--clinical-ink-soft)]">{s(l.by) || "—"}</td>
+                    <td className="px-4 py-2.5 text-[var(--clinical-muted)]">{s(l.note) || "—"}</td>
                   </tr>
                 ))}
             </tbody>
@@ -219,13 +232,13 @@ function Sparkline({ points }: { points: WeightLog[] }) {
   const d = vals.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
   return (
     <div>
-      <p className="text-sm font-semibold text-slate-700 mb-2">Weight Trend (last entries)</p>
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 overflow-x-auto">
+      <p className="mb-2 text-sm font-semibold text-[var(--clinical-ink)]">Weight Trend (last entries)</p>
+      <div className="overflow-x-auto rounded-xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 400 }} preserveAspectRatio="none">
           <path d={d} fill="none" stroke="#3b82f6" strokeWidth={2} />
           {vals.map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r={2.5} fill="#3b82f6" />)}
         </svg>
-        <div className="flex justify-between mt-1">{points.map((p, i) => <span key={i} className="text-[10px] text-slate-400">{new Date(p.date).toLocaleDateString(undefined, { month: "2-digit", day: "2-digit" })}</span>)}</div>
+        <div className="mt-1 flex justify-between">{points.map((p, i) => <span key={i} className="text-[10px] text-[var(--clinical-muted)]">{new Date(p.date).toLocaleDateString(undefined, { month: "2-digit", day: "2-digit" })}</span>)}</div>
       </div>
     </div>
   );
@@ -262,16 +275,16 @@ function ConcernsView({ residents, logs, onViewHistory }: { residents: Row[]; lo
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-500">Residents with weight-loss concerns based on pilot alert rules.</p>
-      {concerns.length === 0 ? <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-400">No weight concerns right now.</div>
+      <p className="text-sm text-[var(--clinical-muted)]">Residents with weight-loss concerns based on pilot alert rules.</p>
+      {concerns.length === 0 ? <div className="rounded-xl border p-8 text-center text-sm text-[var(--clinical-muted)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>No weight concerns right now.</div>
         : concerns.map((c) => { const r = nameOf(c.id); return (
-          <div key={c.id} className="rounded-2xl border border-red-100 bg-white p-4">
+          <div key={c.id} className="rounded-xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)", borderTopWidth: 3, borderTopColor: "var(--clinical-coral)" }}>
             <div className="flex items-start justify-between gap-3">
-              <div><p className="font-bold text-slate-900">{s(r?.name) || "Resident"}</p><p className="text-xs text-slate-500">Room {s(r?.room)}</p></div>
-              <button onClick={() => onViewHistory(c.id)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50">View History <ChevronRight className="w-4 h-4" /></button>
+              <div><p className="font-semibold text-[var(--clinical-ink)]">{s(r?.name) || "Resident"}</p><p className="text-xs text-[var(--clinical-muted)]">Room {s(r?.room)}</p></div>
+              <ClinicalButton variant="secondary" size="sm" onClick={() => onViewHistory(c.id)}>View History <ChevronRight className="h-4 w-4" /></ClinicalButton>
             </div>
             <div className="mt-3 space-y-1.5">
-              {c.warns.map((w, i) => <div key={i} className="flex items-start gap-2"><span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 shrink-0 mt-0.5">warning</span><span className="text-sm text-slate-700">{w}</span></div>)}
+              {c.warns.map((w, i) => <div key={i} className="flex items-start gap-2"><StatusChip label="Warning" accent="amber" /><span className="text-sm text-[var(--clinical-ink-soft)]">{w}</span></div>)}
             </div>
           </div>
         ); })}
@@ -305,41 +318,43 @@ function RecordModal({ residents, resident, type, defaultDate, onClose, onSave }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h2 className="font-bold text-slate-900 text-lg">Record {MODAL_TITLE[type]}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button>
+    <ClinicalModal
+      open
+      onClose={onClose}
+      title={`Record ${MODAL_TITLE[type]}`}
+      description="Log a resident weight entry"
+      footer={<>
+        <ClinicalButton variant="ghost" size="sm" onClick={onClose}>Cancel</ClinicalButton>
+        <ClinicalButton variant="accent" onClick={submit} disabled={saving}>{saving ? "Saving…" : "Save Weight Entry"}</ClinicalButton>
+      </>}
+    >
+      <div className="space-y-4">
+        <div>
+          <FieldLabel required htmlFor="wt-res">Resident</FieldLabel>
+          <select id="wt-res" value={resId} onChange={(e) => setResId(e.target.value)} disabled={!!resident} className={`${controlClass} disabled:opacity-60`}>
+            <option value="">Select…</option>{residents.map((r) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Room {s(r.room)}</option>)}
+          </select>
         </div>
-        <div className="p-5 space-y-4">
-          <div><p className="text-sm font-bold text-slate-700 mb-1.5">Resident <span className="text-red-500">*</span></p>
-            <select value={resId} onChange={(e) => setResId(e.target.value)} disabled={!!resident} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40 disabled:bg-slate-50">
-              <option value="">Select…</option>{residents.map((r) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Room {s(r.room)}</option>)}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><p className="text-sm font-bold text-slate-700 mb-1.5">Date <span className="text-red-500">*</span></p><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
-            <div><p className="text-sm font-bold text-slate-700 mb-1.5">Time</p><input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
-          </div>
-          <div><p className="text-sm font-bold text-slate-700 mb-1.5">Shift</p><select value={shift} onChange={(e) => setShift(e.target.value)} className="w-full max-w-[160px] px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40">{SHIFTS.map((sh) => <option key={sh} value={sh}>{sh}</option>)}</select></div>
-
-          <button type="button" onClick={() => setUnable((u) => !u)} className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left ${unable ? "border-yellow-300 bg-yellow-50" : "border-slate-200"}`}>
-            <span className={`w-5 h-5 rounded border flex items-center justify-center ${unable ? "bg-yellow-500 border-yellow-500 text-white" : "border-slate-300"}`}>{unable && "✓"}</span>
-            <span><span className="block text-sm font-semibold text-slate-800">Unable to weigh</span><span className="block text-xs text-slate-500">Resident cannot be weighed at this time</span></span>
-          </button>
-
-          {!unable && (
-            <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
-              <div><p className="text-sm font-bold text-slate-700 mb-1.5">Weight <span className="text-red-500">*</span></p><input inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="e.g., 58.5" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
-              <div><p className="text-sm font-bold text-slate-700 mb-1.5">Unit</p><select value={unit} onChange={(e) => setUnit(e.target.value as "kg" | "lb")} className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40"><option value="kg">kg</option><option value="lb">lb</option></select></div>
-            </div>
-          )}
-
-          <div><p className="text-sm font-bold text-slate-700 mb-1.5">Notes</p><textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional observations…" className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
-
-          <button onClick={submit} disabled={saving} className="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? "Saving…" : "Save Weight Entry"}</button>
+        <div className="grid grid-cols-2 gap-3">
+          <div><FieldLabel required htmlFor="wt-date">Date</FieldLabel><input id="wt-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className={controlClass} /></div>
+          <div><FieldLabel htmlFor="wt-time">Time</FieldLabel><input id="wt-time" type="time" value={time} onChange={(e) => setTime(e.target.value)} className={controlClass} /></div>
         </div>
+        <div><FieldLabel htmlFor="wt-shift">Shift</FieldLabel><select id="wt-shift" value={shift} onChange={(e) => setShift(e.target.value)} className={`${controlClass} max-w-[160px]`}>{SHIFTS.map((sh) => <option key={sh} value={sh}>{sh}</option>)}</select></div>
+
+        <button type="button" onClick={() => setUnable((u) => !u)} aria-pressed={unable} className="flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition" style={{ borderColor: unable ? "var(--clinical-amber)" : "var(--clinical-line-strong)", backgroundColor: unable ? "var(--clinical-surface-2)" : "transparent" }}>
+          <span className="flex h-5 w-5 items-center justify-center rounded border text-white" style={{ borderColor: unable ? "var(--clinical-amber)" : "var(--clinical-line-strong)", backgroundColor: unable ? "var(--clinical-amber)" : "transparent" }}>{unable && "✓"}</span>
+          <span><span className="block text-sm font-semibold text-[var(--clinical-ink)]">Unable to weigh</span><span className="block text-xs text-[var(--clinical-muted)]">Resident cannot be weighed at this time</span></span>
+        </button>
+
+        {!unable && (
+          <div className="grid grid-cols-[1fr_auto] items-end gap-3">
+            <div><FieldLabel required htmlFor="wt-weight">Weight</FieldLabel><input id="wt-weight" inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="e.g., 58.5" className={controlClass} /></div>
+            <div><FieldLabel htmlFor="wt-unit">Unit</FieldLabel><select id="wt-unit" value={unit} onChange={(e) => setUnit(e.target.value as "kg" | "lb")} className={controlClass}><option value="kg">kg</option><option value="lb">lb</option></select></div>
+          </div>
+        )}
+
+        <div><FieldLabel htmlFor="wt-note">Notes</FieldLabel><textarea id="wt-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional observations…" className={controlClass} /></div>
       </div>
-    </div>
+    </ClinicalModal>
   );
 }

@@ -26,6 +26,11 @@ export const updateRecord = (model: string, id: string, body: unknown) =>
   mutate("PATCH", `/api/db/${model}/${id}`, body);
 
 export const upsertRecord = async (model: string, id: string, body: unknown) => {
+  // app-settings POST is an idempotent tenant-scoped upsert (see the db route),
+  // so go straight to it — a PATCH by bare key can't resolve the composite id.
+  if (model === "app-settings") {
+    return createRecord(model, { id, ...(body as Record<string, unknown>) });
+  }
   try {
     return await updateRecord(model, id, body);
   } catch {

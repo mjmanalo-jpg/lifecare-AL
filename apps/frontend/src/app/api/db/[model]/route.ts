@@ -254,7 +254,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   try {
     if (context.organizationId) await assertMutationEntitled(context, model);
-    const created = await withTenantDb(context, async (tx) => transactionDelegate(definition, tx).create({ data }));
+    const created = await withTenantDb(context, async (tx) => {
+      const delegate = transactionDelegate(definition, tx);
+      // app-settings are keyed data: a POST means "set this key", so upsert on
+      // the tenant-composite id instead of create — repeated writes update in
+      // place rather than colliding on the primary key.
+      if (model === "app-settings" && data.id) {
+        const { id: settingId, ...rest } = data as Record<string, unknown>;
+        return delegate.upsert({ where: { id: settingId }, create: data, update: rest });
+      }
+      return delegate.create({ data });
+    });
     if (OVERVIEW_COUNT_MODELS.has(model) && context.organizationId) invalidatePortalDataPrefix(`org-admin:${context.organizationId}:`);
     logAudit({
       actorId: context.userId,

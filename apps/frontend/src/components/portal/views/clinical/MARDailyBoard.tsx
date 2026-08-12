@@ -15,6 +15,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord, upsertRecord } from "@/lib/api";
 import { useClinician, type ClinicianRole } from "./useClinician";
+import { ClinicalHeader, ClinicalButton, ClinicalCard, DataState, SERIF } from "./clinical-ui";
 import SignatureModal from "@/components/portal/SignatureModal";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -86,6 +87,13 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
   const [openRes, setOpenRes] = useState<Row | null>(null);
   const [addFor, setAddFor] = useState<Row | null>(null);
 
+  // Step the viewed day without opening the date picker — the common MAR move.
+  const shiftDate = (delta: number) => {
+    const [y, mo, d] = date.split("-").map(Number);
+    const nd = new Date(y, mo - 1, d + delta);
+    setDate(`${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, "0")}-${String(nd.getDate()).padStart(2, "0")}`);
+  };
+
   const refetch = async () => { await Promise.allSettled([medQ.refetch(), marQ.refetch()]); };
 
   // Scheduled occurrences for a med on the date → [{slot, time, hour, status, marId}]
@@ -94,7 +102,8 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
     return parseSlots(s(m.frequency)).map((slot) => {
       const mar = (marQ.data || []).find((a) => s(a.medicationId) === s(m.id) && dayOf(a.scheduledTime) === iso && (slot === "PRN" || new Date(s(a.scheduledTime)).getHours() === SLOT_HOUR[slot]));
       const status = (mar ? s(mar.status).toUpperCase() : "PENDING") as string;
-      return { slot, time: SLOT_TIME[slot], status: (["GIVEN", "REFUSED", "HELD"].includes(status) ? status : "PENDING") as MarStatus, marId: mar ? s(mar.id) : "" };
+      const reason = mar ? (s(mar.reasonForRefusal) || s(mar.heldReason)) : "";
+      return { slot, time: SLOT_TIME[slot], status: (["GIVEN", "REFUSED", "HELD"].includes(status) ? status : "PENDING") as MarStatus, marId: mar ? s(mar.id) : "", reason };
     });
   };
 
@@ -108,7 +117,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
   };
   const facility = useMemo(() => { let total = 0, given = 0, refusedHeld = 0; residents.forEach((r: Row) => { const st = resStats(s(r.id)); total += st.total; given += st.given; refusedHeld += st.refused + st.held; }); return { total, given, pending: total - given - refusedHeld, refusedHeld }; }, [residents, medsByRes, marQ.data, date]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const administer = async (m: Row, slot: string, iso: string, marId: string, status: "GIVEN" | "REFUSED" | "HELD") => {
+  const administer = async (m: Row, slot: string, iso: string, marId: string, status: "GIVEN" | "REFUSED" | "HELD", reason = "") => {
     // Vitals-first alert: block a GIVEN dose on a flagged med until vitals are
     // recorded today for the resident (nurse may override with reason).
     if (status === "GIVEN" && isVitalsRequired(s(m.id)) && !vitalsTodayByResident.has(s(m.residentId))) {
@@ -120,7 +129,17 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
       if (!proceed.isConfirmed) return;
     }
     const scheduledTime = slot === "PRN" ? new Date().toISOString() : new Date(`${iso}T${SLOT_TIME[slot]}:00`).toISOString();
-    const payload: Row = { status, actualTime: status === "GIVEN" ? new Date().toISOString() : null, recordedById: userId, recordedByName: clinicianName };
+    const cleanReason = reason.trim();
+    // Store the reason in the matching column so it persists on the record; clear
+    // the other so switching status (e.g. Held → Given) doesn't leave a stale note.
+    const payload: Row = {
+      status,
+      actualTime: status === "GIVEN" ? new Date().toISOString() : null,
+      recordedById: userId,
+      recordedByName: clinicianName,
+      reasonForRefusal: status === "REFUSED" ? (cleanReason || null) : null,
+      heldReason: status === "HELD" ? (cleanReason || null) : null,
+    };
     try {
       if (marId) await updateRecord("medication-administrations", marId, payload);
       else await createRecord("medication-administrations", { medicationId: s(m.id), residentId: s(m.residentId), scheduledTime, dosage: s(m.dosage), route: s(m.route), ...payload });
@@ -135,11 +154,11 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
   if (openRes) {
     const rMeds = (medsByRes.get(s(openRes.id)) || []).filter((m) => activeOn(m, date));
     return (
-      <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
-        <div className="flex items-center gap-3 mb-4"><label className="text-sm text-slate-500">Date:</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm" /></div>
+      <div className="min-h-full bg-[var(--clinical-ground)] -m-4 sm:-m-6 p-4 sm:p-6">
+        <div className="flex items-center gap-3 mb-4"><label className="text-sm text-slate-500" htmlFor="mar-date-detail">Date:</label><input id="mar-date-detail" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm" /></div>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-          <div className="flex items-center gap-3"><button onClick={() => setOpenRes(null)} className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50"><ChevronLeft className="w-4 h-4" /> Back</button><div><h1 className="text-2xl font-bold text-slate-900">{s(openRes.name)}</h1><p className="text-sm text-slate-500">Daily MAR — {date}</p></div></div>
-          <button onClick={() => setAddFor(openRes)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"><Plus className="w-4 h-4" /> Add Medication</button>
+          <div className="flex items-center gap-3"><ClinicalButton variant="secondary" size="sm" onClick={() => setOpenRes(null)}><ChevronLeft className="w-4 h-4" /> Back</ClinicalButton><div><h1 className="text-2xl font-bold text-[var(--clinical-ink)]">{s(openRes.name)}</h1><p className="text-sm text-[var(--clinical-muted)]">Daily MAR — {date}</p></div></div>
+          <ClinicalButton variant="accent" onClick={() => setAddFor(openRes)}><Plus className="w-4 h-4" /> Add Medication</ClinicalButton>
         </div>
         <div className="space-y-3">
           {rMeds.length === 0 ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-400">No active medications for this date.</div>
@@ -151,12 +170,19 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
                 </div>
                 <div className="flex flex-wrap gap-2 mt-3">
                   {occ.map((o, i) => { const Icon = STATUS_ICON[o.status]; return (
-                    <button key={i} onClick={() => doseAction(m, o.slot, date, o.marId, o.status, administer)} className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl border ${STATUS_CLS[o.status]}`}>
+                    <button key={i} onClick={() => doseAction(m, o.slot, date, o.marId, o.status, administer)} title={o.reason || undefined} className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl border ${STATUS_CLS[o.status]}`}>
                       <span className="text-sm font-bold">{o.time}</span>
                       <span className="inline-flex items-center gap-1 text-[11px] font-medium"><Icon className="w-3.5 h-3.5" />{o.status === "PENDING" ? "Pending" : o.status[0] + o.status.slice(1).toLowerCase()}</span>
                     </button>
                   ); })}
                 </div>
+                {occ.some((o) => o.reason && (o.status === "REFUSED" || o.status === "HELD")) && (
+                  <div className="mt-2 space-y-1">
+                    {occ.filter((o) => o.reason && (o.status === "REFUSED" || o.status === "HELD")).map((o, i) => (
+                      <p key={i} className="text-xs text-slate-500"><span className="font-semibold text-slate-600">{o.status === "REFUSED" ? "Refused" : "Held"} · {o.time}:</span> {o.reason}</p>
+                    ))}
+                  </div>
+                )}
               </div>
             ); })}
         </div>
@@ -167,35 +193,73 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
 
   // ── Main (Daily MAR + Medication Summary) ──────────────────────────────────
   return (
-    <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
-      <div className="mb-4"><h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2"><Pill className="w-6 h-6 text-blue-500" /> Medication Administration Record</h1><p className="text-sm text-slate-500 mt-1">Track and document daily medication administration</p></div>
-      <div className="inline-flex gap-1 bg-slate-100 rounded-xl p-1 mb-5">
-        {([["daily", "Daily MAR"], ["summary", "Medication Summary"]] as const).map(([v, label]) => <button key={v} onClick={() => setTab(v)} className={`px-3.5 py-1.5 rounded-lg text-sm font-medium ${tab === v ? "bg-white shadow-sm text-slate-800" : "text-slate-500"}`}>{label}</button>)}
+    <div className="min-h-full bg-[var(--clinical-ground)] -m-4 sm:-m-6 p-4 sm:p-6">
+      <ClinicalHeader title="Medication Administration Record" subtitle="Track and document daily medication administration" />
+      <div className="inline-flex gap-1 rounded-xl p-1 mb-5 mt-5" style={{ backgroundColor: "var(--clinical-surface-2)" }} role="tablist" aria-label="MAR view">
+        {([["daily", "Daily MAR"], ["summary", "Medication Summary"]] as const).map(([v, label]) => (
+          <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${tab === v ? "text-white shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`} style={tab === v ? { backgroundColor: "var(--clinical-panel)" } : undefined}>{label}</button>
+        ))}
       </div>
 
       {tab === "daily" ? (<>
-        <div className="flex items-center gap-3 mb-4"><label className="text-sm text-slate-500">Date:</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm" /></div>
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <ClinicalButton variant="secondary" size="sm" onClick={() => shiftDate(-1)} aria-label="Previous day" className="!px-2.5"><ChevronLeft className="w-4 h-4" /></ClinicalButton>
+          <div className="relative">
+            <input id="mar-date-main" aria-label="Viewed date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 rounded-lg border text-sm text-[var(--clinical-ink)] bg-[var(--clinical-surface)]" style={{ borderColor: "var(--clinical-line-strong)" }} />
+          </div>
+          <ClinicalButton variant="secondary" size="sm" onClick={() => shiftDate(1)} aria-label="Next day" className="!px-2.5"><ChevronRight className="w-4 h-4" /></ClinicalButton>
+          {date !== todayIso() && (
+            <ClinicalButton variant="secondary" size="sm" onClick={() => setDate(todayIso())}>Today</ClinicalButton>
+          )}
+        </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-          <MarStat value={facility.total} label="Total Doses" tone="#334155" bg="bg-white" />
-          <MarStat value={facility.given} label="Given" tone="#16a34a" bg="bg-green-50" />
-          <MarStat value={facility.pending} label="Pending" tone="#334155" bg="bg-white" />
-          <MarStat value={facility.refusedHeld} label="Refused / Held" tone="#dc2626" bg="bg-red-50" />
+          <MarStat value={facility.total} label="Total Doses" accent="ink" />
+          <MarStat value={facility.given} label="Given" accent="given" />
+          <MarStat value={facility.pending} label="Pending" accent="pending" />
+          <MarStat value={facility.refusedHeld} label="Refused / Held" accent="refused" />
         </div>
-        <div className="relative mb-5"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or room…" className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
-        <div className="space-y-3">
-          {filteredResidents.map((r: Row) => { const st = resStats(s(r.id)); const pct = st.total ? (st.given / st.total) * 100 : 0; const initials = s(r.name).split(" ").map((w: string) => w[0]).slice(0, 2).join(""); return (
-            <button key={s(r.id)} onClick={() => setOpenRes(r)} className="w-full flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 hover:border-blue-300 text-left">
-              <span className="w-11 h-11 rounded-full bg-blue-50 text-blue-600 font-bold flex items-center justify-center shrink-0">{initials}</span>
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-slate-900">{s(r.name)} <span className="text-[11px] font-normal text-slate-500 border border-slate-200 rounded px-1.5 py-0.5 ml-1">Rm {s(r.room)}</span></p>
-                <div className="h-1.5 rounded-full bg-slate-100 mt-2 overflow-hidden"><div className="h-full bg-green-500 rounded-full" style={{ width: `${pct}%` }} /></div>
-              </div>
-              <span className="text-xs text-slate-400 shrink-0">{st.given}/{st.total} given</span>
-              <ChevronRight className="w-5 h-5 text-slate-300 shrink-0" />
-            </button>
-          ); })}
-          {filteredResidents.length === 0 && <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-400">No residents match.</div>}
-        </div>
+        <div className="relative mb-5"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or room…" aria-label="Search residents by name or room" className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
+        <DataState
+          loading={resQ.loading && residents.length === 0}
+          error={resQ.error}
+          empty={filteredResidents.length === 0}
+          emptyTitle={q ? "No residents match" : "No residents yet"}
+          emptyHint={q ? "Try a different name or room number." : "Residents will appear here once they're admitted to your community."}
+          onRetry={() => void resQ.refetch()}
+          skeletonRows={5}
+        >
+          <div className="space-y-2">
+            {filteredResidents.map((r: Row) => { const st = resStats(s(r.id)); const initials = s(r.name).split(" ").map((w: string) => w[0]).slice(0, 2).join(""); const scheduled = st.total > 0; return (
+              <button key={s(r.id)} onClick={() => setOpenRes(r)} className="group w-full flex items-center gap-3 rounded-xl border p-3.5 text-left transition hover:shadow-sm hover:shadow-black/[0.04]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+                <span className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 text-sm font-bold" style={{ backgroundColor: "var(--clinical-surface-2)", color: "var(--clinical-ink-soft)" }}>{initials}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="font-semibold text-[var(--clinical-ink)] truncate">{s(r.name)}</p>
+                    <span className="shrink-0 text-[11px] font-medium text-[var(--clinical-muted)] border rounded px-1.5 py-0.5" style={{ borderColor: "var(--clinical-line-strong)" }}>Rm {s(r.room)}</span>
+                  </div>
+                  {scheduled ? (
+                    <div className="mt-2 flex items-center gap-2.5">
+                      <AdherenceBar given={st.given} refusedHeld={st.refused + st.held} total={st.total} />
+                      <span className="shrink-0 text-xs font-medium text-[var(--clinical-muted)] tabular-nums">{st.given}/{st.total} given</span>
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-xs text-[var(--clinical-muted)]">No doses scheduled today</p>
+                  )}
+                </div>
+                {scheduled && (st.pending > 0 ? (
+                  <span className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--clinical-amber)]">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: "var(--clinical-amber)" }} />{st.pending} due
+                  </span>
+                ) : (
+                  <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-[var(--clinical-green)]">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Done
+                  </span>
+                ))}
+                <ChevronRight className="w-5 h-5 shrink-0 text-[var(--clinical-muted)] transition group-hover:translate-x-0.5" />
+              </button>
+            ); })}
+          </div>
+        </DataState>
       </>) : <SummaryView residents={residents} meds={meds} />}
 
       {addFor && <AddMedicationModal resident={addFor} med={null} vitalsRequired={false} onSaveVitalsFlag={saveVitalsFlag} onClose={() => setAddFor(null)} onDone={refetch} />}
@@ -203,19 +267,56 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
   );
 }
 
-// Choose Given/Refused/Held for a dose.
-async function doseAction(m: Row, slot: string, iso: string, marId: string, current: MarStatus, administer: (m: Row, slot: string, iso: string, marId: string, status: "GIVEN" | "REFUSED" | "HELD") => Promise<void>) {
-  const { value } = await Swal.fire({
+// Choose Given/Refused/Held for a dose. Refused/Held require a documented reason
+// before the dose is recorded; the reason is saved on the administration record.
+async function doseAction(m: Row, slot: string, iso: string, marId: string, current: MarStatus, administer: (m: Row, slot: string, iso: string, marId: string, status: "GIVEN" | "REFUSED" | "HELD", reason?: string) => Promise<void>) {
+  const { value: status } = await Swal.fire({
     title: `Record dose — ${splitName(s(m.name))[0]}`, input: "radio",
     inputOptions: { GIVEN: "✅ Given", REFUSED: "❌ Refused", HELD: "⏸ Held" },
     inputValue: current === "PENDING" ? "GIVEN" : current,
-    showCancelButton: true, confirmButtonText: "Save", confirmButtonColor: "#2563eb",
+    showCancelButton: true, confirmButtonText: "Continue", confirmButtonColor: "#2563eb",
   });
-  if (value) await administer(m, slot, iso, marId, value as "GIVEN" | "REFUSED" | "HELD");
+  if (!status) return;
+  let reason = "";
+  if (status === "REFUSED" || status === "HELD") {
+    const { value, isConfirmed } = await Swal.fire({
+      title: status === "REFUSED" ? "Reason for refusal" : "Reason held",
+      input: "textarea",
+      inputPlaceholder: status === "REFUSED" ? "Why did the resident refuse this dose?" : "Why is this dose being held?",
+      inputAttributes: { "aria-label": "Reason" },
+      showCancelButton: true, confirmButtonText: "Save dose", confirmButtonColor: "#2563eb",
+      inputValidator: (v: string) => (!v || !v.trim() ? "Please document a reason" : null),
+    });
+    if (!isConfirmed) return; // cancelling the reason aborts the record
+    reason = String(value || "").trim();
+  }
+  await administer(m, slot, iso, marId, status as "GIVEN" | "REFUSED" | "HELD", reason);
 }
 
-function MarStat({ value, label, tone, bg }: { value: number; label: string; tone: string; bg: string }) {
-  return <div className={`rounded-2xl border border-slate-200 p-5 text-center ${bg}`}><p className="text-3xl font-bold" style={{ color: tone }}>{value}</p><p className="text-sm text-slate-500 mt-1">{label}</p></div>;
+type StatAccent = "ink" | "given" | "pending" | "refused";
+function MarStat({ value, label, accent }: { value: number; label: string; accent: StatAccent }) {
+  const color = { ink: "var(--clinical-ink)", given: "var(--clinical-green)", pending: "var(--clinical-amber)", refused: "var(--clinical-coral)" }[accent];
+  const top = { ink: "teal", given: "green", pending: "amber", refused: "coral" }[accent] as "teal" | "green" | "amber" | "coral";
+  return (
+    <ClinicalCard top={top} className="p-4 text-center">
+      <p className="text-3xl font-bold tabular-nums" style={{ color, fontFamily: SERIF }}>{value}</p>
+      <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">{label}</p>
+    </ClinicalCard>
+  );
+}
+
+// Segmented daily-adherence meter: green = given, coral = refused/held, and the
+// remaining track = still pending. Replaces the lone progress bar that rendered
+// as an empty grey line for residents with nothing scheduled.
+function AdherenceBar({ given, refusedHeld, total }: { given: number; refusedHeld: number; total: number }) {
+  const pct = (n: number) => (total ? (n / total) * 100 : 0);
+  const pending = Math.max(0, total - given - refusedHeld);
+  return (
+    <div className="h-2 flex-1 min-w-0 rounded-full overflow-hidden flex" style={{ backgroundColor: "var(--clinical-surface-2)" }} role="img" aria-label={`${given} given, ${refusedHeld} refused or held, ${pending} pending of ${total} doses`}>
+      <div style={{ width: `${pct(given)}%`, backgroundColor: "var(--clinical-green)" }} />
+      <div style={{ width: `${pct(refusedHeld)}%`, backgroundColor: "var(--clinical-coral)" }} />
+    </div>
+  );
 }
 
 // ── Medication Summary (Image 50) ────────────────────────────────────────────
@@ -233,10 +334,10 @@ function SummaryView({ residents, meds }: { residents: Row[]; meds: Row[] }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MarStat value={active.length} label="Active Medications" tone="#16a34a" bg="bg-green-50" />
-        <MarStat value={discontinued} label="Discontinued" tone="#334155" bg="bg-white" />
-        <MarStat value={onMeds} label="Residents on Meds" tone="#2563eb" bg="bg-blue-50" />
-        <MarStat value={prn} label="PRN Medications" tone="#d97706" bg="bg-amber-50" />
+        <MarStat value={active.length} label="Active Medications" accent="given" />
+        <MarStat value={discontinued} label="Discontinued" accent="ink" />
+        <MarStat value={onMeds} label="Residents on Meds" accent="ink" />
+        <MarStat value={prn} label="PRN Medications" accent="pending" />
       </div>
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search medication, resident, or prescriber…" className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
@@ -326,7 +427,7 @@ function AddMedicationModal({ resident, med, vitalsRequired = false, onSaveVital
             <span><span className="flex items-center gap-1.5 text-sm font-bold text-amber-800"><Activity className="w-4 h-4" /> Requires vitals before administration</span><span className="block text-xs text-amber-700 mt-0.5">Nurses are alerted to record vitals first (Vitals First) when marking a dose Given.</span></span>
           </label>
         </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button><button onClick={tryAdd} disabled={saving} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? "Saving…" : editing ? "Save Changes" : "Add Medication"}</button></div>
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100"><ClinicalButton variant="ghost" size="sm" onClick={onClose}>Cancel</ClinicalButton><ClinicalButton variant="accent" onClick={tryAdd} disabled={saving}>{saving ? "Saving…" : editing ? "Save Changes" : "Add Medication"}</ClinicalButton></div>
       </div>
       <SignatureModal open={showPin} onClose={() => setShowPin(false)} onSigned={doSubmit} mode="sign" title="Sign to save medication" description={`Enter your 4-digit signing PIN to ${editing ? "update" : "add"} this medication order.`} />
     </div>

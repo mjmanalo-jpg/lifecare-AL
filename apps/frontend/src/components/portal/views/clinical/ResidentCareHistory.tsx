@@ -36,24 +36,25 @@ import {
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { type ClinicianRole } from "./useClinician";
 import { useCareLogData } from "./CareLogsBoard";
+import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalCard, StatCard, controlClass, SERIF } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (v: unknown) => (v == null ? "" : String(v));
 
 // All 10 care domains, each its own grid row (matches the quick-log domains).
 type HookDomain = "vitals" | "meals" | "bowel" | "urine" | "edema" | "concerns" | "mood" | "pain" | "mobility" | "sleep";
-interface GridDomain { key: string; label: string; icon: LucideIcon; tint: string; bg: string; pill: string; sources: HookDomain[]; }
+interface GridDomain { key: string; label: string; icon: LucideIcon; sources: HookDomain[]; }
 const GRID_DOMAINS: GridDomain[] = [
-  { key: "vitals", label: "Vitals", icon: Activity, tint: "text-rose-500", bg: "bg-rose-50", pill: "bg-rose-100 text-rose-600", sources: ["vitals"] },
-  { key: "meals", label: "Meals", icon: Utensils, tint: "text-green-600", bg: "bg-green-50", pill: "bg-green-100 text-green-700", sources: ["meals"] },
-  { key: "bowel", label: "Bowel", icon: Droplets, tint: "text-amber-600", bg: "bg-amber-50", pill: "bg-amber-100 text-amber-700", sources: ["bowel"] },
-  { key: "urine", label: "Urine", icon: Droplets, tint: "text-yellow-600", bg: "bg-yellow-50", pill: "bg-yellow-100 text-yellow-700", sources: ["urine"] },
-  { key: "edema", label: "Edema", icon: Wind, tint: "text-sky-600", bg: "bg-sky-50", pill: "bg-sky-100 text-sky-700", sources: ["edema"] },
-  { key: "concerns", label: "Concerns", icon: AlertTriangle, tint: "text-red-600", bg: "bg-red-50", pill: "bg-red-100 text-red-700", sources: ["concerns"] },
-  { key: "mood", label: "Mood", icon: Smile, tint: "text-purple-500", bg: "bg-purple-50", pill: "bg-purple-100 text-purple-700", sources: ["mood"] },
-  { key: "pain", label: "Pain", icon: Zap, tint: "text-orange-500", bg: "bg-orange-50", pill: "bg-orange-100 text-orange-700", sources: ["pain"] },
-  { key: "mobility", label: "Mobility", icon: Footprints, tint: "text-teal-600", bg: "bg-teal-50", pill: "bg-teal-100 text-teal-700", sources: ["mobility"] },
-  { key: "sleep", label: "Sleep", icon: Moon, tint: "text-indigo-500", bg: "bg-indigo-50", pill: "bg-indigo-100 text-indigo-700", sources: ["sleep"] },
+  { key: "vitals", label: "Vitals", icon: Activity, sources: ["vitals"] },
+  { key: "meals", label: "Meals", icon: Utensils, sources: ["meals"] },
+  { key: "bowel", label: "Bowel", icon: Droplets, sources: ["bowel"] },
+  { key: "urine", label: "Urine", icon: Droplets, sources: ["urine"] },
+  { key: "edema", label: "Edema", icon: Wind, sources: ["edema"] },
+  { key: "concerns", label: "Concerns", icon: AlertTriangle, sources: ["concerns"] },
+  { key: "mood", label: "Mood", icon: Smile, sources: ["mood"] },
+  { key: "pain", label: "Pain", icon: Zap, sources: ["pain"] },
+  { key: "mobility", label: "Mobility", icon: Footprints, sources: ["mobility"] },
+  { key: "sleep", label: "Sleep", icon: Moon, sources: ["sleep"] },
 ];
 // Map every hook domain → the grid row it feeds (concerns has no row of its own;
 // it is used only to escalate whatever day it falls on).
@@ -183,176 +184,183 @@ export default function ResidentCareHistory({ clinicianRole = "NURSE" }: { clini
   const canPageForward = endIso < todayIso;
 
   return (
-    <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6 print:bg-white print:m-0">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2"><ClipboardList className="w-6 h-6 text-blue-500" /> Care History</h1>
-          <p className="text-sm text-slate-500 mt-1">Daily documentation grid for all 10 care domains</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 print:hidden">
-          {resident && (
-            <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50"><Printer className="w-4 h-4" /> Export PDF</button>
-          )}
-          <select value={resId} onChange={(e) => { setResId(e.target.value); setWindowEnd(todayIso); }} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-400/40 max-w-[220px]">
-            <option value="">Select resident…</option>
-            {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>Rm {s(r.room)} — {s(r.name)}</option>)}
-          </select>
-          <div className="inline-flex rounded-xl border border-slate-200 bg-white overflow-hidden">
-            {RANGE_OPTIONS.map((d) => (
-              <button key={d} onClick={() => { setRangeDays(d); setWindowEnd(todayIso); }} className={`px-3 py-2 text-sm font-semibold ${rangeDays === d ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>{d} days</button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {!resident ? (
-        <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white p-16 flex flex-col items-center justify-center text-center">
-          <ClipboardList className="w-12 h-12 text-slate-300 mb-3" />
-          <p className="text-lg font-bold text-slate-700">Select a resident to view care history</p>
-          <p className="text-sm text-slate-400 mt-1">Choose a resident from the dropdown above to see their daily documentation grid</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {/* Summary card */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-12 h-12 rounded-xl bg-blue-50 flex flex-col items-center justify-center leading-none shrink-0"><span className="text-[9px] font-semibold text-blue-400">Rm</span><span className="text-sm font-bold text-blue-700">{s(resident.room)}</span></div>
-              <div className="min-w-0">
-                <p className="font-bold text-slate-900 truncate">{s(resident.name)}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{startIso} — {endIso}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-6 sm:gap-8">
-              <Stat value={`${stats.completion}%`} label="Completion" tone="text-slate-900" />
-              <Stat value={String(stats.logged)} label="Logged" tone="text-green-600" />
-              <Stat value={String(stats.escalated)} label="Escalated" tone="text-amber-600" />
-              <Stat value={String(stats.missing)} label="Missing" tone="text-slate-400" />
+    <ClinicalPage className="print:bg-white print:m-0">
+      <ClinicalHeader
+        title="Care History"
+        subtitle="Daily documentation grid for all 10 care domains"
+        right={
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            {resident && (
+              <ClinicalButton variant="secondary" size="sm" onClick={() => window.print()}><Printer className="h-4 w-4" /> Export PDF</ClinicalButton>
+            )}
+            <select value={resId} onChange={(e) => { setResId(e.target.value); setWindowEnd(todayIso); }} aria-label="Select resident" className={`${controlClass} w-full sm:w-64`}>
+              <option value="">Select resident…</option>
+              {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>Rm {s(r.room)} — {s(r.name)}</option>)}
+            </select>
+            <div className="inline-flex overflow-hidden rounded-lg border" style={{ borderColor: "var(--clinical-line-strong)" }}>
+              {RANGE_OPTIONS.map((d) => (
+                <button
+                  key={d}
+                  onClick={() => { setRangeDays(d); setWindowEnd(todayIso); }}
+                  aria-pressed={rangeDays === d}
+                  className={`px-3 py-2 text-sm font-semibold ${rangeDays === d ? "bg-[var(--clinical-panel)] text-white" : "text-[var(--clinical-ink-soft)] hover:bg-[var(--clinical-surface-2)]"}`}
+                >{d} days</button>
+              ))}
             </div>
           </div>
+        }
+      />
 
-          {/* Documentation Grid */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-              <div>
-                <p className="font-bold text-slate-900">Documentation Grid</p>
-                <div className="flex items-center gap-4 mt-2">
-                  <span className="inline-flex items-center gap-1 text-xs text-slate-500"><CheckCircle2 className="w-4 h-4 text-green-500" /> Logged</span>
-                  <span className="inline-flex items-center gap-1 text-xs text-slate-500"><AlertTriangle className="w-4 h-4 text-amber-500" /> Escalated</span>
-                  <span className="inline-flex items-center gap-1 text-xs text-slate-500"><span className="w-3.5 h-3.5 rounded-full border-2 border-slate-300 inline-block" /> Missing</span>
+      <div className="mt-5">
+        {!resident ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-16 text-center" style={{ borderColor: "var(--clinical-line-strong)", backgroundColor: "var(--clinical-surface)" }}>
+            <ClipboardList className="h-12 w-12 text-[var(--clinical-muted)]" />
+            <p className="mt-3 text-lg font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>Select a resident to view care history</p>
+            <p className="mt-1 text-sm text-[var(--clinical-muted)]">Choose a resident from the dropdown above to see their daily documentation grid</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Summary card */}
+            <ClinicalCard className="flex flex-wrap items-center justify-between gap-4 p-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl leading-none" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
+                  <span className="text-[9px] font-semibold text-[var(--clinical-muted)]">Rm</span>
+                  <span className="text-sm font-bold text-[var(--clinical-panel)]">{s(resident.room)}</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate font-bold text-[var(--clinical-ink)]">{s(resident.name)}</p>
+                  <p className="mt-0.5 text-xs text-[var(--clinical-muted)]">{startIso} — {endIso}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 print:hidden">
-                <button onClick={() => setWindowEnd((w) => addDaysIso(w, -rangeDays))} className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50"><ChevronLeft className="w-4 h-4" /></button>
-                <span className="text-sm font-medium text-slate-600 px-1">{fmtRange(startIso, endIso)}</span>
-                <button onClick={() => setWindowEnd((w) => addDaysIso(w, rangeDays))} disabled={!canPageForward} className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"><ChevronRight className="w-4 h-4" /></button>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <StatCard value={`${stats.completion}%`} label="Completion" accent="ink" />
+                <StatCard value={String(stats.logged)} label="Logged" accent="green" />
+                <StatCard value={String(stats.escalated)} label="Escalated" accent="amber" />
+                <StatCard value={String(stats.missing)} label="Missing" accent="ink" />
               </div>
-            </div>
+            </ClinicalCard>
 
-            <div className="overflow-x-auto -mx-4 sm:-mx-5 px-4 sm:px-5">
-              <table className="border-collapse min-w-max">
-                <thead>
-                  <tr>
-                    <th className="sticky left-0 z-10 bg-white text-left px-3 py-2 text-xs font-semibold text-slate-500 border-b border-slate-100">Domain</th>
-                    {days.map((day) => { const d = new Date(day + "T00:00:00"); const isToday = day === todayIso; return (
-                      <th key={day} className={`px-2 py-2 text-center border-b border-slate-100 ${isToday ? "bg-blue-50/60" : ""}`}>
-                        <div className="text-[10px] font-semibold uppercase text-slate-400">{d.toLocaleDateString(undefined, { weekday: "short" })}</div>
-                        <div className="text-sm font-bold text-slate-700">{d.getDate()}</div>
-                        <div className="text-[10px] text-slate-400">{d.toLocaleDateString(undefined, { month: "short" })}</div>
-                      </th>
-                    ); })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {GRID_DOMAINS.map((dom) => { const Icon = dom.icon; return (
-                    <tr key={dom.key}>
-                      <td className="sticky left-0 z-10 bg-white px-3 py-2 border-b border-slate-50 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700"><Icon className={`w-4 h-4 ${dom.tint}`} /> {dom.label}</span>
-                      </td>
-                      {days.map((day) => { const st = grid[dom.key][day]; const isToday = day === todayIso; return (
-                        <td key={day} className={`px-2 py-2 text-center border-b border-slate-50 ${isToday ? "bg-blue-50/40" : ""}`}>
-                          <StatusIcon status={st} />
-                        </td>
+            {/* Documentation Grid */}
+            <ClinicalCard className="p-4 sm:p-5">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>Documentation Grid</p>
+                  <div className="mt-2 flex items-center gap-4">
+                    <span className="inline-flex items-center gap-1 text-xs text-[var(--clinical-muted)]"><CheckCircle2 className="h-4 w-4 text-[var(--clinical-green)]" /> Logged</span>
+                    <span className="inline-flex items-center gap-1 text-xs text-[var(--clinical-muted)]"><AlertTriangle className="h-4 w-4 text-[var(--clinical-amber)]" /> Escalated</span>
+                    <span className="inline-flex items-center gap-1 text-xs text-[var(--clinical-muted)]"><span className="inline-block h-3.5 w-3.5 rounded-full border-2" style={{ borderColor: "var(--clinical-line-strong)" }} /> Missing</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 print:hidden">
+                  <button onClick={() => setWindowEnd((w) => addDaysIso(w, -rangeDays))} aria-label="Previous period" className="flex h-8 w-8 items-center justify-center rounded-full border text-[var(--clinical-muted)] hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: "var(--clinical-line-strong)" }}><ChevronLeft className="h-4 w-4" /></button>
+                  <span className="px-1 text-sm font-medium text-[var(--clinical-ink-soft)]">{fmtRange(startIso, endIso)}</span>
+                  <button onClick={() => setWindowEnd((w) => addDaysIso(w, rangeDays))} disabled={!canPageForward} aria-label="Next period" className="flex h-8 w-8 items-center justify-center rounded-full border text-[var(--clinical-muted)] hover:bg-[var(--clinical-surface-2)] disabled:cursor-not-allowed disabled:opacity-40" style={{ borderColor: "var(--clinical-line-strong)" }}><ChevronRight className="h-4 w-4" /></button>
+                </div>
+              </div>
+
+              <div className="-mx-4 overflow-x-auto px-4 sm:-mx-5 sm:px-5">
+                <table className="min-w-max border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="sticky left-0 z-10 border-b px-3 py-2 text-left text-xs font-semibold text-[var(--clinical-muted)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>Domain</th>
+                      {days.map((day) => { const d = new Date(day + "T00:00:00"); const isToday = day === todayIso; return (
+                        <th key={day} className="border-b px-2 py-2 text-center" style={{ borderColor: "var(--clinical-line)", backgroundColor: isToday ? "var(--clinical-surface-2)" : undefined }}>
+                          <div className="text-[10px] font-semibold uppercase text-[var(--clinical-muted)]">{d.toLocaleDateString(undefined, { weekday: "short" })}</div>
+                          <div className="text-sm font-bold text-[var(--clinical-ink-soft)]">{d.getDate()}</div>
+                          <div className="text-[10px] text-[var(--clinical-muted)]">{d.toLocaleDateString(undefined, { month: "short" })}</div>
+                        </th>
                       ); })}
                     </tr>
-                  ); })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                  </thead>
+                  <tbody>
+                    {GRID_DOMAINS.map((dom) => { const Icon = dom.icon; return (
+                      <tr key={dom.key}>
+                        <td className="sticky left-0 z-10 whitespace-nowrap border-b px-3 py-2" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+                          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--clinical-ink-soft)]"><Icon className="h-4 w-4 text-[var(--clinical-muted)]" /> {dom.label}</span>
+                        </td>
+                        {days.map((day) => { const st = grid[dom.key][day]; const isToday = day === todayIso; return (
+                          <td key={day} className="border-b px-2 py-2 text-center" style={{ borderColor: "var(--clinical-line)", backgroundColor: isToday ? "var(--clinical-surface-2)" : undefined }}>
+                            <StatusIcon status={st} />
+                          </td>
+                        ); })}
+                      </tr>
+                    ); })}
+                  </tbody>
+                </table>
+              </div>
+            </ClinicalCard>
 
-          {/* Caregiver Notes Summary */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-            <p className="font-bold text-slate-900 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-blue-500" /> Caregiver Notes Summary</p>
-            <p className="text-sm text-slate-400 mt-0.5">{notes.length} note{notes.length === 1 ? "" : "s"} recorded in this period</p>
-            {notes.length === 0 ? (
-              <p className="text-sm text-slate-400 py-6 text-center">No notes recorded in this period.</p>
-            ) : (
-              <div className="mt-3 space-y-2.5 max-h-96 overflow-y-auto pr-1">
-                {notes.map((e) => { const dom = GRID_DOMAINS.find((g) => g.sources.includes(e.domain as HookDomain)); return (
-                  <div key={e.id} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${dom?.pill ?? "bg-slate-100 text-slate-500"}`}>{dom?.label ?? "Concern"}</span>
-                      <span className="text-xs text-slate-400">{new Date(e.at).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+            {/* Caregiver Notes Summary */}
+            <ClinicalCard className="p-4 sm:p-5">
+              <p className="flex items-center gap-2 font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}><MessageSquare className="h-5 w-5 text-[var(--clinical-panel)]" /> Caregiver Notes Summary</p>
+              <p className="mt-0.5 text-sm text-[var(--clinical-muted)]">{notes.length} note{notes.length === 1 ? "" : "s"} recorded in this period</p>
+              {notes.length === 0 ? (
+                <p className="py-6 text-center text-sm text-[var(--clinical-muted)]">No notes recorded in this period.</p>
+              ) : (
+                <div className="mt-3 max-h-96 space-y-2.5 overflow-y-auto pr-1">
+                  {notes.map((e) => { const dom = GRID_DOMAINS.find((g) => g.sources.includes(e.domain as HookDomain)); return (
+                    <div key={e.id} className="rounded-xl border p-3" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>
+                          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: "var(--clinical-panel)" }} />{dom?.label ?? "Concern"}
+                        </span>
+                        <span className="text-xs text-[var(--clinical-muted)]">{new Date(e.at).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+                      </div>
+                      <p className="mt-1.5 text-sm text-[var(--clinical-ink-soft)]">{e.summary}</p>
                     </div>
-                    <p className="text-sm text-slate-700 mt-1.5">{e.summary}</p>
+                  ); })}
+                </div>
+              )}
+            </ClinicalCard>
+
+            {/* Weight Entries */}
+            <ClinicalCard className="p-4 sm:p-5">
+              <p className="flex items-center gap-2 font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}><Scale className="h-5 w-5 text-[var(--clinical-panel)]" /> Weight Entries</p>
+              <p className="mt-0.5 text-sm text-[var(--clinical-muted)]">Weight checks recorded in this period</p>
+              {weightLogs.length === 0 ? (
+                <p className="py-6 text-center text-sm text-[var(--clinical-muted)]">No weight entries in this period.</p>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {weightLogs.map((l) => (
+                    <div key={l.id} className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>
+                      <div className="flex items-center gap-4">
+                        <span className="text-sm tabular-nums text-[var(--clinical-muted)]">{dayKey(l.date)}</span>
+                        <span className="text-base font-bold text-[var(--clinical-ink)]">{kg(l.weightKg!)} kg</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="rounded-full border px-2 py-0.5 text-[11px] font-semibold text-[var(--clinical-ink-soft)]" style={{ borderColor: "var(--clinical-line-strong)" }}>{WEIGHT_BADGE[l.type] ?? l.type}</span>
+                        {l.by && <span className="text-xs text-[var(--clinical-muted)]">— {l.by}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ClinicalCard>
+
+            {/* Domain Completion Summary */}
+            <ClinicalCard className="p-4 sm:p-5">
+              <p className="font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>Domain Completion Summary</p>
+              <p className="mt-0.5 text-sm text-[var(--clinical-muted)]">Percentage of days logged per domain in the selected period</p>
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+                {GRID_DOMAINS.map((dom) => { const c = domainCompletion.find((x) => x.key === dom.key)!; const Icon = dom.icon; return (
+                  <div key={dom.key} className="rounded-xl border p-4 text-center" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>
+                    <Icon className="mx-auto h-5 w-5 text-[var(--clinical-muted)]" />
+                    <p className="mt-1 text-sm font-semibold text-[var(--clinical-ink-soft)]">{dom.label}</p>
+                    <p className="mt-1 text-2xl font-bold text-[var(--clinical-green)]" style={{ fontFamily: SERIF }}>{c.pct}%</p>
+                    <p className="mt-0.5 text-[11px] text-[var(--clinical-muted)]">{c.done}/{c.total} days</p>
                   </div>
                 ); })}
               </div>
-            )}
+            </ClinicalCard>
           </div>
-
-          {/* Weight Entries */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-            <p className="font-bold text-slate-900 flex items-center gap-2"><Scale className="w-5 h-5 text-blue-500" /> Weight Entries</p>
-            <p className="text-sm text-slate-400 mt-0.5">Weight checks recorded in this period</p>
-            {weightLogs.length === 0 ? (
-              <p className="text-sm text-slate-400 py-6 text-center">No weight entries in this period.</p>
-            ) : (
-              <div className="mt-3 space-y-2">
-                {weightLogs.map((l) => (
-                  <div key={l.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm text-slate-400 tabular-nums">{dayKey(l.date)}</span>
-                      <span className="text-base font-bold text-slate-800">{kg(l.weightKg!)} kg</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border border-slate-200 text-slate-600">{WEIGHT_BADGE[l.type] ?? l.type}</span>
-                      {l.by && <span className="text-xs text-slate-400">— {l.by}</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Domain Completion Summary */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-            <p className="font-bold text-slate-900">Domain Completion Summary</p>
-            <p className="text-sm text-slate-400 mt-0.5">Percentage of days logged per domain in the selected period</p>
-            <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-              {GRID_DOMAINS.map((dom) => { const c = domainCompletion.find((x) => x.key === dom.key)!; const Icon = dom.icon; return (
-                <div key={dom.key} className={`rounded-2xl border border-slate-100 ${dom.bg} p-4 text-center`}>
-                  <Icon className={`w-5 h-5 mx-auto ${dom.tint}`} />
-                  <p className="text-sm font-semibold text-slate-700 mt-1">{dom.label}</p>
-                  <p className="text-2xl font-bold text-green-600 mt-1">{c.pct}%</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">{c.done}/{c.total} days</p>
-                </div>
-              ); })}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </ClinicalPage>
   );
 }
 
-function Stat({ value, label, tone }: { value: string; label: string; tone: string }) {
-  return <div className="text-center"><p className={`text-2xl font-bold ${tone}`}>{value}</p><p className="text-xs text-slate-400 mt-0.5">{label}</p></div>;
-}
-
 function StatusIcon({ status }: { status: CellStatus }) {
-  if (status === "logged") return <CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" />;
-  if (status === "escalated") return <AlertTriangle className="w-4 h-4 text-amber-500 mx-auto" />;
-  return <span className="w-3.5 h-3.5 rounded-full border-2 border-slate-200 inline-block" />;
+  if (status === "logged") return <CheckCircle2 className="mx-auto h-4 w-4 text-[var(--clinical-green)]" />;
+  if (status === "escalated") return <AlertTriangle className="mx-auto h-4 w-4 text-[var(--clinical-amber)]" />;
+  return <span className="inline-block h-3.5 w-3.5 rounded-full border-2" style={{ borderColor: "var(--clinical-line-strong)" }} />;
 }

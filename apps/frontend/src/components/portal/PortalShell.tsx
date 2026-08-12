@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ReactNode, useEffect, useMemo } from "react";
+import { useState, ReactNode, useEffect, useMemo, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -40,6 +40,7 @@ import {
   Role,
   RoleDetails,
   ROLES,
+  ROUTE_TO_TAB,
   SidebarLink,
   groupSidebarLinks,
 } from "@/constants/roleConfig";
@@ -142,7 +143,12 @@ export default function PortalShell({
   const roleDetails: RoleDetails = ROLES[userRole];
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  // Seed from the class the pre-paint theme script already set on <html>, so the
+  // chrome doesn't flash light before the mount effect runs. Server render has no
+  // document and falls back to the CSS default (dark); the effect reconciles.
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    typeof document !== "undefined" && document.documentElement.classList.contains("light") ? "light" : "dark"
+  );
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -210,6 +216,28 @@ export default function PortalShell({
   });
 
   const [bellDropdownOpen, setBellDropdownOpen] = useState(false);
+
+  // Dropdown dismissal: Escape and outside-click close the notification and
+  // profile menus, so they never trap the user (they previously stayed open).
+  const bellRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!bellDropdownOpen && !profileDropdownOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setBellDropdownOpen(false); setProfileDropdownOpen(false); }
+    };
+    const onPointer = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (bellRef.current && !bellRef.current.contains(t)) setBellDropdownOpen(false);
+      if (profileRef.current && !profileRef.current.contains(t)) setProfileDropdownOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onPointer);
+    };
+  }, [bellDropdownOpen, profileDropdownOpen]);
 
   // Compute unread count
   // Snoozed alerts drop out of the queue until their snooze window elapses.
@@ -356,9 +384,23 @@ export default function PortalShell({
   const toggleGroup = (group: string) =>
     setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }));
 
+  // The active route segment (the part after /<role>/). Exact-segment matching
+  // avoids the substring collisions that `pathname.includes(route)` produced
+  // (e.g. /cameras also lighting up /cameralogs).
+  const activeSegment = pathname.split("/")[2] || "dashboard";
+  const isLinkActive = (link: SidebarLink) => link.route.endsWith(`/${activeSegment}`);
+
+  // Human name of the page currently in view — sidebar label first (already the
+  // words the user clicked), then the route→tab map, so the chrome can always
+  // answer "where am I?".
+  const currentPageName =
+    filteredLinks.find((l) => l.route.endsWith(`/${activeSegment}`))?.name ||
+    ROUTE_TO_TAB[activeSegment] ||
+    "Overview";
+
   // Renders a single nav link (label optional for the collapsed rail)
   const renderLink = (link: SidebarLink, showLabel: boolean) => {
-    const isActive = pathname.includes(link.route);
+    const isActive = isLinkActive(link);
     const Icon = link.icon;
     return (
       <Link
@@ -366,6 +408,7 @@ export default function PortalShell({
         href={link.route}
         onClick={() => setMobileMenuOpen(false)}
         title={showLabel ? undefined : link.name}
+        aria-current={isActive ? "page" : undefined}
         className={`flex items-center gap-3 px-3 py-2 rounded-lg transition ${
           isActive
             ? theme === "dark"
@@ -510,7 +553,7 @@ export default function PortalShell({
       {/* Sidebar — visible on md+, collapsed rail on lg when sidebarOpen, full width on md when sidebarOpen */}
       <aside
         className={`${
-          sidebarOpen ? "w-20 lg:w-64" : "w-20"
+          sidebarOpen ? "w-64" : "w-20"
         } shrink-0 transition-all duration-300 flex flex-col shadow-2xl hidden md:flex overflow-hidden ${
           theme === "dark"
             ? "bg-gradient-to-b from-black to-gray-950 text-white"
@@ -524,22 +567,16 @@ export default function PortalShell({
             : "bg-gradient-to-r from-white to-gray-50 border-blue-200"
         }`}>
           {sidebarOpen ? (
-            <>
-              {/* Full brand — visible when expanded on lg+ */}
-              <div className="hidden lg:flex items-center gap-2 min-w-0 flex-1">
-                <LcmsLogo />
-                <div className="text-left border-l border-gray-200 dark:border-gray-800 pl-2 min-w-0 flex-1">
-                  <div className={`font-black text-xs leading-none uppercase tracking-wider ${theme === "dark" ? "text-blue-400" : "text-blue-600"}`}>{roleDetails.badge}</div>
-                  <div className="text-[9px] text-gray-400 dark:text-gray-500 font-bold truncate mt-0.5" title={portalScopeName}>
-                    {portalScopeName}
-                  </div>
+            /* Full brand — shown whenever the sidebar is expanded (md+). */
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <LcmsLogo />
+              <div className="text-left border-l border-gray-200 dark:border-gray-800 pl-2 min-w-0 flex-1">
+                <div className={`font-black text-xs leading-none uppercase tracking-wider ${theme === "dark" ? "text-blue-400" : "text-blue-600"}`}>{roleDetails.badge}</div>
+                <div className={`text-[10px] font-bold truncate mt-0.5 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`} title={portalScopeName}>
+                  {portalScopeName}
                 </div>
               </div>
-              {/* Icon-only at md rail */}
-              <div className="lg:hidden flex items-center justify-center w-full">
-                <LcmsLogo iconOnly />
-              </div>
-            </>
+            </div>
           ) : (
             <div className="flex items-center justify-center w-full">
               <LcmsLogo iconOnly />
@@ -563,18 +600,9 @@ export default function PortalShell({
         </div>
 
         {/* Navigation Links — grouped by SLMS matrix module when expanded */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto min-h-0 scrollbar-thin">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto min-h-0 scrollbar-thin" aria-label="Portal sections">
           {sidebarOpen
-            ? (
-              <>
-                {/* Full labels only on lg+ expanded */}
-                <div className="hidden lg:block">{renderGroupedNav()}</div>
-                {/* Rail mode at md: icon-only links */}
-                <div className="lg:hidden space-y-1">
-                  {filteredLinks.map((link) => renderLink(link, false))}
-                </div>
-              </>
-            )
+            ? renderGroupedNav()
             : filteredLinks.map((link) => renderLink(link, false))}
         </nav>
 
@@ -585,7 +613,7 @@ export default function PortalShell({
             : "bg-gradient-to-r from-white to-gray-50 border-blue-200"
         }`}>
           {sidebarOpen ? (
-            <p className={`text-xs text-center leading-snug hidden lg:block ${
+            <p className={`text-xs text-center leading-snug ${
               theme === "dark" ? "text-blue-100/70" : "text-blue-700"
             }`}>
               {roleDetails.footerText}
@@ -602,7 +630,7 @@ export default function PortalShell({
             ? "bg-gradient-to-r from-gray-900 to-black border-blue-500/20 text-white"
             : "bg-gradient-to-r from-white to-gray-50 border-blue-200 text-gray-900"
         }`}>
-          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {/* Mobile Menu Toggle */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -611,15 +639,28 @@ export default function PortalShell({
                   ? "hover:bg-gray-800 text-gray-300 active:bg-gray-700"
                   : "hover:bg-blue-100 text-gray-700 active:bg-blue-200"
               }`}
-              title={mobileMenuOpen ? "Close menu" : "Open menu"}
+              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="portal-mobile-nav"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
 
+            {/* Current page — the chrome's persistent "where am I" anchor. A
+                label, not a heading: each board renders its own <h1>. */}
+            <div className="min-w-0">
+              <div className={`text-base sm:text-lg font-bold leading-tight truncate ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+                {currentPageName}
+              </div>
+              <div className={`text-[11px] leading-tight truncate hidden sm:block ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`} title={portalScopeName}>
+                {portalScopeName}
+              </div>
+            </div>
+
             {userRole !== "PLATFORM_ADMIN" && <WorkspaceSwitcher />}
 
-            {/* Clock — hidden on smallest screens */}
-            <div className={`text-sm hidden sm:block ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
+            {/* Clock — hidden on smaller screens */}
+            <div className={`text-sm hidden xl:block ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
               <div id="current-time">
                 {new Date(now).toLocaleTimeString()}
               </div>
@@ -646,7 +687,7 @@ export default function PortalShell({
             </button>
 
             {/* Notification Bell Dropdown */}
-            <div className="relative">
+            <div className="relative" ref={bellRef}>
               <button
                 onClick={() => setBellDropdownOpen(!bellDropdownOpen)}
                 className={`p-2 rounded-lg relative transition active:scale-95 ${
@@ -654,7 +695,9 @@ export default function PortalShell({
                     ? "hover:bg-gray-800 text-gray-300 active:bg-gray-700"
                     : "hover:bg-blue-100 text-gray-700 active:bg-blue-200"
                 }`}
-                title="Notifications"
+                aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
+                aria-haspopup="menu"
+                aria-expanded={bellDropdownOpen}
               >
                 <Bell className="w-5 h-5" />
                 {unreadCount > 0 && (
@@ -809,7 +852,7 @@ export default function PortalShell({
 
 
             {/* Profile Dropdown */}
-            <div className="relative">
+            <div className="relative" ref={profileRef}>
               <button
                 onClick={() =>
                   setProfileDropdownOpen(!profileDropdownOpen)
@@ -817,6 +860,9 @@ export default function PortalShell({
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
                   theme === "dark" ? "hover:bg-gray-800" : "hover:bg-blue-100"
                 }`}
+                aria-label="Account menu"
+                aria-haspopup="menu"
+                aria-expanded={profileDropdownOpen}
               >
                 <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
                   {(profileName || roleDetails.profileName).charAt(0)}
@@ -920,7 +966,7 @@ export default function PortalShell({
                 </div>
 
                 {/* Mobile Sidebar Nav */}
-                <nav className="flex-1 p-4 space-y-1 overflow-y-auto min-h-0 scrollbar-thin"
+                <nav id="portal-mobile-nav" aria-label="Portal sections" className="flex-1 p-4 space-y-1 overflow-y-auto min-h-0 scrollbar-thin"
                   style={{ maxHeight: "calc(100dvh - 56px - 3rem)" }}>
                   {renderGroupedNav()}
                 </nav>

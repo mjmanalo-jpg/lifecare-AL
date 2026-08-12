@@ -10,13 +10,14 @@
  */
 
 import { useMemo, useState } from "react";
-import { TestTube, Activity, Send, Pill, ClipboardList, Stethoscope, Plus, Pencil, Trash2, ExternalLink, X } from "lucide-react";
+import { TestTube, Activity, Send, Pill, ClipboardList, Stethoscope, Plus, Pencil, Trash2, ExternalLink } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { upsertRecord } from "@/lib/api";
 import { useClinician, type ClinicianRole } from "./useClinician";
+import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, DataState, FieldLabel, controlClass } from "./clinical-ui";
 
 const KEY = "clinical_records";
 const newId = (p: string) => globalThis.crypto?.randomUUID?.() ?? `${p}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -63,18 +64,30 @@ const TABS: { id: TabId; label: string; icon: LucideIcon; addLabel: string }[] =
   { id: "diagnoses", label: "Diagnoses", icon: Stethoscope, addLabel: "Add Diagnosis" },
 ];
 
-const pillTone = (status: string) => {
+// Status → the clinical-editorial accent, keyed by the PDF's colour language.
+const ACCENT_VAR = { coral: "var(--clinical-coral)", amber: "var(--clinical-amber)", green: "var(--clinical-green)", teal: "var(--clinical-panel)" } as const;
+type Accent = keyof typeof ACCENT_VAR;
+const pillAccent = (status: string): Accent => {
   const s = status.toLowerCase();
-  if (["active", "completed", "resolved", "routine"].includes(s)) return "bg-green-100 text-green-700";
-  if (["pending", "hold", "urgent"].includes(s)) return "bg-amber-100 text-amber-700";
-  if (["discontinued", "emergency", "rejected"].includes(s)) return "bg-red-100 text-red-700";
-  return "bg-slate-100 text-slate-600";
+  if (["active", "completed", "resolved", "routine"].includes(s)) return "green";
+  if (["pending", "hold", "urgent"].includes(s)) return "amber";
+  if (["discontinued", "emergency", "rejected"].includes(s)) return "coral";
+  return "teal";
 };
+
+// Theme-safe status chip: ink label + a coloured dot (no per-theme contrast traps).
+function StatusChip({ label, accent }: { label: string; accent: Accent }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>
+      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ACCENT_VAR[accent] }} />{label}
+    </span>
+  );
+}
 
 export default function ClinicalRecordsBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   // clinicianRole is kept for parity with sibling clinical boards.
   useClinician(clinicianRole);
-  const { data: settingRows, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
+  const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
   const resQ = useLiveQuery<Record<string, unknown>>("residents", { tables: ["Resident"] });
   const residents = useMemo<ResOpt[]>(() => (resQ.data || []).map(adaptResident).map((r) => ({ id: String(r.id), name: String(r.name), room: String(r.room ?? "") })), [resQ.data]);
   const store = useMemo(() => parseStore(settingRows.find((r) => (r.key || r.id) === KEY)?.value), [settingRows]);
@@ -121,57 +134,75 @@ export default function ClinicalRecordsBoard({ clinicianRole = "NURSE" }: { clin
   const active = TABS.find((t) => t.id === tab)!;
 
   return (
-    <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
-      <div className="mb-4">
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2"><ClipboardList className="w-6 h-6 text-blue-500" /> Clinical Records</h1>
-        <p className="text-sm text-slate-500 mt-1">Lab results, therapy, referrals, medication changes, physician orders &amp; diagnoses</p>
-      </div>
+    <ClinicalPage>
+      <ClinicalHeader
+        title="Clinical Records"
+        subtitle="Lab results, therapy, referrals, medication changes, physician orders & diagnoses"
+        right={
+          <ClinicalButton variant="accent" onClick={() => { setEditing(null); setModalOpen(true); }} disabled={!residentId}>
+            <Plus className="h-4 w-4" /> {active.addLabel}
+          </ClinicalButton>
+        }
+      />
 
-      <div className="flex items-center gap-3 mb-5">
-        <label className="text-sm font-bold text-slate-700">Resident:</label>
-        <select value={residentId} onChange={(e) => setResidentId(e.target.value)} className="min-w-[240px] px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40">
+      <div className="mt-5 mb-5 flex items-center gap-3">
+        <FieldLabel htmlFor="clr-resident">Resident</FieldLabel>
+        <select id="clr-resident" value={residentId} onChange={(e) => setResidentId(e.target.value)} className={`${controlClass} w-full sm:w-72 -mt-1.5`}>
           <option value="">Select a resident…</option>
           {residents.map((r) => <option key={r.id} value={r.id}>{r.room ? `Rm ${r.room} — ` : ""}{r.name}</option>)}
         </select>
       </div>
 
       {!residentId ? (
-        <div className="flex flex-col items-center justify-center text-center py-24 text-slate-400">
-          <ClipboardList className="w-12 h-12 mb-3" />
-          <p className="text-slate-500 font-medium">Select a resident to view or add clinical records</p>
+        <div className="flex flex-col items-center justify-center rounded-xl border py-20 text-center" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
+          <ClipboardList className="mb-3 h-12 w-12 text-[var(--clinical-muted)]" />
+          <p className="font-medium text-[var(--clinical-ink-soft)]">Select a resident to view or add clinical records</p>
         </div>
       ) : (
         <>
-          <div className="flex flex-wrap gap-1 bg-slate-100 rounded-xl p-1 mb-5">
+          <div className="mb-5 flex flex-wrap gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
             {TABS.map((t) => {
               const Icon = t.icon;
+              const activeTab = tab === t.id;
               return (
-                <button key={t.id} onClick={() => setTab(t.id)} className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium ${tab === t.id ? "bg-white shadow-sm text-slate-800" : "text-slate-500 hover:text-slate-700"}`}>
-                  <Icon className="w-4 h-4" /> {t.label}
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  aria-pressed={activeTab}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${activeTab ? "shadow-sm text-[var(--clinical-ink)]" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}
+                  style={activeTab ? { backgroundColor: "var(--clinical-surface)" } : undefined}
+                >
+                  <Icon className="h-4 w-4" /> {t.label}
                 </button>
               );
             })}
           </div>
 
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-slate-500">{records.length} {records.length === 1 ? "record" : "records"}</p>
-            <button onClick={() => { setEditing(null); setModalOpen(true); }} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"><Plus className="w-4 h-4" /> {active.addLabel}</button>
+          <div className="mb-4 flex items-center justify-between">
+            <p className="text-sm text-[var(--clinical-muted)]">{records.length} {records.length === 1 ? "record" : "records"}</p>
           </div>
 
-          <div className="space-y-3">
-            {records.length === 0 ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-400">No {active.label.toLowerCase()} yet. Click <b>{active.addLabel}</b> to start.</div>
-            ) : (
-              records.map((r) => <RecordCard key={r.id} tab={tab} rec={r} onEdit={() => { setEditing(r); setModalOpen(true); }} onDelete={() => remove(r)} />)
-            )}
-          </div>
+          <DataState
+            loading={loading && records.length === 0}
+            error={error}
+            empty={records.length === 0}
+            emptyTitle={`No ${active.label.toLowerCase()} yet`}
+            emptyHint={`Click ${active.addLabel} to start.`}
+            emptyAction={<ClinicalButton variant="accent" onClick={() => { setEditing(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> {active.addLabel}</ClinicalButton>}
+            onRetry={() => void refetch()}
+            skeletonRows={3}
+          >
+            <div className="space-y-3">
+              {records.map((r) => <RecordCard key={r.id} tab={tab} rec={r} onEdit={() => { setEditing(r); setModalOpen(true); }} onDelete={() => remove(r)} />)}
+            </div>
+          </DataState>
         </>
       )}
 
-      {modalOpen && residentId && (
-        <RecordModal tab={tab} residentId={residentId} editing={editing} onClose={() => { setModalOpen(false); setEditing(null); }} onSave={upsert} />
+      {residentId && (
+        <RecordModal open={modalOpen} tab={tab} residentId={residentId} editing={editing} onClose={() => { setModalOpen(false); setEditing(null); }} onSave={upsert} />
       )}
-    </div>
+    </ClinicalPage>
   );
 }
 
@@ -195,24 +226,24 @@ function RecordCard({ tab, rec, onEdit, onDelete }: { tab: TabId; rec: BaseRec; 
   const meta = [fmtDate(date), who].filter(Boolean).join(" · ");
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 flex items-start justify-between gap-3">
+    <div className="flex items-start justify-between gap-3 rounded-xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
       <div className="min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="font-bold text-slate-900">{title || "(untitled)"}</p>
-          {icd && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{icd}</span>}
-          {pill && <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${pillTone(pill)}`}>{pill}</span>}
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="font-bold text-[var(--clinical-ink)]">{title || "(untitled)"}</p>
+          {icd && <span className="rounded-full border px-2 py-0.5 text-[11px] font-semibold text-[var(--clinical-ink-soft)]" style={{ borderColor: "var(--clinical-line-strong)" }}>{icd}</span>}
+          {pill && <StatusChip label={pill} accent={pillAccent(pill)} />}
         </div>
-        {meta && <p className="text-sm text-slate-500 mt-1">{meta}</p>}
-        {rec.notes && <p className="text-sm text-slate-500 mt-1">{rec.notes}</p>}
+        {meta && <p className="mt-1 text-sm text-[var(--clinical-muted)]">{meta}</p>}
+        {rec.notes && <p className="mt-1 text-sm text-[var(--clinical-muted)]">{rec.notes}</p>}
         {rec.driveLink && (
-          <a href={rec.driveLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline mt-2">
-            <ExternalLink className="w-3.5 h-3.5" /> View Document
+          <a href={rec.driveLink} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-[var(--clinical-panel)] hover:underline">
+            <ExternalLink className="h-3.5 w-3.5" /> View Document
           </a>
         )}
       </div>
-      <div className="flex items-center gap-1 shrink-0">
-        <button onClick={onEdit} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><Pencil className="w-4 h-4" /></button>
-        <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500"><Trash2 className="w-4 h-4" /></button>
+      <div className="flex shrink-0 items-center gap-1">
+        <button onClick={onEdit} aria-label="Edit record" className="rounded-lg p-2 text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-ink)]"><Pencil className="h-4 w-4" /></button>
+        <button onClick={onDelete} aria-label="Delete record" className="rounded-lg p-2 text-[var(--clinical-coral)] transition hover:bg-[var(--clinical-surface-2)]"><Trash2 className="h-4 w-4" /></button>
       </div>
     </div>
   );
@@ -220,15 +251,8 @@ function RecordCard({ tab, rec, onEdit, onDelete }: { tab: TabId; rec: BaseRec; 
 
 /* ---------- Shared form primitives ---------- */
 
-const inp = "w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
-const lbl = "block text-sm font-bold text-slate-700 mb-1.5";
-const optLbl = "block text-sm font-semibold text-slate-500 mb-1.5";
-
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
-  return <div><label className={lbl}>{label}{required && <span className="text-red-500"> *</span>}</label>{children}</div>;
-}
 function DriveField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return <div><label className={optLbl}>Google Drive Link (optional)</label><input value={value} onChange={(e) => onChange(e.target.value)} placeholder="https://drive.google.com/..." className={inp} /></div>;
+  return <div><FieldLabel htmlFor="clr-drive">Google Drive Link (optional)</FieldLabel><input id="clr-drive" value={value} onChange={(e) => onChange(e.target.value)} placeholder="https://drive.google.com/..." className={controlClass} /></div>;
 }
 
 const LAB_STATUS = ["Pending", "Completed", "Reviewed", "Abnormal"];
@@ -239,7 +263,7 @@ const ORDER_STATUS = ["Active", "Completed", "Discontinued"];
 
 /* ---------- The one modal (branches per tab) ---------- */
 
-function RecordModal({ tab, residentId, editing, onClose, onSave }: { tab: TabId; residentId: string; editing: BaseRec | null; onClose: () => void; onSave: (rec: BaseRec) => Promise<void> }) {
+function RecordModal({ open, tab, residentId, editing, onClose, onSave }: { open: boolean; tab: TabId; residentId: string; editing: BaseRec | null; onClose: () => void; onSave: (rec: BaseRec) => Promise<void> }) {
   const e = (editing || {}) as Record<string, string | undefined>;
   const title = TABS.find((t) => t.id === tab)!.addLabel.replace(/^Add /, editing ? "Edit " : "Add ").replace(/^Log /, editing ? "Edit " : "Log ");
 
@@ -329,90 +353,91 @@ function RecordModal({ tab, residentId, editing, onClose, onSave }: { tab: TabId
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[95vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"><h2 className="font-bold text-slate-900 text-lg">{title}</h2><button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button></div>
-        <div className="p-5 overflow-y-auto flex-1 space-y-4">
+    <ClinicalModal
+      open={open}
+      onClose={onClose}
+      title={title}
+      footer={<>
+        <ClinicalButton variant="ghost" size="sm" onClick={onClose}>Cancel</ClinicalButton>
+        <ClinicalButton variant="accent" onClick={submit} disabled={saving}>{saving ? "Saving…" : "Save"}</ClinicalButton>
+      </>}
+    >
+      <div className="space-y-4">
 
-          {tab === "labs" && (<>
-            <Field label="Test Name" required><input value={testName} onChange={(ev) => setTestName(ev.target.value)} placeholder="e.g. Complete Blood Count" className={inp} /></Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Date Collected"><input type="date" value={dateCollected} onChange={(ev) => setDateCollected(ev.target.value)} className={inp} /></Field>
-              <Field label="Status"><select value={labStatus} onChange={(ev) => setLabStatus(ev.target.value)} className={inp}>{LAB_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}</select></Field>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Result Value"><input value={resultValue} onChange={(ev) => setResultValue(ev.target.value)} placeholder="e.g. 12.5" className={inp} /></Field>
-              <Field label="Unit"><input value={unit} onChange={(ev) => setUnit(ev.target.value)} placeholder="g/dL" className={inp} /></Field>
-            </div>
-            <Field label="Reference Range"><input value={refRange} onChange={(ev) => setRefRange(ev.target.value)} placeholder="e.g. 12.0–16.0 g/dL" className={inp} /></Field>
-            <Field label="Ordering Physician"><input value={labPhysician} onChange={(ev) => setLabPhysician(ev.target.value)} placeholder="Dr. Santos" className={inp} /></Field>
-            <Field label="Notes"><textarea rows={2} value={notes} onChange={(ev) => setNotes(ev.target.value)} className={inp} /></Field>
-          </>)}
+        {tab === "labs" && (<>
+          <div><FieldLabel required htmlFor="clr-testName">Test Name</FieldLabel><input id="clr-testName" value={testName} onChange={(ev) => setTestName(ev.target.value)} placeholder="e.g. Complete Blood Count" className={controlClass} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><FieldLabel htmlFor="clr-dateCollected">Date Collected</FieldLabel><input id="clr-dateCollected" type="date" value={dateCollected} onChange={(ev) => setDateCollected(ev.target.value)} className={controlClass} /></div>
+            <div><FieldLabel htmlFor="clr-labStatus">Status</FieldLabel><select id="clr-labStatus" value={labStatus} onChange={(ev) => setLabStatus(ev.target.value)} className={controlClass}>{LAB_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><FieldLabel htmlFor="clr-resultValue">Result Value</FieldLabel><input id="clr-resultValue" value={resultValue} onChange={(ev) => setResultValue(ev.target.value)} placeholder="e.g. 12.5" className={controlClass} /></div>
+            <div><FieldLabel htmlFor="clr-unit">Unit</FieldLabel><input id="clr-unit" value={unit} onChange={(ev) => setUnit(ev.target.value)} placeholder="g/dL" className={controlClass} /></div>
+          </div>
+          <div><FieldLabel htmlFor="clr-refRange">Reference Range</FieldLabel><input id="clr-refRange" value={refRange} onChange={(ev) => setRefRange(ev.target.value)} placeholder="e.g. 12.0–16.0 g/dL" className={controlClass} /></div>
+          <div><FieldLabel htmlFor="clr-labPhysician">Ordering Physician</FieldLabel><input id="clr-labPhysician" value={labPhysician} onChange={(ev) => setLabPhysician(ev.target.value)} placeholder="Dr. Santos" className={controlClass} /></div>
+          <div><FieldLabel htmlFor="clr-labNotes">Notes</FieldLabel><textarea id="clr-labNotes" rows={2} value={notes} onChange={(ev) => setNotes(ev.target.value)} className={controlClass} /></div>
+        </>)}
 
-          {tab === "therapy" && (<>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Session Date"><input type="date" value={sessionDate} onChange={(ev) => setSessionDate(ev.target.value)} className={inp} /></Field>
-              <Field label="Type"><select value={therapyType} onChange={(ev) => setTherapyType(ev.target.value)} className={inp}>{THERAPY_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}</select></Field>
-            </div>
-            <Field label="Therapist Name" required><input value={therapist} onChange={(ev) => setTherapist(ev.target.value)} placeholder="e.g. Maria Cruz, RPT" className={inp} /></Field>
-            <Field label="Goals Addressed"><textarea rows={2} value={goals} onChange={(ev) => setGoals(ev.target.value)} placeholder="e.g. Improve gait stability, increase ROM" className={inp} /></Field>
-            <Field label="Resident Response"><textarea rows={2} value={response} onChange={(ev) => setResponse(ev.target.value)} placeholder="e.g. Cooperative, tolerated well" className={inp} /></Field>
-            <Field label="Progress Notes"><textarea rows={2} value={progress} onChange={(ev) => setProgress(ev.target.value)} className={inp} /></Field>
-          </>)}
+        {tab === "therapy" && (<>
+          <div className="grid grid-cols-2 gap-3">
+            <div><FieldLabel htmlFor="clr-sessionDate">Session Date</FieldLabel><input id="clr-sessionDate" type="date" value={sessionDate} onChange={(ev) => setSessionDate(ev.target.value)} className={controlClass} /></div>
+            <div><FieldLabel htmlFor="clr-therapyType">Type</FieldLabel><select id="clr-therapyType" value={therapyType} onChange={(ev) => setTherapyType(ev.target.value)} className={controlClass}>{THERAPY_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+          </div>
+          <div><FieldLabel required htmlFor="clr-therapist">Therapist Name</FieldLabel><input id="clr-therapist" value={therapist} onChange={(ev) => setTherapist(ev.target.value)} placeholder="e.g. Maria Cruz, RPT" className={controlClass} /></div>
+          <div><FieldLabel htmlFor="clr-goals">Goals Addressed</FieldLabel><textarea id="clr-goals" rows={2} value={goals} onChange={(ev) => setGoals(ev.target.value)} placeholder="e.g. Improve gait stability, increase ROM" className={controlClass} /></div>
+          <div><FieldLabel htmlFor="clr-response">Resident Response</FieldLabel><textarea id="clr-response" rows={2} value={response} onChange={(ev) => setResponse(ev.target.value)} placeholder="e.g. Cooperative, tolerated well" className={controlClass} /></div>
+          <div><FieldLabel htmlFor="clr-progress">Progress Notes</FieldLabel><textarea id="clr-progress" rows={2} value={progress} onChange={(ev) => setProgress(ev.target.value)} className={controlClass} /></div>
+        </>)}
 
-          {tab === "referrals" && (<>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Referral Date"><input type="date" value={referralDate} onChange={(ev) => setReferralDate(ev.target.value)} className={inp} /></Field>
-              <Field label="Urgency"><select value={urgency} onChange={(ev) => setUrgency(ev.target.value)} className={inp}>{URGENCIES.map((s) => <option key={s} value={s}>{s}</option>)}</select></Field>
-            </div>
-            <Field label="Referring Physician" required><input value={referringPhysician} onChange={(ev) => setReferringPhysician(ev.target.value)} placeholder="Dr. Santos" className={inp} /></Field>
-            <Field label="Specialist / Facility" required><input value={specialist} onChange={(ev) => setSpecialist(ev.target.value)} placeholder="e.g. St. Luke's Cardiology" className={inp} /></Field>
-            <Field label="Reason for Referral" required><textarea rows={2} value={reason} onChange={(ev) => setReason(ev.target.value)} className={inp} /></Field>
-            <Field label="Follow-up Date"><input type="date" value={followUpDate} onChange={(ev) => setFollowUpDate(ev.target.value)} className={inp} /></Field>
-            <Field label="Outcome"><textarea rows={2} value={outcome} onChange={(ev) => setOutcome(ev.target.value)} placeholder="e.g. Specialist confirmed diagnosis, scheduled for procedure" className={inp} /></Field>
-            <Field label="Additional Notes"><textarea rows={2} value={notes} onChange={(ev) => setNotes(ev.target.value)} className={inp} /></Field>
-          </>)}
+        {tab === "referrals" && (<>
+          <div className="grid grid-cols-2 gap-3">
+            <div><FieldLabel htmlFor="clr-referralDate">Referral Date</FieldLabel><input id="clr-referralDate" type="date" value={referralDate} onChange={(ev) => setReferralDate(ev.target.value)} className={controlClass} /></div>
+            <div><FieldLabel htmlFor="clr-urgency">Urgency</FieldLabel><select id="clr-urgency" value={urgency} onChange={(ev) => setUrgency(ev.target.value)} className={controlClass}>{URGENCIES.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+          </div>
+          <div><FieldLabel required htmlFor="clr-referringPhysician">Referring Physician</FieldLabel><input id="clr-referringPhysician" value={referringPhysician} onChange={(ev) => setReferringPhysician(ev.target.value)} placeholder="Dr. Santos" className={controlClass} /></div>
+          <div><FieldLabel required htmlFor="clr-specialist">Specialist / Facility</FieldLabel><input id="clr-specialist" value={specialist} onChange={(ev) => setSpecialist(ev.target.value)} placeholder="e.g. St. Luke's Cardiology" className={controlClass} /></div>
+          <div><FieldLabel required htmlFor="clr-reason">Reason for Referral</FieldLabel><textarea id="clr-reason" rows={2} value={reason} onChange={(ev) => setReason(ev.target.value)} className={controlClass} /></div>
+          <div><FieldLabel htmlFor="clr-followUpDate">Follow-up Date</FieldLabel><input id="clr-followUpDate" type="date" value={followUpDate} onChange={(ev) => setFollowUpDate(ev.target.value)} className={controlClass} /></div>
+          <div><FieldLabel htmlFor="clr-outcome">Outcome</FieldLabel><textarea id="clr-outcome" rows={2} value={outcome} onChange={(ev) => setOutcome(ev.target.value)} placeholder="e.g. Specialist confirmed diagnosis, scheduled for procedure" className={controlClass} /></div>
+          <div><FieldLabel htmlFor="clr-refNotes">Additional Notes</FieldLabel><textarea id="clr-refNotes" rows={2} value={notes} onChange={(ev) => setNotes(ev.target.value)} className={controlClass} /></div>
+        </>)}
 
-          {tab === "medications" && (<>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Date"><input type="date" value={medDate} onChange={(ev) => setMedDate(ev.target.value)} className={inp} /></Field>
-              <Field label="Change Type"><select value={changeType} onChange={(ev) => setChangeType(ev.target.value)} className={inp}>{CHANGE_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}</select></Field>
-            </div>
-            <Field label="Medication Name" required><input value={medName} onChange={(ev) => setMedName(ev.target.value)} placeholder="e.g. Amlodipine 5mg" className={inp} /></Field>
-            <Field label="Prescribing Physician"><input value={medPhysician} onChange={(ev) => setMedPhysician(ev.target.value)} placeholder="Dr. Reyes" className={inp} /></Field>
-            <Field label="Reason"><textarea rows={2} value={medReason} onChange={(ev) => setMedReason(ev.target.value)} placeholder="e.g. Uncontrolled hypertension" className={inp} /></Field>
-            <Field label="Notes"><textarea rows={2} value={notes} onChange={(ev) => setNotes(ev.target.value)} className={inp} /></Field>
-          </>)}
+        {tab === "medications" && (<>
+          <div className="grid grid-cols-2 gap-3">
+            <div><FieldLabel htmlFor="clr-medDate">Date</FieldLabel><input id="clr-medDate" type="date" value={medDate} onChange={(ev) => setMedDate(ev.target.value)} className={controlClass} /></div>
+            <div><FieldLabel htmlFor="clr-changeType">Change Type</FieldLabel><select id="clr-changeType" value={changeType} onChange={(ev) => setChangeType(ev.target.value)} className={controlClass}>{CHANGE_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+          </div>
+          <div><FieldLabel required htmlFor="clr-medName">Medication Name</FieldLabel><input id="clr-medName" value={medName} onChange={(ev) => setMedName(ev.target.value)} placeholder="e.g. Amlodipine 5mg" className={controlClass} /></div>
+          <div><FieldLabel htmlFor="clr-medPhysician">Prescribing Physician</FieldLabel><input id="clr-medPhysician" value={medPhysician} onChange={(ev) => setMedPhysician(ev.target.value)} placeholder="Dr. Reyes" className={controlClass} /></div>
+          <div><FieldLabel htmlFor="clr-medReason">Reason</FieldLabel><textarea id="clr-medReason" rows={2} value={medReason} onChange={(ev) => setMedReason(ev.target.value)} placeholder="e.g. Uncontrolled hypertension" className={controlClass} /></div>
+          <div><FieldLabel htmlFor="clr-medNotes">Notes</FieldLabel><textarea id="clr-medNotes" rows={2} value={notes} onChange={(ev) => setNotes(ev.target.value)} className={controlClass} /></div>
+        </>)}
 
-          {tab === "orders" && (<>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Order Date"><input type="date" value={orderDate} onChange={(ev) => setOrderDate(ev.target.value)} className={inp} /></Field>
-              <Field label="Status"><select value={orderStatus} onChange={(ev) => setOrderStatus(ev.target.value)} className={inp}>{ORDER_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}</select></Field>
-            </div>
-            <Field label="Ordering Physician" required><input value={orderPhysician} onChange={(ev) => setOrderPhysician(ev.target.value)} placeholder="Dr. Dela Cruz" className={inp} /></Field>
-            <Field label="Order Type" required><input value={orderType} onChange={(ev) => setOrderType(ev.target.value)} placeholder="e.g. Diet Change, Wound Care, Activity Restriction" className={inp} /></Field>
-            <Field label="Order Details" required><textarea rows={2} value={orderDetails} onChange={(ev) => setOrderDetails(ev.target.value)} placeholder="Full order instructions…" className={inp} /></Field>
-            <Field label="Notes"><textarea rows={2} value={notes} onChange={(ev) => setNotes(ev.target.value)} className={inp} /></Field>
-          </>)}
+        {tab === "orders" && (<>
+          <div className="grid grid-cols-2 gap-3">
+            <div><FieldLabel htmlFor="clr-orderDate">Order Date</FieldLabel><input id="clr-orderDate" type="date" value={orderDate} onChange={(ev) => setOrderDate(ev.target.value)} className={controlClass} /></div>
+            <div><FieldLabel htmlFor="clr-orderStatus">Status</FieldLabel><select id="clr-orderStatus" value={orderStatus} onChange={(ev) => setOrderStatus(ev.target.value)} className={controlClass}>{ORDER_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+          </div>
+          <div><FieldLabel required htmlFor="clr-orderPhysician">Ordering Physician</FieldLabel><input id="clr-orderPhysician" value={orderPhysician} onChange={(ev) => setOrderPhysician(ev.target.value)} placeholder="Dr. Dela Cruz" className={controlClass} /></div>
+          <div><FieldLabel required htmlFor="clr-orderType">Order Type</FieldLabel><input id="clr-orderType" value={orderType} onChange={(ev) => setOrderType(ev.target.value)} placeholder="e.g. Diet Change, Wound Care, Activity Restriction" className={controlClass} /></div>
+          <div><FieldLabel required htmlFor="clr-orderDetails">Order Details</FieldLabel><textarea id="clr-orderDetails" rows={2} value={orderDetails} onChange={(ev) => setOrderDetails(ev.target.value)} placeholder="Full order instructions…" className={controlClass} /></div>
+          <div><FieldLabel htmlFor="clr-orderNotes">Notes</FieldLabel><textarea id="clr-orderNotes" rows={2} value={notes} onChange={(ev) => setNotes(ev.target.value)} className={controlClass} /></div>
+        </>)}
 
-          {tab === "diagnoses" && (<>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Date"><input type="date" value={diagDate} onChange={(ev) => setDiagDate(ev.target.value)} className={inp} /></Field>
-              <Field label="ICD Code"><input value={icdCode} onChange={(ev) => setIcdCode(ev.target.value)} placeholder="e.g. I10" className={inp} /></Field>
-            </div>
-            <Field label="Diagnosis Name" required><input value={diagnosis} onChange={(ev) => setDiagnosis(ev.target.value)} placeholder="e.g. Essential Hypertension" className={inp} /></Field>
-            <Field label="Diagnosing Physician"><input value={diagPhysician} onChange={(ev) => setDiagPhysician(ev.target.value)} placeholder="Dr. Reyes" className={inp} /></Field>
-            <Field label="Notes"><textarea rows={2} value={notes} onChange={(ev) => setNotes(ev.target.value)} className={inp} /></Field>
-          </>)}
+        {tab === "diagnoses" && (<>
+          <div className="grid grid-cols-2 gap-3">
+            <div><FieldLabel htmlFor="clr-diagDate">Date</FieldLabel><input id="clr-diagDate" type="date" value={diagDate} onChange={(ev) => setDiagDate(ev.target.value)} className={controlClass} /></div>
+            <div><FieldLabel htmlFor="clr-icdCode">ICD Code</FieldLabel><input id="clr-icdCode" value={icdCode} onChange={(ev) => setIcdCode(ev.target.value)} placeholder="e.g. I10" className={controlClass} /></div>
+          </div>
+          <div><FieldLabel required htmlFor="clr-diagnosis">Diagnosis Name</FieldLabel><input id="clr-diagnosis" value={diagnosis} onChange={(ev) => setDiagnosis(ev.target.value)} placeholder="e.g. Essential Hypertension" className={controlClass} /></div>
+          <div><FieldLabel htmlFor="clr-diagPhysician">Diagnosing Physician</FieldLabel><input id="clr-diagPhysician" value={diagPhysician} onChange={(ev) => setDiagPhysician(ev.target.value)} placeholder="Dr. Reyes" className={controlClass} /></div>
+          <div><FieldLabel htmlFor="clr-diagNotes">Notes</FieldLabel><textarea id="clr-diagNotes" rows={2} value={notes} onChange={(ev) => setNotes(ev.target.value)} className={controlClass} /></div>
+        </>)}
 
-          <DriveField value={driveLink} onChange={setDriveLink} />
-        </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button onClick={submit} disabled={saving} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? "Saving…" : "Save"}</button>
-        </div>
+        <DriveField value={driveLink} onChange={setDriveLink} />
       </div>
-    </div>
+    </ClinicalModal>
   );
 }
 

@@ -26,6 +26,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { levelOf } from "./CareLogsBoard";
 import type { ClinicianRole } from "./useClinician";
+import { ClinicalPage, ClinicalHeader, ClinicalButton, StatCard, DataState, controlClass, SERIF } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (v: unknown) => (v == null ? "" : String(v));
@@ -145,7 +146,7 @@ function LineChart({ points, series, band, height = 160, yDigits = 0, area = fal
         </defs>
         {/* horizontal gridlines */}
         {yTicks.map((t, i) => (
-          <line key={`g${i}`} x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="#eef2f7" strokeWidth={1} />
+          <line key={`g${i}`} x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="var(--clinical-line)" strokeWidth={1} />
         ))}
         {/* normal-range band */}
         {band && (
@@ -159,7 +160,7 @@ function LineChart({ points, series, band, height = 160, yDigits = 0, area = fal
         {area && series.map((se, si) => se.values.some((v) => v != null) ? <path key={`a${si}`} d={areaPath(se.values)} fill={`url(#${idBase}-${si})`} /> : null)}
         {/* y labels */}
         {yTicks.map((t, i) => (
-          <text key={`y${i}`} x={padL - 5} y={y(t) + 3} fontSize={9} fill="#94a3b8" textAnchor="end">{fmtNum(t, yDigits)}</text>
+          <text key={`y${i}`} x={padL - 5} y={y(t) + 3} fontSize={9} fill="var(--clinical-muted)" textAnchor="end">{fmtNum(t, yDigits)}</text>
         ))}
         {/* series lines + points */}
         {series.map((se) => (
@@ -174,7 +175,7 @@ function LineChart({ points, series, band, height = 160, yDigits = 0, area = fal
         ))}
         {/* x labels */}
         {xTickIdx.map((i) => (
-          <text key={`x${i}`} x={x(i)} y={H - 6} fontSize={9} fill="#94a3b8" textAnchor="middle">{fmtDay(points[i].at)}</text>
+          <text key={`x${i}`} x={x(i)} y={H - 6} fontSize={9} fill="var(--clinical-muted)" textAnchor="middle">{fmtDay(points[i].at)}</text>
         ))}
       </svg>
     </div>
@@ -206,7 +207,8 @@ function trendDelta(values: (number | null)[]): number | null {
 function DeltaChip({ delta }: { delta: number | null }) {
   if (delta == null) return null;
   const up = delta > 0, down = delta < 0;
-  return <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${up ? "bg-rose-50 text-rose-500" : down ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-400"}`}>{up ? "▲" : down ? "▼" : "•"} {Math.abs(delta).toFixed(0)}%</span>;
+  const color = up ? "var(--clinical-coral)" : down ? "var(--clinical-green)" : "var(--clinical-muted)";
+  return <span className="rounded px-1.5 py-0.5 text-[11px] font-semibold" style={{ color, backgroundColor: "var(--clinical-surface-2)" }}>{up ? "▲" : down ? "▼" : "•"} {Math.abs(delta).toFixed(0)}%</span>;
 }
 
 function VitalCard({ spec, points }: { spec: CardSpec; points: { at: string; v: number | null }[] }) {
@@ -218,27 +220,27 @@ function VitalCard({ spec, points }: { spec: CardSpec; points: { at: string; v: 
   const delta = trendDelta(values);
   const Icon = spec.icon;
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-xl border p-4 shadow-sm shadow-black/[0.03]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={`w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center shrink-0 ${spec.tint}`}><Icon className="w-4 h-4" /></span>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${spec.tint}`} style={{ backgroundColor: "var(--clinical-surface-2)" }}><Icon className="h-4 w-4" /></span>
           <div className="min-w-0">
-            <h3 className="font-bold text-slate-800 text-sm truncate">{spec.title}</h3>
-            <p className="text-[11px] text-slate-400 truncate">{spec.normalCaption}</p>
+            <h3 className="truncate text-sm font-bold text-[var(--clinical-ink)]">{spec.title}</h3>
+            <p className="truncate text-[11px] text-[var(--clinical-muted)]">{spec.normalCaption}</p>
           </div>
         </div>
         <DeltaChip delta={delta} />
       </div>
       <div className="mt-2.5 flex items-baseline gap-1.5">
-        <span className={`text-2xl font-bold tracking-tight ${hasData ? (ok ? "text-slate-900" : "text-red-600") : "text-slate-300"}`}>{hasData ? fmtNum(latest, spec.digits) : "—"}</span>
-        <span className="text-xs font-medium text-slate-400">{spec.unit}</span>
-        {hasData && spec.band && <span className={`ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${ok ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>{ok ? "Normal" : "Out of range"}</span>}
+        <span className="text-2xl font-bold tracking-tight" style={{ color: hasData ? (ok ? "var(--clinical-ink)" : "var(--clinical-coral)") : "var(--clinical-muted)" }}>{hasData ? fmtNum(latest, spec.digits) : "—"}</span>
+        <span className="text-xs font-medium text-[var(--clinical-muted)]">{spec.unit}</span>
+        {hasData && spec.band && <span className="ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: ok ? "var(--clinical-green)" : "var(--clinical-coral)" }}>{ok ? "Normal" : "Out of range"}</span>}
       </div>
       <div className="mt-1.5">
         {hasData ? (
           <LineChart points={points} series={[{ label: spec.title, color: spec.color, values }]} band={spec.band} height={150} yDigits={spec.digits} area idBase={`vc-${spec.key}`} />
         ) : (
-          <div className="h-[150px] flex items-center justify-center text-sm text-slate-400">No data in range</div>
+          <div className="flex h-[150px] items-center justify-center text-sm text-[var(--clinical-muted)]">No data in range</div>
         )}
       </div>
     </div>
@@ -255,20 +257,20 @@ function BloodPressureCard({ points }: { points: Reading[] }) {
   // Band spans the full BP normal window (diastolic low → systolic high).
   const band: [number, number] = [NORMAL.diastolic[0], NORMAL.systolic[1]];
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
+    <div className="rounded-xl border p-5 shadow-sm shadow-black/[0.03]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+      <div className="mb-1 flex flex-wrap items-start justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center text-rose-500"><Activity className="w-5 h-5" /></span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg text-rose-500" style={{ backgroundColor: "var(--clinical-surface-2)" }}><Activity className="h-5 w-5" /></span>
           <div>
-            <h3 className="font-bold text-slate-800">Blood Pressure</h3>
-            <p className="text-[11px] text-slate-400">Normal: Systolic 90–139 · Diastolic 60–89 mmHg</p>
+            <h3 className="font-bold text-[var(--clinical-ink)]">Blood Pressure</h3>
+            <p className="text-[11px] text-[var(--clinical-muted)]">Normal: Systolic 90–139 · Diastolic 60–89 mmHg</p>
           </div>
         </div>
         {hasData && (
           <div className="flex items-baseline gap-1.5">
-            <span className={`text-3xl font-bold tracking-tight ${latestOk ? "text-slate-900" : "text-red-600"}`}>{fmtNum(latest?.systolic ?? null)}/{fmtNum(latest?.diastolic ?? null)}</span>
-            <span className="text-xs font-medium text-slate-400">mmHg</span>
-            <span className={`ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${latestOk ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>{latestOk ? "Normal" : "Out of range"}</span>
+            <span className="text-3xl font-bold tracking-tight" style={{ color: latestOk ? "var(--clinical-ink)" : "var(--clinical-coral)" }}>{fmtNum(latest?.systolic ?? null)}/{fmtNum(latest?.diastolic ?? null)}</span>
+            <span className="text-xs font-medium text-[var(--clinical-muted)]">mmHg</span>
+            <span className="ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: latestOk ? "var(--clinical-green)" : "var(--clinical-coral)" }}>{latestOk ? "Normal" : "Out of range"}</span>
           </div>
         )}
       </div>
@@ -282,12 +284,12 @@ function BloodPressureCard({ points }: { points: Reading[] }) {
           band={band}
           height={150}
         />
-        <div className="flex items-center justify-center gap-5 mt-2">
-          <span className="inline-flex items-center gap-1.5 text-xs text-slate-500"><span className="w-2.5 h-2.5 rounded-full bg-rose-600" /> Systolic</span>
-          <span className="inline-flex items-center gap-1.5 text-xs text-slate-500"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Diastolic</span>
+        <div className="mt-2 flex items-center justify-center gap-5">
+          <span className="inline-flex items-center gap-1.5 text-xs text-[var(--clinical-ink-soft)]"><span className="h-2.5 w-2.5 rounded-full bg-rose-600" /> Systolic</span>
+          <span className="inline-flex items-center gap-1.5 text-xs text-[var(--clinical-ink-soft)]"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Diastolic</span>
         </div>
       </>) : (
-        <div className="h-[150px] flex items-center justify-center text-sm text-slate-400">No data in range</div>
+        <div className="flex h-[150px] items-center justify-center text-sm text-[var(--clinical-muted)]">No data in range</div>
       )}
     </div>
   );
@@ -301,17 +303,17 @@ function OtherTrendCard({ title, icon: Icon, tint, color, unit, points, digits, 
   const latest = [...values].reverse().find((v) => v != null) ?? null;
   const delta = trendDelta(values);
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-xl border p-4 shadow-sm shadow-black/[0.03]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={`w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center shrink-0 ${tint}`}><Icon className="w-4 h-4" /></span>
-          <h3 className="font-bold text-slate-800 text-sm truncate">{title}</h3>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tint}`} style={{ backgroundColor: "var(--clinical-surface-2)" }}><Icon className="h-4 w-4" /></span>
+          <h3 className="truncate text-sm font-bold text-[var(--clinical-ink)]">{title}</h3>
         </div>
         <DeltaChip delta={delta} />
       </div>
       <div className="mt-2.5 flex items-baseline gap-1.5">
-        <span className="text-2xl font-bold tracking-tight text-slate-900">{fmtNum(latest, digits)}</span>
-        <span className="text-xs font-medium text-slate-400">{unit}</span>
+        <span className="text-2xl font-bold tracking-tight text-[var(--clinical-ink)]">{fmtNum(latest, digits)}</span>
+        <span className="text-xs font-medium text-[var(--clinical-muted)]">{unit}</span>
       </div>
       <div className="mt-1.5"><LineChart points={points} series={[{ label: title, color, values }]} height={150} yDigits={digits} area idBase={idBase} /></div>
     </div>
@@ -446,109 +448,112 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE" }: { clinicia
 
   const lvl = selected ? levelOf(selected) : null;
 
-  return (
-    <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6 print:bg-white">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2"><Activity className="w-6 h-6 text-blue-500" /> Vitals Trend</h1>
-          <p className="text-sm text-slate-500 mt-1">Track vital sign trends over time per resident</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 print:hidden">
-          <select value={residentId} onChange={(e) => setResidentId(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40 min-w-[200px]">
-            <option value="">Select resident…</option>
-            {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>Rm {s(r.room)} — {s(r.name)}</option>)}
-          </select>
-          <div className="inline-flex rounded-xl border border-slate-200 bg-white overflow-hidden">
-            {RANGES.map((d) => (
-              <button key={d} onClick={() => setRange(d)} className={`px-3 py-2 text-sm font-semibold ${range === d ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>{d} days</button>
-            ))}
-          </div>
-          {selected && (
-            <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50"><FileDown className="w-4 h-4" /> Export PDF</button>
-          )}
-        </div>
-      </div>
+  const anyLoading = resQ.loading || roundQ.loading || vitQ.loading;
+  const anyError = resQ.error || roundQ.error || vitQ.error;
 
-      {!selected ? (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-16 flex flex-col items-center justify-center text-center">
-          <Activity className="w-10 h-10 text-slate-300 mb-3" />
-          <p className="font-bold text-slate-600">Select a resident to view vitals trends</p>
-          <p className="text-sm text-slate-400 mt-1">Choose a resident from the dropdown above to see their vital sign history</p>
-        </div>
-      ) : (
-        <div className="space-y-5">
-          {/* Summary card */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-12 h-12 rounded-xl bg-blue-50 flex flex-col items-center justify-center leading-none shrink-0"><span className="text-[9px] font-semibold text-blue-400">Rm</span><span className="text-sm font-bold text-blue-700">{s(selected.room)}</span></div>
-              <div className="min-w-0">
-                <p className="font-bold text-slate-900 truncate">{s(selected.name)}</p>
-                <p className="text-xs text-slate-500">Care Level {lvl?.n} · {startLabel} to {endLabel}</p>
+  return (
+    <ClinicalPage className="print:bg-white">
+      <ClinicalHeader
+        title="Vitals Trend"
+        subtitle="Track vital sign trends over time per resident"
+        right={
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <select value={residentId} onChange={(e) => setResidentId(e.target.value)} aria-label="Select resident" className={`${controlClass} w-full sm:w-64`}>
+              <option value="">Select resident…</option>
+              {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>Rm {s(r.room)} — {s(r.name)}</option>)}
+            </select>
+            <div className="inline-flex overflow-hidden rounded-lg border" style={{ borderColor: "var(--clinical-line-strong)" }}>
+              {RANGES.map((d) => (
+                <button key={d} onClick={() => setRange(d)} className={`px-3 py-2 text-sm font-semibold ${range === d ? "bg-[var(--clinical-panel)] text-white" : "text-[var(--clinical-ink-soft)] hover:bg-[var(--clinical-surface-2)]"}`}>{d} days</button>
+              ))}
+            </div>
+            {selected && (
+              <ClinicalButton variant="secondary" onClick={() => window.print()}><FileDown className="h-4 w-4" /> Export PDF</ClinicalButton>
+            )}
+          </div>
+        }
+      />
+
+      <div className="mt-5">
+        <DataState loading={anyLoading} error={anyError} empty={!selected}
+          emptyTitle="Select a resident to view vitals trends"
+          emptyHint="Choose a resident from the dropdown above to see their vital sign history">
+          {selected && (
+            <div className="space-y-5">
+              {/* Summary card */}
+              <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl leading-none" style={{ backgroundColor: "var(--clinical-surface-2)" }}><span className="text-[9px] font-semibold text-[var(--clinical-muted)]">Rm</span><span className="text-sm font-bold text-[var(--clinical-panel)]">{s(selected.room)}</span></div>
+                  <div className="min-w-0">
+                    <p className="truncate font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>{s(selected.name)}</p>
+                    <p className="text-xs text-[var(--clinical-muted)]">Care Level {lvl?.n} · {startLabel} to {endLabel}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <StatCard value={readings.length} label="Readings" accent="ink" />
+                  <StatCard value={abnormalCount} label="Abnormal" accent={abnormalCount > 0 ? "coral" : "ink"} />
+                </div>
+              </div>
+
+              {/* 2-column analytics grid — 6 graphs paired: BP|HR, Temp|SpO₂, RR|Weight */}
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <BloodPressureCard points={readings} />
+                {smallCards.map((spec) => (
+                  <VitalCard key={spec.key} spec={spec} points={readings.map((r) => ({ at: r.at, v: spec.get(r) }))} />
+                ))}
+                {painPoints.length >= 2 && (
+                  <OtherTrendCard title="Pain Score" icon={Zap} tint="text-orange-500" color="#f97316" unit="/10" points={painPoints} digits={0} idBase="ot-pain" />
+                )}
+                {sleepPoints.length >= 2 && (
+                  <OtherTrendCard title="Sleep Hours" icon={Moon} tint="text-indigo-500" color="#6366f1" unit="h" points={sleepPoints} digits={1} idBase="ot-sleep" />
+                )}
+              </div>
+
+              {/* Raw readings table */}
+              <div className="rounded-xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+                <h2 className="mb-3 font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>Raw Readings</h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-[var(--clinical-muted)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
+                        <th className="rounded-l-lg px-3 py-2 font-semibold">Date</th>
+                        <th className="px-3 py-2 font-semibold">BP (mmHg)</th>
+                        <th className="px-3 py-2 font-semibold">HR (bpm)</th>
+                        <th className="px-3 py-2 font-semibold">Temp (°C)</th>
+                        <th className="px-3 py-2 font-semibold">SpO₂ (%)</th>
+                        <th className="px-3 py-2 font-semibold">RR (/min)</th>
+                        <th className="px-3 py-2 font-semibold">Wt (kg)</th>
+                        <th className="rounded-r-lg px-3 py-2 font-semibold">Logged by</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {readings.length === 0 ? (
+                        <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--clinical-muted)]">No readings in range.</td></tr>
+                      ) : (
+                        [...readings].reverse().map((r, i) => {
+                          const bp = r.systolic != null || r.diastolic != null ? `${fmtNum(r.systolic)}/${fmtNum(r.diastolic)}` : "—";
+                          return (
+                            <tr key={i} className="border-b last:border-0" style={{ borderColor: "var(--clinical-line)" }}>
+                              <td className="px-3 py-2 font-medium text-[var(--clinical-ink)]">{fmtFullDate(r.at)}</td>
+                              <td className="px-3 py-2 text-[var(--clinical-ink-soft)]">{bp}</td>
+                              <td className="px-3 py-2 text-[var(--clinical-ink-soft)]">{fmtNum(r.heartRate)}</td>
+                              <td className="px-3 py-2 text-[var(--clinical-ink-soft)]">{fmtNum(r.temperature, 1)}</td>
+                              <td className="px-3 py-2 text-[var(--clinical-ink-soft)]">{fmtNum(r.spo2)}</td>
+                              <td className="px-3 py-2 text-[var(--clinical-ink-soft)]">{fmtNum(r.respRate)}</td>
+                              <td className="px-3 py-2 text-[var(--clinical-ink-soft)]">{r.weight != null ? fmtNum(r.weight, 1) : "—"}</td>
+                              <td className="px-3 py-2 text-[var(--clinical-muted)]">{r.by}</td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-8">
-              <div className="text-center"><p className="text-2xl font-bold text-slate-800">{readings.length}</p><p className="text-[11px] text-slate-400">Readings</p></div>
-              <div className="text-center"><p className={`text-2xl font-bold ${abnormalCount > 0 ? "text-red-600" : "text-slate-800"}`}>{abnormalCount}</p><p className="text-[11px] text-slate-400">Abnormal</p></div>
-            </div>
-          </div>
-
-          {/* 2-column analytics grid — 6 graphs paired: BP|HR, Temp|SpO₂, RR|Weight */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <BloodPressureCard points={readings} />
-            {smallCards.map((spec) => (
-              <VitalCard key={spec.key} spec={spec} points={readings.map((r) => ({ at: r.at, v: spec.get(r) }))} />
-            ))}
-            {painPoints.length >= 2 && (
-              <OtherTrendCard title="Pain Score" icon={Zap} tint="text-orange-500" color="#f97316" unit="/10" points={painPoints} digits={0} idBase="ot-pain" />
-            )}
-            {sleepPoints.length >= 2 && (
-              <OtherTrendCard title="Sleep Hours" icon={Moon} tint="text-indigo-500" color="#6366f1" unit="h" points={sleepPoints} digits={1} idBase="ot-sleep" />
-            )}
-          </div>
-
-          {/* Raw readings table */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <h2 className="font-bold text-slate-800 mb-3">Raw Readings</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-slate-400 bg-slate-50">
-                    <th className="font-semibold px-3 py-2 rounded-l-lg">Date</th>
-                    <th className="font-semibold px-3 py-2">BP (mmHg)</th>
-                    <th className="font-semibold px-3 py-2">HR (bpm)</th>
-                    <th className="font-semibold px-3 py-2">Temp (°C)</th>
-                    <th className="font-semibold px-3 py-2">SpO₂ (%)</th>
-                    <th className="font-semibold px-3 py-2">RR (/min)</th>
-                    <th className="font-semibold px-3 py-2">Wt (kg)</th>
-                    <th className="font-semibold px-3 py-2 rounded-r-lg">Logged by</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {readings.length === 0 ? (
-                    <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400">No readings in range.</td></tr>
-                  ) : (
-                    [...readings].reverse().map((r, i) => {
-                      const bp = r.systolic != null || r.diastolic != null ? `${fmtNum(r.systolic)}/${fmtNum(r.diastolic)}` : "—";
-                      return (
-                        <tr key={i} className="border-b border-slate-50 last:border-0">
-                          <td className="px-3 py-2 font-medium text-slate-700">{fmtFullDate(r.at)}</td>
-                          <td className="px-3 py-2 text-slate-600">{bp}</td>
-                          <td className="px-3 py-2 text-slate-600">{fmtNum(r.heartRate)}</td>
-                          <td className="px-3 py-2 text-slate-600">{fmtNum(r.temperature, 1)}</td>
-                          <td className="px-3 py-2 text-slate-600">{fmtNum(r.spo2)}</td>
-                          <td className="px-3 py-2 text-slate-600">{fmtNum(r.respRate)}</td>
-                          <td className="px-3 py-2 text-slate-600">{r.weight != null ? fmtNum(r.weight, 1) : "—"}</td>
-                          <td className="px-3 py-2 text-slate-500">{r.by}</td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+          )}
+        </DataState>
+      </div>
+    </ClinicalPage>
   );
 }

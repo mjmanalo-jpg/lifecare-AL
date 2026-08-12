@@ -9,13 +9,14 @@
  */
 
 import { useMemo, useState } from "react";
-import { ClipboardList, CheckCircle2 } from "lucide-react";
+import { ClipboardList } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { levelOf } from "./CareLogsBoard";
+import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalCard, StatCard, DataState, FieldLabel, controlClass, StatusPill, SERIF } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const REVIEW_KEY = "care_plan_reviews";
@@ -41,7 +42,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
   const { name: clinicianName } = useClinician(clinicianRole);
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const incQ = useLiveQuery<Row>("incidents", { query: "take=400", tables: ["Incident"] });
-  const { data: settingRows, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
+  const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
 
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
   const reviews = useMemo(() => parseReviews(settingRows.find((r) => (r.key || r.id) === REVIEW_KEY)?.value), [settingRows]);
@@ -71,84 +72,126 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
   }).filter((x) => x.due), [residents, reviews]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
-      <div className="mb-4">
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Care Plan Reviews</h1>
-        <p className="text-sm text-slate-500 mt-1">Review resident indicators, evaluate triggers, and make care plan decisions</p>
-      </div>
+    <ClinicalPage>
+      <ClinicalHeader
+        title="Care Plan Reviews"
+        subtitle="Review resident indicators, evaluate triggers, and make care plan decisions"
+      />
 
-      <div className="inline-flex gap-1 bg-slate-100 rounded-xl p-1 mb-5">
+      <div className="mt-5 mb-5 inline-flex gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--clinical-surface-2)" }} role="tablist" aria-label="Care plan reviews view">
         {([["new", "New Review"], ["due", "Reviews Due"], ["history", "History"]] as const).map(([v, label]) => (
-          <button key={v} onClick={() => setTab(v)} className={`px-3.5 py-1.5 rounded-lg text-sm font-medium ${tab === v ? "bg-white shadow-sm text-slate-800" : "text-slate-500"}`}>{label}{v === "due" && dueList.length ? ` (${dueList.length})` : ""}</button>
+          <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${tab === v ? "text-white shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`} style={tab === v ? { backgroundColor: "var(--clinical-panel)" } : undefined}>{label}{v === "due" && dueList.length ? ` (${dueList.length})` : ""}</button>
         ))}
       </div>
 
       {tab === "new" && (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="font-bold text-slate-900 mb-2">Select Resident</p>
-            <select value={resId} onChange={(e) => setResId(e.target.value)} className="w-full max-w-md px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40">
+          <ClinicalCard className="p-5">
+            <FieldLabel htmlFor="cpr-res">Select Resident</FieldLabel>
+            <select id="cpr-res" value={resId} onChange={(e) => setResId(e.target.value)} className={`${controlClass} max-w-md`}>
               <option value="">Choose a resident…</option>
               {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)} (Level {levelOf(r).n})</option>)}
             </select>
-          </div>
+          </ClinicalCard>
 
           {resident && <ReviewForm resident={resident} recentInc={recentInc} last={latestReview(resId)} reviewedBy={clinicianName} onSubmit={async (rec) => { await persist([{ ...rec, id: newId(), createdAt: new Date().toISOString() }, ...reviews]); setResId(""); setTab("history"); Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Care plan review submitted", showConfirmButton: false, timer: 1800 }); }} />}
         </div>
       )}
 
       {tab === "due" && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
-          <p className="font-bold text-slate-900 mb-3">Residents Needing Review</p>
-          {dueList.length === 0 ? <div className="py-6 text-center"><CheckCircle2 className="w-10 h-10 text-green-500 mx-auto mb-2" /><p className="text-slate-500">No reviews due — all care plans are up to date.</p></div>
-            : <div className="space-y-2">
+        <>
+          <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatCard value={residents.length} label="Residents" accent="ink" />
+            <StatCard value={dueList.length} label="Reviews Due" accent="amber" />
+            <StatCard value={dueList.filter((x) => !x.last).length} label="Never Reviewed" accent="coral" />
+            <StatCard value={reviews.length} label="Total Reviews" accent="teal" />
+          </div>
+          <ClinicalCard className="p-5">
+            <p className="mb-3 font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>Residents Needing Review</p>
+            <DataState
+              loading={loading && reviews.length === 0}
+              error={error}
+              empty={dueList.length === 0}
+              emptyTitle="No reviews due"
+              emptyHint="All care plans are up to date."
+              onRetry={() => void refetch()}
+              skeletonRows={3}
+            >
+              <div className="space-y-2">
                 {dueList.map(({ r, last }) => {
                   const lastReview = last ? fmt(last.reviewDate) : "Never";
+                  const overdue = !last?.nextReviewDate || last.nextReviewDate <= isoDate(today);
                   const nextDue = last?.nextReviewDate && last.nextReviewDate > isoDate(today) ? fmt(last.nextReviewDate) : "Overdue";
                   return (
-                    <div key={s(r.id)} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3">
-                      <div>
-                        <p className="font-bold text-slate-900">{s(r.name)} — Rm {s(r.room)}</p>
-                        <p className="text-xs text-slate-500">Level {levelOf(r).n} • Last review: {lastReview} • Next due: {nextDue}</p>
+                    <div key={s(r.id)} className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-[var(--clinical-ink)]">{s(r.name)} — Rm {s(r.room)}</p>
+                          {overdue && <StatusPill status="OVERDUE" />}
+                        </div>
+                        <p className="text-xs text-[var(--clinical-muted)]">Level {levelOf(r).n} • Last review: {lastReview} • Next due: {nextDue}</p>
                       </div>
-                      <button onClick={() => { setResId(s(r.id)); setTab("new"); }} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shrink-0">Start Review</button>
+                      <ClinicalButton variant="primary" size="sm" className="shrink-0" onClick={() => { setResId(s(r.id)); setTab("new"); }}>Start Review</ClinicalButton>
                     </div>
                   );
                 })}
-              </div>}
-        </div>
+              </div>
+            </DataState>
+          </ClinicalCard>
+        </>
       )}
 
       {tab === "history" && (
-        reviews.length === 0 ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-400">No care plan reviews yet.</div>
-          : <div className="rounded-2xl border border-slate-200 bg-white overflow-x-auto">
-              <table className="w-full text-sm min-w-[760px]">
-                <thead><tr className="text-left text-slate-400 border-b border-slate-100"><th className="font-semibold px-4 py-2.5">Resident</th><th className="font-semibold px-4 py-2.5">Date</th><th className="font-semibold px-4 py-2.5">Level</th><th className="font-semibold px-4 py-2.5">Decision</th><th className="font-semibold px-4 py-2.5">Status</th><th className="font-semibold px-4 py-2.5">By</th></tr></thead>
-                <tbody>
-                  {[...reviews].sort((a, b) => (b.reviewDate || "").localeCompare(a.reviewDate || "")).map((rv) => { const r = residents.find((x: Row) => s(x.id) === rv.residentId); return (
-                    <tr key={rv.id} className="border-b border-slate-50 last:border-0">
-                      <td className="px-4 py-2.5"><span className="font-semibold text-slate-800">{s(r?.name) || "Resident"}</span> <span className="text-slate-400 text-xs">Rm {s(r?.room)}</span></td>
-                      <td className="px-4 py-2.5 text-slate-600">{fmt(rv.reviewDate)} <span className="text-slate-400">· {rv.reviewPeriod}</span></td>
-                      <td className="px-4 py-2.5 text-slate-700 font-semibold">Level {rv.levelAtReview}</td>
-                      <td className="px-4 py-2.5 text-slate-700">{rv.decision}</td>
-                      <td className="px-4 py-2.5"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{rv.carePlanStatus}</span></td>
-                      <td className="px-4 py-2.5 text-slate-600">{rv.reviewedBy || "—"}</td>
-                    </tr>
-                  ); })}
-                </tbody>
-              </table>
-            </div>
+        <DataState
+          loading={loading && reviews.length === 0}
+          error={error}
+          empty={reviews.length === 0}
+          emptyTitle="No care plan reviews yet"
+          emptyHint="Submitted reviews will appear here."
+          onRetry={() => void refetch()}
+          skeletonRows={4}
+        >
+          <div className="overflow-x-auto rounded-xl border" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+            <table className="w-full min-w-[760px] text-sm">
+              <thead><tr className="border-b text-left text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line)" }}><th className="px-4 py-2.5 font-semibold">Resident</th><th className="px-4 py-2.5 font-semibold">Date</th><th className="px-4 py-2.5 font-semibold">Level</th><th className="px-4 py-2.5 font-semibold">Decision</th><th className="px-4 py-2.5 font-semibold">Status</th><th className="px-4 py-2.5 font-semibold">By</th></tr></thead>
+              <tbody>
+                {[...reviews].sort((a, b) => (b.reviewDate || "").localeCompare(a.reviewDate || "")).map((rv) => { const r = residents.find((x: Row) => s(x.id) === rv.residentId); return (
+                  <tr key={rv.id} className="border-b last:border-0" style={{ borderColor: "var(--clinical-line)" }}>
+                    <td className="px-4 py-2.5"><span className="font-semibold text-[var(--clinical-ink)]">{s(r?.name) || "Resident"}</span> <span className="text-xs text-[var(--clinical-muted)]">Rm {s(r?.room)}</span></td>
+                    <td className="px-4 py-2.5 text-[var(--clinical-ink-soft)]">{fmt(rv.reviewDate)} <span className="text-[var(--clinical-muted)]">· {rv.reviewPeriod}</span></td>
+                    <td className="px-4 py-2.5 font-semibold text-[var(--clinical-ink-soft)]">Level {rv.levelAtReview}</td>
+                    <td className="px-4 py-2.5 text-[var(--clinical-ink-soft)]">{rv.decision}</td>
+                    <td className="px-4 py-2.5"><StatusPill status={rv.carePlanStatus} /></td>
+                    <td className="px-4 py-2.5 text-[var(--clinical-ink-soft)]">{rv.reviewedBy || "—"}</td>
+                  </tr>
+                ); })}
+              </tbody>
+            </table>
+          </div>
+        </DataState>
       )}
-    </div>
+    </ClinicalPage>
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) { return <div><p className="text-[11px] text-slate-400">{label}</p><p className="text-sm font-semibold text-slate-800">{value || "—"}</p></div>; }
-function Section({ title, children }: { title: string; children: React.ReactNode }) { return <div className="rounded-2xl border border-slate-200 bg-white p-5"><p className="font-bold text-slate-900 mb-3">{title}</p>{children}</div>; }
+function Field({ label, value }: { label: string; value: string }) { return <div><p className="text-[11px] uppercase tracking-[0.08em] text-[var(--clinical-muted)]">{label}</p><p className="text-sm font-semibold text-[var(--clinical-ink)]">{value || "—"}</p></div>; }
+function Section({ title, children }: { title: string; children: React.ReactNode }) { return <ClinicalCard className="p-5"><p className="mb-3 font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>{title}</p>{children}</ClinicalCard>; }
 function Toggle({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
-  return <button type="button" onClick={onClick} className="inline-flex items-center gap-2.5 text-sm text-slate-700"><span className={`w-10 h-5 rounded-full relative transition ${on ? "bg-blue-600" : "bg-slate-200"}`}><span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: on ? "22px" : "2px" }} /></span>{label}</button>;
+  return <button type="button" role="switch" aria-checked={on} onClick={onClick} className="inline-flex items-center gap-2.5 text-sm text-[var(--clinical-ink-soft)]"><span className="relative h-5 w-10 rounded-full transition" style={{ backgroundColor: on ? "var(--clinical-panel)" : "var(--clinical-line-strong)" }}><span className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all" style={{ left: on ? "22px" : "2px" }} /></span>{label}</button>;
 }
-const input = "w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
+
+// Trigger chip — dot + label, coral when a trigger fired, muted when clear.
+function TriggerLine({ label, trig }: { label: string; trig: string }) {
+  return (
+    <div className="border-b pb-3 last:border-0 last:pb-0" style={{ borderColor: "var(--clinical-line)" }}>
+      <p className="text-sm font-bold text-[var(--clinical-ink)]">{label}</p>
+      <p className="mt-0.5 inline-flex items-center gap-1.5 text-sm" style={{ color: trig ? "var(--clinical-coral)" : "var(--clinical-muted)" }}>
+        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: trig ? "var(--clinical-coral)" : "var(--clinical-line-strong)" }} />
+        {trig || "No triggers identified."}
+      </p>
+    </div>
+  );
+}
 
 function ReviewForm({ resident, recentInc, last, reviewedBy, onSubmit }: {
   resident: Row; recentInc: Row[]; last?: Review; reviewedBy: string;
@@ -184,7 +227,7 @@ function ReviewForm({ resident, recentInc, last, reviewedBy, onSubmit }: {
   return (
     <>
       <Section title="Review Header">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <Field label="Resident" value={s(resident.name)} />
           <Field label="Room" value={s(resident.room)} />
           <Field label="Current Level of Care" value={`Level ${lvl}`} />
@@ -192,41 +235,38 @@ function ReviewForm({ resident, recentInc, last, reviewedBy, onSubmit }: {
           <Field label="Review Date" value={isoDate(today)} />
           <Field label="Reviewed By" value={reviewedBy || "Staff"} />
           <Field label="Last Review" value={last ? fmt(last.reviewDate) : "Never"} />
-          <div><p className="text-[11px] text-slate-400 mb-1">Next Review Date</p><input type="date" value={nextReviewDate} onChange={(e) => setNextReviewDate(e.target.value)} className={input} /></div>
+          <div><FieldLabel htmlFor="cpr-next">Next Review Date</FieldLabel><input id="cpr-next" type="date" value={nextReviewDate} onChange={(e) => setNextReviewDate(e.target.value)} className={controlClass} /></div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4 items-center">
-          <div><p className="text-[11px] text-slate-400 mb-1">Care Plan Status</p><select value={carePlanStatus} onChange={(e) => setCarePlanStatus(e.target.value)} className={input}>{PLAN_STATUS.map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
+        <div className="mt-4 grid grid-cols-1 items-center gap-4 lg:grid-cols-3">
+          <div><FieldLabel htmlFor="cpr-status">Care Plan Status</FieldLabel><select id="cpr-status" value={carePlanStatus} onChange={(e) => setCarePlanStatus(e.target.value)} className={controlClass}>{PLAN_STATUS.map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
           <Toggle label="Family Update Needed" on={familyUpdate} onClick={() => setFamilyUpdate((v) => !v)} />
           <Toggle label="Physician Follow-up Needed" on={physicianFollowup} onClick={() => setPhysicianFollowup((v) => !v)} />
         </div>
       </Section>
 
       <Section title="Recent Indicators (Last 30 Days)">
-        {recentInc.length === 0 ? <p className="text-slate-400">No indicator data available.</p>
-          : <div className="space-y-1.5">{recentInc.map((i) => <div key={s(i.id)} className="flex items-center gap-2 text-sm"><span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">{s(i.incidentType).replace(/_/g, " ")}</span><span className="text-slate-600">{s(i.title) || s(i.description).slice(0, 80)}</span><span className="text-slate-400 text-xs ml-auto">{fmt(s(i.incidentDate || i.createdAt).slice(0, 10))}</span></div>)}</div>}
+        {recentInc.length === 0 ? <p className="text-[var(--clinical-muted)]">No indicator data available.</p>
+          : <div className="space-y-1.5">{recentInc.map((i) => <div key={s(i.id)} className="flex items-center gap-2 text-sm"><StatusPill status={s(i.incidentType).replace(/_/g, " ")}>{s(i.incidentType).replace(/_/g, " ")}</StatusPill><span className="text-[var(--clinical-ink-soft)]">{s(i.title) || s(i.description).slice(0, 80)}</span><span className="ml-auto text-xs text-[var(--clinical-muted)]">{fmt(s(i.incidentDate || i.createdAt).slice(0, 10))}</span></div>)}</div>}
       </Section>
 
       <Section title="Trigger Evaluation">
         <div className="space-y-3">
-          {[["Individual Care Plan (ICP) Triggers", icp], ["Individual Service Plan (ISP) Triggers", isp], ["Level of Care (LOC) Review Triggers", loc]].map(([label, trig]) => (
-            <div key={label} className="border-b border-slate-100 last:border-0 pb-3 last:pb-0">
-              <p className="text-sm font-bold text-slate-800">{label}</p>
-              <p className={`text-sm mt-0.5 ${trig ? "text-red-600" : "text-slate-400"}`}>{trig || "No triggers identified."}</p>
-            </div>
-          ))}
+          <TriggerLine label="Individual Care Plan (ICP) Triggers" trig={icp} />
+          <TriggerLine label="Individual Service Plan (ISP) Triggers" trig={isp} />
+          <TriggerLine label="Level of Care (LOC) Review Triggers" trig={loc} />
         </div>
       </Section>
 
       <Section title="Nurse/Admin Decision">
         <div className="space-y-4">
-          <div><p className="text-sm font-bold text-slate-700 mb-1.5">Decision <span className="text-red-500">*</span></p><select value={decision} onChange={(e) => setDecision(e.target.value)} className="w-full max-w-xs px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40"><option value="">Select a decision…</option>{DECISIONS.map((d) => <option key={d} value={d}>{d}</option>)}</select></div>
-          <div><p className="text-sm font-bold text-slate-700 mb-1.5">Reason for Decision / Notes</p><textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Explain the rationale…" className={input} /></div>
-          <div><p className="text-sm font-bold text-slate-700 mb-1.5">Action Plan</p><textarea rows={2} value={actionPlan} onChange={(e) => setActionPlan(e.target.value)} placeholder="Steps to be taken…" className={input} /></div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div><p className="text-sm font-bold text-slate-700 mb-1.5">Responsible Person</p><input value={responsible} onChange={(e) => setResponsible(e.target.value)} placeholder="Name or role" className={input} /></div>
-            <div><p className="text-sm font-bold text-slate-700 mb-1.5">Target Completion Date</p><input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className={input} /></div>
+          <div><FieldLabel required htmlFor="cpr-decision">Decision</FieldLabel><select id="cpr-decision" value={decision} onChange={(e) => setDecision(e.target.value)} className={`${controlClass} max-w-xs`}><option value="">Select a decision…</option>{DECISIONS.map((d) => <option key={d} value={d}>{d}</option>)}</select></div>
+          <div><FieldLabel htmlFor="cpr-reason">Reason for Decision / Notes</FieldLabel><textarea id="cpr-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Explain the rationale…" className={controlClass} /></div>
+          <div><FieldLabel htmlFor="cpr-action">Action Plan</FieldLabel><textarea id="cpr-action" rows={2} value={actionPlan} onChange={(e) => setActionPlan(e.target.value)} placeholder="Steps to be taken…" className={controlClass} /></div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div><FieldLabel htmlFor="cpr-resp">Responsible Person</FieldLabel><input id="cpr-resp" value={responsible} onChange={(e) => setResponsible(e.target.value)} placeholder="Name or role" className={controlClass} /></div>
+            <div><FieldLabel htmlFor="cpr-target">Target Completion Date</FieldLabel><input id="cpr-target" type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className={controlClass} /></div>
           </div>
-          <button onClick={submit} disabled={saving} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60"><ClipboardList className="w-4 h-4" /> {saving ? "Submitting…" : "Submit Care Plan Review"}</button>
+          <ClinicalButton variant="accent" onClick={submit} disabled={saving}><ClipboardList className="h-4 w-4" /> {saving ? "Submitting…" : "Submit Care Plan Review"}</ClinicalButton>
         </div>
       </Section>
     </>

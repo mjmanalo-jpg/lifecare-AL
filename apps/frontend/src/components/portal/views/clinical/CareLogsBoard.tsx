@@ -15,7 +15,7 @@ import { useMemo, useState, useRef } from "react";
 import {
   Activity, Utensils, Droplets, Smile, Zap, Footprints, Moon, Wind, AlertTriangle,
   CalendarDays, Sun, Clock,
-  Search, X, ChevronUp, ChevronDown, Plus, QrCode, Eye, Download, Sparkles,
+  ChevronUp, ChevronDown, Plus, QrCode, Eye, Download, Sparkles,
   UserRound, Pill, Check, Camera, Image as ImageIcon, Trash2, Pencil, UserX,
   ExternalLink, type LucideIcon,
 } from "lucide-react";
@@ -25,6 +25,7 @@ import { adaptResident } from "@/lib/adapters";
 import { createRecord, upsertRecord, updateRecord } from "@/lib/api";
 import { qrDataUrl } from "@/lib/qr";
 import { useClinician, type ClinicianRole } from "./useClinician";
+import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, SearchInput, DataState, controlClass } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 type DomainKey = "vitals" | "meals" | "bowel" | "urine" | "edema" | "concerns" | "mood" | "pain" | "mobility" | "sleep";
@@ -55,7 +56,25 @@ const LEVELS: Record<string, { n: number; label: string; badge: string }> = {
   SKILLED: { n: 4, label: "Skilled Care", badge: "bg-red-100 text-red-700" },
 };
 export const levelOf = (r: Row) => LEVELS[s(r.careLevel)] || { n: 2, label: "Assisted", badge: "bg-blue-100 text-blue-700" };
+
+// Theme-safe care-level chip: ink label + a coloured dot keyed to the level
+// (green independent → amber moderate → coral memory/skilled), replacing the
+// hardcoded light bg-*-100 badges that stranded contrast in dark mode.
+const LEVEL_DOT: Record<number, string> = { 1: "var(--clinical-green)", 2: "var(--clinical-panel)", 3: "var(--clinical-amber)", 4: "var(--clinical-coral)" };
+function LevelBadge({ lvl }: { lvl: { n: number; label: string } }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>
+      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: LEVEL_DOT[lvl.n] ?? "var(--clinical-panel)" }} />Level {lvl.n} · {lvl.label}
+    </span>
+  );
+}
 const genderSym = (g: unknown) => { const v = s(g).toLowerCase(); return v.startsWith("m") ? "♂" : v.startsWith("f") ? "♀" : "•"; };
+
+// Theme-safe domain label chip for the Care Logs timeline (replaces the
+// hardcoded bg-*-100 pills that lost contrast in dark mode).
+function DomainChip({ label }: { label: string }) {
+  return <span className="shrink-0 mt-0.5 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--clinical-ink-soft)]" style={{ borderColor: "var(--clinical-line-strong)", backgroundColor: "var(--clinical-surface-2)" }}>{label}</span>;
+}
 const BOWEL_REF_KEY = "bowel_reference_photo"; // migration-free: one community reference image (data URL), set by nurse/care manager
 
 // Downscale an image file to a JPEG data URL so the app-settings JSON stays small.
@@ -205,7 +224,7 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
 
 // ── Residents tab — quick-log list (Image 15) ────────────────────────────────
 export default function CareLogsBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
-  const { residents, domainsByRes, ensureRound, refetchAll, refetchResidents, bowelRef, saveBowelRef } = useCareLogData(clinicianRole);
+  const { residents, domainsByRes, ensureRound, refetchAll, refetchResidents, bowelRef, saveBowelRef, loading } = useCareLogData(clinicianRole);
 
   const [search, setSearch] = useState("");
   const [levelFilter, setLevelFilter] = useState<number | null>(null);
@@ -243,63 +262,67 @@ export default function CareLogsBoard({ clinicianRole = "NURSE" }: { clinicianRo
   };
 
   return (
-    <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
-      <div className="mb-4">
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Residents</h1>
-        <p className="text-sm text-slate-500 mt-1">{residents.length} active resident{residents.length === 1 ? "" : "s"}</p>
-      </div>
+    <ClinicalPage>
+      <ClinicalHeader
+        title="Residents"
+        subtitle={`${residents.length} active resident${residents.length === 1 ? "" : "s"}`}
+      />
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or room…" className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40" />
-        </div>
+      <div className="mt-5 flex flex-col sm:flex-row gap-3 mb-5">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search by name or room…" className="flex-1" />
         <div className="inline-flex gap-1.5">
           {[null, 1, 2, 3, 4].map((lv) => (
-            <button key={lv ?? "all"} onClick={() => setLevelFilter(lv)} className={`px-3.5 py-2 rounded-xl text-sm font-semibold border ${levelFilter === lv ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}>{lv == null ? "All" : `L${lv}`}</button>
+            <ClinicalButton key={lv ?? "all"} variant={levelFilter === lv ? "primary" : "secondary"} onClick={() => setLevelFilter(lv)}>{lv == null ? "All" : `L${lv}`}</ClinicalButton>
           ))}
         </div>
       </div>
 
-      <div className="space-y-3">
-        {filtered.map((r: Row) => {
-          const lvl = levelOf(r);
-          const diet = s(r.dietRestriction) || s(r.raw?.dietType) || "Regular";
-          return (
-            <div key={s(r.id)} className="rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-slate-100 flex flex-col items-center justify-center leading-none shrink-0"><span className="text-[9px] font-semibold text-slate-400">Rm</span><span className="text-sm font-bold text-slate-700">{s(r.room)}</span></div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-bold text-slate-900 truncate">{s(r.name)}</p>
-                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${lvl.badge}`}>Level {lvl.n} · {lvl.label}</span>
+      <DataState
+        loading={loading && residents.length === 0}
+        empty={filtered.length === 0}
+        emptyTitle={residents.length === 0 ? "No active residents" : "No residents match"}
+        emptyHint={residents.length === 0 ? "Residents appear here once they are admitted to the active roster." : "Clear the search or level filter to see all residents."}
+        skeletonRows={4}
+      >
+        <div className="space-y-3">
+          {filtered.map((r: Row) => {
+            const lvl = levelOf(r);
+            const diet = s(r.dietRestriction) || s(r.raw?.dietType) || "Regular";
+            return (
+              <div key={s(r.id)} className="rounded-xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-[var(--clinical-surface-2)] flex flex-col items-center justify-center leading-none shrink-0"><span className="text-[9px] font-semibold text-[var(--clinical-muted)]">Rm</span><span className="text-sm font-bold text-[var(--clinical-ink-soft)]">{s(r.room)}</span></div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-bold text-[var(--clinical-ink)] truncate">{s(r.name)}</p>
+                      <LevelBadge lvl={lvl} />
+                    </div>
+                    <p className="text-xs text-[var(--clinical-muted)] mt-0.5">{genderSym(r.raw?.gender)} · {diet}</p>
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5">{genderSym(r.raw?.gender)} · {diet}</p>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button onClick={() => setViewFor(r)} title="View profile" className="w-9 h-9 rounded-lg flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-500"><Eye className="w-4 h-4" /></button>
-                  <button onClick={() => setEditFor(r)} title="Edit resident" className="w-9 h-9 rounded-lg flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-600"><Pencil className="w-4 h-4" /></button>
-                  <button onClick={() => deactivate(r)} title="Deactivate resident" className="w-9 h-9 rounded-lg flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600"><UserX className="w-4 h-4" /></button>
-                  <button onClick={() => setQrFor(r)} title="Resident QR" className="w-9 h-9 rounded-lg flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-500"><QrCode className="w-4 h-4" /></button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button onClick={() => setViewFor(r)} aria-label={`View ${s(r.name)}'s profile`} title="View profile" className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--clinical-surface-2)] hover:brightness-95 text-[var(--clinical-ink-soft)]"><Eye className="w-4 h-4" /></button>
+                    <button onClick={() => setEditFor(r)} aria-label={`Edit ${s(r.name)}`} title="Edit resident" className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--clinical-surface-2)] hover:brightness-95 text-[var(--clinical-panel)]"><Pencil className="w-4 h-4" /></button>
+                    <button onClick={() => deactivate(r)} aria-label={`Deactivate ${s(r.name)}`} title="Deactivate resident" className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--clinical-surface-2)] hover:brightness-95 text-[var(--clinical-coral)]"><UserX className="w-4 h-4" /></button>
+                    <button onClick={() => setQrFor(r)} aria-label={`Show QR for ${s(r.name)}`} title="Resident QR" className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--clinical-surface-2)] hover:brightness-95 text-[var(--clinical-ink-soft)]"><QrCode className="w-4 h-4" /></button>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-        {filtered.length === 0 && <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-400">No residents match.</div>}
-      </div>
+            );
+          })}
+        </div>
+      </DataState>
 
       {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} ensureRound={ensureRound} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
       {qrFor && <QrModal resident={qrFor} onClose={() => setQrFor(null)} />}
       {viewFor && <ViewModal resident={viewFor} loggedDomains={domainsByRes.get(s(viewFor.id)) || new Set()} onOpenLog={(t) => { setViewFor(null); openLog(viewFor, t); }} onClose={() => setViewFor(null)} />}
       {editFor && <EditResidentModal resident={editFor} onSaved={refetchResidents} onClose={() => setEditFor(null)} />}
-    </div>
+    </ClinicalPage>
   );
 }
 
 // ── Care Logs tab — today's log timeline (Image 18) ──────────────────────────
 export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
-  const { residents, entries, byResident, domainsByRes, bowelRef, saveBowelRef, ensureRound, refetchAll } = useCareLogData(clinicianRole);
+  const { residents, entries, byResident, domainsByRes, bowelRef, saveBowelRef, ensureRound, refetchAll, loading } = useCareLogData(clinicianRole);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [logFor, setLogFor] = useState<Row | null>(null);
@@ -309,72 +332,75 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
   const filtered = residents.filter((r: Row) => !q || s(r.name).toLowerCase().includes(q) || s(r.room).toLowerCase().includes(q));
   const toggle = (id: string) => setExpanded((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
+  const now = new Date();
+  const dateLabel = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  const sm = { DAY: { label: "Day Shift", Icon: Sun }, EVENING: { label: "Evening Shift", Icon: Clock }, NIGHT: { label: "Night Shift", Icon: Moon } }[shiftNow()];
+  const SIcon = sm.Icon;
+
   return (
-    <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Care Logs</h1>
-          <p className="text-sm text-slate-500 mt-1">{entries.length} entr{entries.length === 1 ? "y" : "ies"} today</p>
-        </div>
-        {(() => {
-          const now = new Date();
-          const dateLabel = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-          const sm = { DAY: { label: "Day Shift", Icon: Sun, cls: "bg-amber-50 text-amber-700 border-amber-200" }, EVENING: { label: "Evening Shift", Icon: Clock, cls: "bg-orange-50 text-orange-700 border-orange-200" }, NIGHT: { label: "Night Shift", Icon: Moon, cls: "bg-indigo-50 text-indigo-700 border-indigo-200" } }[shiftNow()];
-          const SIcon = sm.Icon;
-          return (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700"><CalendarDays className="w-4 h-4 text-blue-500" /> {dateLabel}</span>
-              <span className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold ${sm.cls}`}><SIcon className="w-4 h-4" /> {sm.label}</span>
-            </div>
-          );
-        })()}
+    <ClinicalPage>
+      <ClinicalHeader
+        title="Care Logs"
+        subtitle={`${entries.length} entr${entries.length === 1 ? "y" : "ies"} today`}
+        right={
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}><CalendarDays className="w-4 h-4 text-[var(--clinical-panel)]" /> {dateLabel}</span>
+            <span className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}><SIcon className="w-4 h-4 text-[var(--clinical-amber)]" /> {sm.label}</span>
+          </div>
+        }
+      />
+
+      <div className="mt-5 mb-5">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search residents…" />
       </div>
 
-      <div className="relative mb-5">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search residents…" className="w-full pl-11 pr-4 py-3.5 rounded-2xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40" />
-      </div>
-
-      <div className="space-y-3">
-        {filtered.map((r: Row) => {
-          const list = byResident.get(s(r.id)) || [];
-          const open = expanded.has(s(r.id));
-          return (
-            <div key={s(r.id)} className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-              <div className="flex items-center gap-3 p-4">
-                <div className="w-11 h-11 rounded-xl bg-slate-100 flex flex-col items-center justify-center leading-none shrink-0"><span className="text-[9px] font-semibold text-slate-400">Rm</span><span className="text-sm font-bold text-slate-700">{s(r.room)}</span></div>
-                <div className="flex-1 min-w-0"><p className="font-bold text-slate-900 truncate">{s(r.name)}</p><p className="text-xs text-slate-500">{list.length} log{list.length === 1 ? "" : "s"} today</p></div>
-                <button onClick={() => { setLogTab("vitals"); setLogFor(r); }} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Plus className="w-4 h-4" /> Log</button>
-                {list.length > 0 && <button onClick={() => toggle(s(r.id))} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400">{open ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}</button>}
-              </div>
-              {open && list.length > 0 && (
-                <div className="border-t border-slate-100 px-4 py-3 space-y-2.5">
-                  {list.map((e, i) => { const d = DOMAINS.find((x) => x.key === e.domain)!; return (
-                    <div key={i} className="flex items-start gap-3">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${d.pill} shrink-0 mt-0.5`}>{d.label}</span>
-                      <span className="text-sm text-slate-600 flex-1 min-w-0">{e.summary}</span>
-                      <span className="text-xs text-slate-400 shrink-0">{rel(e.at)}</span>
-                    </div>
-                  ); })}
+      <DataState
+        loading={loading && residents.length === 0}
+        empty={filtered.length === 0}
+        emptyTitle={residents.length === 0 ? "No active residents" : "No residents match"}
+        emptyHint={residents.length === 0 ? "Residents appear here once they are admitted to the active roster." : "Clear the search to see all residents."}
+        skeletonRows={4}
+      >
+        <div className="space-y-3">
+          {filtered.map((r: Row) => {
+            const list = byResident.get(s(r.id)) || [];
+            const open = expanded.has(s(r.id));
+            return (
+              <div key={s(r.id)} className="rounded-xl border overflow-hidden" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+                <div className="flex items-center gap-3 p-4">
+                  <div className="w-11 h-11 rounded-xl bg-[var(--clinical-surface-2)] flex flex-col items-center justify-center leading-none shrink-0"><span className="text-[9px] font-semibold text-[var(--clinical-muted)]">Rm</span><span className="text-sm font-bold text-[var(--clinical-ink-soft)]">{s(r.room)}</span></div>
+                  <div className="flex-1 min-w-0"><p className="font-bold text-[var(--clinical-ink)] truncate">{s(r.name)}</p><p className="text-xs text-[var(--clinical-muted)]">{list.length} log{list.length === 1 ? "" : "s"} today</p></div>
+                  <ClinicalButton variant="secondary" size="sm" onClick={() => { setLogTab("vitals"); setLogFor(r); }}><Plus className="w-4 h-4" /> Log</ClinicalButton>
+                  {list.length > 0 && <button onClick={() => toggle(s(r.id))} aria-label={open ? "Collapse logs" : "Expand logs"} className="p-2 rounded-lg hover:bg-[var(--clinical-surface-2)] text-[var(--clinical-muted)]">{open ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}</button>}
                 </div>
-              )}
-            </div>
-          );
-        })}
-        {filtered.length === 0 && <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-400">No residents match.</div>}
-      </div>
+                {open && list.length > 0 && (
+                  <div className="border-t px-4 py-3 space-y-2.5" style={{ borderColor: "var(--clinical-line)" }}>
+                    {list.map((e, i) => { const d = DOMAINS.find((x) => x.key === e.domain)!; return (
+                      <div key={i} className="flex items-start gap-3">
+                        <DomainChip label={d.label} />
+                        <span className="text-sm text-[var(--clinical-ink-soft)] flex-1 min-w-0">{e.summary}</span>
+                        <span className="text-xs text-[var(--clinical-muted)] shrink-0">{rel(e.at)}</span>
+                      </div>
+                    ); })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </DataState>
 
       {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} ensureRound={ensureRound} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
-    </div>
+    </ClinicalPage>
   );
 }
 
 // ── Quick-log modal (10 domains) ─────────────────────────────────────────────
 const chip = "px-2.5 py-1.5 rounded-lg border text-xs font-medium transition text-center";
-const chipOn = "bg-blue-600 text-white border-blue-600";
-const chipOff = "bg-white text-slate-600 border-slate-200 hover:border-blue-300";
-const num = "w-full px-3 py-2 rounded-lg border border-slate-200 text-base font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-400/40";
-const txt = "w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
+const chipOn = "bg-[var(--clinical-panel)] text-white border-[var(--clinical-panel)]";
+const chipOff = "bg-[var(--clinical-surface)] text-[var(--clinical-ink-soft)] border-[var(--clinical-line-strong)] hover:border-[var(--clinical-panel)]";
+const num = "w-full px-3 py-2 rounded-lg border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface)] text-base font-semibold text-[var(--clinical-ink)] outline-none focus:border-[var(--clinical-panel)] focus:ring-1 focus:ring-[var(--clinical-panel)]";
+const txt = "w-full px-3 py-2 rounded-lg border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface)] text-sm text-[var(--clinical-ink)] outline-none focus:border-[var(--clinical-panel)] focus:ring-1 focus:ring-[var(--clinical-panel)]";
 
 function Chips({ options, value, onChange, cols = 4 }: { options: { v: string; label: string }[]; value: string; onChange: (v: string) => void; cols?: number }) {
   return <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}>{options.map((o) => <button key={o.v} type="button" onClick={() => onChange(value === o.v ? "" : o.v)} className={`${chip} ${value === o.v ? chipOn : chipOff}`}>{o.label}</button>)}</div>;
@@ -383,7 +409,7 @@ function Multi({ options, value, onChange }: { options: string[]; value: string[
   const set = new Set(value);
   return <div className="flex flex-wrap gap-1.5">{options.map((o) => { const on = set.has(o); return <button key={o} type="button" onClick={() => { const n = new Set(set); if (on) n.delete(o); else n.add(o); onChange([...n]); }} className={`px-2.5 py-1 rounded-full border text-xs font-medium ${on ? chipOn : chipOff}`}>{o}</button>; })}</div>;
 }
-function Label({ children }: { children: React.ReactNode }) { return <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">{children}</p>; }
+function Label({ children }: { children: React.ReactNode }) { return <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--clinical-muted)] mb-1.5">{children}</p>; }
 function Toggle({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) { return <button type="button" onClick={onClick} className={`py-2 rounded-lg border text-xs font-medium ${on ? chipOn : chipOff}`}>{on ? "✓ " : ""}{label}</button>; }
 // Bowel reference image — a Bristol-type identification aid. Nurse/Care Manager
 // uploads it once (community-scoped, persists by default); caregivers see it
@@ -399,24 +425,24 @@ function BowelReference({ photo, canEdit, onSave }: { photo?: string; canEdit: b
       {photo ? (
         <div className="relative">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={photo} alt="Stool reference" className="w-full h-44 object-contain bg-slate-50 rounded-xl border border-slate-200" />
+          <img src={photo} alt="Stool reference" className="w-full h-44 object-contain bg-[var(--clinical-surface-2)] rounded-xl border" style={{ borderColor: "var(--clinical-line)" }} />
           {canEdit && (
             <div className="absolute top-2 right-2 flex gap-1.5">
               <button type="button" onClick={() => ref.current?.click()} disabled={busy} className="px-2 py-1 rounded-lg bg-black/50 text-white text-xs font-semibold hover:bg-black/70">Replace</button>
-              <button type="button" onClick={() => onSave(null)} className="p-1.5 rounded-lg bg-black/50 text-white hover:bg-black/70"><Trash2 className="w-4 h-4" /></button>
+              <button type="button" onClick={() => onSave(null)} aria-label="Remove reference photo" className="p-1.5 rounded-lg bg-black/50 text-white hover:bg-black/70"><Trash2 className="w-4 h-4" /></button>
             </div>
           )}
         </div>
       ) : canEdit ? (
-        <button type="button" onClick={() => ref.current?.click()} disabled={busy} className="w-full flex flex-col items-center justify-center gap-1.5 py-5 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-500 disabled:opacity-60"><div className="flex items-center gap-2"><Camera className="w-5 h-5" /><ImageIcon className="w-5 h-5" /></div><span className="text-sm font-medium">{busy ? "Saving…" : "Upload reference photo"}</span></button>
+        <button type="button" onClick={() => ref.current?.click()} disabled={busy} className="w-full flex flex-col items-center justify-center gap-1.5 py-5 rounded-xl border-2 border-dashed text-[var(--clinical-muted)] hover:border-[var(--clinical-panel)] hover:text-[var(--clinical-ink)] disabled:opacity-60" style={{ borderColor: "var(--clinical-line-strong)" }}><div className="flex items-center gap-2"><Camera className="w-5 h-5" /><ImageIcon className="w-5 h-5" /></div><span className="text-sm font-medium">{busy ? "Saving…" : "Upload reference photo"}</span></button>
       ) : (
-        <p className="text-xs text-slate-400 py-4 text-center border-2 border-dashed border-slate-200 rounded-xl">No reference photo yet — a nurse or care manager can add one.</p>
+        <p className="text-xs text-[var(--clinical-muted)] py-4 text-center border-2 border-dashed rounded-xl" style={{ borderColor: "var(--clinical-line-strong)" }}>No reference photo yet — a nurse or care manager can add one.</p>
       )}
     </div>
   );
 }
 function VitalField({ label, unit, hint, value, onChange }: { label: string; unit: string; hint: string; value: string | undefined; onChange: (v: string) => void }) {
-  return <div><Label>{label}</Label><div className="relative"><input inputMode="decimal" value={value ?? ""} onChange={(e) => onChange(e.target.value)} className={num} /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">{unit}</span></div><p className="text-[10px] text-slate-400 mt-1">Normal {hint}</p></div>;
+  return <div><Label>{label}</Label><div className="relative"><input inputMode="decimal" value={value ?? ""} onChange={(e) => onChange(e.target.value)} className={num} aria-label={label} /><span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--clinical-muted)]">{unit}</span></div><p className="text-[10px] text-[var(--clinical-muted)] mt-1">Normal {hint}</p></div>;
 }
 
 // MealRecord.appetite (AppetiteLevel) is required — derive it from the % consumed.
@@ -426,7 +452,7 @@ const SLEEP_MAP: Record<string, string> = { Excellent: "RESTFUL", Good: "FAIR", 
 
 function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianRole, bowelRef, saveBowelRef, onDone, onClose }: {
   resident: Row; initialTab: DomainKey; loggedDomains: Set<DomainKey>; ensureRound: (id: string) => Promise<string>; clinicianRole: ClinicianRole; bowelRef: string; saveBowelRef: (dataUrl: string | null) => Promise<void>; onDone: () => Promise<void>; onClose: () => void;
-}) {
+}) { // rendered only when open (parent gates on logFor); ClinicalModal open is always true here
   const [tab, setTab] = useState<DomainKey>(initialTab);
   const [f, setF] = useState<Row>({});
   const [notes, setNotes] = useState("");
@@ -519,32 +545,34 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianR
     finally { setSaving(false); }
   };
 
-  const ActiveIcon = dom.icon;
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[95vh] flex flex-col overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
-          <div className="w-8 h-8 rounded-lg bg-rose-500 flex items-center justify-center text-white"><ActiveIcon className="w-4 h-4" /></div>
-          <div className="flex-1 min-w-0"><p className="font-bold text-slate-900 text-[13px] truncate">{dom.label} — {s(resident.name)}</p><p className="text-[10px] text-slate-400">Room {s(resident.room)} · {nowT}</p></div>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-4 h-4" /></button>
+    <ClinicalModal
+      open
+      onClose={onClose}
+      title={`${dom.label} — ${s(resident.name)}`}
+      description={`Room ${s(resident.room)} · ${nowT}`}
+      footer={
+        <div className="flex flex-1 items-center justify-between">
+          <ClinicalButton variant="ghost" size="sm" onClick={onClose}>Close</ClinicalButton>
+          <span className="text-[11px] text-[var(--clinical-muted)]">{new Set([...logged, ...savedNow]).size}/10 logged</span>
         </div>
+      }
+    >
+      <div className="-mx-1 mb-4 flex items-center gap-0.5 overflow-x-auto border-b pb-2" style={{ borderColor: "var(--clinical-line)" }}>
+        {DOMAINS.map((d) => { const on = d.key === tab; const doneD = logged.has(d.key) || savedNow.has(d.key); const Icon = d.icon; return (
+          <button key={d.key} onClick={() => switchTab(d.key)} aria-label={d.label} className={`relative flex flex-col items-center gap-0.5 px-1.5 py-1 rounded-lg min-w-[46px] shrink-0 ${on ? "bg-[var(--clinical-surface-2)]" : "hover:bg-[var(--clinical-surface-2)]"}`}>
+            <Icon className="w-3.5 h-3.5" style={{ color: on ? "var(--clinical-panel)" : "var(--clinical-muted)" }} />
+            <span className="text-[9px] font-medium" style={{ color: on ? "var(--clinical-ink-soft)" : "var(--clinical-muted)" }}>{d.label}</span>
+            {doneD && <span className="absolute top-0.5 right-1 w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "var(--clinical-green)" }} />}
+          </button>
+        ); })}
+      </div>
 
-        <div className="flex items-center gap-0.5 px-1.5 py-1.5 border-b border-slate-100 overflow-x-auto">
-          {DOMAINS.map((d) => { const on = d.key === tab; const doneD = logged.has(d.key) || savedNow.has(d.key); const Icon = d.icon; return (
-            <button key={d.key} onClick={() => switchTab(d.key)} className={`relative flex flex-col items-center gap-0.5 px-1.5 py-1 rounded-lg min-w-[46px] shrink-0 ${on ? "bg-slate-100" : "hover:bg-slate-50"}`}>
-              <Icon className={`w-3.5 h-3.5 ${on ? d.tint : "text-slate-400"}`} />
-              <span className={`text-[9px] font-medium ${on ? "text-slate-700" : "text-slate-400"}`}>{d.label}</span>
-              {doneD && <span className="absolute top-0.5 right-1 w-1.5 h-1.5 rounded-full bg-green-500" />}
-            </button>
-          ); })}
-        </div>
-
-        <div className="p-4 overflow-y-auto flex-1 space-y-4">
+      <div className="space-y-4">
           {tab === "vitals" && (<>
             <div><Label>Blood Pressure</Label><div className="grid grid-cols-2 gap-2">
-              <div><input inputMode="numeric" value={f.systolic ?? ""} onChange={(e) => set({ systolic: e.target.value })} placeholder="Systolic" className={num} /><p className="text-[10px] text-slate-400 mt-1">90–139 mmHg</p></div>
-              <div><input inputMode="numeric" value={f.diastolic ?? ""} onChange={(e) => set({ diastolic: e.target.value })} placeholder="Diastolic" className={num} /><p className="text-[10px] text-slate-400 mt-1">60–89 mmHg</p></div>
+              <div><input inputMode="numeric" value={f.systolic ?? ""} onChange={(e) => set({ systolic: e.target.value })} placeholder="Systolic" aria-label="Systolic" className={num} /><p className="text-[10px] text-[var(--clinical-muted)] mt-1">90–139 mmHg</p></div>
+              <div><input inputMode="numeric" value={f.diastolic ?? ""} onChange={(e) => set({ diastolic: e.target.value })} placeholder="Diastolic" aria-label="Diastolic" className={num} /><p className="text-[10px] text-[var(--clinical-muted)] mt-1">60–89 mmHg</p></div>
             </div></div>
             <VitalField label="Heart Rate" unit="bpm" hint="60–100 bpm" value={f.heartRate} onChange={(v) => set({ heartRate: v })} />
             <VitalField label="Temperature" unit="°C" hint="36.1–37.2 °C" value={f.temperature} onChange={(v) => set({ temperature: v })} />
@@ -556,7 +584,7 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianR
             <div><Label>Meal Type</Label><Chips cols={4} value={f.mealType || ""} onChange={(v) => set({ mealType: v })} options={[{ v: "BREAKFAST", label: "Breakfast" }, { v: "LUNCH", label: "Lunch" }, { v: "DINNER", label: "Dinner" }, { v: "SNACK", label: "Snack" }]} /></div>
             <div><Label>% Consumed</Label><Chips cols={5} value={f.intakeLevel || ""} onChange={(v) => set({ intakeLevel: v })} options={["0%", "25%", "50%", "75%", "100%"].map((x) => ({ v: x, label: x }))} /></div>
             <div><Label>Assistance</Label><Chips cols={2} value={f.feedingAssist || ""} onChange={(v) => set({ feedingAssist: v })} options={[{ v: "Independent", label: "Independent" }, { v: "Setup Only", label: "Setup Only" }, { v: "Partial Assist", label: "Partial Assist" }, { v: "Full Assist", label: "Full Assist" }]} /></div>
-            <div><Label>Hydration (mL)</Label><div className="flex flex-wrap gap-1.5 items-center">{[0, 100, 150, 200, 250, 300].map((n) => <button key={n} type="button" onClick={() => set({ fluidAmountMl: (Number(f.fluidAmountMl) || 0) + n })} className={`${chip} ${chipOff}`}>+{n}</button>)}<span className="ml-1 text-xs font-bold text-blue-600">{Number(f.fluidAmountMl) || 0}mL</span><button type="button" onClick={() => set({ fluidAmountMl: 0 })} className="text-[10px] text-slate-400 underline">reset</button></div></div>
+            <div><Label>Hydration (mL)</Label><div className="flex flex-wrap gap-1.5 items-center">{[0, 100, 150, 200, 250, 300].map((n) => <button key={n} type="button" onClick={() => set({ fluidAmountMl: (Number(f.fluidAmountMl) || 0) + n })} className={`${chip} ${chipOff}`}>+{n}</button>)}<span className="ml-1 text-xs font-bold text-[var(--clinical-panel)]">{Number(f.fluidAmountMl) || 0}mL</span><button type="button" onClick={() => set({ fluidAmountMl: 0 })} className="text-[10px] text-[var(--clinical-muted)] underline">reset</button></div></div>
           </>)}
           {tab === "bowel" && (<>
             <Label>Bristol Stool Scale</Label>
@@ -566,7 +594,7 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianR
           </>)}
           {tab === "urine" && (<>
             <div><Label>Color</Label><Chips cols={4} value={f.color || ""} onChange={(v) => set({ color: v })} options={["Clear", "Pale", "Yellow", "Dark"].map((x) => ({ v: x, label: x }))} /></div>
-            <div><Label>Output (mL)</Label><input inputMode="numeric" value={f.outputMl ?? ""} onChange={(e) => set({ outputMl: e.target.value })} placeholder="mL" className={num} /></div>
+            <div><Label>Output (mL)</Label><input inputMode="numeric" value={f.outputMl ?? ""} onChange={(e) => set({ outputMl: e.target.value })} placeholder="mL" aria-label="Urine output in mL" className={num} /></div>
             <div className="grid grid-cols-2 gap-2"><Toggle label="No Blood" on={f.hasBlood === false} onClick={() => set({ hasBlood: f.hasBlood === false ? undefined : false })} /><Toggle label="Continent" on={f.containment === "Continent"} onClick={() => set({ containment: f.containment === "Continent" ? "" : "Continent" })} /></div>
           </>)}
           {tab === "edema" && (<>
@@ -594,7 +622,7 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianR
             <div><Label>Assistance Level</Label><Chips cols={2} value={f.assistanceLevel || ""} onChange={(v) => set({ assistanceLevel: v })} options={[{ v: "INDEPENDENT", label: "Independent" }, { v: "SUPERVISED", label: "Supervision" }, { v: "MINIMAL", label: "Minimal Assist" }, { v: "MODERATE", label: "Moderate Assist" }, { v: "MAXIMAL", label: "Maximum Assist" }, { v: "DEPENDENT", label: "Dependent" }]} /></div>
             <div><Label>Mobility Aid</Label><Chips cols={3} value={f.assistiveDevice || ""} onChange={(v) => set({ assistiveDevice: v })} options={["None", "Cane", "Walker", "Wheelchair", "Bed-bound", "Gait belt"].map((x) => ({ v: x, label: x }))} /></div>
             <Toggle label="Did not ambulate" on={f.ambulated === false} onClick={() => set({ ambulated: f.ambulated === false ? undefined : false })} />
-            <button type="button" onClick={() => set({ fallOccurred: !f.fallOccurred })} className={`w-full py-2 rounded-lg border text-xs font-semibold ${f.fallOccurred ? "bg-red-600 text-white border-red-600" : "border-red-200 text-red-600 hover:bg-red-50"}`}>⚠ Report Fall Incident</button>
+            <button type="button" onClick={() => set({ fallOccurred: !f.fallOccurred })} className="w-full py-2 rounded-lg border text-xs font-semibold" style={f.fallOccurred ? { backgroundColor: "var(--clinical-coral)", color: "#fff", borderColor: "var(--clinical-coral)" } : { color: "var(--clinical-coral)", borderColor: "var(--clinical-coral)" }}>⚠ Report Fall Incident</button>
           </>)}
           {tab === "sleep" && (<>
             <div><Label>Hours of Sleep</Label><Chips cols={5} value={s(f.totalHours)} onChange={(v) => set({ totalHours: v })} options={[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({ v: String(n), label: `${n}h` }))} /></div>
@@ -602,19 +630,13 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianR
             <div><Label>Disturbances</Label><Multi value={f.disturbances || []} onChange={(v) => set({ disturbances: v })} options={["Pain", "Anxiety", "Noise", "Nocturia", "Confusion", "Nightmares", "Restlessness"]} /></div>
           </>)}
 
-          <button onClick={save} disabled={saving} className="w-full py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? "Saving…" : "Save Log"}</button>
+          <ClinicalButton variant="accent" onClick={save} disabled={saving} className="w-full">{saving ? "Saving…" : "Save Log"}</ClinicalButton>
           <div>
-            <div className="flex items-center justify-between mb-1"><Label>Clinical Notes (optional)</Label><button onClick={aiNote} className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600"><Sparkles className="w-3 h-3" /> AI Note</button></div>
-            <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observations… or tap AI Note" className={txt} />
+            <div className="flex items-center justify-between mb-1"><Label>Clinical Notes (optional)</Label><button onClick={aiNote} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--clinical-panel)]"><Sparkles className="w-3 h-3" /> AI Note</button></div>
+            <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observations… or tap AI Note" aria-label="Clinical notes" className={txt} />
           </div>
-        </div>
-
-        <div className="flex items-center justify-between px-3 py-2.5 border-t border-slate-100">
-          <button onClick={onClose} className="px-4 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50">Close</button>
-          <span className="text-[11px] text-slate-400">{new Set([...logged, ...savedNow]).size}/10 logged</span>
-        </div>
       </div>
-    </div>
+    </ClinicalModal>
   );
 }
 
@@ -627,32 +649,30 @@ function QrModal({ resident, onClose }: { resident: Row; onClose: () => void }) 
   const cardUrl = `${origin}/rcard/${s(resident.id)}`;
   const download = () => { const a = document.createElement("a"); a.href = qrDataUrl(cardUrl, { size: 400 }); a.download = `QR-${s(resident.name).replace(/\s+/g, "-")}.svg`; a.click(); };
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6 text-center" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-3"><p className="font-bold text-slate-900">{s(resident.name)}</p><button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button></div>
+    <ClinicalModal open onClose={onClose} title={s(resident.name)} description="Scan to open the full care card." size="sm">
+      <div className="text-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={qrDataUrl(cardUrl, { size: 220 })} alt="Resident QR" width={220} height={220} className="mx-auto rounded-xl border border-slate-200" />
-        <p className="text-[11px] text-slate-400 mt-2">Scan to open the full care card.</p>
+        <img src={qrDataUrl(cardUrl, { size: 220 })} alt="Resident QR" width={220} height={220} className="mx-auto rounded-xl border" style={{ borderColor: "var(--clinical-line)" }} />
         <div className="mt-4 flex flex-col gap-2">
-          <button onClick={download} className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Download className="w-4 h-4" /> Download QR</button>
-          <a href={cardUrl} target="_blank" rel="noopener noreferrer" className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"><ExternalLink className="w-4 h-4" /> Open card</a>
+          <ClinicalButton variant="secondary" onClick={download} className="w-full"><Download className="w-4 h-4" /> Download QR</ClinicalButton>
+          <a href={cardUrl} target="_blank" rel="noopener noreferrer" className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-[var(--clinical-panel)] text-white text-sm font-semibold hover:brightness-110"><ExternalLink className="w-4 h-4" /> Open card</a>
         </div>
       </div>
-    </div>
+    </ClinicalModal>
   );
 }
 
 // ── View modal — profile + today's logging + meds, View Full Profile at bottom
 function MedsList({ residentId }: { residentId: string }) {
   const { data } = useLiveQuery<Row>("medications", { query: `take=100&f_residentId=${residentId}`, tables: ["Medication"] });
-  if (!data.length) return <p className="text-sm text-slate-400">No medications on file.</p>;
+  if (!data.length) return <p className="text-sm text-[var(--clinical-muted)]">No medications on file.</p>;
   return (
     <div className="space-y-2">
       {data.map((m) => {
         const name = s(m.name || m.medicationName || m.drugName) || "Medication";
         const dose = s(m.dosage || m.dose || m.strength);
         const sub = [s(m.route), s(m.frequency || m.schedule || m.time || m.scheduleTime)].filter(Boolean).join(" · ");
-        return <div key={s(m.id)} className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold text-slate-800">{name}</p>{sub && <p className="text-xs text-slate-400">{sub}</p>}</div><span className="text-sm text-slate-500 shrink-0">{dose || "—"}</span></div>;
+        return <div key={s(m.id)} className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold text-[var(--clinical-ink)]">{name}</p>{sub && <p className="text-xs text-[var(--clinical-muted)]">{sub}</p>}</div><span className="text-sm text-[var(--clinical-ink-soft)] shrink-0">{dose || "—"}</span></div>;
       })}
     </div>
   );
@@ -662,49 +682,47 @@ function ViewModal({ resident, loggedDomains, onOpenLog, onClose }: { resident: 
   const raw = (resident.raw || {}) as Row;
   const lvl = levelOf(resident);
   const goFull = () => { try { const seg = window.location.pathname.split("/")[1] || "care_manager"; window.location.href = `/${seg}/records?resident=${s(resident.id)}`; } catch { /* noop */ } };
-  const field = (label: string, value: string) => <div><p className="text-[11px] text-slate-400">{label}</p><p className="text-sm font-semibold text-slate-800">{value || "—"}</p></div>;
+  const field = (label: string, value: string) => <div><p className="text-[11px] text-[var(--clinical-muted)]">{label}</p><p className="text-sm font-semibold text-[var(--clinical-ink)]">{value || "—"}</p></div>;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[95vh] flex flex-col overflow-hidden">
-        <div className="flex items-center gap-2.5 px-4 py-3 border-b border-slate-100 bg-blue-50/40">
-          <div className="w-10 h-10 rounded-xl bg-blue-100 flex flex-col items-center justify-center leading-none"><span className="text-[9px] font-semibold text-blue-400">Rm</span><span className="text-sm font-bold text-blue-700">{s(resident.room)}</span></div>
-          <div className="flex-1 min-w-0"><p className="font-bold text-slate-900 truncate">{s(resident.name)}</p><span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${lvl.badge}`}>Level {lvl.n} · {lvl.label}</span></div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button>
+    <ClinicalModal
+      open
+      onClose={onClose}
+      title={s(resident.name)}
+      description={`Room ${s(resident.room)} · Level ${lvl.n} · ${lvl.label}`}
+      footer={<ClinicalButton variant="primary" onClick={goFull} className="w-full"><UserRound className="w-4 h-4" /> View Full Profile</ClinicalButton>}
+    >
+      <div className="space-y-5">
+        <div className="flex items-center gap-2.5">
+          <div className="w-10 h-10 rounded-xl bg-[var(--clinical-surface-2)] flex flex-col items-center justify-center leading-none shrink-0"><span className="text-[9px] font-semibold text-[var(--clinical-muted)]">Rm</span><span className="text-sm font-bold text-[var(--clinical-ink-soft)]">{s(resident.room)}</span></div>
+          <div className="min-w-0"><p className="font-bold text-[var(--clinical-ink)] truncate">{s(resident.name)}</p><LevelBadge lvl={lvl} /></div>
         </div>
-
-        <div className="p-4 overflow-y-auto flex-1 space-y-5">
-          <div className="grid grid-cols-2 gap-3">
-            {field("Date of Birth", s(raw.dateOfBirth).slice(0, 10))}
-            {field("Gender", s(raw.gender))}
-            {field("Admission Date", s(raw.admissionDate).slice(0, 10))}
-            {field("Diet Type", s(resident.dietRestriction) || s(raw.dietType) || "Regular")}
-            {field("Mobility Aid", s(raw.mobility) || s(raw.mobilityAid))}
-            {field("Assigned Nurse", s(raw.assignedNurse))}
-          </div>
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Today&apos;s Care Logging</p>
-            <div className="grid grid-cols-4 gap-2">
-              {DOMAINS.map((d) => { const on = loggedDomains.has(d.key); const Icon = d.icon; return (
-                <button key={d.key} onClick={() => onOpenLog(d.key)} className={`rounded-xl border p-2 flex flex-col items-center gap-1 ${on ? "border-green-200 bg-green-50" : "border-slate-200 hover:bg-slate-50"}`}>
-                  <Icon className={`w-4 h-4 ${on ? "text-green-600" : d.tint}`} />
-                  <span className="text-[10px] text-slate-600">{d.label}</span>
-                  {on ? <Check className="w-3 h-3 text-green-600" /> : <span className="text-[9px] text-slate-300">log</span>}
-                </button>
-              ); })}
-            </div>
-          </div>
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5"><Pill className="w-3.5 h-3.5" /> Medications</p>
-            <MedsList residentId={s(resident.id)} />
+        <div className="grid grid-cols-2 gap-3">
+          {field("Date of Birth", s(raw.dateOfBirth).slice(0, 10))}
+          {field("Gender", s(raw.gender))}
+          {field("Admission Date", s(raw.admissionDate).slice(0, 10))}
+          {field("Diet Type", s(resident.dietRestriction) || s(raw.dietType) || "Regular")}
+          {field("Mobility Aid", s(raw.mobility) || s(raw.mobilityAid))}
+          {field("Assigned Nurse", s(raw.assignedNurse))}
+        </div>
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--clinical-muted)] mb-2">Today&apos;s Care Logging</p>
+          <div className="grid grid-cols-4 gap-2">
+            {DOMAINS.map((d) => { const on = loggedDomains.has(d.key); const Icon = d.icon; return (
+              <button key={d.key} onClick={() => onOpenLog(d.key)} aria-label={`Log ${d.label}`} className="rounded-xl border p-2 flex flex-col items-center gap-1 hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: on ? "var(--clinical-green)" : "var(--clinical-line)", backgroundColor: on ? "color-mix(in srgb, var(--clinical-green) 12%, transparent)" : "transparent" }}>
+                <Icon className="w-4 h-4" style={{ color: on ? "var(--clinical-green)" : "var(--clinical-ink-soft)" }} />
+                <span className="text-[10px] text-[var(--clinical-ink-soft)]">{d.label}</span>
+                {on ? <Check className="w-3 h-3" style={{ color: "var(--clinical-green)" }} /> : <span className="text-[9px] text-[var(--clinical-muted)]">log</span>}
+              </button>
+            ); })}
           </div>
         </div>
-
-        <div className="px-4 py-3 border-t border-slate-100">
-          <button onClick={goFull} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-900 text-white font-semibold hover:bg-slate-800"><UserRound className="w-4 h-4" /> View Full Profile</button>
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--clinical-muted)] mb-2 flex items-center gap-1.5"><Pill className="w-3.5 h-3.5" /> Medications</p>
+          <MedsList residentId={s(resident.id)} />
         </div>
       </div>
-    </div>
+    </ClinicalModal>
   );
 }
 
@@ -718,22 +736,22 @@ const CARE_OPTIONS: { v: string; label: string }[] = [
   { v: "MEMORY", label: "Level 4 · Memory Care" },
   { v: "SKILLED", label: "Level 4 · Skilled Care" },
 ];
-const editInput = "w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50/60 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-400/40 focus:bg-white";
+const editInput = controlClass;
 
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-xl border border-slate-200 overflow-hidden">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3.5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-        <span>{title}{subtitle ? <span className="text-slate-400 font-normal"> {subtitle}</span> : null}</span>
-        {open ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--clinical-line)" }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3.5 py-3 text-sm font-semibold text-[var(--clinical-ink-soft)] hover:bg-[var(--clinical-surface-2)]">
+        <span>{title}{subtitle ? <span className="text-[var(--clinical-muted)] font-normal"> {subtitle}</span> : null}</span>
+        {open ? <ChevronUp className="w-4 h-4 text-[var(--clinical-muted)]" /> : <ChevronDown className="w-4 h-4 text-[var(--clinical-muted)]" />}
       </button>
       {open && <div className="px-3.5 pb-3.5 pt-1 space-y-3">{children}</div>}
     </div>
   );
 }
 function EditLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
-  return <p className="text-[12px] font-semibold text-slate-600 mb-1">{children}{required && <span className="text-red-500"> *</span>}</p>;
+  return <p className="text-[12px] font-semibold text-[var(--clinical-ink-soft)] mb-1">{children}{required && <span className="text-[var(--clinical-coral)]"> *</span>}</p>;
 }
 
 function EditResidentModal({ resident, onSaved, onClose }: { resident: Row; onSaved: () => Promise<void> | void; onClose: () => void }) {
@@ -784,16 +802,19 @@ function EditResidentModal({ resident, onSaved, onClose }: { resident: Row; onSa
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[95vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900">Edit — {s(resident.name)}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button>
-        </div>
-
-        <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-3">
-          <div className="rounded-xl border border-slate-200 px-3.5 py-3.5 space-y-3">
-            <p className="text-sm font-semibold text-slate-700">Basic Information</p>
+    <ClinicalModal
+      open
+      onClose={onClose}
+      title={`Edit — ${s(resident.name)}`}
+      description="Update resident details"
+      footer={<>
+        <ClinicalButton variant="ghost" size="sm" onClick={onClose}>Cancel</ClinicalButton>
+        <ClinicalButton variant="accent" onClick={save} disabled={!valid || saving}>{saving ? "Saving…" : "Save Changes"}</ClinicalButton>
+      </>}
+    >
+        <div className="space-y-3">
+          <div className="rounded-xl border px-3.5 py-3.5 space-y-3" style={{ borderColor: "var(--clinical-line)" }}>
+            <p className="text-sm font-semibold text-[var(--clinical-ink-soft)]">Basic Information</p>
             <div className="grid grid-cols-2 gap-3">
               <div><EditLabel required>First Name</EditLabel><input value={firstName} onChange={(e) => setFirstName(e.target.value)} className={editInput} /></div>
               <div><EditLabel required>Last Name</EditLabel><input value={lastName} onChange={(e) => setLastName(e.target.value)} className={editInput} /></div>
@@ -817,7 +838,7 @@ function EditResidentModal({ resident, onSaved, onClose }: { resident: Row; onSa
                 {CARE_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
               </select>
             </div>
-            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-[var(--clinical-ink-soft)] cursor-pointer">
               <input type="checkbox" checked={dnr} onChange={(e) => setDnr(e.target.checked)} className="w-4 h-4 rounded" />
               DNR (Do Not Resuscitate)
             </label>
@@ -837,12 +858,6 @@ function EditResidentModal({ resident, onSaved, onClose }: { resident: Row; onSa
             <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Special care instructions, preferences…" className={editInput} />
           </Section>
         </div>
-
-        <div className="flex items-center justify-end gap-3 px-5 py-3.5 border-t border-slate-100">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button onClick={save} disabled={!valid || saving} className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? "Saving…" : "Save Changes"}</button>
-        </div>
-      </div>
-    </div>
+    </ClinicalModal>
   );
 }

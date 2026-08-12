@@ -304,7 +304,15 @@ export function sanitizeTenantWrite(modelKey: string, body: Record<string, unkno
   if (modelKey === "app-settings") {
     data.organizationId = context.organizationId;
     data.communityId = context.communityId || null;
-    if (!data.key && data.id) data.key = data.id;
+    // AppSetting rows are keyed data, scoped per tenant. The client passes the
+    // bare key as the id; derive a tenant-composite id so two communities/orgs
+    // can hold the same key without colliding on the global primary key (the
+    // bug where a scoped update missed and the create hit a duplicate id).
+    const key = String(data.key ?? data.id ?? "").trim();
+    if (key) {
+      data.key = key;
+      data.id = `${context.organizationId ?? "_"}:${context.communityId ?? "_"}:${key}`;
+    }
   } else if (!new Set(["organizations", "communities", "users"]).has(modelKey)) {
     data.organizationId = context.organizationId;
     data.communityId = context.communityId;

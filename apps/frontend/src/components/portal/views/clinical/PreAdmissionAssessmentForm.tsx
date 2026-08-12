@@ -2,12 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Plus, X, Search, Loader2, Trash2, Pencil, CheckCircle2, Gauge, AlertTriangle,
+  Plus, X, Trash2, Pencil, CheckCircle2, Gauge, AlertTriangle,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
-import { ClinicalHeader, ClinicalCard, StatusPill, MicroLabel } from "./clinical-ui";
+import {
+  ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalCard, StatCard,
+  SearchInput, DataState, StatusPill, MicroLabel, controlClass, DISPLAY,
+} from "./clinical-ui";
 import LevelOfCareReview from "./LevelOfCareReview";
 import {
   PREADMISSION_KEY, parseAssessments, newId, scoreAssessment,
@@ -28,7 +31,13 @@ type SettingRow = { key?: string; id?: string; value?: string };
 const RISK_LABEL: Record<string, string> = { fall: "Fall Risk", aspiration: "Aspiration Risk", pressure: "Pressure Injury Risk", infection: "Infection Risk" };
 const ADL_LABEL: Record<string, string> = { bathing: "Bathing", dressing: "Dressing", grooming: "Grooming", toileting: "Toileting", feeding: "Feeding", transfers: "Transfers" };
 
-const input = "w-full rounded-lg border border-[#D6D8CD] px-3 py-2 text-sm text-[#2B2B27] bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/25";
+// Level 1–5 → KPI accent (low = positive, mid = caution, high = attention).
+const LEVEL_ACCENT = ["green", "green", "amber", "coral", "coral"] as const;
+
+const input = controlClass;
+// Selected vs. unselected chip styling, shared by every scored/plain/multi pick.
+const chipOn = "bg-[var(--clinical-panel)] text-white border-[var(--clinical-panel)]";
+const chipOff = "bg-[var(--clinical-surface)] text-[var(--clinical-ink-soft)] border-[var(--clinical-line-strong)] hover:border-[var(--clinical-panel)]";
 
 // ── Reusable inputs ──────────────────────────────────────────────────────────
 function Text({ label, value, onChange, placeholder, type = "text" }: { label: string; value?: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
@@ -51,14 +60,14 @@ function Area({ label, value, onChange, placeholder, rows = 2 }: { label: string
 function ScoredPick({ label, options, value, onChange, hint }: { label: string; options: readonly Opt[]; value?: string; onChange: (v: string) => void; hint?: string }) {
   return (
     <div>
-      <MicroLabel className="mb-1.5">{label}{hint && <span className="text-[#8A8D82] normal-case tracking-normal font-normal"> — {hint}</span>}</MicroLabel>
+      <MicroLabel className="mb-1.5">{label}{hint && <span className="text-[var(--clinical-muted)] normal-case tracking-normal font-normal"> — {hint}</span>}</MicroLabel>
       <div className="flex flex-wrap gap-1.5">
         {options.map((o) => {
           const on = value === o.value;
           return (
             <button key={o.value} type="button" onClick={() => onChange(on ? "" : o.value)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${on ? "bg-[#2E4A48] text-white border-[#2E4A48]" : "bg-white text-[#4A4D44] border-[#D6D8CD] hover:border-[#2E4A48]/40"}`}>
-              {o.label}{o.points ? <span className={`ml-1 ${on ? "text-white/70" : "text-[#8A8D82]"}`}>+{o.points}</span> : ""}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${on ? chipOn : chipOff}`}>
+              {o.label}{o.points ? <span className={`ml-1 ${on ? "text-white/70" : "text-[var(--clinical-muted)]"}`}>+{o.points}</span> : ""}
             </button>
           );
         })}
@@ -76,7 +85,7 @@ function Pick({ label, options, value, onChange }: { label: string; options: rea
           const on = value === o;
           return (
             <button key={o} type="button" onClick={() => onChange(on ? "" : o)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${on ? "bg-[#3C5A55] text-white border-[#3C5A55]" : "bg-white text-[#4A4D44] border-[#D6D8CD] hover:border-[#2E4A48]/40"}`}>
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${on ? chipOn : chipOff}`}>
               {o}
             </button>
           );
@@ -98,8 +107,8 @@ function MultiPick({ label, options, values, onChange }: { label: string; option
           const on = set.has(o.value);
           return (
             <button key={o.value} type="button" onClick={() => toggle(o.value)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${on ? "bg-[#7E9B6F] text-white border-[#7E9B6F]" : "bg-white text-[#4A4D44] border-[#D6D8CD] hover:border-[#7E9B6F]/50"}`}>
-              {o.label}{o.points ? <span className={`ml-1 ${on ? "text-white/70" : "text-[#8A8D82]"}`}>+{o.points}</span> : ""}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${on ? chipOn : chipOff}`}>
+              {o.label}{o.points ? <span className={`ml-1 ${on ? "text-white/70" : "text-[var(--clinical-muted)]"}`}>+{o.points}</span> : ""}
             </button>
           );
         })}
@@ -110,8 +119,8 @@ function MultiPick({ label, options, values, onChange }: { label: string; option
 function Bool({ label, value, onChange }: { label: string; value?: boolean; onChange: (v: boolean) => void }) {
   return (
     <button type="button" onClick={() => onChange(!value)}
-      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${value ? "bg-[#2E4A48] text-white border-[#2E4A48]" : "bg-white text-[#4A4D44] border-[#D6D8CD]"}`}>
-      <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${value ? "bg-white/20 border-white" : "border-[#B8BBB0]"}`}>{value && <CheckCircle2 className="w-3 h-3" />}</span>
+      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${value ? chipOn : chipOff}`}>
+      <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${value ? "bg-white/20 border-white" : "border-[var(--clinical-line-strong)]"}`}>{value && <CheckCircle2 className="w-3 h-3" />}</span>
       {label}
     </button>
   );
@@ -119,10 +128,10 @@ function Bool({ label, value, onChange }: { label: string; value?: boolean; onCh
 function Section({ code, title, points, subtotal, children }: { code: string; title: string; points?: number; subtotal?: number; children: React.ReactNode }) {
   return (
     <ClinicalCard top="teal" className="p-4 sm:p-5">
-      <div className="flex items-center justify-between gap-2 mb-3 border-b border-[#EEEFE8] pb-2">
-        <h3 className="text-sm font-bold text-[#2B2B27]"><span className="text-[#C0573F] mr-1.5">{code}</span>{title}</h3>
+      <div className="flex items-center justify-between gap-2 mb-3 border-b pb-2" style={{ borderColor: "var(--clinical-line)" }}>
+        <h3 className="text-sm font-bold text-[var(--clinical-ink)]"><span className="text-[var(--clinical-panel)] mr-1.5">{code}</span>{title}</h3>
         {typeof points === "number" && (
-          <span className="text-xs font-bold text-[#2E4A48] bg-[#2E4A48]/8 px-2 py-0.5 rounded">{subtotal ?? 0}<span className="text-[#8A8D82] font-medium">/{points}</span></span>
+          <span className="text-xs font-bold text-[var(--clinical-panel)] rounded px-2 py-0.5" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)" }}>{subtotal ?? 0}<span className="text-[var(--clinical-muted)] font-medium">/{points}</span></span>
         )}
       </div>
       <div className="space-y-4">{children}</div>
@@ -136,7 +145,7 @@ const stripMeta = (a: PreAdmissionAssessment): PreAdmissionData =>
   Object.fromEntries(Object.entries(a).filter(([k]) => !META_KEYS.has(k))) as PreAdmissionData;
 
 export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: { clinicianRole?: string }) {
-  const { data: settingRows, loading, refetch } = useLiveQuery<SettingRow>("app-settings", { tables: ["AppSetting"] });
+  const { data: settingRows, loading, error, refetch } = useLiveQuery<SettingRow>("app-settings", { tables: ["AppSetting"] });
   const assessments = useMemo(
     () => parseAssessments(settingRows.find((r) => (r.key || r.id) === PREADMISSION_KEY)?.value)
       .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "")),
@@ -188,7 +197,7 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
   };
 
   const remove = async (a: PreAdmissionAssessment) => {
-    const c = await Swal.fire({ title: "Delete assessment?", text: `Remove the pre-admission assessment for ${a.residentName || "this prospect"}?`, icon: "warning", showCancelButton: true, confirmButtonColor: "#C0573F", confirmButtonText: "Delete" });
+    const c = await Swal.fire({ title: "Delete assessment?", text: `Remove the pre-admission assessment for ${a.residentName || "this prospect"}?`, icon: "warning", showCancelButton: true, confirmButtonColor: "#e11d48", confirmButtonText: "Delete" });
     if (!c.isConfirmed) return;
     await persist(assessments.filter((x) => x.id !== a.id));
   };
@@ -212,31 +221,32 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
   const stat = (lvl: number) => assessments.filter((a) => a.scores?.level === lvl).length;
 
   return (
-    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-6" style={{ background: "#F4F5F0" }}>
+    <ClinicalPage className="space-y-6">
       <ClinicalHeader
-        eyebrow="Stage 2 · Pre-Admission Screen"
         title="Pre-Admission Assessment"
         subtitle="LifeCare Living Solutions — Resident Assessment Form v2.0. Scores the 0–50 acuity total and LifeCare Level of Care."
-        right={<button onClick={openNew} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#2E4A48] text-white text-sm font-semibold hover:bg-[#25403D] shadow-sm"><Plus className="w-4 h-4" /> New Assessment</button>}
+        right={<ClinicalButton variant="accent" onClick={openNew}><Plus className="w-4 h-4" /> New Assessment</ClinicalButton>}
       />
 
       {/* Level distribution */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard label="Total" value={assessments.length} tone="#2E4A48" />
-        {[1, 2, 3, 4, 5].map((l) => <StatCard key={l} label={`Level ${l}`} value={stat(l)} tone={["#7E9B6F", "#7E9B6F", "#C39A3E", "#C0573F", "#9E3B2A"][l - 1]} />)}
+        <StatCard label="Total" value={assessments.length} accent="ink" />
+        {[1, 2, 3, 4, 5].map((l) => <StatCard key={l} label={`Level ${l}`} value={stat(l)} accent={LEVEL_ACCENT[l - 1]} />)}
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-2.5 w-4 h-4 text-[#8A8D82]" />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by resident name…" className={`${input} pl-9`} />
-      </div>
+      <SearchInput value={search} onChange={setSearch} placeholder="Search by resident name…" className="max-w-sm" />
 
       {/* List */}
-      {loading && assessments.length === 0 ? (
-        <ClinicalCard className="p-8 text-center text-[#8A8D82]"><Loader2 className="w-5 h-5 animate-spin inline mr-2" />Loading assessments…</ClinicalCard>
-      ) : filtered.length === 0 ? (
-        <ClinicalCard className="p-8 text-center text-[#8A8D82]">No assessments yet. Click <b>New Assessment</b> to screen a prospective resident.</ClinicalCard>
-      ) : (
+      <DataState
+        loading={loading && assessments.length === 0}
+        error={error}
+        empty={filtered.length === 0}
+        emptyTitle={assessments.length === 0 ? "No assessments yet" : "No matches"}
+        emptyHint={assessments.length === 0 ? "Click New Assessment to screen a prospective resident." : "Try a different resident name."}
+        emptyAction={assessments.length === 0 ? <ClinicalButton variant="accent" onClick={openNew}><Plus className="w-4 h-4" /> New Assessment</ClinicalButton> : undefined}
+        onRetry={() => void refetch()}
+        skeletonRows={3}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map((a) => {
             const eff = effectiveLevel(a);
@@ -246,28 +256,28 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
             return (
               <ClinicalCard key={a.id} top={top} className="p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3 className="font-bold text-[#2B2B27]">{a.residentName || "Unnamed prospect"}</h3>
-                    <p className="text-xs text-[#8A8D82] mt-0.5">{a.referralSource ? `Referral: ${a.referralSource} · ` : ""}{a.dateOfAssessment || (a.updatedAt || "").slice(0, 10)}</p>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-[var(--clinical-ink)] truncate">{a.residentName || "Unnamed prospect"}</h3>
+                    <p className="text-xs text-[var(--clinical-muted)] mt-0.5">{a.referralSource ? `Referral: ${a.referralSource} · ` : ""}{a.dateOfAssessment || (a.updatedAt || "").slice(0, 10)}</p>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     {a.status === "VALIDATED" ? <StatusPill status="APPROVED">Validated</StatusPill> : <StatusPill status={a.status} />}
-                    <button onClick={() => openEdit(a)} title="Edit form" className="p-1.5 rounded-lg hover:bg-[#EEEFE8] text-[#4A4D44]"><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => remove(a)} title="Delete" className="p-1.5 rounded-lg hover:bg-[#F3E2DD] text-[#C0573F]"><Trash2 className="w-4 h-4" /></button>
+                    <button onClick={() => openEdit(a)} aria-label="Edit form" className="p-2 rounded-lg text-[var(--clinical-ink-soft)] hover:bg-[var(--clinical-surface-2)]"><Pencil className="w-4 h-4" /></button>
+                    <button onClick={() => remove(a)} aria-label="Delete" className="p-2 rounded-lg text-[var(--clinical-coral)] hover:bg-[var(--clinical-surface-2)]"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
 
                 {/* badges */}
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {a.carePlan && <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[#2E4A48]/8 text-[#2E4A48]">Care plan · {a.carePlan.problems.length} problem{a.carePlan.problems.length === 1 ? "" : "s"}</span>}
-                  {due && <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-[#C0573F] text-white"><AlertTriangle className="w-3 h-3" /> Reassessment due</span>}
-                  {a.priorAssessmentId && <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[#D8DAD0] text-[#5A5D53]">Reassessment</span>}
+                  {a.carePlan && <span className="text-[10px] font-semibold px-2 py-0.5 rounded text-[var(--clinical-panel)]" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)" }}>Care plan · {a.carePlan.problems.length} problem{a.carePlan.problems.length === 1 ? "" : "s"}</span>}
+                  {due && <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-[var(--clinical-coral)] text-white"><AlertTriangle className="w-3 h-3" /> Reassessment due</span>}
+                  {a.priorAssessmentId && <span className="text-[10px] font-semibold px-2 py-0.5 rounded text-[var(--clinical-muted)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}>Reassessment</span>}
                 </div>
 
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-2xl font-bold text-[#2E4A48]">{a.scores?.total ?? 0}</span>
-                    <span className="text-sm text-[#8A8D82]">/ 50</span>
+                    <span className="text-2xl font-bold text-[var(--clinical-ink)] tabular-nums">{a.scores?.total ?? 0}</span>
+                    <span className="text-sm text-[var(--clinical-muted)]">/ 50</span>
                   </div>
                   <span className="text-xs font-bold text-white px-2.5 py-1 rounded" style={{ background: levelColor(eff) }}>
                     {levelLabel(eff)}{overridden ? " ·override" : ""}
@@ -275,45 +285,45 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
                 </div>
 
                 {a.status !== "DRAFT" && (
-                  <button onClick={() => setReviewing(a)} className="mt-3 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#2E4A48] text-white text-xs font-semibold hover:bg-[#25403D]">
+                  <ClinicalButton variant="primary" size="sm" className="mt-3 w-full" onClick={() => setReviewing(a)}>
                     <Gauge className="w-3.5 h-3.5" /> Review · Validate · Care Plan
-                  </button>
+                  </ClinicalButton>
                 )}
               </ClinicalCard>
             );
           })}
         </div>
-      )}
+      </DataState>
 
-      {/* Form modal */}
+      {/* Form modal — bespoke rich form (live acuity readout); responsive sheet. */}
       {open && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
-          <div className="bg-[#F4F5F0] rounded-2xl shadow-2xl w-full max-w-3xl max-h-[94vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+          <div role="dialog" aria-modal="true" aria-label="Pre-admission assessment form" className="flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl shadow-2xl sm:max-h-[92vh] sm:max-w-3xl sm:rounded-2xl" style={{ backgroundColor: "var(--clinical-ground)" }}>
             {/* Header */}
-            <div className="bg-[#2E4A48] text-white px-5 py-4 flex items-center justify-between">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#D7DAD1]">Pre-Admission Resident Assessment v2.0</p>
-                <h2 className="text-lg font-bold" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>{form.residentName || "New Assessment"}</h2>
+            <div className="flex flex-none items-center justify-between px-5 py-4 text-white" style={{ backgroundColor: "var(--clinical-panel)" }}>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/75">Pre-Admission Resident Assessment v2.0</p>
+                <h2 className="text-lg font-bold truncate" style={{ fontFamily: DISPLAY }}>{form.residentName || "New Assessment"}</h2>
               </div>
-              <button onClick={() => setOpen(false)} className="p-2 hover:bg-white/10 rounded-lg"><X className="w-5 h-5" /></button>
+              <button onClick={() => setOpen(false)} aria-label="Close" className="rounded-lg p-2 hover:bg-white/10"><X className="w-5 h-5" /></button>
             </div>
 
             {/* Live acuity bar */}
-            <div className="bg-[#25403D] text-white px-5 py-2.5 flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2 text-xs text-[#D7DAD1]">
+            <div className="flex flex-none flex-wrap items-center justify-between gap-3 px-5 py-2.5 text-white" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 82%, black)" }}>
+              <div className="flex items-center gap-2 text-xs text-white/80">
                 <Gauge className="w-4 h-4" />
                 <span>ADL {scores.adl}/12</span><span>·</span><span>Mob {scores.mobility}/6</span><span>·</span>
                 <span>Cont {scores.continence}/4</span><span>·</span><span>Cog {scores.cognition}/8</span><span>·</span>
                 <span>Nurse {scores.nursing}/8</span><span>·</span><span>Risk {scores.risk}/12</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xl font-bold">{scores.total}<span className="text-sm text-[#D7DAD1] font-medium">/50</span></span>
-                <span className="text-xs font-bold px-2.5 py-1 rounded" style={{ background: ["#7E9B6F", "#7E9B6F", "#C39A3E", "#C0573F", "#9E3B2A"][scores.level - 1] }}>{scores.levelLabel}</span>
+                <span className="text-xl font-bold tabular-nums">{scores.total}<span className="text-sm text-white/75 font-medium">/50</span></span>
+                <span className="text-xs font-bold px-2.5 py-1 rounded" style={{ background: levelColor(scores.level) }}>{scores.levelLabel}</span>
               </div>
             </div>
 
             {/* Body */}
-            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 scrollbar-thin sm:p-5">
               {/* A — Resident Information */}
               <Section code="A" title="Resident Information">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -366,14 +376,14 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
                 <div className="space-y-2.5">
                   {ADL_ITEMS.map((item) => (
                     <div key={item} className="flex flex-col sm:flex-row sm:items-center gap-2">
-                      <span className="text-sm font-medium text-[#2B2B27] w-28 shrink-0">{ADL_LABEL[item]}</span>
+                      <span className="text-sm font-medium text-[var(--clinical-ink)] w-28 shrink-0">{ADL_LABEL[item]}</span>
                       <div className="flex flex-wrap gap-1.5">
                         {ADL_LEVEL_OPTIONS.map((o) => {
                           const on = form.adl?.[item] === o.value;
                           return (
                             <button key={o.value} type="button" onClick={() => set({ adl: { ...form.adl, [item]: on ? undefined : (o.value as never) } })}
-                              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${on ? "bg-[#2E4A48] text-white border-[#2E4A48]" : "bg-white text-[#4A4D44] border-[#D6D8CD] hover:border-[#2E4A48]/40"}`}>
-                              {o.label}{o.points ? <span className={on ? "text-white/70 ml-1" : "text-[#8A8D82] ml-1"}>+{o.points}</span> : ""}
+                              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${on ? chipOn : chipOff}`}>
+                              {o.label}{o.points ? <span className={on ? "text-white/70 ml-1" : "text-[var(--clinical-muted)] ml-1"}>+{o.points}</span> : ""}
                             </button>
                           );
                         })}
@@ -466,11 +476,11 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
             </div>
 
             {/* Footer */}
-            <div className="border-t border-[#D6D8CD] px-5 py-3.5 flex items-center justify-between bg-white gap-2">
-              <span className="text-xs text-[#8A8D82]">{editingId ? "Editing" : "New"} · {clinicianRole === "FACILITY_ADMIN" ? "Care Manager" : "Nurse"}</span>
+            <div className="flex flex-none items-center justify-between gap-2 border-t px-5 py-3.5" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
+              <span className="text-xs text-[var(--clinical-muted)]">{editingId ? "Editing" : "New"} · {clinicianRole === "FACILITY_ADMIN" ? "Care Manager" : "Nurse"}</span>
               <div className="flex items-center gap-2">
-                <button onClick={() => save("DRAFT")} disabled={saving} className="px-4 py-2 rounded-lg border border-[#D6D8CD] text-[#2B2B27] text-sm font-medium hover:bg-[#F0F1EA] disabled:opacity-60">{saving ? "Saving…" : "Save Draft"}</button>
-                <button onClick={() => save("COMPLETED")} disabled={saving} className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-[#7E9B6F] text-white text-sm font-semibold hover:bg-[#6E8A60] disabled:opacity-60"><CheckCircle2 className="w-4 h-4" /> Complete Assessment</button>
+                <ClinicalButton variant="secondary" size="sm" onClick={() => save("DRAFT")} disabled={saving}>{saving ? "Saving…" : "Save Draft"}</ClinicalButton>
+                <ClinicalButton variant="accent" onClick={() => save("COMPLETED")} disabled={saving}><CheckCircle2 className="w-4 h-4" /> Complete Assessment</ClinicalButton>
               </div>
             </div>
           </div>
@@ -489,15 +499,6 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
           onStartReassessment={startReassessment}
         />
       )}
-    </div>
-  );
-}
-
-function StatCard({ label, value, tone }: { label: string; value: number; tone: string }) {
-  return (
-    <ClinicalCard className="p-3.5">
-      <MicroLabel>{label}</MicroLabel>
-      <p className="text-2xl font-bold mt-0.5" style={{ color: tone }}>{value}</p>
-    </ClinicalCard>
+    </ClinicalPage>
   );
 }

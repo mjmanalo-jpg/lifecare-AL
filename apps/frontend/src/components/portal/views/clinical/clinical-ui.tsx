@@ -1,4 +1,5 @@
 import * as React from "react";
+import { X, Search } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
 // SLMS "clinical-editorial" design kit — matches the Feature Overview PDF:
@@ -61,37 +62,224 @@ export function StatusPill({ status, className = "", children }: { status: strin
 }
 
 export function Eyebrow({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <p className={`text-[11px] font-bold uppercase tracking-[0.16em] text-[#C0573F] ${className}`}>{children}</p>;
+  return <p className={`text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--clinical-coral)] ${className}`}>{children}</p>;
 }
 
 export function MicroLabel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <p className={`text-[10px] font-semibold uppercase tracking-[0.1em] text-[#8A8D82] ${className}`}>{children}</p>;
+  return <p className={`text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--clinical-muted)] ${className}`}>{children}</p>;
 }
 
-/** Page heading in the clinical-editorial style (ink title + coral eyebrow, no gradient). */
+/** Display face for headings/metrics — Inter (the redesigned clinical world is
+ *  all sans; SERIF stays exported as a legacy alias so older imports keep working). */
+export const DISPLAY = "Inter, system-ui, -apple-system, sans-serif";
+export const SERIF = DISPLAY;
+
+/** Page heading: strong sans title + muted subtitle, action on the right. */
 export function ClinicalHeader({ eyebrow, title, subtitle, right }: { eyebrow?: string; title: string; subtitle?: string; right?: React.ReactNode }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-      <div>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
         {eyebrow && <Eyebrow className="mb-1.5">{eyebrow}</Eyebrow>}
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#2B2B27]" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>{title}</h1>
-        {subtitle && <p className="text-sm text-[#6B6E63] mt-1">{subtitle}</p>}
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--clinical-ink)] sm:text-[1.75rem]" style={{ fontFamily: DISPLAY }}>{title}</h1>
+        {subtitle && <p className="mt-1 text-sm text-[var(--clinical-muted)]">{subtitle}</p>}
       </div>
-      {right}
+      {right && <div className="shrink-0">{right}</div>}
     </div>
   );
 }
 
-/** White card with an optional coloured top rule (teal / coral / amber / green). */
+/** Card with an optional coloured top rule (teal / coral / amber / green). Token-backed so it themes light/dark. */
 export function ClinicalCard({ top, className = "", children }: { top?: "teal" | "coral" | "amber" | "green" | "none"; className?: string; children: React.ReactNode }) {
-  const rule = { teal: "#2E4A48", coral: "#C0573F", amber: "#C39A3E", green: "#7E9B6F", none: "transparent" }[top ?? "none"];
+  const rule = { teal: "var(--clinical-panel)", coral: "var(--clinical-coral)", amber: "var(--clinical-amber)", green: "var(--clinical-green)", none: "transparent" }[top ?? "none"];
   const hasTop = Boolean(top && top !== "none");
   // Longhand only — mixing `border` shorthand with `borderTop` warns in React.
-  const style: React.CSSProperties = { borderStyle: "solid", borderColor: "#E1E3D9", borderWidth: 1 };
-  if (hasTop) { style.borderTopWidth = 3; style.borderTopColor = rule; }
+  const style: React.CSSProperties = { borderStyle: "solid", borderColor: "var(--clinical-line)", borderWidth: 1, backgroundColor: "var(--clinical-surface)" };
+  if (hasTop) { style.borderTopWidth = 2; style.borderTopColor = rule; }
   return (
-    <div className={`bg-white rounded-lg shadow-sm shadow-black/[0.03] ${className}`} style={style}>
+    <div className={`rounded-xl shadow-sm shadow-slate-900/[0.04] ${className}`} style={style}>
       {children}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Shared action + state primitives — token-backed so every clinical
+// board draws its buttons and its loading / empty / error states the
+// same way instead of hand-rolling a slightly different version.
+// ─────────────────────────────────────────────────────────────
+
+type BtnVariant = "primary" | "accent" | "secondary" | "ghost" | "danger";
+const BTN_BASE =
+  "inline-flex items-center justify-center gap-2 rounded-lg text-sm font-semibold transition disabled:opacity-60 disabled:pointer-events-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clinical-panel)] active:scale-[0.98] min-h-[40px]";
+const BTN_VARIANT: Record<BtnVariant, string> = {
+  // indigo — the standard primary action
+  primary: "bg-[var(--clinical-panel)] text-white shadow-sm shadow-indigo-950/10 hover:brightness-110",
+  // accent == primary here: one confident indigo CTA, no competing accent colour
+  accent: "bg-[var(--clinical-panel)] text-white shadow-sm shadow-indigo-950/10 hover:brightness-110",
+  secondary: "border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface)] text-[var(--clinical-ink)] hover:bg-[var(--clinical-surface-2)]",
+  ghost: "text-[var(--clinical-ink-soft)] hover:bg-[var(--clinical-surface-2)]",
+  danger: "bg-[var(--clinical-coral)] text-white shadow-sm hover:brightness-110",
+};
+
+export function ClinicalButton({
+  variant = "primary",
+  size = "md",
+  className = "",
+  type = "button",
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: BtnVariant; size?: "sm" | "md" }) {
+  const pad = size === "sm" ? "px-3 py-1.5" : "px-4 py-2.5";
+  return <button type={type} className={`${BTN_BASE} ${pad} ${BTN_VARIANT[variant]} ${className}`} {...props} />;
+}
+
+/** Shimmer skeleton block for loading states. */
+export function Skeleton({ className = "" }: { className?: string }) {
+  return <div className={`animate-pulse rounded-md bg-[var(--clinical-surface-2)] ${className}`} />;
+}
+
+/**
+ * One place for the loading / error / empty branches so a board never shows
+ * "no results" while it is actually still fetching. Renders children only when
+ * there is real data to show.
+ */
+export function DataState({
+  loading,
+  error,
+  empty,
+  emptyTitle = "Nothing here yet",
+  emptyHint,
+  emptyAction,
+  onRetry,
+  skeletonRows = 4,
+  children,
+}: {
+  loading?: boolean;
+  error?: unknown;
+  empty?: boolean;
+  emptyTitle?: string;
+  emptyHint?: string;
+  emptyAction?: React.ReactNode;
+  onRetry?: () => void;
+  skeletonRows?: number;
+  children: React.ReactNode;
+}) {
+  if (loading) {
+    return (
+      <div className="space-y-3" role="status" aria-busy="true" aria-live="polite">
+        <span className="sr-only">Loading…</span>
+        {Array.from({ length: skeletonRows }).map((_, i) => (
+          <Skeleton key={i} className="h-16 w-full" />
+        ))}
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="rounded-lg border p-8 text-center" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
+        <p className="text-sm font-semibold text-[var(--clinical-ink)]">We couldn&apos;t load this</p>
+        <p className="mt-1 text-sm text-[var(--clinical-muted)]">{error instanceof Error ? error.message : "Something went wrong while fetching the latest data."}</p>
+        {onRetry && (
+          <ClinicalButton variant="secondary" size="sm" className="mt-4" onClick={onRetry}>Try again</ClinicalButton>
+        )}
+      </div>
+    );
+  }
+  if (empty) {
+    return (
+      <div className="rounded-lg border p-10 text-center" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
+        <p className="text-base font-semibold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>{emptyTitle}</p>
+        {emptyHint && <p className="mx-auto mt-1.5 max-w-md text-sm text-[var(--clinical-muted)]">{emptyHint}</p>}
+        {emptyAction && <div className="mt-4 flex justify-center">{emptyAction}</div>}
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Shared control + layout primitives — one token set for every clinical
+// board so grounds, inputs, search, stats, and MODALS are identical
+// instead of hand-rolled (and inconsistently sized) per screen.
+// ─────────────────────────────────────────────────────────────
+
+/** Full-bleed clinical page ground every board sits on (replaces the
+ *  hard-coded #F7F8FA that stranded a light ground in dark mode). */
+export function ClinicalPage({ className = "", children }: { className?: string; children: React.ReactNode }) {
+  return <div className={`min-h-full bg-[var(--clinical-ground)] -m-4 sm:-m-6 p-4 sm:p-6 ${className}`}>{children}</div>;
+}
+
+/** Shared control classes (inputs, selects, textareas) — token-backed, dark-safe. */
+export const controlClass =
+  "w-full rounded-lg border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface)] px-3 py-2.5 text-sm text-[var(--clinical-ink)] outline-none transition placeholder:text-[var(--clinical-muted)] focus:border-[var(--clinical-panel)] focus:ring-1 focus:ring-[var(--clinical-panel)]";
+
+export function FieldLabel({ children, required, htmlFor }: { children: React.ReactNode; required?: boolean; htmlFor?: string }) {
+  return (
+    <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-semibold text-[var(--clinical-ink)]">
+      {children}{required && <span className="text-[var(--clinical-coral)]"> *</span>}
+    </label>
+  );
+}
+
+/** Labelled search box used across board list views. */
+export function SearchInput({ value, onChange, placeholder = "Search…", className = "" }: { value: string; onChange: (v: string) => void; placeholder?: string; className?: string }) {
+  return (
+    <div className={`relative ${className}`}>
+      <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--clinical-muted)]" />
+      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={placeholder} className={`${controlClass} pl-10`} />
+    </div>
+  );
+}
+
+type StatAccent = "ink" | "teal" | "coral" | "amber" | "green";
+/** Modern KPI card — uppercase micro-label over a large bold numeral, soft depth. */
+export function StatCard({ value, label, accent = "ink" }: { value: React.ReactNode; label: string; accent?: StatAccent }) {
+  const color = { ink: "var(--clinical-ink)", teal: "var(--clinical-panel)", coral: "var(--clinical-coral)", amber: "var(--clinical-amber)", green: "var(--clinical-green)" }[accent];
+  return (
+    <div className="rounded-xl border p-4 shadow-sm shadow-slate-900/[0.04]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">{label}</p>
+      <p className="mt-1.5 text-[1.75rem] font-bold leading-none tabular-nums" style={{ color, fontFamily: DISPLAY }}>{value}</p>
+    </div>
+  );
+}
+
+/**
+ * The one modal every board uses. Fixes the hand-rolled height/width drift:
+ * a bottom sheet on phones, a sized centred dialog from `sm` up, with a sticky
+ * header + footer and a single scrolling body. Escape and backdrop close it,
+ * body scroll is locked while open, and it is labelled for screen readers.
+ */
+export function ClinicalModal({
+  open, onClose, title, description, size = "md", footer, children,
+}: {
+  open: boolean; onClose: () => void; title: string; description?: string;
+  size?: "sm" | "md" | "lg" | "xl"; footer?: React.ReactNode; children: React.ReactNode;
+}) {
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [open, onClose]);
+  if (!open) return null;
+  const maxW = { sm: "sm:max-w-md", md: "sm:max-w-lg", lg: "sm:max-w-2xl", xl: "sm:max-w-3xl" }[size];
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div role="dialog" aria-modal="true" aria-label={title}
+        className={`flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl shadow-2xl sm:max-h-[85vh] sm:rounded-2xl ${maxW}`}
+        style={{ backgroundColor: "var(--clinical-surface)" }}>
+        <div className="flex flex-none items-start justify-between gap-3 border-b px-5 py-4" style={{ borderColor: "var(--clinical-line)" }}>
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>{title}</h2>
+            {description && <p className="mt-0.5 text-xs text-[var(--clinical-muted)]">{description}</p>}
+          </div>
+          <button onClick={onClose} aria-label="Close" className="-mr-1.5 shrink-0 rounded-lg p-2 text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-ink)]"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 scrollbar-thin">{children}</div>
+        {footer && <div className="flex flex-none flex-wrap items-center justify-end gap-2 border-t px-5 py-3.5" style={{ borderColor: "var(--clinical-line)" }}>{footer}</div>}
+      </div>
     </div>
   );
 }

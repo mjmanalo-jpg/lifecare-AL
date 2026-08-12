@@ -8,12 +8,13 @@
  */
 
 import { useMemo, useState, useRef } from "react";
-import { Activity, Plus, X, Camera, Trash2, Image as ImageIcon } from "lucide-react";
+import { Plus, Camera, Trash2, Image as ImageIcon } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
+import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, StatCard, DataState, FieldLabel, controlClass } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const WOUND_KEY = "wound_records";
@@ -26,12 +27,20 @@ const WOUND_TYPES = ["Pressure Ulcer", "Surgical", "Traumatic", "Diabetic", "Oth
 const STAGES = ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Unstageable", "DTI"];
 const STATUSES = ["Active", "Healing", "Healed", "Referred"] as const;
 type WStatus = (typeof STATUSES)[number];
-const STATUS_META: Record<WStatus, { tone: string; badge: string; card: string }> = {
-  Active: { tone: "#dc2626", badge: "bg-red-100 text-red-700", card: "bg-red-50 border-red-200" },
-  Healing: { tone: "#d97706", badge: "bg-amber-100 text-amber-700", card: "bg-amber-50 border-amber-200" },
-  Healed: { tone: "#16a34a", badge: "bg-green-100 text-green-700", card: "bg-green-50 border-green-200" },
-  Referred: { tone: "#2563eb", badge: "bg-blue-100 text-blue-700", card: "bg-blue-50 border-blue-200" },
-};
+
+// Wound status → the clinical-editorial accent. Active reads as attention (coral),
+// Healing as in-progress (amber), Healed as resolved (green), Referred as info (teal).
+const WOUND_ACCENT: Record<WStatus, "coral" | "amber" | "green" | "teal"> = { Active: "coral", Healing: "amber", Healed: "green", Referred: "teal" };
+const ACCENT_VAR: Record<"coral" | "amber" | "green" | "teal", string> = { coral: "var(--clinical-coral)", amber: "var(--clinical-amber)", green: "var(--clinical-green)", teal: "var(--clinical-panel)" };
+
+// Theme-safe status chip: ink label + a coloured dot (no per-theme contrast traps).
+function WoundStatus({ status }: { status: WStatus }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>
+      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ACCENT_VAR[WOUND_ACCENT[status]] }} />{status}
+    </span>
+  );
+}
 
 interface Wound { id: string; residentId: string; woundType: string; stage: string; bodyLocation: string; discoveredAt: string; discoveredBy?: string; notes?: string; status: WStatus; photo?: string; createdAt: string; updatedAt: string; }
 const parseWounds = (raw: string | null | undefined): Wound[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((w) => w && typeof w.id === "string") : []; } catch { return []; } };
@@ -61,7 +70,7 @@ async function toDataUrl(file: File, maxDim = 900, quality = 0.7): Promise<strin
 export default function WoundCareBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   const { name: clinicianName } = useClinician(clinicianRole);
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
-  const { data: settingRows, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
+  const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
 
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
   const wounds = useMemo(() => parseWounds(settingRows.find((r) => (r.key || r.id) === WOUND_KEY)?.value), [settingRows]);
@@ -85,62 +94,65 @@ export default function WoundCareBoard({ clinicianRole = "NURSE" }: { clinicianR
   const remove = async (w: Wound) => { const c = await Swal.fire({ title: "Delete wound record?", icon: "warning", showCancelButton: true, confirmButtonColor: "#dc2626", confirmButtonText: "Delete" }); if (c.isConfirmed) await persist(wounds.filter((x) => x.id !== w.id)); };
 
   return (
-    <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Wound Care Tracker</h1>
-          <p className="text-sm text-slate-500 mt-1">Monitor and track wound healing progress</p>
-        </div>
-        <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"><Plus className="w-4 h-4" /> New Wound</button>
+    <ClinicalPage>
+      <ClinicalHeader
+        title="Wound Care Tracker"
+        subtitle="Monitor and track wound healing progress"
+        right={<ClinicalButton variant="accent" onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> New Wound</ClinicalButton>}
+      />
+
+      <div className="mt-5 flex flex-wrap gap-3">
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status" className={`${controlClass} w-full sm:w-44`}><option value="">All Status</option>{STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}</select>
+        <select value={resFilter} onChange={(e) => setResFilter(e.target.value)} aria-label="Filter by resident" className={`${controlClass} w-full sm:w-64`}><option value="">All Residents</option>{residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)}</option>)}</select>
       </div>
 
-      <div className="flex flex-wrap gap-3 mb-5">
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40"><option value="">All Status</option>{STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}</select>
-        <select value={resFilter} onChange={(e) => setResFilter(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40"><option value="">All Residents</option>{residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)}</option>)}</select>
+      <div className="mt-4 mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {STATUSES.map((st) => <StatCard key={st} value={count(st)} label={st} accent={WOUND_ACCENT[st]} />)}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        {STATUSES.map((st) => { const m = STATUS_META[st]; return (
-          <div key={st} className={`rounded-2xl border p-5 text-center ${m.card}`}><p className="text-3xl font-bold" style={{ color: m.tone }}>{count(st)}</p><p className="text-sm mt-1" style={{ color: m.tone }}>{st}</p></div>
-        ); })}
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-slate-400"><Activity className="w-12 h-12 mb-3 opacity-40" /><p>No wound records found</p></div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {filtered.map((w) => { const rn = resName(w.residentId); const m = STATUS_META[w.status]; return (
-            <div key={w.id} className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+      <DataState
+        loading={loading && wounds.length === 0}
+        error={error}
+        empty={filtered.length === 0}
+        emptyTitle={wounds.length === 0 ? "No wounds recorded" : "No wounds match these filters"}
+        emptyHint={wounds.length === 0 ? "Log the first wound to start tracking its healing progress." : "Clear the status or resident filter to see all records."}
+        emptyAction={wounds.length === 0 ? <ClinicalButton variant="accent" onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> New Wound</ClinicalButton> : undefined}
+        onRetry={() => void refetch()}
+        skeletonRows={3}
+      >
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((w) => { const rn = resName(w.residentId); return (
+            <div key={w.id} className="overflow-hidden rounded-xl border" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
               {w.photo && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={w.photo} alt="Wound" className="w-full h-40 object-cover" />
+                <img src={w.photo} alt={`Wound on ${w.bodyLocation || "resident"}`} className="h-40 w-full object-cover" />
               )}
               <div className="p-4">
                 <div className="flex items-start justify-between gap-2">
-                  <div><p className="font-bold text-slate-900">{rn.name}</p><p className="text-xs text-slate-400">Rm {rn.room}</p></div>
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${m.badge}`}>{w.status}</span>
+                  <div className="min-w-0"><p className="truncate font-semibold text-[var(--clinical-ink)]">{rn.name}</p><p className="text-xs text-[var(--clinical-muted)]">Rm {rn.room}</p></div>
+                  <WoundStatus status={w.status} />
                 </div>
-                <p className="text-sm font-semibold text-slate-700 mt-2">{w.woundType} · {w.stage}</p>
-                <p className="text-sm text-slate-500">{w.bodyLocation}</p>
-                <p className="text-xs text-slate-400 mt-1">Discovered {fmt(w.discoveredAt)}{w.discoveredBy ? ` · ${w.discoveredBy}` : ""}</p>
-                {w.notes && <p className="text-sm text-slate-600 mt-2">{w.notes}</p>}
-                <div className="flex items-center gap-2 mt-3">
-                  <select value={w.status} onChange={(e) => setStatus(w.id, e.target.value as WStatus)} className="text-xs rounded-lg border border-slate-200 px-2 py-1.5 bg-white outline-none">{STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}</select>
-                  <button onClick={() => remove(w)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500"><Trash2 className="w-4 h-4" /></button>
+                <p className="mt-2 text-sm font-semibold text-[var(--clinical-ink)]">{w.woundType} · {w.stage}</p>
+                <p className="text-sm text-[var(--clinical-muted)]">{w.bodyLocation}</p>
+                <p className="mt-1 text-xs text-[var(--clinical-muted)]">Discovered {fmt(w.discoveredAt)}{w.discoveredBy ? ` · ${w.discoveredBy}` : ""}</p>
+                {w.notes && <p className="mt-2 text-sm text-[var(--clinical-ink-soft)]">{w.notes}</p>}
+                <div className="mt-3 flex items-center gap-2">
+                  <select value={w.status} onChange={(e) => setStatus(w.id, e.target.value as WStatus)} aria-label={`Update status for ${rn.name}'s wound`} className={`${controlClass} w-auto py-1.5 text-xs`}>{STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}</select>
+                  <button onClick={() => remove(w)} aria-label="Delete wound record" className="rounded-lg p-2 text-[var(--clinical-coral)] transition hover:bg-[var(--clinical-surface-2)]"><Trash2 className="h-4 w-4" /></button>
                 </div>
               </div>
             </div>
           ); })}
         </div>
-      )}
+      </DataState>
 
-      {open && <NewWoundModal residents={residents} discoveredBy={clinicianName} onClose={() => setOpen(false)} onCreate={create} />}
-    </div>
+      <NewWoundModal open={open} residents={residents} discoveredBy={clinicianName} onClose={() => setOpen(false)} onCreate={create} />
+    </ClinicalPage>
   );
 }
 
-function NewWoundModal({ residents, discoveredBy, onClose, onCreate }: {
-  residents: Row[]; discoveredBy: string; onClose: () => void; onCreate: (w: Omit<Wound, "id" | "status" | "createdAt" | "updatedAt">) => Promise<void>;
+function NewWoundModal({ open, residents, discoveredBy, onClose, onCreate }: {
+  open: boolean; residents: Row[]; discoveredBy: string; onClose: () => void; onCreate: (w: Omit<Wound, "id" | "status" | "createdAt" | "updatedAt">) => Promise<void>;
 }) {
   const [resId, setResId] = useState("");
   const [woundType, setWoundType] = useState("Pressure Ulcer");
@@ -166,50 +178,49 @@ function NewWoundModal({ residents, discoveredBy, onClose, onCreate }: {
     finally { setSaving(false); }
   };
 
-  const input = "w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
-  const lbl = "block text-sm font-bold text-slate-700 mb-1.5";
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[95vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"><h2 className="font-bold text-slate-900 text-lg">New Wound Record</h2><button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button></div>
-        <div className="p-5 overflow-y-auto flex-1 space-y-4">
-          <div><label className={lbl}>Resident <span className="text-red-500">*</span></label><select value={resId} onChange={(e) => setResId(e.target.value)} className={input}><option value="">Select resident…</option>{residents.map((r) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Room {s(r.room)}</option>)}</select></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className={lbl}>Wound Type <span className="text-red-500">*</span></label><select value={woundType} onChange={(e) => setWoundType(e.target.value)} className={input}>{WOUND_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
-            <div><label className={lbl}>Initial Stage <span className="text-red-500">*</span></label><select value={stage} onChange={(e) => setStage(e.target.value)} className={input}>{STAGES.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
-          </div>
-          <div><label className={lbl}>Body Location <span className="text-red-500">*</span></label><input value={bodyLocation} onChange={(e) => setBodyLocation(e.target.value)} placeholder="e.g. Sacrum, Left heel" className={input} /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className={lbl}>Discovered At</label><input type="datetime-local" value={discoveredAt} onChange={(e) => setDiscoveredAt(e.target.value)} className={input} /></div>
-            <div><label className={lbl}>Discovered By</label><input value={by} onChange={(e) => setBy(e.target.value)} className={input} /></div>
-          </div>
-
-          {/* Photo upload / take photo */}
-          <div>
-            <label className={lbl}>Wound Photo</label>
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onPhoto} className="hidden" />
-            {photo ? (
-              <div className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={photo} alt="Wound preview" className="w-full h-44 object-cover rounded-xl border border-slate-200" />
-                <button type="button" onClick={() => setPhoto(undefined)} className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/50 text-white hover:bg-black/70"><Trash2 className="w-4 h-4" /></button>
-              </div>
-            ) : (
-              <button type="button" onClick={() => fileRef.current?.click()} className="w-full flex flex-col items-center justify-center gap-1.5 py-6 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-500">
-                <div className="flex items-center gap-2"><Camera className="w-5 h-5" /><ImageIcon className="w-5 h-5" /></div>
-                <span className="text-sm font-medium">Take photo or upload</span>
-              </button>
-            )}
-          </div>
-
-          <div><label className={lbl}>Notes</label><textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Initial observations…" className={input} /></div>
+    <ClinicalModal
+      open={open}
+      onClose={onClose}
+      title="New Wound Record"
+      description="Register a wound and its initial assessment"
+      footer={<>
+        <ClinicalButton variant="ghost" size="sm" onClick={onClose}>Cancel</ClinicalButton>
+        <ClinicalButton variant="accent" onClick={submit} disabled={saving}>{saving ? "Saving…" : "Create Wound Record"}</ClinicalButton>
+      </>}
+    >
+      <div className="space-y-4">
+        <div><FieldLabel required htmlFor="wnd-res">Resident</FieldLabel><select id="wnd-res" value={resId} onChange={(e) => setResId(e.target.value)} className={controlClass}><option value="">Select resident…</option>{residents.map((r) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Room {s(r.room)}</option>)}</select></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><FieldLabel required htmlFor="wnd-type">Wound Type</FieldLabel><select id="wnd-type" value={woundType} onChange={(e) => setWoundType(e.target.value)} className={controlClass}>{WOUND_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+          <div><FieldLabel required htmlFor="wnd-stage">Initial Stage</FieldLabel><select id="wnd-stage" value={stage} onChange={(e) => setStage(e.target.value)} className={controlClass}>{STAGES.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
         </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button onClick={submit} disabled={saving} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? "Saving…" : "Create Wound Record"}</button>
+        <div><FieldLabel required htmlFor="wnd-loc">Body Location</FieldLabel><input id="wnd-loc" value={bodyLocation} onChange={(e) => setBodyLocation(e.target.value)} placeholder="e.g. Sacrum, Left heel" className={controlClass} /></div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><FieldLabel htmlFor="wnd-at">Discovered At</FieldLabel><input id="wnd-at" type="datetime-local" value={discoveredAt} onChange={(e) => setDiscoveredAt(e.target.value)} className={controlClass} /></div>
+          <div><FieldLabel htmlFor="wnd-by">Discovered By</FieldLabel><input id="wnd-by" value={by} onChange={(e) => setBy(e.target.value)} className={controlClass} /></div>
         </div>
+
+        {/* Photo upload / take photo */}
+        <div>
+          <FieldLabel>Wound Photo</FieldLabel>
+          <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onPhoto} className="hidden" />
+          {photo ? (
+            <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={photo} alt="Wound preview" className="h-44 w-full rounded-xl border object-cover" style={{ borderColor: "var(--clinical-line)" }} />
+              <button type="button" onClick={() => setPhoto(undefined)} aria-label="Remove photo" className="absolute right-2 top-2 rounded-lg bg-black/50 p-1.5 text-white hover:bg-black/70"><Trash2 className="h-4 w-4" /></button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => fileRef.current?.click()} className="flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed py-6 text-[var(--clinical-muted)] transition hover:border-[var(--clinical-panel)] hover:text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>
+              <div className="flex items-center gap-2"><Camera className="h-5 w-5" /><ImageIcon className="h-5 w-5" /></div>
+              <span className="text-sm font-medium">Take photo or upload</span>
+            </button>
+          )}
+        </div>
+
+        <div><FieldLabel htmlFor="wnd-notes">Notes</FieldLabel><textarea id="wnd-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Initial observations…" className={controlClass} /></div>
       </div>
-    </div>
+    </ClinicalModal>
   );
 }

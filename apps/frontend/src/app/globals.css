@@ -47,8 +47,23 @@
     --accent-foreground: #fafafa;
     --input: rgba(255, 255, 255, 0.14);
     --ring: #3b82f6;
+    /* Clinical UI kit — dark. "Clean clinical SaaS": cool slate neutrals, an
+       indigo primary, and emerald/amber/rose status. Panel = primary brand,
+       coral token = attention/danger (rose), amber = caution, green = positive. */
+    --clinical-ground: #0a0e17;     /* page ground — cool slate-black */
+    --clinical-surface: #141a26;    /* card */
+    --clinical-surface-2: #1e2634;  /* raised / hover */
+    --clinical-ink: #f1f5f9;
+    --clinical-ink-soft: #cbd5e1;
+    --clinical-muted: #94a3b8;
+    --clinical-line: rgba(255, 255, 255, 0.08);
+    --clinical-line-strong: rgba(255, 255, 255, 0.14);
+    --clinical-panel: #6366f1;      /* PRIMARY — indigo (lifted for dark) */
+    --clinical-coral: #fb7185;      /* attention / danger — rose */
+    --clinical-amber: #fbbf24;      /* caution */
+    --clinical-green: #34d399;      /* positive — emerald */
   }
-  
+
   :root.light {
     --background: #fafafa;
     --foreground: #18181b;
@@ -70,8 +85,23 @@
     --accent-foreground: #18181b;
     --input: #e4e4e7;
     --ring: #3b82f6;
+    /* Clinical UI kit — light. "Clean clinical SaaS": cool slate neutrals, an
+       indigo primary, emerald/amber/rose status. All accents meet WCAG AA on
+       white. Panel = primary brand, coral = attention/danger (rose). */
+    --clinical-ground: #f3f5fa;     /* clean cool near-white (no green) */
+    --clinical-surface: #ffffff;
+    --clinical-surface-2: #eef1f7;
+    --clinical-ink: #0f172a;        /* slate-900 */
+    --clinical-ink-soft: #334155;   /* slate-700 */
+    --clinical-muted: #5b6577;      /* AA on white + ground */
+    --clinical-line: #e6e9f0;
+    --clinical-line-strong: #cfd5e2;
+    --clinical-panel: #4f46e5;      /* PRIMARY — indigo-600 */
+    --clinical-coral: #e11d48;      /* attention / danger — rose-600 */
+    --clinical-amber: #b45309;      /* caution — amber-700 (AA) */
+    --clinical-green: #047857;      /* positive — emerald-700 (AA) */
   }
-  
+
   html, body {
     @apply bg-[var(--background)] text-[var(--foreground)] antialiased;
     scroll-behavior: initial; /* Handled by Lenis */

@@ -11,13 +11,14 @@
  */
 
 import { useMemo, useState } from "react";
-import { X, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, CheckCircle2 } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, CheckCircle2 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, createRecord } from "@/lib/api";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { PREADMISSION_KEY, parseAssessments, continenceScore, newId, type AdlItem } from "@/lib/preadmissionAssessment";
+import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, FieldLabel, controlClass } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const ADL_KEY = "adl_logs";
@@ -41,11 +42,16 @@ type DomainKey = (typeof DOMAINS)[number]["key"];
 
 const SHIFTS = [{ v: "AM", label: "AM Shift (6am–2pm)" }, { v: "PM", label: "PM Shift (2pm–10pm)" }, { v: "NOC", label: "Noc Shift (10pm–6am)" }];
 const ASSIST = ["Independent", "Supervision/Cueing", "One-Person Assist", "Two-Person Assist", "Full Assist", "Refused"];
-const CHANGES = [
-  { v: "Improved", icon: TrendingUp, cls: "text-green-600", on: "bg-green-50 border-green-400 text-green-700" },
-  { v: "Same as Baseline", icon: Minus, cls: "text-indigo-500", on: "bg-indigo-50 border-indigo-400 text-indigo-700" },
-  { v: "Declined", icon: TrendingDown, cls: "text-amber-600", on: "bg-amber-50 border-amber-400 text-amber-700" },
-  { v: "Significant Decline", icon: AlertTriangle, cls: "text-red-600", on: "bg-red-50 border-red-400 text-red-700" },
+
+// Change-from-baseline → the clinical-editorial accent (green=improved, teal=steady,
+// amber=declined, coral=significant). One accent var drives the dot, chip, and toggle.
+type ChangeAccent = "green" | "teal" | "amber" | "coral";
+const ACCENT_VAR: Record<ChangeAccent, string> = { green: "var(--clinical-green)", teal: "var(--clinical-panel)", amber: "var(--clinical-amber)", coral: "var(--clinical-coral)" };
+const CHANGES: { v: string; icon: typeof TrendingUp; accent: ChangeAccent }[] = [
+  { v: "Improved", icon: TrendingUp, accent: "green" },
+  { v: "Same as Baseline", icon: Minus, accent: "teal" },
+  { v: "Declined", icon: TrendingDown, accent: "amber" },
+  { v: "Significant Decline", icon: AlertTriangle, accent: "coral" },
 ];
 const FLAGS = [{ k: "safety", label: "Safety Concern" }, { k: "followUp", label: "Follow-up Needed" }, { k: "createTask", label: "Create Task" }, { k: "escalate", label: "Escalate" }] as const;
 type FlagKey = (typeof FLAGS)[number]["k"];
@@ -63,6 +69,18 @@ const parseLogs = (raw: string | null | undefined): AdlEntry[] => {
 type BaselineLabel = "Independent" | "Needs Assistance" | "Dependent";
 type Baseline = { label: BaselineLabel; score: number } | null;
 const BL = (label: BaselineLabel): Baseline => ({ label, score: label === "Independent" ? 2 : label === "Needs Assistance" ? 1 : 0 });
+
+// Theme-safe change chip: ink label + a coloured dot (matches WoundCare's status chip).
+function ChangeChip({ change }: { change: string }) {
+  const c = CHANGES.find((x) => x.v === change);
+  if (!c) return null;
+  const Icon = c.icon;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>
+      <Icon className="h-3 w-3" style={{ color: ACCENT_VAR[c.accent] }} />{change}
+    </span>
+  );
+}
 
 export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   const { name: clinicianName } = useClinician(clinicianRole);
@@ -118,39 +136,39 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
   };
 
   return (
-    <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
-      <div className="mb-5">
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2"><Activity className="w-6 h-6 text-indigo-500" /> ADL Monitoring</h1>
-        <p className="text-sm text-slate-500 mt-1">Track Activities of Daily Living per resident, shift, and domain</p>
-      </div>
+    <ClinicalPage>
+      <ClinicalHeader
+        title="ADL Monitoring"
+        subtitle="Track Activities of Daily Living per resident, shift, and domain"
+      />
 
       {/* Controls */}
-      <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-4 items-end mb-5">
-        <label className="block"><span className="text-xs font-semibold text-slate-500">Resident</span>
-          <select value={resId} onChange={(e) => setResId(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-indigo-400/40">
+      <div className="mt-5 grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-4 items-end mb-5">
+        <div><FieldLabel htmlFor="adl-res">Resident</FieldLabel>
+          <select id="adl-res" value={resId} onChange={(e) => setResId(e.target.value)} className={controlClass}>
             <option value="">Select resident</option>
             {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)}</option>)}
           </select>
-        </label>
-        <label className="block"><span className="text-xs font-semibold text-slate-500">Date</span>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-indigo-400/40" />
-        </label>
-        <label className="block"><span className="text-xs font-semibold text-slate-500">Shift</span>
-          <select value={shift} onChange={(e) => setShift(e.target.value)} className="mt-1 w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-indigo-400/40">
+        </div>
+        <div><FieldLabel htmlFor="adl-date">Date</FieldLabel>
+          <input id="adl-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className={controlClass} />
+        </div>
+        <div><FieldLabel htmlFor="adl-shift">Shift</FieldLabel>
+          <select id="adl-shift" value={shift} onChange={(e) => setShift(e.target.value)} className={controlClass}>
             {SHIFTS.map((sh) => <option key={sh.v} value={sh.v}>{sh.label}</option>)}
           </select>
-        </label>
-        <div className="text-sm text-slate-500 sm:text-right sm:pb-2.5">{resId ? `${loggedByDomain.size}/10 domains logged this shift` : ""}</div>
+        </div>
+        <div className="text-sm text-[var(--clinical-muted)] sm:text-right sm:pb-2.5">{resId ? `${loggedByDomain.size}/10 domains logged this shift` : ""}</div>
       </div>
 
       {!resId ? (
-        <div className="flex flex-col items-center justify-center py-24 text-slate-400"><Activity className="w-12 h-12 mb-3 opacity-40" /><p>Select a resident to begin ADL monitoring</p></div>
+        <div className="flex flex-col items-center justify-center py-24 text-[var(--clinical-muted)]"><Activity className="w-12 h-12 mb-3 opacity-40" /><p>Select a resident to begin ADL monitoring</p></div>
       ) : (
         <>
           {/* Tabs */}
-          <div className="inline-flex gap-1 bg-slate-100 rounded-xl p-1 mb-4">
+          <div className="inline-flex gap-1 rounded-xl p-1 mb-4" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
             {([["log", "Shift Log"], ["alerts", "Decline Alerts"]] as const).map(([v, label]) => (
-              <button key={v} onClick={() => setView(v)} className={`px-4 py-1.5 rounded-lg text-sm font-medium ${view === v ? "bg-white shadow-sm text-slate-800" : "text-slate-500"}`}>
+              <button key={v} onClick={() => setView(v)} aria-pressed={view === v} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${view === v ? "bg-[var(--clinical-surface)] shadow-sm text-[var(--clinical-ink)]" : "text-[var(--clinical-muted)]"}`}>
                 {label}{v === "alerts" && declines.length ? ` (${declines.length})` : ""}
               </button>
             ))}
@@ -161,19 +179,18 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
               {DOMAINS.map((d) => {
                 const bl = baselineFor(d.key);
                 const logged = loggedByDomain.get(d.key);
-                const change = logged ? CHANGES.find((c) => c.v === logged.change) : null;
                 return (
-                  <button key={d.key} onClick={() => setLogDomain(d.key)} className="text-left rounded-2xl border border-slate-200 bg-white p-4 hover:border-indigo-300 hover:shadow-sm transition relative">
+                  <button key={d.key} onClick={() => setLogDomain(d.key)} aria-label={`Log ${d.label}`} className="text-left rounded-xl border p-4 transition relative hover:shadow-sm" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
                     <div className="flex items-start justify-between">
                       <span className="text-2xl">{d.emoji}</span>
-                      <span className="w-6 h-6 rounded-full border border-slate-200 flex items-center justify-center text-slate-400 text-lg leading-none">+</span>
+                      <span className="w-6 h-6 rounded-full border flex items-center justify-center text-[var(--clinical-muted)] text-lg leading-none" style={{ borderColor: "var(--clinical-line-strong)" }}>+</span>
                     </div>
-                    <p className="font-bold text-slate-900 mt-3">{d.label}</p>
-                    {bl ? <p className="text-[11px] text-slate-400 mt-0.5">Baseline: {bl.label}</p> : <p className="text-[11px] text-slate-300 mt-0.5">No baseline</p>}
+                    <p className="font-bold text-[var(--clinical-ink)] mt-3">{d.label}</p>
+                    {bl ? <p className="text-[11px] text-[var(--clinical-muted)] mt-0.5">Baseline: {bl.label}</p> : <p className="text-[11px] text-[var(--clinical-muted)] opacity-70 mt-0.5">No baseline</p>}
                     {logged && (
                       <div className="mt-2 flex flex-wrap items-center gap-1">
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{logged.assistance}</span>
-                        {change && <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${change.on}`}><change.icon className="w-3 h-3" />{logged.change}</span>}
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}>{logged.assistance}</span>
+                        <ChangeChip change={logged.change} />
                       </div>
                     )}
                   </button>
@@ -183,20 +200,21 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
           ) : (
             <div className="space-y-2">
               {declines.length === 0 ? (
-                <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-400">No decline alerts{resId ? " for this resident" : ""}.</div>
+                <div className="rounded-xl border p-8 text-center text-[var(--clinical-muted)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>No decline alerts{resId ? " for this resident" : ""}.</div>
               ) : declines.map((l) => {
                 const d = DOMAINS.find((x) => x.key === l.domain);
                 const rn = residents.find((r: Row) => s(r.id) === l.residentId);
                 const sig = l.change === "Significant Decline";
+                const accent = sig ? "var(--clinical-coral)" : "var(--clinical-amber)";
                 return (
-                  <div key={l.id} className={`rounded-xl border p-3 flex items-start gap-3 ${sig ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}`}>
+                  <div key={l.id} className="rounded-xl border p-3 flex items-start gap-3" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)", borderLeftWidth: 3, borderLeftColor: accent }}>
                     <span className="text-xl">{d?.emoji}</span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-800">{d?.label} — {sig ? "Significant Decline" : "Declined"} <span className="font-normal text-slate-500">· {l.assistance}</span></p>
-                      <p className="text-xs text-slate-500">{s(rn?.name) || "Resident"} · {l.date} · {l.shift} shift{l.baseline ? ` · baseline ${l.baseline}` : ""}</p>
-                      {l.notes && <p className="text-xs text-slate-600 mt-1">{l.notes}</p>}
+                      <p className="text-sm font-semibold text-[var(--clinical-ink)]">{d?.label} — {sig ? "Significant Decline" : "Declined"} <span className="font-normal text-[var(--clinical-muted)]">· {l.assistance}</span></p>
+                      <p className="text-xs text-[var(--clinical-muted)]">{s(rn?.name) || "Resident"} · {l.date} · {l.shift} shift{l.baseline ? ` · baseline ${l.baseline}` : ""}</p>
+                      {l.notes && <p className="text-xs text-[var(--clinical-ink-soft)] mt-1">{l.notes}</p>}
                     </div>
-                    {sig ? <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" /> : <TrendingDown className="w-4 h-4 text-amber-500 shrink-0" />}
+                    {sig ? <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: accent }} /> : <TrendingDown className="w-4 h-4 shrink-0" style={{ color: accent }} />}
                   </div>
                 );
               })}
@@ -215,7 +233,7 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
           onSave={(p) => saveEntry(logDomain, p)}
         />
       )}
-    </div>
+    </ClinicalPage>
   );
 }
 
@@ -237,52 +255,55 @@ function LogModal({ domain, resident, baseline, existing, onClose, onSave }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[95vh] flex flex-col overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
-          <span className="text-xl">{domain.emoji}</span>
-          <p className="flex-1 font-bold text-slate-900 text-sm">Log {domain.label} <span className="font-normal text-slate-400">— {s(resident.name)}</span></p>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button>
+    <ClinicalModal
+      open
+      onClose={onClose}
+      title={`${domain.emoji} Log ${domain.label}`}
+      description={s(resident.name)}
+      size="md"
+      footer={
+        <ClinicalButton variant="accent" onClick={submit} disabled={saving || !assistance} className="w-full sm:w-auto">
+          <CheckCircle2 className="w-4 h-4" /> {saving ? "Saving…" : "Log ADL Entry"}
+        </ClinicalButton>
+      }
+    >
+      <div className="space-y-5">
+        <div className="rounded-xl border px-3 py-2 text-sm font-medium text-[var(--clinical-ink)]" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: "var(--clinical-line)" }}>
+          Current Baseline: {baseline ? `${baseline.label} (Score: ${baseline.score}/2)` : "Not set"}
         </div>
 
-        <div className="p-4 overflow-y-auto flex-1 space-y-5">
-          <div className="rounded-xl bg-indigo-50 border border-indigo-100 px-3 py-2 text-sm text-indigo-700 font-medium">
-            Current Baseline: {baseline ? `${baseline.label} (Score: ${baseline.score}/2)` : "Not set"}
-          </div>
-
-          <div>
-            <p className="text-sm font-bold text-slate-700 mb-2">Level of Assistance <span className="text-red-500">*</span></p>
-            <div className="grid grid-cols-2 gap-2">
-              {ASSIST.map((a) => <button key={a} type="button" onClick={() => setAssistance(a)} className={`px-3 py-2.5 rounded-xl border text-sm font-medium ${assistance === a ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"}`}>{a}</button>)}
-            </div>
-          </div>
-
-          <div>
-            <p className="text-sm font-bold text-slate-700 mb-2">Change from Baseline</p>
-            <div className="grid grid-cols-2 gap-2">
-              {CHANGES.map((c) => { const on = change === c.v; return <button key={c.v} type="button" onClick={() => setChange(c.v)} className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm font-medium ${on ? c.on : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"}`}><c.icon className={`w-4 h-4 ${on ? "" : c.cls}`} />{c.v}</button>; })}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-            {FLAGS.map((fl) => (
-              <button key={fl.k} type="button" onClick={() => toggle(fl.k)} className="flex items-center gap-2 text-sm text-slate-600">
-                <span className={`w-9 h-5 rounded-full transition relative ${flags[fl.k] ? "bg-indigo-600" : "bg-slate-200"}`}><span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: flags[fl.k] ? "18px" : "2px" }} /></span>
-                {fl.label}
-              </button>
-            ))}
-          </div>
-
-          <div>
-            <p className="text-sm font-bold text-slate-700 mb-1.5">Staff Notes</p>
-            <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observations, interventions, resident response…" className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-indigo-400/40" />
+        <div>
+          <FieldLabel required>Level of Assistance</FieldLabel>
+          <div className="grid grid-cols-2 gap-2">
+            {ASSIST.map((a) => { const on = assistance === a; return (
+              <button key={a} type="button" onClick={() => setAssistance(a)} aria-pressed={on} className="px-3 py-2.5 rounded-lg border text-sm font-medium transition" style={on ? { backgroundColor: "var(--clinical-panel)", color: "#fff", borderColor: "var(--clinical-panel)" } : { backgroundColor: "var(--clinical-surface)", color: "var(--clinical-ink-soft)", borderColor: "var(--clinical-line-strong)" }}>{a}</button>
+            ); })}
           </div>
         </div>
 
-        <div className="px-4 py-3 border-t border-slate-100">
-          <button onClick={submit} disabled={saving || !assistance} className="w-full inline-flex items-center justify-center gap-1.5 py-3 rounded-xl bg-blue-500 text-white font-semibold hover:bg-blue-600 disabled:opacity-50"><CheckCircle2 className="w-4 h-4" /> {saving ? "Saving…" : "Log ADL Entry"}</button>
+        <div>
+          <FieldLabel>Change from Baseline</FieldLabel>
+          <div className="grid grid-cols-2 gap-2">
+            {CHANGES.map((c) => { const on = change === c.v; const color = ACCENT_VAR[c.accent]; const Icon = c.icon; return (
+              <button key={c.v} type="button" onClick={() => setChange(c.v)} aria-pressed={on} className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-lg border text-sm font-medium transition" style={on ? { backgroundColor: color, color: "#fff", borderColor: color } : { backgroundColor: "var(--clinical-surface)", color: "var(--clinical-ink-soft)", borderColor: "var(--clinical-line-strong)" }}><Icon className="w-4 h-4" style={on ? undefined : { color }} />{c.v}</button>
+            ); })}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+          {FLAGS.map((fl) => (
+            <button key={fl.k} type="button" onClick={() => toggle(fl.k)} aria-pressed={!!flags[fl.k]} className="flex items-center gap-2 text-sm text-[var(--clinical-ink-soft)]">
+              <span className="w-9 h-5 rounded-full transition relative" style={{ backgroundColor: flags[fl.k] ? "var(--clinical-panel)" : "var(--clinical-line-strong)" }}><span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: flags[fl.k] ? "18px" : "2px" }} /></span>
+              {fl.label}
+            </button>
+          ))}
+        </div>
+
+        <div>
+          <FieldLabel htmlFor="adl-notes">Staff Notes</FieldLabel>
+          <textarea id="adl-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observations, interventions, resident response…" className={controlClass} />
         </div>
       </div>
-    </div>
+    </ClinicalModal>
   );
 }
