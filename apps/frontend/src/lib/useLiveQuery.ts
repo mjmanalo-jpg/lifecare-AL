@@ -17,6 +17,13 @@ let channelSeq = 0;
 // new callers await the same promise instead of opening another request.
 const inFlight = new Map<string, Promise<unknown>>();
 
+// Stale-while-revalidate cache of the last SUCCESSFUL response per url. Without it,
+// every mount (each tab switch, and returning to a tab already viewed) starts from
+// `data: []` + `loading: true` and re-fetches from the remote DB — a visible delay.
+// With it, a re-mounted hook paints the cached rows instantly (no skeleton) and
+// revalidates in the background. refetch()/polling/realtime keep the cache current.
+const responseCache = new Map<string, unknown[]>();
+
 function coalescedFetch(url: string): Promise<unknown> {
   const existing = inFlight.get(url);
   if (existing) return existing;
@@ -67,15 +74,18 @@ export function useLiveQuery<T = Record<string, unknown>>(
   const url = `/api/db/${model}${query ? `?${query}` : ""}`;
   const tablesKey = (tables ?? []).join(",");
 
-  const [data, setData] = useState<T[]>([]);
-  const [loading, setLoading] = useState<boolean>(() => enabled);
+  // Seed from the SWR cache so a re-mounted hook paints instantly (no skeleton).
+  const [data, setData] = useState<T[]>(() => (responseCache.get(url) as T[]) ?? []);
+  const [loading, setLoading] = useState<boolean>(() => enabled && !responseCache.has(url));
   const [error, setError] = useState<string | null>(null);
 
   // fetchData closes over the current `url`; it re-creates when the url changes.
   const fetchData = useCallback(async () => {
     try {
       const json = (await coalescedFetch(url)) as { data?: T[] };
-      setData((json.data ?? []) as T[]);
+      const next = (json.data ?? []) as T[];
+      responseCache.set(url, next);
+      setData(next);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Request failed");
@@ -83,6 +93,17 @@ export function useLiveQuery<T = Record<string, unknown>>(
       setLoading(false);
     }
   }, [url]);
+
+  // When the url changes (e.g. a new filter), reset to that url's cached rows —
+  // only show a spinner when nothing is cached yet. This is React's "adjust state
+  // during render on a prop change" pattern (guarded by prevUrl), which avoids a
+  // spinner flash and does not trip the no-setState-in-effect rule.
+  const [prevUrl, setPrevUrl] = useState(url);
+  if (url !== prevUrl) {
+    setPrevUrl(url);
+    setData((responseCache.get(url) as T[]) ?? []);
+    setLoading(enabled && !responseCache.has(url));
+  }
 
   useEffect(() => {
     if (!enabled) return;
@@ -127,10 +148,13 @@ interface DashboardStats {
   overdueInvoices: number;
 }
 
+// SWR cache for the dashboard counters — same rationale as responseCache above.
+let statsCache: DashboardStats | null = null;
+
 /** Live dashboard counters from /api/stats with the same polling cadence. */
 export function useStats(pollMs = 20000) {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<DashboardStats | null>(() => statsCache);
+  const [loading, setLoading] = useState(() => statsCache === null);
   const [error, setError] = useState<string | null>(null);
 
   const fetchStats = useCallback(async () => {
@@ -138,6 +162,7 @@ export function useStats(pollMs = 20000) {
       const res = await fetch("/api/stats", { cache: "no-store" });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || res.statusText);
+      statsCache = json as DashboardStats;
       setStats(json as DashboardStats);
       setError(null);
     } catch (err) {

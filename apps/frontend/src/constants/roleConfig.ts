@@ -416,7 +416,6 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Shift Handover", icon: Repeat, route: "/caregiver/shiftendorsements", group: "Coordination & Comms" },
       { name: "Endorsement Dashboard", icon: Inbox, route: "/caregiver/endorsementdashboard", group: "Coordination & Comms" },
       { name: "SBAR Escalations", icon: Siren, route: "/caregiver/escalations", group: "Coordination & Comms" },
-      { name: "Care Team", icon: Stethoscope, route: "/caregiver/careteam", group: "Coordination & Comms" },
       // Administration
       { name: "Time Clock", icon: Timer, route: "/caregiver/timeclock", group: "Administration" },
     ],
