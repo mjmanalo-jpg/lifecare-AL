@@ -1,6 +1,6 @@
 "use client";
 
-import NurseDashboard from "@/components/portal/views/NurseDashboard";
+import CareManagerDashboard from "@/components/portal/views/CareManagerDashboard";
 import AlertCenter from "@/components/portal/views/clinical/AlertCenter";
 import ApprovalWorkflows from "@/components/portal/views/clinical/ApprovalWorkflows";
 import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
@@ -14,6 +14,7 @@ import ShiftSummaryBoard from "@/components/portal/views/clinical/ShiftSummaryBo
 import CareAcuityBoard from "@/components/portal/views/clinical/CareAcuityBoard";
 import WoundCareBoard from "@/components/portal/views/clinical/WoundCareBoard";
 import ShiftEndorsementBoard from "@/components/portal/views/clinical/ShiftEndorsementBoard";
+import ShiftEndorsementDashboard from "@/components/portal/views/clinical/ShiftEndorsementDashboard";
 import MedicationComplianceBoard from "@/components/portal/views/clinical/MedicationComplianceBoard";
 import ResidentProgressReport from "@/components/portal/views/clinical/ResidentProgressReport";
 import TaskAssignmentBoard from "@/components/portal/views/clinical/TaskAssignmentBoard";
@@ -36,6 +37,8 @@ import MonitoringView from "@/components/portal/views/MonitoringView";
 import QualityMonitoringBoard from "@/components/portal/views/clinical/QualityMonitoringBoard";
 import MedSafetyDashboard from "@/components/portal/views/clinical/MedSafetyDashboard";
 import FacilityResidents from "@/components/portal/views/FacilityResidents";
+import LeadPipelineBoard from "@/components/portal/views/LeadPipelineBoard";
+import OnboardingHub from "@/components/portal/views/OnboardingHub";
 
 /**
  * Care Manager portal — clinical oversight split out of Facility Operations:
@@ -47,6 +50,13 @@ import FacilityResidents from "@/components/portal/views/FacilityResidents";
  */
 export default function CareManagerPortalContent({ tab }: { tab: string }) {
   switch (tab) {
+    // Intake & Admissions — Care Manager can cover these when the Super Admin is
+    // away (mirrors the Super Admin portal's CRM + Admissions).
+    case "crm":
+    case "leads":
+      return <LeadPipelineBoard />;
+    case "admissions":
+      return <OnboardingHub initialTab="admissions" />;
     case "residents":
       return <CareLogsBoard clinicianRole="FACILITY_ADMIN" />;
     case "records":
@@ -71,6 +81,8 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
       return <WoundCareBoard clinicianRole="FACILITY_ADMIN" />;
     case "shiftendorsements":
       return <ShiftEndorsementBoard clinicianRole="FACILITY_ADMIN" />;
+    case "endorsementdashboard":
+      return <ShiftEndorsementDashboard clinicianRole="FACILITY_ADMIN" />;
     case "escalations":
       return <EscalationsBoard role="FACILITY_ADMIN" />;
     case "approvalworkflows":
@@ -120,6 +132,6 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
     case "consentforms":
       return <ConsentFormsManager />;
     default:
-      return <NurseDashboard />;
+      return <CareManagerDashboard />;
   }
 }

@@ -17,6 +17,7 @@ import {
 import { useLiveQuery, useStats } from "@/lib/useLiveQuery";
 import { adaptResident, adaptIncident, adaptTask, residentName } from "@/lib/adapters";
 import { updateRecord } from "@/lib/api";
+import DashboardQuickActions from "@/components/portal/views/DashboardQuickActions";
 
 /* ── Types ───────────────────────────────────────────────────────────── */
 
@@ -546,6 +547,9 @@ export default function NurseDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Floating quick-actions launcher (bottom-right) */}
+      <DashboardQuickActions clinicianRole="NURSE" />
     </div>
   );
 }

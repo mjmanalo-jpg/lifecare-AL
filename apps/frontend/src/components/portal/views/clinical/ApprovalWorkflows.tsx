@@ -44,6 +44,10 @@ export default function ApprovalWorkflows() {
   const [session, setSession] = useState<{ id: string | null; name: string | null; role: string | null }>({ id: null, name: null, role: null });
   useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => { if (d?.authenticated) setSession({ id: d.session?.userId ?? null, name: d.session?.name ?? d.session?.role ?? "Care Manager", role: d.session?.role ?? null }); }).catch(() => {}); }, []);
   const canDecide = session.role === "FACILITY_ADMIN" || session.role === "SUPERADMIN" || session.role === "CARE_MANAGER";
+  // Nurses manage the appointment schedule too, so they can approve/reject
+  // appointments (medications & lab orders stay Care-Manager / Admin only).
+  const canDecideAppointment = canDecide || session.role === "NURSE";
+  const canAct = (kind: Kind) => (kind === "appointment" ? canDecideAppointment : canDecide);
 
   const [tab, setTab] = useState<"pending" | "all">("pending");
 
@@ -222,7 +226,7 @@ export default function ApprovalWorkflows() {
                     {it.state === "REJECTED" && m.rejectionReason && <p className="text-xs text-red-500 mt-0.5">Reason: {s(m.rejectionReason)}</p>}
                   </div>
                 </div>
-                {it.state === "PENDING" && canDecide ? (
+                {it.state === "PENDING" && canAct(it.kind) ? (
                   <div className="flex items-center gap-2 shrink-0">
                     <button onClick={() => reject(it)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50"><X className="w-4 h-4" /> Reject</button>
                     <button onClick={() => approve(it)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700"><Check className="w-4 h-4" /> Approve</button>

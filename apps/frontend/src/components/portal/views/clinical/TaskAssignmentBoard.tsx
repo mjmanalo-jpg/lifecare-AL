@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { RefreshCw, Plus, X, CheckCircle2, Play, Undo2, ClipboardList, StickyNote } from "lucide-react";
+import { RefreshCw, Plus, X, CheckCircle2, Play, Undo2, ClipboardList, StickyNote, ArrowLeftRight, Repeat } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident, adaptTask } from "@/lib/adapters";
@@ -73,6 +73,17 @@ const todayInput = () => {
 type SetStatusFn = (id: string, status: "PENDING" | "IN_PROGRESS" | "COMPLETED") => void | Promise<void>;
 type AddNoteFn = (task: Task) => void | Promise<void>;
 
+// Shape of a shift-endorsement this user has acknowledged (read from the
+// `shift_endorsements` app-setting) — just the parts the Handover tab needs.
+interface HandoverCO { id: string; residentId: string; concern: string; priority: string; role: string; dueTime?: string; action?: string }
+interface HandoverTaskSnap { id: string; title: string; resident: string; room: string; priority: string; due: string }
+interface HandoverIncidentSnap { id: string; type: string; resident: string; room: string; severity: string }
+interface HandoverEndorsement {
+  id: string; number?: string; date?: string; shiftLabel?: string; shiftRange?: string;
+  outgoingBy?: string; acceptedById?: string; acceptedAt?: string;
+  carryOvers?: HandoverCO[]; handover?: { pendingTasks: HandoverTaskSnap[]; openIncidents: HandoverIncidentSnap[] };
+}
+
 /** A single task card with inline status-transition controls. */
 function TaskCard({ task, staffNameById, onSetStatus, onAddNote }: { task: Task; staffNameById: Map<string, string>; onSetStatus: SetStatusFn; onAddNote: AddNoteFn }) {
   const raw = task.raw as { assignedToId?: string; status?: string; priority?: string } | undefined;
@@ -141,6 +152,53 @@ function Column({ label, dot, items, staffNameById, onSetStatus, onAddNote }: {
   );
 }
 
+/** One acknowledged shift handover: its carry-overs (now the user's tasks) + the
+ *  frozen sign-off snapshot of what was still open when the shift ended. */
+function HandoverCard({ e, resName, onOpenTasks, onOpenIncidents }: { e: HandoverEndorsement; resName: (id: string) => { name: string; room: string }; onOpenTasks: () => void; onOpenIncidents: () => void }) {
+  const cos = e.carryOvers || [];
+  const pt = e.handover?.pendingTasks || [];
+  const oi = e.handover?.openIncidents || [];
+  const accepted = e.acceptedAt ? new Date(e.acceptedAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <Repeat className="w-4 h-4 text-blue-500" />
+        <span className="text-sm font-bold text-slate-900">Endorsement {e.number || "—"}</span>
+        <span className="text-xs text-slate-400">{e.date || ""}{e.shiftLabel ? ` · ${e.shiftLabel}${e.shiftRange ? ` ${e.shiftRange}` : ""}` : ""}</span>
+        {e.outgoingBy && <span className="text-xs text-slate-500">from <b className="font-semibold text-slate-700">{e.outgoingBy}</b></span>}
+        {accepted && <span className="ml-auto text-[11px] text-slate-400">Accepted {accepted}</span>}
+      </div>
+
+      <div className="mt-3">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5 flex items-center gap-1"><ArrowLeftRight className="w-3.5 h-3.5" /> Carry-Overs added to your tasks ({cos.length})</p>
+        {cos.length === 0 ? <p className="text-xs text-slate-400">None.</p> : (
+          <div className="space-y-1.5">
+            {cos.map((c) => { const rn = resName(c.residentId); return (
+              <div key={c.id} className="rounded-xl border border-slate-100 bg-slate-50/60 p-2.5">
+                <div className="flex flex-wrap items-center gap-2"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${c.priority === "Urgent" ? "bg-red-100 text-red-700" : c.priority === "Important" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"}`}>{c.priority}</span><span className="text-sm font-semibold text-slate-900">{rn.name}</span><span className="text-xs text-slate-400">Rm {rn.room}{c.dueTime ? ` · due ${c.dueTime}` : ""}</span></div>
+                <p className="text-sm text-slate-700 mt-0.5">{c.concern}</p>{c.action && <p className="text-xs text-slate-500">Action: {c.action}</p>}
+              </div>
+            ); })}
+          </div>
+        )}
+      </div>
+
+      {(pt.length > 0 || oi.length > 0) && (
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-3">
+            <p className="text-xs font-bold text-amber-700 mb-1">Pending Tasks at Sign-Off ({pt.length})</p>
+            {pt.length === 0 ? <p className="text-xs text-slate-400">None.</p> : <ul className="space-y-0.5 max-h-40 overflow-y-auto">{pt.map((t) => <li key={t.id}><button type="button" onClick={onOpenTasks} title="Open in Task Board" className="w-full text-left text-xs text-slate-600 rounded px-1 py-0.5 -mx-1 hover:bg-amber-100/60 hover:text-amber-800 transition"><span className="font-semibold text-slate-800">{t.title}</span> — {t.resident}{t.room ? ` (Rm ${t.room})` : ""}</button></li>)}</ul>}
+          </div>
+          <div className="rounded-xl border border-red-100 bg-red-50/50 p-3">
+            <p className="text-xs font-bold text-red-700 mb-1">Open Incidents at Sign-Off ({oi.length})</p>
+            {oi.length === 0 ? <p className="text-xs text-slate-400">None.</p> : <ul className="space-y-0.5 max-h-40 overflow-y-auto">{oi.map((i) => <li key={i.id}><button type="button" onClick={onOpenIncidents} title="Open in Incident Reports" className="w-full text-left text-xs text-slate-600 rounded px-1 py-0.5 -mx-1 hover:bg-red-100/60 hover:text-red-800 transition"><span className="font-semibold text-slate-800">{(i.type || "Incident").replace(/_/g, " ")}</span>{i.severity ? ` · ${i.severity}` : ""} — {i.resident}{i.room ? ` (Rm ${i.room})` : ""}</button></li>)}</ul>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   // ---- Data -----------------------------------------------------------------
   const { data: taskRows, loading, error, refetch } = useLiveQuery(
@@ -202,10 +260,29 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
   const [filterDate, setFilterDate] = useState(todayInput());
   const [filterAssignee, setFilterAssignee] = useState("all");
   const [filterResident, setFilterResident] = useState("all");
-  const [activeTab, setActiveTab] = useState<"board" | "mine" | "summary">("board");
+  const [activeTab, setActiveTab] = useState<"board" | "mine" | "summary" | "handover">("board");
   const [showAssign, setShowAssign] = useState(false);
+  // Deep-link from the "handover accepted" notification (…/taskassignment?tab=handover).
+  useEffect(() => {
+    if (typeof window === "undefined" || new URLSearchParams(window.location.search).get("tab") !== "handover") return;
+    const id = requestAnimationFrame(() => setActiveTab("handover"));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   const currentShift = shiftNow();
+
+  // Shift endorsements this user has acknowledged — surfaced so the carry-overs
+  // (now their tasks) keep their handover context (source shift + sign-off snapshot).
+  const { data: settingRows } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
+  const myHandovers = useMemo(() => {
+    let list: HandoverEndorsement[] = [];
+    try { const v = JSON.parse(settingRows.find((r) => (r.key || r.id) === "shift_endorsements")?.value || "[]"); if (Array.isArray(v)) list = v; } catch { /* ignore */ }
+    return list
+      .filter((e) => e && e.acceptedById && e.acceptedById === sessionUserId)
+      .sort((a, b) => String(b.acceptedAt || b.date || "").localeCompare(String(a.acceptedAt || a.date || "")));
+  }, [settingRows, sessionUserId]);
+  const resNameById = useMemo(() => { const m = new Map<string, { name: string; room: string }>(); residents.forEach((r) => m.set(r.id, { name: r.name, room: r.room })); return m; }, [residents]);
+  const resName = (id: string) => resNameById.get(id) || { name: "Resident", room: "" };
 
   /** The base, security-critical filter applied before any tab/column grouping. */
   const visibleTasks = useMemo(() => {
@@ -320,7 +397,7 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
   };
 
   return (
-    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full bg-slate-50 space-y-5">
+    <div className="@container -m-4 sm:-m-6 p-4 sm:p-6 min-h-full bg-slate-50 space-y-5">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -373,11 +450,12 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
       )}
 
       {/* Tabs */}
-      <div className="inline-flex rounded-xl bg-slate-100 p-1 text-sm font-medium">
-        {([["board", "Board View"], ["mine", "My Tasks"], ["summary", "Shift Summary"]] as const).map(([id, label]) => (
+      <div className="inline-flex flex-wrap rounded-xl bg-slate-100 p-1 text-sm font-medium">
+        {([["board", "Board View"], ["mine", "My Tasks"], ["summary", "Shift Summary"], ["handover", "Handover"]] as const).map(([id, label]) => (
           <button key={id} onClick={() => setActiveTab(id)}
-            className={`px-4 py-1.5 rounded-lg transition ${activeTab === id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition ${activeTab === id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
             {label}
+            {id === "handover" && myHandovers.length > 0 && <span className="inline-flex items-center justify-center min-w-5 h-4 px-1 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">{myHandovers.length}</span>}
           </button>
         ))}
       </div>
@@ -419,8 +497,14 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
             )}
           </div>
         </div>
+      ) : activeTab === "handover" ? (
+        <div className="space-y-3">
+          {myHandovers.length === 0 ? (
+            <div className="rounded-2xl border-2 border-dashed border-slate-200 p-10 text-center text-sm text-slate-400">No accepted handovers yet. When you acknowledge a shift endorsement, its carry-overs and sign-off snapshot appear here.</div>
+          ) : myHandovers.map((e) => <HandoverCard key={e.id} e={e} resName={resName} onOpenTasks={() => setActiveTab("board")} onOpenIncidents={() => { const seg = window.location.pathname.split("/")[1] || "caregiver"; window.location.href = `/${seg}/incidents`; }} />)}
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-3">
           <Column label="Pending" dot="bg-amber-400" items={columns.pending} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} />
           <Column label="In Progress" dot="bg-blue-500" items={columns.inProgress} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} />
           <Column label="Completed" dot="bg-green-500" items={columns.completed} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} />
@@ -497,6 +581,21 @@ function AssignTaskModal({
           description: notes.trim() || null,
           [TASK_NOTES_FIELD]: notes.trim() || null,
         });
+      }
+      // Notify the assignee (e.g. the caregiver) so the new assignment lands in
+      // their portal notification bell in real time. Best-effort — never blocks
+      // the assignment itself.
+      const assigneeUserId = staffRows.find((st) => st.id === assigneeId)?.userId;
+      if (assigneeUserId) {
+        const count = selectedResidents.size;
+        await createRecord("notifications", {
+          userId: assigneeUserId,
+          type: "TASK_ASSIGNMENT",
+          title: count > 1 ? `${count} new tasks assigned to you` : "New task assigned to you",
+          message: `${title.trim()}${count > 1 ? ` · ${count} residents` : ""} — due ${dueDate} ${dueTime}`,
+          relatedEntityType: "task",
+          severity: "INFO",
+        }).catch(() => null);
       }
       Swal.fire({ title: "Task Assigned", icon: "success", timer: 1300, showConfirmButton: false });
       onSaved();

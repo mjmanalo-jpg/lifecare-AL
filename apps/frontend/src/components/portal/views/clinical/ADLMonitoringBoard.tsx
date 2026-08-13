@@ -11,7 +11,11 @@
  */
 
 import { useMemo, useState } from "react";
-import { TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, CheckCircle2 } from "lucide-react";
+import {
+  TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, CheckCircle2,
+  Bath, Shirt, Scissors, Toilet, ArrowLeftRight, Utensils, Footprints, Droplets, Brain, Moon,
+  type LucideIcon,
+} from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, createRecord } from "@/lib/api";
@@ -23,21 +27,22 @@ import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, FieldLabel
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const ADL_KEY = "adl_logs";
 const s = (v: unknown) => (v == null ? "" : String(v));
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 const today = () => new Date().toISOString().split("T")[0];
 const shiftNow = () => { const h = new Date().getHours(); return h >= 6 && h < 14 ? "AM" : h >= 14 && h < 22 ? "PM" : "NOC"; };
 
-const DOMAINS = [
-  { key: "bathing", label: "Bathing", emoji: "🛁", adl: "bathing" as AdlItem | null },
-  { key: "dressing", label: "Dressing", emoji: "👕", adl: "dressing" as AdlItem | null },
-  { key: "grooming", label: "Grooming", emoji: "✂️", adl: "grooming" as AdlItem | null },
-  { key: "toileting", label: "Toileting", emoji: "🚽", adl: "toileting" as AdlItem | null },
-  { key: "transfers", label: "Transfers", emoji: "🔄", adl: "transfers" as AdlItem | null },
-  { key: "feeding", label: "Feeding", emoji: "🍽️", adl: "feeding" as AdlItem | null },
-  { key: "mobility", label: "Mobility", emoji: "🚶", adl: null },
-  { key: "continence", label: "Continence", emoji: "💧", adl: null },
-  { key: "cognition", label: "Cognition/Behavior", emoji: "🧠", adl: null },
-  { key: "sleep", label: "Sleep/Rest", emoji: "😴", adl: null },
-] as const;
+const DOMAINS: { key: string; label: string; icon: LucideIcon; adl: AdlItem | null }[] = [
+  { key: "bathing", label: "Bathing", icon: Bath, adl: "bathing" as AdlItem | null },
+  { key: "dressing", label: "Dressing", icon: Shirt, adl: "dressing" as AdlItem | null },
+  { key: "grooming", label: "Grooming", icon: Scissors, adl: "grooming" as AdlItem | null },
+  { key: "toileting", label: "Toileting", icon: Toilet, adl: "toileting" as AdlItem | null },
+  { key: "transfers", label: "Transfers", icon: ArrowLeftRight, adl: "transfers" as AdlItem | null },
+  { key: "feeding", label: "Feeding", icon: Utensils, adl: "feeding" as AdlItem | null },
+  { key: "mobility", label: "Mobility", icon: Footprints, adl: null },
+  { key: "continence", label: "Continence", icon: Droplets, adl: null },
+  { key: "cognition", label: "Cognition/Behavior", icon: Brain, adl: null },
+  { key: "sleep", label: "Sleep/Rest", icon: Moon, adl: null },
+];
 type DomainKey = (typeof DOMAINS)[number]["key"];
 
 const SHIFTS = [{ v: "AM", label: "AM Shift (6am–2pm)" }, { v: "PM", label: "PM Shift (2pm–10pm)" }, { v: "NOC", label: "Noc Shift (10pm–6am)" }];
@@ -162,7 +167,32 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
       </div>
 
       {!resId ? (
-        <div className="flex flex-col items-center justify-center py-24 text-[var(--clinical-muted)]"><Activity className="w-12 h-12 mb-3 opacity-40" /><p>Select a resident to begin ADL monitoring</p></div>
+        <div className="@container">
+          <div className="mb-4 flex items-center gap-2">
+            <Activity className="h-5 w-5 text-[var(--clinical-panel)]" />
+            <div>
+              <p className="text-base font-bold text-[var(--clinical-ink)]">Select a resident to begin ADL monitoring</p>
+              <p className="text-sm text-[var(--clinical-muted)]">Tap a resident to start tracking their ADLs</p>
+            </div>
+          </div>
+          {residents.length === 0 ? (
+            <p className="text-center text-sm text-[var(--clinical-muted)] py-8">No residents found.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4 @5xl:grid-cols-5">
+              {residents.map((r: Row, i: number) => (
+                <button key={s(r.id)} onClick={() => setResId(s(r.id))}
+                  className="group flex flex-col items-center gap-2.5 rounded-xl border p-4 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300"
+                  style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)", animationDelay: `${i * 40}ms`, animationFillMode: "backwards" }}>
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold" style={{ backgroundColor: "var(--clinical-surface-2)", color: "var(--clinical-panel)" }}>{initials(s(r.name))}</span>
+                  <span className="block w-full min-w-0">
+                    <span className="block truncate text-sm font-semibold text-[var(--clinical-ink)]">{s(r.name)}</span>
+                    <span className="block text-xs text-[var(--clinical-muted)]">Room {s(r.room)}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       ) : (
         <>
           {/* Tabs */}
@@ -179,10 +209,11 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
               {DOMAINS.map((d) => {
                 const bl = baselineFor(d.key);
                 const logged = loggedByDomain.get(d.key);
+                const Icon = d.icon;
                 return (
                   <button key={d.key} onClick={() => setLogDomain(d.key)} aria-label={`Log ${d.label}`} className="text-left rounded-xl border p-4 transition relative hover:shadow-sm" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
                     <div className="flex items-start justify-between">
-                      <span className="text-2xl">{d.emoji}</span>
+                      <Icon className="h-6 w-6" style={{ color: "var(--clinical-panel)" }} />
                       <span className="w-6 h-6 rounded-full border flex items-center justify-center text-[var(--clinical-muted)] text-lg leading-none" style={{ borderColor: "var(--clinical-line-strong)" }}>+</span>
                     </div>
                     <p className="font-bold text-[var(--clinical-ink)] mt-3">{d.label}</p>
@@ -206,9 +237,10 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
                 const rn = residents.find((r: Row) => s(r.id) === l.residentId);
                 const sig = l.change === "Significant Decline";
                 const accent = sig ? "var(--clinical-coral)" : "var(--clinical-amber)";
+                const DIcon = d?.icon;
                 return (
                   <div key={l.id} className="rounded-xl border p-3 flex items-start gap-3" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)", borderLeftWidth: 3, borderLeftColor: accent }}>
-                    <span className="text-xl">{d?.emoji}</span>
+                    {DIcon && <DIcon className="h-5 w-5 shrink-0" style={{ color: "var(--clinical-panel)" }} />}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-[var(--clinical-ink)]">{d?.label} — {sig ? "Significant Decline" : "Declined"} <span className="font-normal text-[var(--clinical-muted)]">· {l.assistance}</span></p>
                       <p className="text-xs text-[var(--clinical-muted)]">{s(rn?.name) || "Resident"} · {l.date} · {l.shift} shift{l.baseline ? ` · baseline ${l.baseline}` : ""}</p>
@@ -258,7 +290,7 @@ function LogModal({ domain, resident, baseline, existing, onClose, onSave }: {
     <ClinicalModal
       open
       onClose={onClose}
-      title={`${domain.emoji} Log ${domain.label}`}
+      title={`Log ${domain.label}`}
       description={s(resident.name)}
       size="md"
       footer={

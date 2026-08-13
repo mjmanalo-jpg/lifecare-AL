@@ -15,6 +15,7 @@ import StatCard from "@/components/portal/widgets/StatCard";
 import { useLiveQuery, useStats } from "@/lib/useLiveQuery";
 import { adaptTask, adaptResident, adaptIncident, residentName } from "@/lib/adapters";
 import { updateRecord } from "@/lib/api";
+import DashboardQuickActions from "@/components/portal/views/DashboardQuickActions";
 
 /* ── Types ───────────────────────────────────────────────────────────── */
 
@@ -51,7 +52,6 @@ const SEVERITY_BADGE: Record<string, string> = {
   medium: "bg-yellow-100 text-yellow-700",
   low: "bg-blue-100 text-blue-700",
 };
-const PRIORITY_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
 function shiftFor(hour: number): { key: string; label: string; icon: LucideIcon; greeting: string } {
   if (hour >= 6 && hour < 14) return { key: "MORNING", label: "Morning Shift", icon: Sun, greeting: "Good morning" };
@@ -150,10 +150,17 @@ export default function CaregiverDashboard() {
 
   // The caregiver's own outstanding tasks, highest priority first — this is where
   // a supervisor-assigned task must appear (any priority, not just critical/high).
+  // Newest-to-oldest by request date — the most recently assigned/created task is
+  // on top (falls back to the due date when a createdAt is missing).
+  const reqTime = (t: Task) => {
+    const created = (t.raw as { createdAt?: string } | null | undefined)?.createdAt;
+    const d = new Date(String(created ?? t.dueDate ?? 0)).getTime();
+    return isNaN(d) ? 0 : d;
+  };
   const priorityTasks = useMemo(
     () => myTasks
       .filter((t) => !t.completed)
-      .sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority])
+      .sort((a, b) => reqTime(b) - reqTime(a))
       .slice(0, 8),
     [myTasks]
   );
@@ -286,11 +293,11 @@ export default function CaregiverDashboard() {
               {priorityTasks.map((t) => (
                 <div
                   key={t.id}
-                  onClick={() => router.push("/caregiver/taskboard")}
+                  onClick={() => router.push("/caregiver/taskassignment")}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push("/caregiver/taskboard"); } }}
-                  title="Open in Task Checklist"
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push("/caregiver/taskassignment"); } }}
+                  title="Open in Task Board"
                   className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:border-yellow-300 hover:shadow-sm transition cursor-pointer"
                 >
                   <div className="flex-1 min-w-0">
@@ -303,7 +310,8 @@ export default function CaregiverDashboard() {
                         </span>
                       </div>
                     </div>
-                    <p className="text-sm text-gray-600 truncate">{t.resident} • Room {t.room}{t.dueTime ? ` • ${t.dueTime}` : ""}</p>
+                    <p className="text-sm text-gray-600 truncate">{t.resident} • Room {t.room}</p>
+                    {t.dueDate && <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><Clock className="w-3 h-3 flex-shrink-0" /> Due {new Date(t.dueDate).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>}
                     {(() => {
                       const notes = taskNotesOf(t.raw as Record<string, unknown>);
                       if (!notes.length) return null;
@@ -417,6 +425,9 @@ export default function CaregiverDashboard() {
           </Panel>
         </div>
       </div>
+
+      {/* Floating quick-actions launcher (bottom-right) */}
+      <DashboardQuickActions clinicianRole="CAREGIVER" />
     </div>
   );
 }

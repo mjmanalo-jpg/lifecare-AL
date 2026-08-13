@@ -1,11 +1,12 @@
 // ─────────────────────────────────────────────────────────────
 // Quality Monitoring aggregation.
 //
-// Pure functions that roll up raw activity (tasks, medication passes,
-// incidents, call bells, care plans) into ResidentQualityScore- and
-// CommunityQualityDashboard-shaped metrics. Used by the Quality dashboard for
-// live compute AND by its "Save snapshot" action to populate the models.
-// No I/O here — the caller supplies already-fetched rows.
+// Pure functions that roll up the new care-system workflow — care-log domain
+// documentation (DailyRounds), ADL monitoring, medication passes, incidents &
+// care plans — into ResidentQualityScore- and CommunityQualityDashboard-shaped
+// metrics. Used by the Quality dashboard for live compute AND by its "Save
+// snapshot" action to populate the models. No I/O here — the caller supplies
+// already-aggregated care/ADL maps plus raw med/incident/care-plan rows.
 // ─────────────────────────────────────────────────────────────
 
 type Row = Record<string, unknown>;
@@ -33,11 +34,16 @@ export function periodFor(days: number, now = Date.now()): QualityPeriod {
 
 export interface QualityRaw {
   residents: Row[];
-  tasks: Row[];
   meds: Row[];
   incidents: Row[];
   callBells: Row[];
   carePlans: Row[];
+  // Care-log documentation coverage per resident for the window: how many of the
+  // care domains were documented vs the total (from the DailyRounds care logs).
+  careByRes: Record<string, { logged: number; total: number }>;
+  // ADL monitoring per resident for the window: total ADL entries + how many were
+  // a decline / significant decline.
+  adlByRes: Record<string, { entries: number; declines: number }>;
 }
 
 export interface ResidentQuality {
@@ -49,15 +55,19 @@ export interface ResidentQuality {
   medicationComplianceScore: number | null;
   riskManagementScore: number;
   overallScore: number;
+  // Care-log domain coverage (repurposes the snapshot's tasksScheduled/Completed
+  // columns: total = domains expected, completed = domains documented).
   tasksScheduled: number;
   tasksCompleted: number;
   medsScheduled: number;
   medsTaken: number;
   incidentsCount: number;
+  adlEntries: number;
+  adlDeclines: number;
 }
 
 export interface CommunityQuality {
-  taskCompletionRate: number | null;
+  taskCompletionRate: number | null; // care-log documentation rate (kept name for the snapshot column)
   medicationComplianceRate: number | null;
   medicationErrorRate: number | null;
   incidentRate: number | null; // incidents per resident
@@ -68,6 +78,7 @@ export interface CommunityQuality {
   residentCount: number;
   totalIncidents: number;
   totalFalls: number;
+  totalAdlDeclines: number;
 }
 
 const MED_TAKEN = new Set(["GIVEN", "PARTIAL"]);
@@ -78,18 +89,19 @@ export function computeResidentQuality(r: Row, raw: QualityRaw, p: QualityPeriod
   const id = s(r.id);
   const res = (r.resident ?? r) as Row;
 
-  const rTasks = raw.tasks.filter((t) => s(t.residentId) === id && inWindow(tsOf(t.createdAt), p.start, p.end));
-  const tasksScheduled = rTasks.length;
-  const tasksCompleted = rTasks.filter((t) => s(t.status) === "COMPLETED").length;
-  const careCompletionScore = pct(tasksCompleted, tasksScheduled);
+  // Care documentation — from the DailyRounds care-log domain coverage.
+  const care = raw.careByRes[id] || { logged: 0, total: 0 };
+  const careCompletionScore = pct(care.logged, care.total);
 
   const rMeds = raw.meds.filter((m) => s(m.residentId) === id && inWindow(tsOf(m.scheduledTime), p.start, p.end));
   const medsScheduled = rMeds.length;
   const medsTaken = rMeds.filter((m) => MED_TAKEN.has(s(m.status))).length;
   const medicationComplianceScore = pct(medsTaken, medsScheduled);
 
+  // ADL monitoring — declines drag the risk score down alongside incidents.
+  const adl = raw.adlByRes[id] || { entries: 0, declines: 0 };
   const incidentsCount = raw.incidents.filter((i) => s(i.residentId) === id && inWindow(tsOf(i.createdAt), p.start, p.end)).length;
-  const riskManagementScore = Math.max(0, 100 - incidentsCount * 20);
+  const riskManagementScore = Math.max(0, 100 - incidentsCount * 20 - adl.declines * 10);
 
   const parts = [careCompletionScore, medicationComplianceScore, riskManagementScore].filter((x): x is number => x != null);
   const overallScore = parts.length ? round1(parts.reduce((a, b) => a + b, 0) / parts.length) : 0;
@@ -103,11 +115,13 @@ export function computeResidentQuality(r: Row, raw: QualityRaw, p: QualityPeriod
     medicationComplianceScore,
     riskManagementScore,
     overallScore,
-    tasksScheduled,
-    tasksCompleted,
+    tasksScheduled: care.total,
+    tasksCompleted: care.logged,
     medsScheduled,
     medsTaken,
     incidentsCount,
+    adlEntries: adl.entries,
+    adlDeclines: adl.declines,
   };
 }
 
@@ -118,8 +132,15 @@ export function computeQuality(raw: QualityRaw, p: QualityPeriod): { community: 
     .map((r) => computeResidentQuality(r, raw, p))
     .sort((a, b) => a.overallScore - b.overallScore); // worst first — needs attention
 
-  const tasks = raw.tasks.filter((t) => inWindow(tsOf(t.createdAt), p.start, p.end));
-  const taskCompletionRate = pct(tasks.filter((t) => s(t.status) === "COMPLETED").length, tasks.length);
+  // Community care-documentation rate = documented domains / expected domains
+  // across every resident (from the care logs). Kept in `taskCompletionRate` so
+  // the snapshot column is unchanged.
+  const careTotals = residents.reduce<{ logged: number; total: number }>((acc, r) => {
+    const c = raw.careByRes[s(r.id)] || { logged: 0, total: 0 };
+    acc.logged += c.logged; acc.total += c.total; return acc;
+  }, { logged: 0, total: 0 });
+  const taskCompletionRate = pct(careTotals.logged, careTotals.total);
+  const totalAdlDeclines = residents.reduce((n, r) => n + (raw.adlByRes[s(r.id)]?.declines || 0), 0);
 
   const meds = raw.meds.filter((m) => inWindow(tsOf(m.scheduledTime), p.start, p.end));
   const medicationComplianceRate = pct(meds.filter((m) => MED_TAKEN.has(s(m.status))).length, meds.length);
@@ -157,6 +178,7 @@ export function computeQuality(raw: QualityRaw, p: QualityPeriod): { community: 
       residentCount: rc,
       totalIncidents,
       totalFalls,
+      totalAdlDeclines,
     },
     residents: perResident,
   };

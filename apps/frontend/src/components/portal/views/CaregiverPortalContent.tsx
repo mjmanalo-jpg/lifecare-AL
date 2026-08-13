@@ -19,7 +19,7 @@ import DailyDocumentation from "@/components/portal/views/clinical/DailyDocument
 import CarePlanBoard from "@/components/portal/views/clinical/CarePlanBoard";
 import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
 import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
-import MARBoard from "@/components/portal/views/clinical/MARBoard";
+import MARDailyBoard from "@/components/portal/views/clinical/MARDailyBoard";
 import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker";
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
 import { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
@@ -92,7 +92,7 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
     case "documents":
       return <ResidentDocuments />;
     case "mar":
-      return <MARBoard />;
+      return <MARDailyBoard clinicianRole="CAREGIVER" />;
     case "followups":
       return <FollowUpTracker />;
     case "incidents":

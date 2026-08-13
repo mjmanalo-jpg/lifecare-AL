@@ -37,11 +37,13 @@ function parseAppt(v: Row) {
   };
 }
 
-// Approved medical referrals (from the Medical Appointments / Referrals board)
-// reflect here once signed off. The New Referral modal packs the specialist into
-// notes line 1 ("Specialist: <name>"), so extract it for display.
+// Confirmed medical referrals (from the Medical Appointments / Referrals board)
+// reflect here once a nurse / care manager hits "Confirm & schedule" (SCHEDULED).
+// A referral that is only APPROVED still awaits confirmation and does NOT show
+// yet. The New Referral modal packs the specialist into notes line 1
+// ("Specialist: <name>"), so extract it for display.
 const specialistFromNotes = (notes: string) => { const m = s(notes).split("\n")[0].match(/^Specialist:\s*(.*)$/); return m ? m[1].trim() : ""; };
-const REFERRAL_ON_CALENDAR = new Set(["APPROVED", "SCHEDULED", "COMPLETED"]);
+const REFERRAL_ON_CALENDAR = new Set(["SCHEDULED", "COMPLETED"]);
 function parseReferral(r: Row) {
   const specialist = specialistFromNotes(s(r.notes));
   return {
@@ -303,7 +305,7 @@ export default function AppointmentCalendar({ residentId, residentName, canSched
                 <button key={a.id} onClick={() => setDetailAppt(a)} className="flex w-full items-center gap-2.5 rounded-lg border border-gray-100 bg-white p-2 text-left hover:border-blue-200">
                   <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${meta.color}1a`, color: meta.color }}><Icon className="h-4 w-4" /></span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-gray-900">{a.title}{a.source === "referral" && <span className="ml-2 align-middle inline-flex items-center rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-700">Approved</span>}</span>
+                    <span className="block truncate text-sm font-semibold text-gray-900">{a.title}{a.source === "referral" && <span className="ml-2 align-middle inline-flex items-center rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-700">Confirmed</span>}</span>
                     <span className="text-xs text-gray-500">{new Date(a.when).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · {meta.label}{a.withWhom && a.withWhom !== "—" ? ` · ${a.withWhom}` : ""}</span>
                   </span>
                   <ExternalLink className="h-3.5 w-3.5 flex-shrink-0 text-gray-300" />
@@ -334,7 +336,7 @@ export default function AppointmentCalendar({ residentId, residentName, canSched
                       <div key={a.id} className="flex items-start gap-2.5 rounded-lg border border-gray-100 bg-gray-50 p-2.5">
                         <span className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${meta.color}1a`, color: meta.color }}><Icon className="h-4 w-4" /></span>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-gray-900 truncate">{a.title}{a.source === "referral" && <span className="ml-2 align-middle inline-flex items-center rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-700">Approved</span>}</p>
+                          <p className="text-sm font-semibold text-gray-900 truncate">{a.title}{a.source === "referral" && <span className="ml-2 align-middle inline-flex items-center rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-700">Confirmed</span>}</p>
                           <p className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
                             <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(a.when).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                             <span className="font-medium" style={{ color: meta.color }}>{meta.label}</span>
@@ -446,7 +448,7 @@ export default function AppointmentCalendar({ residentId, residentName, canSched
               </div>
               <div className="space-y-3 p-5">
                 <div>
-                  <p className="text-lg font-bold text-gray-900">{detailAppt.title}{detailAppt.source === "referral" && <span className="ml-2 align-middle inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-bold text-green-700">Approved</span>}</p>
+                  <p className="text-lg font-bold text-gray-900">{detailAppt.title}{detailAppt.source === "referral" && <span className="ml-2 align-middle inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-bold text-green-700">Confirmed</span>}</p>
                   <p className="text-sm font-medium" style={{ color: meta.color }}>{meta.label}</p>
                 </div>
                 <div className="space-y-1.5 text-sm text-gray-600">

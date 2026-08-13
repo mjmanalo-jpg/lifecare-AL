@@ -30,6 +30,7 @@ import { ClinicalPage, ClinicalHeader, ClinicalButton, StatCard, DataState, cont
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (v: unknown) => (v == null ? "" : String(v));
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 const num = (v: unknown): number | null => {
   if (v === "" || v == null) return null;
   const n = Number(v);
@@ -475,9 +476,32 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE" }: { clinicia
       />
 
       <div className="mt-5">
-        <DataState loading={anyLoading} error={anyError} empty={!selected}
-          emptyTitle="Select a resident to view vitals trends"
-          emptyHint="Choose a resident from the dropdown above to see their vital sign history">
+        {!selected && !anyLoading && !anyError && (
+          <div className="@container">
+            <div className="mb-4">
+              <p className="text-base font-bold text-[var(--clinical-ink)]">Select a resident to view vitals trends</p>
+              <p className="text-sm text-[var(--clinical-muted)]">Tap a resident to see their vital sign history</p>
+            </div>
+            {residents.length === 0 ? (
+              <p className="text-sm text-[var(--clinical-muted)]">No residents found.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4 @5xl:grid-cols-5">
+                {residents.map((r: Row, i: number) => (
+                  <button key={s(r.id)} onClick={() => setResidentId(s(r.id))}
+                    className="group flex flex-col items-center gap-2.5 rounded-xl border p-4 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300"
+                    style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)", animationDelay: `${i * 40}ms`, animationFillMode: "backwards" }}>
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold" style={{ backgroundColor: "var(--clinical-surface-2)", color: "var(--clinical-panel)" }}>{initials(s(r.name))}</span>
+                    <span className="block w-full min-w-0">
+                      <span className="block truncate text-sm font-semibold text-[var(--clinical-ink)]">{s(r.name)}</span>
+                      <span className="block text-xs text-[var(--clinical-muted)]">Room {s(r.room)}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <DataState loading={anyLoading} error={anyError} empty={false}>
           {selected && (
             <div className="space-y-5">
               {/* Summary card */}

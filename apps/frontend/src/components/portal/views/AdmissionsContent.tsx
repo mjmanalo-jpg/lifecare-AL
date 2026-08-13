@@ -1,15 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Swal from "@/lib/swal";
 import {
   UserPlus, Stethoscope, ClipboardList, ShieldCheck, BedDouble,
   Users, HeartPulse, Check, ChevronLeft, ChevronRight, X, Plus, Search,
   CheckCircle2, Loader2, CircleDot, Ban, AlertTriangle, Download, Printer, Pencil,
+  Brain, Activity, Apple, Pill, Droplets, MessageSquare, Siren, Sparkles,
+  Camera, Trash2, Image as ImageIcon,
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFacilityConfig } from "@/lib/useFacilityConfig";
-import { createRecord, updateRecord } from "@/lib/api";
+import { createRecord, updateRecord, upsertRecord } from "@/lib/api";
 import { insuranceProvider } from "@/lib/integrations/insurance";
 import { qrDataUrl } from "@/lib/qr";
 
@@ -26,6 +28,259 @@ const STEPS = [
 const STEP_COUNT = STEPS.length; // 7
 
 const CARE_LEVELS = ["INDEPENDENT", "ASSISTED", "MEMORY", "SKILLED"];
+
+// ── 12-domain comprehensive clinical assessment (Stage 3) ─────────────────────
+// Stored migration-free as JSON inside the existing free-text `careAssessment`
+// column: { __v: "clinical-12", note, domains: { <key>: { level, notes } } }.
+// Each domain's option list is ordered by acuity (index 0 = lowest … 3 = highest);
+// an index >= 2 counts as an "elevated" flag for the risk summary + suggested
+// level of care — the missing Stage-3 → Stage-5 handoff surfaced by the audit.
+const CLINICAL_DOMAINS = [
+  { key: "clinical",      label: "Clinical Status",      icon: Stethoscope,   hint: "Primary diagnoses, active conditions",   options: ["Stable", "Monitored", "Unstable", "Critical"] },
+  { key: "adl",           label: "ADL / IADL",           icon: ClipboardList, hint: "Bathing, dressing, toileting, feeding",   options: ["Independent", "Supervision", "Partial Assist", "Full Assist"] },
+  { key: "cognitive",     label: "Cognitive",            icon: Brain,         hint: "Orientation, memory, decision-making",    options: ["Intact", "Mild", "Moderate", "Severe"] },
+  { key: "mobility",      label: "Mobility / Fall Risk", icon: Activity,      hint: "Transfers, gait, fall history",          options: ["Independent", "Assistive Device", "Wheelchair", "Bedbound"] },
+  { key: "nutrition",     label: "Nutrition",            icon: Apple,         hint: "Diet, swallowing, weight trend",         options: ["Normal", "Modified Diet", "At Risk", "Malnourished"] },
+  { key: "medication",    label: "Medication",           icon: Pill,          hint: "Polypharmacy, high-alert meds",          options: ["None", "Simple", "Complex", "High-Risk"] },
+  { key: "behavioral",    label: "Behavioral",           icon: AlertTriangle, hint: "Agitation, wandering, aggression",       options: ["None", "Occasional", "Frequent", "Severe"] },
+  { key: "psychosocial",  label: "Psychosocial",         icon: Users,         hint: "Mood, isolation, family support",        options: ["Stable", "Mild Concern", "At Risk", "High Concern"] },
+  { key: "continence",    label: "Continence",           icon: Droplets,      hint: "Bladder & bowel management",             options: ["Continent", "Occasional", "Incontinent", "Catheter / Ostomy"] },
+  { key: "skin",          label: "Skin / Wound",         icon: ShieldCheck,   hint: "Braden risk, existing wounds",           options: ["Intact", "At Risk", "Wound Present", "Pressure Injury"] },
+  { key: "communication", label: "Communication",        icon: MessageSquare, hint: "Sensory & language barriers",            options: ["No Barrier", "Hearing", "Vision", "Speech / Language"] },
+  { key: "emergency",     label: "Emergency Risk",       icon: Siren,         hint: "Elopement, code status, allergy alerts", options: ["Low", "Moderate", "High", "Critical"] },
+] as const;
+const CLINICAL_TAG = "clinical-12";
+type DomainState = { level: string; notes: string };
+type ClinicalState = Record<string, DomainState>;
+
+// Wound / marks captured under the Skin/Wound domain — shape mirrors the Wound
+// Care Tracker's record (app-setting `wound_records`) so they carry over on
+// completion. Photos are downscaled JPEG data URLs.
+const WOUND_KEY = "wound_records";
+const WOUND_TYPES = ["Pressure Ulcer", "Surgical", "Traumatic", "Diabetic", "Skin Tear", "Bruise / Mark", "Other"];
+const WOUND_STAGES = ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Unstageable", "DTI", "N/A"];
+type WoundEntry = { id: string; bodyLocation: string; woundType: string; stage: string; notes: string; photo: string };
+
+const domainIndex = (key: string, level: string): number => {
+  const d = CLINICAL_DOMAINS.find((x) => x.key === key);
+  return d ? (d.options as readonly string[]).indexOf(level) : -1;
+};
+// Tint for an option chip by acuity index: green → amber → orange → red.
+const acuityTone = (i: number): string =>
+  i <= 0 ? "bg-emerald-500 text-white border-emerald-500"
+  : i === 1 ? "bg-amber-400 text-white border-amber-400"
+  : i === 2 ? "bg-orange-500 text-white border-orange-500"
+  : "bg-red-500 text-white border-red-500";
+const clinicalSummary = (domains: ClinicalState) => {
+  let flags = 0, filled = 0, max = 0;
+  for (const d of CLINICAL_DOMAINS) {
+    const lvl = domains[d.key]?.level; if (!lvl) continue;
+    filled++; const i = domainIndex(d.key, lvl); if (i >= 2) flags++; if (i > max) max = i;
+  }
+  return { flags, filled, max };
+};
+// Heuristic level-of-care suggestion from the domain acuities.
+const suggestLevel = (domains: ClinicalState): string => {
+  const idx = (k: string) => domainIndex(k, domains[k]?.level || "");
+  if (idx("clinical") >= 3 || idx("skin") >= 3 || idx("medication") >= 3 || idx("mobility") >= 3 || idx("emergency") >= 3) return "SKILLED";
+  if (idx("cognitive") >= 2 || idx("behavioral") >= 2) return "MEMORY";
+  const { flags, max } = clinicalSummary(domains);
+  if (flags >= 1 || max >= 1) return "ASSISTED";
+  return "INDEPENDENT";
+};
+// Serialize the free-text note + domains into the careAssessment column. Falls
+// back to a plain note (or null) when no structured domain has been captured, so
+// legacy free-text records keep working.
+const serializeClinical = (note: string, domains: ClinicalState, wounds: WoundEntry[] = []): string | null => {
+  const filled = Object.entries(domains).filter(([, v]) => v && (v.level || (v.notes || "").trim()));
+  const hasWounds = Array.isArray(wounds) && wounds.length > 0;
+  if (!filled.length && !hasWounds) return note.trim() || null;
+  return JSON.stringify({ __v: CLINICAL_TAG, note: note.trim() || undefined, domains: Object.fromEntries(filled), ...(hasWounds ? { wounds } : {}) });
+};
+const parseClinical = (raw: string): { note: string; domains: ClinicalState; wounds: WoundEntry[] } => {
+  const t = (raw || "").trim();
+  if (t.startsWith("{")) {
+    try { const o = JSON.parse(t); if (o && o.__v === CLINICAL_TAG) return { note: String(o.note ?? ""), domains: (o.domains || {}) as ClinicalState, wounds: Array.isArray(o.wounds) ? (o.wounds as WoundEntry[]) : [] }; } catch { /* not structured */ }
+  }
+  return { note: t, domains: {}, wounds: [] };
+};
+
+// ── Carry-forward: seed a Care Acuity assessment (Stage 5) on completion ───────
+// On admission completion the 12-domain screen seeds a PENDING_NURSE record into
+// the CareAcuityBoard's own store (`acuity_assessments`), so it surfaces there for
+// nurse review — closing the Stage-3 → Stage-5 handoff without touching the board.
+const ACUITY_KEY = "acuity_assessments";
+// admission 12-domain key → CareAcuityBoard's 10-domain key (skin / communication /
+// emergency have no 1:1 acuity domain, so they ride only in the free-text note).
+const ACUITY_DOMAIN_MAP: Record<string, string> = {
+  clinical: "medical", adl: "adl", cognitive: "cognition", mobility: "mobility",
+  nutrition: "nutrition", medication: "medication", behavioral: "behavior",
+  psychosocial: "psychosocial", continence: "elimination",
+};
+// admission acuity index (0..3, four levels) → acuity board score (0..5, six levels).
+const IDX_TO_SCORE = [0, 2, 3, 5];
+const ACUITY_LEVELS = [
+  { n: 1, name: "Independent Living Plus", min: 0, max: 10 },
+  { n: 2, name: "Assisted Living", min: 11, max: 20 },
+  { n: 3, name: "Enhanced Assisted Care", min: 21, max: 30 },
+  { n: 4, name: "Memory / Comprehensive Care", min: 31, max: 40 },
+  { n: 5, name: "Skilled / Complex Care", min: 41, max: 50 },
+];
+const newId = () => globalThis.crypto?.randomUUID?.() ?? `ac-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+const parseArr = (raw: unknown): Record<string, unknown>[] => {
+  try { const v = JSON.parse(String(raw ?? "") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+};
+// The authoritative level of care is the resident's careLevel (set from the
+// pre-admission level). The acuity board keys off the assessment's stored `level`,
+// so seed it from careLevel — NOT from the lossy 12-domain→10-domain re-mapping,
+// which under-counts (only 9 of 10 domains map). ASSISTED represents both L2 & L3,
+// so it seeds as L2 (the base assisted tier), matching the pre-admission badge.
+const CARELEVEL_TO_LEVEL: Record<string, number> = { INDEPENDENT: 1, ASSISTED: 2, MEMORY: 4, SKILLED: 5 };
+// Build the PENDING_NURSE acuity record from the captured domains (null if nothing
+// mappable was assessed). `note` carries the skin/communication/emergency detail.
+// `careLevel` fixes the level; `totalOverride` (the pre-admission total) keeps the
+// header Score consistent with that level.
+const buildSeedAcuity = (residentId: string, domains: ClinicalState, note: string, createdBy: string, careLevel = "", totalOverride?: number) => {
+  const scores: Record<string, number> = {};
+  for (const key of Object.keys(ACUITY_DOMAIN_MAP)) {
+    const lvl = domains[key]?.level; if (!lvl) continue;
+    const i = domainIndex(key, lvl); if (i < 0) continue;
+    scores[ACUITY_DOMAIN_MAP[key]] = IDX_TO_SCORE[i] ?? 0;
+  }
+  if (!Object.keys(scores).length) return null;
+  const mappedTotal = Object.values(scores).reduce((a, b) => a + b, 0);
+  const total = typeof totalOverride === "number" && totalOverride > 0 ? totalOverride : mappedTotal;
+  const levelN = CARELEVEL_TO_LEVEL[careLevel] ?? (ACUITY_LEVELS.find((l) => total >= l.min && total <= l.max)?.n ?? 1);
+  const lvl = ACUITY_LEVELS.find((l) => l.n === levelN) ?? ACUITY_LEVELS[0];
+  const extra = ["skin", "communication", "emergency"]
+    .map((k) => (domains[k]?.level ? `${CLINICAL_DOMAINS.find((d) => d.key === k)?.label}: ${domains[k].level}` : ""))
+    .filter(Boolean).join(" · ");
+  return {
+    id: newId(), residentId, scores, total, level: lvl.n, levelName: lvl.name,
+    trigger: "Admission",
+    notes: ["Seeded from admission 12-domain clinical assessment — review & adjust.", extra, note.trim()].filter(Boolean).join("\n"),
+    status: "PENDING_NURSE", createdBy, createdAt: new Date().toISOString(),
+  };
+};
+
+// Downscale an image file to a JPEG data URL (keeps the careAssessment JSON small).
+async function toDataUrl(file: File, maxDim = 900, quality = 0.7): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d"); if (!ctx) { reject(new Error("no canvas")); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+const woundInp = "w-full px-2.5 py-1.5 border border-gray-200 rounded-lg bg-white text-gray-900 text-xs outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent";
+
+// Wound / Marks capture embedded in the Skin/Wound domain card. Mirrors the Wound
+// Care Tracker's add form (location, type, stage, notes, photo upload / take-photo).
+function SkinWoundSection({ wounds, onChange }: { wounds: WoundEntry[]; onChange: (next: WoundEntry[]) => void }) {
+  const blank: WoundEntry = { id: "", bodyLocation: "", woundType: WOUND_TYPES[0], stage: "", notes: "", photo: "" };
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState<WoundEntry>(blank);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const camRef = useRef<HTMLInputElement>(null);
+
+  const pickPhoto = async (file?: File | null) => {
+    if (!file) return;
+    setBusy(true);
+    try { const url = await toDataUrl(file); setDraft((d) => ({ ...d, photo: url })); } catch { /* ignore */ } finally { setBusy(false); }
+  };
+  const add = () => {
+    if (!draft.bodyLocation.trim() && !draft.photo && !draft.notes.trim()) return;
+    onChange([{ ...draft, id: newId() }, ...wounds]);
+    setDraft(blank); setAdding(false);
+  };
+
+  return (
+    <div className="mt-3 border-t border-gray-100 pt-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Wound / Marks Record{wounds.length ? ` (${wounds.length})` : ""}</span>
+        {!adding && <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 hover:text-amber-700"><Plus className="w-3.5 h-3.5" /> Add wound / mark</button>}
+      </div>
+
+      {wounds.length > 0 && (
+        <div className="space-y-2 mb-2">
+          {wounds.map((w) => (
+            <div key={w.id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {w.photo ? <img src={w.photo} alt="wound" className="h-10 w-10 rounded object-cover border border-gray-200" /> : <span className="h-10 w-10 rounded bg-gray-100 flex items-center justify-center text-gray-300"><ImageIcon className="w-4 h-4" /></span>}
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-gray-800 truncate">{w.bodyLocation || "Unspecified location"}</p>
+                <p className="text-[11px] text-gray-400 truncate">{[w.woundType, w.stage].filter(Boolean).join(" · ") || "—"}{w.notes ? ` — ${w.notes}` : ""}</p>
+              </div>
+              <button type="button" onClick={() => onChange(wounds.filter((x) => x.id !== w.id))} className="p-1 text-gray-300 hover:text-red-500" aria-label="Remove"><Trash2 className="w-4 h-4" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {adding && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input value={draft.bodyLocation} onChange={(e) => setDraft((d) => ({ ...d, bodyLocation: e.target.value }))} placeholder="Body location (e.g. Sacrum)" className={woundInp} />
+            <select value={draft.woundType} onChange={(e) => setDraft((d) => ({ ...d, woundType: e.target.value }))} className={woundInp}>{WOUND_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+            <select value={draft.stage} onChange={(e) => setDraft((d) => ({ ...d, stage: e.target.value }))} className={woundInp}><option value="">Stage / severity…</option>{WOUND_STAGES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+            <input value={draft.notes} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} placeholder="Notes" className={woundInp} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => pickPhoto(e.target.files?.[0])} />
+            <input ref={camRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => pickPhoto(e.target.files?.[0])} />
+            <button type="button" onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50"><ImageIcon className="w-3.5 h-3.5" /> Upload</button>
+            <button type="button" onClick={() => camRef.current?.click()} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50"><Camera className="w-3.5 h-3.5" /> Take photo</button>
+            {busy && <span className="text-[11px] text-gray-400">Processing…</span>}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {draft.photo && <img src={draft.photo} alt="preview" className="h-9 w-9 rounded object-cover border border-gray-200" />}
+            <div className="ml-auto flex items-center gap-2">
+              <button type="button" onClick={() => { setAdding(false); setDraft(blank); }} className="text-[11px] font-semibold text-gray-500">Cancel</button>
+              <button type="button" onClick={add} className="rounded-lg bg-amber-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-amber-600">Add</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Prefill an admission from a completed Pre-Admission Assessment (Stage 2 → 3)
+// The pre-admission form (app-setting `preadmission_assessments`) already captured
+// demographics, medical history and 6 scored domains — pull them in so the
+// registrar doesn't re-key everything, and map the scores onto the 12 domains.
+const PREADMIT_KEY = "preadmission_assessments";
+const PA_DOMAIN_MAP: { pa: string; max: number; dom: string }[] = [
+  { pa: "adl", max: 12, dom: "adl" },
+  { pa: "mobility", max: 6, dom: "mobility" },
+  { pa: "continence", max: 4, dom: "continence" },
+  { pa: "cognition", max: 8, dom: "cognitive" },
+  { pa: "nursing", max: 8, dom: "clinical" },
+  { pa: "risk", max: 12, dom: "emergency" },
+];
+// Normalize a domain sub-score (0..max) into the 4-level acuity index (0..3).
+const scoreIdx = (score: unknown, max: number) => (max ? Math.max(0, Math.min(3, Math.round(((Number(score) || 0) / max) * 3))) : 0);
+// Pre-admission stores DOB as YYYY-MM-DD or M/D/YYYY; the wizard input needs YYYY-MM-DD.
+const normDOB = (v: unknown) => {
+  const t = String(v ?? "").trim(); if (!t) return "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
+  const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+  const d = new Date(t); return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+};
+const paLevel = (p: Record<string, unknown>) => Number(p.overrideLevel) || Number((p.scores as Record<string, unknown> | undefined)?.level) || 0;
 
 type Row = Record<string, unknown>;
 type TeamMember = { id: string; name: string; role: string; userId?: string };
@@ -68,6 +323,14 @@ export default function AdmissionsContent() {
   const { data: staffRows } = useLiveQuery<Row>("staff", { query: "include=user", tables: ["Staff"] });
   const { data: residentRows } = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const { data: userRows } = useLiveQuery<Row>("users", { tables: ["User"] });
+  const { data: settingRows } = useLiveQuery<Row>("app-settings", { tables: ["AppSetting"] });
+  // Completed pre-admission assessments available to prefill a new admission from.
+  const preadmits = useMemo(
+    () => parseArr(settingRows.find((r) => (r.key ?? r.id) === PREADMIT_KEY)?.value)
+      .filter((p) => String(p.residentName ?? "").trim())
+      .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))),
+    [settingRows]
+  );
 
   const staffOptions = useMemo<TeamMember[]>(
     () => staffRows.map((r) => {
@@ -81,6 +344,11 @@ export default function AdmissionsContent() {
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedAdmission, setSelectedAdmission] = useState<Row | null>(null);
   const [form, setForm] = useState<Form>({ ...emptyForm });
+  const [clinical, setClinical] = useState<ClinicalState>({});
+  const [skinWounds, setSkinWounds] = useState<WoundEntry[]>([]);
+  // Pre-admission total (0–50) captured on prefill, so the seeded acuity's Score
+  // matches its level. Null when the assessment was entered manually.
+  const [prefillTotal, setPrefillTotal] = useState<number | null>(null);
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -89,6 +357,67 @@ export default function AdmissionsContent() {
   const [statusFilter, setStatusFilter] = useState<"all" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED">("all");
 
   const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
+
+  // Stage 2 → Stage 3 handoff: pull a completed pre-admission assessment into the
+  // wizard (demographics, medical history, care level + the 12 domains).
+  const prefillFromPreadmission = async (paId: string) => {
+    const pa = preadmits.find((p) => s(p.id) === paId);
+    if (!pa) return;
+    const c = await Swal.fire({
+      title: "Prefill from pre-admission?",
+      text: `Populate this admission with ${s(pa.residentName) || "the assessment"}'s pre-admission data? Matching fields already entered will be overwritten.`,
+      icon: "question", showCancelButton: true, confirmButtonColor: "#d97706", confirmButtonText: "Prefill",
+    });
+    if (!c.isConfirmed) return;
+
+    const parts = s(pa.residentName).trim().split(/\s+/);
+    const firstName = parts.shift() || "";
+    const lastName = parts.join(" ");
+    const sc = (pa.scores || {}) as Record<string, unknown>;
+    const lvl = paLevel(pa);
+    const careLevel = lvl === 1 ? "INDEPENDENT" : lvl === 4 ? "MEMORY" : lvl === 5 ? "SKILLED" : lvl ? "ASSISTED" : "";
+    setPrefillTotal(Number(sc.total) || null);
+
+    const nextClinical: ClinicalState = {};
+    for (const mp of PA_DOMAIN_MAP) {
+      if (sc[mp.pa] == null) continue;
+      const dom = CLINICAL_DOMAINS.find((d) => d.key === mp.dom); if (!dom) continue;
+      nextClinical[mp.dom] = { level: dom.options[scoreIdx(sc[mp.pa], mp.max)], notes: "" };
+    }
+    setClinical(nextClinical);
+
+    const others = Array.isArray(pa.otherConditions) ? (pa.otherConditions as string[]) : [];
+    const meds = s(pa.currentMedications);
+
+    // Flatten the pre-admission's structured Individualized Care Plan (problem →
+    // goal → interventions → frequency → responsible) into the wizard's Step 7
+    // free-text fields, so the plan authored during screening carries over.
+    const cp = pa.carePlan as { problems?: unknown } | undefined;
+    const problems = (Array.isArray(cp?.problems) ? cp!.problems : []) as Record<string, unknown>[];
+    const carePlanText = problems.map((p) => {
+      const iv = Array.isArray(p.interventions) ? (p.interventions as unknown[]).map((x) => s(x)).filter(Boolean).join("; ") : "";
+      const meta = [s(p.frequency) && `Frequency: ${s(p.frequency)}`, s(p.responsible) && `Responsible: ${s(p.responsible)}`].filter(Boolean).join(" · ");
+      return [`[${s(p.domain) || "General"}] ${s(p.problem)}`.trim(), iv && `  Interventions: ${iv}`, meta && `  ${meta}`].filter(Boolean).join("\n");
+    }).join("\n\n");
+    const goalsText = problems.map((p) => [`[${s(p.domain) || "General"}] ${s(p.goal)}`.trim(), s(p.expectedOutcome) && `— Expected: ${s(p.expectedOutcome)}`].filter(Boolean).join(" ")).filter((l) => l.replace(/\[[^\]]*\]/, "").trim()).join("\n");
+
+    set({
+      firstName: firstName || form.firstName,
+      lastName: lastName || form.lastName,
+      dateOfBirth: normDOB(pa.dateOfBirth) || form.dateOfBirth,
+      gender: s(pa.sex) || form.gender,
+      phone: s(pa.contactNo) || form.phone,
+      emergencyContact: s(pa.primaryContact) || form.emergencyContact,
+      allergies: s(pa.allergies) || form.allergies,
+      medicalHistory: [s(pa.primaryDiagnosis), s(pa.secondaryDiagnosis), ...others].filter(Boolean).join("; ") || form.medicalHistory,
+      medicalAssessment: [s(pa.clinicalConcerns), meds && `Current medications: ${meds}`].filter(Boolean).join("\n") || form.medicalAssessment,
+      careAssessment: s(pa.reasonForAdmission) || s(pa.clinicalJustification) || form.careAssessment,
+      careLevel: careLevel || form.careLevel,
+      carePlan: carePlanText || form.carePlan,
+      carePlanGoals: goalsText || form.carePlanGoals,
+    });
+    Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Prefilled from pre-admission", showConfirmButton: false, timer: 1600 });
+  };
 
   // Rooms already taken by residents or by other in-progress admissions.
   const occupiedRooms = useMemo(() => {
@@ -109,7 +438,7 @@ export default function AdmissionsContent() {
     [allRooms, occupiedRooms, form.roomNumber]
   );
 
-  const openNew = () => { setForm({ ...emptyForm }); setStep(1); setVerifyMsg(""); setWizardOpen(true); };
+  const openNew = () => { setForm({ ...emptyForm }); setClinical({}); setSkinWounds([]); setPrefillTotal(null); setStep(1); setVerifyMsg(""); setWizardOpen(true); };
 
   const openView = (row: Row) => {
     setSelectedAdmission(row);
@@ -117,6 +446,9 @@ export default function AdmissionsContent() {
   };
 
   const openExisting = (row: Row) => {
+    const parsedCA = parseClinical(s(row.careAssessment));
+    setClinical(parsedCA.domains);
+    setSkinWounds(parsedCA.wounds);
     setForm({
       id: s(row.id),
       firstName: s(row.firstName), lastName: s(row.lastName),
@@ -125,7 +457,7 @@ export default function AdmissionsContent() {
       emergencyContact: s(row.emergencyContact), emergencyContactPhone: s(row.emergencyContactPhone),
       sponsorName: s(row.sponsorName), sponsorEmail: s(row.sponsorEmail),
       medicalAssessment: s(row.medicalAssessment), allergies: s(row.allergies), medicalHistory: s(row.medicalHistory),
-      careAssessment: s(row.careAssessment), careLevel: s(row.careLevel), mobility: s(row.mobility),
+      careAssessment: parsedCA.note, careLevel: s(row.careLevel), mobility: s(row.mobility),
       insuranceProvider: s(row.insuranceProvider), insurancePolicyNumber: s(row.insurancePolicyNumber),
       insuranceVerified: Boolean(row.insuranceVerified), insuranceVerifiedAt: s(row.insuranceVerifiedAt),
       roomNumber: s(row.roomNumber), qrPayload: s(row.qrPayload),
@@ -144,7 +476,7 @@ export default function AdmissionsContent() {
     emergencyContact: form.emergencyContact || null, emergencyContactPhone: form.emergencyContactPhone || null,
     sponsorName: form.sponsorName || null, sponsorEmail: form.sponsorEmail || null,
     medicalAssessment: form.medicalAssessment || null, allergies: form.allergies || null, medicalHistory: form.medicalHistory || null,
-    careAssessment: form.careAssessment || null, careLevel: form.careLevel || null, mobility: form.mobility || null,
+    careAssessment: serializeClinical(form.careAssessment, clinical, skinWounds), careLevel: form.careLevel || null, mobility: form.mobility || null,
     insuranceProvider: form.insuranceProvider || null, insurancePolicyNumber: form.insurancePolicyNumber || null,
     insuranceVerified: form.insuranceVerified, insuranceVerifiedAt: form.insuranceVerifiedAt || null,
     roomNumber: form.roomNumber || null, qrPayload: form.qrPayload || null,
@@ -332,6 +664,7 @@ export default function AdmissionsContent() {
     setSaving(true);
     try {
       const sponsorId = await resolveSponsorId();
+      let seededAcuity = false;
       const residentPayload: Row = {
         firstName: form.firstName, lastName: form.lastName,
         dateOfBirth: form.dateOfBirth ? new Date(form.dateOfBirth).toISOString() : null,
@@ -367,6 +700,31 @@ export default function AdmissionsContent() {
           dueDate: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
           assignedToId: team[0]?.id || null,
         }).catch(() => null);
+
+        // Carry the 12-domain assessment forward: seed a PENDING_NURSE acuity
+        // record so it surfaces on the Care Acuity board for validation. Best-effort.
+        const seed = buildSeedAcuity(residentId, clinical, form.careAssessment, `${form.firstName} ${form.lastName} (Admission)`, form.careLevel, prefillTotal ?? undefined);
+        if (seed) {
+          try {
+            const existing = parseArr(settingRows.find((r) => (r.key ?? r.id) === ACUITY_KEY)?.value);
+            await upsertRecord("app-settings", ACUITY_KEY, { key: ACUITY_KEY, value: JSON.stringify([seed, ...existing]) });
+            seededAcuity = true;
+          } catch { /* non-fatal — resident already created */ }
+        }
+
+        // Carry Skin/Wound entries into the Wound Care Tracker (`wound_records`).
+        if (skinWounds.length) {
+          try {
+            const now = new Date().toISOString();
+            const woundRecs = skinWounds.map((w) => ({
+              id: w.id || newId(), residentId, woundType: w.woundType || "Other", stage: w.stage || "",
+              bodyLocation: w.bodyLocation || "", discoveredAt: now, discoveredBy: `${form.firstName} ${form.lastName} (Admission)`,
+              notes: w.notes || "", status: "Active", photo: w.photo || "", createdAt: now, updatedAt: now,
+            }));
+            const existingW = parseArr(settingRows.find((r) => (r.key ?? r.id) === WOUND_KEY)?.value);
+            await upsertRecord("app-settings", WOUND_KEY, { key: WOUND_KEY, value: JSON.stringify([...woundRecs, ...existingW]) });
+          } catch { /* non-fatal */ }
+        }
       }
 
       if (id) {
@@ -377,7 +735,7 @@ export default function AdmissionsContent() {
       }
       await refetch();
       setWizardOpen(false);
-      Swal.fire({ title: "Admission Complete", text: `${form.firstName} ${form.lastName} is now a resident.`, icon: "success", timer: 1900, showConfirmButton: false });
+      Swal.fire({ title: "Admission Complete", text: `${form.firstName} ${form.lastName} is now a resident.${seededAcuity ? " A care-acuity assessment is pending nurse review." : ""}`, icon: "success", timer: 2300, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ title: "Could not complete", text: err instanceof Error ? err.message : "Resident creation failed (room may be taken).", icon: "error" });
     } finally {
@@ -515,6 +873,21 @@ export default function AdmissionsContent() {
             <div className="p-6 overflow-y-auto flex-1">
               {step === 1 && (
                 <div className="space-y-4">
+                  {preadmits.length > 0 && (
+                    <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-indigo-500" />
+                        <span className="text-xs font-semibold text-indigo-800">Prefill from a Pre-Admission Assessment</span>
+                      </div>
+                      <select value="" onChange={(e) => { const v = e.target.value; if (v) prefillFromPreadmission(v); }} className={`${inputCls} mt-2`}>
+                        <option value="">Select a completed pre-admission assessment…</option>
+                        {preadmits.map((p) => { const lvl = paLevel(p); return (
+                          <option key={s(p.id)} value={s(p.id)}>{s(p.residentName)}{lvl ? ` — Level ${lvl}` : ""}{p.dateOfAssessment ? ` · ${s(p.dateOfAssessment)}` : ""}</option>
+                        ); })}
+                      </select>
+                      <p className="text-[11px] text-indigo-600/80 mt-1.5">Pulls name, DOB, contact, diagnoses, allergies, care level, the 12-domain assessment &amp; the care plan. Review before completing.</p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field label="First Name *"><input className={inputCls} value={form.firstName} onChange={(e) => set({ firstName: e.target.value })} /></Field>
                     <Field label="Last Name *"><input className={inputCls} value={form.lastName} onChange={(e) => set({ lastName: e.target.value })} /></Field>
@@ -543,15 +916,72 @@ export default function AdmissionsContent() {
                   </div>
                 </div>
               )}
-              {step === 3 && (
+              {step === 3 && (() => {
+                const sum = clinicalSummary(clinical);
+                const suggestion = sum.filled >= 3 ? suggestLevel(clinical) : "";
+                const setDomain = (key: string, patch: Partial<DomainState>) =>
+                  setClinical((c) => ({ ...c, [key]: { level: c[key]?.level || "", notes: c[key]?.notes || "", ...patch } }));
+                return (
                 <div className="space-y-4">
-                  <Field label="Care Assessment"><textarea rows={4} className={inputCls} value={form.careAssessment} onChange={(e) => set({ careAssessment: e.target.value })} placeholder="ADLs, cognition, support needs…" /></Field>
+                  {/* Risk roll-up + suggested level of care (Stage 3 → 5 handoff) */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <ClipboardList className="w-4 h-4 text-amber-600" />
+                      <span className="font-semibold text-gray-800">12-Domain Clinical Assessment</span>
+                      <span className="text-gray-500">· {sum.filled}/12 assessed</span>
+                      {sum.flags > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700"><AlertTriangle className="w-3 h-3" />{sum.flags} elevated</span>}
+                    </div>
+                    {suggestion && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Sparkles className="w-4 h-4 text-amber-500" />
+                        <span className="text-gray-500">Suggested:</span>
+                        <button type="button" onClick={() => set({ careLevel: suggestion })} className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-white hover:bg-amber-600">
+                          {suggestion[0] + suggestion.slice(1).toLowerCase()}{form.careLevel !== suggestion ? " — apply" : ""}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* The 12 clinical domains */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    {CLINICAL_DOMAINS.map((d) => {
+                      const Icon = d.icon; const cur = clinical[d.key] || { level: "", notes: "" };
+                      return (
+                        <div key={d.key} className="rounded-xl border border-gray-200 bg-white p-3">
+                          <div className="flex items-start gap-2 mb-2">
+                            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600"><Icon className="w-4 h-4" /></span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-gray-800 leading-tight">{d.label}</p>
+                              <p className="text-[11px] text-gray-400 leading-tight">{d.hint}</p>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {d.options.map((opt, i) => {
+                              const on = cur.level === opt;
+                              return (
+                                <button key={opt} type="button" onClick={() => setDomain(d.key, { level: on ? "" : opt })}
+                                  className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${on ? acuityTone(i) : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"}`}>
+                                  {opt}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <input value={cur.notes} onChange={(e) => setDomain(d.key, { notes: e.target.value })} placeholder="Notes (optional)…"
+                            className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg bg-white text-gray-900 text-xs focus:ring-2 focus:ring-amber-400 focus:border-transparent outline-none" />
+                          {d.key === "skin" && <SkinWoundSection wounds={skinWounds} onChange={setSkinWounds} />}
+                        </div>
+                      );
+                    })}
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field label="Care Level *"><select className={inputCls} value={form.careLevel} onChange={(e) => set({ careLevel: e.target.value })}><option value="">—</option>{CARE_LEVELS.map((c) => <option key={c} value={c}>{c[0] + c.slice(1).toLowerCase()}</option>)}</select></Field>
                     <Field label="Mobility"><input className={inputCls} value={form.mobility} onChange={(e) => set({ mobility: e.target.value })} placeholder="Independent / Walker / Wheelchair" /></Field>
                   </div>
+                  <Field label="Assessment Summary / Additional Notes"><textarea rows={3} className={inputCls} value={form.careAssessment} onChange={(e) => set({ careAssessment: e.target.value })} placeholder="Overall clinical summary, support needs, priorities…" /></Field>
                 </div>
-              )}
+                );
+              })()}
               {step === 4 && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -797,10 +1227,50 @@ export default function AdmissionsContent() {
                           <span className="text-gray-900">{s(row.mobility) || "—"}</span>
                         </div>
                         <div className="sm:col-span-2">
-                          <span className="block text-xs font-semibold text-gray-500">Care Assessment Notes</span>
-                          <p className="text-gray-700 bg-gray-50 rounded-lg p-3 text-xs mt-1 whitespace-pre-line border border-gray-100">
-                            {s(row.careAssessment) || "No care assessment notes recorded."}
-                          </p>
+                          <span className="block text-xs font-semibold text-gray-500">Clinical Assessment (12 domains)</span>
+                          {(() => {
+                            const { note, domains, wounds } = parseClinical(s(row.careAssessment));
+                            const entries = CLINICAL_DOMAINS.filter((d) => domains[d.key]?.level || (domains[d.key]?.notes || "").trim());
+                            if (!entries.length && !wounds.length) return <p className="text-gray-700 bg-gray-50 rounded-lg p-3 text-xs mt-1 whitespace-pre-line border border-gray-100">{note || "No clinical assessment recorded."}</p>;
+                            return (
+                              <div className="mt-1 space-y-2">
+                                {entries.length > 0 && (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {entries.map((d) => {
+                                      const cur = domains[d.key]; const i = domainIndex(d.key, cur.level);
+                                      return (
+                                        <div key={d.key} className="rounded-lg border border-gray-100 bg-gray-50 p-2.5">
+                                          <div className="flex items-center justify-between gap-2">
+                                            <span className="text-xs font-semibold text-gray-700">{d.label}</span>
+                                            {cur.level && <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${acuityTone(i)}`}>{cur.level}</span>}
+                                          </div>
+                                          {cur.notes && <p className="text-[11px] text-gray-500 mt-1">{cur.notes}</p>}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                                {wounds.length > 0 && (
+                                  <div>
+                                    <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Wound / Marks ({wounds.length})</span>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                                      {wounds.map((w) => (
+                                        <div key={w.id} className="flex items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 p-2">
+                                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                                          {w.photo ? <img src={w.photo} alt="wound" className="h-10 w-10 rounded object-cover border border-gray-200" /> : <span className="h-10 w-10 rounded bg-gray-100 flex items-center justify-center text-gray-300"><ImageIcon className="w-4 h-4" /></span>}
+                                          <div className="min-w-0">
+                                            <p className="text-xs font-semibold text-gray-800 truncate">{w.bodyLocation || "Unspecified location"}</p>
+                                            <p className="text-[11px] text-gray-400 truncate">{[w.woundType, w.stage].filter(Boolean).join(" · ") || "—"}{w.notes ? ` — ${w.notes}` : ""}</p>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {note && <p className="text-gray-700 bg-gray-50 rounded-lg p-3 text-xs whitespace-pre-line border border-gray-100">{note}</p>}
+                              </div>
+                            );
+                          })()}
                         </div>
                         <div className="sm:col-span-2">
                           <span className="block text-xs font-semibold text-gray-500">Individual Care Plan</span>

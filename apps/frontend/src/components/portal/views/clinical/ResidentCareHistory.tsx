@@ -40,6 +40,8 @@ import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalCard, StatCard, c
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (v: unknown) => (v == null ? "" : String(v));
+// Initials for the resident picker-card avatar.
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 
 // All 10 care domains, each its own grid row (matches the quick-log domains).
 type HookDomain = "vitals" | "meals" | "bowel" | "urine" | "edema" | "concerns" | "mood" | "pain" | "mobility" | "sleep";
@@ -213,10 +215,31 @@ export default function ResidentCareHistory({ clinicianRole = "NURSE" }: { clini
 
       <div className="mt-5">
         {!resident ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-16 text-center" style={{ borderColor: "var(--clinical-line-strong)", backgroundColor: "var(--clinical-surface)" }}>
-            <ClipboardList className="h-12 w-12 text-[var(--clinical-muted)]" />
-            <p className="mt-3 text-lg font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>Select a resident to view care history</p>
-            <p className="mt-1 text-sm text-[var(--clinical-muted)]">Choose a resident from the dropdown above to see their daily documentation grid</p>
+          <div className="@container">
+            <div className="mb-4 flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-[var(--clinical-panel)]" />
+              <div>
+                <p className="text-base font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>Select a resident to view care history</p>
+                <p className="text-sm text-[var(--clinical-muted)]">Tap a resident to open their daily documentation grid</p>
+              </div>
+            </div>
+            {residents.length === 0 ? (
+              <div className="rounded-xl border-2 border-dashed p-16 text-center text-sm text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line-strong)", backgroundColor: "var(--clinical-surface)" }}>No residents found.</div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4 @5xl:grid-cols-5">
+                {residents.map((r: Row, i: number) => (
+                  <button key={s(r.id)} onClick={() => { setResId(s(r.id)); setWindowEnd(todayIso); }}
+                    className="group flex flex-col items-center gap-2.5 rounded-xl border p-4 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300"
+                    style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)", animationDelay: `${i * 40}ms`, animationFillMode: "backwards" }}>
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold transition group-hover:brightness-95" style={{ backgroundColor: "var(--clinical-surface-2)", color: "var(--clinical-panel)" }}>{initials(s(r.name))}</span>
+                    <span className="block w-full min-w-0">
+                      <span className="block truncate text-sm font-semibold text-[var(--clinical-ink)]">{s(r.name)}</span>
+                      <span className="block text-xs text-[var(--clinical-muted)]">Room {s(r.room)}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-4">

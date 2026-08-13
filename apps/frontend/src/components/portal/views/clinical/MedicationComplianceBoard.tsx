@@ -75,7 +75,7 @@ export default function MedicationComplianceBoard() {
     <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2"><Pill className="w-6 h-6 text-blue-500" /> Medication Compliance Report</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2.5"><span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 shrink-0"><Pill className="h-5 w-5 text-blue-500" /></span> Medication Compliance Report</h1>
           <p className="text-sm text-slate-500 mt-1">Given, Refused, Held, and Missed dose breakdown</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">

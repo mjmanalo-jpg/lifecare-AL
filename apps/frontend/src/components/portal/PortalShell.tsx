@@ -71,7 +71,8 @@ const NOTIF_TARGET_ROUTES: Record<string, string[]> = {
   slaBreach: ["alertcenter", "alerts", "escalations", "dashboard"],
   followUp: ["followups", "records", "dashboard"],
   assessment: ["rounds", "casereview", "dashboard"],
-  task: ["taskboard", "tasks", "documentation", "dashboard"],
+  task: ["taskboard", "tasks", "taskassignment", "documentation", "dashboard"],
+  handover: ["taskassignment", "shiftendorsements", "endorsementdashboard", "dashboard"],
   dailyDoc: ["dailyrounds", "documentation", "tasks", "reports", "dashboard"],
   callbell: ["callbells", "alertcenter", "monitoring", "dashboard"],
   // Facility operations
@@ -102,7 +103,7 @@ const NOTIF_ROUTE_BY_TYPE: Record<string, string[]> = {
   MEDICATION_REMINDER: ["mar", "medications", "orders", "dashboard"],
   INCIDENT_REPORT: ["incidents", "alertcenter", "records", "dashboard"],
   CALL_BELL: ["callbells", "alertcenter", "monitoring", "dashboard"],
-  TASK_ASSIGNMENT: ["taskboard", "tasks", "documentation", "dashboard"],
+  TASK_ASSIGNMENT: ["taskboard", "tasks", "taskassignment", "documentation", "dashboard"],
   SHIFT_REMINDER: ["reports", "dashboard"],
   MESSAGE: ["messages", "dashboard"],
   TRANSPORT_UPDATE: ["trips", "requests", "transport", "dashboard"],
@@ -114,6 +115,7 @@ const NOTIF_ROUTE_BY_TYPE: Record<string, string[]> = {
 // Optional deep-link appended when the resolved tab supports sub-tabs.
 const NOTIF_ROUTE_QUERY: Record<string, string> = {
   diningReservation: "subtab=dining",
+  handover: "tab=handover", // opens the Handover tab on the Task Assignment board
 };
 
 /** Best matching sidebar route for a notification — by its related entity type

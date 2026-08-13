@@ -37,6 +37,7 @@ import { useClinician, type ClinicianRole } from "./useClinician";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (v: unknown) => (v == null ? "" : String(v));
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 const APPROVAL_KEY = "progress_report_approvals";
 const ENDORSEMENT_KEY = "shift_endorsements";
 
@@ -278,9 +279,31 @@ export default function ResidentProgressReport({ clinicianRole = "NURSE" }: { cl
       </div>
 
       {!resident ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <FileText className="w-12 h-12 text-slate-300 mb-3" />
-          <p className="font-bold text-slate-700">Select a resident to generate their progress report</p>
+        <div className="@container">
+          <div className="mb-4 flex items-center gap-2">
+            <FileText className="w-5 h-5 text-slate-400" />
+            <div>
+              <p className="text-base font-bold text-slate-800">Select a resident to generate their progress report</p>
+              <p className="text-sm text-slate-500">Tap a resident to build their period summary</p>
+            </div>
+          </div>
+          {residents.length === 0 ? (
+            <p className="text-sm text-slate-400">No residents found.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4 @5xl:grid-cols-5">
+              {residents.map((r: Row, i: number) => (
+                <button key={s(r.id)} onClick={() => setResidentId(s(r.id))}
+                  className="group flex flex-col items-center gap-2.5 rounded-xl border border-slate-200 bg-white p-4 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300"
+                  style={{ animationDelay: `${i * 40}ms`, animationFillMode: "backwards" }}>
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600">{initials(s(r.name))}</span>
+                  <span className="block w-full min-w-0">
+                    <span className="block truncate text-sm font-semibold text-slate-800">{s(r.name)}</span>
+                    <span className="block text-xs text-slate-400">Room {s(r.room)}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-8">

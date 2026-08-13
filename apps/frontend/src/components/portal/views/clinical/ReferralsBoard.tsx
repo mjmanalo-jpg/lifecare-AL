@@ -6,7 +6,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord } from "@/lib/api";
-import { StatusPill, MicroLabel, ClinicalCard } from "./clinical-ui";
+import { Clock, CalendarDays, CheckCircle2 } from "lucide-react";
 
 type Row = Record<string, unknown>;
 const s = (v: unknown) => (v == null ? "" : String(v));
@@ -21,11 +21,6 @@ const toLocalInputValue = (d: Date) => {
 // The card + transport modal only want the doctor name, so read line 1 only.
 const specialistFromNotes = (v: unknown) => s(v).split("\n")[0].replace(/^Specialist:\s*/, "").trim();
 const APPOINTMENT_TYPES = ["GP / Family Doctor", "Specialist", "Dental", "Laboratory", "Imaging / Radiology", "Therapy", "Follow-up", "Other"];
-const APPT_STATUS = ["Scheduled", "Pending", "Completed", "Cancelled"];
-// The board's own status flow (REQUESTED/APPROVED/…) drives the card + approval
-// gate; the form's human status maps onto it so the new referral lands in the
-// right bucket without new columns.
-const APPT_STATUS_TO_REFERRAL: Record<string, string> = { Scheduled: "SCHEDULED", Pending: "REQUESTED", Completed: "COMPLETED", Cancelled: "CANCELLED" };
 // The transport request the appointment/referral is wired to (if any). Status
 // mirrors TransportRequest.status in the Fleet board.
 const TRANSPORT_STATUS_LABEL: Record<string, string> = {
@@ -69,7 +64,7 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
   const [showAdd, setShowAdd] = useState(false);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
-    residentId: "", appointmentType: APPOINTMENT_TYPES[0], apptStatus: "Scheduled",
+    residentId: "", appointmentType: APPOINTMENT_TYPES[0],
     specialist: "", facilityName: "", scheduledDate: "", reason: "", urgency: "ROUTINE",
     documentsNeeded: "", companion: "", preApptNotes: "", familyNotified: false,
   });
@@ -119,7 +114,7 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
         facilityName: form.facilityName.trim() || "—",
         reason: form.reason.trim(),
         urgency: form.urgency,
-        status: APPT_STATUS_TO_REFERRAL[form.apptStatus] ?? "REQUESTED",
+        status: "REQUESTED",
         referredById: session.id,
         referredByName: session.name,
         scheduledDate: form.scheduledDate ? new Date(form.scheduledDate).toISOString() : null,
@@ -128,11 +123,11 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
       await refetch();
       setShowAdd(false);
       setForm({
-        residentId: "", appointmentType: APPOINTMENT_TYPES[0], apptStatus: "Scheduled",
+        residentId: "", appointmentType: APPOINTMENT_TYPES[0],
         specialist: "", facilityName: "", scheduledDate: "", reason: "", urgency: "ROUTINE",
         documentsNeeded: "", companion: "", preApptNotes: "", familyNotified: false,
       });
-      Swal.fire({ title: "Appointment scheduled", text: "Saved to the appointments board.", icon: "success", timer: 1600, showConfirmButton: false });
+      Swal.fire({ title: "Referral submitted", text: "Sent to Pending Approvals for nurse / care manager review.", icon: "success", timer: 1800, showConfirmButton: false });
     } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not submit.", "error"); }
     finally { setBusy(false); }
   };
@@ -142,7 +137,6 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
     try { await updateRecord("hospital-referrals", s(r.id), data); await refetch(); } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not update.", "error"); }
   };
 
-  const approve = (r: Row) => patch(r, { status: "APPROVED", approvedByName: session.name, approvedAt: new Date().toISOString() }, { title: "Approve referral?", text: `Approve ${rname(r)}'s referral?`, color: "#16a34a" });
   const reject = async (r: Row) => { const res = await Swal.fire({ title: "Reject referral?", input: "textarea", inputLabel: "Reason", showCancelButton: true, confirmButtonColor: "#dc2626", confirmButtonText: "Reject" }); if (!res.isConfirmed) return; await patch(r, { status: "CANCELLED", rejectionReason: res.value || "Rejected" }); };
   const schedule = async (r: Row) => { const res = await Swal.fire({ title: "Confirm & schedule", input: "text", inputLabel: "Appointment date (YYYY-MM-DD)", inputValue: new Date().toISOString().slice(0, 10), showCancelButton: true }); if (!res.isConfirmed) return; await patch(r, { status: "SCHEDULED", scheduledDate: new Date(res.value || Date.now()).toISOString() }); };
   const complete = async (r: Row) => { const res = await Swal.fire({ title: "Document outcome", input: "textarea", inputLabel: "Findings, follow-up & notes", showCancelButton: true, confirmButtonText: "Complete", confirmButtonColor: "#16a34a" }); if (!res.isConfirmed) return; await patch(r, { status: "COMPLETED", outcome: res.value || "Completed", completedAt: new Date().toISOString() }); };
@@ -211,106 +205,103 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
   };
 
   return (
-    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-6" style={{ background: "#FFFFFF" }}>
+    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-6" style={{ background: "#F7F8FA" }}>
       {/* Header banner */}
-      <div className="bg-[#2E4A48] rounded-lg p-6 relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+      <div className="rounded-2xl p-6 relative overflow-hidden bg-gradient-to-r from-[#2f5ee0] to-[#2445b0] shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="pr-28 sm:pr-0">
-            <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-3" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
-              <CalendarClock className="w-7 h-7 text-[#D7DAD1]" /> Medical Appointments
+            <h1 className="text-2xl sm:text-[1.7rem] font-bold text-white flex items-center gap-3">
+              <CalendarClock className="w-7 h-7 text-white/90" /> Medical Appointments
             </h1>
-            <p className="text-sm text-[#D7DAD1] mt-1.5">Submit → approve → confirm → outcome. Specialist referrals require Care Manager sign-off.</p>
+            <p className="text-sm text-white/80 mt-1.5">Submit → approve → confirm → outcome. Specialist referrals require Care Manager sign-off.</p>
           </div>
-          <button onClick={() => setShowAdd(true)} className="self-start sm:self-auto shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-[#2E4A48] text-sm font-semibold shadow-sm hover:bg-[#F0F1EA]"><Plus className="w-4 h-4" /> New Referral</button>
+          <button onClick={() => setShowAdd(true)} className="self-start sm:self-auto shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-[#2445b0] text-sm font-semibold shadow-sm hover:bg-blue-50"><Plus className="w-4 h-4" /> New Referral</button>
         </div>
       </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Stat label="Pending Approval" value={String(stats.pending)} color="#C39A3E" />
-        <Stat label="Scheduled" value={String(stats.scheduled)} color="#2E4A48" />
-        <Stat label="Completed" value={String(stats.completed)} color="#7E9B6F" />
-        <Stat label="Needs Transport" value={String(stats.needsTransport)} color="#C0573F" icon="transport" />
+        <Stat label="Pending Approval" value={String(stats.pending)} color="#D97706" icon={Clock} />
+        <Stat label="Scheduled" value={String(stats.scheduled)} color="#2563EB" icon={CalendarDays} />
+        <Stat label="Completed" value={String(stats.completed)} color="#16A34A" icon={CheckCircle2} />
+        <Stat label="Needs Transport" value={String(stats.needsTransport)} color="#DC2626" icon={Truck} />
       </div>
 
       {/* Filter chips */}
       <div className="flex gap-2 flex-wrap">
         {["all", "REQUESTED", "APPROVED", "SCHEDULED", "COMPLETED", "CANCELLED"].map((st) => (
-          <button key={st} onClick={() => setStatusFilter(st)} className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${statusFilter === st ? "bg-[#2E4A48] text-white border-[#2E4A48]" : "bg-white text-[#6B6E63] border-[#D6D8CD] hover:bg-[#F0F1EA]"}`}>{st === "all" ? "All" : st}</button>
+          <button key={st} onClick={() => setStatusFilter(st)} className={`px-3.5 py-1.5 rounded-full text-sm font-medium border transition ${statusFilter === st ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>{st === "all" ? "All" : st.charAt(0) + st.slice(1).toLowerCase()}</button>
         ))}
       </div>
 
       {/* Record cards */}
       <div className="space-y-3">
-        {loading && filtered.length === 0 ? <ClinicalCard className="p-8 text-center text-[#8A8D82]">Loading…</ClinicalCard>
-          : filtered.length === 0 ? <ClinicalCard className="p-8 text-center text-[#8A8D82]">No referrals.</ClinicalCard>
+        {loading && filtered.length === 0 ? <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-400">Loading…</div>
+          : filtered.length === 0 ? <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-400">No referrals.</div>
           : filtered.map((r) => {
             const st = s(r.status);
+            const urg = s(r.urgency) || "ROUTINE";
             const specialist = specialistFromNotes(r.notes);
-            const top = st === "REQUESTED" ? "amber" : st === "COMPLETED" ? "green" : "teal";
+            const accent = urg === "EMERGENCY" ? "#DC2626" : urg === "URGENT" ? "#F59E0B" : "#2563EB";
             const linkedReqId = s(r.transportRequestId);
             const transportReq = linkedReqId ? transportById.get(linkedReqId) : undefined;
             const transportStatus = transportReq ? s(transportReq.status) : "";
             // Active transport requests block a duplicate; declined/cancelled re-open the button.
             const transportActive = !!transportReq && !["DECLINED", "CANCELLED"].includes(transportStatus);
             return (
-              <ClinicalCard key={s(r.id)} top={top} className="p-4 sm:p-5">
+              <div key={s(r.id)} className="rounded-xl bg-white p-4 sm:p-5 shadow-sm border border-slate-200" style={{ borderLeft: `3px solid ${accent}` }}>
                 <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <StatusPill status={s(r.urgency) || "ROUTINE"} />
-                    <StatusPill status={st} />
-                    {transportActive && <span className="inline-flex items-center gap-1 rounded-full border border-[#2E4A48]/25 bg-[#2E4A48]/8 px-2.5 py-0.5 text-xs font-semibold text-[#2E4A48]"><Truck className="w-3.5 h-3.5" /> Transport</span>}
-                    <span className="inline-flex items-center gap-1.5 font-bold text-[#2B2B27]"><UserRound className="w-4 h-4 text-[#2E4A48]" />{rHeader(r)}</span>
+                    <UrgencyBadge urgency={urg} />
+                    <StatusBadge status={st} />
+                    {transportActive && <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700"><Truck className="w-3.5 h-3.5" /> Transport</span>}
+                    <span className="inline-flex items-center gap-1.5 font-bold text-slate-900"><UserRound className="w-4 h-4 text-slate-400" />{rHeader(r)}</span>
                   </div>
-                  {s(r.scheduledDate) && <span className="text-sm font-semibold text-[#2E4A48]">{fmtD(r.scheduledDate)}</span>}
+                  {s(r.scheduledDate) && <span className="text-sm font-semibold text-slate-500">{fmtD(r.scheduledDate)}</span>}
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div><MicroLabel>Specialist</MicroLabel><p className="text-sm text-[#2B2B27] mt-0.5">{specialist || "—"}</p></div>
-                  <div><MicroLabel>Clinic</MicroLabel><p className="text-sm text-[#2B2B27] mt-0.5">{s(r.facilityName) || "—"}</p></div>
-                  <div><MicroLabel>Purpose</MicroLabel><p className="text-sm text-[#2B2B27] mt-0.5">{s(r.reason) || "—"}</p></div>
-                  <div>
-                    <MicroLabel>{r.approvedByName ? "Approved By" : "Submitted By"}</MicroLabel>
-                    <p className="text-sm text-[#2B2B27] mt-0.5">{s(r.approvedByName) || s(r.referredByName) || rname(r)}</p>
-                  </div>
+                  <Detail label="Specialist" value={specialist || "—"} />
+                  <Detail label="Clinic" value={s(r.facilityName) || "—"} />
+                  <Detail label="Purpose" value={s(r.reason) || "—"} />
+                  <Detail label={r.approvedByName ? "Approved By" : "Submitted By"} value={s(r.approvedByName) || s(r.referredByName) || rname(r)} />
                 </div>
 
-                {r.rejectionReason && <p className="text-sm text-[#C0573F] font-medium mt-3">Rejected: {s(r.rejectionReason)}</p>}
+                {r.rejectionReason && <p className="text-sm text-red-600 font-medium mt-3">Rejected: {s(r.rejectionReason)}</p>}
 
                 {r.outcome && (
-                  <div className="mt-3 flex items-start gap-2 rounded-lg bg-[#7E9B6F]/10 border border-[#7E9B6F]/30 p-3">
-                    <Check className="w-4 h-4 text-[#7E9B6F] mt-0.5 shrink-0" />
-                    <p className="text-sm text-[#2B2B27]"><span className="font-semibold">Outcome:</span> {s(r.outcome)}</p>
+                  <div className="mt-3 flex items-start gap-2 rounded-lg bg-green-50 border border-green-200 p-3">
+                    <Check className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
+                    <p className="text-sm text-slate-700"><span className="font-semibold">Outcome:</span> {s(r.outcome)}</p>
                   </div>
                 )}
 
                 {st === "REQUESTED" && (
-                  <div className="mt-3 rounded-lg bg-[#C39A3E]/12 border border-[#C39A3E]/40 text-[#7a5f1e] px-3 py-2 text-sm">
-                    Awaiting Care Manager review — will be confirmed upon approval
+                  <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 text-sm">
+                    Pending approval — nurse or care manager will approve/reject this in <b>Pending Approvals</b>, then confirm &amp; schedule here.
                   </div>
                 )}
 
                 {/* Transport — wired to Fleet Management as a driver-assignable request */}
                 {transportActive ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-[#2E4A48]/8 border border-[#2E4A48]/20 px-3 py-2 text-sm text-[#2E4A48]">
+                  <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-700">
                     <Truck className="w-4 h-4 shrink-0" />
                     <span className="font-semibold">{TRANSPORT_STATUS_LABEL[transportStatus] || `Transport: ${transportStatus}`}</span>
-                    {transportStatus === "DECLINED" && transportReq && s(transportReq.declineReason) && <span className="text-[#C0573F]">— {s(transportReq.declineReason)}</span>}
+                    {transportStatus === "DECLINED" && transportReq && s(transportReq.declineReason) && <span className="text-red-600">— {s(transportReq.declineReason)}</span>}
                   </div>
                 ) : null}
 
                 <div className="flex flex-wrap items-center gap-2 mt-3">
                   {!transportActive && st !== "CANCELLED" && (
-                    <button onClick={() => openRequest(r)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#2E4A48] text-white text-xs font-semibold hover:bg-[#25403D]"><Truck className="w-3.5 h-3.5" /> Request Transport</button>
+                    <button onClick={() => openRequest(r)} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-800 text-white text-xs font-semibold hover:bg-slate-900 transition"><Truck className="w-3.5 h-3.5" /> Request Transport</button>
                   )}
-                  {st === "REQUESTED" && canApprove && (<>
-                    <button onClick={() => approve(r)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#7E9B6F] text-white text-xs font-semibold hover:bg-[#6E8A60]"><Check className="w-3.5 h-3.5" /> Approve</button>
-                    <button onClick={() => reject(r)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#C0573F] text-white text-xs font-semibold hover:bg-[#A94A34]"><Ban className="w-3.5 h-3.5" /> Reject</button>
+                  {st === "APPROVED" && canApprove && (<>
+                    <button onClick={() => reject(r)} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition"><Ban className="w-3.5 h-3.5" /> Reject</button>
+                    <button onClick={() => schedule(r)} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-800 text-white text-xs font-semibold hover:bg-slate-900 transition"><CalendarClock className="w-3.5 h-3.5" /> Confirm &amp; schedule</button>
                   </>)}
-                  {st === "APPROVED" && <button onClick={() => schedule(r)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#2E4A48] text-white text-xs font-semibold hover:bg-[#25403D]"><CalendarClock className="w-3.5 h-3.5" /> Confirm &amp; schedule</button>}
-                  {st === "SCHEDULED" && <button onClick={() => complete(r)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#7E9B6F] text-white text-xs font-semibold hover:bg-[#6E8A60]"><ClipboardCheck className="w-3.5 h-3.5" /> Document outcome</button>}
+                  {st === "SCHEDULED" && <button onClick={() => complete(r)} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition"><ClipboardCheck className="w-3.5 h-3.5" /> Document outcome</button>}
                 </div>
-              </ClinicalCard>
+              </div>
             );
           })}
       </div>
@@ -323,8 +314,7 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
               <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Resident <span className="text-[#C0573F]">*</span></label>
                 <select value={form.residentId} onChange={(e) => setForm({ ...form, residentId: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/30"><option value="">Select resident…</option>{residents.map((r) => <option key={r.id} value={r.id}>{r.name} — Room {r.room}</option>)}</select></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Appointment Type <span className="text-[#C0573F]">*</span></label><select value={form.appointmentType} onChange={(e) => setForm({ ...form, appointmentType: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/30">{APPOINTMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
-                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Status</label><select value={form.apptStatus} onChange={(e) => setForm({ ...form, apptStatus: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/30">{APPT_STATUS.map((st) => <option key={st} value={st}>{st}</option>)}</select></div>
+                <div className="sm:col-span-2"><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Appointment Type <span className="text-[#C0573F]">*</span></label><select value={form.appointmentType} onChange={(e) => setForm({ ...form, appointmentType: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/30">{APPOINTMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
                 <div className="sm:col-span-2"><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Date &amp; Time <span className="text-[#C0573F]">*</span></label><input type="datetime-local" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
                 <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Specialist / Doctor Name</label><input value={form.specialist} onChange={(e) => setForm({ ...form, specialist: e.target.value })} placeholder="e.g. Dr. Santos" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
                 <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Clinic / Hospital</label><input value={form.facilityName} onChange={(e) => setForm({ ...form, facilityName: e.target.value })} placeholder="e.g. St. Luke's Medical Center" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
@@ -373,15 +363,34 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
   );
 }
 
-function Stat({ label, value, color, icon }: { label: string; value: string; color: string; icon?: "transport" }) {
-  const Icon = icon === "transport" ? Truck : CalendarClock;
+function Stat({ label, value, color, icon: Icon }: { label: string; value: string; color: string; icon: typeof Truck }) {
   return (
-    <ClinicalCard className="p-4">
-      <div className="flex items-center justify-between mb-2">
-        <MicroLabel>{label}</MicroLabel>
-        <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${color}1A`, color }}><Icon className="w-4 h-4" /></span>
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">{label}</span>
+        <span className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}1A`, color }}><Icon className="w-4 h-4" /></span>
       </div>
-      <p className="text-2xl font-bold" style={{ color }}>{value}</p>
-    </ClinicalCard>
+      <p className="text-3xl font-bold mt-3 leading-none" style={{ color }}>{value}</p>
+    </div>
   );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{label}</p>
+      <p className="text-sm text-slate-700 mt-0.5">{value}</p>
+    </div>
+  );
+}
+
+function UrgencyBadge({ urgency }: { urgency: string }) {
+  const cls = urgency === "EMERGENCY" ? "bg-red-100 text-red-700" : urgency === "URGENT" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600";
+  return <span className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] ${cls}`}>{urgency}</span>;
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const label = status.charAt(0) + status.slice(1).toLowerCase();
+  const cls = status === "CANCELLED" ? "bg-red-500" : status === "COMPLETED" ? "bg-green-600" : status === "REQUESTED" ? "bg-amber-500" : "bg-slate-700";
+  return <span className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-white ${cls}`}>{label}</span>;
 }

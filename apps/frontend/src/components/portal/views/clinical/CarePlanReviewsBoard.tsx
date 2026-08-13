@@ -16,11 +16,12 @@ import { upsertRecord } from "@/lib/api";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { levelOf } from "./CareLogsBoard";
-import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalCard, StatCard, DataState, FieldLabel, controlClass, StatusPill, SERIF } from "./clinical-ui";
+import { ClinicalButton, ClinicalCard, StatCard, DataState, FieldLabel, controlClass, StatusPill, SERIF } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const REVIEW_KEY = "care_plan_reviews";
 const s = (v: unknown) => (v == null ? "" : String(v));
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 const newId = () => globalThis.crypto?.randomUUID?.() ?? `rev-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 const isoDate = (d: Date) => d.toISOString().split("T")[0];
 const addMonths = (d: Date, n: number) => { const x = new Date(d); x.setMonth(x.getMonth() + n); return x; };
@@ -72,15 +73,15 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
   }).filter((x) => x.due), [residents, reviews]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <ClinicalPage>
-      <ClinicalHeader
-        title="Care Plan Reviews"
-        subtitle="Review resident indicators, evaluate triggers, and make care plan decisions"
-      />
+    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5" style={{ background: "#F7F8FA" }}>
+      <div className="min-w-0">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem]">Care Plan Reviews</h1>
+        <p className="mt-1 text-sm text-slate-500">Review resident indicators, evaluate triggers, and make care plan decisions</p>
+      </div>
 
-      <div className="mt-5 mb-5 inline-flex gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--clinical-surface-2)" }} role="tablist" aria-label="Care plan reviews view">
+      <div className="flex items-center gap-2" role="tablist" aria-label="Care plan reviews view">
         {([["new", "New Review"], ["due", "Reviews Due"], ["history", "History"]] as const).map(([v, label]) => (
-          <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${tab === v ? "text-white shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`} style={tab === v ? { backgroundColor: "var(--clinical-panel)" } : undefined}>{label}{v === "due" && dueList.length ? ` (${dueList.length})` : ""}</button>
+          <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${tab === v ? "bg-[#4F46E5] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}{v === "due" && dueList.length ? ` (${dueList.length})` : ""}</button>
         ))}
       </div>
 
@@ -93,6 +94,29 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
               {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)} (Level {levelOf(r).n})</option>)}
             </select>
           </ClinicalCard>
+
+          {!resident && (
+            <div className="@container">
+              <p className="mb-3 text-sm text-[var(--clinical-muted)]">Or tap a resident to start their care plan review</p>
+              {residents.length === 0 ? (
+                <p className="text-sm text-[var(--clinical-muted)]">No residents found.</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4 @5xl:grid-cols-5">
+                  {residents.map((r: Row, i: number) => { const lv = levelOf(r); return (
+                    <button key={s(r.id)} onClick={() => setResId(s(r.id))}
+                      className="group flex flex-col items-center gap-2.5 rounded-xl border p-4 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300"
+                      style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)", animationDelay: `${i * 40}ms`, animationFillMode: "backwards" }}>
+                      <span className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold" style={{ backgroundColor: "var(--clinical-surface-2)", color: "var(--clinical-panel)" }}>{initials(s(r.name))}</span>
+                      <span className="block w-full min-w-0">
+                        <span className="block truncate text-sm font-semibold text-[var(--clinical-ink)]">{s(r.name)}</span>
+                        <span className="block text-xs text-[var(--clinical-muted)]">Room {s(r.room)} · Level {lv.n}</span>
+                      </span>
+                    </button>
+                  ); })}
+                </div>
+              )}
+            </div>
+          )}
 
           {resident && <ReviewForm resident={resident} recentInc={recentInc} last={latestReview(resId)} reviewedBy={clinicianName} onSubmit={async (rec) => { await persist([{ ...rec, id: newId(), createdAt: new Date().toISOString() }, ...reviews]); setResId(""); setTab("history"); Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Care plan review submitted", showConfirmButton: false, timer: 1800 }); }} />}
         </div>
@@ -170,7 +194,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
           </div>
         </DataState>
       )}
-    </ClinicalPage>
+    </div>
   );
 }
 
@@ -266,7 +290,7 @@ function ReviewForm({ resident, recentInc, last, reviewedBy, onSubmit }: {
             <div><FieldLabel htmlFor="cpr-resp">Responsible Person</FieldLabel><input id="cpr-resp" value={responsible} onChange={(e) => setResponsible(e.target.value)} placeholder="Name or role" className={controlClass} /></div>
             <div><FieldLabel htmlFor="cpr-target">Target Completion Date</FieldLabel><input id="cpr-target" type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className={controlClass} /></div>
           </div>
-          <ClinicalButton variant="accent" onClick={submit} disabled={saving}><ClipboardList className="h-4 w-4" /> {saving ? "Submitting…" : "Submit Care Plan Review"}</ClinicalButton>
+          <button onClick={submit} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] disabled:opacity-60"><ClipboardList className="h-4 w-4" /> {saving ? "Submitting…" : "Submit Care Plan Review"}</button>
         </div>
       </Section>
     </>

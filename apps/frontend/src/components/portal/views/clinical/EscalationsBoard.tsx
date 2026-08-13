@@ -2,9 +2,9 @@
 
 import RefreshButton from "@/components/portal/RefreshButton";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, type ReactNode } from "react";
 import {
-  Siren, Search, Plus, X, CheckCircle2, Clock, AlertTriangle,
+  Siren, Search, Plus, X, CheckCircle2, Clock, AlertTriangle, Bell,
   Eye, Loader2, ChevronLeft, ChevronRight, UserRound, ArrowUpCircle,
   Stethoscope, ClipboardList, Printer, Link2, type LucideIcon,
 } from "lucide-react";
@@ -23,7 +23,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord } from "@/lib/api";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { PRIORITY_META, STATUS_LABEL, PRIORITIES, slaState } from "./escalationMeta";
-import { StatusPill, MicroLabel, ClinicalHeader, ClinicalCard } from "./clinical-ui";
+import { MicroLabel } from "./clinical-ui";
 
 /**
  * SBAR clinical escalation — one role-aware board:
@@ -195,94 +195,94 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
   };
 
   return (
-    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-6" style={{ background: "#FFFFFF" }}>
-      <ClinicalHeader
-        title="SBAR Escalations"
-        subtitle={canRaise ? "Raise a clinical concern (Situation · Background · Assessment · Recommendation)" : canRespond ? "Acknowledge, respond with orders & resolve" : "Escalation oversight & SLA monitoring"}
-        right={
-          <div className="flex flex-wrap items-center gap-2 self-start">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#7E9B6F] mr-1"><span className="w-2 h-2 rounded-full bg-[#7E9B6F] animate-pulse" /> Live</span>
-            <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 bg-white border border-[#D6D8CD] rounded-lg text-[#2B2B27] hover:bg-[#F3F4EE] transition text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30" />
-            {canCreate && (
-              <button onClick={() => setShowRaise(true)} className="flex items-center gap-2 px-4 py-2 bg-[#2E4A48] hover:bg-[#25403D] text-white font-semibold rounded-lg transition active:scale-95 text-sm focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30">
-                <Plus className="w-4 h-4" /> New Escalation
-              </button>
-            )}
-          </div>
-        }
-      />
+    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-6" style={{ background: "#F8FAFC" }}>
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem]">SBAR Escalations</h1>
+          <p className="mt-1 text-sm text-slate-500">{canRaise ? "Raise a clinical concern (Situation · Background · Assessment · Recommendation)" : canRespond ? "Acknowledge, respond with orders & resolve" : "Escalation oversight & SLA monitoring"}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 self-start">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Live</span>
+          <RefreshButton onRefresh={() => void refetch()} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+          {canCreate && (
+            <button onClick={() => setShowRaise(true)} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500/40">
+              <Plus className="h-4 w-4" /> New Escalation
+            </button>
+          )}
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Stat label="Open" value={stats.open} icon={ClipboardList} tone="amber" />
-        <Stat label="SLA Breached" value={stats.breached} icon={AlertTriangle} tone="coral" />
-        <Stat label="Emergency" value={stats.emergency} icon={Siren} tone="coral" />
-        <Stat label="Resolved" value={stats.resolved} icon={CheckCircle2} tone="green" />
+        <Stat label="Open" value={stats.open} icon={ClipboardList} color="#C39A3E" />
+        <Stat label="SLA Breached" value={stats.breached} icon={AlertTriangle} color="#DC2626" />
+        <Stat label="Emergency" value={stats.emergency} icon={Bell} color="#DC2626" />
+        <Stat label="Resolved" value={stats.resolved} icon={CheckCircle2} color="#16A34A" />
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
-        <div className="flex gap-2 flex-wrap">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="inline-flex items-center rounded-full bg-slate-100 p-1 self-start">
           {["open", "resolved", "all"].map((s) => (
             <button key={s} onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition border focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30 ${statusFilter === s ? "bg-[#2E4A48] text-white border-[#2E4A48]" : "bg-white text-[#6B6E63] border-[#D6D8CD] hover:bg-[#F3F4EE]"}`}>
+              className={`rounded-full px-4 py-1.5 text-xs font-semibold transition focus:outline-none ${statusFilter === s ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>
               {s === "open" ? "Open" : s === "resolved" ? "Resolved" : "All"}
             </button>
           ))}
-          <span className="w-px bg-[#D6D8CD] mx-1 hidden sm:block" />
+        </div>
+        <div className="inline-flex items-center rounded-full bg-slate-100 p-1 self-start">
           {["all", ...PRIORITIES].map((p) => (
             <button key={p} onClick={() => setPriorityFilter(p)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition border focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30 ${priorityFilter === p ? "bg-[#2E4A48] text-white border-[#2E4A48]" : "bg-white text-[#6B6E63] border-[#D6D8CD] hover:bg-[#F3F4EE]"}`}>
+              className={`rounded-full px-4 py-1.5 text-xs font-semibold transition focus:outline-none ${priorityFilter === p ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>
               {p === "all" ? "All Priorities" : PRIORITY_META[p].label}
             </button>
           ))}
         </div>
-        <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-3 top-3 w-4 h-4 text-[#8A8D82]" />
+        <div className="relative flex-1 lg:ml-auto lg:max-w-sm">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input type="text" placeholder="Search resident, situation, or clinician…" value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 bg-white border border-[#D6D8CD] rounded-lg text-sm text-[#2B2B27] focus:outline-none focus:ring-2 focus:ring-[#2E4A48]/30" />
+            className="w-full rounded-full border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
         </div>
       </div>
 
-      {error && <div className="bg-[#C0573F]/[0.06] border border-[#C0573F]/30 text-[#C0573F] rounded-lg px-4 py-3 text-sm">Failed to load: {error}</div>}
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">Failed to load: {error}</div>}
 
       {/* List */}
       {loading && escalations.length === 0 ? (
-        <ClinicalCard className="p-10 text-center text-[#8A8D82]">Loading escalations…</ClinicalCard>
+        <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-slate-400">Loading escalations…</div>
       ) : filtered.length === 0 ? (
-        <ClinicalCard className="p-10 text-center text-[#8A8D82]">No {statusFilter !== "all" ? statusFilter : ""} escalations.</ClinicalCard>
+        <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-slate-400">No {statusFilter !== "all" ? statusFilter : ""} escalations.</div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {paginated.map((e) => {
             const pm = PRIORITY_META[e.priority] ?? PRIORITY_META.URGENT;
             const sla = slaState(e.createdAt, e.priority, e.status, nowTs);
             const busy = busyId === e.id;
-            const alarm = sla.overdue || e.priority === "EMERGENCY";
+            // Soft left-accent by priority (calmer than a full saturated outline).
+            const accent = e.priority === "EMERGENCY" ? "#EF4444" : e.priority === "URGENT" ? "#F59E0B" : "#64748B";
             return (
-              <ClinicalCard key={e.id} top={alarm ? "coral" : "teal"} className="p-4 transition hover:shadow-md">
-                <div className="flex items-start justify-between gap-3">
+              <div key={e.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md" style={{ borderLeftWidth: 4, borderLeftColor: accent }}>
+                <div className="flex items-start justify-between gap-4">
                   <button onClick={() => setViewing(e)} className="min-w-0 flex-1 text-left">
-                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                      <StatusPill status={e.priority}>{pm.label}</StatusPill>
-                      <StatusPill status={e.status}>{STATUS_LABEL[e.status] ?? e.status}</StatusPill>
-                      {sla.overdue && <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#C0573F]"><Clock className="w-3 h-3" /> {sla.label}</span>}
+                    <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                      <SolidBadge color={badgeBg(e.priority)}>{pm.label}</SolidBadge>
+                      <SolidBadge color={badgeBg(e.status)}>{STATUS_LABEL[e.status] ?? e.status}</SolidBadge>
+                      {sla.overdue && <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-500"><Clock className="h-3 w-3" /> {sla.label}</span>}
                     </div>
-                    <p className="text-sm font-semibold text-[#2B2B27]">{e.residentName} <span className="text-[#8A8D82] font-normal">· Room {e.room || "—"}</span></p>
-                    <p className="text-sm text-[#6B6E63] line-clamp-2">{e.situation}</p>
-                    <p className="text-[11px] text-[#8A8D82] mt-0.5">Raised by {e.raisedBy || "—"} ({e.raisedByRole || "—"}) → {e.assignedToRole.replace(/_/g, " ")}</p>
+                    <p className="text-sm font-semibold text-slate-900">{e.residentName} <span className="font-normal text-slate-400">· Room {e.room || "—"}</span></p>
+                    <p className="mt-0.5 line-clamp-2 text-sm text-slate-600">{e.situation}</p>
+                    <p className="mt-1.5 text-[11px] text-slate-400">Raised by {e.raisedBy || "—"} ({e.raisedByRole || "—"}) → {e.assignedToRole.replace(/_/g, " ")}</p>
                   </button>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <button onClick={() => setViewing(e)} className="p-1.5 rounded hover:bg-[#2E4A48]/10 text-[#2E4A48] transition" title="View"><Eye className="w-4 h-4" /></button>
+                  <div className="flex flex-shrink-0 items-center gap-2">
+                    <button onClick={() => setViewing(e)} className="rounded-md p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" title="View"><Eye className="h-4 w-4" /></button>
                     {canRespond && !["RESOLVED", "CANCELLED"].includes(e.status) && (
-                      busy ? <Loader2 className="w-4 h-4 text-[#8A8D82] animate-spin" /> : (
-                        <>
-                          {e.status === "OPEN" && <button onClick={() => acknowledge(e)} className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-white text-[#2E4A48] border border-[#2E4A48]/30 rounded-lg hover:bg-[#2E4A48]/10 transition" title="Acknowledge"><CheckCircle2 className="w-3.5 h-3.5" /> Ack</button>}
-                          <button onClick={() => respondResolve(e)} className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-[#2E4A48] text-white rounded-lg hover:bg-[#25403D] transition" title="Respond & Resolve"><Stethoscope className="w-3.5 h-3.5" /> Respond</button>
-                        </>
+                      busy ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : (
+                        <button onClick={() => respondResolve(e)} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-slate-900" title="Respond & Resolve"><ClipboardList className="h-3.5 w-3.5" /> Respond</button>
                       )
                     )}
                   </div>
                 </div>
-              </ClinicalCard>
+              </div>
             );
           })}
         </div>
@@ -588,17 +588,32 @@ function StatusStepper({ status }: { status: string }) {
   );
 }
 
-const TONES: Record<string, { color: string; top: "amber" | "coral" | "green" }> = {
-  amber: { color: "#C39A3E", top: "amber" },
-  coral: { color: "#C0573F", top: "coral" },
-  green: { color: "#7E9B6F", top: "green" },
-};
-function Stat({ label, value, icon: Icon, tone }: { label: string; value: number; icon: LucideIcon; tone: keyof typeof TONES }) {
-  const t = TONES[tone];
+// Solid pill badge (white text on a filled colour) — priority & status chips.
+function SolidBadge({ color, children }: { color: string; children: ReactNode }) {
   return (
-    <ClinicalCard top={t.top} className="p-4">
-      <div className="flex items-center justify-between"><MicroLabel>{label}</MicroLabel><Icon className="w-4 h-4" style={{ color: t.color }} /></div>
-      <p className="text-2xl sm:text-3xl font-bold mt-1" style={{ color: t.color, fontFamily: "Georgia, 'Times New Roman', serif" }}>{value}</p>
-    </ClinicalCard>
+    <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-white" style={{ backgroundColor: color }}>
+      {children}
+    </span>
+  );
+}
+
+// Fill colour for a priority or status chip.
+function badgeBg(key: string): string {
+  return ({
+    EMERGENCY: "#DC2626", URGENT: "#D97706", ROUTINE: "#64748B",
+    OPEN: "#D97706", ACKNOWLEDGED: "#2563EB", IN_PROGRESS: "#4F46E5",
+    ESCALATED: "#DC2626", RESOLVED: "#16A34A", CANCELLED: "#94A3B8",
+  } as Record<string, string>)[key] ?? "#64748B";
+}
+
+function Stat({ label, value, icon: Icon, color }: { label: string; value: number; icon: LucideIcon; color: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm" style={{ borderTopWidth: 3, borderTopColor: color }}>
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">{label}</span>
+        <Icon className="h-4 w-4" style={{ color }} />
+      </div>
+      <p className="mt-3 text-4xl font-bold leading-none" style={{ color, fontFamily: "Georgia, 'Times New Roman', serif" }}>{value}</p>
+    </div>
   );
 }

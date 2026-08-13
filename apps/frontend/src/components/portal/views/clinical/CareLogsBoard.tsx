@@ -49,18 +49,22 @@ const rel = (iso: string) => {
 };
 
 // careLevel enum → LifeCare "Level N · label" badge (adjust mapping if needed).
+// Maps the 4-value careLevel enum onto its representative Level of Care (1–5) —
+// aligned with the Pre-Admission / Care-Acuity scale (L1 Independent, L2 Assisted,
+// L4 Memory, L5 Skilled). Level 3 (Enhanced Assisted) shares the ASSISTED enum, so
+// it also reads as Assisted here.
 const LEVELS: Record<string, { n: number; label: string; badge: string }> = {
   INDEPENDENT: { n: 1, label: "Independent", badge: "bg-green-100 text-green-700" },
-  ASSISTED: { n: 3, label: "Moderate Assist", badge: "bg-amber-100 text-amber-700" },
+  ASSISTED: { n: 2, label: "Assisted", badge: "bg-amber-100 text-amber-700" },
   MEMORY: { n: 4, label: "Memory Care", badge: "bg-orange-100 text-orange-700" },
-  SKILLED: { n: 4, label: "Skilled Care", badge: "bg-red-100 text-red-700" },
+  SKILLED: { n: 5, label: "Skilled Care", badge: "bg-red-100 text-red-700" },
 };
 export const levelOf = (r: Row) => LEVELS[s(r.careLevel)] || { n: 2, label: "Assisted", badge: "bg-blue-100 text-blue-700" };
 
 // Theme-safe care-level chip: ink label + a coloured dot keyed to the level
 // (green independent → amber moderate → coral memory/skilled), replacing the
 // hardcoded light bg-*-100 badges that stranded contrast in dark mode.
-const LEVEL_DOT: Record<number, string> = { 1: "var(--clinical-green)", 2: "var(--clinical-panel)", 3: "var(--clinical-amber)", 4: "var(--clinical-coral)" };
+const LEVEL_DOT: Record<number, string> = { 1: "var(--clinical-green)", 2: "var(--clinical-panel)", 3: "var(--clinical-amber)", 4: "var(--clinical-coral)", 5: "var(--clinical-coral)" };
 function LevelBadge({ lvl }: { lvl: { n: number; label: string } }) {
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>
@@ -129,6 +133,61 @@ const summarize = (domain: DomainKey, r: Row): string => {
   }
   return p.join(" · ") || "logged";
 };
+
+// ── Clinical trigger alerts ──────────────────────────────────────────────────
+// Certain domain values are clinically significant and auto-raise an Incident so
+// they surface in the resident's "Recent Incidents" (visible to caregiver / nurse
+// / care manager) — mirroring the abnormal-vitals trigger in /api/vitals. Vitals
+// themselves are handled server-side (mirrorVitals → /api/vitals), so they are
+// intentionally NOT re-evaluated here to avoid double-logging.
+type TriggerAlert = { type: string; severity: "MINOR" | "MODERATE" | "SEVERE" | "CRITICAL"; title: string; description: string };
+const cap = (v: string) => (v ? v[0] + v.slice(1).toLowerCase() : v);
+function evalDomainTrigger(domain: DomainKey, d: Row, f: Row, name: string): TriggerAlert | null {
+  const who = name || "Resident";
+  switch (domain) {
+    case "bowel": {
+      if (d.bristolType == null) return { type: "OTHER", severity: "MODERATE", title: "No bowel movement", description: `No bowel movement recorded for ${who}. Monitor bowel pattern — escalate if no BM for 3+ days (constipation / impaction risk).` };
+      if (d.bristolType === 1) return { type: "OTHER", severity: "MODERATE", title: "Constipation signs", description: `${who} passed hard, lumpy stool (Bristol Type 1) — constipation risk. Review hydration, diet and bowel protocol.` };
+      if (d.bristolType === 7) return { type: "INFECTION", severity: "MODERATE", title: "Diarrhea", description: `${who} passed watery stool (Bristol Type 7) — diarrhea. Monitor hydration and watch for signs of infection.` };
+      return null;
+    }
+    case "urine": {
+      if (d.outputMl === 0) return { type: "MEDICAL_EMERGENCY", severity: "SEVERE", title: "No urine output", description: `No urine output recorded for ${who} — possible retention. Assess bladder, consider a bladder scan and notify the nurse.` };
+      if (s(d.color) === "Dark") return { type: "OTHER", severity: "MODERATE", title: "Dark urine", description: `${who}'s urine is dark — possible dehydration or concentrated output. Encourage fluids and monitor intake.` };
+      return null;
+    }
+    case "edema": {
+      const sev = s(f.severity);
+      if (["MODERATE", "SEVERE", "DEEP"].includes(sev)) return { type: "MEDICAL_EMERGENCY", severity: sev === "MODERATE" ? "MODERATE" : "SEVERE", title: `Edema — ${cap(sev)}`, description: `${cap(sev)} edema noted for ${who}${f.location ? ` at ${s(f.location)}` : ""}${f.pitting ? " (pitting)" : ""}. Monitor for fluid overload / cardiac or renal cause.` };
+      return null;
+    }
+    case "concerns": {
+      const sev = s(f.severity);
+      if (sev === "HIGH" || sev === "CRITICAL") return { type: "MEDICAL_EMERGENCY", severity: sev === "CRITICAL" ? "CRITICAL" : "SEVERE", title: `${cap(sev)} clinical concern`, description: `${cap(sev)}-severity concern raised for ${who}${f.category ? ` (${s(f.category).toLowerCase()})` : ""}: ${s(f.description) || "see care log"}.` };
+      return null;
+    }
+    case "pain": {
+      const score = Number(d.score) || 0;
+      if (score >= 7) return { type: "MEDICAL_EMERGENCY", severity: "SEVERE", title: `Severe pain (${score}/10)`, description: `${who} reported severe pain of ${score}/10${f.location ? ` at ${s(f.location)}` : ""}. Assess, treat per orders and notify the nurse.` };
+      if (score >= 4) return { type: "OTHER", severity: "MODERATE", title: `Moderate pain (${score}/10)`, description: `${who} reported pain of ${score}/10${f.location ? ` at ${s(f.location)}` : ""}. Review analgesia and reassess.` };
+      return null;
+    }
+    case "mobility": {
+      if (d.fallOccurred === true) return { type: "FALL", severity: "CRITICAL", title: "Fall during mobility", description: `A fall was reported for ${who} during mobility. Complete a full fall assessment and notify the nurse immediately.` };
+      if (d.activityType === "BED_REST") return { type: "OTHER", severity: "MODERATE", title: "Did not ambulate", description: `${who} did not ambulate this shift — immobility / decline risk. Review mobility plan and DVT / pressure-injury precautions.` };
+      if (s(f.assistanceLevel) === "DEPENDENT") return { type: "OTHER", severity: "MODERATE", title: "Dependent mobility", description: `${who} was fully dependent for mobility. Ensure the repositioning schedule and pressure-injury precautions are in place.` };
+      return null;
+    }
+    case "sleep": {
+      const hrs = Number(d.totalHours) || 0;
+      const q = s(f.quality);
+      if (hrs > 0 && hrs < 4) return { type: "OTHER", severity: "MODERATE", title: `Poor sleep (${hrs}h)`, description: `${who} slept only ${hrs}h${q ? ` (${q.toLowerCase()} quality)` : ""}. Review causes (pain, anxiety, nocturia) and sleep hygiene.` };
+      if (q === "Poor" || q === "Very Poor") return { type: "OTHER", severity: "MODERATE", title: "Poor sleep quality", description: `${who}'s sleep quality was ${q.toLowerCase()}${Array.isArray(f.disturbances) && f.disturbances.length ? ` — disturbances: ${(f.disturbances as string[]).join(", ")}` : ""}. Review contributing factors.` };
+      return null;
+    }
+    default: return null;
+  }
+}
 
 // ── Shared data layer ────────────────────────────────────────────────────────
 type Entry = { id: string; resId: string; domain: DomainKey; at: string; summary: string };
@@ -227,7 +286,8 @@ export default function CareLogsBoard({ clinicianRole = "NURSE" }: { clinicianRo
   const { residents, domainsByRes, ensureRound, refetchAll, refetchResidents, bowelRef, saveBowelRef, loading } = useCareLogData(clinicianRole);
 
   const [search, setSearch] = useState("");
-  const [levelFilter, setLevelFilter] = useState<number | null>(null);
+  const [careLevelFilter, setCareLevelFilter] = useState("");
+  const [roomFilter, setRoomFilter] = useState("");
   const [logFor, setLogFor] = useState<Row | null>(null);
   const [logTab, setLogTab] = useState<DomainKey>("vitals");
   const [qrFor, setQrFor] = useState<Row | null>(null);
@@ -235,9 +295,13 @@ export default function CareLogsBoard({ clinicianRole = "NURSE" }: { clinicianRo
   const [editFor, setEditFor] = useState<Row | null>(null);
 
   const q = search.trim().toLowerCase();
+  const rooms = Array.from(new Set(residents.map((r: Row) => s(r.room)).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   const filtered = residents.filter((r: Row) => {
     const okQ = !q || s(r.name).toLowerCase().includes(q) || s(r.room).toLowerCase().includes(q);
-    return okQ && (levelFilter == null || levelOf(r).n === levelFilter);
+    const okLevel = !careLevelFilter || s(r.careLevel) === careLevelFilter;
+    const okRoom = !roomFilter || s(r.room) === roomFilter;
+    return okQ && okLevel && okRoom;
   });
   const openLog = (r: Row, tab: DomainKey) => { setLogTab(tab); setLogFor(r); };
 
@@ -270,11 +334,17 @@ export default function CareLogsBoard({ clinicianRole = "NURSE" }: { clinicianRo
 
       <div className="mt-5 flex flex-col sm:flex-row gap-3 mb-5">
         <SearchInput value={search} onChange={setSearch} placeholder="Search by name or room…" className="flex-1" />
-        <div className="inline-flex gap-1.5">
-          {[null, 1, 2, 3, 4].map((lv) => (
-            <ClinicalButton key={lv ?? "all"} variant={levelFilter === lv ? "primary" : "secondary"} onClick={() => setLevelFilter(lv)}>{lv == null ? "All" : `L${lv}`}</ClinicalButton>
-          ))}
-        </div>
+        <select value={roomFilter} onChange={(e) => setRoomFilter(e.target.value)} aria-label="Filter by room" className={`${controlClass} sm:w-40`}>
+          <option value="">All rooms</option>
+          {rooms.map((rm) => <option key={rm} value={rm}>Room {rm}</option>)}
+        </select>
+        <select value={careLevelFilter} onChange={(e) => setCareLevelFilter(e.target.value)} aria-label="Filter by level of care" className={`${controlClass} sm:w-56`}>
+          <option value="">All levels of care</option>
+          {CARE_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+        </select>
+        {(careLevelFilter || roomFilter || search) && (
+          <ClinicalButton variant="ghost" onClick={() => { setSearch(""); setCareLevelFilter(""); setRoomFilter(""); }}>Clear</ClinicalButton>
+        )}
       </div>
 
       <DataState
@@ -537,9 +607,17 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianR
       if (!built) { Swal.fire({ title: "Nothing to save", text: "Enter at least one value for this domain.", icon: "info" }); setSaving(false); return; }
       await createRecord(built.resource, built.data);
       if (tab === "vitals") { try { await mirrorVitals(built.data); } catch { /* best-effort */ } }
+      // Clinically-significant values auto-raise an Incident (Recent Incidents).
+      // Best-effort — a trigger failure must never block the care log itself.
+      const alert = tab === "vitals" ? null : evalDomainTrigger(tab, built.data, f, s(resident.name));
+      if (alert) {
+        try {
+          await createRecord("incidents", { residentId: s(resident.id), incidentType: alert.type, severity: alert.severity, description: alert.description, followUpRequired: alert.severity === "SEVERE" || alert.severity === "CRITICAL", incidentDate: new Date().toISOString() });
+        } catch { /* best-effort */ }
+      }
       setSavedNow((prev) => new Set(prev).add(tab));
       await onDone();
-      Swal.fire({ toast: true, position: "top-end", icon: "success", title: `${dom.label} logged`, showConfirmButton: false, timer: 1500 });
+      Swal.fire({ toast: true, position: "top-end", icon: alert ? "warning" : "success", title: alert ? `${dom.label} logged — ${alert.title} alert raised` : `${dom.label} logged`, text: alert ? "Logged to Recent Incidents for clinical review." : undefined, showConfirmButton: false, timer: alert ? 2800 : 1500 });
       setF({}); setNotes("");
     } catch (e) { Swal.fire({ title: "Save failed", text: e instanceof Error ? e.message : "Could not save.", icon: "error" }); }
     finally { setSaving(false); }
@@ -681,7 +759,8 @@ function MedsList({ residentId }: { residentId: string }) {
 function ViewModal({ resident, loggedDomains, onOpenLog, onClose }: { resident: Row; loggedDomains: Set<DomainKey>; onOpenLog: (t: DomainKey) => void; onClose: () => void }) {
   const raw = (resident.raw || {}) as Row;
   const lvl = levelOf(resident);
-  const goFull = () => { try { const seg = window.location.pathname.split("/")[1] || "care_manager"; window.location.href = `/${seg}/records?resident=${s(resident.id)}`; } catch { /* noop */ } };
+  // Open the resident's full care card (same /rcard/<id> page the per-resident QR encodes).
+  const goFull = () => { try { window.location.href = `/rcard/${s(resident.id)}`; } catch { /* noop */ } };
   const field = (label: string, value: string) => <div><p className="text-[11px] text-[var(--clinical-muted)]">{label}</p><p className="text-sm font-semibold text-[var(--clinical-ink)]">{value || "—"}</p></div>;
 
   return (
@@ -732,9 +811,9 @@ function ViewModal({ resident, loggedDomains, onOpenLog, onClose }: { resident: 
 // persisted here maps to a real Resident column (no invented fields).
 const CARE_OPTIONS: { v: string; label: string }[] = [
   { v: "INDEPENDENT", label: "Level 1 · Independent" },
-  { v: "ASSISTED", label: "Level 3 · Moderate Assist" },
+  { v: "ASSISTED", label: "Level 2 · Assisted" },
   { v: "MEMORY", label: "Level 4 · Memory Care" },
-  { v: "SKILLED", label: "Level 4 · Skilled Care" },
+  { v: "SKILLED", label: "Level 5 · Skilled Care" },
 ];
 const editInput = controlClass;
 

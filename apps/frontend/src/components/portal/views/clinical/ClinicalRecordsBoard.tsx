@@ -22,6 +22,7 @@ import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, DataState,
 const KEY = "clinical_records";
 const newId = (p: string) => globalThis.crypto?.randomUUID?.() ?? `${p}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 const fmtDate = (v: string) => (v ? new Date(v + (v.length <= 10 ? "T00:00:00" : "")).toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\//g, "-").replace(/(\d{2})-(\d{2})-(\d{4})/, "$3-$1-$2") : "");
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 
 type TabId = "labs" | "therapy" | "referrals" | "medications" | "orders" | "diagnoses";
 
@@ -154,9 +155,28 @@ export default function ClinicalRecordsBoard({ clinicianRole = "NURSE" }: { clin
       </div>
 
       {!residentId ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border py-20 text-center" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
-          <ClipboardList className="mb-3 h-12 w-12 text-[var(--clinical-muted)]" />
-          <p className="font-medium text-[var(--clinical-ink-soft)]">Select a resident to view or add clinical records</p>
+        <div className="@container">
+          <div className="mb-4">
+            <p className="font-semibold text-[var(--clinical-ink)]">Select a resident to view or add clinical records</p>
+            <p className="text-sm text-[var(--clinical-muted)]">Tap a resident to open their clinical records</p>
+          </div>
+          {residents.length === 0 ? (
+            <p className="text-sm text-[var(--clinical-muted)]">No residents found.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4 @5xl:grid-cols-5">
+              {residents.map((r, i) => (
+                <button key={r.id} onClick={() => setResidentId(r.id)}
+                  className="group flex flex-col items-center gap-2.5 rounded-xl border p-4 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300"
+                  style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)", animationDelay: `${i * 40}ms`, animationFillMode: "backwards" }}>
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold" style={{ backgroundColor: "var(--clinical-surface-2)", color: "var(--clinical-panel)" }}>{initials(r.name)}</span>
+                  <span className="block w-full min-w-0">
+                    <span className="block truncate text-sm font-semibold text-[var(--clinical-ink)]">{r.name}</span>
+                    <span className="block text-xs text-[var(--clinical-muted)]">Room {r.room}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         <>

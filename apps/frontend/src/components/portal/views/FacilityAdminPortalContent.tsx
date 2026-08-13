@@ -11,8 +11,6 @@ import FacilityDashboard from "@/components/portal/views/FacilityDashboard";
 import FacilityResidents from "@/components/portal/views/FacilityResidents";
 import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
 import FacilityVitals from "@/components/portal/views/FacilityVitals";
-import AdmissionsContent from "@/components/portal/views/AdmissionsContent";
-import LeadPipelineBoard from "@/components/portal/views/LeadPipelineBoard";
 import AIAssistantContent from "@/components/portal/ai/AIAssistantContent";
 import FacilityRooms from "@/components/portal/views/FacilityRooms";
 import FacilityOccupancy from "@/components/portal/views/FacilityOccupancy";
@@ -252,8 +250,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
 
   // Tab routing
   if (tab === "alertcenter") return <AlertCenter />;
-  if (tab === "crm" || tab === "leads") return <LeadPipelineBoard />;
-  if (tab === "admissions") return <AdmissionsContent />;
+  // CRM & Leads and Admissions moved to the Super Admin portal.
   if (tab === "assistant") return <AIAssistantContent />;
   if (tab === "residents") return <FacilityResidents />;
   if (tab === "incidents") return <FacilityIncidents />;

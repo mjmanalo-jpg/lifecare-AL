@@ -7,8 +7,8 @@
  * requests in `inventory_purchase_requests`.
  */
 
-import { useMemo, useState } from "react";
-import { Package, Pill, Search, Plus, Printer, RefreshCw, ShoppingCart, Pencil, X, MapPin, CheckCircle2, User } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Package, Pill, Search, Plus, Printer, RefreshCw, ShoppingCart, Pencil, X, CheckCircle2, User } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
@@ -22,14 +22,28 @@ const fmtDate = (v: string) => (v ? new Date(v + (v.length <= 10 ? "T00:00:00" :
 const UNITS = ["tablets", "capsules", "mL", "mg", "vials", "ampoules", "patches", "sachets", "units", "boxes", "packs", "pcs"];
 const URGENCIES = ["Routine", "Urgent", "Emergency"];
 
-interface InvItem { id: string; type: "MEDICATION" | "GENERAL"; name: string; generic?: string; brand?: string; unit: string; quantity: number; reorder: number; location?: string; expiry?: string; notes?: string; residentId?: string; residentName?: string; updatedAt: string; }
+interface InvItem { id: string; type: "MEDICATION" | "GENERAL"; name: string; generic?: string; brand?: string; category?: string; supplier?: string; unit: string; quantity: number; reorder: number; location?: string; expiry?: string; notes?: string; residentId?: string; residentName?: string; updatedAt: string; }
 type ResOpt = { id: string; name: string; room: string };
 interface PR { id: string; itemId: string; itemName: string; unit: string; quantity: number; urgency: string; notes?: string; status: "PENDING" | "APPROVED" | "ORDERED" | "REJECTED"; by?: string; byAt: string; approvedBy?: string; }
 const parse = <T,>(raw: string | null | undefined): T[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((x) => x && typeof x.id === "string") : []; } catch { return []; } };
 
 const stockLevel = (it: InvItem) => (it.quantity <= 0 ? "out" : it.quantity <= it.reorder ? "low" : "ok");
-const qtyBadge = (lvl: string) => (lvl === "out" ? "bg-red-100 text-red-700" : lvl === "low" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700");
 const daysToExpiry = (exp?: string) => (exp ? Math.ceil((new Date(exp + "T00:00:00").getTime() - Date.now()) / 86_400_000) : null);
+// Numeric M/D/YYYY for the table's Expiry column.
+const numDate = (v?: string) => (v ? new Date(v + (v.length <= 10 ? "T00:00:00" : "")).toLocaleDateString() : "");
+// Stock-level pill for the table (dark = normal, amber = low, coral = out).
+const stockMeta = (lvl: string) => (lvl === "out" ? { label: "Out of Stock", cls: "bg-[#C0573F] text-white" } : lvl === "low" ? { label: "Low", cls: "bg-[#C39A3E] text-white" } : { label: "Normal", cls: "bg-[#2E4A48] text-white" });
+// Relative expiry note ("Expiring in 9 days", "6 months away", …) with a tone.
+const expiryRel = (exp?: string): { text: string; cls: string } | null => {
+  const d = daysToExpiry(exp);
+  if (d == null) return null;
+  if (d < 0) return { text: `Expired ${Math.abs(d)}d ago`, cls: "text-red-600" };
+  if (d <= 30) return { text: `Expiring in ${d} day${d === 1 ? "" : "s"}`, cls: "text-amber-600" };
+  const months = Math.round(d / 30);
+  if (months < 12) return { text: `${months} month${months === 1 ? "" : "s"} away`, cls: "text-slate-400" };
+  const years = Math.round(d / 365);
+  return { text: `${years} year${years === 1 ? "" : "s"} away`, cls: "text-slate-400" };
+};
 
 export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   const { name: clinicianName } = useClinician(clinicianRole);
@@ -43,6 +57,8 @@ export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { 
   const [search, setSearch] = useState("");
   const [stockFilter, setStockFilter] = useState("");
   const [expiryFilter, setExpiryFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
   const [residentFilter, setResidentFilter] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [editItem, setEditItem] = useState<InvItem | null>(null);
@@ -57,13 +73,18 @@ export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { 
   const submitPR = async (it: InvItem, quantity: number, urgency: string, notes: string) => { const rec: PR = { id: newId("pr"), itemId: it.id, itemName: it.name, unit: it.unit, quantity, urgency, notes: notes || undefined, status: "PENDING", by: clinicianName, byAt: new Date().toISOString() }; await savePRs([rec, ...prs]); setRequestItem(null); Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Purchase request submitted", showConfirmButton: false, timer: 1600 }); };
   const setPRStatus = async (pr: PR, status: PR["status"]) => savePRs(prs.map((x) => (x.id === pr.id ? { ...x, status, approvedBy: status === "APPROVED" ? clinicianName : x.approvedBy } : x)));
 
+  const categoryOpts = useMemo(() => Array.from(new Set(items.map((i) => (i.category || "").trim()).filter(Boolean))).sort(), [items]);
+  const locationOpts = useMemo(() => Array.from(new Set(items.map((i) => (i.location || "").trim()).filter(Boolean))).sort(), [items]);
+
   const q = search.trim().toLowerCase();
   const filtered = items.filter((it) => {
-    const okQ = !q || it.name.toLowerCase().includes(q) || (it.generic || "").toLowerCase().includes(q) || (it.brand || "").toLowerCase().includes(q);
+    const okQ = !q || [it.name, it.generic, it.brand, it.category, it.supplier, it.location].some((f) => (f || "").toLowerCase().includes(q));
+    const okCat = !categoryFilter || it.category === categoryFilter;
+    const okLoc = !locationFilter || it.location === locationFilter;
     const okS = !stockFilter || stockLevel(it) === stockFilter;
     const dte = daysToExpiry(it.expiry);
     const okE = !expiryFilter || (expiryFilter === "expired" ? dte != null && dte < 0 : expiryFilter === "soon" ? dte != null && dte >= 0 && dte <= 90 : true);
-    return okQ && okS && okE;
+    return okQ && okCat && okLoc && okS && okE;
   });
   const stats = { total: items.length, critical: items.filter((it) => stockLevel(it) === "out").length, low: items.filter((it) => stockLevel(it) === "low").length, pendingPR: prs.filter((p) => p.status === "PENDING").length };
 
@@ -89,15 +110,14 @@ export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { 
       </div>
 
       {tab === "inventory" && (<>
-        <div className="flex flex-col sm:flex-row gap-3 mb-5">
-          <div className="relative flex-1"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name, generic, or brand…" className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
-          <select value={stockFilter} onChange={(e) => setStockFilter(e.target.value)} className="px-3 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm"><option value="">All Stock Levels</option><option value="out">Out of Stock</option><option value="low">Low Stock</option><option value="ok">In Stock</option></select>
-          <select value={expiryFilter} onChange={(e) => setExpiryFilter(e.target.value)} className="px-3 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm"><option value="">All Expiry Dates</option><option value="soon">Expiring ≤ 90 days</option><option value="expired">Expired</option></select>
+        <div className="flex flex-col lg:flex-row gap-3 mb-5">
+          <div className="relative flex-1"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, category, location, supplier…" className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
+          <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm"><option value="">All Categories</option>{categoryOpts.map((c) => <option key={c} value={c}>{c}</option>)}</select>
+          <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm"><option value="">All Locations</option>{locationOpts.map((l) => <option key={l} value={l}>{l}</option>)}</select>
+          <select value={stockFilter} onChange={(e) => setStockFilter(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm"><option value="">All Stock Levels</option><option value="out">Out of Stock</option><option value="low">Low Stock</option><option value="ok">In Stock</option></select>
+          <select value={expiryFilter} onChange={(e) => setExpiryFilter(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm"><option value="">Any Expiry</option><option value="soon">Expiring ≤ 90 days</option><option value="expired">Expired</option></select>
         </div>
-        <div className="space-y-3">
-          {filtered.length === 0 ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-400">No inventory items. Click <b>Add Item</b> to start.</div>
-            : filtered.map((it) => <ItemRow key={it.id} it={it} onRestock={setRestockItem} onRequest={setRequestItem} onEdit={(x) => { setEditItem(x); setAddOpen(true); }} />)}
-        </div>
+        <InventoryTable items={filtered} onRestock={setRestockItem} onRequest={setRequestItem} onEdit={(x) => { setEditItem(x); setAddOpen(true); }} empty={<>No inventory items. Click <b>Add Item</b> to start.</>} />
       </>)}
 
       {tab === "residents" && (() => {
@@ -112,10 +132,7 @@ export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { 
               </select>
             </div>
           </div>
-          <div className="space-y-3">
-            {resItems.length === 0 ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-400">{residentFilter ? "No inventory assigned to this resident yet." : "No resident-assigned inventory yet. Pick a resident when adding an item."}</div>
-              : resItems.map((it) => <ItemRow key={it.id} it={it} showResident onRestock={setRestockItem} onRequest={setRequestItem} onEdit={(x) => { setEditItem(x); setAddOpen(true); }} />)}
-          </div>
+          <InventoryTable items={resItems} onRestock={setRestockItem} onRequest={setRequestItem} onEdit={(x) => { setEditItem(x); setAddOpen(true); }} empty={residentFilter ? "No inventory assigned to this resident yet." : "No resident-assigned inventory yet. Pick a resident when adding an item."} />
         </>);
       })()}
 
@@ -150,22 +167,62 @@ function InvStat({ value, label, tone }: { value: number; label: string; tone: s
   return <div className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-3xl font-bold" style={{ color: tone }}>{value}</p><p className="text-sm text-slate-500 mt-1">{label}</p></div>;
 }
 
-function ItemRow({ it, onRestock, onRequest, onEdit, showResident }: { it: InvItem; onRestock: (it: InvItem) => void; onRequest: (it: InvItem) => void; onEdit: (it: InvItem) => void; showResident?: boolean }) {
-  const lvl = stockLevel(it); const dte = daysToExpiry(it.expiry);
+// Shared dark-teal table used by both the Inventory and Resident Inventory tabs.
+function InventoryTable({ items, onRestock, onRequest, onEdit, empty }: { items: InvItem[]; onRestock: (it: InvItem) => void; onRequest: (it: InvItem) => void; onEdit: (it: InvItem) => void; empty: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 flex flex-wrap items-center gap-3">
-      <span className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${it.type === "MEDICATION" ? "bg-green-50 text-green-600" : "bg-blue-50 text-blue-600"}`}>{it.type === "MEDICATION" ? <Pill className="w-5 h-5" /> : <Package className="w-5 h-5" />}</span>
-      <div className="flex-1 min-w-0">
-        <p className="font-bold text-slate-900">{it.name} {it.generic && <span className="text-xs font-normal text-slate-400">({it.generic})</span>}{it.type === "GENERAL" && <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">General</span>}{showResident && it.residentName && <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700"><User className="w-3 h-3" />{it.residentName}</span>}</p>
-        <p className="text-sm mt-0.5"><span className={`font-semibold px-1.5 py-0.5 rounded ${qtyBadge(lvl)}`}>{it.quantity} {it.unit}</span> <span className="text-slate-400 ml-2">Reorder at {it.reorder}</span></p>
-        <p className="text-xs text-slate-400 mt-1 inline-flex items-center gap-1">{it.location && <><MapPin className="w-3 h-3 text-red-400" /> {it.location}</>}{it.expiry && <span className={dte != null && dte < 0 ? "text-red-500 ml-2" : dte != null && dte <= 90 ? "text-amber-500 ml-2" : "ml-2"}>Exp: {fmtDate(it.expiry)}</span>}</p>
-      </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <button onClick={() => onRestock(it)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"><RefreshCw className="w-3.5 h-3.5" /> Restock</button>
-        <button onClick={() => onRequest(it)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"><ShoppingCart className="w-3.5 h-3.5" /> Request</button>
-        <button onClick={() => onEdit(it)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><Pencil className="w-4 h-4" /></button>
+    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[880px] text-sm">
+          <thead>
+            <tr className="text-left text-white" style={{ backgroundColor: "#2E4A48" }}>
+              <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider">Item</th>
+              <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider">Current Qty</th>
+              <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider">Stock Level</th>
+              <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider">Expiry</th>
+              <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider">Location</th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {items.length === 0 ? (
+              <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-400">{empty}</td></tr>
+            ) : items.map((it) => <InvTableRow key={it.id} it={it} onRestock={onRestock} onRequest={onRequest} onEdit={onEdit} />)}
+          </tbody>
+        </table>
       </div>
     </div>
+  );
+}
+
+// Table row for the redesigned Inventory tab — item + qty + stock badge
+// (with min) + relative expiry + location, with edit/request actions.
+function InvTableRow({ it, onRestock, onRequest, onEdit }: { it: InvItem; onRestock: (it: InvItem) => void; onRequest: (it: InvItem) => void; onEdit: (it: InvItem) => void }) {
+  const lvl = stockLevel(it); const sm = stockMeta(lvl); const rel = expiryRel(it.expiry);
+  const subtitle = [it.category, it.supplier].filter(Boolean).join(" · ");
+  return (
+    <tr className="hover:bg-slate-50/60 transition">
+      <td className="px-6 py-3.5 align-middle">
+        <p className="font-bold text-slate-900 flex items-center gap-2">{it.name}{it.residentName && <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700"><User className="w-3 h-3" />{it.residentName}</span>}</p>
+        {subtitle ? <p className="text-xs mt-0.5" style={{ color: "#9a7b52" }}>{subtitle}</p> : it.generic ? <p className="text-xs mt-0.5 text-slate-400">{it.generic}</p> : null}
+      </td>
+      <td className="px-6 py-3.5 align-middle">
+        <p className="text-lg font-bold leading-none tabular-nums" style={{ color: lvl === "out" ? "#C0573F" : "#1e293b" }}>{it.quantity}</p>
+        <p className="text-[11px] text-slate-400 mt-0.5">{it.unit}</p>
+      </td>
+      <td className="px-6 py-3.5 align-middle">
+        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-[0.04em] ${sm.cls}`}>{sm.label}</span>
+        <p className="text-[11px] text-slate-400 mt-1">Min {it.reorder}</p>
+      </td>
+      <td className="px-6 py-3.5 align-middle">
+        {it.expiry ? <><p className="text-sm text-slate-700 tabular-nums">{numDate(it.expiry)}</p>{rel && <p className={`text-[11px] mt-0.5 ${rel.cls}`}>{rel.text}</p>}</> : <span className="text-slate-300">—</span>}
+      </td>
+      <td className="px-6 py-3.5 align-middle text-sm text-slate-700">{it.location || <span className="text-slate-300">—</span>}</td>
+      <td className="px-4 py-3.5 align-middle text-right whitespace-nowrap">
+        <button onClick={() => onRestock(it)} title="Restock" className="p-1.5 rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-[#2E4A48]"><RefreshCw className="w-4 h-4" /></button>
+        <button onClick={() => onRequest(it)} title="Request purchase" className="p-1.5 rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-blue-600"><ShoppingCart className="w-4 h-4" /></button>
+        <button onClick={() => onEdit(it)} title="Edit" className="p-1.5 rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><Pencil className="w-4 h-4" /></button>
+      </td>
+    </tr>
   );
 }
 
@@ -177,6 +234,8 @@ function AddItemModal({ item, residents, onClose, onSave }: { item: InvItem | nu
   const [name, setName] = useState(item?.name || "");
   const [generic, setGeneric] = useState(item?.generic || "");
   const [brand, setBrand] = useState(item?.brand || "");
+  const [category, setCategory] = useState(item?.category || "");
+  const [supplier, setSupplier] = useState(item?.supplier || "");
   const [unit, setUnit] = useState(item?.unit || "tablets");
   const [quantity, setQuantity] = useState(item ? String(item.quantity) : "0");
   const [reorder, setReorder] = useState(item ? String(item.reorder) : "10");
@@ -191,7 +250,7 @@ function AddItemModal({ item, residents, onClose, onSave }: { item: InvItem | nu
     if (!name.trim()) { Swal.fire({ title: `${isMed ? "Medication" : "Item"} name is required`, icon: "warning" }); return; }
     setSaving(true);
     const residentName = residents.find((r) => r.id === residentId)?.name;
-    try { await onSave({ id: item?.id || newId("inv"), type, name: name.trim(), generic: isMed ? generic.trim() || undefined : undefined, brand: isMed ? brand.trim() || undefined : undefined, unit, quantity: Number(quantity) || 0, reorder: Number(reorder) || 0, location: location.trim() || undefined, expiry: expiry || undefined, notes: notes.trim() || undefined, residentId: residentId || undefined, residentName: residentId ? residentName : undefined, updatedAt: new Date().toISOString() }); }
+    try { await onSave({ id: item?.id || newId("inv"), type, name: name.trim(), generic: isMed ? generic.trim() || undefined : undefined, brand: isMed ? brand.trim() || undefined : undefined, category: category.trim() || undefined, supplier: supplier.trim() || undefined, unit, quantity: Number(quantity) || 0, reorder: Number(reorder) || 0, location: location.trim() || undefined, expiry: expiry || undefined, notes: notes.trim() || undefined, residentId: residentId || undefined, residentName: residentId ? residentName : undefined, updatedAt: new Date().toISOString() }); }
     finally { setSaving(false); }
   };
 
@@ -206,6 +265,10 @@ function AddItemModal({ item, residents, onClose, onSave }: { item: InvItem | nu
           </div>
           <div><label className={lbl}>Assign to Resident <span className="text-slate-400 font-normal">(optional)</span></label><select value={residentId} onChange={(e) => setResidentId(e.target.value)} className={inp}><option value="">Facility stock (no resident)</option>{residents.map((r) => <option key={r.id} value={r.id}>{r.name}{r.room ? ` — Rm ${r.room}` : ""}</option>)}</select></div>
           <div><label className={lbl}>{isMed ? "Medication Name" : "Item Name"} <span className="text-red-500">*</span></label><input value={name} onChange={(e) => setName(e.target.value)} placeholder={isMed ? "e.g., Amlodipine 5mg" : "e.g., Surgical gloves"} className={inp} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Category</label><input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g., Medical Supplies" className={inp} /></div>
+            <div><label className={lbl}>Supplier</label><input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="e.g., MedSupply Co." className={inp} /></div>
+          </div>
           {isMed && (
             <div className="grid grid-cols-2 gap-3">
               <div><label className={lbl}>Generic Name</label><input value={generic} onChange={(e) => setGeneric(e.target.value)} placeholder="e.g., Amlodipine besylate" className={inp} /></div>

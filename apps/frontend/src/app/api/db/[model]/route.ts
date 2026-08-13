@@ -256,12 +256,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (context.organizationId) await assertMutationEntitled(context, model);
     const created = await withTenantDb(context, async (tx) => {
       const delegate = transactionDelegate(definition, tx);
-      // app-settings are keyed data: a POST means "set this key", so upsert on
-      // the tenant-composite id instead of create — repeated writes update in
-      // place rather than colliding on the primary key.
-      if (model === "app-settings" && data.id) {
-        const { id: settingId, ...rest } = data as Record<string, unknown>;
-        return delegate.upsert({ where: { id: settingId }, create: data, update: rest });
+      // app-settings are keyed data: a POST means "set this key". Match the
+      // existing row by its tenant-composite (organizationId, communityId, key)
+      // rather than by primary key, then update in place — otherwise a legacy row
+      // saved under a bare-key id (before composite ids) is never found by an
+      // id-based upsert and the create collides on the (org, community, key)
+      // unique. Falls back to create when the key is genuinely new.
+      if (model === "app-settings") {
+        const settingData = data as Record<string, unknown>;
+        const key = String(settingData.key ?? "").trim();
+        if (key) {
+          const existing = await delegate.findFirst({
+            where: { key, organizationId: settingData.organizationId ?? null, communityId: settingData.communityId ?? null },
+          }) as { id: string } | null;
+          if (existing) {
+            const { id: _omitId, ...rest } = settingData;
+            void _omitId;
+            return delegate.update({ where: { id: existing.id }, data: rest });
+          }
+        }
+        return delegate.create({ data });
       }
       return delegate.create({ data });
     });

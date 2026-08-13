@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 
 /**
@@ -23,6 +23,8 @@ export type ClinicianRole = "PHYSICIAN" | "NURSE" | "CAREGIVER" | "FACILITY_ADMI
 export interface Clinician {
   name: string;
   userId: string;
+  /** The current user's Staff id (Task.assignedToId FK), when they have a Staff record. */
+  staffId: string;
   role: ClinicianRole;
 }
 
@@ -53,24 +55,59 @@ export function useClinician(role: ClinicianRole): Clinician {
     tables: ["User"],
   });
 
+  // The ACTUAL signed-in user (enriched /api/auth/session exposes their real name
+  // + linked User id). This is the source of truth for authorship, so an action
+  // is attributed to the person who logged it — e.g. "Grace Villanueva" — instead
+  // of a role-matched placeholder account like "…Organization Admin".
+  const [sessionUser, setSessionUser] = useState<{ name: string; userId: string } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive || !d?.authenticated) return;
+        const name = String(d.session?.name ?? "").trim();
+        const userId = String(d.session?.userId ?? "");
+        if (name || userId) setSessionUser({ name, userId });
+      })
+      .catch(() => { /* non-fatal: fall back to role-based resolution */ });
+    return () => { alive = false; };
+  }, []);
+
   return useMemo(() => {
     const fallback = FALLBACK[role];
 
-    // 1. Titled Staff member for this role.
+    // Role-based resolution — used to supply a linked User id when the session
+    // doesn't carry one, and as the name fallback before the session lands.
+    let resolvedName = fallback;
+    let resolvedUserId = "";
     const staffMatch = staffRows.find((s) => matchesRole(String((s as { position?: unknown }).position ?? ""), role));
     const staffUser = (staffMatch as { user?: Record<string, unknown> } | undefined)?.user;
     if (staffUser?.id) {
-      return { name: displayName(staffUser, fallback), userId: String(staffUser.id), role };
+      resolvedName = displayName(staffUser, fallback);
+      resolvedUserId = String(staffUser.id);
+    } else {
+      const userMatch =
+        userRows.find((u) => String(u.role) === role && u.isActive !== false) ??
+        userRows.find((u) => String(u.role) === role);
+      if (userMatch?.id) {
+        resolvedName = displayName(userMatch, fallback);
+        resolvedUserId = String(userMatch.id);
+      }
     }
 
-    // 2. Any User account with the matching role (covers physician w/o a Staff row).
-    const userMatch =
-      userRows.find((u) => String(u.role) === role && u.isActive !== false) ??
-      userRows.find((u) => String(u.role) === role);
-    if (userMatch?.id) {
-      return { name: displayName(userMatch, fallback), userId: String(userMatch.id), role };
-    }
+    // The signed-in user's Staff id (for task assignment): match their User id
+    // against the staff directory, falling back to the role-matched staff row.
+    const uid = sessionUser?.userId || resolvedUserId;
+    const staffByUser = staffRows.find((st) => String((st as { userId?: unknown }).userId ?? "") === uid);
+    const staffId = String((staffByUser as { id?: unknown } | undefined)?.id ?? (staffMatch as { id?: unknown } | undefined)?.id ?? "");
 
-    return { name: fallback, userId: "", role };
-  }, [staffRows, userRows, role]);
+    // Prefer the real signed-in identity over the role-matched placeholder.
+    return {
+      name: sessionUser?.name || resolvedName,
+      userId: sessionUser?.userId || resolvedUserId,
+      staffId,
+      role,
+    };
+  }, [staffRows, userRows, role, sessionUser]);
 }

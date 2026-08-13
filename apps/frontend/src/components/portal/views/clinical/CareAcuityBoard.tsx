@@ -9,7 +9,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { ClipboardCheck, CheckCircle2 } from "lucide-react";
+import { ClipboardCheck, CheckCircle2, Eye } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, updateRecord } from "@/lib/api";
@@ -54,6 +54,10 @@ const LEVELS: Level[] = [
 ];
 const levelFor = (total: number) => LEVELS.find((l) => total >= l.min && total <= l.max) ?? LEVELS[LEVELS.length - 1];
 const accentFor = (n: number) => LEVELS.find((l) => l.n === n)?.accent ?? "coral";
+// The 4-value careLevel enum → its representative Level (1–5). ASSISTED covers both
+// L2 & L3, so it reads as L2. Used to heal admission-seeded records whose stored
+// level pre-dates the careLevel-based seed fix.
+const CARELEVEL_TO_LEVEL: Record<string, number> = { INDEPENDENT: 1, ASSISTED: 2, MEMORY: 4, SKILLED: 5 };
 
 // Theme-safe level chip: ink label + a coloured dot (matches WoundCare's status chip).
 function LevelChip({ level, label }: { level: number; label?: string }) {
@@ -91,7 +95,7 @@ const CARE_ACTIVITIES: { category: string; activity: string; frequency: string; 
 const TRIGGERS = ["Scheduled / Quarterly", "Condition Change", "Post-Fall", "Post-Hospitalization", "Family Request", "Admission"];
 
 type AStatus = "PENDING_NURSE" | "PENDING_ADMIN" | "APPROVED" | "REJECTED";
-interface Acuity { id: string; residentId: string; scores: Record<string, number>; total: number; level: number; levelName: string; trigger?: string; notes?: string; status: AStatus; createdBy?: string; createdAt: string; decidedBy?: string; decidedAt?: string; }
+interface Acuity { id: string; residentId: string; scores: Record<string, number>; total: number; level: number; levelName: string; trigger?: string; notes?: string; status: AStatus; createdBy?: string; createdAt: string; decidedBy?: string; decidedAt?: string; rejectionReason?: string; }
 const parseAcuity = (raw: string | null | undefined): Acuity[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((a) => a && typeof a.id === "string") : []; } catch { return []; } };
 
 export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
@@ -100,11 +104,29 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
   const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
 
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
-  const items = useMemo(() => parseAcuity(settingRows.find((r) => (r.key || r.id) === ACUITY_KEY)?.value), [settingRows]);
+  const careLevelById = useMemo(() => {
+    const m = new Map<string, string>();
+    (resQ.data || []).forEach((r) => m.set(s(r.id), s(r.careLevel)));
+    return m;
+  }, [resQ.data]);
+  // Heal admission-seeded records still awaiting review: recompute their level from
+  // the resident's current careLevel so older seeds (which stored a mis-derived
+  // level) display — and approve — at the correct Level of Care.
+  const items = useMemo(() => {
+    const raw = parseAcuity(settingRows.find((r) => (r.key || r.id) === ACUITY_KEY)?.value);
+    return raw.map((a) => {
+      if (a.trigger !== "Admission" || (a.status !== "PENDING_NURSE" && a.status !== "PENDING_ADMIN")) return a;
+      const n = CARELEVEL_TO_LEVEL[careLevelById.get(a.residentId) || ""];
+      if (!n || n === a.level) return a;
+      const lvl = LEVELS.find((l) => l.n === n);
+      return lvl ? { ...a, level: n, levelName: lvl.name } : a;
+    });
+  }, [settingRows, careLevelById]);
   const resName = (id: string) => { const r = residents.find((x: Row) => s(x.id) === id); return r ? { name: s(r.name), room: s(r.room) } : { name: id, room: "" }; };
 
   const [tab, setTab] = useState<"queue" | "packages" | "activities" | "history">("queue");
   const [newOpen, setNewOpen] = useState(false);
+  const [viewing, setViewing] = useState<Acuity | null>(null);
 
   const pendingNurse = items.filter((a) => a.status === "PENDING_NURSE");
   const pendingAdmin = items.filter((a) => a.status === "PENDING_ADMIN");
@@ -129,12 +151,43 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Submitted for nurse review", showConfirmButton: false, timer: 1600 });
   };
 
-  const advance = async (a: Acuity, to: AStatus) => {
+  // Approve — confirm first (modal alert), then advance the workflow. Returns
+  // whether the action was actually applied (false if the user cancelled).
+  const advance = async (a: Acuity, to: AStatus): Promise<boolean> => {
+    const rn = resName(a.residentId);
+    const isFinal = to === "APPROVED";
+    const confirm = await Swal.fire({
+      title: isFinal ? "Approve & assign level?" : "Approve for admin?",
+      html: isFinal
+        ? `Approve <b>${rn.name}</b> at <b>Level ${a.level} — ${a.levelName}</b> and assign this level of care?`
+        : `Send <b>${rn.name}</b>'s assessment (Score ${a.total}/50) to admin for final approval?`,
+      icon: "question", showCancelButton: true,
+      confirmButtonColor: "#4F46E5", cancelButtonColor: "#6b7280",
+      confirmButtonText: isFinal ? "Approve & assign" : "Approve → Admin",
+    });
+    if (!confirm.isConfirmed) return false;
     const next = items.map((x) => (x.id === a.id ? { ...x, status: to, decidedBy: clinicianName, decidedAt: new Date().toISOString() } : x));
     await persist(next);
-    if (to === "APPROVED") { const lvl = LEVELS.find((l) => l.n === a.level); if (lvl) updateRecord("residents", a.residentId, { careLevel: lvl.careLevel }).catch(() => null); }
+    if (isFinal) { const lvl = LEVELS.find((l) => l.n === a.level); if (lvl) updateRecord("residents", a.residentId, { careLevel: lvl.careLevel }).catch(() => null); }
+    Swal.fire({ toast: true, position: "top-end", icon: "success", title: isFinal ? "Approved — level assigned" : "Sent to admin", showConfirmButton: false, timer: 1600 });
+    return true;
   };
-  const reject = async (a: Acuity) => { await persist(items.map((x) => (x.id === a.id ? { ...x, status: "REJECTED", decidedBy: clinicianName, decidedAt: new Date().toISOString() } : x))); };
+  // Reject — confirm with an optional reason.
+  const reject = async (a: Acuity): Promise<boolean> => {
+    const rn = resName(a.residentId);
+    const confirm = await Swal.fire({
+      title: "Reject assessment?",
+      html: `Reject <b>${rn.name}</b>'s acuity assessment? Add a reason for the record if you like.`,
+      input: "textarea", inputPlaceholder: "Reason for rejection (optional)…",
+      icon: "warning", showCancelButton: true,
+      confirmButtonColor: "#dc2626", cancelButtonColor: "#6b7280", confirmButtonText: "Reject",
+    });
+    if (!confirm.isConfirmed) return false;
+    const reason = String(confirm.value || "").trim() || undefined;
+    await persist(items.map((x) => (x.id === a.id ? { ...x, status: "REJECTED", rejectionReason: reason, decidedBy: clinicianName, decidedAt: new Date().toISOString() } : x)));
+    Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Assessment rejected", showConfirmButton: false, timer: 1600 });
+    return true;
+  };
 
   return (
     <ClinicalPage>
@@ -184,6 +237,7 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
                   <StatusPill status={a.status === "PENDING_NURSE" ? "PENDING" : "PENDING_APPROVAL"}>{a.status === "PENDING_NURSE" ? "Nurse Review" : "Admin Approval"}</StatusPill>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <ClinicalButton variant="secondary" size="sm" onClick={() => setViewing(a)}><Eye className="h-4 w-4" /> View</ClinicalButton>
                   {a.status === "PENDING_NURSE" && <ClinicalButton variant="primary" size="sm" onClick={() => advance(a, "PENDING_ADMIN")}>Approve → Admin</ClinicalButton>}
                   {a.status === "PENDING_ADMIN" && <ClinicalButton variant="accent" size="sm" onClick={() => advance(a, "APPROVED")}>Approve &amp; Assign Level</ClinicalButton>}
                   <ClinicalButton variant="danger" size="sm" onClick={() => reject(a)}>Reject</ClinicalButton>
@@ -212,6 +266,47 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
       {tab === "history" && <LevelHistoryView residents={residents} approved={approved} />}
 
       <NewAssessmentModal open={newOpen} residents={residents} onClose={() => setNewOpen(false)} onSubmit={submitNew} />
+
+      {viewing && (() => {
+        const a = viewing; const rn = resName(a.residentId);
+        const pendingNurse = a.status === "PENDING_NURSE";
+        const pendingAdmin = a.status === "PENDING_ADMIN";
+        const doThen = async (fn: () => Promise<boolean>) => { const ok = await fn(); if (ok) setViewing(null); };
+        return (
+          <ClinicalModal open onClose={() => setViewing(null)} title={`${rn.name} — Acuity Assessment`} description={`Room ${rn.room} · reviewed before approval`} size="lg"
+            footer={<>
+              <ClinicalButton variant="ghost" size="sm" onClick={() => setViewing(null)}>Close</ClinicalButton>
+              {(pendingNurse || pendingAdmin) && <ClinicalButton variant="danger" size="sm" onClick={() => void doThen(() => reject(a))}>Reject</ClinicalButton>}
+              {pendingNurse && <ClinicalButton variant="primary" size="sm" onClick={() => void doThen(() => advance(a, "PENDING_ADMIN"))}>Approve → Admin</ClinicalButton>}
+              {pendingAdmin && <ClinicalButton variant="accent" size="sm" onClick={() => void doThen(() => advance(a, "APPROVED"))}>Approve &amp; Assign Level</ClinicalButton>}
+            </>}
+          >
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <LevelChip level={a.level} label={a.levelName} />
+                <StatusPill status={a.status === "PENDING_NURSE" ? "PENDING" : a.status === "PENDING_ADMIN" ? "PENDING_APPROVAL" : a.status === "APPROVED" ? "APPROVED" : "REJECTED"}>{a.status.replace(/_/g, " ")}</StatusPill>
+              </div>
+              <p className="text-xs text-[var(--clinical-muted)]">{a.trigger || "No trigger"} · by {a.createdBy || "—"} · {fmtDate(a.createdAt)}</p>
+              {a.notes && <div className="rounded-lg border p-3 text-sm text-[var(--clinical-ink-soft)]" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>{a.notes}</div>}
+              <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--clinical-line)" }}>
+                {DOMAINS.map((d, i) => { const sc = a.scores?.[d.key] ?? 0; return (
+                  <div key={d.key} className="flex items-start justify-between gap-3 p-3" style={i ? { borderTop: "1px solid var(--clinical-line)" } : undefined}>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[var(--clinical-ink)]">{d.label}</p>
+                      <p className="text-xs text-[var(--clinical-muted)]">{d.scale[sc] ?? "—"}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs font-bold text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>{sc}/5</span>
+                  </div>
+                ); })}
+              </div>
+              <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
+                <span className="text-sm font-semibold text-[var(--clinical-ink)]">Total Acuity Score</span>
+                <span className="text-lg font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>{a.total}/50</span>
+              </div>
+            </div>
+          </ClinicalModal>
+        );
+      })()}
     </ClinicalPage>
   );
 }
