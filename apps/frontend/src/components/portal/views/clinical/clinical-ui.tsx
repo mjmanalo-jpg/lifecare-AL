@@ -75,12 +75,12 @@ export const DISPLAY = "Inter, system-ui, -apple-system, sans-serif";
 export const SERIF = DISPLAY;
 
 /** Page heading: strong sans title + muted subtitle, action on the right. */
-export function ClinicalHeader({ eyebrow, title, subtitle, right }: { eyebrow?: string; title: string; subtitle?: string; right?: React.ReactNode }) {
+export function ClinicalHeader({ eyebrow, title, subtitle, right }: { eyebrow?: string; title?: string; subtitle?: string; right?: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         {eyebrow && <Eyebrow className="mb-1.5">{eyebrow}</Eyebrow>}
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--clinical-ink)] sm:text-[1.75rem]" style={{ fontFamily: DISPLAY }}>{title}</h1>
+        {title && <h1 className="text-2xl font-bold tracking-tight text-[var(--clinical-ink)] sm:text-[1.75rem]" style={{ fontFamily: DISPLAY }}>{title}</h1>}
         {subtitle && <p className="mt-1 text-sm text-[var(--clinical-muted)]">{subtitle}</p>}
       </div>
       {right && <div className="shrink-0">{right}</div>}

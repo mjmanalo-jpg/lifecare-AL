@@ -168,6 +168,11 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
             await upsertRecord("app-settings", INV_ITEMS_KEY, { key: INV_ITEMS_KEY, value: JSON.stringify(plan.items) });
             if (plan.createdPR) await upsertRecord("app-settings", INV_PR_KEY, { key: INV_PR_KEY, value: JSON.stringify(plan.prs) });
             await setQ.refetch();
+            if (plan.level === "out" || plan.level === "low") {
+              // Real-time care-team alert with the CURRENT quantity (supersedes the
+              // periodic cron snapshot so the notification never shows a stale count).
+              fetch("/api/inventory/low-stock", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemId: plan.item?.id, itemName: plan.item?.name, residentName: plan.item?.residentName, quantity: plan.remaining, unit: plan.item?.unit, reorder: plan.item?.reorder, out: plan.level === "out" }) }).catch(() => null);
+            }
             if (plan.level === "out") Swal.fire({ toast: true, position: "top-end", icon: "error", title: `${plan.item?.name}: out of stock`, text: plan.createdPR ? "Urgent purchase request auto-created." : "Restock needed.", showConfirmButton: false, timer: 3400 });
             else if (plan.level === "low") Swal.fire({ toast: true, position: "top-end", icon: "warning", title: `${plan.item?.name}: low — ${plan.remaining} ${plan.item?.unit} left`, text: plan.createdPR ? "Purchase request auto-created." : undefined, showConfirmButton: false, timer: 3000 });
           }

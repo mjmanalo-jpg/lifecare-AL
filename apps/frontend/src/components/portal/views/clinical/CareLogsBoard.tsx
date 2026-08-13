@@ -410,7 +410,6 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
   return (
     <ClinicalPage>
       <ClinicalHeader
-        title="Care Logs"
         subtitle={`${entries.length} entr${entries.length === 1 ? "y" : "ies"} today`}
         right={
           <div className="flex flex-wrap items-center gap-2">

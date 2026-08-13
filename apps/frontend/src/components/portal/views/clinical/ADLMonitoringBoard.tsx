@@ -143,7 +143,6 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
   return (
     <ClinicalPage>
       <ClinicalHeader
-        title="ADL Monitoring"
         subtitle="Track Activities of Daily Living per resident, shift, and domain"
       />
 

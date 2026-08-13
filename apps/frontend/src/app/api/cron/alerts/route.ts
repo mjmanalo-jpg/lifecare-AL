@@ -275,7 +275,9 @@ async function scanCommunity(communityId: string, organizationId: string | null)
       const msg = out
         ? `${it.name}${who} is OUT OF STOCK (reorder at ${reorder}). A purchase request has been auto-queued.`
         : `${it.name}${who} is low — ${it.quantity} ${it.unit || "left"} (reorder at ${reorder}).`;
-      if (await notify("SYSTEM_ALERT", "inventoryItem", `appinv:${out ? "out" : "low"}:${it.id}`, out ? "Out of stock" : "Low stock", msg, out ? "CRITICAL" : "WARNING", invTeam)) counts.lowStock++;
+      // Stable key (no level suffix) so the real-time MAR endpoint supersedes this
+      // same notification instead of leaving a stale duplicate.
+      if (await notify("SYSTEM_ALERT", "inventoryItem", `appinv:${it.id}`, out ? "Out of stock" : "Low stock", msg, out ? "CRITICAL" : "WARNING", invTeam)) counts.lowStock++;
     }
   });
 

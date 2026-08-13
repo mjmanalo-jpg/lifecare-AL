@@ -147,8 +147,7 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
     <div className="@container -m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5" style={{ background: "#F7F8FA" }}>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem]">Weekly Weight Monitoring</h1>
-          <p className="mt-1 text-sm text-slate-500">Rolling weekly checks — each resident is due 7 days after their last weigh-in (Manila time)</p>
+          <p className="text-sm text-slate-500">Rolling weekly checks — each resident is due 7 days after their last weigh-in (Manila time)</p>
         </div>
         <button onClick={() => openRecord(null, contextType)} className="inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] active:scale-95"><Plus className="h-4 w-4" /> Record Weight</button>
       </div>

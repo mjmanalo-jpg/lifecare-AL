@@ -7,11 +7,11 @@ import {
   Users, HeartPulse, Check, ChevronLeft, ChevronRight, X, Plus, Search,
   CheckCircle2, Loader2, CircleDot, Ban, AlertTriangle, Download, Printer, Pencil,
   Brain, Activity, Apple, Pill, Droplets, MessageSquare, Siren, Sparkles,
-  Camera, Trash2, Image as ImageIcon,
+  Camera, Trash2, Image as ImageIcon, Eye,
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFacilityConfig } from "@/lib/useFacilityConfig";
-import { createRecord, updateRecord, upsertRecord } from "@/lib/api";
+import { createRecord, updateRecord, upsertRecord, deleteRecord } from "@/lib/api";
 import { insuranceProvider } from "@/lib/integrations/insurance";
 import { qrDataUrl } from "@/lib/qr";
 
@@ -633,6 +633,18 @@ export default function AdmissionsContent() {
     setWizardOpen(false);
   };
 
+  // Permanently remove an onboarding record (does NOT touch a resident already
+  // created from it — that lives in the Resident Directory).
+  const deleteAdmission = async (id: string, name: string) => {
+    const c = await Swal.fire({ title: "Delete admission?", html: `Permanently delete <b>${name || "this admission"}</b>'s onboarding record? This can't be undone.`, icon: "warning", showCancelButton: true, confirmButtonColor: "#ef4444", confirmButtonText: "Delete" });
+    if (!c.isConfirmed) return;
+    try {
+      await deleteRecord("admissions", id);
+      await refetch();
+      Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Admission deleted", showConfirmButton: false, timer: 1500 });
+    } catch (e) { Swal.fire({ title: "Delete failed", text: e instanceof Error ? e.message : "Could not delete.", icon: "error" }); }
+  };
+
   // Resolve (find-or-create) the FAMILY sponsor user, return its id.
   const resolveSponsorId = async (): Promise<string | undefined> => {
     const email = form.sponsorEmail.trim().toLowerCase();
@@ -805,21 +817,28 @@ export default function AdmissionsContent() {
             const cur = STEPS.find((x) => x.n === (Number(a.currentStep) || 1));
             const badge = isDone ? "bg-green-100 text-green-700" : isCancelled ? "bg-gray-200 text-gray-600" : "bg-amber-100 text-amber-700";
             return (
-              <button key={s(a.id)} onClick={() => openView(a)} className="text-left bg-white rounded-xl border border-gray-200 p-5 hover:border-amber-300 hover:shadow-md transition">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-bold text-gray-900">{s(a.firstName)} {s(a.lastName)}</h3>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badge}`}>{isDone ? "Completed" : isCancelled ? "Cancelled" : "In Progress"}</span>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {a.roomNumber ? `Room ${s(a.roomNumber)} • ` : ""}{isDone ? "Onboarded" : isCancelled ? "Cancelled" : `Next: ${cur?.label ?? "Registration"}`}
-                </p>
-                <div className="mt-3">
-                  <div className="flex items-center justify-between text-xs text-gray-500 mb-1"><span>Progress</span><span>{done}/{STEP_COUNT}</span></div>
-                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                    <div className={`h-full ${isDone ? "bg-green-500" : isCancelled ? "bg-gray-400" : "bg-amber-500"} transition-all`} style={{ width: `${(done / STEP_COUNT) * 100}%` }} />
+              <div key={s(a.id)} className="bg-white rounded-xl border border-gray-200 p-5 hover:border-amber-300 hover:shadow-md transition">
+                <button onClick={() => openView(a)} className="w-full text-left">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-bold text-gray-900">{s(a.firstName)} {s(a.lastName)}</h3>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badge}`}>{isDone ? "Completed" : isCancelled ? "Cancelled" : "In Progress"}</span>
                   </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {a.roomNumber ? `Room ${s(a.roomNumber)} • ` : ""}{isDone ? "Onboarded" : isCancelled ? "Cancelled" : `Next: ${cur?.label ?? "Registration"}`}
+                  </p>
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-xs text-gray-500 mb-1"><span>Progress</span><span>{done}/{STEP_COUNT}</span></div>
+                    <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                      <div className={`h-full ${isDone ? "bg-green-500" : isCancelled ? "bg-gray-400" : "bg-amber-500"} transition-all`} style={{ width: `${(done / STEP_COUNT) * 100}%` }} />
+                    </div>
+                  </div>
+                </button>
+                <div className="mt-3 flex items-center justify-end gap-1 border-t border-gray-100 pt-2.5">
+                  <button onClick={() => openView(a)} title="View" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 transition"><Eye className="w-4 h-4" /> View</button>
+                  <button onClick={() => openExisting(a)} title="Edit onboarding" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-50 transition"><Pencil className="w-4 h-4" /> Edit</button>
+                  <button onClick={() => deleteAdmission(s(a.id), `${s(a.firstName)} ${s(a.lastName)}`.trim())} title="Delete" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition"><Trash2 className="w-4 h-4" /> Delete</button>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { RefreshCw, Plus, X, CheckCircle2, Play, Undo2, ClipboardList, StickyNote, ArrowLeftRight, Repeat } from "lucide-react";
+import { RefreshCw, Plus, X, CheckCircle2, Play, Undo2, StickyNote, ArrowLeftRight, Repeat } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident, adaptTask } from "@/lib/adapters";
@@ -431,10 +431,7 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
-            <ClipboardList className="w-6 h-6 text-blue-600" /> Task Assignment
-          </h1>
-          <p className="text-sm text-slate-500 mt-0.5">Assign and track care tasks for caregivers</p>
+          <p className="text-sm text-slate-500">Assign and track care tasks for caregivers</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => refetch()} title="Refresh" className="p-2.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition">
