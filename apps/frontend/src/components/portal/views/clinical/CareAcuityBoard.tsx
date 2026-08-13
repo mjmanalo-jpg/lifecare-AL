@@ -13,6 +13,7 @@ import { ClipboardCheck, CheckCircle2, Eye } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, updateRecord } from "@/lib/api";
+import { generateCarePlanForResident } from "@/lib/carePlanGen";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import {
@@ -101,7 +102,10 @@ const parseAcuity = (raw: string | null | undefined): Acuity[] => { if (!raw) re
 export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   const { name: clinicianName } = useClinician(clinicianRole);
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
+  const cpQ = useLiveQuery<Row>("care-plans", { query: "take=300", tables: ["CarePlan"] });
   const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
+  // Residents that already have a (non-discontinued) care plan — skip auto-generation for them.
+  const residentsWithPlan = useMemo(() => new Set((cpQ.data || []).filter((p) => s(p.status) !== "DISCONTINUED").map((p) => s(p.residentId))), [cpQ.data]);
 
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
   const careLevelById = useMemo(() => {
@@ -168,8 +172,21 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
     if (!confirm.isConfirmed) return false;
     const next = items.map((x) => (x.id === a.id ? { ...x, status: to, decidedBy: clinicianName, decidedAt: new Date().toISOString() } : x));
     await persist(next);
-    if (isFinal) { const lvl = LEVELS.find((l) => l.n === a.level); if (lvl) updateRecord("residents", a.residentId, { careLevel: lvl.careLevel }).catch(() => null); }
-    Swal.fire({ toast: true, position: "top-end", icon: "success", title: isFinal ? "Approved — level assigned" : "Sent to admin", showConfirmButton: false, timer: 1600 });
+    let madePlan = false;
+    if (isFinal) {
+      const lvl = LEVELS.find((l) => l.n === a.level);
+      if (lvl) await updateRecord("residents", a.residentId, { careLevel: lvl.careLevel }).catch(() => null);
+      // Stage 6 → 8 → 9: on final approval, auto-build the care plan + caregiver
+      // tasks — unless the resident already has a plan. Best-effort.
+      if (!residentsWithPlan.has(a.residentId)) {
+        try {
+          const raw = (resQ.data || []).find((r) => s(r.id) === a.residentId);
+          await generateCarePlanForResident({ residentId: a.residentId, level: a.level, communityId: raw ? s(raw.communityId) : undefined, createdByName: clinicianName });
+          madePlan = true;
+        } catch { /* best-effort — approval already applied */ }
+      }
+    }
+    Swal.fire({ toast: true, position: "top-end", icon: "success", title: isFinal ? (madePlan ? "Approved — level, care plan & tasks created" : "Approved — level assigned") : "Sent to admin", showConfirmButton: false, timer: 2000 });
     return true;
   };
   // Reject — confirm with an optional reason.

@@ -25,6 +25,7 @@ import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoar
 import { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
 import ADLMonitoringBoard from "@/components/portal/views/clinical/ADLMonitoringBoard";
 import ShiftEndorsementBoard from "@/components/portal/views/clinical/ShiftEndorsementBoard";
+import ShiftEndorsementDashboard from "@/components/portal/views/clinical/ShiftEndorsementDashboard";
 import WeightMonitoringBoard from "@/components/portal/views/clinical/WeightMonitoringBoard";
 import ShiftSummaryBoard from "@/components/portal/views/clinical/ShiftSummaryBoard";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
@@ -61,6 +62,8 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
       return <ADLMonitoringBoard clinicianRole="CAREGIVER" />;
     case "shiftendorsements":
       return <ShiftEndorsementBoard clinicianRole="CAREGIVER" />;
+    case "endorsementdashboard":
+      return <ShiftEndorsementDashboard clinicianRole="CAREGIVER" />;
     case "weightmonitoring":
       return <WeightMonitoringBoard clinicianRole="CAREGIVER" />;
     case "shiftsummary":

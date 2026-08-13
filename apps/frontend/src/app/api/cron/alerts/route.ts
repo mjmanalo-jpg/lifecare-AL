@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic";
 // signed-in NURSE / FACILITY_ADMIN / SUPERADMIN scans only their community.
 // ─────────────────────────────────────────────────────────────
 
-const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "incident", "slaBreach", "escalation", "assessment", "purchaseRequest", "serviceRequest", "maintenance", "diningReservation"];
+const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "weightReminder", "incident", "slaBreach", "escalation", "assessment", "purchaseRequest", "serviceRequest", "maintenance", "diningReservation"];
 
 // SBAR SLA response windows (minutes) by priority — single source of truth is
 // escalationMeta.PRIORITY_META in the UI; mirrored here so the server can
@@ -63,12 +63,13 @@ interface Scan {
   lowStock: number;
   missedDocs: number;
   weightLoss: number;
+  weightDue: number;
   incidents: number;
   sbarEscalations: number;
 }
 
 async function scanCommunity(communityId: string, organizationId: string | null): Promise<Scan> {
-  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, incidents: 0, sbarEscalations: 0 };
+  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0 };
 
   // Recipient sets by care tier. General alerts go to the on-floor + admin team
   // (nurse + facility admin). SBAR SLA escalations follow the clinical chain of
@@ -254,6 +255,30 @@ async function scanCommunity(communityId: string, organizationId: string | null)
     }
   });
 
+  // 5a) Low stock in the app-setting Medication & Supply Inventory (`inventory_items`
+  //     — separate from the Prisma InventoryItem model above). Doses given via MAR
+  //     decrement resident meds here; when one crosses reorder / hits zero the care
+  //     team is alerted. Keyed by item id so it fires once per low episode.
+  await runSource("inventory-app", async () => {
+    const setting = await prisma.appSetting.findFirst({ where: { communityId, key: "inventory_items" }, select: { value: true } });
+    if (!setting?.value) return;
+    let appItems: Array<{ id?: string; name?: string; unit?: string; quantity?: number; reorder?: number; residentName?: string }> = [];
+    try { const v = JSON.parse(setting.value); if (Array.isArray(v)) appItems = v; } catch { return; }
+    const invTeam = idsForRoles(["NURSE", "CARE_MANAGER", "FACILITY_ADMIN"]);
+    if (!invTeam.length) return;
+    for (const it of appItems) {
+      if (!it?.id || typeof it.quantity !== "number") continue;
+      const reorder = Number(it.reorder) || 0;
+      if (it.quantity > reorder) continue;
+      const out = it.quantity <= 0;
+      const who = it.residentName ? ` (${it.residentName})` : "";
+      const msg = out
+        ? `${it.name}${who} is OUT OF STOCK (reorder at ${reorder}). A purchase request has been auto-queued.`
+        : `${it.name}${who} is low — ${it.quantity} ${it.unit || "left"} (reorder at ${reorder}).`;
+      if (await notify("SYSTEM_ALERT", "inventoryItem", `appinv:${out ? "out" : "low"}:${it.id}`, out ? "Out of stock" : "Low stock", msg, out ? "CRITICAL" : "WARNING", invTeam)) counts.lowStock++;
+    }
+  });
+
   // 6) Missed daily documentation (after midday, no round today).
   if (now.getHours() >= 12) {
     await runSource("daily-doc", async () => {
@@ -309,6 +334,41 @@ async function scanCommunity(communityId: string, organizationId: string | null)
         const r = arr[arr.length - 1].resident;
         if (await notify("SYSTEM_ALERT", "weightTrend", `weight:${residentId}:${monthKey}`, "Weight loss detected", `${rname(r)} (Room ${room(r)}) is down ${dropPct.toFixed(1)}% (${first} → ${last}) over the past weeks. Consider a nutrition review.`)) counts.weightLoss++;
       }
+    }
+  });
+
+  // 7a) Weekly weight check due — rolling 7-day cadence per resident (matches the
+  //     Weight Monitoring board). Reads the weekly weigh-ins from the `weight_logs`
+  //     app-setting; when a resident is due (last weekly + 7 days ≤ today, Manila)
+  //     the care team (caregiver / nurse / care manager) gets a reminder. Keyed by
+  //     the due date so it fires once per cycle — a fresh weigh-in moves the key.
+  await runSource("weight-due", async () => {
+    const weightTeam = idsForRoles(["CAREGIVER", "NURSE", "CARE_MANAGER"]);
+    if (!weightTeam.length) return;
+    const setting = await prisma.appSetting.findFirst({ where: { communityId, key: "weight_logs" }, select: { value: true } });
+    if (!setting?.value) return;
+    let wlogs: Array<{ type?: string; residentId?: string; date?: string }> = [];
+    try { const v = JSON.parse(setting.value); if (Array.isArray(v)) wlogs = v; } catch { return; }
+    // Manila "today" + date helpers (YYYY-MM-DD, arithmetic on UTC-midnight carriers).
+    const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(now);
+    const addDaysStr = (str: string, n: number) => { const d = new Date(str + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+    // Latest weekly weigh-in date per resident.
+    const latestByRes = new Map<string, string>();
+    for (const l of wlogs) {
+      if (l?.type !== "weekly" || !l.residentId || !l.date) continue;
+      const d = String(l.date).slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
+      const prev = latestByRes.get(l.residentId);
+      if (!prev || d > prev) latestByRes.set(l.residentId, d);
+    }
+    for (const [residentId, lastDate] of latestByRes) {
+      const nextDue = addDaysStr(lastDate, 7);
+      if (nextDue > todayStr) continue; // not due yet
+      const r = await prisma.resident.findFirst({ where: { id: residentId, communityId }, select: { firstName: true, lastName: true, roomNumber: true } });
+      if (!r) continue;
+      const overdueDays = Math.round((new Date(todayStr + "T00:00:00Z").getTime() - new Date(nextDue + "T00:00:00Z").getTime()) / 86_400_000);
+      const when = overdueDays > 0 ? `overdue by ${overdueDays} day${overdueDays === 1 ? "" : "s"}` : "due today";
+      if (await notify("SHIFT_REMINDER", "weightReminder", `weightdue:${residentId}:${nextDue}`, "Weekly weight check due", `${rname(r)} (Room ${room(r)}) — weekly weight is ${when} (last recorded ${fmtDate(lastDate)}). Please record their weight.`, "INFO", weightTeam)) counts.weightDue++;
     }
   });
 
@@ -444,7 +504,7 @@ async function runScan(request: NextRequest) {
     communities = [{ id: ctx.communityId, organizationId: ctx.organizationId ?? null }];
   }
 
-  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, incidents: 0, sbarEscalations: 0 };
+  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0 };
   for (const c of communities) {
     try {
       const s = await scanCommunity(c.id, c.organizationId);

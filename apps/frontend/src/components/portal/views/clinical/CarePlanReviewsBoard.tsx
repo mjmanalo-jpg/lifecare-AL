@@ -9,10 +9,11 @@
  */
 
 import { useMemo, useState } from "react";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, ListChecks, Loader2 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
+import { generateCarePlanForResident } from "@/lib/carePlanGen";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { levelOf } from "./CareLogsBoard";
@@ -45,11 +46,14 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
   const incQ = useLiveQuery<Row>("incidents", { query: "take=400", tables: ["Incident"] });
   const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
 
+  const cpQ = useLiveQuery<Row>("care-plans", { query: "take=300", tables: ["CarePlan"] });
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
   const reviews = useMemo(() => parseReviews(settingRows.find((r) => (r.key || r.id) === REVIEW_KEY)?.value), [settingRows]);
+  const residentsWithPlan = useMemo(() => new Set((cpQ.data || []).filter((p) => s(p.status) !== "DISCONTINUED").map((p) => s(p.residentId))), [cpQ.data]);
 
   const [tab, setTab] = useState<"new" | "due" | "history">("new");
   const [resId, setResId] = useState("");
+  const [genBusy, setGenBusy] = useState(false);
 
   const today = new Date();
   const resident = residents.find((r: Row) => s(r.id) === resId) || null;
@@ -64,6 +68,29 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
   }, [incQ.data, resId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const persist = async (next: Review[]) => { await upsertRecord("app-settings", REVIEW_KEY, { key: REVIEW_KEY, value: JSON.stringify(next) }); await refetch(); };
+
+  // Manual fallback for the Stage 8/9 handoff — build a care plan + caregiver tasks
+  // from the resident's current Level of Care (for residents approved before the
+  // auto-generation, or missing a plan).
+  const genPlan = async () => {
+    if (!resident || genBusy) return;
+    const n = levelOf(resident).n;
+    const already = residentsWithPlan.has(s(resident.id));
+    const c = await Swal.fire({
+      title: "Generate care plan & tasks?",
+      html: `Create a <b>Level ${n}</b> care plan for <b>${s(resident.name)}</b> and generate caregiver tasks from its interventions.${already ? "<br/><br/><span style='color:#b45309'>This resident already has a care plan — this creates another.</span>" : ""}`,
+      icon: "question", showCancelButton: true, confirmButtonColor: "#4F46E5", confirmButtonText: "Generate",
+    });
+    if (!c.isConfirmed) return;
+    setGenBusy(true);
+    try {
+      const raw = (resident.raw || {}) as Row;
+      const { taskCount } = await generateCarePlanForResident({ residentId: s(resident.id), level: n, communityId: s(raw.communityId) || undefined, createdByName: clinicianName });
+      await cpQ.refetch?.();
+      Swal.fire({ icon: "success", title: "Care plan created", text: `${taskCount} caregiver task${taskCount === 1 ? "" : "s"} generated from the plan.`, timer: 2400, showConfirmButton: false });
+    } catch (e) { Swal.fire("Couldn't generate", e instanceof Error ? e.message : "Please try again.", "error"); }
+    finally { setGenBusy(false); }
+  };
 
   // Reviews Due: residents whose next review has passed, or who've never been reviewed.
   const dueList = useMemo(() => residents.map((r: Row) => {
@@ -89,10 +116,19 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
         <div className="space-y-4">
           <ClinicalCard className="p-5">
             <FieldLabel htmlFor="cpr-res">Select Resident</FieldLabel>
-            <select id="cpr-res" value={resId} onChange={(e) => setResId(e.target.value)} className={`${controlClass} max-w-md`}>
-              <option value="">Choose a resident…</option>
-              {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)} (Level {levelOf(r).n})</option>)}
-            </select>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <select id="cpr-res" value={resId} onChange={(e) => setResId(e.target.value)} className={`${controlClass} max-w-md`}>
+                <option value="">Choose a resident…</option>
+                {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)} (Level {levelOf(r).n})</option>)}
+              </select>
+              {resident && (
+                <ClinicalButton variant="secondary" onClick={genPlan} disabled={genBusy} className="shrink-0">
+                  {genBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />}
+                  {residentsWithPlan.has(resId) ? "Regenerate care plan & tasks" : "Generate care plan & tasks"}
+                </ClinicalButton>
+              )}
+            </div>
+            {resident && <p className="mt-2 text-xs text-[var(--clinical-muted)]">Builds a Level {levelOf(resident).n} plan from the approved level of care and spins its interventions into caregiver tasks. Auto-runs on Care Acuity approval — use this for residents approved earlier.</p>}
           </ClinicalCard>
 
           {!resident && (

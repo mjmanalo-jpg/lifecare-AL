@@ -37,8 +37,27 @@ const shiftOf = (iso: string | Date | null | undefined): Shift | null => {
   const h = d.getHours();
   return h >= 7 && h < 15 ? "DAY" : h >= 15 && h < 23 ? "EVENING" : "NIGHT";
 };
-const sameLocalDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+/** Assignable shifts (AM 6a–2p, PM 2p–10p, Noc 10p–6a). A task assigned to a shift
+ *  is due by that shift's END on the chosen date and is overdue after it. */
+const ASSIGN_SHIFTS = [
+  { key: "AM", label: "AM Shift", range: "6am–2pm", endH: 14, nextDay: false },
+  { key: "PM", label: "PM Shift", range: "2pm–10pm", endH: 22, nextDay: false },
+  { key: "NOC", label: "Noc Shift", range: "10pm–6am", endH: 6, nextDay: true },
+] as const;
+// Local deadline datetime (ISO) for a shift on a YYYY-MM-DD date — the shift's end.
+const shiftDeadlineISO = (date: string, shiftKey: string): string => {
+  const meta = ASSIGN_SHIFTS.find((s) => s.key === shiftKey) ?? ASSIGN_SHIFTS[0];
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(y, m - 1, d + (meta.nextDay ? 1 : 0), meta.endH, 0, 0, 0).toISOString();
+};
+// Minutes a task is overdue (0 when not) — past its due datetime and not completed.
+const overdueMinutes = (task: Task, nowMs: number): number => {
+  if (task.completed || !task.dueDate) return 0;
+  const due = new Date(task.dueDate).getTime();
+  if (Number.isNaN(due)) return 0;
+  return nowMs > due ? Math.floor((nowMs - due) / 60000) : 0;
+};
+const fmtDur = (min: number) => { const h = Math.floor(min / 60), d = Math.floor(h / 24); if (d > 0) return `${d}d ${h % 24}h`; if (h > 0) return `${h}h ${min % 60}m`; return `${min}m`; };
 
 /** Roles that manage (see all) vs. workers (see only their own current-shift tasks). */
 const MANAGER_ROLES = new Set(["NURSE", "FACILITY_ADMIN", "CARE_MANAGER", "SUPERADMIN", "ORGANIZATION_ADMIN", "PHYSICIAN"]);
@@ -85,7 +104,8 @@ interface HandoverEndorsement {
 }
 
 /** A single task card with inline status-transition controls. */
-function TaskCard({ task, staffNameById, onSetStatus, onAddNote }: { task: Task; staffNameById: Map<string, string>; onSetStatus: SetStatusFn; onAddNote: AddNoteFn }) {
+function TaskCard({ task, staffNameById, onSetStatus, onAddNote, nowMs }: { task: Task; staffNameById: Map<string, string>; onSetStatus: SetStatusFn; onAddNote: AddNoteFn; nowMs: number }) {
+  const overdue = overdueMinutes(task, nowMs);
   const raw = task.raw as { assignedToId?: string; status?: string; priority?: string } | undefined;
   const assignee = raw?.assignedToId ? staffNameById.get(raw.assignedToId) : null;
   const status = task.completed
@@ -102,7 +122,9 @@ function TaskCard({ task, staffNameById, onSetStatus, onAddNote }: { task: Task;
       <div className="flex items-center flex-wrap gap-2 mt-2">
         <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide bg-slate-100 text-slate-500">{task.category}</span>
         {assignee && <span className="text-[11px] text-slate-500">{assignee}</span>}
-        {task.dueTime && <span className="text-[11px] text-slate-400 ml-auto">Due {task.dueTime}</span>}
+        {overdue > 0
+          ? <span className="ml-auto inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">Overdue {fmtDur(overdue)}</span>
+          : task.dueTime && <span className="text-[11px] text-slate-400 ml-auto">Due {task.dueTime}</span>}
       </div>
       <div className="mt-3 flex items-center justify-end gap-1">
         <button onClick={() => onAddNote(task)}
@@ -133,8 +155,8 @@ function TaskCard({ task, staffNameById, onSetStatus, onAddNote }: { task: Task;
 }
 
 /** A kanban status column: dot + label + count badge + card stack. */
-function Column({ label, dot, items, staffNameById, onSetStatus, onAddNote }: {
-  label: string; dot: string; items: Task[]; staffNameById: Map<string, string>; onSetStatus: SetStatusFn; onAddNote: AddNoteFn;
+function Column({ label, dot, items, staffNameById, onSetStatus, onAddNote, nowMs }: {
+  label: string; dot: string; items: Task[]; staffNameById: Map<string, string>; onSetStatus: SetStatusFn; onAddNote: AddNoteFn; nowMs: number;
 }) {
   return (
     <div className="flex flex-col min-w-0">
@@ -145,7 +167,7 @@ function Column({ label, dot, items, staffNameById, onSetStatus, onAddNote }: {
       </div>
       <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-3 min-h-28">
         {items.length > 0
-          ? items.map((t) => <TaskCard key={t.id} task={t} staffNameById={staffNameById} onSetStatus={onSetStatus} onAddNote={onAddNote} />)
+          ? items.map((t) => <TaskCard key={t.id} task={t} staffNameById={staffNameById} onSetStatus={onSetStatus} onAddNote={onAddNote} nowMs={nowMs} />)
           : <p className="text-center text-sm text-slate-400 py-8">No tasks</p>}
       </div>
     </div>
@@ -204,7 +226,14 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
   const { data: taskRows, loading, error, refetch } = useLiveQuery(
     "tasks", { query: "include=resident&take=300", tables: ["Task", "Resident"] }
   );
-  const tasks = useMemo<Task[]>(() => taskRows.map(adaptTask), [taskRows]);
+  // Optimistic status overlay: a tapped task moves columns instantly (before the
+  // save + refetch round-trip lands), keyed by task id → its new status.
+  const [optimistic, setOptimistic] = useState<Map<string, string>>(new Map());
+  const tasks = useMemo<Task[]>(() => taskRows.map((r) => {
+    const t = adaptTask(r);
+    const ov = optimistic.get(String(t.id));
+    return ov ? { ...t, completed: ov === "COMPLETED", raw: { ...(t.raw as object), status: ov } } : t;
+  }), [taskRows, optimistic]);
 
   const { data: staffRows } = useLiveQuery<StaffRow>(
     "staff", { query: "include=user&take=300", tables: ["Staff"] }
@@ -256,12 +285,15 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
     : MANAGER_ROLES.has(clinicianRole); // pre-session: trust the portal's declared role
   const isWorker = !isManager;
 
-  // ---- Filters (managers only) ----------------------------------------------
-  const [filterDate, setFilterDate] = useState(todayInput());
+  // ---- Filters ---------------------------------------------------------------
+  const [filterDate, setFilterDate] = useState(""); // "" = all dates (Board View shows every task)
   const [filterAssignee, setFilterAssignee] = useState("all");
   const [filterResident, setFilterResident] = useState("all");
   const [activeTab, setActiveTab] = useState<"board" | "mine" | "summary" | "handover">("board");
   const [showAssign, setShowAssign] = useState(false);
+  // "Now" tick for overdue badges (updated after mount + every minute; never Date.now() in render).
+  const [nowMs, setNowMs] = useState(0);
+  useEffect(() => { const tick = () => setNowMs(Date.now()); tick(); const id = setInterval(tick, 60_000); return () => clearInterval(id); }, []);
   // Deep-link from the "handover accepted" notification (…/taskassignment?tab=handover).
   useEffect(() => {
     if (typeof window === "undefined" || new URLSearchParams(window.location.search).get("tab") !== "handover") return;
@@ -284,27 +316,13 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
   const resNameById = useMemo(() => { const m = new Map<string, { name: string; room: string }>(); residents.forEach((r) => m.set(r.id, { name: r.name, room: r.room })); return m; }, [residents]);
   const resName = (id: string) => resNameById.get(id) || { name: "Resident", room: "" };
 
-  /** The base, security-critical filter applied before any tab/column grouping. */
+  /** The base filter applied before any tab/column grouping. The Board View shows
+   *  EVERY task (all assignees, all shifts, all dates) — narrowed only by the
+   *  resident/date/assignee filter controls. Personal scoping lives on "My Tasks". */
   const visibleTasks = useMemo(() => {
-    const now = new Date();
     return tasks.filter((t) => {
       const raw = t.raw as { assignedToId?: string } | undefined;
       const assignedTo = raw?.assignedToId ?? null;
-
-      if (isWorker) {
-        // Only MY tasks, and only for the CURRENT shift (derived from dueDate).
-        if (!myStaffId || assignedTo !== myStaffId) return false;
-        if (!t.dueDate) return false;
-        const due = new Date(t.dueDate);
-        if (Number.isNaN(due.getTime())) return false;
-        if (!sameLocalDay(due, now)) return false;
-        if (shiftOf(t.dueDate) !== currentShift) return false;
-        // Workers may narrow their own board to a single resident.
-        if (filterResident !== "all" && (t.raw as { residentId?: string } | undefined)?.residentId !== filterResident) return false;
-        return true;
-      }
-
-      // Managers: apply the visible filter controls.
       if (filterAssignee !== "all" && assignedTo !== filterAssignee) return false;
       if (filterResident !== "all") {
         const rid = (t.raw as { residentId?: string } | undefined)?.residentId;
@@ -317,7 +335,7 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
       }
       return true;
     });
-  }, [tasks, isWorker, myStaffId, currentShift, filterAssignee, filterResident, filterDate]);
+  }, [tasks, filterAssignee, filterResident, filterDate]);
 
   // Tab scoping: "My Tasks" = tasks assigned to the current user (within the
   // already-visible set). For a worker the whole board is already their tasks.
@@ -331,9 +349,17 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
   const rawStatus = (t: Task) =>
     String((t.raw as { status?: string } | undefined)?.status ?? "").toUpperCase();
 
+  // Sort key: newest request first (createdAt, then dueDate, then updatedAt).
+  const taskTs = (t: Task) => {
+    const raw = t.raw as { createdAt?: string; updatedAt?: string } | undefined;
+    const d = raw?.createdAt || t.dueDate || raw?.updatedAt;
+    const ts = d ? new Date(d).getTime() : 0;
+    return Number.isNaN(ts) ? 0 : ts;
+  };
+
   const columns = useMemo(() => {
     const pending: Task[] = [], inProgress: Task[] = [], completed: Task[] = [];
-    for (const t of tabTasks) {
+    for (const t of [...tabTasks].sort((a, b) => taskTs(b) - taskTs(a))) {
       if (t.completed) completed.push(t);
       else if (rawStatus(t) === "IN_PROGRESS") inProgress.push(t);
       else pending.push(t);
@@ -362,6 +388,7 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
 
   // ---- Status transitions (reuse CaregiverTasks pattern) --------------------
   const setStatus = async (id: string, status: "PENDING" | "IN_PROGRESS" | "COMPLETED") => {
+    setOptimistic((prev) => new Map(prev).set(id, status)); // move the card immediately
     try {
       await updateRecord("tasks", id, {
         status,
@@ -370,6 +397,9 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
       await refetch();
     } catch (err) {
       Swal.fire({ title: "Update Failed", text: err instanceof Error ? err.message : "Could not update task.", icon: "error" });
+    } finally {
+      // Server data is now authoritative — drop the overlay for this task.
+      setOptimistic((prev) => { const next = new Map(prev); next.delete(id); return next; });
     }
   };
 
@@ -505,9 +535,9 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-3">
-          <Column label="Pending" dot="bg-amber-400" items={columns.pending} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} />
-          <Column label="In Progress" dot="bg-blue-500" items={columns.inProgress} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} />
-          <Column label="Completed" dot="bg-green-500" items={columns.completed} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} />
+          <Column label="Pending" dot="bg-amber-400" items={columns.pending} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} nowMs={nowMs} />
+          <Column label="In Progress" dot="bg-blue-500" items={columns.inProgress} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} nowMs={nowMs} />
+          <Column label="Completed" dot="bg-green-500" items={columns.completed} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} nowMs={nowMs} />
         </div>
       )}
 
@@ -542,7 +572,7 @@ function AssignTaskModal({
   const [category, setCategory] = useState<string>(CATEGORIES[0]);
   const [priority, setPriority] = useState<string>(PRIORITY_OPTIONS[0].value);
   const [dueDate, setDueDate] = useState(todayInput());
-  const [dueTime, setDueTime] = useState("08:00");
+  const [shiftKey, setShiftKey] = useState<string>(ASSIGN_SHIFTS[0].key);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -555,7 +585,7 @@ function AssignTaskModal({
   const selectAll = () => setSelectedResidents(new Set(residents.map((r) => r.id)));
   const clearAll = () => setSelectedResidents(new Set());
 
-  const valid = selectedResidents.size > 0 && assigneeId && title.trim() && dueDate && dueTime;
+  const valid = selectedResidents.size > 0 && assigneeId && title.trim() && dueDate && shiftKey;
   const inputCls = "w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none text-sm";
 
   const submit = async (e: React.FormEvent) => {
@@ -563,8 +593,9 @@ function AssignTaskModal({
     if (!valid || saving) return;
     setSaving(true);
     try {
-      // Combine Due Date + Due Time into a local ISO datetime.
-      const dueISO = new Date(`${dueDate}T${dueTime}`).toISOString();
+      // The task is due by the END of the chosen shift on the due date; it goes
+      // overdue after that. (Task has no shift column — the deadline encodes it.)
+      const dueISO = shiftDeadlineISO(dueDate, shiftKey);
       // One Task per selected resident, all to the same assignee.
       for (const residentId of selectedResidents) {
         await createRecord("tasks", {
@@ -592,7 +623,7 @@ function AssignTaskModal({
           userId: assigneeUserId,
           type: "TASK_ASSIGNMENT",
           title: count > 1 ? `${count} new tasks assigned to you` : "New task assigned to you",
-          message: `${title.trim()}${count > 1 ? ` · ${count} residents` : ""} — due ${dueDate} ${dueTime}`,
+          message: `${title.trim()}${count > 1 ? ` · ${count} residents` : ""} — ${ASSIGN_SHIFTS.find((sh) => sh.key === shiftKey)?.label ?? "shift"}, ${dueDate}`,
           relatedEntityType: "task",
           severity: "INFO",
         }).catch(() => null);
@@ -667,15 +698,17 @@ function AssignTaskModal({
               </div>
             </div>
 
-            {/* Due Date + Due Time */}
+            {/* Due Date + Shift (task is due by the shift's end; overdue after) */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1">Due Date</label>
                 <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1">Due Time</label>
-                <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} className={inputCls} />
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Shift</label>
+                <select value={shiftKey} onChange={(e) => setShiftKey(e.target.value)} className={inputCls}>
+                  {ASSIGN_SHIFTS.map((sh) => <option key={sh.key} value={sh.key}>{sh.label} ({sh.range})</option>)}
+                </select>
               </div>
             </div>
 

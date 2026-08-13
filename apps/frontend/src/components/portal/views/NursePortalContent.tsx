@@ -32,6 +32,7 @@ import ShiftSummaryBoard from "@/components/portal/views/clinical/ShiftSummaryBo
 import CareAcuityBoard from "@/components/portal/views/clinical/CareAcuityBoard";
 import WoundCareBoard from "@/components/portal/views/clinical/WoundCareBoard";
 import ShiftEndorsementBoard from "@/components/portal/views/clinical/ShiftEndorsementBoard";
+import ShiftEndorsementDashboard from "@/components/portal/views/clinical/ShiftEndorsementDashboard";
 import MedicationComplianceBoard from "@/components/portal/views/clinical/MedicationComplianceBoard";
 import ResidentProgressReport from "@/components/portal/views/clinical/ResidentProgressReport";
 import TaskAssignmentBoard from "@/components/portal/views/clinical/TaskAssignmentBoard";
@@ -740,6 +741,9 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   }
   if (tab === "shiftendorsements") {
     return <ShiftEndorsementBoard clinicianRole="NURSE" />;
+  }
+  if (tab === "endorsementdashboard") {
+    return <ShiftEndorsementDashboard clinicianRole="NURSE" />;
   }
   if (tab === "rounds") {
     return <AssessmentAcuityBoard clinicianRole="NURSE" />;

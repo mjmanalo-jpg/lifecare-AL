@@ -22,6 +22,7 @@ import NutritionistPortalContent from "@/components/portal/views/NutritionistPor
 import KitchenPortalContent from "@/components/portal/views/KitchenPortalContent";
 import HousekeepingPortalContent from "@/components/portal/views/HousekeepingPortalContent";
 import MaintenancePortalContent from "@/components/portal/views/MaintenancePortalContent";
+import DashboardQuickActions from "@/components/portal/views/DashboardQuickActions";
 import { useEffect, useState } from "react";
 
 export default function RolePortalPage() {
@@ -110,6 +111,12 @@ export default function RolePortalPage() {
       {userRole === "MAINTENANCE" && (
         <MaintenancePortalContent tab={tabParam || "dashboard"} />
       )}
+
+      {/* Floating quick-actions launcher — present on EVERY tab (not just the
+          dashboard) for the front-line clinical roles. */}
+      {userRole === "NURSE" && <DashboardQuickActions clinicianRole="NURSE" />}
+      {userRole === "CAREGIVER" && <DashboardQuickActions clinicianRole="CAREGIVER" />}
+      {userRole === "CARE_MANAGER" && <DashboardQuickActions clinicianRole="FACILITY_ADMIN" />}
     </PortalShell>
   );
 }

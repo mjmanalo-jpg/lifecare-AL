@@ -5,7 +5,7 @@ import RefreshButton from "@/components/portal/RefreshButton";
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Users, CheckCircle2, ClipboardList, AlertTriangle, BellRing, RefreshCw,
+  Users, CheckCircle2, ClipboardList, AlertTriangle, BellRing,
   Clock, Heart, Sun, Sunset, Moon, ChevronRight, Activity, Inbox, StickyNote, X,
   type LucideIcon,
 } from "lucide-react";
@@ -15,7 +15,6 @@ import StatCard from "@/components/portal/widgets/StatCard";
 import { useLiveQuery, useStats } from "@/lib/useLiveQuery";
 import { adaptTask, adaptResident, adaptIncident, residentName } from "@/lib/adapters";
 import { updateRecord } from "@/lib/api";
-import DashboardQuickActions from "@/components/portal/views/DashboardQuickActions";
 
 /* ── Types ───────────────────────────────────────────────────────────── */
 
@@ -45,12 +44,6 @@ const PRIORITY_BADGE: Record<string, string> = {
   high: "bg-orange-100 text-orange-800 border-orange-300",
   medium: "bg-yellow-100 text-yellow-800 border-yellow-300",
   low: "bg-green-100 text-green-800 border-green-300",
-};
-const SEVERITY_BADGE: Record<string, string> = {
-  critical: "bg-red-100 text-red-700",
-  high: "bg-orange-100 text-orange-700",
-  medium: "bg-yellow-100 text-yellow-700",
-  low: "bg-blue-100 text-blue-700",
 };
 
 function shiftFor(hour: number): { key: string; label: string; icon: LucideIcon; greeting: string } {
@@ -374,26 +367,6 @@ export default function CaregiverDashboard() {
             )}
           </Panel>
 
-          <Panel title="Active Incidents" icon={AlertTriangle} count={openIncidents.length}>
-            {openIncidents.length > 0 ? (
-              <div className="space-y-2">
-                {openIncidents.map((i) => (
-                  <div key={i.id} className="p-2.5 rounded-lg border border-gray-200">
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="font-medium text-gray-900 text-sm truncate">{i.type}</span>
-                      <span className={`px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0 ${SEVERITY_BADGE[i.severity]}`}>
-                        {i.severity.toUpperCase()}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-600 truncate">{i.resident} • Room {i.room} • {relTime(i.timestamp, nowTs)}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <Empty text="No open incidents." />
-            )}
-          </Panel>
-
           <Panel
             title="Active Call Bells"
             icon={BellRing}
@@ -425,9 +398,6 @@ export default function CaregiverDashboard() {
           </Panel>
         </div>
       </div>
-
-      {/* Floating quick-actions launcher (bottom-right) */}
-      <DashboardQuickActions clinicianRole="CAREGIVER" />
     </div>
   );
 }

@@ -65,6 +65,7 @@ const NOTIF_TARGET_ROUTES: Record<string, string[]> = {
   // Care system
   vitalsLog: ["monitoring", "vitals", "records", "dashboard"],
   weightTrend: ["monitoring", "vitals", "records", "dashboard"],
+  weightreminder: ["weightmonitoring", "monitoring", "dashboard"], // key is lowercase — routeForNotification lowercases relatedEntityType before lookup
   medicationAdministration: ["mar", "medications", "orders", "dashboard"],
   incident: ["incidents", "alertcenter", "records", "dashboard"],
   escalation: ["escalations", "alertcenter", "dashboard"],
@@ -241,9 +242,19 @@ export default function PortalShell({
     };
   }, [bellDropdownOpen, profileDropdownOpen]);
 
+  // A tick of "now" (updated after mount + every 30s) — used instead of calling
+  // Date.now() during render, which the purity rule forbids.
+  const [nowTs, setNowTs] = useState(0);
+  useEffect(() => {
+    const tick = () => setNowTs(Date.now());
+    tick();
+    const id = setInterval(tick, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   // Compute unread count
   // Snoozed alerts drop out of the queue until their snooze window elapses.
-  const isSnoozed = (n: { snoozedUntil?: string | null }) => !!n.snoozedUntil && new Date(n.snoozedUntil).getTime() >= Date.now();
+  const isSnoozed = (n: { snoozedUntil?: string | null }) => !!n.snoozedUntil && new Date(n.snoozedUntil).getTime() >= nowTs;
   // Admin tiers only surface alerts within their function. Facility Operations is
   // not a clinical role — its bell only carries operational alerts (inventory,
   // maintenance/tickets, camera/device, occupancy). Care-system alerts are hidden
@@ -280,7 +291,7 @@ export default function PortalShell({
   const handleSnooze = async (id: string) => {
     try {
       const { updateRecord } = await import("@/lib/api");
-      await updateRecord("notifications", id, { snoozedUntil: new Date(Date.now() + 60 * 60 * 1000).toISOString() });
+      await updateRecord("notifications", id, { snoozedUntil: new Date(nowTs + 60 * 60 * 1000).toISOString() });
       await refetchNotifications();
     } catch (err) { console.error("Snooze failed:", err); }
   };

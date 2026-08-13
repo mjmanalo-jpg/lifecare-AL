@@ -375,6 +375,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Clinical Approvals", icon: BadgeCheck, route: "/nurse/approvalworkflows", group: "Medication" },
       // Coordination & Comms
       { name: "Shift Handover", icon: Repeat, route: "/nurse/shiftendorsements", group: "Coordination & Comms" },
+      { name: "Endorsement Dashboard", icon: Inbox, route: "/nurse/endorsementdashboard", group: "Coordination & Comms" },
       { name: "SBAR Escalations", icon: Siren, route: "/nurse/escalations", group: "Coordination & Comms" },
       { name: "Specialist Referrals", icon: Send, route: "/nurse/referrals", group: "Coordination & Comms" },
       { name: "Appointments", icon: CalendarDays, route: "/nurse/appointmentcalendar", group: "Coordination & Comms" },
@@ -413,6 +414,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Medication Administration (MAR)", icon: Syringe, route: "/caregiver/mar", group: "Medication" },
       // Coordination & Comms
       { name: "Shift Handover", icon: Repeat, route: "/caregiver/shiftendorsements", group: "Coordination & Comms" },
+      { name: "Endorsement Dashboard", icon: Inbox, route: "/caregiver/endorsementdashboard", group: "Coordination & Comms" },
       { name: "SBAR Escalations", icon: Siren, route: "/caregiver/escalations", group: "Coordination & Comms" },
       { name: "Care Team", icon: Stethoscope, route: "/caregiver/careteam", group: "Coordination & Comms" },
       // Administration
@@ -462,6 +464,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Care Command Center", icon: LayoutDashboard, route: "/care_manager/dashboard" },
       // Intake & Admissions — Care Manager can cover for an absent Super Admin.
       { name: "CRM & Leads", icon: UserPlus, route: "/care_manager/crm" },
+      { name: "Pre-Admission", icon: FileCheck, route: "/care_manager/prescreen", group: "Operations" },
       { name: "Admissions & Registration", icon: UserPlus, route: "/care_manager/admissions" },
       // Clinical Monitoring
       { name: "Clinical Alerts", icon: BellRing, route: "/care_manager/alertcenter", group: "Clinical Monitoring" },
@@ -495,7 +498,6 @@ export const ROLES: Record<Role, RoleDetails> = {
       // Administration
       { name: "Task Board", icon: ListTodo, route: "/care_manager/taskassignment", group: "Administration" },
       { name: "Progress Reports", icon: FileText, route: "/care_manager/progressreport", group: "Administration" },
-      { name: "Pre-Admission", icon: FileCheck, route: "/care_manager/prescreen", group: "Administration" },
       { name: "Quality & Outcomes", icon: TrendingUp, route: "/care_manager/quality", group: "Administration" },
       { name: "Audit Trail", icon: ScrollText, route: "/care_manager/auditlog", group: "Administration" },
     ],

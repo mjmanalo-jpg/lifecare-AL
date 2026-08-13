@@ -14,6 +14,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord, upsertRecord } from "@/lib/api";
+import { planMedConsumption, parseInvItems, parseInvPRs, INV_ITEMS_KEY, INV_PR_KEY } from "@/lib/medInventory";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalHeader, ClinicalButton, ClinicalCard, DataState, SERIF } from "./clinical-ui";
 import SignatureModal from "@/components/portal/SignatureModal";
@@ -76,6 +77,10 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
     try { return row ? (JSON.parse(s(row.value)) as Record<string, boolean>) : {}; } catch { return {}; }
   }, [setQ.data]);
   const isVitalsRequired = (medId: string) => Boolean(vitalsReqMap[medId]);
+
+  // Resident-medication inventory (app-setting) — decremented as doses are given.
+  const invItems = useMemo(() => parseInvItems((setQ.data || []).find((r) => s(r.key || r.id) === INV_ITEMS_KEY)?.value), [setQ.data]);
+  const invPRs = useMemo(() => parseInvPRs((setQ.data || []).find((r) => s(r.key || r.id) === INV_PR_KEY)?.value), [setQ.data]);
   const saveVitalsFlag = async (medId: string, required: boolean) => {
     if (!medId) return;
     const next = { ...vitalsReqMap };
@@ -95,8 +100,6 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
   const [search, setSearch] = useState("");
   const [openRes, setOpenRes] = useState<Row | null>(null);
   const [addFor, setAddFor] = useState<Row | null>(null);
-  const [notifPerm, setNotifPerm] = useState<NotificationPermission>("default");
-  const [remindersSupported, setRemindersSupported] = useState(false);
 
   // Step the viewed day without opening the date picker — the common MAR move.
   const shiftDate = (delta: number) => {
@@ -155,29 +158,30 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
       if (marId) await updateRecord("medication-administrations", marId, payload);
       else await createRecord("medication-administrations", { medicationId: s(m.id), residentId: s(m.residentId), scheduledTime, dosage: s(m.dosage), route: s(m.route), ...payload });
       await refetch();
+      // A given dose consumes one unit of the resident's medication in inventory.
+      // Low/out crossings auto-queue a purchase request. Best-effort — never blocks
+      // the dose record itself.
+      if (status === "GIVEN") {
+        try {
+          const plan = planMedConsumption({ items: invItems, prs: invPRs, residentId: s(m.residentId), medName: s(m.name), qty: 1, by: clinicianName });
+          if (plan.matched) {
+            await upsertRecord("app-settings", INV_ITEMS_KEY, { key: INV_ITEMS_KEY, value: JSON.stringify(plan.items) });
+            if (plan.createdPR) await upsertRecord("app-settings", INV_PR_KEY, { key: INV_PR_KEY, value: JSON.stringify(plan.prs) });
+            await setQ.refetch();
+            if (plan.level === "out") Swal.fire({ toast: true, position: "top-end", icon: "error", title: `${plan.item?.name}: out of stock`, text: plan.createdPR ? "Urgent purchase request auto-created." : "Restock needed.", showConfirmButton: false, timer: 3400 });
+            else if (plan.level === "low") Swal.fire({ toast: true, position: "top-end", icon: "warning", title: `${plan.item?.name}: low — ${plan.remaining} ${plan.item?.unit} left`, text: plan.createdPR ? "Purchase request auto-created." : undefined, showConfirmButton: false, timer: 3000 });
+          }
+        } catch { /* inventory sync is best-effort */ }
+      }
     } catch (e) { Swal.fire({ title: "Could not record dose", text: e instanceof Error ? e.message : "", icon: "error" }); }
   };
 
   const q = search.trim().toLowerCase();
   const filteredResidents = residents.filter((r: Row) => !q || s(r.name).toLowerCase().includes(q) || s(r.room).toLowerCase().includes(q));
 
-  // Detect browser-notification support + current permission once on mount.
-  // Deferred via rAF so the initial (server-consistent) render is untouched.
-  useEffect(() => {
-    const ok = typeof window !== "undefined" && "Notification" in window;
-    const raf = requestAnimationFrame(() => { setRemindersSupported(ok); if (ok) setNotifPerm(Notification.permission); });
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
-  const enableReminders = async () => {
-    if (!("Notification" in window)) return;
-    try { setNotifPerm(await Notification.requestPermission()); } catch { /* denied / unsupported */ }
-  };
-
-  // Medication reminders — while the MAR is open, ping staff (in-app toast + a
-  // browser notification when permitted) as each scheduled dose time is reached
-  // and the dose is still pending. Fired doses are remembered per-day in
-  // localStorage so a reminder never repeats within the day.
+  // Medication reminders — while the MAR is open, an in-app toast pings staff as
+  // each scheduled dose time is reached and the dose is still pending. Fired doses
+  // are remembered per-day in localStorage so a reminder never repeats within the day.
   useEffect(() => {
     const iso = todayIso();
     const storeKey = `mar_reminded_${iso}`;
@@ -209,11 +213,6 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
       });
       if (!due.length) return;
       save(done);
-      const lines = due.slice(0, 6).map((d) => `${d.time} · ${d.med} — ${d.who}`);
-      const body = lines.join("\n") + (due.length > 6 ? `\n+${due.length - 6} more` : "");
-      if ("Notification" in window && Notification.permission === "granted") {
-        try { new Notification(`Medication due — ${due.length} dose${due.length > 1 ? "s" : ""}`, { body, tag: "mar-reminder" }); } catch { /* ignore */ }
-      }
       const pillSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>`;
       const rowsHtml = due.slice(0, 6).map((d) => `<div style="display:flex;gap:8px;align-items:flex-start;padding:4px 0;border-top:1px solid #f1f5f9"><span style="flex:none;font-weight:700;font-size:11px;color:#1d4ed8;background:#eff6ff;border-radius:6px;padding:2px 7px;line-height:1.5;letter-spacing:.02em">${esc(d.time)}</span><span style="font-size:12px;color:#334155;line-height:1.4"><b style="color:#0f172a">${esc(d.med)}</b> — ${esc(d.who)}</span></div>`).join("");
       const moreHtml = due.length > 6 ? `<div style="font-size:11px;color:#64748b;padding-top:6px">+ ${due.length - 6} more due</div>` : "";
@@ -290,11 +289,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
             <ClinicalButton variant="secondary" size="sm" onClick={() => setDate(todayIso())}>Today</ClinicalButton>
           )}
           <span className="flex-1" />
-          {remindersSupported && notifPerm !== "granted" ? (
-            <ClinicalButton variant="secondary" size="sm" onClick={enableReminders}><BellRing className="w-4 h-4" /> Enable reminders</ClinicalButton>
-          ) : remindersSupported ? (
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700"><BellRing className="w-3.5 h-3.5" /> Reminders on</span>
-          ) : null}
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700"><BellRing className="w-3.5 h-3.5" /> Reminders on</span>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
           <MarStat value={facility.total} label="Total Doses" accent="ink" />

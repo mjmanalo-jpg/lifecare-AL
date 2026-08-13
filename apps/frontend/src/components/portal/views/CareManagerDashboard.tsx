@@ -12,7 +12,6 @@ import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recha
 import { useLiveQuery, useStats } from "@/lib/useLiveQuery";
 import { adaptResident, adaptIncident, adaptTask } from "@/lib/adapters";
 import { updateRecord } from "@/lib/api";
-import DashboardQuickActions from "@/components/portal/views/DashboardQuickActions";
 
 /**
  * Care Manager dashboard — a lean clinical-OVERSIGHT view (distinct from the
@@ -135,7 +134,7 @@ export default function CareManagerDashboard() {
         <div>
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold flex items-center gap-2">
             <ShiftIcon className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-500 flex-shrink-0" />
-            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">{shift.greeting} — Care Manager Overview</span>
+            <span className="text-slate-900">{shift.greeting} — Care Manager Overview</span>
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-xs sm:text-sm mt-1">
             <span className="inline-flex items-center gap-1 text-green-600">
@@ -232,9 +231,6 @@ export default function CareManagerDashboard() {
           ) : <Empty text="All residents stable." />}
         </Card>
       </div>
-
-      {/* Floating quick-actions launcher (bottom-right) */}
-      <DashboardQuickActions clinicianRole="FACILITY_ADMIN" />
     </div>
   );
 }

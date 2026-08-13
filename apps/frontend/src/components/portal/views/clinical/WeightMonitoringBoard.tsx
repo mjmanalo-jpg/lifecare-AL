@@ -10,7 +10,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { Plus, Calendar, History, AlertTriangle, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, BedDouble as Bed } from "lucide-react";
+import { Plus, Calendar, History, AlertTriangle, ChevronRight, TrendingUp, TrendingDown, Minus, BedDouble as Bed } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
@@ -49,10 +49,28 @@ const WEIGHT_KEY = "weight_logs";
 const s = (v: unknown) => (v == null ? "" : String(v));
 const newId = () => globalThis.crypto?.randomUUID?.() ?? `w-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
-const iso = (d: Date) => d.toISOString().split("T")[0];
-const startOfSunday = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - x.getDay()); return x; };
-const addDays = (isoStr: string, n: number) => { const d = new Date(isoStr + "T00:00:00"); d.setDate(d.getDate() + n); return iso(d); };
-const fmtSunday = (isoStr: string) => new Date(isoStr + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+// Weight checks are a ROLLING 7-day cadence anchored per-resident to their last
+// logged date — log on a Thursday and the next check is due the following Thursday.
+// Runs on Philippine (Asia/Manila) time for ALL users, so "today" and the cadence
+// are identical regardless of the viewer's / server's timezone. Calendar dates are
+// carried as YYYY-MM-DD strings, arithmetic done on UTC-midnight Dates (unambiguous
+// carriers); only "today" is resolved through Manila.
+const WEIGHT_INTERVAL_DAYS = 7;
+const MANILA_TZ = "Asia/Manila";
+// Today's Manila calendar date as YYYY-MM-DD (en-CA formats ISO-style).
+const todayManila = () => new Intl.DateTimeFormat("en-CA", { timeZone: MANILA_TZ }).format(new Date());
+// Robust to legacy values: some older logs stored `date` as a full ISO datetime,
+// not YYYY-MM-DD. Take the leading date part; fall back to Date parsing for other
+// shapes. iso() never throws — an unparseable date yields "".
+const dParse = (dateStr: string) => {
+  const head = String(dateStr ?? "").slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(head)) return new Date(head + "T00:00:00Z");
+  return new Date(String(dateStr ?? ""));
+};
+const iso = (d: Date) => (Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10));
+const addDays = (isoStr: string, n: number) => { const d = dParse(isoStr); if (Number.isNaN(d.getTime())) return ""; d.setUTCDate(d.getUTCDate() + n); return iso(d); };
+const daysBetween = (a: string, b: string) => Math.round((dParse(b).getTime() - dParse(a).getTime()) / 86_400_000);
+const fmtDay = (isoStr: string) => dParse(isoStr).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" });
 const fmtDate = (isoStr: string) => new Date(isoStr).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 const kg = (w: number) => (Number.isInteger(w) ? String(w) : w.toFixed(1));
 
@@ -86,32 +104,35 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
   const logs = useMemo(() => parseLogs(settingRows.find((r) => (r.key || r.id) === WEIGHT_KEY)?.value), [settingRows]);
 
-  const thisSunday = iso(startOfSunday(new Date()));
-  const todayIso = iso(new Date());
-  const [weekOf, setWeekOf] = useState(thisSunday);
+  const todayIso = todayManila();
   const [view, setView] = useState<"schedule" | "history" | "concerns">("schedule");
   const [historyResId, setHistoryResId] = useState("");
   const [rec, setRec] = useState<{ resident: Row | null; type: EntryType } | null>(null);
 
-  const weeklyLog = (residentId: string, week: string) => logs.find((l) => l.type === "weekly" && l.residentId === residentId && l.weekOf === week);
-  const statusOf = (residentId: string, week: string): Status => {
-    const l = weeklyLog(residentId, week);
-    if (l?.unable) return "unable";
-    if (l?.weightKg != null) return "completed";
-    return week <= todayIso ? "overdue" : "due";
+  // Latest weekly weigh-in for a resident (newest date first).
+  const latestWeekly = (residentId: string) => logs.filter((l) => l.type === "weekly" && l.residentId === residentId && l.date).sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0] || null;
+  // Rolling cadence: the next check is due 7 days after the last logged date. Never
+  // logged → due now. `unable` still counts as an event (resets the 7-day clock).
+  const evalResident = (residentId: string): { status: Status; log: WeightLog | null; nextDue: string } => {
+    const l = latestWeekly(residentId);
+    if (!l) return { status: "due", log: null, nextDue: todayIso };
+    const nextDue = addDays(l.date, WEIGHT_INTERVAL_DAYS);
+    if (!nextDue) return { status: "due", log: l, nextDue: todayIso }; // unparseable date → treat as due
+    if (nextDue > todayIso) return { status: l.unable ? "unable" : "completed", log: l, nextDue };
+    return { status: nextDue < todayIso ? "overdue" : "due", log: l, nextDue };
   };
 
-  const rows = useMemo(() => residents.map((r: Row) => ({ r, status: statusOf(s(r.id), weekOf), log: weeklyLog(s(r.id), weekOf) })), [residents, logs, weekOf]); // eslint-disable-line react-hooks/exhaustive-deps
+  const rows = useMemo(() => residents.map((r: Row) => ({ r, ...evalResident(s(r.id)) })), [residents, logs]); // eslint-disable-line react-hooks/exhaustive-deps
   const counts = useMemo(() => rows.reduce((a, x) => { a[x.status]++; return a; }, { completed: 0, due: 0, overdue: 0, unable: 0 } as Record<Status, number>), [rows]);
 
   const persist = async (next: WeightLog[]) => { await upsertRecord("app-settings", WEIGHT_KEY, { key: WEIGHT_KEY, value: JSON.stringify(next) }); await refetch(); };
 
   const saveRecord = async (data: { residentId: string; type: EntryType; date: string; shift?: string; weightKg?: number; unit?: string; unable?: boolean; note?: string }) => {
     const now = new Date().toISOString();
-    const weekKey = data.type === "weekly" ? iso(startOfSunday(new Date(data.date))) : undefined;
-    // Weekly entries are unique per (resident, week); baseline/additional just append.
-    const rest = data.type === "weekly" ? logs.filter((l) => !(l.type === "weekly" && l.residentId === data.residentId && l.weekOf === weekKey)) : logs;
-    const record: WeightLog = { id: newId(), residentId: data.residentId, type: data.type, weekOf: weekKey, date: data.date, shift: data.shift, weightKg: data.weightKg, unit: data.unit, unable: data.unable, note: data.note, by: clinicianName, at: now };
+    // Weekly entries are unique per (resident, date) — re-logging the same day
+    // replaces; the 7-day cadence is derived from this date. Baseline/additional append.
+    const rest = data.type === "weekly" ? logs.filter((l) => !(l.type === "weekly" && l.residentId === data.residentId && l.date === data.date)) : logs;
+    const record: WeightLog = { id: newId(), residentId: data.residentId, type: data.type, weekOf: data.date, date: data.date, shift: data.shift, weightKg: data.weightKg, unit: data.unit, unable: data.unable, note: data.note, by: clinicianName, at: now };
     await persist([record, ...rest]);
     if (data.weightKg != null) fetch("/api/vitals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ residentId: data.residentId, type: "WEIGHT", value: String(data.weightKg), unit: "kg" }) }).catch(() => null);
     setRec(null);
@@ -127,23 +148,19 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem]">Weekly Weight Monitoring</h1>
-          <p className="mt-1 text-sm text-slate-500">Sunday morning weight checks for all residents</p>
+          <p className="mt-1 text-sm text-slate-500">Rolling weekly checks — each resident is due 7 days after their last weigh-in (Manila time)</p>
         </div>
         <button onClick={() => openRecord(null, contextType)} className="inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] active:scale-95"><Plus className="h-4 w-4" /> Record Weight</button>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1">
-          {([["schedule", "Sunday Schedule", Calendar], ["history", "Resident History", History], ["concerns", "Weight Concerns", AlertTriangle]] as const).map(([v, label, Icon]) => (
+          {([["schedule", "Weekly Schedule", Calendar], ["history", "Resident History", History], ["concerns", "Weight Concerns", AlertTriangle]] as const).map(([v, label, Icon]) => (
             <button key={v} onClick={() => setView(v)} aria-pressed={view === v} className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition ${view === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}><Icon className="h-4 w-4" /> {label}</button>
           ))}
         </div>
         {view === "schedule" && (
-          <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-200 bg-white text-sm">
-            <button onClick={() => setWeekOf((w) => addDays(w, -7))} className="inline-flex items-center gap-1 px-3 py-2 font-medium text-slate-500 transition hover:bg-slate-50"><ChevronLeft className="h-4 w-4" /> Previous</button>
-            <span className="border-x border-slate-200 px-4 py-2 font-semibold text-slate-800">Sunday {fmtSunday(weekOf)}</span>
-            <button onClick={() => setWeekOf((w) => addDays(w, 7))} disabled={weekOf >= thisSunday} className="inline-flex items-center gap-1 px-3 py-2 font-medium text-slate-500 transition hover:bg-slate-50 disabled:opacity-40">Next <ChevronRight className="h-4 w-4" /></button>
-          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-600"><Calendar className="h-4 w-4 text-slate-400" /> Today · {fmtDay(todayIso)}</span>
         )}
       </div>
 
@@ -165,17 +182,20 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
             skeletonRows={4}
           >
             <div className="space-y-2.5">
-              {rows.map(({ r, status, log }) => (
+              {rows.map(({ r, status, log, nextDue }) => (
                 <div key={s(r.id)} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500">{initials(s(r.name))}</span>
                     <div className="min-w-0"><p className="font-semibold text-slate-900 truncate">{s(r.name)}</p><p className="flex items-center gap-1 text-xs text-slate-400"><Bed className="h-3 w-3" /> Room {s(r.room)}</p></div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {status === "completed" && <WtChip label={`${kg(log!.weightKg!)} kg`} color="#16A34A" />}
-                    {status === "unable" && <WtChip label="Unable" color="#D97706" />}
-                    {status === "overdue" && <WtChip label="Overdue" color="#DC2626" />}
-                    {status === "due" && <WtChip label="Due" color="#4F46E5" />}
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="text-right">
+                      {status === "completed" && <WtChip label={`${kg(log!.weightKg!)} kg`} color="#16A34A" />}
+                      {status === "unable" && <WtChip label="Unable" color="#D97706" />}
+                      {status === "overdue" && <WtChip label={`Overdue ${daysBetween(nextDue, todayIso)}d`} color="#DC2626" />}
+                      {status === "due" && <WtChip label={log ? "Due today" : "Never weighed"} color="#4F46E5" />}
+                      <p className="mt-1 text-[11px] text-slate-400">{status === "completed" || status === "unable" ? `Next check ${fmtDay(nextDue)}` : log ? `Last ${fmtDay(log.date)}` : "No weigh-in on record"}</p>
+                    </div>
                     {status !== "completed" && <button onClick={() => openRecord(r, "weekly")} className="rounded-lg border border-slate-200 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50">Record</button>}
                     {status === "completed" && <button onClick={() => openRecord(r, "weekly")} className="rounded-lg px-3.5 py-1.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100">Edit</button>}
                   </div>
@@ -189,7 +209,7 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
       {view === "history" && <HistoryView residents={residents} logs={logs} resId={historyResId} setResId={setHistoryResId} entryType={historyType} setEntryType={setHistoryType} onRecord={(t) => openRecord(residents.find((x: Row) => s(x.id) === historyResId) || null, t)} />}
       {view === "concerns" && <ConcernsView residents={residents} logs={logs} onViewHistory={(id) => { setHistoryResId(id); setView("history"); }} />}
 
-      {rec && <RecordModal residents={residents} resident={rec.resident} type={rec.type} defaultDate={rec.type === "weekly" ? weekOf : todayIso} onClose={() => setRec(null)} onSave={saveRecord} />}
+      {rec && <RecordModal residents={residents} resident={rec.resident} type={rec.type} defaultDate={todayIso} onClose={() => setRec(null)} onSave={saveRecord} />}
     </div>
   );
 }

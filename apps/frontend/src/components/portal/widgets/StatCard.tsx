@@ -25,10 +25,10 @@ export default function StatCard({
   iconColor = "text-blue-500",
 }: StatCardProps) {
   return (
-    <div className="bg-surface rounded-lg p-3 sm:p-5 md:p-6 border border-border shadow-sm hover:shadow-md transition container-type-[inline-size]">
+    <div className="bg-surface rounded-lg p-3 sm:p-5 md:p-6 border border-border shadow-sm hover:shadow-md transition">
       <div className="flex items-start justify-between gap-2 sm:gap-3">
         <div className="flex-1 min-w-0">
-          <h3 className="text-[10cqi] sm:text-sm font-medium text-muted-foreground leading-tight">{title}</h3>
+          <h3 className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">{title}</h3>
           <div className={`mt-1.5 sm:mt-2 flex items-baseline gap-1 ${textColor}`}>
             <span className="text-lg sm:text-xl md:text-2xl font-bold leading-none">{value}</span>
             {unit && <span className="text-xs sm:text-sm font-medium">{unit}</span>}
