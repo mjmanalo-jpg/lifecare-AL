@@ -195,25 +195,25 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
   };
 
   return (
-    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-6" style={{ background: "#F8FAFC" }}>
+    <div className="-m-4 min-h-full space-y-5 bg-[var(--clinical-ground)] p-4 sm:-m-6 sm:p-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem]">SBAR Escalations</h1>
+          <h1 className="text-2xl font-bold tracking-[-0.025em] text-[var(--clinical-ink)] sm:text-[1.75rem]">SBAR Escalations</h1>
           <p className="mt-1 text-sm text-slate-500">{canRaise ? "Raise a clinical concern (Situation · Background · Assessment · Recommendation)" : canRespond ? "Acknowledge, respond with orders & resolve" : "Escalation oversight & SLA monitoring"}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 self-start">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Live</span>
+          <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-xs font-bold uppercase tracking-[0.08em] text-[var(--clinical-green)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}><span className="h-2 w-2 rounded-full bg-[var(--clinical-green)] animate-pulse" /> Live</span>
           <RefreshButton onRefresh={() => void refetch()} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
           {canCreate && (
-            <button onClick={() => setShowRaise(true)} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-500/40">
+            <button onClick={() => setShowRaise(true)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--clinical-panel)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--clinical-panel-hover,var(--clinical-panel))] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[var(--clinical-focus,var(--clinical-panel))]">
               <Plus className="h-4 w-4" /> New Escalation
             </button>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border bg-[var(--clinical-line)] lg:grid-cols-4" style={{ borderColor: "var(--clinical-line)" }}>
         <Stat label="Open" value={stats.open} icon={ClipboardList} color="#C39A3E" />
         <Stat label="SLA Breached" value={stats.breached} icon={AlertTriangle} color="#DC2626" />
         <Stat label="Emergency" value={stats.emergency} icon={Bell} color="#DC2626" />
@@ -221,27 +221,27 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="inline-flex items-center rounded-full bg-slate-100 p-1 self-start">
+      <div className="flex flex-col gap-3 rounded-2xl border p-3 lg:flex-row lg:items-center" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+        <div className="inline-flex items-center self-start rounded-xl bg-[var(--clinical-surface-2)] p-1">
           {["open", "resolved", "all"].map((s) => (
             <button key={s} onClick={() => setStatusFilter(s)}
-              className={`rounded-full px-4 py-1.5 text-xs font-semibold transition focus:outline-none ${statusFilter === s ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>
+              className={`min-h-9 rounded-lg px-4 text-xs font-semibold transition focus:outline-none ${statusFilter === s ? "bg-[var(--clinical-panel)] text-white shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>
               {s === "open" ? "Open" : s === "resolved" ? "Resolved" : "All"}
             </button>
           ))}
         </div>
-        <div className="inline-flex items-center rounded-full bg-slate-100 p-1 self-start">
+        <div className="flex max-w-full items-center self-start overflow-x-auto rounded-xl bg-[var(--clinical-surface-2)] p-1">
           {["all", ...PRIORITIES].map((p) => (
             <button key={p} onClick={() => setPriorityFilter(p)}
-              className={`rounded-full px-4 py-1.5 text-xs font-semibold transition focus:outline-none ${priorityFilter === p ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>
+              className={`min-h-9 shrink-0 rounded-lg px-4 text-xs font-semibold transition focus:outline-none ${priorityFilter === p ? "bg-[var(--clinical-ink)] text-[var(--clinical-surface)] shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>
               {p === "all" ? "All Priorities" : PRIORITY_META[p].label}
             </button>
           ))}
         </div>
         <div className="relative flex-1 lg:ml-auto lg:max-w-sm">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--clinical-muted)]" />
           <input type="text" placeholder="Search resident, situation, or clinician…" value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-full border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
+            className="min-h-11 w-full rounded-xl border bg-[var(--clinical-surface)] py-2.5 pl-10 pr-4 text-sm text-[var(--clinical-ink)] outline-none transition focus:border-[var(--clinical-focus)] focus:ring-2 focus:ring-[var(--clinical-focus)]/20" style={{ borderColor: "var(--clinical-line)" }} />
         </div>
       </div>
 
@@ -261,8 +261,8 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
             // Soft left-accent by priority (calmer than a full saturated outline).
             const accent = e.priority === "EMERGENCY" ? "#EF4444" : e.priority === "URGENT" ? "#F59E0B" : "#64748B";
             return (
-              <div key={e.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md" style={{ borderLeftWidth: 4, borderLeftColor: accent }}>
-                <div className="flex items-start justify-between gap-4">
+              <div key={e.id} className="rounded-2xl border p-4 transition hover:border-[var(--clinical-line-strong)] sm:p-5" style={{ backgroundColor: "var(--clinical-surface)", borderColor: accent }}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                   <button onClick={() => setViewing(e)} className="min-w-0 flex-1 text-left">
                     <div className="mb-1.5 flex flex-wrap items-center gap-2">
                       <SolidBadge color={badgeBg(e.priority)}>{pm.label}</SolidBadge>
@@ -273,7 +273,7 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
                     <p className="mt-0.5 line-clamp-2 text-sm text-slate-600">{e.situation}</p>
                     <p className="mt-1.5 text-[11px] text-slate-400">Raised by {e.raisedBy || "—"} ({e.raisedByRole || "—"}) → {e.assignedToRole.replace(/_/g, " ")}</p>
                   </button>
-                  <div className="flex flex-shrink-0 items-center gap-2">
+                  <div className="flex flex-shrink-0 items-center justify-end gap-2">
                     <button onClick={() => setViewing(e)} className="rounded-md p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600" title="View"><Eye className="h-4 w-4" /></button>
                     {canRespond && !["RESOLVED", "CANCELLED"].includes(e.status) && (
                       busy ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : (
@@ -608,12 +608,12 @@ function badgeBg(key: string): string {
 
 function Stat({ label, value, icon: Icon, color }: { label: string; value: number; icon: LucideIcon; color: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm" style={{ borderTopWidth: 3, borderTopColor: color }}>
+    <div className="bg-[var(--clinical-surface)] p-5">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">{label}</span>
-        <Icon className="h-4 w-4" style={{ color }} />
+        <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--clinical-muted)]">{label}</span>
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--clinical-surface-2)]"><Icon className="h-4 w-4" style={{ color }} /></span>
       </div>
-      <p className="mt-3 text-4xl font-bold leading-none" style={{ color, fontFamily: "Georgia, 'Times New Roman', serif" }}>{value}</p>
+      <p className="mt-2 text-3xl font-bold leading-none" style={{ color }}>{value}</p>
     </div>
   );
 }

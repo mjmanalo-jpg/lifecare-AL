@@ -10,31 +10,18 @@
  */
 
 import { useMemo, useState } from "react";
-import { Plus, Calendar, History, AlertTriangle, ChevronRight, TrendingUp, TrendingDown, Minus, BedDouble as Bed } from "lucide-react";
+import { Plus, Calendar, History, AlertTriangle, ChevronRight, TrendingUp, TrendingDown, Minus, Scale, Check, Clock } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
-import { ClinicalButton, ClinicalModal, DataState, FieldLabel, controlClass, SERIF } from "./clinical-ui";
+import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, DataState, FieldLabel, SearchInput, controlClass, SERIF } from "./clinical-ui";
 
 // Initials from a resident name for the row avatar.
-const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 
 // Light KPI card — big colored number over an uppercase label; the "alert"
 // variant (Overdue) gets a red top rule + a faint warning glyph, per the design.
-function WtStat({ value, label, color, alert }: { value: number; label: string; color: string; alert?: boolean }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm" style={alert ? { borderTopWidth: 3, borderTopColor: color } : undefined}>
-      <div className="flex items-start justify-between">
-        <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">{label}</span>
-        {alert && <AlertTriangle className="h-4 w-4" style={{ color }} />}
-      </div>
-      <p className="mt-3 text-3xl font-bold leading-none" style={{ color }}>{value}</p>
-    </div>
-  );
-}
-
 // Light status chip — colored dot + label on a soft color-tinted pill.
 function WtChip({ label, color }: { label: string; color: string }) {
   return (
@@ -108,6 +95,8 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
   const [view, setView] = useState<"schedule" | "history" | "concerns">("schedule");
   const [historyResId, setHistoryResId] = useState("");
   const [rec, setRec] = useState<{ resident: Row | null; type: EntryType } | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "action" | "completed">("all");
 
   // Latest weekly weigh-in for a resident (newest date first).
   const latestWeekly = (residentId: string) => logs.filter((l) => l.type === "weekly" && l.residentId === residentId && l.date).sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0] || null;
@@ -124,6 +113,16 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
 
   const rows = useMemo(() => residents.map((r: Row) => ({ r, ...evalResident(s(r.id)) })), [residents, logs]); // eslint-disable-line react-hooks/exhaustive-deps
   const counts = useMemo(() => rows.reduce((a, x) => { a[x.status]++; return a; }, { completed: 0, due: 0, overdue: 0, unable: 0 } as Record<Status, number>), [rows]);
+  const coverage = rows.length ? Math.round((counts.completed / rows.length) * 100) : 0;
+  const attentionCount = counts.due + counts.overdue + counts.unable;
+  const filteredRows = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return rows.filter(({ r, status }) => {
+      const matchesSearch = !query || s(r.name).toLowerCase().includes(query) || s(r.room).toLowerCase().includes(query);
+      const matchesStatus = statusFilter === "all" || (statusFilter === "completed" ? status === "completed" : status !== "completed");
+      return matchesSearch && matchesStatus;
+    });
+  }, [rows, search, statusFilter]);
 
   const persist = async (next: WeightLog[]) => { await upsertRecord("app-settings", WEIGHT_KEY, { key: WEIGHT_KEY, value: JSON.stringify(next) }); await refetch(); };
 
@@ -144,59 +143,95 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
   const contextType: EntryType = view === "history" ? historyType : "weekly";
 
   return (
-    <div className="@container -m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5" style={{ background: "#F7F8FA" }}>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <ClinicalPage className="@container">
+      <ClinicalHeader
+        title="Weight Tracking"
+        subtitle="Manage rolling weekly checks, review resident trends, and identify weight changes that need follow-up."
+        right={
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm font-semibold text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}><Calendar className="h-4 w-4 text-[var(--clinical-panel)]" /> Today · {fmtDay(todayIso)}</span>
+            <ClinicalButton onClick={() => openRecord(null, contextType)}><Plus className="h-4 w-4" /> Record Weight</ClinicalButton>
+          </div>
+        }
+      />
+      <div className="hidden">
         <div className="min-w-0">
           <p className="text-sm text-slate-500">Rolling weekly checks — each resident is due 7 days after their last weigh-in (Manila time)</p>
         </div>
         <button onClick={() => openRecord(null, contextType)} className="inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] active:scale-95"><Plus className="h-4 w-4" /> Record Weight</button>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+      {view === "schedule" && (
+        <section className="clinical-summary-band mt-6 overflow-hidden rounded-2xl bg-[var(--clinical-panel)] text-white">
+          <div className="grid gap-px bg-white/15 sm:grid-cols-[1.35fr_repeat(3,1fr)]">
+            <div className="bg-[var(--clinical-panel)] p-5 sm:p-6">
+              <div className="flex items-center justify-between gap-4">
+                <div><p className="text-sm font-semibold text-blue-100">Weekly weight coverage</p><p className="mt-1 text-3xl font-bold tracking-[-0.03em]">{coverage}%</p></div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15"><Scale className="h-6 w-6" /></div>
+              </div>
+              <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-black/20" aria-label={`${counts.completed} of ${rows.length} residents completed`}><div className="h-full rounded-full bg-white transition-[width] duration-500" style={{ width: `${coverage}%` }} /></div>
+              <p className="mt-2 text-xs text-blue-100">{counts.completed} of {rows.length} residents are current this week</p>
+            </div>
+            <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Completed</p><p className="mt-2 text-2xl font-bold tabular-nums">{counts.completed}</p></div>
+            <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Due now</p><p className="mt-2 text-2xl font-bold tabular-nums">{counts.due}</p></div>
+            <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Needs attention</p><p className="mt-2 text-2xl font-bold tabular-nums">{attentionCount}</p><p className="mt-1 text-xs text-blue-100">{counts.overdue} overdue · {counts.unable} unable</p></div>
+          </div>
+        </section>
+      )}
+
+      <div className="my-5 grid gap-3 rounded-2xl border p-3 lg:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_auto_auto] xl:items-center" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+        {view === "schedule" ? <SearchInput value={search} onChange={setSearch} placeholder="Search resident or room..." className="min-w-0 lg:col-span-2 xl:col-span-1" /> : <div className="min-w-0 text-sm text-[var(--clinical-muted)] lg:col-span-2 xl:col-span-1">{view === "history" ? "Review a resident's recorded weight history and trend." : "Review residents whose weight changes may require follow-up."}</div>}
+        <div role="tablist" aria-label="Weight tracking view" className="grid grid-cols-3 gap-1 rounded-xl bg-[var(--clinical-surface-2)] p-1">
           {([["schedule", "Weekly Schedule", Calendar], ["history", "Resident History", History], ["concerns", "Weight Concerns", AlertTriangle]] as const).map(([v, label, Icon]) => (
-            <button key={v} onClick={() => setView(v)} aria-pressed={view === v} className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition ${view === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}><Icon className="h-4 w-4" /> {label}</button>
+            <button key={v} role="tab" onClick={() => setView(v)} aria-selected={view === v} className={`inline-flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition ${view === v ? "bg-[var(--clinical-surface-raised,var(--clinical-surface))] text-[var(--clinical-ink)] shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}><Icon className="h-4 w-4" /> <span className="hidden sm:inline">{label}</span><span className="sm:hidden">{v === "schedule" ? "Schedule" : v === "history" ? "History" : "Concerns"}</span></button>
           ))}
         </div>
         {view === "schedule" && (
+          <div role="tablist" aria-label="Weight schedule status" className="grid grid-cols-3 gap-1 rounded-xl bg-[var(--clinical-surface-2)] p-1">
+            {([["all", "All", rows.length], ["action", "Needs action", attentionCount], ["completed", "Completed", counts.completed]] as const).map(([value, label, count]) => (
+              <button key={value} role="tab" aria-selected={statusFilter === value} onClick={() => setStatusFilter(value)} className={`min-h-10 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition ${statusFilter === value ? "bg-[var(--clinical-surface-raised,var(--clinical-surface))] text-[var(--clinical-ink)] shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>{label} <span className="ml-1 tabular-nums opacity-70">{count}</span></button>
+            ))}
+          </div>
+        )}
+        {false && view === "schedule" && (
           <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-600"><Calendar className="h-4 w-4 text-slate-400" /> Today · {fmtDay(todayIso)}</span>
         )}
       </div>
 
       {view === "schedule" && (
         <>
-          <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
-            <WtStat value={counts.completed} label="Completed" color="#16A34A" />
-            <WtStat value={counts.due} label="Due" color="#4F46E5" />
-            <WtStat value={counts.overdue} label="Overdue" color="#DC2626" alert />
-            <WtStat value={counts.unable} label="Unable" color="#D97706" />
+          <div className="hidden">
+            {([["all", "All residents", rows.length], ["action", "Needs action", attentionCount], ["completed", "Completed", counts.completed]] as const).map(([value, label, count]) => (
+              <button key={value} role="tab" aria-selected={statusFilter === value} onClick={() => setStatusFilter(value)} className={`min-h-10 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition ${statusFilter === value ? "bg-[var(--clinical-surface-raised,var(--clinical-surface))] text-[var(--clinical-ink)] shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>{label} <span className="ml-1 tabular-nums opacity-70">{count}</span></button>
+            ))}
           </div>
           <DataState
             loading={loading && logs.length === 0 && residents.length === 0}
             error={error}
-            empty={rows.length === 0}
-            emptyTitle="No residents"
-            emptyHint="Add residents to start weekly weight checks."
+            empty={filteredRows.length === 0}
+            emptyTitle={rows.length === 0 ? "No active residents" : "No residents match"}
+            emptyHint={rows.length === 0 ? "Residents appear here once they are admitted." : "Try a different search or status filter."}
             onRetry={() => void refetch()}
             skeletonRows={4}
           >
             <div className="space-y-2.5">
-              {rows.map(({ r, status, log, nextDue }) => (
-                <div key={s(r.id)} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500">{initials(s(r.name))}</span>
-                    <div className="min-w-0"><p className="font-semibold text-slate-900 truncate">{s(r.name)}</p><p className="flex items-center gap-1 text-xs text-slate-400"><Bed className="h-3 w-3" /> Room {s(r.room)}</p></div>
+              {filteredRows.map(({ r, status, log, nextDue }) => (
+                <div key={s(r.id)} className="grid items-center gap-4 rounded-2xl border p-4 transition hover:border-[var(--clinical-line-strong)] sm:grid-cols-[minmax(190px,1.15fr)_minmax(180px,1fr)_auto] sm:p-5" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] leading-none"><span className="text-[9px] font-semibold uppercase tracking-wide text-[var(--clinical-muted)]">Room</span><span className="mt-1 text-base font-bold text-[var(--clinical-ink)]">{s(r.room)}</span></span>
+                    <div className="min-w-0"><p className="truncate font-bold text-[var(--clinical-ink)]">{s(r.name)}</p><p className={`mt-1 inline-flex items-center gap-1.5 text-xs font-semibold ${status === "completed" ? "text-[var(--clinical-green)]" : status === "overdue" ? "text-[var(--clinical-coral)]" : "text-[var(--clinical-amber)]"}`}>{status === "completed" ? <Check className="h-3.5 w-3.5" /> : status === "overdue" ? <AlertTriangle className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}{status === "completed" ? "Weight current" : status === "overdue" ? "Weigh-in overdue" : status === "unable" ? "Unable to weigh" : "Weigh-in due"}</p></div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <div className="text-right">
+                  <div className="min-w-0 sm:text-right">
+                    <div>
                       {status === "completed" && <WtChip label={`${kg(log!.weightKg!)} kg`} color="#16A34A" />}
                       {status === "unable" && <WtChip label="Unable" color="#D97706" />}
                       {status === "overdue" && <WtChip label={`Overdue ${daysBetween(nextDue, todayIso)}d`} color="#DC2626" />}
                       {status === "due" && <WtChip label={log ? "Due today" : "Never weighed"} color="#4F46E5" />}
-                      <p className="mt-1 text-[11px] text-slate-400">{status === "completed" || status === "unable" ? `Next check ${fmtDay(nextDue)}` : log ? `Last ${fmtDay(log.date)}` : "No weigh-in on record"}</p>
+                      <p className="mt-1 text-xs text-[var(--clinical-muted)]">{status === "completed" || status === "unable" ? `Next check ${fmtDay(nextDue)}` : log ? `Last recorded ${fmtDay(log.date)}` : "No weigh-in on record"}</p>
                     </div>
-                    {status !== "completed" && <button onClick={() => openRecord(r, "weekly")} className="rounded-lg border border-slate-200 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50">Record</button>}
-                    {status === "completed" && <button onClick={() => openRecord(r, "weekly")} className="rounded-lg px-3.5 py-1.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100">Edit</button>}
+                  </div>
+                  <div className="flex items-center justify-end">
+                    <ClinicalButton className="w-full sm:w-auto" variant={status === "completed" ? "secondary" : "primary"} size="sm" onClick={() => openRecord(r, "weekly")}>{status === "completed" ? "Edit weight" : <><Plus className="h-4 w-4" /> Record</>}</ClinicalButton>
                   </div>
                 </div>
               ))}
@@ -209,7 +244,7 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
       {view === "concerns" && <ConcernsView residents={residents} logs={logs} onViewHistory={(id) => { setHistoryResId(id); setView("history"); }} />}
 
       {rec && <RecordModal residents={residents} resident={rec.resident} type={rec.type} defaultDate={todayIso} onClose={() => setRec(null)} onSave={saveRecord} />}
-    </div>
+    </ClinicalPage>
   );
 }
 

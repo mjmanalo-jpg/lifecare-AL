@@ -260,6 +260,21 @@ p, blockquote, li {
    ============================================================ */
 :root:not(.light) {
   color-scheme: dark;
+  --clinical-ground: #080d16;
+  --clinical-surface: #111927;
+  --clinical-surface-2: #1a2535;
+  --clinical-surface-raised: #202d40;
+  --clinical-surface-inset: #0c1320;
+  --clinical-ink: #f4f7fb;
+  --clinical-ink-soft: #d2dbea;
+  --clinical-muted: #9dabc0;
+  --clinical-line: rgba(190, 211, 239, 0.11);
+  --clinical-line-strong: rgba(190, 211, 239, 0.21);
+  --clinical-panel: #5b5ee5;
+  --clinical-panel-hover: #6a6df0;
+  --clinical-focus: #a5b4fc;
+  --clinical-overlay: rgba(3, 7, 18, 0.76);
+  --clinical-shadow: 0 18px 42px -28px rgba(0, 0, 0, 0.9);
 }
 
 /* — Neutral surfaces — */
@@ -606,3 +621,364 @@ p, blockquote, li {
 .al-swal2-popup textarea { min-height: 6rem; resize: vertical; line-height: 1.5; }
 /* Labels inside custom dialogs read as muted micro-labels. */
 .al-swal2-popup label { color: var(--muted-foreground); }
+
+/* ============================================================
+   Clinical operations surface
+   ------------------------------------------------------------
+   A scoped compatibility layer for boards that predate clinical-ui.tsx.
+   It makes the Care Manager, Nurse and Caregiver route sets share the same
+   typography, surfaces, controls, tables and interaction states without
+   altering any board's data logic.
+   ============================================================ */
+.clinical-portal-content {
+  min-height: 100%;
+  color: var(--clinical-ink);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.clinical-portal-content h1 {
+  color: var(--clinical-ink);
+  font-size: clamp(1.5rem, 2vw, 1.875rem);
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  background-image: none;
+}
+
+.clinical-portal-content h2 {
+  color: var(--clinical-ink);
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+}
+
+.clinical-portal-content h3 {
+  color: var(--clinical-ink);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.clinical-portal-content .text-white {
+  color: #fff;
+}
+
+.clinical-portal-content :where(h1, h2, h3) + p {
+  max-width: 72ch;
+  color: var(--clinical-muted);
+}
+
+/* Neutral cards use one surface, radius and depth model. Semantic tinted
+   alerts remain tinted, with their icon and label carrying the same status. */
+.clinical-portal-content :where(.bg-white.rounded-lg, .bg-white.rounded-xl, .bg-white.rounded-2xl) {
+  background-color: var(--clinical-surface);
+  border-color: var(--clinical-line);
+  border-radius: 0.875rem;
+  box-shadow: 0 10px 28px -24px rgba(15, 23, 42, 0.45);
+}
+
+.clinical-portal-content :where(.rounded-lg.border-gray-200, .rounded-xl.border-gray-200, .rounded-2xl.border-gray-200) {
+  border-color: var(--clinical-line);
+  border-radius: 0.875rem;
+  box-shadow: 0 10px 28px -24px rgba(15, 23, 42, 0.45);
+}
+
+.clinical-portal-content :where(.bg-gray-50, .bg-slate-50) {
+  background-color: var(--clinical-surface-2);
+}
+
+.clinical-portal-content :where(.border-gray-100, .border-gray-200, .border-slate-100, .border-slate-200) {
+  border-color: var(--clinical-line);
+}
+
+.clinical-portal-content :where(.text-gray-900, .text-slate-900, .text-gray-800, .text-slate-800) {
+  color: var(--clinical-ink);
+}
+
+.clinical-portal-content :where(.text-gray-700, .text-slate-700) {
+  color: var(--clinical-ink-soft);
+}
+
+.clinical-portal-content :where(.text-gray-400, .text-gray-500, .text-gray-600, .text-slate-400, .text-slate-500, .text-slate-600) {
+  color: var(--clinical-muted);
+}
+
+/* One control geometry across native inputs and older custom board forms. */
+.clinical-portal-content :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+  min-height: 2.75rem;
+  border: 1px solid var(--clinical-line-strong);
+  border-radius: 0.75rem;
+  background-color: var(--clinical-surface);
+  color: var(--clinical-ink);
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.clinical-portal-content textarea { min-height: 6.5rem; }
+.clinical-portal-content :where(input, textarea)::placeholder { color: var(--clinical-muted); opacity: 1; }
+.clinical-portal-content :where(input, select, textarea):focus {
+  border-color: var(--clinical-panel);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--clinical-panel) 18%, transparent);
+}
+.clinical-portal-content :where(input, select, textarea):disabled {
+  cursor: not-allowed;
+  background-color: var(--clinical-surface-2);
+  color: var(--clinical-muted);
+  opacity: 0.75;
+}
+
+/* Buttons retain their semantic intent while sharing sizing, type and focus. */
+.clinical-portal-content button,
+.clinical-portal-content a[class*="px-"] {
+  min-height: 2.75rem;
+  border-radius: 0.75rem;
+  font-weight: 650;
+}
+
+.clinical-portal-content button { min-width: 2.75rem; }
+
+.clinical-portal-content :where(button.bg-blue-600, button.bg-indigo-600, button.bg-teal-600, a.bg-blue-600, a.bg-indigo-600, a.bg-teal-600) {
+  background-color: var(--clinical-panel);
+  color: #fff;
+}
+
+.clinical-portal-content :where(button.bg-yellow-400, button.bg-gradient-to-r, a.bg-gradient-to-r) {
+  background-color: var(--clinical-panel);
+  background-image: none;
+  color: #fff;
+}
+
+.clinical-portal-content :where(button.bg-yellow-400, button.bg-gradient-to-r, a.bg-gradient-to-r):hover {
+  filter: brightness(1.08);
+}
+
+.clinical-portal-content h1 > svg.text-yellow-500 {
+  color: var(--clinical-panel);
+}
+
+.clinical-portal-content :where(button.bg-blue-600, button.bg-indigo-600, button.bg-teal-600, a.bg-blue-600, a.bg-indigo-600, a.bg-teal-600):hover {
+  filter: brightness(1.08);
+}
+
+.clinical-portal-content :where(button.bg-white, button.bg-gray-50, button.bg-gray-100) {
+  border-color: var(--clinical-line-strong);
+  background-color: var(--clinical-surface);
+  color: var(--clinical-ink-soft);
+}
+
+.clinical-portal-content :where(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--clinical-panel);
+  outline-offset: 2px;
+}
+
+.clinical-portal-content button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  filter: grayscale(0.15);
+}
+
+/* Tables and dense lists: consistent header rhythm and row affordance. */
+.clinical-portal-content table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--clinical-ink-soft);
+}
+
+.clinical-portal-content thead {
+  background-color: var(--clinical-surface-2);
+}
+
+.clinical-portal-content th {
+  color: var(--clinical-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Dark inventory table bands need an explicit foreground override because the
+   shared table typography above intentionally mutes ordinary light headers. */
+.clinical-portal-content thead.inventory-table-head,
+.clinical-portal-content thead.inventory-table-head th {
+  color: #fff;
+}
+
+.clinical-portal-content thead.inventory-table-head {
+  background-color: #2e4a48;
+}
+
+/* Any dark-banded table header uses a `text-white` header row — keep it white so
+   the shared header muting above doesn't dim it to near-invisibility on the dark
+   band. Covers every inventory / billing / trend table without per-table classes. */
+.clinical-portal-content tr.text-white th {
+  color: #fff;
+}
+
+.clinical-portal-content :where(th, td) {
+  border-color: var(--clinical-line);
+  padding-block: 0.75rem;
+}
+
+.clinical-portal-content tbody tr {
+  background-color: var(--clinical-surface);
+  transition: background-color 150ms ease;
+}
+
+.clinical-portal-content tbody tr:hover {
+  background-color: var(--clinical-surface-2);
+}
+
+/* Tabs read as one control family rather than unrelated page-specific buttons. */
+.clinical-portal-content [role="tablist"] {
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--clinical-line);
+  border-radius: 0.875rem;
+  background-color: var(--clinical-surface-2);
+}
+
+.clinical-portal-content [role="tab"] {
+  min-height: 2.5rem;
+  border-radius: 0.625rem;
+  color: var(--clinical-muted);
+}
+
+.clinical-portal-content [role="tab"][aria-selected="true"] {
+  background-color: var(--clinical-surface);
+  color: var(--clinical-ink);
+  box-shadow: 0 4px 14px -12px rgba(15, 23, 42, 0.6);
+}
+
+/* Dark mode is composed as a navy surface hierarchy rather than a mechanical
+   inversion. Inset controls recede, cards stay readable, and primary indigo
+   remains the strongest action/selection cue. */
+:root:not(.light) .clinical-portal-content {
+  scrollbar-color: var(--clinical-line-strong) var(--clinical-surface-inset);
+}
+
+:root:not(.light) .clinical-portal-content ::selection {
+  background: color-mix(in srgb, var(--clinical-focus) 32%, transparent);
+  color: var(--clinical-ink);
+}
+
+:root:not(.light) .clinical-portal-content .clinical-summary-band {
+  border: 1px solid color-mix(in srgb, var(--clinical-focus) 42%, transparent);
+  box-shadow: 0 22px 44px -30px rgba(0, 0, 0, 0.95);
+}
+
+:root:not(.light) .clinical-portal-content .clinical-card {
+  box-shadow: var(--clinical-shadow);
+}
+
+/* Legacy Nurse and Caregiver boards use white and warm-neutral utility
+   surfaces directly. Remap those surfaces and their common ink values to the
+   clinical tokens so the same components remain legible in dark mode. */
+:root:not(.light) .clinical-portal-content .bg-white {
+  background-color: var(--clinical-surface);
+}
+
+.clinical-portal-content [class*="text-[#2B2B27]"],
+.clinical-portal-content [class*="text-[#1F2937]"] {
+  color: var(--clinical-ink);
+}
+
+.clinical-portal-content [class*="text-[#6B6E63]"],
+.clinical-portal-content [class*="text-[#8A8D82]"] {
+  color: var(--clinical-muted);
+}
+
+:root:not(.light) .clinical-portal-content [class*="bg-[#F3F4EE]"],
+:root:not(.light) .clinical-portal-content [class*="bg-[#F5F6F1]"],
+:root:not(.light) .clinical-portal-content [class*="bg-[#F7F8FA]"],
+:root:not(.light) .clinical-portal-content [class*="bg-[#FAFAF7]"] {
+  background-color: var(--clinical-surface-2);
+}
+
+:root:not(.light) .clinical-portal-content [class*="border-[#D6D8CD]"],
+:root:not(.light) .clinical-portal-content [class*="border-[#E1E3D9]"],
+:root:not(.light) .clinical-portal-content [class*="border-[#EBEDE4]"] {
+  border-color: var(--clinical-line);
+}
+
+/* Semantic pastel utilities become restrained tinted surfaces in dark mode;
+   their labels stay readable without turning every status into neon. */
+:root:not(.light) .clinical-portal-content :where([class*="bg-red-50"], [class*="bg-red-100"]) { background-color: color-mix(in srgb, var(--clinical-coral) 15%, var(--clinical-surface)); }
+:root:not(.light) .clinical-portal-content :where([class*="bg-orange-50"], [class*="bg-orange-100"], [class*="bg-amber-50"], [class*="bg-amber-100"], [class*="bg-yellow-50"], [class*="bg-yellow-100"]) { background-color: color-mix(in srgb, var(--clinical-amber) 14%, var(--clinical-surface)); }
+:root:not(.light) .clinical-portal-content :where([class*="bg-green-50"], [class*="bg-green-100"], [class*="bg-emerald-50"], [class*="bg-emerald-100"]) { background-color: color-mix(in srgb, var(--clinical-green) 14%, var(--clinical-surface)); }
+:root:not(.light) .clinical-portal-content :where([class*="bg-blue-50"], [class*="bg-blue-100"], [class*="bg-indigo-50"], [class*="bg-indigo-100"], [class*="bg-purple-50"], [class*="bg-purple-100"]) { background-color: color-mix(in srgb, var(--clinical-panel) 15%, var(--clinical-surface)); }
+
+:root:not(.light) .clinical-portal-content :where([class*="text-red-700"], [class*="text-red-800"], [class*="text-red-900"]) { color: #fca5a5; }
+:root:not(.light) .clinical-portal-content :where([class*="text-orange-700"], [class*="text-orange-800"], [class*="text-amber-700"], [class*="text-amber-800"], [class*="text-yellow-700"], [class*="text-yellow-800"], [class*="text-yellow-900"]) { color: #fcd34d; }
+:root:not(.light) .clinical-portal-content :where([class*="text-green-700"], [class*="text-green-800"], [class*="text-green-900"], [class*="text-emerald-700"], [class*="text-emerald-800"]) { color: #86efac; }
+:root:not(.light) .clinical-portal-content :where([class*="text-blue-700"], [class*="text-blue-800"], [class*="text-blue-900"], [class*="text-indigo-700"], [class*="text-indigo-800"], [class*="text-purple-700"], [class*="text-purple-800"], [class*="text-purple-900"]) { color: #c7d2fe; }
+
+:root:not(.light) .clinical-portal-content :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+  color-scheme: dark;
+  background-color: var(--clinical-surface-inset);
+  border-color: var(--clinical-line-strong);
+}
+
+:root:not(.light) .clinical-portal-content :where(input, select, textarea):hover:not(:disabled) {
+  background-color: var(--clinical-surface);
+  border-color: color-mix(in srgb, var(--clinical-focus) 42%, var(--clinical-line-strong));
+}
+
+:root:not(.light) .clinical-portal-content :where(input, select, textarea):focus {
+  background-color: var(--clinical-surface);
+  border-color: var(--clinical-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--clinical-focus) 22%, transparent);
+}
+
+:root:not(.light) .clinical-portal-content select option {
+  background-color: var(--clinical-surface-raised);
+  color: var(--clinical-ink);
+}
+
+:root:not(.light) .clinical-portal-content [role="tablist"] {
+  background-color: var(--clinical-surface-inset);
+  border-color: var(--clinical-line-strong);
+}
+
+:root:not(.light) .clinical-portal-content [role="tab"][aria-selected="true"] {
+  background-color: var(--clinical-surface-raised);
+  box-shadow: 0 7px 18px -12px rgba(0, 0, 0, 0.95);
+}
+
+:root:not(.light) .clinical-portal-content :where(button, a, input, select, textarea):focus-visible {
+  outline-color: var(--clinical-focus);
+}
+
+.clinical-modal-backdrop {
+  background-color: var(--clinical-overlay, rgba(15, 23, 42, 0.55));
+}
+
+:root:not(.light) .clinical-modal-panel {
+  background-color: var(--clinical-surface-raised) !important;
+}
+
+@media (max-width: 640px) {
+  .clinical-portal-content { font-size: 0.875rem; }
+  .clinical-portal-content h1 { font-size: 1.375rem; }
+  .clinical-portal-content :where(button, a[class*="px-"]) { min-height: 2.75rem; }
+  .clinical-portal-content :where(.overflow-x-auto, [class*="overflow-x-auto"]) { -webkit-overflow-scrolling: touch; }
+  .clinical-portal-content :where(.flex, .grid) > * { min-width: 0; }
+  .clinical-portal-content :where(h1, h2, h3, p) { overflow-wrap: anywhere; }
+  .clinical-portal-content :where(img, video, canvas, svg) { max-width: 100%; }
+  .clinical-portal-content :where([class*="min-w-["]):not(table) { min-width: 0 !important; }
+  .clinical-portal-content :where([class*="max-w-["]) { max-width: 100% !important; }
+  .clinical-portal-content :where(.overflow-x-auto, [class*="overflow-x-auto"]) {
+    width: 100%;
+    max-width: calc(100vw - 1.5rem);
+    overscroll-behavior-inline: contain;
+  }
+  .clinical-portal-content :where(table) { font-size: 0.8125rem; }
+}
+
+@media (pointer: coarse) {
+  .clinical-portal-content :where(button, a, input, select, textarea) { min-height: 2.75rem; }
+}

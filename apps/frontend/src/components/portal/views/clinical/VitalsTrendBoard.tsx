@@ -20,6 +20,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity, Heart, Thermometer, Droplets, Wind, Scale, Zap, Moon,
+  Utensils, Footprints, Smile, AlertTriangle, CircleDot, Waves,
   FileDown, type LucideIcon,
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -51,6 +52,21 @@ const NORMAL = {
 };
 
 const inRange = (v: number | null, lo: number, hi: number) => v != null && v >= lo && v <= hi;
+
+// Ordinal maps for the categorical DailyRounds domains → a numeric trend line, with
+// a formatter that restores the real label in the tooltip + the latest value.
+const EDEMA_LABEL = ["None", "Trace", "Mild", "Moderate", "Severe", "Deep"];
+const EDEMA_ORD: Record<string, number> = { NONE: 0, TRACE: 1, MILD: 2, MODERATE: 3, SEVERE: 4, DEEP: 5 };
+const MOOD_ORDER = ["AGGRESSIVE", "AGITATED", "ANXIOUS", "CONFUSED", "SAD", "WITHDRAWN", "APATHETIC", "COOPERATIVE", "CALM", "HAPPY"];
+const MOOD_ORD: Record<string, number> = Object.fromEntries(MOOD_ORDER.map((m, i) => [m, i]));
+const MOOD_LABEL = MOOD_ORDER.map((m) => m.charAt(0) + m.slice(1).toLowerCase());
+const CONCERN_LABEL = ["—", "Low", "Medium", "High", "Critical"];
+const CONCERN_ORD: Record<string, number> = { LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
+const fmtEdema = (v: number) => EDEMA_LABEL[Math.round(v)] ?? String(v);
+const fmtMood = (v: number) => MOOD_LABEL[Math.round(v)] ?? String(v);
+const fmtConcern = (v: number) => CONCERN_LABEL[Math.round(v)] ?? String(v);
+const fmtBristol = (v: number) => `Type ${Math.round(v)}`;
+const parsePct = (x: unknown): number | null => { const n = parseInt(String(x ?? "").replace(/[^0-9]/g, ""), 10); return Number.isFinite(n) ? n : null; };
 
 // One normalized reading for a resident.
 interface Reading {
@@ -86,7 +102,7 @@ const isAbnormal = (r: Reading): boolean => {
 };
 
 // ── Inline SVG line chart (module-level, dependency-free) ────────────────────
-interface Series { label: string; color: string; values: (number | null)[] }
+interface Series { label: string; color: string; values: (number | null)[]; fmt?: (v: number) => string }
 interface ChartPoint { at: string }
 
 function niceExtent(min: number, max: number, band?: readonly [number, number]): [number, number] {
@@ -169,7 +185,7 @@ function LineChart({ points, series, band, height = 160, yDigits = 0, area = fal
             <path d={linePath(se.values)} fill="none" stroke={se.color} strokeWidth={2.25} strokeLinejoin="round" strokeLinecap="round" />
             {se.values.map((v, i) => v == null ? null : (
               <circle key={i} cx={x(i)} cy={y(v)} r={2.4} fill="#fff" stroke={se.color} strokeWidth={1.5}>
-                <title>{`${fmtDay(points[i].at)} · ${fmtNum(v, yDigits)}`}</title>
+                <title>{`${fmtDay(points[i].at)} · ${se.fmt ? se.fmt(v) : fmtNum(v, yDigits)}`}</title>
               </circle>
             ))}
           </g>
@@ -297,26 +313,39 @@ function BloodPressureCard({ points }: { points: Reading[] }) {
 }
 
 // ── Other-domain mini trend (module-level) ───────────────────────────────────
-function OtherTrendCard({ title, icon: Icon, tint, color, unit, points, digits, idBase }: {
-  title: string; icon: LucideIcon; tint: string; color: string; unit: string; points: { at: string; v: number | null }[]; digits: number; idBase: string;
+function OtherTrendCard({ title, icon: Icon, tint, color, unit, points, digits, idBase, band, fmt, caption }: {
+  title: string; icon: LucideIcon; tint: string; color: string; unit: string; points: { at: string; v: number | null }[]; digits: number; idBase: string; band?: readonly [number, number]; fmt?: (v: number) => string; caption?: string;
 }) {
   const values = points.map((p) => p.v);
-  const latest = [...values].reverse().find((v) => v != null) ?? null;
+  const hasData = values.some((v) => v != null);
+  const latest = [...values].reverse().find((v): v is number => v != null) ?? null;
   const delta = trendDelta(values);
+  const ok = band && latest != null ? inRange(latest, band[0], band[1]) : true;
+  const latestText = latest == null ? "—" : fmt ? fmt(latest) : fmtNum(latest, digits);
   return (
     <div className="rounded-xl border p-4 shadow-sm shadow-black/[0.03]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tint}`} style={{ backgroundColor: "var(--clinical-surface-2)" }}><Icon className="h-4 w-4" /></span>
-          <h3 className="truncate text-sm font-bold text-[var(--clinical-ink)]">{title}</h3>
+          <div className="min-w-0">
+            <h3 className="truncate text-sm font-bold text-[var(--clinical-ink)]">{title}</h3>
+            {caption && <p className="truncate text-[11px] text-[var(--clinical-muted)]">{caption}</p>}
+          </div>
         </div>
         <DeltaChip delta={delta} />
       </div>
       <div className="mt-2.5 flex items-baseline gap-1.5">
-        <span className="text-2xl font-bold tracking-tight text-[var(--clinical-ink)]">{fmtNum(latest, digits)}</span>
+        <span className="text-2xl font-bold tracking-tight" style={{ color: latest != null && band ? (ok ? "var(--clinical-ink)" : "var(--clinical-coral)") : "var(--clinical-ink)" }}>{latestText}</span>
         <span className="text-xs font-medium text-[var(--clinical-muted)]">{unit}</span>
+        {latest != null && band && <span className="ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: ok ? "var(--clinical-green)" : "var(--clinical-coral)" }}>{ok ? "Normal" : "Out of range"}</span>}
       </div>
-      <div className="mt-1.5"><LineChart points={points} series={[{ label: title, color, values }]} height={150} yDigits={digits} area idBase={idBase} /></div>
+      <div className="mt-1.5">
+        {hasData ? (
+          <LineChart points={points} series={[{ label: title, color, values, fmt }]} band={band} height={150} yDigits={digits} area idBase={idBase} />
+        ) : (
+          <div className="flex h-[150px] items-center justify-center text-sm text-[var(--clinical-muted)]">No data in range</div>
+        )}
+      </div>
     </div>
   );
 }
@@ -343,6 +372,13 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE" }: { clinicia
   const vitQ = useLiveQuery<Row>("vital-signs", { query: "take=2000", tables: ["VitalSigns"] });
   const painQ = useLiveQuery<Row>("pain-records", { query: "take=2000", tables: ["PainRecord"] });
   const sleepQ = useLiveQuery<Row>("round-sleep-records", { query: "take=2000", tables: ["SleepRecord"] });
+  const bowelQ = useLiveQuery<Row>("bowel-records", { query: "take=2000", tables: ["BowelRecord"] });
+  const urineQ = useLiveQuery<Row>("urine-records", { query: "take=2000", tables: ["UrineRecord"] });
+  const edemaQ = useLiveQuery<Row>("edema-records", { query: "take=2000", tables: ["EdemaRecord"] });
+  const concernQ = useLiveQuery<Row>("concern-records", { query: "take=2000", tables: ["ConcernRecord"] });
+  const moodQ = useLiveQuery<Row>("mood-records", { query: "take=2000", tables: ["MoodRecord"] });
+  const mobQ = useLiveQuery<Row>("mobility-records", { query: "take=2000", tables: ["MobilityRecord"] });
+  const mealQ = useLiveQuery<Row>("meal-records", { query: "take=2000", tables: ["MealRecord"] });
   const { data: settingRows } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
 
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
@@ -435,6 +471,36 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE" }: { clinicia
     return pts.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   }, [residentId, sleepQ.data, roundInfo, rangeStart, nowMs]);
 
+  // The other DailyRounds domains, joined the same way (dailyRoundId → resident).
+  // Categorical domains (edema/mood/concern) are mapped to an ordinal via the maps
+  // above; their card formatter restores the real label.
+  const domain = useMemo(() => {
+    const mk = (rows: Row[] | undefined, getVal: (r: Row) => number | null) => {
+      if (!residentId) return [] as { at: string; v: number | null }[];
+      const pts: { at: string; v: number | null }[] = [];
+      (rows || []).forEach((rec) => {
+        const info = roundInfo.get(s(rec.dailyRoundId));
+        if (!info || info.resId !== residentId) return;
+        const v = getVal(rec);
+        if (v == null) return;
+        const at = s(rec.time) || info.date;
+        const t = new Date(at).getTime();
+        if (!Number.isFinite(t) || t < rangeStart || t > nowMs) return;
+        pts.push({ at, v });
+      });
+      return pts.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+    };
+    return {
+      urine: mk(urineQ.data, (r) => num(r.outputMl) ?? num(r.estimatedMl)),
+      meal: mk(mealQ.data, (r) => parsePct(r.intakeLevel)),
+      mobility: mk(mobQ.data, (r) => num(r.durationMinutes)),
+      bowel: mk(bowelQ.data, (r) => num(r.bristolType)),
+      edema: mk(edemaQ.data, (r) => EDEMA_ORD[s(r.severity)] ?? null),
+      mood: mk(moodQ.data, (r) => MOOD_ORD[s(r.mood)] ?? null),
+      concern: mk(concernQ.data, (r) => CONCERN_ORD[s(r.severity)] ?? null),
+    };
+  }, [residentId, roundInfo, rangeStart, nowMs, urineQ.data, mealQ.data, mobQ.data, bowelQ.data, edemaQ.data, moodQ.data, concernQ.data]);
+
   const startLabel = useMemo(() => new Date(rangeStart).toISOString().slice(0, 10), [rangeStart]);
   const endLabel = useMemo(() => new Date(nowMs).toISOString().slice(0, 10), [nowMs]);
 
@@ -525,12 +591,15 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE" }: { clinicia
                 {smallCards.map((spec) => (
                   <VitalCard key={spec.key} spec={spec} points={readings.map((r) => ({ at: r.at, v: spec.get(r) }))} />
                 ))}
-                {painPoints.length >= 2 && (
-                  <OtherTrendCard title="Pain Score" icon={Zap} tint="text-orange-500" color="#f97316" unit="/10" points={painPoints} digits={0} idBase="ot-pain" />
-                )}
-                {sleepPoints.length >= 2 && (
-                  <OtherTrendCard title="Sleep Hours" icon={Moon} tint="text-indigo-500" color="#6366f1" unit="h" points={sleepPoints} digits={1} idBase="ot-sleep" />
-                )}
+                <OtherTrendCard title="Pain Score" icon={Zap} tint="text-orange-500" color="#f97316" unit="/10" points={painPoints} digits={0} band={[0, 3]} caption="Normal: 0–3 /10" idBase="ot-pain" />
+                <OtherTrendCard title="Sleep Hours" icon={Moon} tint="text-indigo-500" color="#6366f1" unit="h" points={sleepPoints} digits={1} band={[6, 8]} caption="Normal: 6–8 h/night" idBase="ot-sleep" />
+                <OtherTrendCard title="Urine Output" icon={Droplets} tint="text-cyan-500" color="#06b6d4" unit="mL" points={domain.urine} digits={0} caption="Output per void" idBase="ot-urine" />
+                <OtherTrendCard title="Meal Intake" icon={Utensils} tint="text-green-600" color="#16a34a" unit="%" points={domain.meal} digits={0} band={[50, 100]} caption="Normal: ≥ 50% intake" idBase="ot-meal" />
+                <OtherTrendCard title="Mobility Duration" icon={Footprints} tint="text-teal-600" color="#0d9488" unit="min" points={domain.mobility} digits={0} caption="Active minutes per session" idBase="ot-mobility" />
+                <OtherTrendCard title="Bowel (Bristol)" icon={CircleDot} tint="text-amber-600" color="#d97706" unit="" points={domain.bowel} digits={0} band={[3, 5]} fmt={fmtBristol} caption="Normal: Type 3–5" idBase="ot-bowel" />
+                <OtherTrendCard title="Edema Severity" icon={Waves} tint="text-blue-500" color="#3b82f6" unit="" points={domain.edema} digits={0} band={[0, 1]} fmt={fmtEdema} caption="None → Deep (0–5)" idBase="ot-edema" />
+                <OtherTrendCard title="Mood" icon={Smile} tint="text-purple-500" color="#a855f7" unit="" points={domain.mood} digits={0} fmt={fmtMood} caption="Wellbeing (worst → best)" idBase="ot-mood" />
+                <OtherTrendCard title="Concerns" icon={AlertTriangle} tint="text-red-500" color="#ef4444" unit="" points={domain.concern} digits={0} band={[0, 1]} fmt={fmtConcern} caption="Severity: Low → Critical" idBase="ot-concern" />
               </div>
 
               {/* Raw readings table */}

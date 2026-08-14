@@ -499,7 +499,7 @@ export default function FacilityInventory() {
         <div className="bg-white rounded-lg border border-[#E1E3D9] overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-[#2E4A48]">
+            <thead className="inventory-table-head bg-[#2E4A48]">
               <tr>
                 <th className="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#C9D2CB]">Item</th>
                 <th className="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#C9D2CB]">Current Qty</th>

@@ -14,7 +14,7 @@ import { useMemo, useState } from "react";
 import {
   TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, CheckCircle2,
   Bath, Shirt, Scissors, Toilet, ArrowLeftRight, Utensils, Footprints, Droplets, Brain, Moon,
-  type LucideIcon,
+  CalendarDays, Clock, Plus, Check, X, type LucideIcon,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -22,7 +22,7 @@ import { upsertRecord, createRecord } from "@/lib/api";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { PREADMISSION_KEY, parseAssessments, continenceScore, newId, type AdlItem } from "@/lib/preadmissionAssessment";
-import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, FieldLabel, controlClass } from "./clinical-ui";
+import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, FieldLabel, SearchInput, controlClass } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const ADL_KEY = "adl_logs";
@@ -101,6 +101,8 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
   const [shift, setShift] = useState(shiftNow());
   const [view, setView] = useState<"log" | "alerts">("log");
   const [logDomain, setLogDomain] = useState<DomainKey | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "needs" | "documented">("all");
 
   const resident = residents.find((r: Row) => s(r.id) === resId) || null;
 
@@ -122,6 +124,22 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
   const shiftLogs = useMemo(() => logs.filter((l) => l.residentId === resId && l.date === date && l.shift === shift), [logs, resId, date, shift]);
   const loggedByDomain = useMemo(() => new Map(shiftLogs.map((l) => [l.domain, l])), [shiftLogs]);
   const declines = useMemo(() => logs.filter((l) => (!resId || l.residentId === resId) && (l.change === "Declined" || l.change === "Significant Decline")).sort((a, b) => (b.at || "").localeCompare(a.at || "")), [logs, resId]);
+  const scopeLogs = useMemo(() => logs.filter((l) => l.date === date && l.shift === shift), [logs, date, shift]);
+  const documentedResidentIds = useMemo(() => new Set(scopeLogs.map((l) => l.residentId)), [scopeLogs]);
+  const documentedResidents = documentedResidentIds.size;
+  const stillDue = Math.max(0, residents.length - documentedResidents);
+  const shiftDeclines = useMemo(() => scopeLogs.filter((l) => l.change === "Declined" || l.change === "Significant Decline").sort((a, b) => (b.at || "").localeCompare(a.at || "")), [scopeLogs]);
+  const coverage = residents.length ? Math.round((documentedResidents / residents.length) * 100) : 0;
+  const filteredResidents = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return residents.filter((r: Row) => {
+      const id = s(r.id);
+      const matchesSearch = !query || s(r.name).toLowerCase().includes(query) || s(r.room).toLowerCase().includes(query);
+      const isDocumented = documentedResidentIds.has(id);
+      const matchesStatus = statusFilter === "all" || (statusFilter === "documented" ? isDocumented : !isDocumented);
+      return matchesSearch && matchesStatus;
+    });
+  }, [residents, search, statusFilter, documentedResidentIds]);
 
   const persist = async (next: AdlEntry[]) => { await upsertRecord("app-settings", ADL_KEY, { key: ADL_KEY, value: JSON.stringify(next) }); await refetch(); };
 
@@ -142,6 +160,135 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
 
   return (
     <ClinicalPage>
+      {true ? (
+        <>
+          <ClinicalHeader
+            title="Daily Living (ADL)"
+            subtitle="Track assistance, compare each activity with the resident's baseline, and surface meaningful changes during the shift."
+            right={
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="relative inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm font-semibold text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+                  <CalendarDays className="h-4 w-4 text-[var(--clinical-panel)]" />
+                  <span className="hidden lg:inline">{new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span>
+                  <span className="lg:hidden">Date</span>
+                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="ADL date" className="absolute inset-0 cursor-pointer opacity-0" />
+                </label>
+                <label className="relative inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm font-semibold text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+                  <Clock className="h-4 w-4 text-[var(--clinical-amber)]" />
+                  <span className="hidden md:inline">{SHIFTS.find((item) => item.v === shift)?.label}</span>
+                  <span className="md:hidden">{shift} Shift</span>
+                  <select value={shift} onChange={(e) => setShift(e.target.value)} aria-label="ADL shift" className="absolute inset-0 cursor-pointer opacity-0">
+                    {SHIFTS.map((item) => <option key={item.v} value={item.v}>{item.label}</option>)}
+                  </select>
+                </label>
+              </div>
+            }
+          />
+
+          <section className="clinical-summary-band mt-6 overflow-hidden rounded-2xl bg-[var(--clinical-panel)] text-white">
+            <div className="grid gap-px bg-white/15 sm:grid-cols-[1.35fr_repeat(3,1fr)]">
+              <div className="bg-[var(--clinical-panel)] p-5 sm:p-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div><p className="text-sm font-semibold text-blue-100">ADL documentation coverage</p><p className="mt-1 text-3xl font-bold tracking-[-0.03em]">{coverage}%</p></div>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15"><Activity className="h-6 w-6" /></div>
+                </div>
+                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-black/20" aria-label={`${documentedResidents} of ${residents.length} residents documented`}>
+                  <div className="h-full rounded-full bg-white transition-[width] duration-500" style={{ width: `${coverage}%` }} />
+                </div>
+                <p className="mt-2 text-xs text-blue-100">{documentedResidents} of {residents.length} residents have an ADL entry this shift</p>
+              </div>
+              <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Entries recorded</p><p className="mt-2 text-2xl font-bold tabular-nums">{scopeLogs.length}</p></div>
+              <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Still due</p><p className="mt-2 text-2xl font-bold tabular-nums">{stillDue}</p></div>
+              <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Decline flags</p><p className="mt-2 text-2xl font-bold tabular-nums">{shiftDeclines.length}</p></div>
+            </div>
+          </section>
+
+          <div className="my-5 flex flex-col gap-3 rounded-2xl border p-3 lg:flex-row lg:items-center" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+            <SearchInput value={search} onChange={setSearch} placeholder="Search resident or room..." className="min-w-0 flex-1" />
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div role="tablist" aria-label="ADL documentation status" className="grid grid-cols-3 gap-1 rounded-xl bg-[var(--clinical-surface-2)] p-1">
+                {([["all", "All", residents.length], ["needs", "Still due", stillDue], ["documented", "Documented", documentedResidents]] as const).map(([value, label, count]) => (
+                  <button key={value} role="tab" aria-selected={statusFilter === value} onClick={() => { setStatusFilter(value); setView("log"); }} className={`min-h-10 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition ${statusFilter === value ? "bg-[var(--clinical-surface)] text-[var(--clinical-ink)] shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>
+                    {label} <span className="ml-1 tabular-nums opacity-70">{count}</span>
+                  </button>
+                ))}
+              </div>
+              <ClinicalButton variant={view === "alerts" ? "primary" : "secondary"} size="sm" onClick={() => setView(view === "alerts" ? "log" : "alerts")}><AlertTriangle className="h-4 w-4" /> Declines {shiftDeclines.length > 0 && `(${shiftDeclines.length})`}</ClinicalButton>
+            </div>
+          </div>
+
+          {view === "alerts" ? (
+            <div className="space-y-3">
+              {shiftDeclines.length === 0 ? (
+                <div className="rounded-2xl border p-10 text-center" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+                  <CheckCircle2 className="mx-auto h-7 w-7 text-[var(--clinical-green)]" /><p className="mt-3 font-bold text-[var(--clinical-ink)]">No decline flags this shift</p><p className="mt-1 text-sm text-[var(--clinical-muted)]">Changes from baseline will appear here as staff document ADLs.</p>
+                </div>
+              ) : shiftDeclines.map((entry) => {
+                const domain = DOMAINS.find((item) => item.key === entry.domain);
+                const residentRow = residents.find((item: Row) => s(item.id) === entry.residentId);
+                const Icon = domain?.icon;
+                const significant = entry.change === "Significant Decline";
+                return (
+                  <div key={entry.id} className="flex items-start gap-3 rounded-2xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: significant ? "var(--clinical-coral)" : "var(--clinical-amber)" }}>
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--clinical-surface-2)]">{Icon && <Icon className="h-5 w-5 text-[var(--clinical-panel)]" />}</div>
+                    <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-bold text-[var(--clinical-ink)]">{s(residentRow?.name) || "Resident"}</p><ChangeChip change={entry.change} /></div><p className="mt-1 text-sm text-[var(--clinical-ink-soft)]">{domain?.label} · {entry.assistance}</p>{entry.notes && <p className="mt-2 text-sm text-[var(--clinical-muted)]">{entry.notes}</p>}</div>
+                    <span className="shrink-0 text-xs text-[var(--clinical-muted)]">{entry.shift} shift</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredResidents.length === 0 ? (
+                <div className="rounded-2xl border p-10 text-center" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}><p className="font-bold text-[var(--clinical-ink)]">{residents.length === 0 ? "No active residents" : "No residents match"}</p><p className="mt-1 text-sm text-[var(--clinical-muted)]">{residents.length === 0 ? "Residents appear here once they are admitted." : "Try a different search or status filter."}</p></div>
+              ) : filteredResidents.map((row: Row) => {
+                const id = s(row.id);
+                const residentLogs = scopeLogs.filter((entry) => entry.residentId === id);
+                const domainCount = new Set(residentLogs.map((entry) => entry.domain)).size;
+                const lastEntry = [...residentLogs].sort((a, b) => (b.at || "").localeCompare(a.at || ""))[0];
+                const open = resId === id;
+                const nextDomain = DOMAINS.find((domain) => !residentLogs.some((entry) => entry.domain === domain.key))?.key || DOMAINS[0].key;
+                return (
+                  <div key={id} className="overflow-hidden rounded-2xl border transition hover:border-[var(--clinical-line-strong)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+                    <div className="grid items-center gap-4 p-4 sm:grid-cols-[minmax(190px,1.15fr)_minmax(180px,1fr)_auto] sm:p-5">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] leading-none"><span className="text-[9px] font-semibold uppercase tracking-wide text-[var(--clinical-muted)]">Room</span><span className="mt-1 text-base font-bold text-[var(--clinical-ink)]">{s(row.room)}</span></div>
+                        <div className="min-w-0"><p className="truncate font-bold text-[var(--clinical-ink)]">{s(row.name)}</p><p className={`mt-1 inline-flex items-center gap-1.5 text-xs font-semibold ${domainCount ? "text-[var(--clinical-green)]" : "text-[var(--clinical-amber)]"}`}>{domainCount ? <Check className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}{domainCount ? "ADLs documented this shift" : "ADL documentation still due"}</p></div>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center justify-between gap-3 text-xs"><span className="font-semibold text-[var(--clinical-ink-soft)]">{domainCount} of 10 domains</span><span className="text-[var(--clinical-muted)]">{lastEntry ? new Date(lastEntry.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "No entry yet"}</span></div>
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--clinical-surface-2)]" aria-label={`${domainCount} of 10 ADL domains documented`}><div className="h-full rounded-full bg-[var(--clinical-green)] transition-[width] duration-500" style={{ width: `${domainCount * 10}%` }} /></div>
+                      </div>
+                      <div className="flex items-center justify-end gap-2">
+                        <ClinicalButton variant={domainCount ? "secondary" : "primary"} size="sm" onClick={() => { setResId(id); setLogDomain(nextDomain); }}><Plus className="h-4 w-4" /> {domainCount ? "Continue ADL" : "Start ADL"}</ClinicalButton>
+                        <button onClick={() => setResId(open ? "" : id)} aria-label={open ? "Close ADL domains" : "Review ADL domains"} className="flex h-11 w-11 items-center justify-center rounded-xl text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-ink)]">{open ? <X className="h-5 w-5" /> : <Activity className="h-5 w-5" />}</button>
+                      </div>
+                    </div>
+                    {open && (
+                      <div className="grid grid-cols-1 gap-3 border-t bg-[var(--clinical-surface-2)] p-4 sm:grid-cols-2 lg:grid-cols-5" style={{ borderColor: "var(--clinical-line)" }}>
+                        {DOMAINS.map((domain) => {
+                          const baseline = baselineFor(domain.key);
+                          const logged = loggedByDomain.get(domain.key);
+                          const Icon = domain.icon;
+                          return (
+                            <button key={domain.key} onClick={() => setLogDomain(domain.key)} className="rounded-xl border p-3 text-left transition hover:border-[var(--clinical-line-strong)] hover:shadow-sm" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+                              <div className="flex items-center justify-between gap-3"><Icon className="h-5 w-5 text-[var(--clinical-panel)]" />{logged ? <Check className="h-4 w-4 text-[var(--clinical-green)]" /> : <Plus className="h-4 w-4 text-[var(--clinical-muted)]" />}</div>
+                              <p className="mt-3 text-sm font-bold text-[var(--clinical-ink)]">{domain.label}</p>
+                              <p className="mt-1 text-[11px] text-[var(--clinical-muted)]">{logged ? logged.assistance : baseline ? `Baseline: ${baseline.label}` : "No baseline recorded"}</p>
+                              {logged && <div className="mt-2"><ChangeChip change={logged.change} /></div>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
       <ClinicalHeader
         subtitle="Track Activities of Daily Living per resident, shift, and domain"
       />
@@ -251,6 +398,9 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
               })}
             </div>
           )}
+        </>
+      )}
+
         </>
       )}
 

@@ -16,7 +16,7 @@ import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoar
 import PhysicianCarePlans from "@/components/portal/views/physician/PhysicianCarePlans";
 import NurseMedications from "@/components/portal/views/NurseMedications";
 import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
-import CarePlanBoard from "@/components/portal/views/clinical/CarePlanBoard";
+import CarePlanReviewsBoard from "@/components/portal/views/clinical/CarePlanReviewsBoard";
 import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
 import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
 import MARDailyBoard from "@/components/portal/views/clinical/MARDailyBoard";
@@ -85,7 +85,7 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
     case "rounds":
       return <AssessmentAcuityBoard clinicianRole="CAREGIVER" />;
     case "careplans":
-      return <CarePlanBoard />;
+      return <CarePlanReviewsBoard clinicianRole="CAREGIVER" />;
     case "medications":
       return <NurseMedications />;
     case "documentation":

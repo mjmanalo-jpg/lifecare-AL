@@ -67,12 +67,12 @@ export const levelOf = (r: Row) => LEVELS[s(r.careLevel)] || { n: 2, label: "Ass
 const LEVEL_DOT: Record<number, string> = { 1: "var(--clinical-green)", 2: "var(--clinical-panel)", 3: "var(--clinical-amber)", 4: "var(--clinical-coral)", 5: "var(--clinical-coral)" };
 function LevelBadge({ lvl }: { lvl: { n: number; label: string } }) {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>
+    <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>
       <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: LEVEL_DOT[lvl.n] ?? "var(--clinical-panel)" }} />Level {lvl.n} · {lvl.label}
     </span>
   );
 }
-const genderSym = (g: unknown) => { const v = s(g).toLowerCase(); return v.startsWith("m") ? "♂" : v.startsWith("f") ? "♀" : "•"; };
+const genderLabel = (g: unknown) => { const v = s(g).toLowerCase(); return v.startsWith("m") ? "Male" : v.startsWith("f") ? "Female" : "Gender not specified"; };
 
 // Theme-safe domain label chip for the Care Logs timeline (replaces the
 // hardcoded bg-*-100 pills that lost contrast in dark mode).
@@ -360,20 +360,22 @@ export default function CareLogsBoard({ clinicianRole = "NURSE" }: { clinicianRo
             const diet = s(r.dietRestriction) || s(r.raw?.dietType) || "Regular";
             return (
               <div key={s(r.id)} className="rounded-xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-3">
+                  <div className="flex min-w-0 items-start gap-3 sm:flex-1 sm:items-center">
                   <div className="w-11 h-11 rounded-xl bg-[var(--clinical-surface-2)] flex flex-col items-center justify-center leading-none shrink-0"><span className="text-[9px] font-semibold text-[var(--clinical-muted)]">Rm</span><span className="text-sm font-bold text-[var(--clinical-ink-soft)]">{s(r.room)}</span></div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-bold text-[var(--clinical-ink)] truncate">{s(r.name)}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+                      <p className="break-words font-bold leading-snug text-[var(--clinical-ink)] sm:truncate">{s(r.name)}</p>
                       <LevelBadge lvl={lvl} />
                     </div>
-                    <p className="text-xs text-[var(--clinical-muted)] mt-0.5">{genderSym(r.raw?.gender)} · {diet}</p>
+                    <p className="text-xs text-[var(--clinical-muted)] mt-0.5">{genderLabel(r.raw?.gender)} · {diet}</p>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button onClick={() => setViewFor(r)} aria-label={`View ${s(r.name)}'s profile`} title="View profile" className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--clinical-surface-2)] hover:brightness-95 text-[var(--clinical-ink-soft)]"><Eye className="w-4 h-4" /></button>
-                    <button onClick={() => setEditFor(r)} aria-label={`Edit ${s(r.name)}`} title="Edit resident" className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--clinical-surface-2)] hover:brightness-95 text-[var(--clinical-panel)]"><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => deactivate(r)} aria-label={`Deactivate ${s(r.name)}`} title="Deactivate resident" className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--clinical-surface-2)] hover:brightness-95 text-[var(--clinical-coral)]"><UserX className="w-4 h-4" /></button>
-                    <button onClick={() => setQrFor(r)} aria-label={`Show QR for ${s(r.name)}`} title="Resident QR" className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--clinical-surface-2)] hover:brightness-95 text-[var(--clinical-ink-soft)]"><QrCode className="w-4 h-4" /></button>
+                  </div>
+                  <div className="grid w-full grid-cols-4 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:gap-1.5">
+                    <button onClick={() => setViewFor(r)} aria-label={`View ${s(r.name)}'s profile`} title="View profile" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-ink-soft)] hover:brightness-95 sm:w-11"><Eye className="w-4 h-4" /></button>
+                    <button onClick={() => setEditFor(r)} aria-label={`Edit ${s(r.name)}`} title="Edit resident" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-panel)] hover:brightness-95 sm:w-11"><Pencil className="w-4 h-4" /></button>
+                    <button onClick={() => deactivate(r)} aria-label={`Deactivate ${s(r.name)}`} title="Deactivate resident" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-coral)] hover:brightness-95 sm:w-11"><UserX className="w-4 h-4" /></button>
+                    <button onClick={() => setQrFor(r)} aria-label={`Show QR for ${s(r.name)}`} title="Resident QR" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-ink-soft)] hover:brightness-95 sm:w-11"><QrCode className="w-4 h-4" /></button>
                   </div>
                 </div>
               </div>
@@ -397,9 +399,19 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [logFor, setLogFor] = useState<Row | null>(null);
   const [logTab, setLogTab] = useState<DomainKey>("vitals");
+  const [statusFilter, setStatusFilter] = useState<"all" | "needs" | "documented">("all");
 
   const q = search.trim().toLowerCase();
-  const filtered = residents.filter((r: Row) => !q || s(r.name).toLowerCase().includes(q) || s(r.room).toLowerCase().includes(q));
+  const documentedResidents = residents.filter((r: Row) => (byResident.get(s(r.id)) || []).length > 0).length;
+  const needsDocumentation = Math.max(0, residents.length - documentedResidents);
+  const documentedDomains = new Set(entries.map((entry) => entry.domain)).size;
+  const coverage = residents.length ? Math.round((documentedResidents / residents.length) * 100) : 0;
+  const filtered = residents.filter((r: Row) => {
+    const matchesQuery = !q || s(r.name).toLowerCase().includes(q) || s(r.room).toLowerCase().includes(q);
+    const hasEntries = (byResident.get(s(r.id)) || []).length > 0;
+    const matchesStatus = statusFilter === "all" || (statusFilter === "documented" ? hasEntries : !hasEntries);
+    return matchesQuery && matchesStatus;
+  });
   const toggle = (id: string) => setExpanded((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   const now = new Date();
@@ -410,17 +422,50 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
   return (
     <ClinicalPage>
       <ClinicalHeader
-        subtitle={`${entries.length} entr${entries.length === 1 ? "y" : "ies"} today`}
+        title="Daily Care Logs"
+        subtitle="Review shift documentation, identify residents still waiting for an entry, and add care observations from one workspace."
         right={
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}><CalendarDays className="w-4 h-4 text-[var(--clinical-panel)]" /> {dateLabel}</span>
-            <span className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}><SIcon className="w-4 h-4 text-[var(--clinical-amber)]" /> {sm.label}</span>
+            <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm font-semibold text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}><CalendarDays className="h-4 w-4 text-[var(--clinical-panel)]" /> <span className="hidden lg:inline">{dateLabel}</span><span className="lg:hidden">Today</span></span>
+            <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm font-semibold text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}><SIcon className="h-4 w-4 text-[var(--clinical-amber)]" /> {sm.label}</span>
           </div>
         }
       />
 
-      <div className="mt-5 mb-5">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search residents…" />
+      <section className="clinical-summary-band mt-6 overflow-hidden rounded-2xl bg-[var(--clinical-panel)] text-white">
+        <div className="grid gap-px bg-white/15 sm:grid-cols-[1.35fr_repeat(3,1fr)]">
+          <div className="bg-[var(--clinical-panel)] p-5 sm:p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-blue-100">Shift documentation coverage</p>
+                <p className="mt-1 text-3xl font-bold tracking-[-0.03em]">{coverage}%</p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15"><Activity className="h-6 w-6" /></div>
+            </div>
+            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-black/20" aria-label={`${documentedResidents} of ${residents.length} residents documented`}>
+              <div className="h-full rounded-full bg-white transition-[width] duration-500" style={{ width: `${coverage}%` }} />
+            </div>
+            <p className="mt-2 text-xs text-blue-100">{documentedResidents} of {residents.length} residents have an entry this shift</p>
+          </div>
+          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Entries today</p><p className="mt-2 text-2xl font-bold tabular-nums">{entries.length}</p></div>
+          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Still due</p><p className="mt-2 text-2xl font-bold tabular-nums">{needsDocumentation}</p></div>
+          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Domains charted</p><p className="mt-2 text-2xl font-bold tabular-nums">{documentedDomains}<span className="ml-1 text-sm font-semibold text-blue-100">/ 10</span></p></div>
+        </div>
+      </section>
+
+      <div className="my-5 flex flex-col gap-3 rounded-2xl border p-3 sm:flex-row sm:items-center" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+        <SearchInput value={search} onChange={setSearch} placeholder="Search resident or room…" className="min-w-0 flex-1" />
+        <div role="tablist" aria-label="Documentation status" className="grid grid-cols-3 gap-1 rounded-xl bg-[var(--clinical-surface-2)] p-1">
+          {([
+            ["all", "All", residents.length],
+            ["needs", "Still due", needsDocumentation],
+            ["documented", "Documented", documentedResidents],
+          ] as const).map(([value, label, count]) => (
+            <button key={value} role="tab" aria-selected={statusFilter === value} onClick={() => setStatusFilter(value)} className={`min-h-10 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition ${statusFilter === value ? "bg-[var(--clinical-surface)] text-[var(--clinical-ink)] shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>
+              {label} <span className="ml-1 tabular-nums opacity-70">{count}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       <DataState
@@ -434,18 +479,34 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
           {filtered.map((r: Row) => {
             const list = byResident.get(s(r.id)) || [];
             const open = expanded.has(s(r.id));
+            const domainCount = domainsByRes.get(s(r.id))?.size || 0;
+            const lastEntry = list[0];
             return (
-              <div key={s(r.id)} className="rounded-xl border overflow-hidden" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
-                <div className="flex items-center gap-3 p-4">
-                  <div className="w-11 h-11 rounded-xl bg-[var(--clinical-surface-2)] flex flex-col items-center justify-center leading-none shrink-0"><span className="text-[9px] font-semibold text-[var(--clinical-muted)]">Rm</span><span className="text-sm font-bold text-[var(--clinical-ink-soft)]">{s(r.room)}</span></div>
-                  <div className="flex-1 min-w-0"><p className="font-bold text-[var(--clinical-ink)] truncate">{s(r.name)}</p><p className="text-xs text-[var(--clinical-muted)]">{list.length} log{list.length === 1 ? "" : "s"} today</p></div>
-                  <ClinicalButton variant="secondary" size="sm" onClick={() => { setLogTab("vitals"); setLogFor(r); }}><Plus className="w-4 h-4" /> Log</ClinicalButton>
-                  {list.length > 0 && <button onClick={() => toggle(s(r.id))} aria-label={open ? "Collapse logs" : "Expand logs"} className="p-2 rounded-lg hover:bg-[var(--clinical-surface-2)] text-[var(--clinical-muted)]">{open ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}</button>}
+              <div key={s(r.id)} className="group overflow-hidden rounded-2xl border transition hover:border-[var(--clinical-line-strong)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+                <div className="grid items-center gap-4 p-4 sm:grid-cols-[minmax(180px,1.15fr)_minmax(180px,1fr)_auto] sm:p-5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] leading-none"><span className="text-[9px] font-semibold uppercase tracking-wide text-[var(--clinical-muted)]">Room</span><span className="mt-1 text-base font-bold text-[var(--clinical-ink)]">{s(r.room)}</span></div>
+                    <div className="min-w-0">
+                      <p className="truncate font-bold text-[var(--clinical-ink)]">{s(r.name)}</p>
+                      <p className={`mt-1 inline-flex items-center gap-1.5 text-xs font-semibold ${list.length ? "text-[var(--clinical-green)]" : "text-[var(--clinical-amber)]"}`}>
+                        {list.length ? <Check className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+                        {list.length ? "Documented this shift" : "Documentation still due"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center justify-between gap-3 text-xs"><span className="font-semibold text-[var(--clinical-ink-soft)]">{domainCount} of 10 domains</span><span className="text-[var(--clinical-muted)]">{lastEntry ? rel(lastEntry.at) : "No entry yet"}</span></div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--clinical-surface-2)]" aria-label={`${domainCount} of 10 care domains documented`}><div className="h-full rounded-full bg-[var(--clinical-green)] transition-[width] duration-500" style={{ width: `${domainCount * 10}%` }} /></div>
+                  </div>
+                  <div className="flex items-center justify-end gap-2">
+                    <ClinicalButton variant={list.length ? "secondary" : "primary"} size="sm" onClick={() => { setLogTab("vitals"); setLogFor(r); }}><Plus className="h-4 w-4" /> {list.length ? "Add entry" : "Start log"}</ClinicalButton>
+                    {list.length > 0 && <button onClick={() => toggle(s(r.id))} aria-label={open ? "Collapse logs" : "Review today's logs"} className="flex h-11 w-11 items-center justify-center rounded-xl text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-ink)]">{open ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}</button>}
+                  </div>
                 </div>
                 {open && list.length > 0 && (
-                  <div className="border-t px-4 py-3 space-y-2.5" style={{ borderColor: "var(--clinical-line)" }}>
+                  <div className="space-y-3 border-t bg-[var(--clinical-surface-2)] px-4 py-4 sm:px-5" style={{ borderColor: "var(--clinical-line)" }}>
                     {list.map((e, i) => { const d = DOMAINS.find((x) => x.key === e.domain)!; return (
-                      <div key={i} className="flex items-start gap-3">
+                      <div key={i} className="flex items-start gap-3 rounded-xl bg-[var(--clinical-surface)] p-3">
                         <DomainChip label={d.label} />
                         <span className="text-sm text-[var(--clinical-ink-soft)] flex-1 min-w-0">{e.summary}</span>
                         <span className="text-xs text-[var(--clinical-muted)] shrink-0">{rel(e.at)}</span>
@@ -626,8 +687,9 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianR
     <ClinicalModal
       open
       onClose={onClose}
-      title={`${dom.label} — ${s(resident.name)}`}
-      description={`Room ${s(resident.room)} · ${nowT}`}
+      size="lg"
+      title={`Document care — ${s(resident.name)}`}
+      description={`${dom.label} · Room ${s(resident.room)} · ${nowT}`}
       footer={
         <div className="flex flex-1 items-center justify-between">
           <ClinicalButton variant="ghost" size="sm" onClick={onClose}>Close</ClinicalButton>
@@ -635,12 +697,12 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianR
         </div>
       }
     >
-      <div className="-mx-1 mb-4 flex items-center gap-0.5 overflow-x-auto border-b pb-2" style={{ borderColor: "var(--clinical-line)" }}>
+      <div className="mb-5 grid grid-cols-5 gap-1 rounded-2xl bg-[var(--clinical-surface-2)] p-1.5 sm:grid-cols-10">
         {DOMAINS.map((d) => { const on = d.key === tab; const doneD = logged.has(d.key) || savedNow.has(d.key); const Icon = d.icon; return (
-          <button key={d.key} onClick={() => switchTab(d.key)} aria-label={d.label} className={`relative flex flex-col items-center gap-0.5 px-1.5 py-1 rounded-lg min-w-[46px] shrink-0 ${on ? "bg-[var(--clinical-surface-2)]" : "hover:bg-[var(--clinical-surface-2)]"}`}>
-            <Icon className="w-3.5 h-3.5" style={{ color: on ? "var(--clinical-panel)" : "var(--clinical-muted)" }} />
-            <span className="text-[9px] font-medium" style={{ color: on ? "var(--clinical-ink-soft)" : "var(--clinical-muted)" }}>{d.label}</span>
-            {doneD && <span className="absolute top-0.5 right-1 w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "var(--clinical-green)" }} />}
+          <button key={d.key} onClick={() => switchTab(d.key)} aria-label={d.label} className={`relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-xl px-1 transition ${on ? "bg-[var(--clinical-surface)] text-[var(--clinical-panel)] shadow-sm" : "text-[var(--clinical-muted)] hover:bg-[var(--clinical-surface)] hover:text-[var(--clinical-ink)]"}`}>
+            <Icon className="h-4 w-4" />
+            <span className="text-[10px] font-semibold">{d.label}</span>
+            {doneD && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--clinical-green)]" aria-label="Already documented" />}
           </button>
         ); })}
       </div>
@@ -707,11 +769,11 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianR
             <div><Label>Disturbances</Label><Multi value={f.disturbances || []} onChange={(v) => set({ disturbances: v })} options={["Pain", "Anxiety", "Noise", "Nocturia", "Confusion", "Nightmares", "Restlessness"]} /></div>
           </>)}
 
-          <ClinicalButton variant="accent" onClick={save} disabled={saving} className="w-full">{saving ? "Saving…" : "Save Log"}</ClinicalButton>
           <div>
             <div className="flex items-center justify-between mb-1"><Label>Clinical Notes (optional)</Label><button onClick={aiNote} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--clinical-panel)]"><Sparkles className="w-3 h-3" /> AI Note</button></div>
             <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observations… or tap AI Note" aria-label="Clinical notes" className={txt} />
           </div>
+          <ClinicalButton variant="accent" onClick={save} disabled={saving} className="w-full">{saving ? "Saving…" : `Save ${dom.label} entry`}</ClinicalButton>
       </div>
     </ClinicalModal>
   );

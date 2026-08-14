@@ -34,7 +34,13 @@ export async function POST(request: NextRequest) {
         authUserId = result.user.id;
         tokens = result;
       } catch {
-        return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+        // Local staff accounts retain a bcrypt hash for development parity.
+        // A configured but unreachable/out-of-sync Supabase project must not
+        // make those valid localhost credentials unusable. Production remains
+        // Supabase-only and never falls back to the database password hash.
+        if (process.env.NODE_ENV === "production") {
+          return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+        }
       }
     }
 
@@ -78,7 +84,9 @@ export async function POST(request: NextRequest) {
     if (!success) return NextResponse.json({ error: "Failed to create session" }, { status: 500 });
     if (tokens) await setSupabaseTokens(tokens.access_token, tokens.refresh_token, tokens.expires_in);
 
-    await prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } });
+    // Fire-and-forget: `lastLogin` and the audit log must not block the sign-in
+    // response on extra remote round-trips — the user is already authenticated.
+    prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } }).catch(() => undefined);
     logAudit({ actorId: user.id, actorRole: role, action: "LOGIN", entityType: "auth", entityId: user.id });
 
     return NextResponse.json({

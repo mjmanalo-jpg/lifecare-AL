@@ -72,7 +72,7 @@ export default function DashboardQuickActions({ clinicianRole = "FACILITY_ADMIN"
   return (
     <>
       {/* Speed dial */}
-      <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-3 print:hidden">
+      <div className="fixed bottom-24 right-4 z-40 flex flex-col items-end gap-3 print:hidden md:bottom-6 md:right-6">
         {menuOpen && (
           <div className="mb-1 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl animate-in fade-in slide-in-from-bottom-2 zoom-in-95 duration-200">
             {ACTIONS.map((a) => (
@@ -95,9 +95,9 @@ export default function DashboardQuickActions({ clinicianRole = "FACILITY_ADMIN"
 
       {/* Slide-in panel */}
       {active && (
-        <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={label}>
+        <div className="fixed inset-0 z-50 m-0 h-dvh w-screen max-w-none" role="dialog" aria-modal="true" aria-label={label}>
           <div className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`} onClick={close} />
-          <div className={`absolute right-0 top-0 flex h-full w-full max-w-3xl flex-col bg-slate-50 shadow-2xl transition-transform duration-300 ${shown ? "translate-x-0" : "translate-x-full"}`}>
+          <div className={`absolute inset-y-0 right-0 ml-auto flex h-full w-full max-w-3xl flex-col bg-slate-50 shadow-2xl transition-transform duration-300 ${shown ? "translate-x-0" : "translate-x-full"}`}>
             <div className="flex flex-none items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
               <h2 className="text-lg font-bold text-slate-900">{label}</h2>
               <button onClick={close} aria-label="Close" className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"><X className="h-5 w-5" /></button>

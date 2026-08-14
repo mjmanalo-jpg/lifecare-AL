@@ -28,6 +28,9 @@ import {
   Clock,
   Zap,
   Bus,
+  Search,
+  MoreHorizontal,
+  CircleCheck,
 } from "lucide-react";
 import Link from "next/link";
 import LcmsLogo from "@/components/LcmsLogo";
@@ -52,6 +55,19 @@ interface PortalShellProps {
   children: ReactNode;
   onLogout?: () => void;
 }
+
+const DEFAULT_COLLAPSED_GROUPS: Record<string, boolean> = {
+  "Clinical Monitoring": true,
+  "Coordination & Comms": true,
+  Operations: true,
+  Administration: true,
+  Inventory: true,
+  "Billing & Finance": true,
+  "Hospitality & Services": true,
+  "Fleet & Transport": true,
+};
+
+const sidebarGroupStateByRole = new Map<Role, Record<string, boolean>>();
 
 // Every notification resolves to an explicit sidebar tab. The ENTITY a
 // notification points at is the precise signal (many types are shared —
@@ -146,6 +162,7 @@ export default function PortalShell({
   const roleDetails: RoleDetails = ROLES[userRole];
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [navQuery, setNavQuery] = useState("");
   // Seed from the class the pre-paint theme script already set on <html>, so the
   // chrome doesn't flash light before the mount effect runs. Server render has no
   // document and falls back to the CSS default (dark); the effect reconciles.
@@ -387,15 +404,32 @@ export default function PortalShell({
   }, [settingRows, roleDetails, userRole]);
 
   // Group links into matrix-based collapsible sections
+  const visibleNavLinks = useMemo(() => {
+    const query = navQuery.trim().toLocaleLowerCase();
+    if (!query) return filteredLinks;
+    return filteredLinks.filter((link) =>
+      `${link.name} ${link.group || ""}`.toLocaleLowerCase().includes(query)
+    );
+  }, [filteredLinks, navQuery]);
+
   const groupedLinks = useMemo(
-    () => groupSidebarLinks(filteredLinks),
-    [filteredLinks]
+    () => groupSidebarLinks(visibleNavLinks),
+    [visibleNavLinks]
   );
 
-  // Per-group collapse state (all groups start expanded)
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
-  const toggleGroup = (group: string) =>
-    setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }));
+  // Keep the two highest-frequency clinical groups open. Lower-frequency
+  // groups remain one tap away, which prevents a long link wall on first load.
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(
+    () => sidebarGroupStateByRole.get(userRole) ?? { ...DEFAULT_COLLAPSED_GROUPS }
+  );
+
+  const toggleGroup = (group: string) => {
+    setCollapsedGroups((prev) => {
+      const next = { ...prev, [group]: !prev[group] };
+      sidebarGroupStateByRole.set(userRole, next);
+      return next;
+    });
+  };
 
   // The active route segment (the part after /<role>/). Exact-segment matching
   // avoids the substring collisions that `pathname.includes(route)` produced
@@ -411,6 +445,20 @@ export default function PortalShell({
     ROUTE_TO_TAB[activeSegment] ||
     "Overview";
 
+  const currentGroup =
+    groupSidebarLinks(filteredLinks).find(({ links }) => links.some(isLinkActive))?.group ||
+    "Overview";
+
+  const priorityLinks = useMemo(() => {
+    const preferredSegments = ["dashboard", "alertcenter", "residents", "carelogs", "mar"];
+    const preferred = preferredSegments
+      .map((segment) => filteredLinks.find((link) => link.route.endsWith(`/${segment}`)))
+      .filter(Boolean) as SidebarLink[];
+    const active = filteredLinks.find((link) => link.route.endsWith(`/${activeSegment}`));
+    const combined = active ? [active, ...preferred] : preferred;
+    return combined.filter((link, index, all) => all.findIndex((item) => item.route === link.route) === index).slice(0, 5);
+  }, [activeSegment, filteredLinks]);
+
   // Renders a single nav link (label optional for the collapsed rail)
   const renderLink = (link: SidebarLink, showLabel: boolean) => {
     const isActive = isLinkActive(link);
@@ -422,14 +470,14 @@ export default function PortalShell({
         onClick={() => setMobileMenuOpen(false)}
         title={showLabel ? undefined : link.name}
         aria-current={isActive ? "page" : undefined}
-        className={`flex items-center gap-3 px-3 py-2 rounded-lg transition ${
+        className={`group/nav flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
           isActive
             ? theme === "dark"
-              ? "bg-gradient-to-r from-blue-500/20 to-blue-400/10 text-blue-300 border-l-2 border-blue-400"
-              : "bg-blue-100 text-blue-700 border-l-2 border-blue-500"
+              ? "bg-blue-500/15 text-blue-200 shadow-[inset_0_0_0_1px_rgba(96,165,250,.24)]"
+              : "bg-blue-50 text-blue-800 shadow-[inset_0_0_0_1px_rgba(37,99,235,.18)]"
             : theme === "dark"
-            ? "text-gray-300 hover:bg-gray-700/50 hover:text-white"
-            : "text-gray-700 hover:bg-gray-200 hover:text-gray-900"
+            ? "text-slate-300 hover:bg-slate-800 hover:text-white"
+            : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
         } ${showLabel ? "" : "justify-center"}`}
       >
         <Icon className="flex-shrink-0 w-5 h-5" />
@@ -441,16 +489,18 @@ export default function PortalShell({
   // Renders the full nav as collapsible group sections
   const renderGroupedNav = () =>
     groupedLinks.map(({ group, links }) => {
-      const collapsed = !!collapsedGroups[group];
+      const collapsed = navQuery ? false : !!collapsedGroups[group];
       return (
         <div key={group} className="space-y-1">
           <button
             onClick={() => toggleGroup(group)}
-            className={`w-full flex items-center justify-between px-3 pt-3 pb-1 group ${
-              theme === "dark" ? "text-gray-500 hover:text-gray-300" : "text-gray-400 hover:text-gray-600"
+            className={`group flex min-h-10 w-full items-center justify-between rounded-lg px-3 pt-3 pb-1 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              theme === "dark" ? "text-slate-400 hover:text-slate-200" : "text-slate-500 hover:text-slate-800"
             }`}
+            aria-expanded={!collapsed}
           >
-            <span className="text-[10px] font-bold uppercase tracking-wider">{group}</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.12em]">{group}</span>
+            <span className="ml-auto mr-2 text-[10px] tabular-nums opacity-70">{links.length}</span>
             <ChevronDown
               className={`w-3.5 h-3.5 transition-transform duration-200 ${
                 collapsed ? "-rotate-90" : ""
@@ -458,11 +508,33 @@ export default function PortalShell({
             />
           </button>
           {!collapsed && (
-            <div className="space-y-1">{links.map((link) => renderLink(link, true))}</div>
+            <div className="space-y-1 pb-1">{links.map((link) => renderLink(link, true))}</div>
           )}
         </div>
       );
     });
+
+  const renderNavSearch = () => (
+    <div className="px-3 pb-2 pt-3">
+      <label className="relative block">
+        <Search className={`pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`} />
+        <span className="sr-only">Find a portal page</span>
+        <input
+          value={navQuery}
+          onChange={(event) => setNavQuery(event.target.value)}
+          placeholder="Find a page..."
+          className={`h-11 w-full rounded-xl border pl-9 pr-3 text-sm outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${
+            theme === "dark" ? "border-slate-700 bg-slate-900 text-white" : "border-slate-200 bg-slate-50 text-slate-950"
+          }`}
+        />
+      </label>
+      {navQuery && visibleNavLinks.length === 0 && (
+        <div className={`px-3 py-8 text-center text-sm ${theme === "dark" ? "text-slate-400" : "text-slate-600"}`}>
+          No pages match {navQuery}.
+        </div>
+      )}
+    </div>
+  );
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -562,22 +634,23 @@ export default function PortalShell({
 
   const handleChangePassword = () => setShowChangePassword(true);
   return (
-    <div className={`flex h-screen ${theme === "dark" ? "bg-black text-white" : "bg-gray-50 text-gray-900"}`}>
-      {/* Sidebar — visible on md+, collapsed rail on lg when sidebarOpen, full width on md when sidebarOpen */}
+    <div className={`flex h-screen ${theme === "dark" ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-950"}`}>
+      {/* Desktop navigation index. Tablets use the overlay drawer below so the
+          clinical workspace never loses a third of its usable width. */}
       <aside
         className={`${
-          sidebarOpen ? "w-64" : "w-20"
-        } shrink-0 transition-all duration-300 flex flex-col shadow-2xl hidden md:flex overflow-hidden ${
+          sidebarOpen ? "w-72" : "w-[76px]"
+        } hidden shrink-0 flex-col overflow-hidden border-r transition-[width] duration-200 xl:flex ${
           theme === "dark"
-            ? "bg-gradient-to-b from-black to-gray-950 text-white"
-            : "bg-gradient-to-b from-white to-gray-100 text-gray-900 border-r border-gray-200"
+            ? "border-slate-800 bg-slate-950 text-white"
+            : "border-slate-200 bg-white text-slate-950"
         }`}
       >
         {/* Brand Header */}
-        <div className={`p-4 border-b flex items-center justify-between transition-colors duration-300 ${
+        <div className={`flex min-h-[76px] items-center justify-between border-b p-4 transition-colors ${
           theme === "dark"
-            ? "bg-gradient-to-r from-black to-gray-950 border-blue-500/10"
-            : "bg-gradient-to-r from-white to-gray-50 border-blue-200"
+            ? "border-slate-800 bg-slate-950"
+            : "border-slate-200 bg-white"
         }`}>
           {sidebarOpen ? (
             /* Full brand — shown whenever the sidebar is expanded (md+). */
@@ -597,11 +670,12 @@ export default function PortalShell({
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className={`p-2 rounded-lg transition text-blue-400 active:bg-gray-600 ${
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-blue-500 outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 ${
               theme === "dark"
-                ? "hover:bg-gray-700"
-                : "hover:bg-gray-200"
+                ? "hover:bg-slate-800"
+                : "hover:bg-slate-100"
             }`}
+            aria-label={sidebarOpen ? "Collapse navigation" : "Expand navigation"}
             title={sidebarOpen ? "Collapse" : "Expand"}
           >
             {sidebarOpen ? (
@@ -613,10 +687,11 @@ export default function PortalShell({
         </div>
 
         {/* Navigation Links — grouped by SLMS matrix module when expanded */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto min-h-0 scrollbar-thin" aria-label="Portal sections">
+        {sidebarOpen && renderNavSearch()}
+        <nav className={`min-h-0 flex-1 space-y-1 overflow-y-auto scrollbar-thin ${sidebarOpen ? "px-3 pb-4" : "p-3"}`} aria-label="Portal sections">
           {sidebarOpen
             ? renderGroupedNav()
-            : filteredLinks.map((link) => renderLink(link, false))}
+            : priorityLinks.map((link) => renderLink(link, false))}
         </nav>
 
         {/* Footer */}
@@ -638,19 +713,19 @@ export default function PortalShell({
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
         {/* Topbar */}
-        <header className={`border-b px-3 sm:px-4 md:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 shadow-sm transition-colors duration-300 ${
+        <header className={`flex min-h-[76px] items-center justify-between gap-3 border-b px-3 py-2 transition-colors sm:px-5 lg:px-7 ${
           theme === "dark"
-            ? "bg-gradient-to-r from-gray-900 to-black border-blue-500/20 text-white"
-            : "bg-gradient-to-r from-white to-gray-50 border-blue-200 text-gray-900"
+            ? "border-slate-800 bg-slate-950 text-white"
+            : "border-slate-200 bg-white text-slate-950"
         }`}>
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {/* Mobile Menu Toggle */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className={`md:hidden p-2 rounded-lg transition active:scale-95 ${
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-blue-500 xl:hidden ${
                 theme === "dark"
                   ? "hover:bg-gray-800 text-gray-300 active:bg-gray-700"
-                  : "hover:bg-blue-100 text-gray-700 active:bg-blue-200"
+                  : "hover:bg-blue-100 text-blue-900 active:bg-blue-200"
               }`}
               aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
               aria-expanded={mobileMenuOpen}
@@ -662,11 +737,11 @@ export default function PortalShell({
             {/* Current page — the chrome's persistent "where am I" anchor. A
                 label, not a heading: each board renders its own <h1>. */}
             <div className="min-w-0">
-              <div className={`text-base sm:text-lg font-bold leading-tight truncate ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+              <div className={`truncate text-base font-bold leading-tight sm:text-lg ${theme === "dark" ? "text-white" : "text-slate-950"}`}>
                 {currentPageName}
               </div>
-              <div className={`text-[11px] leading-tight truncate hidden sm:block ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`} title={portalScopeName}>
-                {portalScopeName}
+              <div className={`hidden items-center gap-1 truncate text-[11px] leading-tight sm:flex ${theme === "dark" ? "text-slate-400" : "text-slate-600"}`} title={`${portalScopeName} / ${currentGroup}`}>
+                <span className="truncate">{portalScopeName}</span><ChevronRight className="h-3 w-3 shrink-0" /><span className="truncate">{currentGroup}</span>
               </div>
             </div>
 
@@ -685,7 +760,7 @@ export default function PortalShell({
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
-              className={`p-2 rounded-lg transition active:scale-95 ${
+              className={`flex h-11 w-11 items-center justify-center rounded-xl outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 theme === "dark"
                   ? "hover:bg-gray-800 text-blue-400 active:bg-gray-700"
                   : "hover:bg-blue-100 text-blue-600 active:bg-blue-200"
@@ -703,10 +778,10 @@ export default function PortalShell({
             <div className="relative" ref={bellRef}>
               <button
                 onClick={() => setBellDropdownOpen(!bellDropdownOpen)}
-                className={`p-2 rounded-lg relative transition active:scale-95 ${
+                className={`relative flex h-11 w-11 items-center justify-center rounded-xl outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   theme === "dark"
                     ? "hover:bg-gray-800 text-gray-300 active:bg-gray-700"
-                    : "hover:bg-blue-100 text-gray-700 active:bg-blue-200"
+                    : "hover:bg-blue-100 text-blue-900 active:bg-blue-200"
                 }`}
                 aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
                 aria-haspopup="menu"
@@ -819,7 +894,7 @@ export default function PortalShell({
                           <div
                             key={n.id}
                             onClick={() => handleNotificationClick(n)}
-                            className={`p-4 flex gap-3 transition cursor-pointer hover:bg-blue-50/10 ${n.severity === "CRITICAL" ? "border-l-4 border-red-500" : n.severity === "WARNING" ? "border-l-4 border-amber-400" : ""} ${
+                            className={`flex cursor-pointer gap-3 p-4 transition hover:bg-blue-50/10 ${n.severity === "CRITICAL" ? "ring-1 ring-inset ring-red-500/50" : n.severity === "WARNING" ? "ring-1 ring-inset ring-amber-500/50" : ""} ${
                               !n.isRead ? "bg-blue-50/5 dark:bg-blue-500/5 font-medium" : ""
                             }`}
                           >
@@ -831,6 +906,11 @@ export default function PortalShell({
                                 {formatTimeAgo(n.createdAt)}
                               </p>
                               <p className="text-sm font-bold truncate leading-snug">{n.title}</p>
+                              {(n.severity === "CRITICAL" || n.severity === "WARNING") && (
+                                <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${n.severity === "CRITICAL" ? "bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200" : "bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200"}`}>
+                                  {n.severity === "CRITICAL" ? "Critical" : "Warning"}
+                                </span>
+                              )}
                               <p className={`text-xs mt-0.5 line-clamp-2 leading-relaxed ${
                                 theme === "dark" ? "text-gray-300" : "text-gray-600"
                               }`}>{n.message}</p>
@@ -853,7 +933,7 @@ export default function PortalShell({
                       })
                     ) : (
                       <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-                        <p className="text-2xl">🎉</p>
+                        <CircleCheck className="mx-auto h-7 w-7 text-emerald-500" />
                         <p className="text-sm font-semibold mt-2">All caught up!</p>
                         <p className="text-xs text-gray-400 mt-1 mb-4">No notifications right now.</p>
                       </div>
@@ -870,7 +950,7 @@ export default function PortalShell({
                 onClick={() =>
                   setProfileDropdownOpen(!profileDropdownOpen)
                 }
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition ${
+                className={`flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   theme === "dark" ? "hover:bg-gray-800" : "hover:bg-blue-100"
                 }`}
                 aria-label="Account menu"
@@ -905,7 +985,7 @@ export default function PortalShell({
                     className={`w-full text-left px-4 py-2 flex items-center gap-2 border-b transition-colors ${
                       theme === "dark"
                         ? "hover:bg-gray-800 border-gray-700 text-gray-200"
-                        : "hover:bg-blue-50 border-blue-100 text-gray-700"
+                        : "hover:bg-blue-50 border-blue-100 text-blue-900"
                     }`}
                   >
                     <Settings className="w-4 h-4" />
@@ -938,14 +1018,14 @@ export default function PortalShell({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+              className="fixed inset-0 z-40 bg-black/55 xl:hidden"
               onClick={() => setMobileMenuOpen(false)}
             >
               <motion.aside
-                initial={{ x: -300 }}
+                initial={{ x: -320 }}
                 animate={{ x: 0 }}
-                exit={{ x: -300 }}
-                className={`w-[min(256px,85vw)] max-w-[256px] h-full shadow-2xl transition-colors duration-300 flex flex-col ${
+                exit={{ x: -320 }}
+                className={`flex h-full w-[min(320px,92vw)] max-w-[320px] flex-col shadow-2xl transition-colors ${
                   theme === "dark"
                     ? "bg-gradient-to-b from-black to-gray-950 text-white"
                     : "bg-gradient-to-b from-white to-gray-100 text-gray-900"
@@ -969,7 +1049,7 @@ export default function PortalShell({
                   </div>
                   <button
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`p-1.5 rounded-lg transition flex-shrink-0 ${
+                    className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 ${
                       theme === "dark" ? "hover:bg-gray-800 text-gray-400" : "hover:bg-gray-200 text-gray-500"
                     }`}
                     title="Close menu"
@@ -978,9 +1058,9 @@ export default function PortalShell({
                   </button>
                 </div>
 
-                {/* Mobile Sidebar Nav */}
-                <nav id="portal-mobile-nav" aria-label="Portal sections" className="flex-1 p-4 space-y-1 overflow-y-auto min-h-0 scrollbar-thin"
-                  style={{ maxHeight: "calc(100dvh - 56px - 3rem)" }}>
+                {renderNavSearch()}
+                {/* Tablet and mobile navigation drawer */}
+                <nav id="portal-mobile-nav" aria-label="Portal sections" className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-4 scrollbar-thin">
                   {renderGroupedNav()}
                 </nav>
 
@@ -1002,9 +1082,30 @@ export default function PortalShell({
         </AnimatePresence>
 
         {/* Main Content Area */}
-        <main className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6" style={{ height: 0 }}>
-          {children}
+        <main className="min-h-0 flex-1 overflow-y-auto p-3 pb-24 sm:p-5 sm:pb-24 lg:p-7 lg:pb-7" style={{ height: 0 }}>
+          <div className={["CARE_MANAGER", "NURSE", "CAREGIVER"].includes(userRole) ? "clinical-portal-content" : undefined}>
+            {children}
+          </div>
         </main>
+
+        {/* Mobile task dock: the active workflow plus the most common clinical
+            destinations stay thumb-reachable; the complete index lives in More. */}
+        <nav aria-label="Quick portal navigation" className={`fixed inset-x-0 bottom-0 z-30 grid min-h-[72px] grid-cols-5 border-t px-1 pb-[env(safe-area-inset-bottom)] md:hidden ${theme === "dark" ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-white"}`}>
+          {priorityLinks.slice(0, 4).map((link) => {
+            const Icon = link.icon;
+            const isActive = isLinkActive(link);
+            const segment = link.route.split("/").pop();
+            const label = segment === "dashboard" ? "Home" : segment === "alertcenter" ? "Alerts" : segment === "residents" ? "Residents" : segment === "carelogs" ? "Care logs" : segment === "mar" ? "MAR" : link.name;
+            return (
+              <Link key={`dock-${link.route}`} href={link.route} aria-current={isActive ? "page" : undefined} className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${isActive ? "text-blue-600 dark:text-blue-300" : "text-slate-600 dark:text-slate-400"}`}>
+                <Icon className="h-5 w-5" /><span className="w-full truncate text-center">{label}</span>
+              </Link>
+            );
+          })}
+          <button onClick={() => setMobileMenuOpen(true)} aria-label="Open all portal pages" className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-semibold text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:text-slate-400">
+            <MoreHorizontal className="h-5 w-5" /><span>More</span>
+          </button>
+        </nav>
       </div>
 
       {/* Settings Modal */}

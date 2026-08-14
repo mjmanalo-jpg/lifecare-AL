@@ -75,13 +75,12 @@ export const DISPLAY = "Inter, system-ui, -apple-system, sans-serif";
 export const SERIF = DISPLAY;
 
 /** Page heading: strong sans title + muted subtitle, action on the right. */
-export function ClinicalHeader({ eyebrow, title, subtitle, right }: { eyebrow?: string; title?: string; subtitle?: string; right?: React.ReactNode }) {
+export function ClinicalHeader({ title, subtitle, right }: { eyebrow?: string; title?: string; subtitle?: string; right?: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
-        {eyebrow && <Eyebrow className="mb-1.5">{eyebrow}</Eyebrow>}
-        {title && <h1 className="text-2xl font-bold tracking-tight text-[var(--clinical-ink)] sm:text-[1.75rem]" style={{ fontFamily: DISPLAY }}>{title}</h1>}
-        {subtitle && <p className="mt-1 text-sm text-[var(--clinical-muted)]">{subtitle}</p>}
+        {title && <h1 className="text-2xl font-bold tracking-[-0.02em] text-[var(--clinical-ink)] sm:text-[1.75rem]" style={{ fontFamily: DISPLAY }}>{title}</h1>}
+        {subtitle && <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[var(--clinical-muted)]">{subtitle}</p>}
       </div>
       {right && <div className="shrink-0">{right}</div>}
     </div>
@@ -96,7 +95,7 @@ export function ClinicalCard({ top, className = "", children }: { top?: "teal" |
   const style: React.CSSProperties = { borderStyle: "solid", borderColor: "var(--clinical-line)", borderWidth: 1, backgroundColor: "var(--clinical-surface)" };
   if (hasTop) { style.borderTopWidth = 2; style.borderTopColor = rule; }
   return (
-    <div className={`rounded-xl shadow-sm shadow-slate-900/[0.04] ${className}`} style={style}>
+    <div className={`clinical-card rounded-xl ${className}`} style={{ ...style, boxShadow: "var(--clinical-shadow, 0 10px 28px -24px rgba(15, 23, 42, 0.45))" }}>
       {children}
     </div>
   );
@@ -110,13 +109,13 @@ export function ClinicalCard({ top, className = "", children }: { top?: "teal" |
 
 type BtnVariant = "primary" | "accent" | "secondary" | "ghost" | "danger";
 const BTN_BASE =
-  "inline-flex items-center justify-center gap-2 rounded-lg text-sm font-semibold transition disabled:opacity-60 disabled:pointer-events-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clinical-panel)] active:scale-[0.98] min-h-[40px]";
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl text-sm font-semibold transition disabled:pointer-events-none disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clinical-focus,var(--clinical-panel))] active:scale-[0.98]";
 const BTN_VARIANT: Record<BtnVariant, string> = {
   // indigo — the standard primary action
-  primary: "bg-[var(--clinical-panel)] text-white shadow-sm shadow-indigo-950/10 hover:brightness-110",
+  primary: "bg-[var(--clinical-panel)] text-white shadow-[0_8px_20px_-12px_rgba(0,0,0,0.8)] hover:bg-[var(--clinical-panel-hover,var(--clinical-panel))]",
   // accent == primary here: one confident indigo CTA, no competing accent colour
-  accent: "bg-[var(--clinical-panel)] text-white shadow-sm shadow-indigo-950/10 hover:brightness-110",
-  secondary: "border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface)] text-[var(--clinical-ink)] hover:bg-[var(--clinical-surface-2)]",
+  accent: "bg-[var(--clinical-panel)] text-white shadow-[0_8px_20px_-12px_rgba(0,0,0,0.8)] hover:bg-[var(--clinical-panel-hover,var(--clinical-panel))]",
+  secondary: "border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface)] text-[var(--clinical-ink)] hover:bg-[var(--clinical-surface-raised,var(--clinical-surface-2))]",
   ghost: "text-[var(--clinical-ink-soft)] hover:bg-[var(--clinical-surface-2)]",
   danger: "bg-[var(--clinical-coral)] text-white shadow-sm hover:brightness-110",
 };
@@ -205,12 +204,12 @@ export function DataState({
 /** Full-bleed clinical page ground every board sits on (replaces the
  *  hard-coded #F7F8FA that stranded a light ground in dark mode). */
 export function ClinicalPage({ className = "", children }: { className?: string; children: React.ReactNode }) {
-  return <div className={`min-h-full bg-[var(--clinical-ground)] -m-4 sm:-m-6 p-4 sm:p-6 ${className}`}>{children}</div>;
+  return <div className={`-m-3 min-h-full bg-[var(--clinical-ground)] p-3 transition-colors duration-300 sm:-m-5 sm:p-5 lg:-m-7 lg:p-7 ${className}`}>{children}</div>;
 }
 
 /** Shared control classes (inputs, selects, textareas) — token-backed, dark-safe. */
 export const controlClass =
-  "w-full rounded-lg border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface)] px-3 py-2.5 text-sm text-[var(--clinical-ink)] outline-none transition placeholder:text-[var(--clinical-muted)] focus:border-[var(--clinical-panel)] focus:ring-1 focus:ring-[var(--clinical-panel)]";
+  "w-full rounded-lg border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface)] px-3 py-2.5 text-sm text-[var(--clinical-ink)] outline-none transition placeholder:text-[var(--clinical-muted)] focus:border-[var(--clinical-focus,var(--clinical-panel))] focus:ring-2 focus:ring-[var(--clinical-focus,var(--clinical-panel))]/20";
 
 export function FieldLabel({ children, required, htmlFor }: { children: React.ReactNode; required?: boolean; htmlFor?: string }) {
   return (
@@ -235,7 +234,7 @@ type StatAccent = "ink" | "teal" | "coral" | "amber" | "green";
 export function StatCard({ value, label, accent = "ink" }: { value: React.ReactNode; label: string; accent?: StatAccent }) {
   const color = { ink: "var(--clinical-ink)", teal: "var(--clinical-panel)", coral: "var(--clinical-coral)", amber: "var(--clinical-amber)", green: "var(--clinical-green)" }[accent];
   return (
-    <div className="rounded-xl border p-4 shadow-sm shadow-slate-900/[0.04]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+    <div className="rounded-xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">{label}</p>
       <p className="mt-1.5 text-[1.75rem] font-bold leading-none tabular-nums" style={{ color, fontFamily: DISPLAY }}>{value}</p>
     </div>
@@ -265,11 +264,11 @@ export function ClinicalModal({
   if (!open) return null;
   const maxW = { sm: "sm:max-w-md", md: "sm:max-w-lg", lg: "sm:max-w-2xl", xl: "sm:max-w-3xl" }[size];
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+    <div className="clinical-modal-backdrop fixed inset-0 z-50 flex items-end justify-center p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div role="dialog" aria-modal="true" aria-label={title}
-        className={`flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl shadow-2xl sm:max-h-[85vh] sm:rounded-2xl ${maxW}`}
-        style={{ backgroundColor: "var(--clinical-surface)" }}>
+        className={`clinical-modal-panel flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border sm:max-h-[85vh] sm:rounded-2xl ${maxW}`}
+        style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line-strong)", boxShadow: "0 28px 80px -24px rgba(0, 0, 0, 0.9)" }}>
         <div className="flex flex-none items-start justify-between gap-3 border-b px-5 py-4" style={{ borderColor: "var(--clinical-line)" }}>
           <div className="min-w-0">
             <h2 className="truncate text-lg font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>{title}</h2>

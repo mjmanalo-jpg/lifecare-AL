@@ -20,6 +20,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { upsertRecord, createRecord } from "@/lib/api";
 import { exportInventoryCsv, parseInventoryCsv, inventoryHeaders, importSummaryHtml } from "@/lib/inventoryCsv";
+import { mirrorFacilityInventory } from "@/lib/inventoryMirror";
 import { useClinician, type ClinicianRole } from "./useClinician";
 
 const ITEMS_KEY = "mini_pharmacy_items";
@@ -95,10 +96,22 @@ export default function MiniPharmacyBoard({ clinicianRole = "NURSE" }: { clinici
   const savePRs = async (next: PR[]) => { await upsertRecord("app-settings", PR_KEY, { key: PR_KEY, value: JSON.stringify(next) }); await refetch(); };
   const saveLogs = async (next: DispenseLog[]) => { await upsertRecord("app-settings", LOG_KEY, { key: LOG_KEY, value: JSON.stringify(next) }); await refetch(); };
 
+  // GENERAL supplies added here don't live in the Mini Pharmacy — they go straight
+  // to the shared Facility Inventory (Facility portal). Only medications stay here.
+  // Returns true if the item was routed away (so the caller skips the local save).
+  const routeIfFacilityGeneral = async (rec: InvItem): Promise<boolean> => {
+    if (rec.type !== "GENERAL") return false;
+    if (items.some((x) => x.id === rec.id)) await saveItems(items.filter((x) => x.id !== rec.id)); // drop if it was here (med retyped to general)
+    const fid = await mirrorFacilityInventory({ name: rec.name, category: rec.category, quantity: rec.quantity, unit: rec.unit, reorder: rec.reorder, location: rec.location, supplier: rec.supplier, expiry: rec.expiry, notes: rec.notes, unitCost: rec.unitPrice || undefined, source: "Mini Pharmacy" });
+    Swal.fire({ toast: true, position: "top-end", icon: fid ? "success" : "warning", title: fid ? "General supply sent to Facility Inventory" : "Facility Inventory sync failed — please retry", showConfirmButton: false, timer: 2800 });
+    return true;
+  };
+
   const upsertItem = async (it: InvItem) => {
-    const next = [{ ...it, updatedAt: new Date().toISOString() }, ...items.filter((x) => x.id !== it.id)];
-    setAddOpen(false); setEditItem(null); // close instantly; the optimistic list already shows it
-    try { await saveItems(next); }
+    const rec = { ...it, updatedAt: new Date().toISOString() };
+    setAddOpen(false); setEditItem(null); // close instantly
+    if (await routeIfFacilityGeneral(rec)) return;
+    try { await saveItems([rec, ...items.filter((x) => x.id !== rec.id)]); }
     catch { Swal.fire({ toast: true, position: "top-end", icon: "error", title: "Couldn't save — please retry", showConfirmButton: false, timer: 2600 }); }
   };
   const restock = async (it: InvItem, add: number) => {
@@ -123,9 +136,14 @@ export default function MiniPharmacyBoard({ clinicianRole = "NURSE" }: { clinici
     if (!result.added.length) { Swal.fire({ icon: "warning", title: "Nothing to import", html: importSummaryHtml(result) }); return; }
     const confirm = await Swal.fire({ icon: "question", title: "Import into Mini Pharmacy?", html: importSummaryHtml(result), showCancelButton: true, confirmButtonText: `Import ${result.added.length} item(s)`, confirmButtonColor: "#0d9488" });
     if (!confirm.isConfirmed) return;
-    const next = [...result.added.map((a) => ({ ...a, unitPrice: a.unitPrice ?? 0 })), ...items] as InvItem[];
-    try { await saveItems(next); Swal.fire({ toast: true, position: "top-end", icon: "success", title: `Imported ${result.added.length} item(s)`, showConfirmButton: false, timer: 2200 }); }
-    catch { Swal.fire({ toast: true, position: "top-end", icon: "error", title: "Import failed — please retry", showConfirmButton: false, timer: 2600 }); }
+    // General supplies route to the Facility Inventory; medications stay here.
+    const toFacility = result.added.filter((a) => a.type === "GENERAL");
+    const toClinical = result.added.filter((a) => a.type !== "GENERAL").map((a) => ({ ...a, unitPrice: a.unitPrice ?? 0 })) as InvItem[];
+    try {
+      if (toClinical.length) await saveItems([...toClinical, ...items]);
+      for (const g of toFacility) await mirrorFacilityInventory({ name: g.name, category: g.category, quantity: g.quantity, unit: g.unit, reorder: g.reorder, location: g.location, supplier: g.supplier, expiry: g.expiry, notes: g.notes, unitCost: g.unitPrice || undefined, source: "Mini Pharmacy" });
+      Swal.fire({ toast: true, position: "top-end", icon: "success", title: `Imported ${toClinical.length} med(s)${toFacility.length ? ` · ${toFacility.length} to Facility Inventory` : ""}`, showConfirmButton: false, timer: 2600 });
+    } catch { Swal.fire({ toast: true, position: "top-end", icon: "error", title: "Import failed — please retry", showConfirmButton: false, timer: 2600 }); }
   };
 
   // Dispense-with-charge: confirm → decrement stock, post a ServiceCharge to the
@@ -182,8 +200,11 @@ export default function MiniPharmacyBoard({ clinicianRole = "NURSE" }: { clinici
   };
 
   const categoryOpts = useMemo(() => Array.from(new Set(items.map((i) => (i.category || "").trim()).filter(Boolean))).sort(), [items]);
+  // Only medications live in the Mini Pharmacy — general supplies are routed to the
+  // Facility Inventory on add, so they never appear here (this also hides any legacy).
+  const medItems = useMemo(() => items.filter((it) => it.type !== "GENERAL"), [items]);
   const q = search.trim().toLowerCase();
-  const filtered = items.filter((it) => {
+  const filtered = medItems.filter((it) => {
     const okQ = !q || [it.name, it.generic, it.brand, it.category, it.supplier, it.location].some((f) => (f || "").toLowerCase().includes(q));
     const okCat = !categoryFilter || it.category === categoryFilter;
     const okS = !stockFilter || stockLevel(it) === stockFilter;
@@ -191,7 +212,7 @@ export default function MiniPharmacyBoard({ clinicianRole = "NURSE" }: { clinici
   });
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
   const chargedThisMonth = logs.filter((l) => new Date(l.at).getTime() >= monthStart).reduce((a, l) => a + (Number(l.amount) || 0), 0);
-  const stats = { total: items.length, critical: items.filter((it) => stockLevel(it) === "out").length, low: items.filter((it) => stockLevel(it) === "low").length, charged: chargedThisMonth };
+  const stats = { total: medItems.length, critical: medItems.filter((it) => stockLevel(it) === "out").length, low: medItems.filter((it) => stockLevel(it) === "low").length, charged: chargedThisMonth };
 
   return (
     <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
@@ -213,7 +234,7 @@ export default function MiniPharmacyBoard({ clinicianRole = "NURSE" }: { clinici
       </div>
 
       <div className="inline-flex gap-1 bg-slate-100 rounded-xl p-1 mb-5">
-        {([["inventory", "Stock"], ["dispenses", "Dispense Log"], ["requests", "Purchase Requests"]] as const).map(([v, label]) => <button key={v} onClick={() => setTab(v)} className={`px-3.5 py-1.5 rounded-lg text-sm font-medium ${tab === v ? "bg-white shadow-sm text-slate-800" : "text-slate-500"}`}>{label}{v === "inventory" ? ` ${items.length}` : v === "dispenses" ? ` ${logs.length}` : prs.filter((p) => p.status === "PENDING").length ? ` ${prs.filter((p) => p.status === "PENDING").length}` : ""}</button>)}
+        {([["inventory", "Stock"], ["dispenses", "Dispense Log"], ["requests", "Purchase Requests"]] as const).map(([v, label]) => <button key={v} onClick={() => setTab(v)} className={`px-3.5 py-1.5 rounded-lg text-sm font-medium ${tab === v ? "bg-white shadow-sm text-slate-800" : "text-slate-500"}`}>{label}{v === "inventory" ? ` ${medItems.length}` : v === "dispenses" ? ` ${logs.length}` : prs.filter((p) => p.status === "PENDING").length ? ` ${prs.filter((p) => p.status === "PENDING").length}` : ""}</button>)}
       </div>
 
       {tab === "inventory" && (<>
@@ -229,7 +250,7 @@ export default function MiniPharmacyBoard({ clinicianRole = "NURSE" }: { clinici
         <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
-              <thead><tr className="text-left text-white" style={{ backgroundColor: "#2E4A48" }}>
+              <thead className="inventory-table-head"><tr className="text-left text-white" style={{ backgroundColor: "#2E4A48" }}>
                 {["Date", "Medication", "Resident", "Qty", "Charged", "By"].map((h) => <th key={h} className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider">{h}</th>)}
               </tr></thead>
               <tbody className="divide-y divide-slate-100">
@@ -287,7 +308,7 @@ function InventoryTable({ items, onDispense, onRestock, onRequest, onEdit, empty
     <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[960px] text-sm">
-          <thead>
+          <thead className="inventory-table-head">
             <tr className="text-left text-white" style={{ backgroundColor: "#2E4A48" }}>
               {["Item", "Current Qty", "Stock Level", "Price / Unit", "Expiry", "Location"].map((h) => <th key={h} className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider">{h}</th>)}
               <th className="px-4 py-3" />
@@ -359,7 +380,7 @@ function AddItemModal({ item, onClose, onSave }: { item: InvItem | null; onClose
 
   const submit = async () => {
     if (!name.trim()) { Swal.fire({ title: `${isMed ? "Medication" : "Item"} name is required`, icon: "warning" }); return; }
-    if (!(Number(unitPrice) > 0)) { Swal.fire({ title: "A selling price per unit is required", text: "This is what the resident is charged when the item is dispensed.", icon: "warning" }); return; }
+    if (isMed && !(Number(unitPrice) > 0)) { Swal.fire({ title: "A selling price per unit is required", text: "This is what the resident is charged when the medication is dispensed. (General supplies are sent to the Facility Inventory and need no price.)", icon: "warning" }); return; }
     setSaving(true);
     try { await onSave({ id: item?.id || newId("mp"), type, name: name.trim(), generic: isMed ? generic.trim() || undefined : undefined, brand: isMed ? brand.trim() || undefined : undefined, category: category.trim() || undefined, supplier: supplier.trim() || undefined, unit, quantity: Number(quantity) || 0, reorder: Number(reorder) || 0, unitPrice: Number(unitPrice) || 0, location: location.trim() || undefined, expiry: expiry || undefined, notes: notes.trim() || undefined, updatedAt: new Date().toISOString() }); }
     finally { setSaving(false); }

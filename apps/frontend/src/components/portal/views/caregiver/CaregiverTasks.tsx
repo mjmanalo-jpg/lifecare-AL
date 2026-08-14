@@ -399,10 +399,7 @@ export default function CaregiverTasks() {
   );
 
   return (
-    <div
-      className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5"
-      style={{ background: "#FFFFFF" }}
-    >
+    <div className="-m-4 min-h-full space-y-5 bg-[var(--clinical-ground)] p-4 sm:-m-6 sm:p-6">
       {/* Header — only the head nurse / supervisor can assign tasks; caregivers cannot. */}
       <ClinicalHeader
         eyebrow="Board View — Current Shift"

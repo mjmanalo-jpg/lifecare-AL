@@ -6,7 +6,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord } from "@/lib/api";
-import { ClinicalHeader, ClinicalCard, StatusPill, MicroLabel, Eyebrow } from "./clinical-ui";
+import { ClinicalHeader, ClinicalCard, ClinicalButton, StatusPill, MicroLabel, Eyebrow } from "./clinical-ui";
 
 type Row = Record<string, unknown>;
 const s = (v: unknown) => (v == null ? "" : String(v));
@@ -76,26 +76,32 @@ export default function PhysicianCommsLog() {
   const inp = "w-full rounded-md border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30 text-sm";
 
   return (
-    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5 print:m-0 print:p-0" style={{ background: "#FFFFFF" }}>
+    <div className="-m-4 min-h-full space-y-5 bg-[var(--clinical-ground)] p-4 sm:-m-6 sm:p-6 print:m-0 print:bg-white print:p-0">
       <div className="print:hidden">
         <ClinicalHeader
           title="Physician Communications"
           subtitle="Every physician contact on record — with instructions received verbatim and follow-up tracking."
           right={
             <div className="flex flex-wrap items-center gap-2">
-              <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-md border border-[#2E4A48]/25 bg-white px-4 py-2 text-sm font-semibold text-[#2B2B27] hover:bg-[#2E4A48]/5"><Printer className="w-4 h-4" /> Print</button>
-              <button onClick={() => setShowAdd(true)} className="inline-flex items-center gap-2 rounded-md bg-[#2E4A48] px-4 py-2 text-sm font-semibold text-white hover:bg-[#25403D]"><Plus className="w-4 h-4" /> Log Contact</button>
+              <ClinicalButton variant="secondary" onClick={() => window.print()}><Printer className="w-4 h-4" /> Print</ClinicalButton>
+              <ClinicalButton onClick={() => setShowAdd(true)}><Plus className="w-4 h-4" /> Log Contact</ClinicalButton>
             </div>
           }
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 print:hidden">
+      <div className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border bg-[var(--clinical-line)] print:hidden" style={{ borderColor: "var(--clinical-line)" }}>
+        <div className="bg-[var(--clinical-surface)] p-4"><MicroLabel>Contacts on record</MicroLabel><p className="mt-1 text-2xl font-bold text-[var(--clinical-ink)]">{rows.length}</p></div>
+        <div className="bg-[var(--clinical-surface)] p-4"><MicroLabel>Open follow-ups</MicroLabel><p className="mt-1 text-2xl font-bold text-[var(--clinical-amber)]">{rows.filter((c) => c.followUpRequired && !c.followUpCompletedAt).length}</p></div>
+        <div className="bg-[var(--clinical-surface)] p-4"><MicroLabel>Linked SBAR</MicroLabel><p className="mt-1 text-2xl font-bold text-[var(--clinical-panel)]">{rows.filter((c) => c.relatedEscalationId).length}</p></div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border p-3 print:hidden" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
         <div className="relative flex-1 min-w-[220px]">
-          <Search className="absolute left-3 top-2.5 w-4 h-4 text-[#8A8D82]" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search resident, physician, or reason…" className="w-full rounded-md border border-[#D6D8CD] bg-white pl-9 pr-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E4A48]/30" />
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--clinical-muted)]" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search resident, physician, or reason…" className="min-h-11 w-full rounded-xl border bg-[var(--clinical-surface)] py-2.5 pl-10 pr-4 text-sm text-[var(--clinical-ink)] outline-none transition focus:border-[var(--clinical-focus)] focus:ring-2 focus:ring-[var(--clinical-focus)]/20" style={{ borderColor: "var(--clinical-line)" }} />
         </div>
-        <select value={resFilter} onChange={(e) => setResFilter(e.target.value)} className="rounded-md border border-[#D6D8CD] bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E4A48]/30">
+        <select value={resFilter} onChange={(e) => setResFilter(e.target.value)} className="min-h-11 rounded-xl border bg-[var(--clinical-surface)] px-3 py-2 text-sm text-[var(--clinical-ink)] outline-none focus:border-[var(--clinical-focus)] focus:ring-2 focus:ring-[var(--clinical-focus)]/20" style={{ borderColor: "var(--clinical-line)" }}>
           <option value="">All residents</option>
           {residents.map((r) => <option key={r.id} value={r.id}>{r.name} — Rm {r.room}</option>)}
         </select>
@@ -114,21 +120,21 @@ export default function PhysicianCommsLog() {
           const overdue = isOverdue(c);
           const linked = c.relatedEscalationId ? escMap.get(s(c.relatedEscalationId)) : undefined;
           return (
-            <ClinicalCard key={s(c.id)} top={overdue ? "coral" : "teal"} className="p-5 break-inside-avoid">
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+            <ClinicalCard key={s(c.id)} className="break-inside-avoid overflow-hidden p-4">
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-3 border-b pb-3" style={{ borderColor: "var(--clinical-line)" }}>
                 <div className="flex items-center gap-2.5">
                   <StatusPill status={s(c.method)} className="!gap-1"><Icon className="w-3 h-3 mr-1 inline" />{METHOD_LABEL[s(c.method)] ?? s(c.method)}</StatusPill>
-                  <span className="text-base font-bold text-[#2B2B27]">{s(c.physicianName)}</span>
+                   <span className="text-base font-bold text-[var(--clinical-ink)]">{s(c.physicianName)}</span>
                 </div>
-                <span className="text-xs text-[#8A8D82]">{fmt(c.occurredAt)}</span>
+                 <span className="rounded-lg bg-[var(--clinical-surface-2)] px-2.5 py-1 text-xs text-[var(--clinical-muted)]">{fmt(c.occurredAt)}</span>
               </div>
               <p className="text-[13px] text-[#6B6E63] mb-3">Resident: <span className="font-medium text-[#2B2B27]">{rname(c)}, Room {rroom(c)}</span>{c.loggedByName ? ` · Logged by: ${s(c.loggedByName)}` : ""}</p>
 
-              <div className="border-t border-[#EBEDE4] pt-3">
+              <div className="rounded-xl bg-[var(--clinical-surface-2)] p-3">
                 <MicroLabel className="!text-[#C0573F]">Reason for contact</MicroLabel>
                 <p className="text-sm text-[#2B2B27] mt-0.5">{s(c.reason)}</p>
               </div>
-              <div className="border-t border-[#EBEDE4] pt-3 mt-3">
+              <div className="rounded-xl bg-[var(--clinical-surface-2)] p-3">
                 <MicroLabel className="!text-[#C0573F]">Instructions received</MicroLabel>
                 <p className="text-sm text-[#2B2B27] mt-0.5 whitespace-pre-wrap">{s(c.instructionsReceived)}</p>
               </div>

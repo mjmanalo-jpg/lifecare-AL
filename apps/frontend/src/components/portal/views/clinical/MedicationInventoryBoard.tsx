@@ -14,6 +14,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { upsertRecord } from "@/lib/api";
 import { exportInventoryCsv, parseInventoryCsv, inventoryHeaders, importSummaryHtml } from "@/lib/inventoryCsv";
+import { mirrorFacilityInventory } from "@/lib/inventoryMirror";
 import { useClinician, type ClinicianRole } from "./useClinician";
 
 const ITEMS_KEY = "inventory_items";
@@ -70,8 +71,28 @@ export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { 
   const saveItems = async (next: InvItem[]) => { await upsertRecord("app-settings", ITEMS_KEY, { key: ITEMS_KEY, value: JSON.stringify(next) }); await refetch(); };
   const savePRs = async (next: PR[]) => { await upsertRecord("app-settings", PR_KEY, { key: PR_KEY, value: JSON.stringify(next) }); await refetch(); };
 
-  const upsertItem = async (it: InvItem) => { const rest = items.filter((x) => x.id !== it.id); await saveItems([{ ...it, updatedAt: new Date().toISOString() }, ...rest]); setAddOpen(false); setEditItem(null); };
-  const restock = async (it: InvItem, add: number) => { await saveItems(items.map((x) => (x.id === it.id ? { ...x, quantity: x.quantity + add, updatedAt: new Date().toISOString() } : x))); setRestockItem(null); Swal.fire({ toast: true, position: "top-end", icon: "success", title: `Restocked +${add}`, showConfirmButton: false, timer: 1400 }); };
+  // GENERAL facility supplies (not resident-assigned) don't live in the Medication
+  // Inventory — they go straight to the shared Facility Inventory. Medications and
+  // resident-assigned items stay here. Returns true if routed away.
+  const routeIfFacilityGeneral = async (rec: InvItem): Promise<boolean> => {
+    if (!(rec.type === "GENERAL" && !rec.residentId)) return false;
+    if (items.some((x) => x.id === rec.id)) await saveItems(items.filter((x) => x.id !== rec.id));
+    const fid = await mirrorFacilityInventory({ name: rec.name, category: rec.category, quantity: rec.quantity, unit: rec.unit, reorder: rec.reorder, location: rec.location, supplier: rec.supplier, expiry: rec.expiry, notes: rec.notes, source: "Medication Inventory" });
+    Swal.fire({ toast: true, position: "top-end", icon: fid ? "success" : "warning", title: fid ? "General supply sent to Facility Inventory" : "Facility Inventory sync failed — please retry", showConfirmButton: false, timer: 2800 });
+    return true;
+  };
+
+  const upsertItem = async (it: InvItem) => {
+    const rec = { ...it, updatedAt: new Date().toISOString() };
+    setAddOpen(false); setEditItem(null);
+    if (await routeIfFacilityGeneral(rec)) return;
+    await saveItems([rec, ...items.filter((x) => x.id !== rec.id)]);
+  };
+  const restock = async (it: InvItem, add: number) => {
+    await saveItems(items.map((x) => (x.id === it.id ? { ...x, quantity: x.quantity + add, updatedAt: new Date().toISOString() } : x)));
+    setRestockItem(null);
+    Swal.fire({ toast: true, position: "top-end", icon: "success", title: `Restocked +${add}`, showConfirmButton: false, timer: 1400 });
+  };
   const submitPR = async (it: InvItem, quantity: number, urgency: string, notes: string) => { const rec: PR = { id: newId("pr"), itemId: it.id, itemName: it.name, unit: it.unit, quantity, urgency, notes: notes || undefined, status: "PENDING", by: clinicianName, byAt: new Date().toISOString() }; await savePRs([rec, ...prs]); setRequestItem(null); Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Purchase request submitted", showConfirmButton: false, timer: 1600 }); };
   const setPRStatus = async (pr: PR, status: PR["status"]) => savePRs(prs.map((x) => (x.id === pr.id ? { ...x, status, approvedBy: status === "APPROVED" ? clinicianName : x.approvedBy } : x)));
 
@@ -89,16 +110,25 @@ export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { 
     if (!result.added.length) { Swal.fire({ icon: "warning", title: "Nothing to import", html: importSummaryHtml(result) }); return; }
     const confirm = await Swal.fire({ icon: "question", title: "Import inventory?", html: importSummaryHtml(result), showCancelButton: true, confirmButtonText: `Import ${result.added.length} item(s)` });
     if (!confirm.isConfirmed) return;
-    const next = [...result.added, ...items] as InvItem[];
-    try { await saveItems(next); Swal.fire({ toast: true, position: "top-end", icon: "success", title: `Imported ${result.added.length} item(s)`, showConfirmButton: false, timer: 2200 }); }
-    catch { Swal.fire({ toast: true, position: "top-end", icon: "error", title: "Import failed — please retry", showConfirmButton: false, timer: 2600 }); }
+    // General facility supplies (no resident) route to the Facility Inventory; meds
+    // and resident-assigned items stay here.
+    const toFacility = result.added.filter((a) => a.type === "GENERAL" && !a.residentId);
+    const toClinical = result.added.filter((a) => !(a.type === "GENERAL" && !a.residentId)) as InvItem[];
+    try {
+      if (toClinical.length) await saveItems([...toClinical, ...items]);
+      for (const g of toFacility) await mirrorFacilityInventory({ name: g.name, category: g.category, quantity: g.quantity, unit: g.unit, reorder: g.reorder, location: g.location, supplier: g.supplier, expiry: g.expiry, notes: g.notes, source: "Medication Inventory" });
+      Swal.fire({ toast: true, position: "top-end", icon: "success", title: `Imported ${toClinical.length} item(s)${toFacility.length ? ` · ${toFacility.length} to Facility Inventory` : ""}`, showConfirmButton: false, timer: 2600 });
+    } catch { Swal.fire({ toast: true, position: "top-end", icon: "error", title: "Import failed — please retry", showConfirmButton: false, timer: 2600 }); }
   };
 
   const categoryOpts = useMemo(() => Array.from(new Set(items.map((i) => (i.category || "").trim()).filter(Boolean))).sort(), [items]);
   const locationOpts = useMemo(() => Array.from(new Set(items.map((i) => (i.location || "").trim()).filter(Boolean))).sort(), [items]);
 
+  // Facility general supplies (general + no resident) are routed to the Facility
+  // Inventory, so they don't appear here. Medications + resident-assigned items stay.
+  const clinicalItems = items.filter((it) => !(it.type === "GENERAL" && !it.residentId));
   const q = search.trim().toLowerCase();
-  const filtered = items.filter((it) => {
+  const filtered = clinicalItems.filter((it) => {
     const okQ = !q || [it.name, it.generic, it.brand, it.category, it.supplier, it.location].some((f) => (f || "").toLowerCase().includes(q));
     const okCat = !categoryFilter || it.category === categoryFilter;
     const okLoc = !locationFilter || it.location === locationFilter;
@@ -107,7 +137,7 @@ export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { 
     const okE = !expiryFilter || (expiryFilter === "expired" ? dte != null && dte < 0 : expiryFilter === "soon" ? dte != null && dte >= 0 && dte <= 90 : true);
     return okQ && okCat && okLoc && okS && okE;
   });
-  const stats = { total: items.length, critical: items.filter((it) => stockLevel(it) === "out").length, low: items.filter((it) => stockLevel(it) === "low").length, pendingPR: prs.filter((p) => p.status === "PENDING").length };
+  const stats = { total: clinicalItems.length, critical: clinicalItems.filter((it) => stockLevel(it) === "out").length, low: clinicalItems.filter((it) => stockLevel(it) === "low").length, pendingPR: prs.filter((p) => p.status === "PENDING").length };
 
   return (
     <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
@@ -129,7 +159,7 @@ export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { 
       </div>
 
       <div className="inline-flex gap-1 bg-slate-100 rounded-xl p-1 mb-5">
-        {([["inventory", "Inventory"], ["residents", "Resident Inventory"], ["requests", "Purchase Requests"]] as const).map(([v, label]) => <button key={v} onClick={() => setTab(v)} className={`px-3.5 py-1.5 rounded-lg text-sm font-medium ${tab === v ? "bg-white shadow-sm text-slate-800" : "text-slate-500"}`}>{label}{v === "inventory" ? ` ${items.length}` : v === "residents" ? ` ${items.filter((it) => it.residentId).length}` : prs.filter((p) => p.status === "PENDING").length ? ` ${prs.filter((p) => p.status === "PENDING").length}` : ""}</button>)}
+        {([["inventory", "Inventory"], ["residents", "Resident Inventory"], ["requests", "Purchase Requests"]] as const).map(([v, label]) => <button key={v} onClick={() => setTab(v)} className={`px-3.5 py-1.5 rounded-lg text-sm font-medium ${tab === v ? "bg-white shadow-sm text-slate-800" : "text-slate-500"}`}>{label}{v === "inventory" ? ` ${clinicalItems.length}` : v === "residents" ? ` ${items.filter((it) => it.residentId).length}` : prs.filter((p) => p.status === "PENDING").length ? ` ${prs.filter((p) => p.status === "PENDING").length}` : ""}</button>)}
       </div>
 
       {tab === "inventory" && (<>
@@ -196,7 +226,7 @@ function InventoryTable({ items, onRestock, onRequest, onEdit, empty }: { items:
     <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[880px] text-sm">
-          <thead>
+          <thead className="inventory-table-head">
             <tr className="text-left text-white" style={{ backgroundColor: "#2E4A48" }}>
               <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider">Item</th>
               <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider">Current Qty</th>
