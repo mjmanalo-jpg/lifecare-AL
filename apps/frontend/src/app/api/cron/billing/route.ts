@@ -8,6 +8,8 @@ import {
   recurringMarker,
   type ChargeTemplate,
 } from "@/lib/billingLibrary";
+import { ACUITY_ASSESSMENTS_KEY, parseAcuityItems, latestApprovedAcuityLevel } from "@/lib/locBilling";
+import { applyResidentLocCharge } from "@/lib/locBillingServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,56 +26,70 @@ export const dynamic = "force-dynamic";
 // ─────────────────────────────────────────────────────────────
 
 async function accrueForCommunity(organizationId: string, communityId: string) {
+  const residents = await prisma.resident.findMany({
+    where: { communityId, status: "ACTIVE" },
+    select: { id: true, careLevel: true },
+  });
+  if (!residents.length) return { created: 0, skipped: 0, residents: 0, loc: 0 };
+
+  const now = new Date();
+  const tag = periodTag(now);
+
+  // 1) Charge Library — recurring templates matched to each resident's care level.
   const setting = await prisma.appSetting.findFirst({
     where: { key: BILLING_LIBRARY_KEY, organizationId, communityId },
     select: { value: true },
   });
   const templates = parseTemplates(setting?.value).filter((t) => t.recurring && t.amount > 0);
-  if (!templates.length) return { created: 0, skipped: 0, residents: 0 };
 
-  const residents = await prisma.resident.findMany({
-    where: { communityId, status: "ACTIVE" },
-    select: { id: true, careLevel: true },
-  });
-  if (!residents.length) return { created: 0, skipped: 0, residents: 0 };
-
-  const now = new Date();
-  const tag = periodTag(now);
-
-  // Existing markers this month, so we never post a duplicate.
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const existing = await prisma.serviceCharge.findMany({
-    where: { communityId, serviceDate: { gte: monthStart } },
-    select: { description: true },
-  });
-  const seen = new Set(existing.map((c) => c.description));
-
-  const toCreate: { organizationId: string; communityId: string; residentId: string; description: string; amount: number; category: string; serviceDate: Date }[] = [];
+  let created = 0;
   let skipped = 0;
 
-  for (const resident of residents) {
-    const applicable = templates.filter(
-      (t: ChargeTemplate) => t.careLevel === "ALL" || t.careLevel === String(resident.careLevel),
-    );
-    for (const t of applicable) {
-      const marker = recurringMarker(t.id, tag);
-      const description = `${t.name} ${marker}`;
-      if (seen.has(description)) { skipped += 1; continue; }
-      seen.add(description);
-      toCreate.push({
-        organizationId,
-        communityId,
-        residentId: resident.id,
-        description,
-        amount: t.amount,
-        category: t.category,
-        serviceDate: now,
-      });
+  if (templates.length) {
+    // Existing markers this month, so we never post a duplicate.
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const existing = await prisma.serviceCharge.findMany({
+      where: { communityId, serviceDate: { gte: monthStart } },
+      select: { description: true },
+    });
+    const seen = new Set(existing.map((c) => c.description));
+
+    const toCreate: { organizationId: string; communityId: string; residentId: string; description: string; amount: number; category: string; serviceDate: Date }[] = [];
+    for (const resident of residents) {
+      const applicable = templates.filter(
+        (t: ChargeTemplate) => t.careLevel === "ALL" || t.careLevel === String(resident.careLevel),
+      );
+      for (const t of applicable) {
+        const marker = recurringMarker(t.id, tag);
+        const description = `${t.name} ${marker}`;
+        if (seen.has(description)) { skipped += 1; continue; }
+        seen.add(description);
+        toCreate.push({ organizationId, communityId, residentId: resident.id, description, amount: t.amount, category: t.category, serviceDate: now });
+      }
+    }
+    if (toCreate.length) await prisma.serviceCharge.createMany({ data: toCreate });
+    created = toCreate.length;
+  }
+
+  // 2) Level-of-Care fee — each resident's latest APPROVED acuity level → its
+  //    monthly price. Idempotent per resident/level/month (shares the same marker
+  //    as the approval-time post), and switches the fee if the level changed.
+  let loc = 0;
+  const acuitySetting = await prisma.appSetting.findFirst({
+    where: { key: ACUITY_ASSESSMENTS_KEY, communityId },
+    select: { value: true },
+  });
+  const acuityItems = parseAcuityItems(acuitySetting?.value);
+  if (acuityItems.length) {
+    for (const resident of residents) {
+      const level = latestApprovedAcuityLevel(acuityItems, resident.id);
+      if (level == null) continue;
+      const r = await applyResidentLocCharge({ organizationId, communityId, residentId: resident.id, level, now }).catch(() => ({ created: false, voided: 0, skipped: true }));
+      if (r.created) loc += 1;
     }
   }
 
-  if (toCreate.length) await prisma.serviceCharge.createMany({ data: toCreate });
-  return { created: toCreate.length, skipped, residents: residents.length };
+  return { created, skipped, residents: residents.length, loc };
 }
 
 export async function POST(request: NextRequest) {
@@ -81,13 +97,13 @@ export async function POST(request: NextRequest) {
   const auth = request.headers.get("authorization");
   if (process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`) {
     const communities = await prisma.community.findMany({ where: { isActive: true }, select: { id: true, organizationId: true } });
-    let created = 0, skipped = 0;
+    let created = 0, skipped = 0, loc = 0;
     for (const c of communities) {
       if (!c.organizationId) continue;
-      const r = await accrueForCommunity(c.organizationId, c.id).catch(() => ({ created: 0, skipped: 0, residents: 0 }));
-      created += r.created; skipped += r.skipped;
+      const r = await accrueForCommunity(c.organizationId, c.id).catch(() => ({ created: 0, skipped: 0, residents: 0, loc: 0 }));
+      created += r.created; skipped += r.skipped; loc += r.loc;
     }
-    return NextResponse.json({ ok: true, scope: "all", communities: communities.length, created, skipped });
+    return NextResponse.json({ ok: true, scope: "all", communities: communities.length, created, skipped, loc });
   }
 
   // Signed-in billing/facility/super admin accrues their own community.

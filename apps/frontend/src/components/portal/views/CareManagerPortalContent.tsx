@@ -23,6 +23,7 @@ import VitalsTrendBoard from "@/components/portal/views/clinical/VitalsTrendBoar
 import ClinicalRecordsBoard from "@/components/portal/views/clinical/ClinicalRecordsBoard";
 import AppointmentCalendar from "@/components/portal/AppointmentCalendar";
 import MedicationInventoryBoard from "@/components/portal/views/clinical/MedicationInventoryBoard";
+import MiniPharmacyBoard from "@/components/portal/views/clinical/MiniPharmacyBoard";
 import CarePlanReviewsBoard from "@/components/portal/views/clinical/CarePlanReviewsBoard";
 import LabsAllergiesBoard from "@/components/portal/views/clinical/LabsAllergiesBoard";
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
@@ -107,6 +108,8 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
       return <VitalsTrendBoard clinicianRole="FACILITY_ADMIN" />;
     case "medinventory":
       return <MedicationInventoryBoard clinicianRole="FACILITY_ADMIN" />;
+    case "minipharmacy":
+      return <MiniPharmacyBoard clinicianRole="FACILITY_ADMIN" />;
     case "monitoring":
       return <MonitoringView />;
     case "prescreen":

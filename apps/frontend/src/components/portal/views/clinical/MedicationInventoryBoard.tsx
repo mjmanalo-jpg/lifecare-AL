@@ -7,12 +7,13 @@
  * requests in `inventory_purchase_requests`.
  */
 
-import { useMemo, useState, type ReactNode } from "react";
-import { Package, Pill, Search, Plus, Printer, RefreshCw, ShoppingCart, Pencil, X, CheckCircle2, User } from "lucide-react";
+import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { Package, Pill, Search, Plus, RefreshCw, ShoppingCart, Pencil, X, CheckCircle2, User, Upload, Download } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { upsertRecord } from "@/lib/api";
+import { exportInventoryCsv, parseInventoryCsv, inventoryHeaders, importSummaryHtml } from "@/lib/inventoryCsv";
 import { useClinician, type ClinicianRole } from "./useClinician";
 
 const ITEMS_KEY = "inventory_items";
@@ -64,6 +65,7 @@ export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { 
   const [editItem, setEditItem] = useState<InvItem | null>(null);
   const [restockItem, setRestockItem] = useState<InvItem | null>(null);
   const [requestItem, setRequestItem] = useState<InvItem | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const saveItems = async (next: InvItem[]) => { await upsertRecord("app-settings", ITEMS_KEY, { key: ITEMS_KEY, value: JSON.stringify(next) }); await refetch(); };
   const savePRs = async (next: PR[]) => { await upsertRecord("app-settings", PR_KEY, { key: PR_KEY, value: JSON.stringify(next) }); await refetch(); };
@@ -72,6 +74,25 @@ export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { 
   const restock = async (it: InvItem, add: number) => { await saveItems(items.map((x) => (x.id === it.id ? { ...x, quantity: x.quantity + add, updatedAt: new Date().toISOString() } : x))); setRestockItem(null); Swal.fire({ toast: true, position: "top-end", icon: "success", title: `Restocked +${add}`, showConfirmButton: false, timer: 1400 }); };
   const submitPR = async (it: InvItem, quantity: number, urgency: string, notes: string) => { const rec: PR = { id: newId("pr"), itemId: it.id, itemName: it.name, unit: it.unit, quantity, urgency, notes: notes || undefined, status: "PENDING", by: clinicianName, byAt: new Date().toISOString() }; await savePRs([rec, ...prs]); setRequestItem(null); Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Purchase request submitted", showConfirmButton: false, timer: 1600 }); };
   const setPRStatus = async (pr: PR, status: PR["status"]) => savePRs(prs.map((x) => (x.id === pr.id ? { ...x, status, approvedBy: status === "APPROVED" ? clinicianName : x.approvedBy } : x)));
+
+  const exportCsv = () => exportInventoryCsv("MED", items, "medication-inventory.csv");
+  const importCsv = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (!file) return;
+    const text = await file.text();
+    const result = parseInventoryCsv({ variant: "MED", text, existing: items, residents: residents.map((r) => ({ id: r.id, name: r.name })), newId: () => newId("inv") });
+    if (result.formatError) {
+      Swal.fire({ icon: "error", title: "Invalid CSV format", html: `${result.formatError}<br/><br/><b>Expected columns:</b><br/><code style="font-size:.8rem">${inventoryHeaders("MED").join(", ")}</code>` });
+      return;
+    }
+    if (!result.added.length) { Swal.fire({ icon: "warning", title: "Nothing to import", html: importSummaryHtml(result) }); return; }
+    const confirm = await Swal.fire({ icon: "question", title: "Import inventory?", html: importSummaryHtml(result), showCancelButton: true, confirmButtonText: `Import ${result.added.length} item(s)` });
+    if (!confirm.isConfirmed) return;
+    const next = [...result.added, ...items] as InvItem[];
+    try { await saveItems(next); Swal.fire({ toast: true, position: "top-end", icon: "success", title: `Imported ${result.added.length} item(s)`, showConfirmButton: false, timer: 2200 }); }
+    catch { Swal.fire({ toast: true, position: "top-end", icon: "error", title: "Import failed — please retry", showConfirmButton: false, timer: 2600 }); }
+  };
 
   const categoryOpts = useMemo(() => Array.from(new Set(items.map((i) => (i.category || "").trim()).filter(Boolean))).sort(), [items]);
   const locationOpts = useMemo(() => Array.from(new Set(items.map((i) => (i.location || "").trim()).filter(Boolean))).sort(), [items]);
@@ -92,8 +113,10 @@ export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { 
     <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div><h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2"><Package className="w-6 h-6 text-blue-500" /> Medication Inventory</h1><p className="text-sm text-slate-500 mt-1">Track stock levels and manage purchase requests</p></div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50"><Printer className="w-4 h-4" /> Export PDF</button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={importCsv} className="hidden" />
+          <button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50"><Upload className="w-4 h-4" /> Import CSV</button>
+          <button onClick={exportCsv} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50"><Download className="w-4 h-4" /> Export CSV</button>
           <button onClick={() => { setEditItem(null); setAddOpen(true); }} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"><Plus className="w-4 h-4" /> Add Item</button>
         </div>
       </div>

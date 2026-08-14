@@ -19,6 +19,7 @@ import {
 import {
   useRelative, useNowTs, MoneyStat, TabLoading, EmptyState, LiveBadge,
 } from "./shared";
+import InvoiceDocument from "../billing/InvoiceDocument";
 
 type Invoice = ReturnType<typeof adaptInvoice>;
 type Payment = ReturnType<typeof adaptPayment>;
@@ -61,6 +62,7 @@ export default function FamilyBilling() {
   const [invSearch, setInvSearch] = useState("");
   const [billSubTab, setBillSubTab] = useState<"invoices" | "charges" | "insurance">("invoices");
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
+  const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [viewingReceipt, setViewingReceipt] = useState<Payment | any | null>(null);
   const [processingPayment, setProcessingPayment] = useState(false);
@@ -295,6 +297,9 @@ export default function FamilyBilling() {
                         </div>
 
                         <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-2">
+                          <button onClick={() => setViewingInvoice(v)} className="flex-1 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold border border-gray-200 rounded-lg text-xs transition flex items-center justify-center gap-1.5">
+                            <FileText className="w-3.5 h-3.5 text-gray-500" /> View / Print Invoice
+                          </button>
                           {v.balance > 0 && v.status !== "DRAFT" && (
                             <button onClick={() => handlePayNow(v)} className="flex-1 py-2 bg-yellow-400 hover:bg-yellow-500 text-black font-extrabold rounded-lg text-xs transition shadow-sm active:scale-95 flex items-center justify-center gap-1.5">
                               <CreditCard className="w-3.5 h-3.5" /> Pay Balance Online
@@ -468,6 +473,9 @@ export default function FamilyBilling() {
           </div>
         </div>
       )}
+
+      {/* ── PRINTABLE INVOICE MODAL ── */}
+      {viewingInvoice && <InvoiceDocument invoice={viewingInvoice} facilityName={facilityName} onClose={() => setViewingInvoice(null)} />}
 
       {/* ── PRINTABLE RECEIPTS MODAL ── */}
       {viewingReceipt && (

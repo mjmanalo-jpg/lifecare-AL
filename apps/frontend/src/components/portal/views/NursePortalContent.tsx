@@ -41,6 +41,7 @@ import VitalsTrendBoard from "@/components/portal/views/clinical/VitalsTrendBoar
 import ClinicalRecordsBoard from "@/components/portal/views/clinical/ClinicalRecordsBoard";
 import AppointmentCalendar from "@/components/portal/AppointmentCalendar";
 import MedicationInventoryBoard from "@/components/portal/views/clinical/MedicationInventoryBoard";
+import MiniPharmacyBoard from "@/components/portal/views/clinical/MiniPharmacyBoard";
 import CarePlanReviewsBoard from "@/components/portal/views/clinical/CarePlanReviewsBoard";
 import LabsAllergiesBoard from "@/components/portal/views/clinical/LabsAllergiesBoard";
 import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
@@ -835,6 +836,9 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   }
   if (tab === "medinventory") {
     return <MedicationInventoryBoard clinicianRole="NURSE" />;
+  }
+  if (tab === "minipharmacy") {
+    return <MiniPharmacyBoard clinicianRole="NURSE" />;
   }
   if (tab === "followups") {
     return <FollowUpTracker />;

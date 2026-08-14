@@ -5,6 +5,8 @@ import BillingOnlinePayment from "./BillingOnlinePayment";
 import BillingLedger from "./billing/BillingLedger";
 import BillingReceivables from "./billing/BillingReceivables";
 import BillingRevenue from "./billing/BillingRevenue";
+import LocPricingBoard from "./billing/LocPricingBoard";
+import ResidentBillingRecord from "./billing/ResidentBillingRecord";
 
 interface BillingFinancePortalContentProps {
   tab: string;
@@ -27,6 +29,8 @@ export default function BillingFinancePortalContent({ tab }: BillingFinancePorta
   if (tab === "ledger") return <BillingLedger />;
   if (tab === "receivables") return <BillingReceivables />;
   if (tab === "revenue") return <BillingRevenue />;
+  if (tab === "loccpricing") return <LocPricingBoard />;
+  if (tab === "residentbilling") return <ResidentBillingRecord />;
   // Online payments live in their own gated view.
   if (tab === "onlinepayment") return <BillingOnlinePayment />;
 

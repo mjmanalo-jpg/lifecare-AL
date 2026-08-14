@@ -21,6 +21,7 @@ export const dynamic = "force-dynamic";
 //   • Vital Signs — abnormal BP, SpO₂, HR, temp, RR (CRITICAL when dangerous).
 //   • MAR         — missed dose windows + refused meds.
 //   • Care Logs   — missing daily rounds + no shift report submitted (INFO).
+//   • Elimination — no bowel movement in 3+ days / no urine output in 12+ hours.
 //   • Incidents   — severe & critical incident reports (CRITICAL when critical).
 // Plus operational guards: overdue follow-ups/tasks, low/expiring stock, weight loss.
 //
@@ -28,7 +29,7 @@ export const dynamic = "force-dynamic";
 // signed-in NURSE / FACILITY_ADMIN / SUPERADMIN scans only their community.
 // ─────────────────────────────────────────────────────────────
 
-const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "weightReminder", "incident", "slaBreach", "escalation", "assessment", "purchaseRequest", "serviceRequest", "maintenance", "diningReservation"];
+const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "weightReminder", "incident", "slaBreach", "escalation", "assessment", "purchaseRequest", "serviceRequest", "maintenance", "diningReservation", "elimination"];
 
 // SBAR SLA response windows (minutes) by priority — single source of truth is
 // escalationMeta.PRIORITY_META in the UI; mirrored here so the server can
@@ -66,10 +67,11 @@ interface Scan {
   weightDue: number;
   incidents: number;
   sbarEscalations: number;
+  missedElimination: number;
 }
 
 async function scanCommunity(communityId: string, organizationId: string | null): Promise<Scan> {
-  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0 };
+  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0 };
 
   // Recipient sets by care tier. General alerts go to the on-floor + admin team
   // (nurse + facility admin). SBAR SLA escalations follow the clinical chain of
@@ -312,6 +314,54 @@ async function scanCommunity(communityId: string, organizationId: string | null)
     });
   }
 
+  // 6c) Missed elimination — a tracked resident with NO bowel movement in 3+ days
+  //     (constipation / impaction risk) or NO urine output in 12+ hours (retention
+  //     risk). Absence-over-time is invisible to the per-log Care Log trigger, which
+  //     only fires when a caregiver actively saves an empty entry — this scan catches
+  //     the silent case where nothing was logged at all. Recipients are the bedside +
+  //     clinical team (caregiver / nurse / care manager). Newly-admitted residents
+  //     (admitted within the window) are skipped so there is no false alarm before a
+  //     baseline exists. Bowel is keyed per calendar day (re-nags once/day while it
+  //     persists); urine is keyed per rolling 12h block (up to twice/day).
+  await runSource("elimination", async () => {
+    const elimTeam = idsForRoles(["CAREGIVER", "NURSE", "CARE_MANAGER"]);
+    if (!elimTeam.length) return;
+
+    const BOWEL_MS = 3 * 86_400_000; // no BM in 3 days
+    const URINE_MS = 12 * 3_600_000; // no void in 12 hours
+    const bowelCutoff = new Date(nowTs - BOWEL_MS);
+    const urineCutoff = new Date(nowTs - URINE_MS);
+
+    const residents = await prisma.resident.findMany({
+      where: { communityId, status: { not: "DISCHARGED" } },
+      select: { id: true, firstName: true, lastName: true, roomNumber: true, admissionDate: true },
+    });
+    if (!residents.length) return;
+
+    // Residents WITH a bowel/urine record inside the threshold window. Anyone active
+    // but absent from a set has "missed" that elimination type. (BowelRecord/UrineRecord
+    // carry no residentId — they hang off DailyRound, so we join through it.)
+    const [recentBowel, recentUrine] = await Promise.all([
+      prisma.bowelRecord.findMany({ where: { dailyRound: { resident: { communityId } }, time: { gte: bowelCutoff } }, select: { dailyRound: { select: { residentId: true } } } }),
+      prisma.urineRecord.findMany({ where: { dailyRound: { resident: { communityId } }, time: { gte: urineCutoff } }, select: { dailyRound: { select: { residentId: true } } } }),
+    ]);
+    const wentBowel = new Set(recentBowel.map((b) => b.dailyRound.residentId));
+    const wentUrine = new Set(recentUrine.map((u) => u.dailyRound.residentId));
+
+    const dayKey = new Date(nowTs).toISOString().slice(0, 10);
+    const halfKey = Math.floor(nowTs / URINE_MS); // rolling 12h block
+
+    for (const r of residents) {
+      const admittedMs = r.admissionDate ? nowTs - new Date(r.admissionDate).getTime() : Infinity;
+      if (!wentBowel.has(r.id) && admittedMs >= BOWEL_MS) {
+        if (await notify("SYSTEM_ALERT", "elimination", `bowelmiss:${r.id}:${dayKey}`, "No bowel movement in 3+ days", `${rname(r)} (Room ${room(r)}) has no recorded bowel movement in the last 3 days — constipation / impaction risk. Review the bowel protocol, hydration and diet; document a BM or intervene.`, "WARNING", elimTeam)) counts.missedElimination++;
+      }
+      if (!wentUrine.has(r.id) && admittedMs >= URINE_MS) {
+        if (await notify("SYSTEM_ALERT", "elimination", `urinemiss:${r.id}:${halfKey}`, "No urine output in 12+ hours", `${rname(r)} (Room ${room(r)}) has no recorded urine output in the last 12 hours — possible retention. Check the resident, assess the bladder and consider a bladder scan; document output or escalate to the nurse.`, "WARNING", elimTeam)) counts.missedElimination++;
+      }
+    }
+  });
+
   // 7) Weight loss trend (>5% drop over the last ~5 weeks).
   await runSource("weight-trend", async () => {
     const weights = await prisma.vitalsLog.findMany({
@@ -506,7 +556,7 @@ async function runScan(request: NextRequest) {
     communities = [{ id: ctx.communityId, organizationId: ctx.organizationId ?? null }];
   }
 
-  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0 };
+  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0 };
   for (const c of communities) {
     try {
       const s = await scanCommunity(c.id, c.organizationId);

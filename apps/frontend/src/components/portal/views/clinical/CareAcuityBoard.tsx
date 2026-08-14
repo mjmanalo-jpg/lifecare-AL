@@ -176,6 +176,10 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
     if (isFinal) {
       const lvl = LEVELS.find((l) => l.n === a.level);
       if (lvl) await updateRecord("residents", a.residentId, { careLevel: lvl.careLevel }).catch(() => null);
+      // Level-of-Care billing: post/switch this resident's monthly care fee for the
+      // approved level (best-effort). Re-assessment to a new level voids the old
+      // unbilled fee and posts the new one; the billing cron re-applies it monthly.
+      fetch("/api/billing/loc-charge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ residentId: a.residentId, level: a.level }) }).catch(() => null);
       // Stage 6 → 8 → 9: on final approval, auto-build the care plan + caregiver
       // tasks — unless the resident already has a plan. Best-effort.
       if (!residentsWithPlan.has(a.residentId)) {
