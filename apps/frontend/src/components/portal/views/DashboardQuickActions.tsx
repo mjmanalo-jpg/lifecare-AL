@@ -102,7 +102,7 @@ export default function DashboardQuickActions({ clinicianRole = "FACILITY_ADMIN"
               <h2 className="text-lg font-bold text-slate-900">{label}</h2>
               <button onClick={close} aria-label="Close" className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"><X className="h-5 w-5" /></button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
               <div className={`transition-all duration-500 ease-out ${shown ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"}`}>
                 {renderBoard()}
               </div>

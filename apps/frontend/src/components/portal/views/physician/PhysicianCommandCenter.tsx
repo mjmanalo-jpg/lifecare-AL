@@ -5,9 +5,11 @@ import RefreshButton from "@/components/portal/RefreshButton";
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Stethoscope, RefreshCw, Activity, Pill, AlertTriangle, PenTool, ClipboardCheck,
+  Stethoscope, Activity, Pill, AlertTriangle, PenTool, ClipboardCheck,
   HeartPulse, MessageSquare, BellRing, CheckSquare, Users, ChevronRight,
-  Signature, TrendingUp, Siren, type LucideIcon,
+  Signature, Siren, Bandage, Target, FolderOpen, PieChart,
+  Accessibility, Scale, FileText, Package, Cross, NotebookPen, History,
+  type LucideIcon,
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
@@ -120,7 +122,6 @@ export default function PhysicianCommandCenter() {
   const pendingOrders = useMemo(() => medsQ.data.filter((m) => asStr(m.status) === "PENDING"), [medsQ.data]);
   const unsignedNotes = useMemo(() => notesQ.data.filter((n) =>
     !PHYSICIAN_NOTE_TYPES.has(asStr(n.noteType)) && asStr(n.noteType) !== "MEDICATION_ADMIN" && !n.coSignedBy), [notesQ.data]);
-  const openConsults = useMemo(() => notesQ.data.filter((n) => asStr(n.noteType) === "CONSULTATION" && !n.coSignedBy), [notesQ.data]);
   const openEscalations = useMemo(() => escalationsQ.data.filter((e) => !["RESOLVED", "CANCELLED"].includes(asStr(e.status))), [escalationsQ.data]);
 
   const stats = useMemo(() => ({
@@ -173,8 +174,8 @@ export default function PhysicianCommandCenter() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
-            <Stethoscope className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Command Center
+          <h1 className="text-3xl sm:text-4xl font-bold text-indigo-700 mb-1 flex items-center gap-2">
+            <Stethoscope className="w-7 h-7 text-indigo-500 flex-shrink-0" /> Command Center
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
             <span className="inline-flex items-center gap-1 text-green-600"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Live</span>
@@ -187,10 +188,10 @@ export default function PhysicianCommandCenter() {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <Kpi label="Patients Under Care" value={stats.patients} icon={Users} tone="gray" />
-        <Kpi label="Needs Review" value={stats.needReview} icon={HeartPulse} tone="red" onClick={() => go("/physician/rounds")} />
+        <Kpi label="Needs Review" value={stats.needReview} icon={HeartPulse} tone="red" onClick={() => go("/physician/vitalstrend")} />
         <Kpi label="Pending Orders" value={stats.pendingOrders} icon={Pill} tone="amber" onClick={() => go("/physician/orders")} />
         <Kpi label="Open Incidents" value={stats.openIncidents} icon={AlertTriangle} tone="orange" onClick={() => go("/physician/incidents")} />
-        <Kpi label="Notes to Co-sign" value={stats.unsigned} icon={Signature} tone="blue" onClick={() => go("/physician/rounds")} />
+        <Kpi label="Notes to Co-sign" value={stats.unsigned} icon={Signature} tone="blue" onClick={() => go("/physician/notes")} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -206,7 +207,7 @@ export default function PhysicianCommandCenter() {
           ) : (
             <div className="space-y-2 max-h-[420px] overflow-y-auto">
               {attention.map((p) => (
-                <button key={p.id} onClick={() => go(`/physician/rounds?resident=${p.id}`)}
+                <button key={p.id} onClick={() => go(`/physician/vitalstrend?resident=${p.id}`)}
                   className="w-full text-left bg-gray-50 hover:bg-yellow-50 border border-gray-200 hover:border-yellow-300 rounded-lg p-3 transition flex items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-gray-900 text-sm">{p.name} <span className="text-gray-400 font-normal">· Room {p.room}</span></p>
@@ -234,12 +235,20 @@ export default function PhysicianCommandCenter() {
           </div>
           <div className="space-y-2">
             <ActionRow icon={Siren} tone="red" label="SBAR escalations awaiting response" count={openEscalations.length} onClick={() => go("/physician/escalations")} />
-            <ActionRow icon={Pill} tone="amber" label="Orders awaiting approval" count={pendingOrders.length} onClick={() => go("/physician/orders")} />
-            <ActionRow icon={Signature} tone="blue" label="Care-team notes to co-sign" count={unsignedNotes.length} onClick={() => go("/physician/rounds")} />
-            <ActionRow icon={Stethoscope} tone="teal" label="Open consult requests" count={openConsults.length} onClick={() => go("/physician/consults")} />
             <ActionRow icon={AlertTriangle} tone="orange" label="Incidents to review" count={stats.openIncidents} onClick={() => go("/physician/incidents")} />
-            <ActionRow icon={TrendingUp} tone="green" label="Patients to assess" count={attention.length} onClick={() => go("/physician/rounds")} />
           </div>
+        </div>
+      </div>
+
+      {/* Clinical Review — quick access to the full record boards */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <ClipboardCheck className="w-5 h-5 text-indigo-500" />
+          <h2 className="font-bold text-gray-900">Clinical Review — Quick Access</h2>
+          <span className="ml-auto text-xs text-gray-500">Jump into any record board</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+          {REVIEW_BOARDS.map((b) => <QuickCard key={b.route} board={b} onClick={() => go(b.route)} />)}
         </div>
       </div>
 
@@ -293,6 +302,39 @@ function Kpi({ label, value, icon: Icon, tone, onClick }: { label: string; value
         <Icon className={`w-4 h-4 ${t.icon}`} />
       </div>
       <p className={`text-2xl sm:text-3xl font-bold mt-1 ${t.value}`}>{value}</p>
+    </button>
+  );
+}
+
+// The up-to-date clinical record boards a physician reviews (shared with Care
+// Manager). Rendered as a quick-access grid so the cockpit opens straight into
+// any board without hunting the sidebar.
+interface ReviewBoard { label: string; desc: string; icon: LucideIcon; route: string; tint: string }
+const REVIEW_BOARDS: ReviewBoard[] = [
+  { label: "Vital Sign Trends", desc: "10-domain trends & bands", icon: HeartPulse, route: "/physician/vitalstrend", tint: "text-rose-500" },
+  { label: "Wound Care", desc: "Registry, photos, staging", icon: Bandage, route: "/physician/woundcare", tint: "text-amber-600" },
+  { label: "Care Plan Reviews", desc: "Reviews due & decisions", icon: Target, route: "/physician/careplans", tint: "text-indigo-600" },
+  { label: "Clinical Records", desc: "Labs, therapy, dx, orders", icon: FolderOpen, route: "/physician/clinicalrecords", tint: "text-blue-600" },
+  { label: "Med Compliance", desc: "Adherence & missed doses", icon: PieChart, route: "/physician/medcompliance", tint: "text-teal-600" },
+  { label: "Daily Living (ADL)", desc: "Function & assistance", icon: Accessibility, route: "/physician/adlmonitoring", tint: "text-cyan-600" },
+  { label: "Weight Tracking", desc: "Weekly weights & trend", icon: Scale, route: "/physician/weightmonitoring", tint: "text-slate-600" },
+  { label: "Progress Reports", desc: "Period clinical summary", icon: FileText, route: "/physician/progressreport", tint: "text-green-600" },
+  { label: "Daily Care Logs", desc: "10-domain bedside logs", icon: NotebookPen, route: "/physician/carelogs", tint: "text-purple-600" },
+  { label: "Care Timeline", desc: "Full documentation history", icon: History, route: "/physician/carehistory", tint: "text-orange-600" },
+  { label: "Med Inventory", desc: "Stock & purchase requests", icon: Package, route: "/physician/medinventory", tint: "text-blue-500" },
+  { label: "Mini Pharmacy", desc: "Backup stock & dispense", icon: Cross, route: "/physician/minipharmacy", tint: "text-teal-500" },
+];
+
+function QuickCard({ board, onClick }: { board: ReviewBoard; onClick: () => void }) {
+  const Icon = board.icon;
+  return (
+    <button onClick={onClick}
+      className="group flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-3 text-left transition hover:border-yellow-300 hover:bg-yellow-50 hover:shadow-sm active:scale-[0.98]">
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 ${board.tint}`}><Icon className="h-4 w-4" /></span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold text-gray-900">{board.label}</span>
+        <span className="block truncate text-[11px] text-gray-500">{board.desc}</span>
+      </span>
     </button>
   );
 }

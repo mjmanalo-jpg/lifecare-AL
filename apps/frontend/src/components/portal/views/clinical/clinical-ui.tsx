@@ -1,4 +1,5 @@
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { X, Search } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
@@ -261,9 +262,11 @@ export function ClinicalModal({
     document.body.style.overflow = "hidden";
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
   }, [open, onClose]);
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
   const maxW = { sm: "sm:max-w-md", md: "sm:max-w-lg", lg: "sm:max-w-2xl", xl: "sm:max-w-3xl" }[size];
-  return (
+  // Portal to <body> so the modal escapes any transformed/overflow-clipped ancestor
+  // (e.g. the sliding Quick-Actions drawer) and always centers on the true viewport.
+  return createPortal(
     <div className="clinical-modal-backdrop fixed inset-0 z-50 flex items-end justify-center p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div role="dialog" aria-modal="true" aria-label={title}
@@ -279,6 +282,7 @@ export function ClinicalModal({
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 scrollbar-thin">{children}</div>
         {footer && <div className="flex flex-none flex-wrap items-center justify-end gap-2 border-t px-5 py-3.5" style={{ borderColor: "var(--clinical-line)" }}>{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

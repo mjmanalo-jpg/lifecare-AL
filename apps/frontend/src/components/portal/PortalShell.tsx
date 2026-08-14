@@ -31,6 +31,8 @@ import {
   Search,
   MoreHorizontal,
   CircleCheck,
+  Command,
+  CornerDownLeft,
 } from "lucide-react";
 import Link from "next/link";
 import LcmsLogo from "@/components/LcmsLogo";
@@ -38,6 +40,7 @@ import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import ChangePasswordDialog from "@/components/portal/ChangePasswordDialog";
 import LogoutDialog from "@/components/portal/LogoutDialog";
 import SignatureModal from "@/components/portal/SignatureModal";
+import { PortalContentSkeleton } from "@/components/portal/PortalSkeleton";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Role,
@@ -67,7 +70,35 @@ const DEFAULT_COLLAPSED_GROUPS: Record<string, boolean> = {
   "Fleet & Transport": true,
 };
 
-const sidebarGroupStateByRole = new Map<Role, Record<string, boolean>>();
+// Sidebar collapse state persists in localStorage per role so a user's chosen
+// expanded/collapsed groups survive a full reload (not just navigation).
+const SIDEBAR_GROUPS_KEY = (role: Role) => `lcms_sidebar_groups_${role}`;
+
+// Default collapsed map for a role's ACTUAL groups: apply the low-frequency
+// denylist, then guarantee at least one content group (non-Overview) starts open
+// — otherwise a non-clinical role whose only groups are all denylisted (Billing,
+// Fleet, …) would open to just "Overview". If none would be open, open the
+// largest content group so every role lands on its primary work area.
+function defaultCollapsedFor(groups: { group: string; links: SidebarLink[] }[]): Record<string, boolean> {
+  const state: Record<string, boolean> = {};
+  for (const g of groups) state[g.group] = !!DEFAULT_COLLAPSED_GROUPS[g.group];
+  const content = groups.filter((g) => g.group !== "Overview");
+  if (content.length && !content.some((g) => !state[g.group])) {
+    const largest = content.reduce((a, b) => (b.links.length > a.links.length ? b : a));
+    state[largest.group] = false;
+  }
+  return state;
+}
+
+function readStoredGroups(role: Role): Record<string, boolean> | null {
+  if (typeof window === "undefined") return null;
+  try { const raw = localStorage.getItem(SIDEBAR_GROUPS_KEY(role)); return raw ? (JSON.parse(raw) as Record<string, boolean>) : null; }
+  catch { return null; }
+}
+function writeStoredGroups(role: Role, state: Record<string, boolean>): void {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(SIDEBAR_GROUPS_KEY(role), JSON.stringify(state)); } catch { /* ignore quota / disabled storage */ }
+}
 
 // Every notification resolves to an explicit sidebar tab. The ENTITY a
 // notification points at is the precise signal (many types are shared —
@@ -163,6 +194,7 @@ export default function PortalShell({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [navQuery, setNavQuery] = useState("");
+  const [pendingRoute, setPendingRoute] = useState<string | null>(null);
   // Seed from the class the pre-paint theme script already set on <html>, so the
   // chrome doesn't flash light before the mount effect runs. Server render has no
   // document and falls back to the CSS default (dark); the effect reconciles.
@@ -420,13 +452,13 @@ export default function PortalShell({
   // Keep the two highest-frequency clinical groups open. Lower-frequency
   // groups remain one tap away, which prevents a long link wall on first load.
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(
-    () => sidebarGroupStateByRole.get(userRole) ?? { ...DEFAULT_COLLAPSED_GROUPS }
+    () => ({ ...defaultCollapsedFor(groupedLinks), ...(readStoredGroups(userRole) ?? {}) })
   );
 
   const toggleGroup = (group: string) => {
     setCollapsedGroups((prev) => {
       const next = { ...prev, [group]: !prev[group] };
-      sidebarGroupStateByRole.set(userRole, next);
+      writeStoredGroups(userRole, next);
       return next;
     });
   };
@@ -436,6 +468,7 @@ export default function PortalShell({
   // (e.g. /cameras also lighting up /cameralogs).
   const activeSegment = pathname.split("/")[2] || "dashboard";
   const isLinkActive = (link: SidebarLink) => link.route.endsWith(`/${activeSegment}`);
+  const contentPending = Boolean(pendingRoute && pathname !== pendingRoute);
 
   // Human name of the page currently in view — sidebar label first (already the
   // words the user clicked), then the route→tab map, so the chrome can always
@@ -449,15 +482,35 @@ export default function PortalShell({
     groupSidebarLinks(filteredLinks).find(({ links }) => links.some(isLinkActive))?.group ||
     "Overview";
 
+  // Role-agnostic "top tasks": the active page, the role's dashboard, then the
+  // first link of each of the role's groups — so every role (clinical or not)
+  // gets meaningful pinned shortcuts in the collapsed rail + mobile bar.
   const priorityLinks = useMemo(() => {
-    const preferredSegments = ["dashboard", "alertcenter", "residents", "carelogs", "mar"];
-    const preferred = preferredSegments
-      .map((segment) => filteredLinks.find((link) => link.route.endsWith(`/${segment}`)))
-      .filter(Boolean) as SidebarLink[];
     const active = filteredLinks.find((link) => link.route.endsWith(`/${activeSegment}`));
-    const combined = active ? [active, ...preferred] : preferred;
+    const dashboard = filteredLinks.find((link) => link.route.endsWith("/dashboard"));
+    const firstOfEachGroup = groupSidebarLinks(filteredLinks).map((g) => g.links[0]).filter(Boolean) as SidebarLink[];
+    const combined = [active, dashboard, ...firstOfEachGroup].filter(Boolean) as SidebarLink[];
     return combined.filter((link, index, all) => all.findIndex((item) => item.route === link.route) === index).slice(0, 5);
   }, [activeSegment, filteredLinks]);
+
+  // ── ⌘K command palette — jump to any page by typing (all roles) ──────────
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteQuery, setPaletteQuery] = useState("");
+  const [paletteIndex, setPaletteIndex] = useState(0);
+  const paletteResults = useMemo(() => {
+    const q = paletteQuery.trim().toLowerCase();
+    const matched = q ? filteredLinks.filter((l) => `${l.name} ${l.group || ""}`.toLowerCase().includes(q)) : filteredLinks;
+    return matched.slice(0, 12);
+  }, [paletteQuery, filteredLinks]);
+  const openPalette = () => { setPaletteQuery(""); setPaletteIndex(0); setPaletteOpen(true); };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPaletteQuery(""); setPaletteIndex(0); setPaletteOpen(true); }
+      else if (e.key === "Escape") setPaletteOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Renders a single nav link (label optional for the collapsed rail)
   const renderLink = (link: SidebarLink, showLabel: boolean) => {
@@ -467,7 +520,12 @@ export default function PortalShell({
       <Link
         key={`${link.name}-${link.route}`}
         href={link.route}
-        onClick={() => setMobileMenuOpen(false)}
+        onClick={(event) => {
+          setMobileMenuOpen(false);
+          if (!isActive && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+            setPendingRoute(link.route.split("?")[0]);
+          }
+        }}
         title={showLabel ? undefined : link.name}
         aria-current={isActive ? "page" : undefined}
         className={`group/nav flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
@@ -523,10 +581,21 @@ export default function PortalShell({
           value={navQuery}
           onChange={(event) => setNavQuery(event.target.value)}
           placeholder="Find a page..."
-          className={`h-11 w-full rounded-xl border pl-9 pr-3 text-sm outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${
+          className={`h-11 w-full rounded-xl border pl-9 pr-14 text-sm outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${
             theme === "dark" ? "border-slate-700 bg-slate-900 text-white" : "border-slate-200 bg-slate-50 text-slate-950"
           }`}
         />
+        <button
+          type="button"
+          onClick={openPalette}
+          title="Command palette (Ctrl / ⌘ + K)"
+          aria-label="Open command palette"
+          className={`absolute right-2 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded border px-1.5 py-1 text-[10px] font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 xl:flex ${
+            theme === "dark" ? "border-slate-700 text-slate-400 hover:text-slate-200" : "border-slate-200 text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <Command className="h-3 w-3" />K
+        </button>
       </label>
       {navQuery && visibleNavLinks.length === 0 && (
         <div className={`px-3 py-8 text-center text-sm ${theme === "dark" ? "text-slate-400" : "text-slate-600"}`}>
@@ -709,6 +778,52 @@ export default function PortalShell({
           ) : null}
         </div>
       </aside>
+
+      {/* ⌘K command palette — jump to any page by typing (all roles) */}
+      {paletteOpen && (
+        <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 p-4 pt-[14vh] backdrop-blur-sm" onClick={() => setPaletteOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-lg overflow-hidden rounded-2xl border shadow-2xl ${theme === "dark" ? "border-slate-700 bg-slate-900" : "border-slate-200 bg-white"}`}>
+            <div className={`flex items-center gap-2 border-b px-4 py-3 ${theme === "dark" ? "border-slate-800" : "border-slate-100"}`}>
+              <Search className={`h-4 w-4 shrink-0 ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`} />
+              <input
+                autoFocus
+                value={paletteQuery}
+                onChange={(e) => { setPaletteQuery(e.target.value); setPaletteIndex(0); }}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowDown") { e.preventDefault(); setPaletteIndex((i) => Math.min(i + 1, paletteResults.length - 1)); }
+                  else if (e.key === "ArrowUp") { e.preventDefault(); setPaletteIndex((i) => Math.max(i - 1, 0)); }
+                  else if (e.key === "Enter") { const sel = paletteResults[paletteIndex]; if (sel) { router.push(sel.route); setPaletteOpen(false); } }
+                }}
+                placeholder="Jump to a page…"
+                aria-label="Search pages"
+                className={`flex-1 bg-transparent text-sm outline-none ${theme === "dark" ? "text-white placeholder:text-slate-500" : "text-slate-950 placeholder:text-slate-400"}`}
+              />
+              <kbd className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${theme === "dark" ? "border-slate-700 text-slate-400" : "border-slate-200 text-slate-500"}`}>Esc</kbd>
+            </div>
+            <div className="max-h-[52vh] overflow-y-auto py-2 scrollbar-thin">
+              {paletteResults.length === 0 ? (
+                <p className={`px-4 py-8 text-center text-sm ${theme === "dark" ? "text-slate-500" : "text-slate-400"}`}>No pages match &ldquo;{paletteQuery}&rdquo;.</p>
+              ) : paletteResults.map((link, i) => {
+                const Icon = link.icon;
+                const activeRow = i === paletteIndex;
+                return (
+                  <button
+                    key={`${link.name}-${link.route}`}
+                    onMouseEnter={() => setPaletteIndex(i)}
+                    onClick={() => { router.push(link.route); setPaletteOpen(false); }}
+                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition ${activeRow ? (theme === "dark" ? "bg-blue-500/15 text-blue-100" : "bg-blue-50 text-blue-800") : (theme === "dark" ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-50")}`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0 opacity-70" />
+                    <span className="flex-1 truncate font-medium">{link.name}</span>
+                    {link.group && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide opacity-50">{link.group}</span>}
+                    {activeRow && <CornerDownLeft className="h-3.5 w-3.5 shrink-0 opacity-60" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
@@ -1084,7 +1199,7 @@ export default function PortalShell({
         {/* Main Content Area */}
         <main className="min-h-0 flex-1 overflow-y-auto p-3 pb-24 sm:p-5 sm:pb-24 lg:p-7 lg:pb-7" style={{ height: 0 }}>
           <div className={["CARE_MANAGER", "NURSE", "CAREGIVER"].includes(userRole) ? "clinical-portal-content" : undefined}>
-            {children}
+            {contentPending ? <PortalContentSkeleton variant={activeSegment === "dashboard" ? "dashboard" : "list"} /> : children}
           </div>
         </main>
 
@@ -1097,7 +1212,7 @@ export default function PortalShell({
             const segment = link.route.split("/").pop();
             const label = segment === "dashboard" ? "Home" : segment === "alertcenter" ? "Alerts" : segment === "residents" ? "Residents" : segment === "carelogs" ? "Care logs" : segment === "mar" ? "MAR" : link.name;
             return (
-              <Link key={`dock-${link.route}`} href={link.route} aria-current={isActive ? "page" : undefined} className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${isActive ? "text-blue-600 dark:text-blue-300" : "text-slate-600 dark:text-slate-400"}`}>
+              <Link key={`dock-${link.route}`} href={link.route} onClick={(event) => { if (!isActive && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) setPendingRoute(link.route.split("?")[0]); }} aria-current={isActive ? "page" : undefined} className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${isActive ? "text-blue-600 dark:text-blue-300" : "text-slate-600 dark:text-slate-400"}`}>
                 <Icon className="h-5 w-5" /><span className="w-full truncate text-center">{label}</span>
               </Link>
             );

@@ -23,6 +23,7 @@ import KitchenPortalContent from "@/components/portal/views/KitchenPortalContent
 import HousekeepingPortalContent from "@/components/portal/views/HousekeepingPortalContent";
 import MaintenancePortalContent from "@/components/portal/views/MaintenancePortalContent";
 import DashboardQuickActions from "@/components/portal/views/DashboardQuickActions";
+import { PortalShellSkeleton } from "@/components/portal/PortalSkeleton";
 import { useEffect, useState } from "react";
 
 export default function RolePortalPage() {
@@ -45,14 +46,7 @@ export default function RolePortalPage() {
   };
 
   if (isLoading || !roleParam) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
+    return <PortalShellSkeleton />;
   }
 
   return (
