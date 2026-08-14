@@ -91,18 +91,40 @@ const suggestLevel = (domains: ClinicalState): string => {
 // Serialize the free-text note + domains into the careAssessment column. Falls
 // back to a plain note (or null) when no structured domain has been captured, so
 // legacy free-text records keep working.
-const serializeClinical = (note: string, domains: ClinicalState, wounds: WoundEntry[] = []): string | null => {
+type MedRow = { id: string; name: string; dose: string; frequency: string };
+const serializeClinical = (
+  note: string, domains: ClinicalState, wounds: WoundEntry[] = [],
+  meds: MedRow[] = [], extra: { surgeries?: string; hospitalizations?: string } = {},
+): string | null => {
   const filled = Object.entries(domains).filter(([, v]) => v && (v.level || (v.notes || "").trim()));
   const hasWounds = Array.isArray(wounds) && wounds.length > 0;
-  if (!filled.length && !hasWounds) return note.trim() || null;
-  return JSON.stringify({ __v: CLINICAL_TAG, note: note.trim() || undefined, domains: Object.fromEntries(filled), ...(hasWounds ? { wounds } : {}) });
+  const cleanMeds = (meds || []).filter((m) => m.name.trim());
+  const surgeries = (extra.surgeries || "").trim();
+  const hospitalizations = (extra.hospitalizations || "").trim();
+  const hasExtra = cleanMeds.length > 0 || !!surgeries || !!hospitalizations;
+  if (!filled.length && !hasWounds && !hasExtra) return note.trim() || null;
+  return JSON.stringify({
+    __v: CLINICAL_TAG, note: note.trim() || undefined, domains: Object.fromEntries(filled),
+    ...(hasWounds ? { wounds } : {}),
+    ...(cleanMeds.length ? { medications: cleanMeds } : {}),
+    ...(surgeries ? { surgeries } : {}),
+    ...(hospitalizations ? { hospitalizations } : {}),
+  });
 };
-const parseClinical = (raw: string): { note: string; domains: ClinicalState; wounds: WoundEntry[] } => {
+const parseClinical = (raw: string): { note: string; domains: ClinicalState; wounds: WoundEntry[]; meds: MedRow[]; surgeries: string; hospitalizations: string } => {
   const t = (raw || "").trim();
   if (t.startsWith("{")) {
-    try { const o = JSON.parse(t); if (o && o.__v === CLINICAL_TAG) return { note: String(o.note ?? ""), domains: (o.domains || {}) as ClinicalState, wounds: Array.isArray(o.wounds) ? (o.wounds as WoundEntry[]) : [] }; } catch { /* not structured */ }
+    try {
+      const o = JSON.parse(t);
+      if (o && o.__v === CLINICAL_TAG) return {
+        note: String(o.note ?? ""), domains: (o.domains || {}) as ClinicalState,
+        wounds: Array.isArray(o.wounds) ? (o.wounds as WoundEntry[]) : [],
+        meds: Array.isArray(o.medications) ? (o.medications as MedRow[]) : [],
+        surgeries: String(o.surgeries ?? ""), hospitalizations: String(o.hospitalizations ?? ""),
+      };
+    } catch { /* not structured */ }
   }
-  return { note: t, domains: {}, wounds: [] };
+  return { note: t, domains: {}, wounds: [], meds: [], surgeries: "", hospitalizations: "" };
 };
 
 // ── Carry-forward: seed a Care Acuity assessment (Stage 5) on completion ───────
@@ -299,7 +321,7 @@ const emptyForm = {
   firstName: "", lastName: "", dateOfBirth: "", gender: "", phone: "", email: "",
   emergencyContact: "", emergencyContactPhone: "",
   sponsorName: "", sponsorEmail: "",
-  medicalAssessment: "", allergies: "", medicalHistory: "",
+  medicalAssessment: "", allergies: "", medicalHistory: "", surgeries: "", hospitalizations: "",
   careAssessment: "", careLevel: "", mobility: "",
   insuranceProvider: "", insurancePolicyNumber: "", insuranceVerified: false, insuranceVerifiedAt: "",
   roomNumber: "", qrPayload: "",
@@ -343,12 +365,18 @@ export default function AdmissionsContent() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedAdmission, setSelectedAdmission] = useState<Row | null>(null);
+  const [editView, setEditView] = useState(false);
+  const [viewSaving, setViewSaving] = useState(false);
   const [form, setForm] = useState<Form>({ ...emptyForm });
   const [clinical, setClinical] = useState<ClinicalState>({});
   const [skinWounds, setSkinWounds] = useState<WoundEntry[]>([]);
   // Pre-admission total (0–50) captured on prefill, so the seeded acuity's Score
   // matches its level. Null when the assessment was entered manually.
   const [prefillTotal, setPrefillTotal] = useState<number | null>(null);
+  const [medList, setMedList] = useState<MedRow[]>([]);
+  const addMed = () => setMedList((l) => [...l, { id: newId(), name: "", dose: "", frequency: "" }]);
+  const patchMed = (mid: string, patch: Partial<MedRow>) => setMedList((l) => l.map((m) => (m.id === mid ? { ...m, ...patch } : m)));
+  const removeMed = (mid: string) => setMedList((l) => l.filter((m) => m.id !== mid));
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -388,6 +416,12 @@ export default function AdmissionsContent() {
 
     const others = Array.isArray(pa.otherConditions) ? (pa.otherConditions as string[]) : [];
     const meds = s(pa.currentMedications);
+    // Split the free-text current-medications blob into structured rows the nurse
+    // can refine; each becomes an ACTIVE Medication on completion.
+    const medRows: MedRow[] = meds
+      ? meds.split(/[\n;,]+/).map((x) => x.trim()).filter(Boolean).map((nm) => ({ id: newId(), name: nm, dose: "", frequency: "" }))
+      : [];
+    setMedList(medRows);
 
     // Flatten the pre-admission's structured Individualized Care Plan (problem →
     // goal → interventions → frequency → responsible) into the wizard's Step 7
@@ -410,7 +444,9 @@ export default function AdmissionsContent() {
       emergencyContact: s(pa.primaryContact) || form.emergencyContact,
       allergies: s(pa.allergies) || form.allergies,
       medicalHistory: [s(pa.primaryDiagnosis), s(pa.secondaryDiagnosis), ...others].filter(Boolean).join("; ") || form.medicalHistory,
-      medicalAssessment: [s(pa.clinicalConcerns), meds && `Current medications: ${meds}`].filter(Boolean).join("\n") || form.medicalAssessment,
+      medicalAssessment: s(pa.clinicalConcerns) || form.medicalAssessment,
+      surgeries: s(pa.previousSurgeries) || form.surgeries,
+      hospitalizations: [pa.hospitalized12mo ? "Hospitalized in last 12 months" : "", s(pa.hospitalizationReason)].filter(Boolean).join(" — ") || form.hospitalizations,
       careAssessment: s(pa.reasonForAdmission) || s(pa.clinicalJustification) || form.careAssessment,
       careLevel: careLevel || form.careLevel,
       carePlan: carePlanText || form.carePlan,
@@ -422,12 +458,18 @@ export default function AdmissionsContent() {
   // Rooms already taken by residents or by other in-progress admissions.
   const occupiedRooms = useMemo(() => {
     const taken = new Set<string>();
-    residentRows.forEach((r) => r.roomNumber && taken.add(s(r.roomNumber)));
+    const fullName = `${form.firstName} ${form.lastName}`.trim().toLowerCase();
+    residentRows.forEach((r) => {
+      if (!r.roomNumber) return;
+      // A resident's own room isn't "taken" when re-admitting that same person.
+      if (fullName && `${s(r.firstName)} ${s(r.lastName)}`.trim().toLowerCase() === fullName) return;
+      taken.add(s(r.roomNumber));
+    });
     admissionRows.forEach((a) => {
       if (s(a.id) !== s(form.id) && s(a.status) !== "CANCELLED" && a.roomNumber) taken.add(s(a.roomNumber));
     });
     return taken;
-  }, [residentRows, admissionRows, form.id]);
+  }, [residentRows, admissionRows, form.id, form.firstName, form.lastName]);
 
   const { data: roomRows } = useLiveQuery<Record<string, unknown>>(
     "rooms", { query: "take=200", tables: ["Room"] }
@@ -438,17 +480,71 @@ export default function AdmissionsContent() {
     [allRooms, occupiedRooms, form.roomNumber]
   );
 
-  const openNew = () => { setForm({ ...emptyForm }); setClinical({}); setSkinWounds([]); setPrefillTotal(null); setStep(1); setVerifyMsg(""); setWizardOpen(true); };
+  const openNew = () => { setForm({ ...emptyForm }); setClinical({}); setSkinWounds([]); setMedList([]); setPrefillTotal(null); setStep(1); setVerifyMsg(""); setWizardOpen(true); };
 
   const openView = (row: Row) => {
     setSelectedAdmission(row);
+    setEditView(false);
     setViewOpen(true);
+  };
+  const openViewEdit = (row: Row) => {
+    setSelectedAdmission(row);
+    setEditView(true);
+    setViewOpen(true);
+  };
+
+  // Look up the resident's existing medication names so a re-save doesn't create
+  // duplicate meds (only genuinely new ones are added).
+  const existingMedNames = async (rid: string): Promise<Set<string>> => {
+    try {
+      const r = await fetch(`/api/db/medications?f_residentId=${rid}&take=300`, { credentials: "include" });
+      if (!r.ok) return new Set();
+      const j = await r.json();
+      return new Set(((j?.data as Row[]) || []).map((m) => s(m.name).trim().toLowerCase()).filter(Boolean));
+    } catch { return new Set(); }
+  };
+
+  // Save the editable detail view → update the Admission AND sync profile/medical
+  // fields + new medications onto the linked resident (so the rcard reflects it).
+  const saveAdmissionEdit = async (row: Row, data: { admission: Row; residentSync: Row; meds: MedRow[] }) => {
+    setViewSaving(true);
+    try {
+      await updateRecord("admissions", s(row.id), data.admission);
+      let rid = s(row.residentId);
+      if (!rid) {
+        const fullName = `${s(data.residentSync.firstName)} ${s(data.residentSync.lastName)}`.trim().toLowerCase();
+        const match = residentRows.find((r) => s(r.roomNumber) === s(data.residentSync.roomNumber) && `${s(r.firstName)} ${s(r.lastName)}`.trim().toLowerCase() === fullName);
+        rid = s(match?.id);
+        if (rid) await updateRecord("admissions", s(row.id), { residentId: rid });
+      }
+      if (rid) {
+        await updateRecord("residents", rid, data.residentSync);
+        const existing = await existingMedNames(rid);
+        const toCreate = data.meds.filter((m) => m.name.trim() && !existing.has(m.name.trim().toLowerCase()));
+        if (toCreate.length) {
+          const startDate = new Date().toISOString();
+          await Promise.all(toCreate.map((m) => createRecord("medications", {
+            residentId: rid, name: m.name.trim(), dosage: m.dose.trim() || "—", frequency: m.frequency.trim() || "—",
+            route: "oral", status: "ACTIVE", startDate, prescribedBy: `${s(data.residentSync.firstName)} ${s(data.residentSync.lastName)} (Admission)`,
+          }).catch(() => null)));
+        }
+      }
+      await refetch();
+      setViewOpen(false);
+      setEditView(false);
+      Swal.fire({ toast: true, position: "top-end", icon: "success", title: rid ? "Saved · synced to resident card" : "Saved (no linked resident found)", showConfirmButton: false, timer: 2400 });
+    } catch (err) {
+      Swal.fire({ title: "Could not save", text: err instanceof Error ? err.message : "Update failed.", icon: "error" });
+    } finally {
+      setViewSaving(false);
+    }
   };
 
   const openExisting = (row: Row) => {
     const parsedCA = parseClinical(s(row.careAssessment));
     setClinical(parsedCA.domains);
     setSkinWounds(parsedCA.wounds);
+    setMedList(parsedCA.meds);
     setForm({
       id: s(row.id),
       firstName: s(row.firstName), lastName: s(row.lastName),
@@ -457,6 +553,7 @@ export default function AdmissionsContent() {
       emergencyContact: s(row.emergencyContact), emergencyContactPhone: s(row.emergencyContactPhone),
       sponsorName: s(row.sponsorName), sponsorEmail: s(row.sponsorEmail),
       medicalAssessment: s(row.medicalAssessment), allergies: s(row.allergies), medicalHistory: s(row.medicalHistory),
+      surgeries: parsedCA.surgeries, hospitalizations: parsedCA.hospitalizations,
       careAssessment: parsedCA.note, careLevel: s(row.careLevel), mobility: s(row.mobility),
       insuranceProvider: s(row.insuranceProvider), insurancePolicyNumber: s(row.insurancePolicyNumber),
       insuranceVerified: Boolean(row.insuranceVerified), insuranceVerifiedAt: s(row.insuranceVerifiedAt),
@@ -476,7 +573,7 @@ export default function AdmissionsContent() {
     emergencyContact: form.emergencyContact || null, emergencyContactPhone: form.emergencyContactPhone || null,
     sponsorName: form.sponsorName || null, sponsorEmail: form.sponsorEmail || null,
     medicalAssessment: form.medicalAssessment || null, allergies: form.allergies || null, medicalHistory: form.medicalHistory || null,
-    careAssessment: serializeClinical(form.careAssessment, clinical, skinWounds), careLevel: form.careLevel || null, mobility: form.mobility || null,
+    careAssessment: serializeClinical(form.careAssessment, clinical, skinWounds, medList, { surgeries: form.surgeries, hospitalizations: form.hospitalizations }), careLevel: form.careLevel || null, mobility: form.mobility || null,
     insuranceProvider: form.insuranceProvider || null, insurancePolicyNumber: form.insurancePolicyNumber || null,
     insuranceVerified: form.insuranceVerified, insuranceVerifiedAt: form.insuranceVerifiedAt || null,
     roomNumber: form.roomNumber || null, qrPayload: form.qrPayload || null,
@@ -686,11 +783,25 @@ export default function AdmissionsContent() {
         admissionDate: new Date().toISOString(),
         emergencyContact: form.emergencyContact || null, emergencyContactPhone: form.emergencyContactPhone || null,
         allergies: form.allergies || null, medicalHistory: form.medicalHistory || null,
+        surgeries: form.surgeries || null, hospitalizations: form.hospitalizations || null,
         notes: form.carePlan || null,
         ...(sponsorId ? { sponsorId } : {}),
       };
-      const res = await createRecord("residents", residentPayload);
-      const residentId = s((res.data as Row)?.id);
+      // Re-admitting someone who already has a resident profile (same name + room)
+      // UPDATES that profile instead of creating a duplicate; otherwise create new.
+      const fullName = `${form.firstName} ${form.lastName}`.trim().toLowerCase();
+      const existingResident = residentRows.find((r) => s(r.roomNumber) === form.roomNumber && `${s(r.firstName)} ${s(r.lastName)}`.trim().toLowerCase() === fullName);
+      let residentId = "";
+      if (existingResident) {
+        await updateRecord("residents", s(existingResident.id), residentPayload);
+        residentId = s(existingResident.id);
+      } else {
+        const res = await createRecord("residents", residentPayload);
+        residentId = s((res.data as Row)?.id);
+      }
+      // Never mark the admission COMPLETED if the resident profile didn't persist —
+      // surface it instead of silently orphaning the admission (residentId null).
+      if (!residentId) throw new Error("Resident profile could not be saved — the room may already be assigned to a different resident.");
 
       // Handoff: notify the assigned care team + create an onboarding task.
       const team = parseTeam(form.careTeam);
@@ -712,6 +823,20 @@ export default function AdmissionsContent() {
           dueDate: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
           assignedToId: team[0]?.id || null,
         }).catch(() => null);
+
+        // Carry current medications forward as ACTIVE Medication records so they
+        // surface on the resident card, the MAR and medication inventory.
+        const cleanMeds = medList.filter((mm) => mm.name.trim());
+        if (cleanMeds.length) {
+          const startDate = new Date().toISOString();
+          await Promise.all(cleanMeds.map((mm) =>
+            createRecord("medications", {
+              residentId, name: mm.name.trim(), dosage: mm.dose.trim() || "—", frequency: mm.frequency.trim() || "—",
+              route: "oral", status: "ACTIVE", startDate,
+              prescribedBy: `${form.firstName} ${form.lastName} (Admission)`,
+            }).catch(() => null)
+          ));
+        }
 
         // Carry the 12-domain assessment forward: seed a PENDING_NURSE acuity
         // record so it surfaces on the Care Acuity board for validation. Best-effort.
@@ -835,7 +960,7 @@ export default function AdmissionsContent() {
                 </button>
                 <div className="mt-3 flex items-center justify-end gap-1 border-t border-gray-100 pt-2.5">
                   <button onClick={() => openView(a)} title="View" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 transition"><Eye className="w-4 h-4" /> View</button>
-                  <button onClick={() => openExisting(a)} title="Edit onboarding" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-50 transition"><Pencil className="w-4 h-4" /> Edit</button>
+                  <button onClick={() => (s(a.status) === "COMPLETED" ? openViewEdit(a) : openExisting(a))} title="Edit" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-50 transition"><Pencil className="w-4 h-4" /> Edit</button>
                   <button onClick={() => deleteAdmission(s(a.id), `${s(a.firstName)} ${s(a.lastName)}`.trim())} title="Delete" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition"><Trash2 className="w-4 h-4" /> Delete</button>
                 </div>
               </div>
@@ -928,10 +1053,37 @@ export default function AdmissionsContent() {
               )}
               {step === 2 && (
                 <div className="space-y-4">
-                  <Field label="Medical Assessment"><textarea rows={4} className={inputCls} value={form.medicalAssessment} onChange={(e) => set({ medicalAssessment: e.target.value })} placeholder="Findings, diagnoses, current medications…" /></Field>
+                  <Field label="Medical Assessment"><textarea rows={4} className={inputCls} value={form.medicalAssessment} onChange={(e) => set({ medicalAssessment: e.target.value })} placeholder="Clinical findings & diagnoses (medications are listed separately below)…" /></Field>
+
+                  {/* Structured current medications → become ACTIVE meds on the resident card + MAR */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5"><Pill className="w-3.5 h-3.5 text-amber-600" /> Medications</span>
+                      <button type="button" onClick={addMed} className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800"><Plus className="w-3.5 h-3.5" /> Add medication</button>
+                    </div>
+                    {medList.length === 0 ? (
+                      <p className="text-xs text-gray-500 border border-dashed border-gray-300 rounded-lg px-3 py-2">No medications added. Each one you add becomes an active medication on the resident card & MAR.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {medList.map((m) => (
+                          <div key={m.id} className="flex flex-col sm:flex-row gap-2">
+                            <input className={inputCls + " sm:flex-1"} placeholder="Medication name" value={m.name} onChange={(e) => patchMed(m.id, { name: e.target.value })} />
+                            <input className={inputCls + " sm:w-28"} placeholder="Dose" value={m.dose} onChange={(e) => patchMed(m.id, { dose: e.target.value })} />
+                            <input className={inputCls + " sm:w-40"} placeholder="Frequency" value={m.frequency} onChange={(e) => patchMed(m.id, { frequency: e.target.value })} />
+                            <button type="button" onClick={() => removeMed(m.id)} className="shrink-0 self-start px-2 py-2 rounded-lg border border-gray-300 text-gray-400 hover:text-red-600 hover:border-red-300" aria-label="Remove medication"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field label="Allergies"><input className={inputCls} value={form.allergies} onChange={(e) => set({ allergies: e.target.value })} /></Field>
                     <Field label="Medical History"><input className={inputCls} value={form.medicalHistory} onChange={(e) => set({ medicalHistory: e.target.value })} /></Field>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Field label="Previous Surgeries"><input className={inputCls} value={form.surgeries} onChange={(e) => set({ surgeries: e.target.value })} /></Field>
+                    <Field label="Hospitalizations"><input className={inputCls} value={form.hospitalizations} onChange={(e) => set({ hospitalizations: e.target.value })} /></Field>
                   </div>
                 </div>
               )}
@@ -1109,19 +1261,24 @@ export default function AdmissionsContent() {
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
               {/* Header */}
-              <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white px-6 py-4 flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-xl font-bold">{s(row.firstName)} {s(row.lastName)}</h2>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badge}`}>
-                      {isDone ? "Completed" : isCancelled ? "Cancelled" : "In Progress"}
-                    </span>
+              <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white px-6 py-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="h-11 w-11 shrink-0 rounded-full bg-white/15 ring-1 ring-white/20 flex items-center justify-center text-white font-bold text-sm">
+                    {(`${s(row.firstName).charAt(0)}${s(row.lastName).charAt(0)}`).toUpperCase() || "?"}
                   </div>
-                  <p className="text-slate-400 text-xs mt-0.5">
-                    Admission ID: <code className="text-amber-400">{s(row.id)}</code> &bull; Progress: {done}/{STEP_COUNT} steps
-                  </p>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-xl font-bold text-white truncate">{s(row.firstName)} {s(row.lastName)}</h2>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badge}`}>
+                        {isDone ? "Completed" : isCancelled ? "Cancelled" : "In Progress"}
+                      </span>
+                    </div>
+                    <p className="text-slate-300 text-xs mt-0.5 truncate">
+                      {row.roomNumber ? `Room ${s(row.roomNumber)} · ` : ""}Admission {s(row.id).slice(0, 8)} · {done}/{STEP_COUNT} steps
+                    </p>
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 justify-end">
+                <div className="flex flex-wrap items-center gap-2 justify-end shrink-0">
                   {!isDone && !isCancelled && (
                     <button
                       onClick={() => {
@@ -1144,12 +1301,23 @@ export default function AdmissionsContent() {
                       <Ban className="w-5 h-5" />
                     </button>
                   )}
+                  {isDone && !editView && (
+                    <button
+                      onClick={() => setEditView(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition"
+                    >
+                      <Pencil className="w-3.5 h-3.5" /> Edit
+                    </button>
+                  )}
                   <button onClick={() => setViewOpen(false)} className="p-2 hover:bg-white/10 rounded-lg"><X className="w-5 h-5" /></button>
                 </div>
               </div>
 
               {/* Body */}
               <div className="p-6 overflow-y-auto flex-1 bg-gray-50 space-y-6">
+                {editView ? (
+                  <AdmissionEditForm row={row} onSave={(d) => saveAdmissionEdit(row, d)} />
+                ) : (<>
                 {/* Visual Progress Bar */}
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
                   <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
@@ -1402,26 +1570,25 @@ export default function AdmissionsContent() {
                     </div>
                   </div>
                 </div>
+                </>)}
               </div>
 
               {/* Footer */}
               <div className="border-t border-gray-100 px-6 py-4 flex flex-wrap items-center justify-end bg-gray-50 gap-2">
-                <button
-                  onClick={() => setViewOpen(false)}
-                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm font-medium"
-                >
-                  Close
-                </button>
-                {!isDone && !isCancelled && (
-                  <button
-                    onClick={() => {
-                      setViewOpen(false);
-                      openExisting(row);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold shadow-sm transition"
-                  >
-                    <Pencil className="w-4 h-4" /> Edit Onboarding
-                  </button>
+                {editView ? (
+                  <>
+                    <button type="button" onClick={() => setEditView(false)} disabled={viewSaving} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm font-medium disabled:opacity-50">Cancel</button>
+                    <button type="submit" form="admission-edit-form" disabled={viewSaving} className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold shadow-sm transition disabled:opacity-50">{viewSaving ? "Saving…" : "Save changes"}</button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => setViewOpen(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm font-medium">Close</button>
+                    {!isDone && !isCancelled && (
+                      <button onClick={() => { setViewOpen(false); openExisting(row); }} className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold shadow-sm transition">
+                        <Pencil className="w-4 h-4" /> Edit Onboarding
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -1429,6 +1596,152 @@ export default function AdmissionsContent() {
         );
       })()}
     </div>
+  );
+}
+
+// Editable version of the admission detail card. Saving updates the Admission and
+// (via the parent) syncs profile/medical fields + new medications to the resident.
+function AdmissionEditForm({ row, onSave }: {
+  row: Row;
+  onSave: (data: { admission: Row; residentSync: Row; meds: MedRow[] }) => void;
+}) {
+  const g = (k: string) => s(row[k]);
+  const ca = parseClinical(g("careAssessment"));
+  const [firstName, setFirstName] = useState(g("firstName"));
+  const [lastName, setLastName] = useState(g("lastName"));
+  const [dateOfBirth, setDateOfBirth] = useState(g("dateOfBirth") ? g("dateOfBirth").slice(0, 10) : "");
+  const [gender, setGender] = useState(g("gender"));
+  const [phone, setPhone] = useState(g("phone"));
+  const [email, setEmail] = useState(g("email"));
+  const [emergencyContact, setEmergencyContact] = useState(g("emergencyContact"));
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState(g("emergencyContactPhone"));
+  const [sponsorName, setSponsorName] = useState(g("sponsorName"));
+  const [sponsorEmail, setSponsorEmail] = useState(g("sponsorEmail"));
+  const [allergies, setAllergies] = useState(g("allergies"));
+  const [medicalHistory, setMedicalHistory] = useState(g("medicalHistory"));
+  const [medicalAssessment, setMedicalAssessment] = useState(g("medicalAssessment"));
+  const [surgeries, setSurgeries] = useState(ca.surgeries);
+  const [hospitalizations, setHospitalizations] = useState(ca.hospitalizations);
+  const [careLevel, setCareLevel] = useState(g("careLevel"));
+  const [mobility, setMobility] = useState(g("mobility"));
+  const [roomNumber, setRoomNumber] = useState(g("roomNumber"));
+  const [insuranceProvider, setInsuranceProvider] = useState(g("insuranceProvider"));
+  const [insurancePolicyNumber, setInsurancePolicyNumber] = useState(g("insurancePolicyNumber"));
+  const [carePlan, setCarePlan] = useState(g("carePlan"));
+  const [carePlanGoals, setCarePlanGoals] = useState(g("carePlanGoals"));
+  const [meds, setMeds] = useState<MedRow[]>(ca.meds);
+  const addM = () => setMeds((l) => [...l, { id: newId(), name: "", dose: "", frequency: "" }]);
+  const patchM = (mid: string, patch: Partial<MedRow>) => setMeds((l) => l.map((m) => (m.id === mid ? { ...m, ...patch } : m)));
+  const rmM = (mid: string) => setMeds((l) => l.filter((m) => m.id !== mid));
+  const CARE_LEVELS = ["INDEPENDENT", "ASSISTED", "MEMORY", "SKILLED"];
+
+  const submit = () => {
+    if (!firstName.trim() || !lastName.trim()) { Swal.fire({ title: "First and last name are required", icon: "warning" }); return; }
+    const dob = dateOfBirth ? new Date(dateOfBirth).toISOString() : null;
+    const admission: Row = {
+      firstName: firstName.trim(), lastName: lastName.trim(), dateOfBirth: dob,
+      gender: gender || null, phone: phone || null, email: email || null,
+      emergencyContact: emergencyContact || null, emergencyContactPhone: emergencyContactPhone || null,
+      sponsorName: sponsorName || null, sponsorEmail: sponsorEmail || null,
+      allergies: allergies || null, medicalHistory: medicalHistory || null, medicalAssessment: medicalAssessment || null,
+      careLevel: careLevel || null, mobility: mobility || null, roomNumber: roomNumber || null,
+      insuranceProvider: insuranceProvider || null, insurancePolicyNumber: insurancePolicyNumber || null,
+      carePlan: carePlan || null, carePlanGoals: carePlanGoals || null,
+      careAssessment: serializeClinical(ca.note, ca.domains, ca.wounds, meds, { surgeries, hospitalizations }),
+    };
+    // NOTE: medicalAssessment/diagnosis are NOT Resident columns — they live on the
+    // Admission and the rcard reads them from there.
+    const residentSync: Row = {
+      firstName: firstName.trim(), lastName: lastName.trim(), dateOfBirth: dob,
+      gender: gender || null, phone: phone || null, email: email || null,
+      emergencyContact: emergencyContact || null, emergencyContactPhone: emergencyContactPhone || null,
+      allergies: allergies || null, medicalHistory: medicalHistory || null,
+      surgeries: surgeries || null, hospitalizations: hospitalizations || null,
+      roomNumber: roomNumber || null, careLevel: careLevel || null,
+    };
+    onSave({ admission, residentSync, meds });
+  };
+
+  return (
+    <form id="admission-edit-form" onSubmit={(e) => { e.preventDefault(); submit(); }} className="space-y-5">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+        Editing this admission — saving updates the record and syncs the profile, medical details &amp; new medications to the resident card.
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <h3 className="text-sm font-bold text-slate-800 border-b border-gray-100 pb-2">Resident Profile</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="First Name"><input className={inputCls} value={firstName} onChange={(e) => setFirstName(e.target.value)} /></Field>
+          <Field label="Last Name"><input className={inputCls} value={lastName} onChange={(e) => setLastName(e.target.value)} /></Field>
+          <Field label="Date of Birth"><input type="date" className={inputCls} value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} /></Field>
+          <Field label="Gender"><input className={inputCls} value={gender} onChange={(e) => setGender(e.target.value)} /></Field>
+          <Field label="Phone"><input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} /></Field>
+          <Field label="Email"><input className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+          <Field label="Emergency Contact"><input className={inputCls} value={emergencyContact} onChange={(e) => setEmergencyContact(e.target.value)} /></Field>
+          <Field label="Emergency Phone"><input className={inputCls} value={emergencyContactPhone} onChange={(e) => setEmergencyContactPhone(e.target.value)} /></Field>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <h3 className="text-sm font-bold text-slate-800 border-b border-gray-100 pb-2">Family Sponsor</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Sponsor Name"><input className={inputCls} value={sponsorName} onChange={(e) => setSponsorName(e.target.value)} /></Field>
+          <Field label="Sponsor Email"><input className={inputCls} value={sponsorEmail} onChange={(e) => setSponsorEmail(e.target.value)} /></Field>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <h3 className="text-sm font-bold text-slate-800 border-b border-gray-100 pb-2">Medical &amp; Clinical</h3>
+        <Field label="Medical Assessment"><textarea rows={3} className={inputCls} value={medicalAssessment} onChange={(e) => setMedicalAssessment(e.target.value)} placeholder="Clinical findings & diagnoses…" /></Field>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Allergies"><input className={inputCls} value={allergies} onChange={(e) => setAllergies(e.target.value)} /></Field>
+          <Field label="Medical History"><input className={inputCls} value={medicalHistory} onChange={(e) => setMedicalHistory(e.target.value)} /></Field>
+          <Field label="Previous Surgeries"><input className={inputCls} value={surgeries} onChange={(e) => setSurgeries(e.target.value)} /></Field>
+          <Field label="Hospitalizations"><input className={inputCls} value={hospitalizations} onChange={(e) => setHospitalizations(e.target.value)} /></Field>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+          <h3 className="text-sm font-bold text-slate-800">Medications</h3>
+          <button type="button" onClick={addM} className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800"><Plus className="w-3.5 h-3.5" /> Add medication</button>
+        </div>
+        {meds.length === 0 ? (
+          <p className="text-xs text-gray-500">No medications. New ones you add are created on the resident&apos;s MAR (existing ones aren&apos;t duplicated).</p>
+        ) : (
+          <div className="space-y-2">
+            {meds.map((m) => (
+              <div key={m.id} className="flex flex-col sm:flex-row gap-2">
+                <input className={inputCls + " sm:flex-1"} placeholder="Medication name" value={m.name} onChange={(e) => patchM(m.id, { name: e.target.value })} />
+                <input className={inputCls + " sm:w-28"} placeholder="Dose" value={m.dose} onChange={(e) => patchM(m.id, { dose: e.target.value })} />
+                <input className={inputCls + " sm:w-40"} placeholder="Frequency" value={m.frequency} onChange={(e) => patchM(m.id, { frequency: e.target.value })} />
+                <button type="button" onClick={() => rmM(m.id)} className="shrink-0 self-start px-2 py-2 rounded-lg border border-gray-300 text-gray-400 hover:text-red-600 hover:border-red-300"><Trash2 className="w-4 h-4" /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <h3 className="text-sm font-bold text-slate-800 border-b border-gray-100 pb-2">Care &amp; Room</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Care Level"><select className={inputCls} value={careLevel} onChange={(e) => setCareLevel(e.target.value)}><option value="">—</option>{CARE_LEVELS.map((c) => <option key={c} value={c}>{c}</option>)}</select></Field>
+          <Field label="Mobility Status"><input className={inputCls} value={mobility} onChange={(e) => setMobility(e.target.value)} /></Field>
+          <Field label="Assigned Room"><input className={inputCls} value={roomNumber} onChange={(e) => setRoomNumber(e.target.value)} /></Field>
+        </div>
+        <Field label="Individual Care Plan"><textarea rows={3} className={inputCls} value={carePlan} onChange={(e) => setCarePlan(e.target.value)} /></Field>
+        <Field label="Measurable Goals"><textarea rows={2} className={inputCls} value={carePlanGoals} onChange={(e) => setCarePlanGoals(e.target.value)} /></Field>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <h3 className="text-sm font-bold text-slate-800 border-b border-gray-100 pb-2">Insurance Coverage</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Provider"><input className={inputCls} value={insuranceProvider} onChange={(e) => setInsuranceProvider(e.target.value)} /></Field>
+          <Field label="Policy Number"><input className={inputCls} value={insurancePolicyNumber} onChange={(e) => setInsurancePolicyNumber(e.target.value)} /></Field>
+        </div>
+      </div>
+
+    </form>
   );
 }
 

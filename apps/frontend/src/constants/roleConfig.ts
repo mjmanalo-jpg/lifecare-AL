@@ -16,6 +16,7 @@ import {
   Stethoscope,
   Cross,
   Layers,
+  HeartHandshake,
   UserRound,
   UserPlus,
   DoorOpen,
@@ -170,6 +171,7 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   rounds: "Assessment & Level of Care",
   casereview: "Assessment & Level of Care",
   careplans: "Care Planning",
+  privatecare: "Private Caregivers",
   consults: "Consults & Referrals",
   escalations: "Sbar Escalation",
   orders: "Medication Management & Inventory",
@@ -372,6 +374,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Assessment Rounds", icon: ClipboardList, route: "/nurse/rounds", group: "Resident Care" },
       { name: "Wound Care", icon: Bandage, route: "/nurse/woundcare", group: "Resident Care" },
       { name: "Care Plans", icon: Target, route: "/nurse/careplans", group: "Resident Care" },
+      { name: "Private Caregivers", icon: HeartHandshake, route: "/nurse/privatecare", group: "Resident Care" },
       // Medication
       { name: "Med Administration (MAR)", icon: Syringe, route: "/nurse/mar", group: "Medication" },
       { name: "Med Compliance", icon: PieChart, route: "/nurse/medcompliance", group: "Medication" },
@@ -487,6 +490,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Wound Care", icon: Bandage, route: "/care_manager/woundcare", group: "Resident Care" },
       { name: "Resident Directory", icon: UserRound, route: "/care_manager/residents", group: "Resident Care" },
       { name: "Care Plans", icon: Target, route: "/care_manager/careplans", group: "Resident Care" },
+      { name: "Private Caregivers", icon: HeartHandshake, route: "/care_manager/privatecare", group: "Resident Care" },
       // Medication
       { name: "Clinical Approvals", icon: BadgeCheck, route: "/care_manager/approvalworkflows", group: "Medication" },
       { name: "Med Administration (MAR)", icon: Pill, route: "/care_manager/mar", group: "Medication" },

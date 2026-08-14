@@ -53,7 +53,7 @@ function relTime(iso: string | null, nowTs: number): string {
   return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h ago` : `${Math.floor(h / 24)}d ago`;
 }
 
-export default function FacilityIncidents({ readOnly = false }: { readOnly?: boolean } = {}) {
+export default function FacilityIncidents({ readOnly = false, canResolve = false }: { readOnly?: boolean; canResolve?: boolean } = {}) {
   const { data: incidentRows, loading, error, refetch } = useLiveQuery<Record<string, unknown>>(
     "incidents", { query: "include=resident&take=500", tables: ["Incident"] }
   );
@@ -424,7 +424,7 @@ export default function FacilityIncidents({ readOnly = false }: { readOnly?: boo
                       <button onClick={() => printIncident(i)} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition">
                         <Printer className="w-3.5 h-3.5" /> Print PDF
                       </button>
-                      {!readOnly && (!i.resolved ? (
+                      {(!readOnly || canResolve) && (!i.resolved ? (
                         <button onClick={() => void handleResolve(i.id)} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded transition">
                           <CheckCircle className="w-3.5 h-3.5" /> Review &amp; Close
                         </button>
@@ -477,7 +477,7 @@ export default function FacilityIncidents({ readOnly = false }: { readOnly?: boo
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => setViewing(i)} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
                         <button onClick={() => printIncident(i)} className="p-1.5 rounded hover:bg-gray-100 text-gray-600 transition" title="Print PDF"><Printer className="w-4 h-4" /></button>
-                        {!readOnly && (!i.resolved ? (
+                        {(!readOnly || canResolve) && (!i.resolved ? (
                           <button onClick={() => void handleResolve(i.id)} className="p-1.5 rounded hover:bg-green-100 text-green-600 transition" title="Review & Close"><CheckCircle className="w-4 h-4" /></button>
                         ) : (
                           <button onClick={() => void handleReopen(i.id)} className="p-1.5 rounded hover:bg-amber-100 text-amber-600 transition" title="Reopen"><RefreshCw className="w-4 h-4" /></button>
@@ -596,7 +596,7 @@ export default function FacilityIncidents({ readOnly = false }: { readOnly?: boo
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setViewing(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Close</button>
-              {!readOnly && (
+              {(!readOnly || canResolve) && (
                 <div className="flex flex-wrap gap-2">
                   {!viewing.resolved ? (
                     <button onClick={() => { void handleResolve(viewing.id); setViewing(null); }} className="px-5 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm">
@@ -607,9 +607,11 @@ export default function FacilityIncidents({ readOnly = false }: { readOnly?: boo
                       <RefreshCw className="w-4 h-4 inline mr-1" /> Reopen
                     </button>
                   )}
-                  <button onClick={() => { void handleDelete(viewing.id); setViewing(null); }} className="px-5 py-2 bg-gradient-to-r from-red-400 to-red-500 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm">
-                    <Trash2 className="w-4 h-4 inline mr-1" /> Delete
-                  </button>
+                  {!readOnly && (
+                    <button onClick={() => { void handleDelete(viewing.id); setViewing(null); }} className="px-5 py-2 bg-gradient-to-r from-red-400 to-red-500 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm">
+                      <Trash2 className="w-4 h-4 inline mr-1" /> Delete
+                    </button>
+                  )}
                 </div>
               )}
             </div>

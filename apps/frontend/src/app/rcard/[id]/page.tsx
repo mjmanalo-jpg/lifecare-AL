@@ -5,9 +5,11 @@ import { useParams } from "next/navigation";
 import {
   Pill, ClipboardList, ConciergeBell, ShieldAlert,
   UserRound, CalendarClock, Loader2, FileDown, StickyNote, IdCard,
+  Users, Phone, Syringe, Activity, HeartPulse, Gauge, AlertTriangle,
 } from "lucide-react";
 import { taskNotesOf } from "@/lib/taskNotes";
 import { patientCode } from "@/lib/patientId";
+import { parseAcuityItems, LOC_LEVEL_META } from "@/lib/locBilling";
 import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
 
@@ -15,6 +17,7 @@ type Row = Record<string, unknown>;
 const s = (v: unknown) => (v == null ? "" : String(v));
 const fmt = (v: unknown) => (v ? new Date(s(v)).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "—");
 const fmtDate = (v: unknown) => (v ? new Date(s(v)).toLocaleDateString() : "—");
+const cap = (k: string) => k.charAt(0).toUpperCase() + k.slice(1);
 const age = (dob: unknown) => {
   if (!dob) return null;
   const d = new Date(s(dob)); if (isNaN(d.getTime())) return null;
@@ -28,9 +31,61 @@ const STATUS_META: Record<string, string> = {
   DECEASED: "bg-red-100 text-red-700 border-red-200",
 };
 
+const VAX_STATUS: Record<string, string> = {
+  COMPLETED: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  SCHEDULED: "bg-blue-100 text-blue-700 border-blue-200",
+  OVERDUE: "bg-red-100 text-red-700 border-red-200",
+  DECLINED: "bg-gray-200 text-gray-600 border-gray-300",
+  EXEMPTED: "bg-amber-100 text-amber-700 border-amber-200",
+};
+const SEVERITY_META: Record<string, string> = {
+  MILD: "bg-gray-100 text-gray-600 border-gray-200",
+  MODERATE: "bg-amber-100 text-amber-700 border-amber-200",
+  SEVERE: "bg-orange-100 text-orange-700 border-orange-200",
+  LIFE_THREATENING: "bg-red-100 text-red-700 border-red-200",
+};
+
+// Human labels for the admission 12-domain baseline + the acuity 10-domain scores.
+const ADL_DOMAIN_LABEL: Record<string, string> = {
+  clinical: "Clinical / Medical", adl: "Activities of Daily Living", cognitive: "Cognition",
+  mobility: "Mobility", nutrition: "Nutrition", medication: "Medication", behavioral: "Behavioral",
+  psychosocial: "Psychosocial", continence: "Continence", skin: "Skin / Wounds",
+  communication: "Communication", emergency: "Emergency / Safety",
+};
+const ACUITY_DOMAIN_LABEL: Record<string, string> = {
+  adl: "ADL", mobility: "Mobility", cognition: "Cognition", behavior: "Behavior", nutrition: "Nutrition",
+  elimination: "Elimination", medication: "Medication", medical: "Medical", psychosocial: "Psychosocial", night: "Night Care",
+};
+
+type TabKey = "family" | "emergency" | "vaccines" | "adl" | "medical" | "advance" | "acuity";
+const TABS: { key: TabKey; label: string; icon: typeof Pill }[] = [
+  { key: "family", label: "Family", icon: Users },
+  { key: "emergency", label: "Emergency", icon: Phone },
+  { key: "vaccines", label: "Vaccines", icon: Syringe },
+  { key: "adl", label: "ADL Baseline", icon: Activity },
+  { key: "medical", label: "Medical Hx", icon: ClipboardList },
+  { key: "advance", label: "Advance Care", icon: HeartPulse },
+  { key: "acuity", label: "Care Acuity", icon: Gauge },
+];
+
 async function getJson(url: string) {
   try { const r = await fetch(url, { credentials: "include" }); if (!r.ok) return { ok: false, status: r.status, data: null }; const j = await r.json(); return { ok: true, status: 200, data: j?.data ?? null }; }
   catch { return { ok: false, status: 0, data: null }; }
+}
+
+type Assessment = { note?: string; domains?: Record<string, { level?: string; notes?: string }> };
+function parseAssessment(raw: string): Assessment | null {
+  if (!raw) return null;
+  try { const v = JSON.parse(raw); return v && typeof v === "object" ? (v as Assessment) : null; } catch { return null; }
+}
+
+// Latest acuity record for a resident — an APPROVED one wins; otherwise the most
+// recent of any status (so a pending/in-review assessment still shows).
+function latestAcuityFor(items: Array<Record<string, unknown>>, residentId: string): Record<string, unknown> | null {
+  const mine = items.filter((x) => x && x.residentId === residentId);
+  const approved = mine.filter((x) => x.status === "APPROVED");
+  const pool = approved.length ? approved : mine;
+  return pool.sort((a, b) => s(b.decidedAt || b.createdAt).localeCompare(s(a.decidedAt || a.createdAt)))[0] || null;
 }
 
 export default function ResidentCardPage() {
@@ -45,6 +100,12 @@ export default function ResidentCardPage() {
   const [tasks, setTasks] = useState<Row[]>([]);
   const [comms, setComms] = useState<Row[]>([]);
   const [diets, setDiets] = useState<Row[]>([]);
+  const [admissions, setAdmissions] = useState<Row[]>([]);
+  const [vaccinations, setVaccinations] = useState<Row[]>([]);
+  const [allergyRecs, setAllergyRecs] = useState<Row[]>([]);
+  const [acuityRows, setAcuityRows] = useState<Row[]>([]);
+  const [sponsor, setSponsor] = useState<Row | null>(null);
+  const [tab, setTab] = useState<TabKey>("family");
   const [cardUrl, setCardUrl] = useState("");
   const [qrData, setQrData] = useState("");
 
@@ -59,13 +120,18 @@ export default function ResidentCardPage() {
       const res = await getJson(`/api/db/residents/${id}`);
       if (!alive) return;
       if (res.status === 401) { setDenied(true); setLoading(false); return; }
-      setResident(res.data as Row | null);
-      const [m, sr, tk, pc, dt] = await Promise.all([
+      const r = res.data as Row | null;
+      setResident(r);
+      const [m, sr, tk, pc, dt, adm, vax, alg, acu] = await Promise.all([
         getJson(`/api/db/medications?f_residentId=${id}&take=100`),
         getJson(`/api/db/service-requests?f_residentId=${id}&take=100`),
         getJson(`/api/db/tasks?f_residentId=${id}&take=100`),
         getJson(`/api/db/physician-communications?f_residentId=${id}&take=50`),
         getJson(`/api/db/diet-orders?f_residentId=${id}&take=50`),
+        getJson(`/api/db/admissions?f_residentId=${id}&take=5`),
+        getJson(`/api/db/vaccinations?f_residentId=${id}&take=100`),
+        getJson(`/api/db/allergies?f_residentId=${id}&take=100`),
+        getJson(`/api/db/app-settings?f_key=acuity_assessments&take=50`),
       ]);
       if (!alive) return;
       setMeds((m.data as Row[]) || []);
@@ -73,6 +139,15 @@ export default function ResidentCardPage() {
       setTasks((tk.data as Row[]) || []);
       setComms((pc.data as Row[]) || []);
       setDiets((dt.data as Row[]) || []);
+      setAdmissions((adm.data as Row[]) || []);
+      setVaccinations((vax.data as Row[]) || []);
+      setAllergyRecs((alg.data as Row[]) || []);
+      setAcuityRows((acu.data as Row[]) || []);
+      const sponsorId = s(r?.sponsorId);
+      if (sponsorId) {
+        const sp = await getJson(`/api/db/users?f_id=${sponsorId}&take=1`);
+        if (alive) setSponsor(((sp.data as Row[]) || [])[0] || null);
+      }
       setLoading(false);
     })();
     return () => { alive = false; };
@@ -101,6 +176,28 @@ export default function ResidentCardPage() {
     return [s(active.dietType).replace(/_/g, " "), s(active.restrictions)].filter(Boolean).join(" · ");
   }, [diets]);
 
+  // The admission 12-domain clinical assessment doubles as the ADL baseline.
+  const baseline = useMemo(() => parseAssessment(s(admissions[0]?.careAssessment)), [admissions]);
+  // Latest acuity (Level of Care) assessment from the migration-free app-setting.
+  const acuity = useMemo(() => {
+    const row = acuityRows.find((x) => s(x.key) === "acuity_assessments") || acuityRows[0];
+    return latestAcuityFor(parseAcuityItems(row ? s(row.value) : null), id);
+  }, [acuityRows, id]);
+
+  // Resident has no diagnosis/medicalAssessment column, and allergies/medicalHistory
+  // may be blank on the resident while the linked Admission holds them — so fall
+  // back to the admission for a complete picture.
+  const adm0 = useMemo(() => (admissions[0] || {}) as Row, [admissions]);
+  const effAllergies = useMemo(() => s(resident?.allergies) || s(adm0.allergies), [resident, adm0]);
+  const effHistory = useMemo(() => s(resident?.medicalHistory) || s(adm0.medicalHistory), [resident, adm0]);
+  const effAssessment = useMemo(() => s(adm0.medicalAssessment), [adm0]);
+  const primaryDiagnosis = useMemo(() => (effHistory.split(/[;·]/)[0] || "").trim(), [effHistory]);
+  // Family sponsor: prefer the linked sponsor User, else fall back to the
+  // admission's captured sponsor name/email.
+  const sponsorName = useMemo(() => ([s(sponsor?.firstName), s(sponsor?.lastName)].filter(Boolean).join(" ") || s(sponsor?.name) || s(adm0.sponsorName)), [sponsor, adm0]);
+  const sponsorEmail = useMemo(() => s(sponsor?.email) || s(adm0.sponsorEmail), [sponsor, adm0]);
+  const sponsorPhone = useMemo(() => s(sponsor?.phone), [sponsor]);
+
   const residentSlug = () => (`${s(resident?.firstName)} ${s(resident?.lastName)}`.trim() || "resident").toLowerCase().replace(/\s+/g, "-");
 
   // The whole care card as a downloadable PDF (shown after the QR is scanned).
@@ -121,8 +218,14 @@ export default function ResidentCardPage() {
     doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(46, 74, 72).text(`Patient ID: ${patientCode(s(resident.id))}`, M, y); y += 15;
     doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(100).text(`Room ${s(resident.roomNumber) || "—"} · ${s(resident.careLevel) || "—"} · DOB ${fmtDate(resident.dateOfBirth)}${age(resident.dateOfBirth) != null ? ` · ${age(resident.dateOfBirth)} yrs` : ""}`, M, y); y += 24;
 
-    heading("Allergies"); body(s(resident.allergies) || "None on record");
-    heading("Medical History"); body(s(resident.medicalHistory));
+    heading("Allergies"); body(effAllergies || "None on record");
+    if (effAssessment) { heading("Clinical Assessment"); body(effAssessment); }
+    heading("Medical History"); body(effHistory);
+    if (resident.surgeries) { heading("Surgeries"); body(s(resident.surgeries)); }
+    if (resident.hospitalizations) { heading("Hospitalizations"); body(s(resident.hospitalizations)); }
+    heading("Advance Care"); body(`Code status: ${s(resident.codeStatus) || "—"}${resident.dnrStatus ? " · DNR" : ""}`);
+    if (resident.advanceDirectives) body(s(resident.advanceDirectives));
+    if (acuity) { heading("Care Acuity"); body(`Level ${s(acuity.level)} — ${LOC_LEVEL_META.find((l) => l.level === Number(acuity.level))?.name || s(acuity.levelName)} · score ${s(acuity.total)}/50 · ${s(acuity.status)}`); }
     heading(`Medications (${activeMeds.length})`);
     activeMeds.length ? activeMeds.forEach(m => body(`• ${s(m.name)} ${s(m.dosage)} · ${s(m.frequency)}${m.route ? ` · ${s(m.route)}` : ""}`)) : body("None active");
     heading("Recent Requests");
@@ -153,11 +256,11 @@ export default function ResidentCardPage() {
 
   const name = `${s(resident.firstName)} ${s(resident.lastName)}`.trim() || "Resident";
   const yrs = age(resident.dateOfBirth);
-  const allergies = s(resident.allergies);
+  const allergies = effAllergies;
 
   return (
     <div className="min-h-screen bg-gray-50 py-6 px-4 print:bg-white print:py-0">
-      <div className="max-w-2xl mx-auto bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden print:shadow-none print:border-0">
+      <div className="max-w-4xl mx-auto bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden print:shadow-none print:border-0">
         {/* Title bar */}
         <div className="bg-[#2E4A48] text-white px-5 py-3 flex items-center justify-between">
           <span className="text-sm font-semibold uppercase tracking-wide flex items-center gap-2"><UserRound className="w-4 h-4" /> Resident Care Card</span>
@@ -185,7 +288,7 @@ export default function ResidentCardPage() {
             <span className={`shrink-0 px-2.5 py-1 rounded text-[11px] font-bold uppercase border ${STATUS_META[s(resident.status)] || STATUS_META.ACTIVE}`}>{s(resident.status).replace(/_/g, " ") || "ACTIVE"}</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3 mt-4">
-            <Cell label="Primary Diagnosis" value={s(resident.diagnosis)} />
+            <Cell label="Primary Diagnosis" value={primaryDiagnosis} />
             <Cell label="Care Level" value={s(resident.careLevel).replace(/_/g, " ")} accent />
             <Cell label="Allergies" value={allergies} danger />
             <Cell label="Primary Physician" value={primaryPhysician} />
@@ -194,12 +297,174 @@ export default function ResidentCardPage() {
           </div>
         </div>
 
-        <div className="px-5 py-5 space-y-4">
-          {/* Medical history */}
-          <Section title="Medical History" icon={ClipboardList}>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{s(resident.medicalHistory) || "—"}</p>
-          </Section>
+        {/* Resident profile tab bar (Family/Emergency/Vaccines/ADL/Medical/Advance/Acuity) */}
+        <div className="border-b border-gray-200 bg-gray-50/60 print:hidden">
+          <div className="flex gap-0.5 overflow-x-auto px-3 no-scrollbar">
+            {TABS.map(({ key, label, icon: Icon }) => {
+              const on = tab === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition ${
+                    on ? "border-[#2E4A48] text-[#2E4A48]" : "border-transparent text-gray-500 hover:text-gray-800"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" /> {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
+        {/* Active tab panel */}
+        <div className="px-5 py-5">
+          {tab === "family" && (
+            <Section title="Family & Sponsor" icon={Users}>
+              {(sponsorName || sponsorEmail) ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                  <Cell label="Name" value={sponsorName} accent />
+                  <Cell label="Role" value="Sponsor / billing contact" />
+                  <Cell label="Phone" value={sponsorPhone} />
+                  <Cell label="Email" value={sponsorEmail} />
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">No family sponsor on record.</p>
+              )}
+            </Section>
+          )}
+
+          {tab === "emergency" && (
+            <Section title="Emergency Contact" icon={Phone}>
+              {resident.emergencyContact || resident.emergencyContactPhone ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                  <Cell label="Contact" value={s(resident.emergencyContact)} accent />
+                  <Cell label="Phone" value={s(resident.emergencyContactPhone)} />
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">No emergency contact on record.</p>
+              )}
+            </Section>
+          )}
+
+          {tab === "vaccines" && (
+            <Section title={`Vaccinations (${vaccinations.length})`} icon={Syringe}>
+              {vaccinations.length === 0 ? <p className="text-sm text-gray-400">No vaccination records.</p> : (
+                <ul className="space-y-2">
+                  {vaccinations.map((v) => (
+                    <li key={s(v.id)} className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 p-2.5">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900">{s(v.vaccineName) || s(v.vaccineType) || "Vaccine"}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {[s(v.vaccineType).replace(/_/g, " "),
+                            v.doseNumber ? `Dose ${s(v.doseNumber)}${v.totalDoses ? `/${s(v.totalDoses)}` : ""}` : "",
+                            v.dateGiven ? `Given ${fmtDate(v.dateGiven)}` : v.scheduledDate ? `Scheduled ${fmtDate(v.scheduledDate)}` : "",
+                          ].filter(Boolean).join(" · ") || "—"}
+                        </p>
+                      </div>
+                      <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${VAX_STATUS[s(v.status)] || VAX_STATUS.SCHEDULED}`}>{s(v.status).replace(/_/g, " ") || "—"}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+          )}
+
+          {tab === "adl" && (
+            <Section title="ADL Baseline — Admission Assessment" icon={Activity}>
+              {baseline?.domains && Object.keys(baseline.domains).length > 0 ? (
+                <div className="space-y-2">
+                  {Object.entries(baseline.domains).map(([k, d]) => (
+                    <div key={k} className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 p-2.5">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900">{ADL_DOMAIN_LABEL[k] || cap(k)}</p>
+                        {d?.notes ? <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-wrap">{d.notes}</p> : null}
+                      </div>
+                      <span className="shrink-0 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#2E4A48]/10 text-[#2E4A48] border border-[#2E4A48]/20">{d?.level || "—"}</span>
+                    </div>
+                  ))}
+                  {baseline.note ? <p className="text-xs text-gray-500 whitespace-pre-wrap pt-1"><b className="text-gray-700">Summary:</b> {baseline.note}</p> : null}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">No admission (12-domain) assessment on file for this resident.</p>
+              )}
+            </Section>
+          )}
+
+          {tab === "medical" && (
+            <Section title="Medical History" icon={ClipboardList}>
+              <div className="space-y-3">
+                <KV label="Primary Diagnosis" value={primaryDiagnosis} />
+                {effAssessment ? <KV label="Clinical Assessment" value={effAssessment} /> : null}
+                <KV label="History" value={effHistory} />
+                {resident.surgeries ? <KV label="Surgeries" value={s(resident.surgeries)} /> : null}
+                {resident.hospitalizations ? <KV label="Hospitalizations" value={s(resident.hospitalizations)} /> : null}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1">Allergies</p>
+                  {allergyRecs.length > 0 ? (
+                    <ul className="space-y-1.5">
+                      {allergyRecs.map((a) => (
+                        <li key={s(a.id)} className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 p-2">
+                          <span className="text-sm text-gray-800"><AlertTriangle className="inline w-3.5 h-3.5 text-amber-500 mr-1 -mt-0.5" />{s(a.allergen)}{a.reaction ? <span className="text-gray-500"> — {s(a.reaction)}</span> : ""}<span className="text-[11px] text-gray-400"> · {s(a.type).replace(/_/g, " ")}</span></span>
+                          <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${SEVERITY_META[s(a.severity)] || SEVERITY_META.MILD}`}>{s(a.severity).replace(/_/g, " ") || "—"}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className={`text-sm ${allergies ? "text-red-600 font-semibold" : "text-gray-400"}`}>{allergies || "None on record."}</p>
+                  )}
+                </div>
+              </div>
+            </Section>
+          )}
+
+          {tab === "advance" && (
+            <Section title="Advance Care Planning" icon={HeartPulse}>
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold border border-gray-200 bg-gray-50 text-gray-700">Code status: {s(resident.codeStatus).replace(/_/g, " ") || "—"}</span>
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold border ${resident.dnrStatus ? "bg-red-100 text-red-700 border-red-200" : "bg-emerald-100 text-emerald-700 border-emerald-200"}`}>
+                    {resident.dnrStatus ? "DNR — Do Not Resuscitate" : "Full resuscitation"}
+                  </span>
+                </div>
+                <KV label="Advance Directives" value={s(resident.advanceDirectives)} />
+                {resident.livingWill ? <KV label="Living Will" value={s(resident.livingWill)} /> : null}
+                <KV label="Healthcare Proxy" value={[s(resident.healthcareProxy), s(resident.healthcareProxyPhone)].filter(Boolean).join(" · ")} />
+              </div>
+            </Section>
+          )}
+
+          {tab === "acuity" && (
+            <Section title="Care Acuity — Level of Care" icon={Gauge}>
+              {acuity ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-bold bg-[#2E4A48] text-white">Level {s(acuity.level)} · {LOC_LEVEL_META.find((l) => l.level === Number(acuity.level))?.name || s(acuity.levelName)}</span>
+                    <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-bold border border-gray-200 bg-gray-50 text-gray-700">Score {s(acuity.total)}/50</span>
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded text-[10px] font-bold uppercase border ${acuity.status === "APPROVED" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-amber-100 text-amber-700 border-amber-200"}`}>{s(acuity.status).replace(/_/g, " ")}</span>
+                  </div>
+                  <p className="text-xs text-gray-500">{[acuity.trigger ? `Trigger: ${s(acuity.trigger)}` : "", `Assessed ${fmtDate(acuity.decidedAt || acuity.createdAt)}`].filter(Boolean).join(" · ")}</p>
+                  {acuity.scores && typeof acuity.scores === "object" ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {Object.entries(acuity.scores as Record<string, unknown>).map(([k, v]) => (
+                        <div key={k} className="rounded-lg border border-gray-200 p-2 flex items-center justify-between">
+                          <span className="text-xs text-gray-600">{ACUITY_DOMAIN_LABEL[k] || cap(k)}</span>
+                          <span className="text-sm font-bold text-[#2E4A48]">{s(v)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {acuity.notes ? <p className="text-xs text-gray-500 whitespace-pre-wrap pt-1"><b className="text-gray-700">Notes:</b> {s(acuity.notes)}</p> : null}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">No acuity (Level of Care) assessment recorded yet.</p>
+              )}
+            </Section>
+          )}
+        </div>
+
+        {/* Operational sections — live care ops, kept below the profile tabs */}
+        <div className="px-5 pb-5 space-y-4 border-t border-gray-100 pt-5">
           {/* Active medications */}
           <Section title={`Medications (${activeMeds.length})`} icon={Pill}>
             {activeMeds.length === 0 ? <p className="text-sm text-gray-400">No active medications.</p> : (
@@ -268,6 +533,15 @@ function Cell({ label, value, danger, accent }: { label: string; value: string; 
     <div>
       <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{label}</p>
       <p className={`text-sm mt-0.5 ${danger && value ? "text-red-600 font-semibold" : accent && value ? "text-[#2E4A48] font-semibold" : "text-gray-800"}`}>{value || "—"}</p>
+    </div>
+  );
+}
+
+function KV({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="text-sm text-gray-800 whitespace-pre-wrap mt-0.5">{value || "—"}</p>
     </div>
   );
 }

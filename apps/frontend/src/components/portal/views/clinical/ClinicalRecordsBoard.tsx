@@ -10,12 +10,12 @@
  */
 
 import { useMemo, useState } from "react";
-import { TestTube, Activity, Send, Pill, ClipboardList, Stethoscope, Plus, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { TestTube, Activity, Send, Pill, ClipboardList, Stethoscope, Syringe, Plus, Pencil, Trash2, ExternalLink } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
-import { upsertRecord } from "@/lib/api";
+import { upsertRecord, createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, DataState, FieldLabel, controlClass } from "./clinical-ui";
 
@@ -24,7 +24,11 @@ const newId = (p: string) => globalThis.crypto?.randomUUID?.() ?? `${p}-${Date.n
 const fmtDate = (v: string) => (v ? new Date(v + (v.length <= 10 ? "T00:00:00" : "")).toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\//g, "-").replace(/(\d{2})-(\d{2})-(\d{4})/, "$3-$1-$2") : "");
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 
-type TabId = "labs" | "therapy" | "referrals" | "medications" | "orders" | "diagnoses";
+// The app-setting-backed tabs (stored in `clinical_records`). Vaccines are the
+// exception — they live in the real `Vaccination` model so they pull straight
+// onto the resident card's Vaccines tab.
+type StoreTab = "labs" | "therapy" | "referrals" | "medications" | "orders" | "diagnoses";
+type TabId = StoreTab | "vaccines";
 
 interface BaseRec { id: string; residentId: string; createdAt: string; driveLink?: string; notes?: string }
 interface LabRec extends BaseRec { testName: string; dateCollected: string; status: string; resultValue?: string; unit?: string; refRange?: string; physician?: string }
@@ -63,7 +67,20 @@ const TABS: { id: TabId; label: string; icon: LucideIcon; addLabel: string }[] =
   { id: "medications", label: "Medications", icon: Pill, addLabel: "Log Medication Change" },
   { id: "orders", label: "Orders", icon: ClipboardList, addLabel: "Add Order" },
   { id: "diagnoses", label: "Diagnoses", icon: Stethoscope, addLabel: "Add Diagnosis" },
+  { id: "vaccines", label: "Vaccines", icon: Syringe, addLabel: "Add Vaccine" },
 ];
+
+// Consent + adverse reactions have no Vaccination column, so they ride in a
+// migration-free side-map app-setting keyed by vaccination id.
+const VAX_META_KEY = "vaccine_meta";
+type VaxMeta = { consent?: string; adverse?: string };
+const CONSENT_OPTS: { v: string; label: string }[] = [
+  { v: "CONSENTED", label: "Consented" },
+  { v: "REFUSED", label: "Refused" },
+  { v: "PROXY", label: "Proxy Consented" },
+];
+const consentLabel = (c: string) => CONSENT_OPTS.find((o) => o.v === c)?.label || "Consented";
+const consentAccent = (c: string): Accent => (c === "REFUSED" ? "coral" : c === "PROXY" ? "amber" : "green");
 
 // Status → the clinical-editorial accent, keyed by the PDF's colour language.
 const ACCENT_VAR = { coral: "var(--clinical-coral)", amber: "var(--clinical-amber)", green: "var(--clinical-green)", teal: "var(--clinical-panel)" } as const;
@@ -92,6 +109,8 @@ export default function ClinicalRecordsBoard({ clinicianRole = "NURSE" }: { clin
   const resQ = useLiveQuery<Record<string, unknown>>("residents", { tables: ["Resident"] });
   const residents = useMemo<ResOpt[]>(() => (resQ.data || []).map(adaptResident).map((r) => ({ id: String(r.id), name: String(r.name), room: String(r.room ?? "") })), [resQ.data]);
   const store = useMemo(() => parseStore(settingRows.find((r) => (r.key || r.id) === KEY)?.value), [settingRows]);
+  // Vaccines are model-backed (not in the app-setting store) so they flow to the rcard.
+  const vaxQ = useLiveQuery<Record<string, unknown>>("vaccinations", { query: "take=500", tables: ["Vaccination"] });
 
   const [residentId, setResidentId] = useState("");
   const [tab, setTab] = useState<TabId>("labs");
@@ -103,14 +122,14 @@ export default function ClinicalRecordsBoard({ clinicianRole = "NURSE" }: { clin
     await refetch();
   };
 
-  const listFor = (t: TabId): BaseRec[] => (store[t] as BaseRec[]);
+  const listFor = (t: StoreTab): BaseRec[] => (store[t] as BaseRec[]);
   const dateOf = (r: BaseRec): string => {
     const rec = r as unknown as Record<string, string>;
     return rec.dateCollected || rec.sessionDate || rec.referralDate || rec.date || rec.orderDate || "";
   };
 
   const records = useMemo(() => {
-    if (!residentId) return [] as BaseRec[];
+    if (!residentId || tab === "vaccines") return [] as BaseRec[];
     return listFor(tab)
       .filter((r) => r.residentId === residentId)
       .slice()
@@ -118,21 +137,64 @@ export default function ClinicalRecordsBoard({ clinicianRole = "NURSE" }: { clin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, tab, residentId]);
 
+  const vaxRecords = useMemo(() => {
+    if (!residentId) return [] as Record<string, unknown>[];
+    return (vaxQ.data || [])
+      .filter((v) => String(v.residentId) === residentId)
+      .slice()
+      .sort((a, b) => String(b.dateGiven || b.scheduledDate || b.createdAt).localeCompare(String(a.dateGiven || a.scheduledDate || a.createdAt)));
+  }, [vaxQ.data, residentId]);
+
+  const vaxMetaMap = useMemo<Record<string, VaxMeta>>(() => {
+    try {
+      const raw = settingRows.find((r) => (r.key || r.id) === VAX_META_KEY)?.value;
+      const o = raw ? JSON.parse(raw) : {};
+      return o && typeof o === "object" ? (o as Record<string, VaxMeta>) : {};
+    } catch { return {}; }
+  }, [settingRows]);
+
   const upsert = async (rec: BaseRec) => {
-    const list = listFor(tab).filter((x) => x.id !== rec.id);
-    await saveStore({ ...store, [tab]: [rec, ...list] });
+    const t = tab as StoreTab;
+    const list = listFor(t).filter((x) => x.id !== rec.id);
+    await saveStore({ ...store, [t]: [rec, ...list] });
     setModalOpen(false);
     setEditing(null);
   };
 
   const remove = async (rec: BaseRec) => {
+    const t = tab as StoreTab;
     const res = await Swal.fire({ title: "Delete this record?", text: "This cannot be undone.", icon: "warning", showCancelButton: true, confirmButtonText: "Delete", confirmButtonColor: "#dc2626" });
     if (!res.isConfirmed) return;
-    await saveStore({ ...store, [tab]: listFor(tab).filter((x) => x.id !== rec.id) });
+    await saveStore({ ...store, [t]: listFor(t).filter((x) => x.id !== rec.id) });
+    Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Record deleted", showConfirmButton: false, timer: 1400 });
+  };
+
+  // Vaccine CRUD → real Vaccination model (pulls onto the resident card);
+  // consent + adverse reactions ride in the `vaccine_meta` side-map by id.
+  const saveVax = async (payload: Record<string, unknown>, meta: VaxMeta, editingId?: string) => {
+    let vid = editingId || "";
+    if (editingId) await updateRecord("vaccinations", editingId, payload);
+    else { const res = await createRecord("vaccinations", payload); vid = String((res?.data as Record<string, unknown>)?.id || ""); }
+    if (vid) {
+      const next = { ...vaxMetaMap, [vid]: { consent: meta.consent || "CONSENTED", adverse: meta.adverse || "" } };
+      await upsertRecord("app-settings", VAX_META_KEY, { key: VAX_META_KEY, value: JSON.stringify(next) });
+    }
+    await Promise.all([vaxQ.refetch(), refetch()]);
+    setModalOpen(false);
+    setEditing(null);
+  };
+  const removeVax = async (row: Record<string, unknown>) => {
+    const res = await Swal.fire({ title: "Delete this vaccine record?", text: "This cannot be undone.", icon: "warning", showCancelButton: true, confirmButtonText: "Delete", confirmButtonColor: "#dc2626" });
+    if (!res.isConfirmed) return;
+    await deleteRecord("vaccinations", String(row.id));
+    const next = { ...vaxMetaMap }; delete next[String(row.id)];
+    await upsertRecord("app-settings", VAX_META_KEY, { key: VAX_META_KEY, value: JSON.stringify(next) });
+    await Promise.all([vaxQ.refetch(), refetch()]);
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Record deleted", showConfirmButton: false, timer: 1400 });
   };
 
   const active = TABS.find((t) => t.id === tab)!;
+  const isVax = tab === "vaccines";
 
   return (
     <ClinicalPage>
@@ -199,29 +261,48 @@ export default function ClinicalRecordsBoard({ clinicianRole = "NURSE" }: { clin
           </div>
 
           <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm text-[var(--clinical-muted)]">{records.length} {records.length === 1 ? "record" : "records"}</p>
+            <p className="text-sm text-[var(--clinical-muted)]">{isVax ? vaxRecords.length : records.length} {(isVax ? vaxRecords.length : records.length) === 1 ? "record" : "records"}</p>
           </div>
 
-          <DataState
-            loading={loading && records.length === 0}
-            error={error}
-            empty={records.length === 0}
-            emptyTitle={`No ${active.label.toLowerCase()} yet`}
-            emptyHint={`Click ${active.addLabel} to start.`}
-            emptyAction={<ClinicalButton variant="accent" onClick={() => { setEditing(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> {active.addLabel}</ClinicalButton>}
-            onRetry={() => void refetch()}
-            skeletonRows={3}
-          >
-            <div className="space-y-3">
-              {records.map((r) => <RecordCard key={r.id} tab={tab} rec={r} onEdit={() => { setEditing(r); setModalOpen(true); }} onDelete={() => remove(r)} />)}
-            </div>
-          </DataState>
+          {isVax ? (
+            <DataState
+              loading={vaxQ.loading && vaxRecords.length === 0}
+              error={vaxQ.error}
+              empty={vaxRecords.length === 0}
+              emptyTitle="No vaccines yet"
+              emptyHint="Click Add Vaccine to start."
+              emptyAction={<ClinicalButton variant="accent" onClick={() => { setEditing(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> Add Vaccine</ClinicalButton>}
+              onRetry={() => void vaxQ.refetch()}
+              skeletonRows={3}
+            >
+              <div className="space-y-3">
+                {vaxRecords.map((v) => <VaccineCard key={String(v.id)} rec={v} meta={vaxMetaMap[String(v.id)]} onEdit={() => { setEditing(v as unknown as BaseRec); setModalOpen(true); }} onDelete={() => removeVax(v)} />)}
+              </div>
+            </DataState>
+          ) : (
+            <DataState
+              loading={loading && records.length === 0}
+              error={error}
+              empty={records.length === 0}
+              emptyTitle={`No ${active.label.toLowerCase()} yet`}
+              emptyHint={`Click ${active.addLabel} to start.`}
+              emptyAction={<ClinicalButton variant="accent" onClick={() => { setEditing(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> {active.addLabel}</ClinicalButton>}
+              onRetry={() => void refetch()}
+              skeletonRows={3}
+            >
+              <div className="space-y-3">
+                {records.map((r) => <RecordCard key={r.id} tab={tab} rec={r} onEdit={() => { setEditing(r); setModalOpen(true); }} onDelete={() => remove(r)} />)}
+              </div>
+            </DataState>
+          )}
         </>
       )}
 
-      {residentId && (
+      {residentId && (isVax ? (
+        <VaccineModal open={modalOpen} residentId={residentId} editing={editing as unknown as Record<string, unknown> | null} meta={editing ? vaxMetaMap[String((editing as unknown as Record<string, unknown>).id)] : undefined} onClose={() => { setModalOpen(false); setEditing(null); }} onSaved={saveVax} />
+      ) : (
         <RecordModal open={modalOpen} tab={tab} residentId={residentId} editing={editing} onClose={() => { setModalOpen(false); setEditing(null); }} onSave={upsert} />
-      )}
+      ))}
     </ClinicalPage>
   );
 }
@@ -456,6 +537,101 @@ function RecordModal({ open, tab, residentId, editing, onClose, onSave }: { open
         </>)}
 
         <DriveField value={driveLink} onChange={setDriveLink} />
+      </div>
+    </ClinicalModal>
+  );
+}
+
+/* ---------- Vaccine card + modal (model-backed) ---------- */
+
+function VaccineCard({ rec, meta, onEdit, onDelete }: { rec: Record<string, unknown>; meta?: VaxMeta; onEdit: () => void; onDelete: () => void }) {
+  const g = (k: string) => (rec[k] == null ? "" : String(rec[k]));
+  const consent = meta?.consent || "";
+  const line = [
+    g("dateGiven") ? `Given ${fmtDate(g("dateGiven").slice(0, 10))}` : "",
+    g("doseNumber") ? `Dose #${g("doseNumber")}` : "",
+    g("administeredBy"),
+    g("scheduledDate") ? `Next due ${fmtDate(g("scheduledDate").slice(0, 10))}` : "",
+  ].filter(Boolean).join(" · ");
+
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="font-bold text-[var(--clinical-ink)]">{g("vaccineName") || "(unnamed vaccine)"}</p>
+          {consent && <StatusChip label={consentLabel(consent)} accent={consentAccent(consent)} />}
+        </div>
+        {line && <p className="mt-1 text-sm text-[var(--clinical-muted)]">{line}</p>}
+        {g("site") && <p className="mt-1 text-xs text-[var(--clinical-muted)]">Location: {g("site")}</p>}
+        {meta?.adverse && <p className="mt-1 text-sm text-[var(--clinical-coral)]">⚠ Reactions: {meta.adverse}</p>}
+        {g("notes") && <p className="mt-1 text-sm text-[var(--clinical-muted)]">{g("notes")}</p>}
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <button onClick={onEdit} aria-label="Edit vaccine" className="rounded-lg p-2 text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-ink)]"><Pencil className="h-4 w-4" /></button>
+        <button onClick={onDelete} aria-label="Delete vaccine" className="rounded-lg p-2 text-[var(--clinical-coral)] transition hover:bg-[var(--clinical-surface-2)]"><Trash2 className="h-4 w-4" /></button>
+      </div>
+    </div>
+  );
+}
+
+function VaccineModal({ open, residentId, editing, meta, onClose, onSaved }: { open: boolean; residentId: string; editing: Record<string, unknown> | null; meta?: VaxMeta; onClose: () => void; onSaved: (payload: Record<string, unknown>, meta: VaxMeta, editingId?: string) => Promise<void> }) {
+  const e = editing || {};
+  const g = (k: string) => (e[k] == null ? "" : String(e[k]));
+  const [vaccineName, setVaccineName] = useState(g("vaccineName"));
+  const [dateGiven, setDateGiven] = useState(g("dateGiven") ? g("dateGiven").slice(0, 10) : "");
+  const [doseNumber, setDoseNumber] = useState(g("doseNumber") || "1");
+  const [provider, setProvider] = useState(g("administeredBy"));
+  const [location, setLocation] = useState(g("site"));
+  const [nextDue, setNextDue] = useState(g("scheduledDate") ? g("scheduledDate").slice(0, 10) : "");
+  const [consent, setConsent] = useState(meta?.consent || "CONSENTED");
+  const [adverse, setAdverse] = useState(meta?.adverse || "");
+  const [notes, setNotes] = useState(g("notes"));
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!vaccineName.trim()) { warn("Vaccine Name is required"); return; }
+    if (!dateGiven) { warn("Date Given is required"); return; }
+    const payload: Record<string, unknown> = {
+      residentId,
+      vaccineName: vaccineName.trim(),
+      doseNumber: doseNumber ? parseInt(doseNumber, 10) : null,
+      administeredBy: provider.trim() || null,
+      site: location.trim() || null,
+      dateGiven: new Date(dateGiven + "T00:00:00").toISOString(),
+      scheduledDate: nextDue ? new Date(nextDue + "T00:00:00").toISOString() : null,
+      status: "COMPLETED",
+      notes: notes.trim() || null,
+    };
+    setSaving(true);
+    try { await onSaved(payload, { consent, adverse: adverse.trim() }, editing ? String(e.id) : undefined); } finally { setSaving(false); }
+  };
+
+  return (
+    <ClinicalModal
+      open={open}
+      onClose={onClose}
+      title={editing ? "Edit Vaccination Record" : "Add Vaccination Record"}
+      footer={<>
+        <ClinicalButton variant="ghost" size="sm" onClick={onClose}>Cancel</ClinicalButton>
+        <ClinicalButton variant="accent" onClick={submit} disabled={saving}>{saving ? "Saving…" : editing ? "Save" : "Add Record"}</ClinicalButton>
+      </>}
+    >
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div><FieldLabel required htmlFor="vax-name">Vaccine Name</FieldLabel><input id="vax-name" value={vaccineName} onChange={(ev) => setVaccineName(ev.target.value)} placeholder="e.g. Influenza, Pneumovax" className={controlClass} /></div>
+          <div><FieldLabel required htmlFor="vax-given">Date Given</FieldLabel><input id="vax-given" type="date" value={dateGiven} onChange={(ev) => setDateGiven(ev.target.value)} className={controlClass} /></div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div><FieldLabel htmlFor="vax-dose">Dose #</FieldLabel><input id="vax-dose" type="number" min="1" value={doseNumber} onChange={(ev) => setDoseNumber(ev.target.value)} className={controlClass} /></div>
+          <div><FieldLabel htmlFor="vax-provider">Provider</FieldLabel><input id="vax-provider" value={provider} onChange={(ev) => setProvider(ev.target.value)} placeholder="Dr. Santos" className={controlClass} /></div>
+          <div><FieldLabel htmlFor="vax-loc">Location</FieldLabel><input id="vax-loc" value={location} onChange={(ev) => setLocation(ev.target.value)} placeholder="Left deltoid" className={controlClass} /></div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><FieldLabel htmlFor="vax-next">Next Due Date</FieldLabel><input id="vax-next" type="date" value={nextDue} onChange={(ev) => setNextDue(ev.target.value)} className={controlClass} /></div>
+          <div><FieldLabel htmlFor="vax-consent">Consent Status</FieldLabel><select id="vax-consent" value={consent} onChange={(ev) => setConsent(ev.target.value)} className={controlClass}>{CONSENT_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}</select></div>
+        </div>
+        <div><FieldLabel htmlFor="vax-adverse">Adverse Reactions</FieldLabel><input id="vax-adverse" value={adverse} onChange={(ev) => setAdverse(ev.target.value)} placeholder="e.g. Mild soreness at injection site" className={controlClass} /></div>
+        <div><FieldLabel htmlFor="vax-notes">Notes</FieldLabel><textarea id="vax-notes" rows={2} value={notes} onChange={(ev) => setNotes(ev.target.value)} className={controlClass} /></div>
       </div>
     </ClinicalModal>
   );

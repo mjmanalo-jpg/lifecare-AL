@@ -43,6 +43,7 @@ import AppointmentCalendar from "@/components/portal/AppointmentCalendar";
 import MedicationInventoryBoard from "@/components/portal/views/clinical/MedicationInventoryBoard";
 import MiniPharmacyBoard from "@/components/portal/views/clinical/MiniPharmacyBoard";
 import CarePlanReviewsBoard from "@/components/portal/views/clinical/CarePlanReviewsBoard";
+import PrivateCaregiverBoard from "@/components/portal/views/clinical/PrivateCaregiverBoard";
 import LabsAllergiesBoard from "@/components/portal/views/clinical/LabsAllergiesBoard";
 import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
 import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
@@ -353,7 +354,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   }
 
   // Incident Reports — read-only for nurses (Care Manager reviews & closes).
-  if (tab === "incidents") return <FacilityIncidents readOnly />;
+  if (tab === "incidents") return <FacilityIncidents readOnly canResolve />;
 
   // Legacy inline nurse incident view — superseded by the read-only view above.
   if (tab === "incidents-legacy") {
@@ -806,6 +807,9 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   }
   if (tab === "careplans") {
     return <CarePlanReviewsBoard clinicianRole="NURSE" />;
+  }
+  if (tab === "privatecare") {
+    return <PrivateCaregiverBoard clinicianRole="NURSE" />;
   }
   if (tab === "vaccinations") {
     return <VaccinationTracker />;

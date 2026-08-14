@@ -12,6 +12,7 @@ import {
   SearchInput, DataState, StatusPill, MicroLabel, controlClass, DISPLAY,
 } from "./clinical-ui";
 import LevelOfCareReview from "./LevelOfCareReview";
+import SignatureModal from "@/components/portal/SignatureModal";
 import {
   PREADMISSION_KEY, parseAssessments, newId, scoreAssessment,
   effectiveLevel, levelLabel, levelColor, cloneForReassessment, isReassessmentDue,
@@ -161,6 +162,7 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [reviewing, setReviewing] = useState<PreAdmissionAssessment | null>(null);
+  const [showPin, setShowPin] = useState(false);
   const nowISO = new Date().toISOString();
 
   const set = (patch: Partial<PreAdmissionData>) => setForm((f) => ({ ...f, ...patch }));
@@ -480,7 +482,7 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
               <span className="text-xs text-[var(--clinical-muted)]">{editingId ? "Editing" : "New"} · {clinicianRole === "FACILITY_ADMIN" ? "Care Manager" : "Nurse"}</span>
               <div className="flex items-center gap-2">
                 <ClinicalButton variant="secondary" size="sm" onClick={() => save("DRAFT")} disabled={saving}>{saving ? "Saving…" : "Save Draft"}</ClinicalButton>
-                <ClinicalButton variant="accent" onClick={() => save("COMPLETED")} disabled={saving}><CheckCircle2 className="w-4 h-4" /> Complete Assessment</ClinicalButton>
+                <ClinicalButton variant="accent" onClick={() => setShowPin(true)} disabled={saving}><CheckCircle2 className="w-4 h-4" /> Complete Assessment</ClinicalButton>
               </div>
             </div>
           </div>
@@ -499,6 +501,16 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
           onStartReassessment={startReassessment}
         />
       )}
+
+      {/* Completing (submitting) an assessment is signed with the clinician's 4-digit PIN. */}
+      <SignatureModal
+        open={showPin}
+        onClose={() => setShowPin(false)}
+        onSigned={() => { setShowPin(false); void save("COMPLETED"); }}
+        mode="sign"
+        title="Sign to complete assessment"
+        description="Enter your 4-digit signing PIN to submit this pre-admission assessment."
+      />
     </ClinicalPage>
   );
 }
