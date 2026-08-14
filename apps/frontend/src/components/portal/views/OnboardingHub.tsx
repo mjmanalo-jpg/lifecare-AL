@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { UserPlus, ScanFace } from "lucide-react";
+import { UserPlus, KeyRound } from "lucide-react";
 import AdmissionsContent from "@/components/portal/views/AdmissionsContent";
-import ResidentRegistration from "@/components/portal/views/ResidentRegistration";
+import ResidentAccounts from "@/components/portal/views/ResidentAccounts";
 
 /**
  * Combined onboarding hub — hosts the staff Admissions pipeline and the
- * Resident Registration (credentials + facial enrollment) wizard as two tabs
- * of a single screen. Both /superadmin/admissions and /superadmin/registration
- * resolve here, defaulting to the relevant tab.
+ * Resident & Family Accounts screen (provision logins for admitted residents +
+ * their sponsors) as two tabs of a single screen. Both /superadmin/admissions
+ * and /superadmin/registration resolve here, defaulting to the relevant tab.
  */
 export default function OnboardingHub({ initialTab = "admissions" }: { initialTab?: "admissions" | "registration" }) {
   const [view, setView] = useState<"admissions" | "registration">(initialTab);
@@ -26,11 +26,11 @@ export default function OnboardingHub({ initialTab = "admissions" }: { initialTa
           <UserPlus className="w-4 h-4" /> Admissions
         </button>
         <button onClick={() => setView("registration")} className={tabCls(view === "registration")}>
-          <ScanFace className="w-4 h-4" /> Resident Registration
+          <KeyRound className="w-4 h-4" /> Accounts
         </button>
       </div>
 
-      {view === "admissions" ? <AdmissionsContent /> : <ResidentRegistration />}
+      {view === "admissions" ? <AdmissionsContent /> : <ResidentAccounts />}
     </div>
   );
 }

@@ -127,6 +127,18 @@ export async function createSupabaseUser(email: string, password: string): Promi
   }
 }
 
+// Reset an existing Supabase Auth user's password (admin API). Used when staff
+// re-issue a first-time / temporary password for a resident or family sponsor.
+export async function updateSupabaseUserPassword(id: string, password: string): Promise<void> {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) throw new Error("Supabase account provisioning is not configured. Set SUPABASE_SERVICE_ROLE_KEY and restart the application.");
+  await authRequest(`/admin/users/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify({ password }),
+    headers: { Authorization: `Bearer ${serviceKey}` },
+  }, serviceKey);
+}
+
 // Best-effort compensation used when tenant provisioning fails after the auth
 // user has been created, so a failed signup does not orphan a Supabase user.
 export async function deleteSupabaseUser(id: string): Promise<void> {
