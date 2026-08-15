@@ -29,7 +29,13 @@ export const dynamic = "force-dynamic";
 // signed-in NURSE / FACILITY_ADMIN / SUPERADMIN scans only their community.
 // ─────────────────────────────────────────────────────────────
 
-const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "weightReminder", "incident", "slaBreach", "escalation", "assessment", "purchaseRequest", "serviceRequest", "maintenance", "diningReservation", "elimination"];
+const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "weightReminder", "incident", "slaBreach", "escalation", "assessment", "purchaseRequest", "serviceRequest", "maintenance", "diningReservation", "elimination", "referral"];
+
+// A family-pending appointment (raised with the "Family Notified" toggle) is a
+// HospitalReferral in REQUESTED, not yet decided, carrying this flag in notes.
+// Mirrors FAMILY_FLAG in /api/family/appointment.
+const FAMILY_APPT_FLAG = "Family Notified: Yes";
+const APPT_AUTO_APPROVE_MS = 24 * 3_600_000; // 24h no-response window
 
 // SBAR SLA response windows (minutes) by priority — single source of truth is
 // escalationMeta.PRIORITY_META in the UI; mirrored here so the server can
@@ -68,10 +74,11 @@ interface Scan {
   incidents: number;
   sbarEscalations: number;
   missedElimination: number;
+  apptAutoApproved: number;
 }
 
 async function scanCommunity(communityId: string, organizationId: string | null): Promise<Scan> {
-  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0 };
+  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0 };
 
   // Recipient sets by care tier. General alerts go to the on-floor + admin team
   // (nurse + facility admin). SBAR SLA escalations follow the clinical chain of
@@ -537,6 +544,57 @@ async function scanCommunity(communityId: string, organizationId: string | null)
     }
   });
 
+  // 10) Family-appointment 24h auto-approve — an appointment routed to the family
+  //     sponsor (REQUESTED + "Family Notified: Yes" + not yet decided) that has
+  //     gone 24h without a family decision is auto-approved so care is never
+  //     stalled by an unresponsive sponsor: status → SCHEDULED (appears on the
+  //     Appointment Calendar) and the care team + sponsor are notified. The
+  //     status flip is the idempotency guard — once SCHEDULED it is never
+  //     re-selected. A resolved sponsorId lets us also notify the family.
+  await runSource("appt-family-autoapprove", async () => {
+    const clinicalIds = idsForRoles(["NURSE", "CARE_MANAGER", "FACILITY_ADMIN"]);
+    const cutoff = new Date(nowTs - APPT_AUTO_APPROVE_MS);
+    const pending = await prisma.hospitalReferral.findMany({
+      where: {
+        communityId,
+        status: "REQUESTED",
+        approvedAt: null,
+        notes: { contains: FAMILY_APPT_FLAG },
+        createdAt: { lt: cutoff },
+      },
+      select: {
+        id: true, notes: true, scheduledDate: true, residentId: true,
+        resident: { select: { firstName: true, lastName: true, roomNumber: true, sponsorId: true } },
+      },
+    });
+    for (const r of pending) {
+      const type = (r.notes || "").match(/^Appointment Type:\s*(.*)$/m)?.[1]?.trim() || "appointment";
+      const stamped = `${r.notes || ""}\nAuto-approved: no family response within 24h.`.trim();
+      await prisma.hospitalReferral.update({
+        where: { id: r.id },
+        data: { status: "SCHEDULED", approvedByName: "Auto-approved (24h)", approvedAt: now, notes: stamped },
+      });
+      counts.apptAutoApproved++;
+      // Notify the care team it went through automatically…
+      await notify(
+        "SERVICE_UPDATE", "referral", `apptauto:${r.id}`,
+        "Appointment auto-approved",
+        `${rname(r.resident)} (Room ${room(r.resident)}) — the ${type.toLowerCase()} had no family response within 24h and was auto-approved. It's now scheduled.`,
+        "INFO", clinicalIds,
+      );
+      // …and the family sponsor, so they know it proceeded.
+      const sponsorId = r.resident?.sponsorId;
+      if (sponsorId) {
+        await notify(
+          "SERVICE_UPDATE", "referral", `apptautofam:${r.id}`,
+          "Appointment auto-approved",
+          `${rname(r.resident)}'s ${type.toLowerCase()} was auto-approved after 24 hours with no response and has been scheduled.`,
+          "INFO", [sponsorId],
+        );
+      }
+    }
+  });
+
   return counts;
 }
 
@@ -556,7 +614,7 @@ async function runScan(request: NextRequest) {
     communities = [{ id: ctx.communityId, organizationId: ctx.organizationId ?? null }];
   }
 
-  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0 };
+  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0 };
   for (const c of communities) {
     try {
       const s = await scanCommunity(c.id, c.organizationId);

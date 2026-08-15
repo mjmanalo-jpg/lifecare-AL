@@ -2,29 +2,42 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Swal from "sweetalert2";
-import { HeartHandshake, Check, X, Clock, CheckCircle2, XCircle, RefreshCw, Inbox } from "lucide-react";
+import { HeartHandshake, Check, X, Clock, CheckCircle2, XCircle, RefreshCw, Inbox, CalendarClock } from "lucide-react";
 import { RATE_UNIT_LABEL, PRIVATE_CARE_STATUS_META, type PrivateCareAssignment } from "@/lib/privateCaregiver";
 
 /**
- * Family "Requests & Approvals" — pending Private (1:1) Caregiver requests routed
- * to the family sponsor. The sponsor reviews the cost and approves (→ active +
- * billing starts) or declines. Backed by /api/family/private-care.
+ * Family "Requests & Approvals" — items routed to the family sponsor for sign-off:
+ *   • Private (1:1) Caregiver requests  → /api/family/private-care
+ *   • Specialist appointments / referrals (raised with "Family Notified") →
+ *     /api/family/appointment. Approving one schedules it on the calendar.
  */
 
+type ApptApproval = {
+  id: string; residentName: string; room: string; appointmentType: string; specialist: string;
+  facilityName: string; reason: string; scheduledDate: string | null; requestedBy: string; requestedAt: string;
+};
+
 const peso = (n: number) => `₱${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const fmtDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "");
+const fmtDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "");
+const fmtDateTime = (iso?: string | null) => (iso ? new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "TBD");
 
 export default function FamilyApprovals() {
   const [assignments, setAssignments] = useState<PrivateCareAssignment[]>([]);
+  const [appts, setAppts] = useState<ApptApproval[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/family/private-care", { cache: "no-store" });
-      const body = await res.json().catch(() => ({}));
-      setAssignments(Array.isArray(body.assignments) ? body.assignments : []);
-    } catch { setAssignments([]); }
+      const [pcRes, apRes] = await Promise.all([
+        fetch("/api/family/private-care", { cache: "no-store" }),
+        fetch("/api/family/appointment", { cache: "no-store" }),
+      ]);
+      const pc = await pcRes.json().catch(() => ({}));
+      const ap = await apRes.json().catch(() => ({}));
+      setAssignments(Array.isArray(pc.assignments) ? pc.assignments : []);
+      setAppts(Array.isArray(ap.pending) ? ap.pending : []);
+    } catch { setAssignments([]); setAppts([]); }
     finally { setLoading(false); }
   }, []);
 
@@ -67,6 +80,42 @@ export default function FamilyApprovals() {
     } finally { setBusyId(null); }
   };
 
+  const decideAppt = async (a: ApptApproval, decision: "APPROVE" | "DECLINE") => {
+    let reason = "";
+    if (decision === "DECLINE") {
+      const r = await Swal.fire({
+        title: "Decline this appointment?",
+        input: "textarea",
+        inputLabel: "Reason (optional) — shared with the care team",
+        inputPlaceholder: "e.g. Please reschedule to next week",
+        showCancelButton: true, confirmButtonText: "Decline", confirmButtonColor: "#dc2626",
+      });
+      if (!r.isConfirmed) return;
+      reason = String(r.value || "");
+    } else {
+      const r = await Swal.fire({
+        title: "Approve appointment?",
+        html: `Approve the <b>${a.appointmentType}</b>${a.specialist ? ` with <b>${a.specialist}</b>` : ""} for <b>${a.residentName}</b>?<br/><span style="color:#64748b;font-size:.85em">It will be scheduled on the appointment calendar.</span>`,
+        icon: "question", showCancelButton: true, confirmButtonText: "Approve & schedule", confirmButtonColor: "#16a34a",
+      });
+      if (!r.isConfirmed) return;
+    }
+    setBusyId(a.id);
+    try {
+      const res = await fetch("/api/family/appointment", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ referralId: a.id, decision, reason }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Could not save your decision");
+      await load();
+      Swal.fire({ toast: true, position: "top-end", icon: "success", showConfirmButton: false, timer: 2200,
+        title: decision === "APPROVE" ? "Approved — appointment scheduled" : "Appointment declined" });
+    } catch (e) {
+      Swal.fire({ title: "Something went wrong", text: e instanceof Error ? e.message : "Please try again", icon: "error" });
+    } finally { setBusyId(null); }
+  };
+
   const pending = assignments.filter((a) => a.status === "PENDING_FAMILY");
   const decided = assignments.filter((a) => a.status !== "PENDING_FAMILY")
     .sort((a, b) => (b.decidedAt || "").localeCompare(a.decidedAt || ""));
@@ -83,7 +132,8 @@ export default function FamilyApprovals() {
         </button>
       </div>
 
-      {/* Pending — needs your action */}
+      {/* Private caregiver — needs your action (hidden when only appointments pend) */}
+      {(pending.length > 0 || appts.length === 0) && (
       <section>
         <div className="mb-2 flex items-center gap-2">
           <Clock className="h-4 w-4 text-amber-500" />
@@ -142,6 +192,53 @@ export default function FamilyApprovals() {
           </div>
         )}
       </section>
+      )}
+
+      {/* Appointment / referral approvals (raised with "Family Notified") */}
+      {appts.length > 0 && (
+        <section>
+          <div className="mb-2 flex items-center gap-2">
+            <CalendarClock className="h-4 w-4 text-teal-600" />
+            <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Appointments awaiting approval</h2>
+            <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-teal-100 px-1.5 text-xs font-bold text-teal-700">{appts.length}</span>
+          </div>
+          <div className="space-y-4">
+            {appts.map((a) => (
+              <div key={a.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-900/5">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4">
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-teal-600 text-white shadow-sm"><CalendarClock className="h-5 w-5" /></span>
+                    <div>
+                      <p className="text-[15px] font-bold text-slate-900">{a.appointmentType}</p>
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700"><Clock className="h-3 w-3" /> Awaiting your approval</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-slate-900">{fmtDateTime(a.scheduledDate)}</p>
+                    <p className="text-xs font-medium text-slate-500">Proposed time</p>
+                  </div>
+                </div>
+                <div className="grid gap-px bg-slate-100 sm:grid-cols-2">
+                  <Detail label="Resident" value={`${a.residentName}${a.room ? ` · Room ${a.room}` : ""}`} />
+                  <Detail label="Specialist / clinic" value={[a.specialist, a.facilityName].filter((x) => x && x !== "—").join(" · ") || "—"} />
+                  <Detail label="Reason" value={a.reason} />
+                  <Detail label="Requested by" value={`${a.requestedBy} · ${fmtDate(a.requestedAt)}`} />
+                </div>
+                <div className="flex items-center justify-end gap-2 px-5 py-4">
+                  <button disabled={busyId === a.id} onClick={() => decideAppt(a, "DECLINE")}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-red-300 hover:text-red-600 disabled:opacity-50">
+                    <X className="h-4 w-4" /> Decline
+                  </button>
+                  <button disabled={busyId === a.id} onClick={() => decideAppt(a, "APPROVE")}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700 active:scale-95 disabled:opacity-50">
+                    <Check className="h-4 w-4" /> Approve &amp; schedule
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Decided — history */}
       {decided.length > 0 && (

@@ -89,6 +89,8 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
   const [showRaise, setShowRaise] = useState(false);
   const [viewing, setViewing] = useState<EscVM | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [respondTo, setRespondTo] = useState<EscVM | null>(null);
+  const [respondText, setRespondText] = useState("");
 
   const escalations = useMemo(() => rows.map(adapt), [rows]);
 
@@ -142,17 +144,13 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
 
   const acknowledge = (e: EscVM) => patch(e, { status: "ACKNOWLEDGED", acknowledgedBy: clinician.name, acknowledgedAt: new Date().toISOString() }, "Acknowledged");
 
-  const respondResolve = async (e: EscVM) => {
-    const result = await Swal.fire({
-      title: "Respond & Resolve",
-      html:
-        `<p style="font-size:13px;margin-bottom:8px;text-align:left">Recommendation / orders back to the care team for ${e.residentName}:</p>` +
-        `<textarea id="swal-resp" class="swal2-textarea" style="height:120px" placeholder="e.g. Increase O2 to 2L, recheck vitals in 30 min, start IV fluids…">${e.response || ""}</textarea>`,
-      showCancelButton: true, confirmButtonColor: "#22c55e", cancelButtonColor: "#6b7280", confirmButtonText: "Resolve",
-      preConfirm: () => (document.getElementById("swal-resp") as HTMLTextAreaElement | null)?.value ?? "",
-    });
-    if (!result.isConfirmed) return;
-    await patch(e, { status: "RESOLVED", response: String(result.value || ""), resolvedBy: clinician.name, resolvedAt: new Date().toISOString() }, "Resolved — family notified");
+  const respondResolve = (e: EscVM) => { setRespondText(e.response || ""); setRespondTo(e); };
+
+  const submitResponse = async () => {
+    if (!respondTo) return;
+    const e = respondTo;
+    await patch(e, { status: "RESOLVED", response: respondText.trim(), resolvedBy: clinician.name, resolvedAt: new Date().toISOString() }, "Resolved — family notified");
+    setRespondTo(null);
   };
 
   const escalateOnCall = (e: EscVM) => patch(e, { status: "ESCALATED", assignedToRole: "FACILITY_ADMIN" }, "Escalated to on-call");
@@ -364,6 +362,64 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
           residents={residentsQ.data} meds={medsQ.data}
           onClose={() => setShowRaise(false)} onSaved={() => { void refetch(); setShowRaise(false); }} />
       )}
+
+      {/* Respond & Resolve — custom modal (replaces the plain SweetAlert prompt) */}
+      {respondTo && (() => {
+        const e = respondTo;
+        const pm = PRIORITY_META[e.priority] ?? PRIORITY_META.URGENT;
+        const accent = e.priority === "EMERGENCY" ? "#EF4444" : e.priority === "URGENT" ? "#F59E0B" : "#64748B";
+        const busy = busyId === e.id;
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm" onClick={() => { if (!busy) setRespondTo(null); }}>
+            <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/5 animate-in fade-in zoom-in-95 duration-200" onClick={(ev) => ev.stopPropagation()}>
+              <div className="flex items-start justify-between gap-3 px-6 py-4 text-white" style={{ backgroundColor: e.priority === "EMERGENCY" ? "#C0573F" : "#2E4A48" }}>
+                <div className="flex items-center gap-3">
+                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/15"><Stethoscope className="h-5 w-5" /></span>
+                  <div>
+                    <h2 className="text-base font-bold" style={{ color: "#ffffff" }}>Respond &amp; Resolve</h2>
+                    <p className="text-xs" style={{ color: "rgba(255,255,255,0.9)" }}>Orders back to the care team</p>
+                  </div>
+                </div>
+                <button onClick={() => { if (!busy) setRespondTo(null); }} aria-label="Close" style={{ color: "#ffffff" }} className="rounded-lg p-1.5 transition hover:bg-white/15"><X className="h-5 w-5" /></button>
+              </div>
+
+              <div className="max-h-[70vh] space-y-4 overflow-y-auto px-6 py-5">
+                {/* SBAR context */}
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full px-2.5 py-0.5 text-xs font-bold text-white" style={{ backgroundColor: accent }}>{pm.label}</span>
+                    <span className="text-sm font-semibold text-slate-900">{e.residentName}{e.room ? ` · Room ${e.room}` : ""}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-700"><span className="font-semibold text-slate-400">S:</span> {e.situation || "—"}</p>
+                  {e.recommendation ? <p className="mt-1 text-sm text-slate-700"><span className="font-semibold text-slate-400">R:</span> {e.recommendation}</p> : null}
+                  {e.raisedBy ? <p className="mt-2 text-xs text-slate-400">Raised by {e.raisedBy}{e.createdAt ? ` · ${new Date(e.createdAt).toLocaleString()}` : ""}</p> : null}
+                </div>
+
+                <div>
+                  <label htmlFor="esc-response" className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Recommendation / orders</label>
+                  <textarea
+                    id="esc-response"
+                    value={respondText}
+                    onChange={(ev) => setRespondText(ev.target.value)}
+                    rows={5}
+                    autoFocus
+                    placeholder="e.g. Increase O2 to 2L, recheck vitals in 30 min, start IV fluids…"
+                    className="mt-1.5 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                  />
+                  <p className="mt-1.5 text-xs text-slate-400">On resolve, the family sponsor is notified and the escalation closes.</p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-6 py-4">
+                <button onClick={() => setRespondTo(null)} disabled={busy} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-50">Cancel</button>
+                <button onClick={() => void submitResponse()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-95 disabled:opacity-50">
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Resolve
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

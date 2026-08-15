@@ -40,7 +40,7 @@ const TRANSPORT_STATUS_LABEL: Record<string, string> = {
  */
 export default function ReferralsBoard({ canApprove = false }: { canApprove?: boolean }) {
   const { data: rows, loading, refetch } = useLiveQuery<Row>("hospital-referrals", { query: "include=resident&take=400", tables: ["HospitalReferral"] });
-  const { data: residentRows } = useLiveQuery<Row>("residents", { query: "take=300", tables: ["Resident"] });
+  const { data: residentRows } = useLiveQuery<Row>("residents", { query: "include=sponsor&take=300", tables: ["Resident"] });
   const residents = useMemo(() => residentRows.map(adaptResident), [residentRows]);
 
   // Fleet wiring: the same TransportRequest resource the Fleet board (FleetHub
@@ -118,7 +118,7 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
         `Family Notified: ${form.familyNotified ? "Yes" : "No"}`,
         form.preApptNotes.trim() && `Pre-Appointment Notes: ${form.preApptNotes.trim()}`,
       ].filter(Boolean);
-      await createRecord("hospital-referrals", {
+      const created = await createRecord("hospital-referrals", {
         residentId: form.residentId,
         facilityName: form.facilityName.trim() || "—",
         reason: form.reason.trim(),
@@ -129,6 +129,25 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
         scheduledDate: form.scheduledDate ? new Date(form.scheduledDate).toISOString() : null,
         notes: noteLines.join("\n"),
       });
+      // Family-approval routing: when "Family Notified" is on, alert the sponsor so
+      // they can approve/decline it in their Requests & Approvals. It stays
+      // REQUESTED until the family (or the 24h auto-approve cron) schedules it.
+      if (form.familyNotified) {
+        const resRaw = residentRows.find((r) => s(r.id) === form.residentId);
+        const sponsor = (resRaw?.sponsor ?? null) as Row | null;
+        const sponsorId = sponsor?.id ? s(sponsor.id) : "";
+        if (sponsorId) {
+          createRecord("notifications", {
+            userId: sponsorId,
+            type: "SERVICE_UPDATE",
+            title: "Appointment needs your approval",
+            message: `A ${form.appointmentType}${form.specialist.trim() ? ` with ${form.specialist.trim()}` : ""} was requested for your relative. Review and approve or decline it in Requests & Approvals — it auto-approves after 24h if no response.`,
+            relatedEntityType: "referral",
+            relatedEntityId: created && typeof created === "object" ? s((created as Row).id) : undefined,
+            severity: "WARNING",
+          }).catch(() => null);
+        }
+      }
       await refetch();
       setShowAdd(false);
       setForm({
@@ -136,7 +155,7 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
         specialist: "", facilityName: "", scheduledDate: "", reason: "", urgency: "ROUTINE",
         documentsNeeded: "", companion: "", preApptNotes: "", familyNotified: false,
       });
-      Swal.fire({ title: "Referral submitted", text: "Sent to Pending Approvals for nurse / care manager review.", icon: "success", timer: 1800, showConfirmButton: false });
+      Swal.fire({ title: "Referral submitted", text: form.familyNotified ? "Sent to the family sponsor for approval — auto-approves after 24h." : "Sent to Pending Approvals for nurse / care manager review.", icon: "success", timer: 2200, showConfirmButton: false });
     } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not submit.", "error"); }
     finally { setBusy(false); }
   };
@@ -318,15 +337,15 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-start justify-between gap-3 bg-[#2E4A48] px-5 py-4 text-white">
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-[#E5E7DF] bg-white px-5 py-4">
               <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15"><CalendarClock className="h-5 w-5" /></span>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#2E4A48]/10 text-[#2E4A48]"><CalendarClock className="h-5 w-5" /></span>
                 <div>
-                  <h2 className="text-lg font-bold leading-tight tracking-tight">New Referral / Appointment</h2>
-                  <p className="text-xs font-medium text-white/70">Coordinate a specialist appointment or referral</p>
+                  <h2 className="text-lg font-bold leading-tight tracking-tight text-[#2B2B27]">New Referral / Appointment</h2>
+                  <p className="text-xs font-medium text-[#6B7280]">Coordinate a specialist appointment or referral</p>
                 </div>
               </div>
-              <button onClick={() => setShowAdd(false)} className="rounded-lg p-1.5 text-white/80 transition hover:bg-white/20 hover:text-white"><X className="h-5 w-5" /></button>
+              <button onClick={() => setShowAdd(false)} className="rounded-lg p-1.5 text-[#9CA3AF] transition hover:bg-[#F1F2ED] hover:text-[#2B2B27]"><X className="h-5 w-5" /></button>
             </div>
             <div className="space-y-4 p-6">
               <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Resident <span className="text-[#C0573F]">*</span></label>
@@ -365,8 +384,8 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
               <div className="flex items-center gap-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15"><Truck className="h-5 w-5" /></span>
                 <div>
-                  <h2 className="text-lg font-bold leading-tight tracking-tight">Request Transport</h2>
-                  <p className="text-xs font-medium text-white/70">Arrange a driver-assigned trip for this appointment</p>
+                  <h2 className="text-lg font-bold leading-tight tracking-tight" style={{ color: "#ffffff" }}>Request Transport</h2>
+                  <p className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>Arrange a driver-assigned trip for this appointment</p>
                 </div>
               </div>
               <button onClick={() => setReqFor(null)} className="rounded-lg p-1.5 text-white/80 transition hover:bg-white/20 hover:text-white"><X className="h-5 w-5" /></button>
