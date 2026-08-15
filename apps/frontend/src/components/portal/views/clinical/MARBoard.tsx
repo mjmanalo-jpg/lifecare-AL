@@ -64,9 +64,18 @@ export default function MARBoard() {
     return s;
   }, [vitalsRows, today]);
 
+  // Witness capture (controlled substances) — a designed in-component modal
+  // replaces the bare Swal text prompt. runGiveChecks returns `needsWitness`
+  // when a witness is still required; markGiven then opens this modal, and
+  // confirming it re-runs the give with the entered witness name.
+  const [witnessFor, setWitnessFor] = useState<any>(null);
+  const [witnessName, setWitnessName] = useState("");
+  const [witnessBusy, setWitnessBusy] = useState(false);
+
   // Run controlled-substance, vitals, and PRN-interval safety checks before a
-  // dose is marked GIVEN. Returns null to abort, or the witness name to record.
-  const runGiveChecks = async (mar: any): Promise<{ ok: boolean; witnessName?: string }> => {
+  // dose is marked GIVEN. Returns { ok:false } to abort, { needsWitness:true }
+  // when a controlled-substance witness must be captured, or { ok:true } to give.
+  const runGiveChecks = async (mar: any): Promise<{ ok: boolean; witnessName?: string; needsWitness?: boolean }> => {
     const med: any = medMap.get(mar.medicationId);
     const flags = classifyMedication(med?.name);
     const resName = resMap.get(mar.residentId)?.name || "this resident";
@@ -112,20 +121,12 @@ export default function MARBoard() {
       if (!proceed.isConfirmed) { goRecordVitals(mar.residentId); return { ok: false }; }
     }
 
-    // Controlled substances require a witness.
-    let witnessName: string | undefined = mar.witnessName || undefined;
-    if (flags.controlled) {
-      const res = await Swal.fire({
-        title: `Controlled substance${flags.deaSchedule ? ` (C-${flags.deaSchedule})` : ""}`,
-        input: "text", inputValue: witnessName || "",
-        inputLabel: `A witness is required to administer ${med?.name}. Enter the witness name:`,
-        showCancelButton: true, confirmButtonColor: "#2E4A48", confirmButtonText: "Confirm & give",
-        inputValidator: (v) => (!v || !v.trim() ? "Witness name is required for controlled substances" : null),
-      });
-      if (!res.isConfirmed) return { ok: false };
-      witnessName = String(res.value || "").trim();
+    // Controlled substances require a witness — captured in a designed modal
+    // (opened by markGiven) rather than inline here.
+    if (flags.controlled && !(mar.witnessName || "").trim()) {
+      return { ok: false, needsWitness: true };
     }
-    return { ok: true, witnessName };
+    return { ok: true, witnessName: mar.witnessName || undefined };
   };
 
   const filtered = useMemo(() => {
@@ -178,16 +179,29 @@ export default function MARBoard() {
     const r = await Swal.fire({ title: "Delete MAR Entry?", icon: "warning", showCancelButton: true, confirmButtonColor: "#C0573F" });
     if (r.isConfirmed) { await deleteRecord("medication-administrations", id); refetch(); Swal.fire("Deleted", "", "success"); }
   };
-  const markGiven = async (mar: any) => {
-    const chk = await runGiveChecks(mar);
-    if (!chk.ok) return;
+  // Write the GIVEN dose (optionally with a witness). Shared by the row action
+  // and the controlled-substance witness modal.
+  const applyGiven = async (mar: { id: string; witnessName?: string | null }, witness?: string) => {
     await updateRecord("medication-administrations", mar.id, {
       status: "GIVEN", actualTime: new Date().toISOString(),
       recordedById: me.id, recordedByName: me.name,
-      ...(chk.witnessName ? { witnessName: chk.witnessName } : {}),
+      ...(witness ? { witnessName: witness } : {}),
     });
     refetch();
     Swal.fire({ icon: "success", title: "Recorded", timer: 1200, showConfirmButton: false });
+  };
+  const markGiven = async (mar: { id: string; witnessName?: string | null }) => {
+    const chk = await runGiveChecks(mar);
+    if (chk.needsWitness) { setWitnessName(mar.witnessName || ""); setWitnessFor(mar); return; }
+    if (!chk.ok) return;
+    await applyGiven(mar, chk.witnessName);
+  };
+  const submitWitness = async () => {
+    if (!witnessFor || !witnessName.trim()) return;
+    setWitnessBusy(true);
+    try { await applyGiven(witnessFor, witnessName.trim()); setWitnessFor(null); }
+    catch { Swal.fire("Error", "Could not record the administration.", "error"); }
+    finally { setWitnessBusy(false); }
   };
 
   const th = "px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-[#C9D2CB]";
@@ -306,6 +320,36 @@ export default function MARBoard() {
       )}
 
       {creating && <MARModal residents={residents} me={me} vitalsTodayByResident={vitalsTodayByResident} onRecordVitals={goRecordVitals} onClose={() => setCreating(false)} onSaved={() => { refetch(); setCreating(false); }} />}
+
+      {witnessFor && (() => {
+        const med = medMap.get(witnessFor.medicationId) as { name?: string } | undefined;
+        const flags = classifyMedication(med?.name);
+        const resName = resMap.get(witnessFor.residentId)?.name || "this resident";
+        return (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setWitnessFor(null); }}>
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
+              <div className="sticky top-0 bg-[#2E4A48] px-6 py-4 flex items-center justify-between">
+                <h3 className="text-white font-bold text-lg">Controlled Substance{flags.deaSchedule ? ` (C-${flags.deaSchedule})` : ""}</h3>
+                <button onClick={() => setWitnessFor(null)} className="text-white/80 hover:text-white"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="rounded-md border border-[#E1E3D9] bg-[#F5F6F1] px-3 py-2.5 text-sm text-[#3C3C36]">
+                  <span className="font-bold text-[#2B2B27]">{med?.name || "Medication"}</span> for <span className="font-semibold">{resName}</span>
+                </div>
+                <div>
+                  <label htmlFor="mar-witness" className="block text-[10px] font-semibold uppercase tracking-[0.1em] text-[#8A8D82] mb-1">Witness Name *</label>
+                  <input id="mar-witness" value={witnessName} onChange={(e) => setWitnessName(e.target.value)} autoFocus placeholder="Enter the witness name" className={inputCls} onKeyDown={(e) => { if (e.key === "Enter" && witnessName.trim() && !witnessBusy) void submitWitness(); }} />
+                  <p className="mt-1.5 text-[11px] text-[#8A8D82]">A witness is required to administer this controlled substance.</p>
+                </div>
+              </div>
+              <div className="bg-[#F5F6F1] border-t border-[#E1E3D9] px-6 py-3 flex flex-wrap justify-end gap-2">
+                <button onClick={() => setWitnessFor(null)} disabled={witnessBusy} className="px-4 py-2 text-sm text-[#6B6E63] hover:bg-black/5 rounded-md disabled:opacity-50">Cancel</button>
+                <button onClick={submitWitness} disabled={witnessBusy || !witnessName.trim()} className="px-5 py-2 rounded-md bg-[#2E4A48] text-white text-sm font-semibold hover:bg-[#25403D] disabled:opacity-50 inline-flex items-center gap-2">{witnessBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Confirm &amp; give</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

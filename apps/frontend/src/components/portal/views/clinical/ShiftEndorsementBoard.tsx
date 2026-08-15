@@ -35,6 +35,15 @@ const SHIFT_TYPES = [
   { label: "Morning", range: "06:00–14:00" }, { label: "Afternoon", range: "14:00–22:00" }, { label: "Night", range: "22:00–06:00" },
   { label: "Morning 12h", range: "06:00–18:00" }, { label: "Night 12h", range: "18:00–06:00" },
 ];
+// Auto-pick the current 8-hour shift from the wall clock so a new endorsement
+// defaults to the shift the clinician is actually on: Morning 06–14, Afternoon
+// 14–22, Night 22–06. (Indexes match the first three SHIFT_TYPES entries.)
+const currentShiftIdx = () => {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 14) return 0;   // Morning
+  if (h >= 14 && h < 22) return 1;  // Afternoon
+  return 2;                          // Night (wraps 22:00 → 06:00)
+};
 const SECTIONS = [
   { key: "generalCondition", label: "General Condition", icon: Heart, color: "text-rose-500" },
   { key: "intakeElimination", label: "Intake & Elimination", icon: Droplets, color: "text-blue-500" },
@@ -317,7 +326,7 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
 
 // ── New Endorsement modal ────────────────────────────────────────────────────
 function NewEndorsementModal({ onClose, onCreate }: { onClose: () => void; onCreate: (d: { shiftLabel: string; shiftRange: string; generalNotes?: string; medicationNotes?: string; aiSummary?: string }) => Promise<void> }) {
-  const [shiftIdx, setShiftIdx] = useState(0);
+  const [shiftIdx, setShiftIdx] = useState(currentShiftIdx);
   const [general, setGeneral] = useState("");
   const [med, setMed] = useState("");
   const [ai, setAi] = useState("");
@@ -393,13 +402,25 @@ function NewEndorsementModal({ onClose, onCreate }: { onClose: () => void; onCre
 function DetailsView({ e, residents, resName, onBack, update, buildSections, hasActivity, canEdit }: { e: Endorsement; residents: Row[]; resName: (id: string) => { name: string; room: string }; onBack: () => void; update: (id: string, patch: (e: Endorsement) => Endorsement) => Promise<void>; buildSections: (rid: string, dateIso: string) => Record<string, string>; hasActivity: (rid: string, dateIso: string) => boolean; canEdit: boolean }) {
   const [openKey, setOpenKey] = useState<string>("");
   const [filling, setFilling] = useState(false);
-  const addResident = async () => {
+  // Add-resident capture — a designed modal with a styled <select> replaces the
+  // bare Swal select prompt.
+  const [addOpen, setAddOpen] = useState(false);
+  const [addSel, setAddSel] = useState("");
+  const [addBusy, setAddBusy] = useState(false);
+  const addResident = () => {
     const existing = new Set(e.residents.map((r) => r.residentId));
     const opts = residents.filter((r: Row) => !existing.has(s(r.id)));
     if (!opts.length) { Swal.fire({ title: "All residents added", icon: "info" }); return; }
-    const { value } = await Swal.fire({ title: "Add resident", input: "select", inputOptions: Object.fromEntries(opts.map((r: Row) => [s(r.id), `${s(r.name)} — Rm ${s(r.room)}`])), inputPlaceholder: "Select resident", showCancelButton: true });
-    // Pre-draft the added resident's sections from the shift's live care data.
-    if (value) await update(e.id, (en) => ({ ...en, residents: [...en.residents, { residentId: String(value), sections: buildSections(String(value), e.date) }] }));
+    setAddSel(""); setAddOpen(true);
+  };
+  const submitAddResident = async () => {
+    if (!addSel) return;
+    setAddBusy(true);
+    try {
+      // Pre-draft the added resident's sections from the shift's live care data.
+      await update(e.id, (en) => ({ ...en, residents: [...en.residents, { residentId: addSel, sections: buildSections(addSel, e.date) }] }));
+      setAddOpen(false);
+    } finally { setAddBusy(false); }
   };
   // Auto-fill ONLY the residents who actually logged an action this shift.
   const autoFillAll = async () => {
@@ -469,6 +490,35 @@ function DetailsView({ e, residents, resName, onBack, update, buildSections, has
               );
             })}
           </div>}
+
+      {addOpen && (() => {
+        const existing = new Set(e.residents.map((r) => r.residentId));
+        const opts = residents.filter((r: Row) => !existing.has(s(r.id)));
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3" onMouseDown={(ev) => { if (ev.target === ev.currentTarget) setAddOpen(false); }}>
+            <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900"><User className="h-5 w-5" /> Add resident</h2>
+                <button onClick={() => setAddOpen(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="space-y-4 p-5">
+                <p className="text-sm text-slate-500">Pick a resident to document on this endorsement — their eight sections are pre-drafted from this shift&apos;s live care data.</p>
+                <div>
+                  <label htmlFor="add-resident-sel" className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Resident</label>
+                  <select id="add-resident-sel" autoFocus value={addSel} onChange={(ev) => setAddSel(ev.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400/40">
+                    <option value="">Select resident…</option>
+                    {opts.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-4">
+                <button onClick={() => setAddOpen(false)} disabled={addBusy} className="rounded-xl px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+                <button onClick={submitAddResident} disabled={addBusy || !addSel} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"><Plus className="h-4 w-4" /> {addBusy ? "Adding…" : "Add resident"}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

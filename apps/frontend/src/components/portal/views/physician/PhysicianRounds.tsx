@@ -100,6 +100,9 @@ export default function PhysicianRounds({ clinicianRole = "PHYSICIAN" }: { clini
   const [filterCareLevel, setFilterCareLevel] = useState<string>("all");
   const [viewing, setViewing] = useState<RoundPatient | null>(null);
   const [roundNotes, setRoundNotes] = useState("");
+  const [completeFor, setCompleteFor] = useState<RoundPatient | null>(null);
+  const [completeNotes, setCompleteNotes] = useState("");
+  const [completeBusy, setCompleteBusy] = useState(false);
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
 
@@ -207,33 +210,34 @@ export default function PhysicianRounds({ clinicianRole = "PHYSICIAN" }: { clini
     withMeds: patients.filter((p) => p.activeMeds > 0).length,
   }), [patients]);
 
-  const handleCompleteRound = async (p: RoundPatient) => {
-    const result = await Swal.fire({
-      title: "Complete Round?",
-      html: `<b>${p.name}</b> &middot; Room ${p.room}<br/>Mark this patient's round as completed?`,
-      input: "textarea",
-      inputLabel: "Round notes (optional)",
-      inputPlaceholder: "Patient appears stable, continue current care plan...",
-      showCancelButton: true,
-      confirmButtonColor: "#10b981",
-      cancelButtonColor: "#6b7280",
-      confirmButtonText: "Complete Round",
-    });
-    if (!result.isConfirmed) return;
+  const handleCompleteRound = (p: RoundPatient) => {
+    setCompleteFor(p);
+    setCompleteNotes(roundNotes);
+  };
+
+  const submitCompleteRound = async () => {
+    const p = completeFor;
+    if (!p) return;
+    const notes = completeNotes.trim();
+    setCompleteBusy(true);
     try {
-      if (result.value) {
+      if (notes) {
         await updateRecord("medical-notes", `round-${p.id}-${Date.now()}`, {
           noteType: "ROUND_NOTE",
           title: `Round completed: ${p.name}`,
-          content: `Round completed.\n\n${result.value}`,
+          content: `Round completed.\n\n${notes}`,
           authorName: clinicianName,
           residentId: p.id,
         }).catch(() => {});
       }
       Swal.fire({ title: "Round Complete", text: `${p.name}'s round marked as done.`, icon: "success", timer: 1400, showConfirmButton: false });
+      setCompleteFor(null);
+      setCompleteNotes("");
       setViewing(null);
     } catch (err) {
       Swal.fire({ title: "Error", text: err instanceof Error ? err.message : "Could not complete round.", icon: "error" });
+    } finally {
+      setCompleteBusy(false);
     }
   };
 
@@ -522,9 +526,41 @@ export default function PhysicianRounds({ clinicianRole = "PHYSICIAN" }: { clini
             {/* Modal Footer */}
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-5 sm:px-6 py-4 flex items-center justify-between gap-2">
               <button onClick={() => setViewing(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
-              <button onClick={() => void handleCompleteRound(viewing)}
+              <button onClick={() => handleCompleteRound(viewing)}
                 className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
                 <CheckCircle2 className="w-4 h-4" /> Complete Round
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Complete Round confirm ──────────────────────────────────── */}
+      {completeFor && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onMouseDown={(e) => { if (e.target === e.currentTarget && !completeBusy) setCompleteFor(null); }}>
+          <div className="bg-white w-full max-w-lg max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-xl shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-gradient-to-r from-green-500 to-emerald-600 px-5 py-4 text-white">
+              <h2 className="flex items-center gap-2 text-lg font-bold"><CheckCircle2 className="w-5 h-5" /> Complete Round</h2>
+              <button onClick={() => setCompleteFor(null)} disabled={completeBusy} className="rounded-lg p-1.5 transition hover:bg-white/20 disabled:opacity-50"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                <p className="flex items-center gap-2 font-semibold text-gray-900"><Stethoscope className="w-4 h-4 text-blue-500" />{completeFor.name} &middot; Room {completeFor.room}</p>
+                <p className="mt-1 text-xs text-gray-500">Mark this patient&apos;s round as completed.</p>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-gray-700">Round notes <span className="font-normal text-gray-400">(optional)</span></label>
+                <textarea autoFocus rows={4} value={completeNotes} onChange={(e) => setCompleteNotes(e.target.value)}
+                  placeholder="Patient appears stable, continue current care plan..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none resize-y text-sm" />
+              </div>
+            </div>
+            <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
+              <button onClick={() => setCompleteFor(null)} disabled={completeBusy} className="rounded-lg px-5 py-2 text-sm text-gray-700 transition hover:bg-gray-100 disabled:opacity-50">Cancel</button>
+              <button onClick={() => void submitCompleteRound()} disabled={completeBusy}
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50 active:scale-95">
+                {completeBusy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} {completeBusy ? "Saving…" : "Complete Round"}
               </button>
             </div>
           </div>

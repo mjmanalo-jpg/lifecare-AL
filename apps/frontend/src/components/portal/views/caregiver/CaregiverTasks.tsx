@@ -8,7 +8,7 @@ import { adaptTask } from "@/lib/adapters";
 import { updateRecord, deleteRecord } from "@/lib/api";
 import { TASK_NOTES_FIELD, taskNotesOf, withAppendedNote, withoutNote } from "@/lib/taskNotes";
 import AddTaskModal, { SUPERVISOR_ROLES } from "./AddTaskModal";
-import { StatusPill, MicroLabel, ClinicalHeader, ClinicalCard } from "../clinical/clinical-ui";
+import { StatusPill, MicroLabel, ClinicalHeader, ClinicalCard, ClinicalModal, ClinicalButton, FieldLabel, controlClass } from "../clinical/clinical-ui";
 
 type CaregiverTask = ReturnType<typeof adaptTask>;
 
@@ -69,6 +69,10 @@ export default function CaregiverTasks() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [viewingTask, setViewingTask] = useState<CaregiverTask | null>(null);
   const [showAddTask, setShowAddTask] = useState(false);
+  // Add-note modal (replaces the bare Swal textarea prompt).
+  const [noteFor, setNoteFor] = useState<CaregiverTask | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
 
   // Only the head nurse / supervisors may assign tasks — caregivers cannot.
   const [sessionRole, setSessionRole] = useState<string | null>(null);
@@ -140,26 +144,27 @@ export default function CaregiverTasks() {
   // Add a caregiver note to a task ("can't bathe — slight fever"). The note is
   // stored ON the task, so it reflects live to the nurse, other caregivers, and
   // the resident's QR profile without any extra plumbing.
-  const handleAddNote = async (task: CaregiverTask) => {
-    const { value } = await Swal.fire({
-      title: "Add a note to this task",
-      input: "textarea",
-      inputPlaceholder: "e.g. Can't give the medication yet — resident hasn't eaten (no solid food).",
-      inputAttributes: { "aria-label": "Task note", maxlength: "500" },
-      showCancelButton: true,
-      confirmButtonText: "Add note",
-      confirmButtonColor: "#2E4A48",
-      inputValidator: (v) => (!v || String(v).trim().length < 2 ? "Please enter a note." : undefined),
-    });
-    if (!value) return;
+  const handleAddNote = (task: CaregiverTask) => {
+    setNoteText("");
+    setNoteFor(task);
+  };
+  const submitAddNote = async () => {
+    if (!noteFor) return;
+    const task = noteFor;
+    // Same validator as before — require a real note.
+    if (noteText.trim().length < 2) return;
+    setNoteBusy(true);
     try {
       await updateRecord("tasks", task.id, {
-        [TASK_NOTES_FIELD]: withAppendedNote((task.raw as Record<string, unknown>)?.[TASK_NOTES_FIELD], String(value), authorName),
+        [TASK_NOTES_FIELD]: withAppendedNote((task.raw as Record<string, unknown>)?.[TASK_NOTES_FIELD], noteText.trim(), authorName),
       });
       await refetchTasks();
+      setNoteFor(null);
       Swal.fire({ title: "Note added", text: "Visible to the nurse, other caregivers, and on the resident's profile.", icon: "success", timer: 1800, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ title: "Couldn't add note", text: err instanceof Error ? err.message : "Try again.", icon: "error" });
+    } finally {
+      setNoteBusy(false);
     }
   };
 
@@ -508,6 +513,35 @@ export default function CaregiverTasks() {
           }}
         />
       )}
+
+      {/* Add-note modal — reflects live to nurse + other caregivers + QR profile. */}
+      <ClinicalModal
+        open={!!noteFor}
+        onClose={() => setNoteFor(null)}
+        title="Add a note to this task"
+        description={noteFor ? `${noteFor.resident} · Room ${noteFor.room} — ${noteFor.title}` : undefined}
+        footer={
+          <>
+            <ClinicalButton variant="secondary" onClick={() => setNoteFor(null)} disabled={noteBusy}>Cancel</ClinicalButton>
+            <ClinicalButton variant="primary" onClick={() => void submitAddNote()} disabled={noteBusy || noteText.trim().length < 2}>
+              {noteBusy ? "Adding…" : "Add note"}
+            </ClinicalButton>
+          </>
+        }
+      >
+        <FieldLabel htmlFor="task-note" required>Note</FieldLabel>
+        <textarea
+          id="task-note"
+          autoFocus
+          rows={4}
+          maxLength={500}
+          value={noteText}
+          onChange={(e) => setNoteText(e.target.value)}
+          placeholder="e.g. Can't give the medication yet — resident hasn't eaten (no solid food)."
+          className={`${controlClass} resize-y`}
+        />
+        <p className="mt-1.5 text-xs text-[var(--clinical-muted)]">Visible to the nurse, other caregivers, and on the resident&apos;s profile.</p>
+      </ClinicalModal>
 
       {/* Task Details Modal */}
       {viewingTask && (

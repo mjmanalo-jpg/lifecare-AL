@@ -120,6 +120,11 @@ export default function FacilityDining() {
     status: "PENDING"
   });
 
+  // Dietitian Recommendations modal (complete consult review)
+  const [reviewConsult, setReviewConsult] = useState<ConsultRow | null>(null);
+  const [reviewRecs, setReviewRecs] = useState("");
+  const [reviewBusy, setReviewBusy] = useState(false);
+
   // New Compliance Form State
   const [showAddCompliance, setShowAddCompliance] = useState(false);
   const [complianceForm, setComplianceForm] = useState({
@@ -289,22 +294,8 @@ export default function FacilityDining() {
     }
   };
 
-  // Toggle Consult Status
-  const handleToggleConsult = async (consult: ConsultRow) => {
-    const newStatus = consult.status === "PENDING" ? "COMPLETED" : "PENDING";
-    let recs = consult.recommendations;
-    if (newStatus === "COMPLETED" && consult.recommendations.startsWith("Pending")) {
-      const input = await Swal.fire({
-        title: "Dietitian Recommendations",
-        input: "textarea",
-        inputLabel: "Add clinical dietary recommendations",
-        inputPlaceholder: "e.g. Restrict sodium to 1500mg/day, provide high-protein snacks between meals...",
-        showCancelButton: true
-      });
-      if (input.isDismissed) return;
-      recs = input.value || "Completed consultation review.";
-    }
-
+  // Persist a consult status change (shared by direct toggle + review modal)
+  const applyConsultUpdate = async (consult: ConsultRow, newStatus: string, recs: string) => {
     try {
       await updateRecord("dietitian-consults", consult.id, {
         status: newStatus,
@@ -315,6 +306,28 @@ export default function FacilityDining() {
     } catch (err) {
       Swal.fire("Error", "Could not update consultation.", "error");
     }
+  };
+
+  // Toggle Consult Status — open the recommendations modal when completing a
+  // consult that still has a pending write-up; otherwise flip immediately.
+  const handleToggleConsult = async (consult: ConsultRow) => {
+    const newStatus = consult.status === "PENDING" ? "COMPLETED" : "PENDING";
+    if (newStatus === "COMPLETED" && consult.recommendations.startsWith("Pending")) {
+      setReviewConsult(consult);
+      setReviewRecs("");
+      return;
+    }
+    await applyConsultUpdate(consult, newStatus, consult.recommendations);
+  };
+
+  // Submit dietitian recommendations from the modal (completes the consult).
+  const submitConsultReview = async () => {
+    if (!reviewConsult) return;
+    setReviewBusy(true);
+    await applyConsultUpdate(reviewConsult, "COMPLETED", reviewRecs.trim() || "Completed consultation review.");
+    setReviewBusy(false);
+    setReviewConsult(null);
+    setReviewRecs("");
   };
 
   return (
@@ -900,6 +913,54 @@ export default function FacilityDining() {
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2 z-10">
               <button onClick={() => setShowAddMenu(false)} className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg font-bold">Cancel</button>
               <button onClick={handleSaveMenu} className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-extrabold text-sm rounded-lg hover:shadow transition active:scale-95">Schedule Meal</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Dietitian Recommendations Modal (complete consult) */}
+      {reviewConsult && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => { if (!reviewBusy) { setReviewConsult(null); setReviewRecs(""); } }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
+              <h2 className="text-xl font-extrabold flex items-center gap-2">
+                <Users className="w-5 h-5 text-amber-800" /> Dietitian Recommendations
+              </h2>
+              <button onClick={() => { setReviewConsult(null); setReviewRecs(""); }} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+            </div>
+            <div className="p-4 sm:p-6 space-y-4">
+              <p className="text-xs text-gray-500">
+                Completing consult for{" "}
+                <span className="font-bold text-gray-800">
+                  {reviewConsult.resident ? `${reviewConsult.resident.firstName} ${reviewConsult.resident.lastName}` : "Unknown"}
+                </span>
+                {reviewConsult.resident?.roomNumber ? ` (Room ${reviewConsult.resident.roomNumber})` : ""}.
+              </p>
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">Add clinical dietary recommendations</label>
+                <textarea
+                  autoFocus
+                  value={reviewRecs}
+                  onChange={(e) => setReviewRecs(e.target.value)}
+                  rows={5}
+                  placeholder="e.g. Restrict sodium to 1500mg/day, provide high-protein snacks between meals..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-400 outline-none text-sm resize-none"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Leave blank to log a generic completed consultation review.</p>
+              </div>
+            </div>
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2 z-10">
+              <button onClick={() => { setReviewConsult(null); setReviewRecs(""); }} className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg font-bold">Cancel</button>
+              <button
+                onClick={submitConsultReview}
+                disabled={reviewBusy}
+                className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-extrabold text-sm rounded-lg hover:shadow transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {reviewBusy ? "Saving..." : "Complete Consult"}
+              </button>
             </div>
           </div>
         </div>

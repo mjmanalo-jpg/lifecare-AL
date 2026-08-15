@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import {
   Users, Search, X, Heart, Droplets, Wind, Thermometer, AlertTriangle,
   Pill, Activity, Clock, RefreshCw, ListChecks, BarChart3, HeartPulse,
-  Camera, ArrowUpRight, CheckCircle2, Phone, BellRing, QrCode,
+  Camera, ArrowUpRight, CheckCircle2, Phone, BellRing, QrCode, Loader2,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -443,6 +443,11 @@ export default function CaregiverResidents() {
 /* ── Call Bells modal — respond / resolve, mirrors the nurse Residents view ── */
 
 function CallBellsModal({ r, onClose, refetchCallBells }: { r: ResidentVM; onClose: () => void; refetchCallBells: () => void }) {
+  // Resolve-with-notes modal (replaces the bare Swal textarea prompt).
+  const [resolveForId, setResolveForId] = useState<string | null>(null);
+  const [resolveNotes, setResolveNotes] = useState("");
+  const [resolveBusy, setResolveBusy] = useState(false);
+
   const handleRespond = async (bellId: string) => {
     try {
       await updateRecord("call-bells", bellId, { status: "RESPONDED", respondedAt: new Date().toISOString() });
@@ -453,25 +458,22 @@ function CallBellsModal({ r, onClose, refetchCallBells }: { r: ResidentVM; onClo
     }
   };
 
-  const handleResolve = async (bellId: string) => {
-    const result = await Swal.fire({
-      title: "Resolve Call Bell?",
-      input: "textarea",
-      inputLabel: "Resolution notes",
-      inputPlaceholder: "What was done...",
-      showCancelButton: true,
-      confirmButtonColor: "#10b981",
-      cancelButtonColor: "#6b7280",
-      confirmButtonText: "Resolve",
-    });
-    if (result.isConfirmed) {
-      try {
-        await updateRecord("call-bells", bellId, { status: "RESOLVED", resolvedAt: new Date().toISOString(), notes: result.value || "Resolved" });
-        refetchCallBells();
-        Swal.fire({ title: "Resolved", text: "Call bell marked as resolved", icon: "success", timer: 1500, showConfirmButton: false });
-      } catch (err) {
-        Swal.fire({ title: "Error", text: err instanceof Error ? err.message : "Failed to resolve", icon: "error" });
-      }
+  const handleResolve = (bellId: string) => {
+    setResolveNotes("");
+    setResolveForId(bellId);
+  };
+  const submitResolve = async () => {
+    if (!resolveForId) return;
+    setResolveBusy(true);
+    try {
+      await updateRecord("call-bells", resolveForId, { status: "RESOLVED", resolvedAt: new Date().toISOString(), notes: resolveNotes.trim() || "Resolved" });
+      refetchCallBells();
+      setResolveForId(null);
+      Swal.fire({ title: "Resolved", text: "Call bell marked as resolved", icon: "success", timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: "Error", text: err instanceof Error ? err.message : "Failed to resolve", icon: "error" });
+    } finally {
+      setResolveBusy(false);
     }
   };
 
@@ -536,6 +538,37 @@ function CallBellsModal({ r, onClose, refetchCallBells }: { r: ResidentVM; onClo
           <button onClick={onClose} className="px-6 py-2 bg-gray-700 hover:bg-gray-800 text-white font-semibold rounded-lg transition">Close</button>
         </div>
       </div>
+
+      {/* Resolve call bell modal — nested above the bells list. */}
+      {resolveForId && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setResolveForId(null); }}>
+          <div className="bg-white w-full max-w-md max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-gradient-to-r from-green-500 to-green-600 px-5 py-4 text-white">
+              <h2 className="flex items-center gap-2 text-lg font-bold"><CheckCircle2 className="w-5 h-5" /> Resolve Call Bell</h2>
+              <button onClick={() => setResolveForId(null)} className="rounded-lg p-1.5 transition hover:bg-white/20"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-3">
+              <p className="text-sm text-gray-600">{r.name} • Room {r.room}</p>
+              <div>
+                <label htmlFor="bell-resolve-notes" className="mb-1.5 block text-sm font-semibold text-gray-700">Resolution notes</label>
+                <textarea
+                  id="bell-resolve-notes"
+                  autoFocus
+                  rows={4}
+                  value={resolveNotes}
+                  onChange={(e) => setResolveNotes(e.target.value)}
+                  placeholder="What was done…"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none text-sm resize-y"
+                />
+              </div>
+            </div>
+            <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
+              <button onClick={() => setResolveForId(null)} disabled={resolveBusy} className="rounded-lg px-5 py-2 text-sm text-gray-700 transition hover:bg-gray-100 disabled:opacity-50">Cancel</button>
+              <button onClick={() => void submitResolve()} disabled={resolveBusy} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-6 py-2 text-sm font-semibold text-white transition hover:shadow-lg disabled:opacity-50">{resolveBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} {resolveBusy ? "Resolving…" : "Resolve"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -26,6 +26,14 @@ export default function FamilyApprovals() {
   const [appts, setAppts] = useState<ApptApproval[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Decline modal (private caregiver OR appointment) — collects an optional reason.
+  const [declineFor, setDeclineFor] = useState<
+    | { kind: "care"; item: PrivateCareAssignment }
+    | { kind: "appt"; item: ApptApproval }
+    | null
+  >(null);
+  const [declineReason, setDeclineReason] = useState("");
+  const [declineBusy, setDeclineBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -43,27 +51,7 @@ export default function FamilyApprovals() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const decide = async (a: PrivateCareAssignment, decision: "APPROVE" | "DECLINE") => {
-    let reason = "";
-    if (decision === "DECLINE") {
-      const r = await Swal.fire({
-        title: "Decline this request?",
-        input: "textarea",
-        inputLabel: "Reason (optional) — shared with the care team",
-        inputPlaceholder: "e.g. Not needed at this time",
-        showCancelButton: true, confirmButtonText: "Decline", confirmButtonColor: "#dc2626",
-      });
-      if (!r.isConfirmed) return;
-      reason = String(r.value || "");
-    } else {
-      const r = await Swal.fire({
-        title: "Approve private caregiver?",
-        html: `Approve <b>${a.caregiverName}</b> for <b>${a.residentName}</b> at <b>${peso(a.rate)} ${RATE_UNIT_LABEL[a.rateUnit]}</b>?<br/><span style="color:#64748b;font-size:.85em">This starts the recurring charge on your billing account.</span>`,
-        icon: "question", showCancelButton: true, confirmButtonText: "Approve & activate", confirmButtonColor: "#16a34a",
-      });
-      if (!r.isConfirmed) return;
-    }
-
+  const postCareDecision = async (a: PrivateCareAssignment, decision: "APPROVE" | "DECLINE", reason: string) => {
     setBusyId(a.id);
     try {
       const res = await fetch("/api/family/private-care", {
@@ -77,29 +65,26 @@ export default function FamilyApprovals() {
         title: decision === "APPROVE" ? "Approved — caregiver activated" : "Request declined" });
     } catch (e) {
       Swal.fire({ title: "Something went wrong", text: e instanceof Error ? e.message : "Please try again", icon: "error" });
+      throw e;
     } finally { setBusyId(null); }
   };
 
-  const decideAppt = async (a: ApptApproval, decision: "APPROVE" | "DECLINE") => {
-    let reason = "";
+  const decide = async (a: PrivateCareAssignment, decision: "APPROVE" | "DECLINE") => {
     if (decision === "DECLINE") {
-      const r = await Swal.fire({
-        title: "Decline this appointment?",
-        input: "textarea",
-        inputLabel: "Reason (optional) — shared with the care team",
-        inputPlaceholder: "e.g. Please reschedule to next week",
-        showCancelButton: true, confirmButtonText: "Decline", confirmButtonColor: "#dc2626",
-      });
-      if (!r.isConfirmed) return;
-      reason = String(r.value || "");
-    } else {
-      const r = await Swal.fire({
-        title: "Approve appointment?",
-        html: `Approve the <b>${a.appointmentType}</b>${a.specialist ? ` with <b>${a.specialist}</b>` : ""} for <b>${a.residentName}</b>?<br/><span style="color:#64748b;font-size:.85em">It will be scheduled on the appointment calendar.</span>`,
-        icon: "question", showCancelButton: true, confirmButtonText: "Approve & schedule", confirmButtonColor: "#16a34a",
-      });
-      if (!r.isConfirmed) return;
+      setDeclineFor({ kind: "care", item: a });
+      setDeclineReason("");
+      return;
     }
+    const r = await Swal.fire({
+      title: "Approve private caregiver?",
+      html: `Approve <b>${a.caregiverName}</b> for <b>${a.residentName}</b> at <b>${peso(a.rate)} ${RATE_UNIT_LABEL[a.rateUnit]}</b>?<br/><span style="color:#64748b;font-size:.85em">This starts the recurring charge on your billing account.</span>`,
+      icon: "question", showCancelButton: true, confirmButtonText: "Approve & activate", confirmButtonColor: "#16a34a",
+    });
+    if (!r.isConfirmed) return;
+    await postCareDecision(a, "APPROVE", "").catch(() => {});
+  };
+
+  const postApptDecision = async (a: ApptApproval, decision: "APPROVE" | "DECLINE", reason: string) => {
     setBusyId(a.id);
     try {
       const res = await fetch("/api/family/appointment", {
@@ -113,7 +98,36 @@ export default function FamilyApprovals() {
         title: decision === "APPROVE" ? "Approved — appointment scheduled" : "Appointment declined" });
     } catch (e) {
       Swal.fire({ title: "Something went wrong", text: e instanceof Error ? e.message : "Please try again", icon: "error" });
+      throw e;
     } finally { setBusyId(null); }
+  };
+
+  const decideAppt = async (a: ApptApproval, decision: "APPROVE" | "DECLINE") => {
+    if (decision === "DECLINE") {
+      setDeclineFor({ kind: "appt", item: a });
+      setDeclineReason("");
+      return;
+    }
+    const r = await Swal.fire({
+      title: "Approve appointment?",
+      html: `Approve the <b>${a.appointmentType}</b>${a.specialist ? ` with <b>${a.specialist}</b>` : ""} for <b>${a.residentName}</b>?<br/><span style="color:#64748b;font-size:.85em">It will be scheduled on the appointment calendar.</span>`,
+      icon: "question", showCancelButton: true, confirmButtonText: "Approve & schedule", confirmButtonColor: "#16a34a",
+    });
+    if (!r.isConfirmed) return;
+    await postApptDecision(a, "APPROVE", "").catch(() => {});
+  };
+
+  const submitDecline = async () => {
+    if (!declineFor) return;
+    const reason = declineReason.trim();
+    setDeclineBusy(true);
+    try {
+      if (declineFor.kind === "care") await postCareDecision(declineFor.item, "DECLINE", reason);
+      else await postApptDecision(declineFor.item, "DECLINE", reason);
+      setDeclineFor(null);
+      setDeclineReason("");
+    } catch { /* toast already surfaced by post* */ }
+    finally { setDeclineBusy(false); }
   };
 
   const pending = assignments.filter((a) => a.status === "PENDING_FAMILY");
@@ -264,6 +278,52 @@ export default function FamilyApprovals() {
           </div>
         </section>
       )}
+
+      {/* Decline modal — private caregiver OR appointment (optional reason) */}
+      {declineFor && (() => {
+        const isCare = declineFor.kind === "care";
+        const subject = isCare
+          ? `Private caregiver — ${declineFor.item.caregiverName} for ${declineFor.item.residentName}`
+          : `${declineFor.item.appointmentType}${declineFor.item.specialist ? ` with ${declineFor.item.specialist}` : ""} — ${declineFor.item.residentName}`;
+        return (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+            onMouseDown={(e) => { if (e.target === e.currentTarget && !declineBusy) setDeclineFor(null); }}>
+            <div className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl ring-1 ring-slate-900/5 sm:max-h-[88vh] sm:rounded-2xl">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-red-600 text-white shadow-sm"><X className="h-5 w-5" /></span>
+                  <div>
+                    <h2 className="text-[15px] font-bold text-slate-900">{isCare ? "Decline this request?" : "Decline this appointment?"}</h2>
+                    <p className="mt-0.5 text-xs text-slate-500">This lets the care team know your decision.</p>
+                  </div>
+                </div>
+                <button onClick={() => setDeclineFor(null)} disabled={declineBusy}
+                  className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Request</p>
+                  <p className="mt-0.5 text-sm font-semibold text-slate-800">{subject}</p>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold text-slate-700">Reason <span className="font-normal text-slate-400">(optional) — shared with the care team</span></label>
+                  <textarea autoFocus rows={4} value={declineReason} onChange={(e) => setDeclineReason(e.target.value)}
+                    placeholder={isCare ? "e.g. Not needed at this time" : "e.g. Please reschedule to next week"}
+                    className="w-full resize-y rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-transparent focus:ring-2 focus:ring-red-400" />
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-4">
+                <button onClick={() => setDeclineFor(null)} disabled={declineBusy}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+                <button onClick={() => void submitDecline()} disabled={declineBusy}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 active:scale-95 disabled:opacity-50">
+                  {declineBusy ? <RefreshCw className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />} {declineBusy ? "Declining…" : "Decline"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

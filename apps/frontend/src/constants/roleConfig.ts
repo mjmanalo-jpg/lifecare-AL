@@ -371,7 +371,6 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Vital Sign Trends", icon: HeartPulse, route: "/nurse/vitalstrend", group: "Resident Care" },
       { name: "Shift Documentation", icon: ClipboardCheck, route: "/nurse/shiftsummary", group: "Resident Care" },
       { name: "Acuity & Level of Care", icon: Gauge, route: "/nurse/careacuity", group: "Resident Care" },
-      { name: "Assessment Rounds", icon: ClipboardList, route: "/nurse/rounds", group: "Resident Care" },
       { name: "Wound Care", icon: Bandage, route: "/nurse/woundcare", group: "Resident Care" },
       { name: "Care Plans", icon: Target, route: "/nurse/careplans", group: "Resident Care" },
       { name: "Private Caregivers", icon: HeartHandshake, route: "/nurse/privatecare", group: "Resident Care" },

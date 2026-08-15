@@ -16,7 +16,7 @@ import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord, upsertRecord } from "@/lib/api";
 import { planMedConsumption, parseInvItems, parseInvPRs, INV_ITEMS_KEY, INV_PR_KEY } from "@/lib/medInventory";
 import { useClinician, type ClinicianRole } from "./useClinician";
-import { ClinicalHeader, ClinicalButton, ClinicalCard, DataState, SERIF } from "./clinical-ui";
+import { ClinicalHeader, ClinicalButton, ClinicalCard, DataState, SERIF, ClinicalModal, controlClass, FieldLabel } from "./clinical-ui";
 import SignatureModal from "@/components/portal/SignatureModal";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -58,6 +58,12 @@ const splitName = (name: string): [string, string] => { const mt = name.match(/^
 type MarStatus = "GIVEN" | "REFUSED" | "HELD" | "PENDING";
 const STATUS_ICON = { GIVEN: CheckCircle2, REFUSED: XCircle, HELD: PauseCircle, PENDING: Clock };
 const STATUS_CLS: Record<MarStatus, string> = { GIVEN: "bg-green-100 text-green-700 border-green-200", REFUSED: "bg-red-100 text-red-700 border-red-200", HELD: "bg-amber-100 text-amber-700 border-amber-200", PENDING: "bg-slate-100 text-slate-500 border-slate-200" };
+// Record-dose modal choices — icon + token colour drive the selectable tiles.
+const DOSE_OPTS = [
+  { v: "GIVEN" as const, label: "Given", hint: "Dose administered", icon: CheckCircle2, color: "var(--clinical-green)" },
+  { v: "REFUSED" as const, label: "Refused", hint: "Resident declined", icon: XCircle, color: "var(--clinical-coral)" },
+  { v: "HELD" as const, label: "Held", hint: "Withheld this time", icon: PauseCircle, color: "var(--clinical-amber)" },
+];
 
 export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   const { name: clinicianName, userId } = useClinician(clinicianRole);
@@ -100,6 +106,10 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
   const [search, setSearch] = useState("");
   const [openRes, setOpenRes] = useState<Row | null>(null);
   const [addFor, setAddFor] = useState<Row | null>(null);
+  // Record-dose modal (replaces the two-step Swal radio + reason prompt).
+  const [doseFor, setDoseFor] = useState<{ m: Row; slot: string; iso: string; marId: string } | null>(null);
+  const [doseStatus, setDoseStatus] = useState<"GIVEN" | "REFUSED" | "HELD">("GIVEN");
+  const [doseReason, setDoseReason] = useState("");
 
   // Step the viewed day without opening the date picker — the common MAR move.
   const shiftDate = (delta: number) => {
@@ -181,6 +191,26 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
     } catch (e) { Swal.fire({ title: "Could not record dose", text: e instanceof Error ? e.message : "", icon: "error" }); }
   };
 
+  // Open the record-dose modal pre-set to the current status (Given by default).
+  const openDose = (m: Row, slot: string, iso: string, marId: string, current: MarStatus) => {
+    setDoseStatus(current === "PENDING" ? "GIVEN" : current);
+    setDoseReason("");
+    setDoseFor({ m, slot, iso, marId });
+  };
+  // Refused/Held require a documented reason. Close first, then administer so the
+  // vitals-first confirm (a Swal inside `administer`) never stacks on the modal.
+  const submitDose = async () => {
+    if (!doseFor) return;
+    if ((doseStatus === "REFUSED" || doseStatus === "HELD") && !doseReason.trim()) {
+      Swal.fire("Reason required", doseStatus === "REFUSED" ? "Please document why the resident refused this dose." : "Please document why this dose is being held.", "warning");
+      return;
+    }
+    const { m, slot, iso, marId } = doseFor;
+    const status = doseStatus, reason = doseReason.trim();
+    setDoseFor(null);
+    await administer(m, slot, iso, marId, status, reason);
+  };
+
   const q = search.trim().toLowerCase();
   const filteredResidents = residents.filter((r: Row) => !q || s(r.name).toLowerCase().includes(q) || s(r.room).toLowerCase().includes(q));
 
@@ -252,7 +282,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
                 </div>
                 <div className="flex flex-wrap gap-2 mt-3">
                   {occ.map((o, i) => { const Icon = STATUS_ICON[o.status]; return (
-                    <button key={i} onClick={() => doseAction(m, o.slot, date, o.marId, o.status, administer)} title={o.reason || undefined} className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl border ${STATUS_CLS[o.status]}`}>
+                    <button key={i} onClick={() => openDose(m, o.slot, date, o.marId, o.status)} title={o.reason || undefined} className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl border ${STATUS_CLS[o.status]}`}>
                       <span className="text-sm font-bold">{o.time}</span>
                       <span className="inline-flex items-center gap-1 text-[11px] font-medium"><Icon className="w-3.5 h-3.5" />{o.status === "PENDING" ? "Pending" : o.status[0] + o.status.slice(1).toLowerCase()}</span>
                     </button>
@@ -269,6 +299,55 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
             ); })}
         </div>
         {addFor && <AddMedicationModal resident={openRes} med={addFor.__edit ? addFor : null} vitalsRequired={addFor.__edit ? isVitalsRequired(s(addFor.id)) : false} onSaveVitalsFlag={saveVitalsFlag} onClose={() => setAddFor(null)} onDone={refetch} />}
+
+        {/* Record-dose modal — status tiles + conditional reason, replacing the Swal prompts */}
+        <ClinicalModal
+          open={!!doseFor}
+          onClose={() => setDoseFor(null)}
+          title="Record dose"
+          description={doseFor ? `${splitName(s(doseFor.m.name))[0]} · ${s(doseFor.m.dosage) || "dose"}` : undefined}
+          size="sm"
+          footer={<>
+            <ClinicalButton variant="secondary" onClick={() => setDoseFor(null)}>Cancel</ClinicalButton>
+            <ClinicalButton onClick={submitDose} className="!text-white hover:brightness-110" style={{ backgroundColor: (DOSE_OPTS.find((o) => o.v === doseStatus)?.color) ?? "var(--clinical-panel)" }}>Save dose</ClinicalButton>
+          </>}
+        >
+          {doseFor && (
+            <div className="space-y-4">
+              <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: "var(--clinical-line)" }}>
+                <p className="text-sm font-bold text-[var(--clinical-ink)]">{s(openRes.name)}</p>
+                <p className="mt-0.5 text-xs text-[var(--clinical-muted)]">{s(doseFor.m.route) || "Oral"} · {doseFor.slot === "PRN" ? "PRN (as needed)" : to12h(SLOT_TIME[doseFor.slot] || "")} · {date}</p>
+              </div>
+
+              <div>
+                <FieldLabel>Outcome</FieldLabel>
+                <div className="grid grid-cols-3 gap-2">
+                  {DOSE_OPTS.map((o) => {
+                    const active = doseStatus === o.v;
+                    const Icon = o.icon;
+                    return (
+                      <button key={o.v} type="button" onClick={() => setDoseStatus(o.v)} aria-pressed={active}
+                        className="flex flex-col items-center gap-1.5 rounded-xl border-2 px-2 py-3 text-center transition"
+                        style={{ borderColor: active ? o.color : "var(--clinical-line-strong)", backgroundColor: active ? `color-mix(in srgb, ${o.color} 12%, var(--clinical-surface))` : "var(--clinical-surface)" }}>
+                        <Icon className="h-6 w-6" style={{ color: active ? o.color : "var(--clinical-muted)" }} />
+                        <span className="text-sm font-bold" style={{ color: active ? o.color : "var(--clinical-ink)" }}>{o.label}</span>
+                        <span className="text-[11px] leading-tight text-[var(--clinical-muted)]">{o.hint}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {(doseStatus === "REFUSED" || doseStatus === "HELD") && (
+                <div>
+                  <FieldLabel required>{doseStatus === "REFUSED" ? "Reason for refusal" : "Reason held"}</FieldLabel>
+                  <textarea value={doseReason} onChange={(e) => setDoseReason(e.target.value)} rows={3} autoFocus
+                    placeholder={doseStatus === "REFUSED" ? "Why did the resident refuse this dose?" : "Why is this dose being held?"} className={controlClass} />
+                </div>
+              )}
+            </div>
+          )}
+        </ClinicalModal>
       </div>
     );
   }
@@ -279,7 +358,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
       <ClinicalHeader title="Medication Administration Record" subtitle="Track and document daily medication administration" />
       <div className="inline-flex gap-1 rounded-xl p-1 mb-5 mt-5" style={{ backgroundColor: "var(--clinical-surface-2)" }} role="tablist" aria-label="MAR view">
         {([["daily", "Daily MAR"], ["summary", "Medication Summary"]] as const).map(([v, label]) => (
-          <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${tab === v ? "text-white shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`} style={tab === v ? { backgroundColor: "var(--clinical-panel)" } : undefined}>{label}</button>
+          <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${tab === v ? "shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`} style={tab === v ? { backgroundColor: "var(--clinical-panel)", color: "#ffffff" } : undefined}>{label}</button>
         ))}
       </div>
 
@@ -349,32 +428,6 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
       {addFor && <AddMedicationModal resident={addFor} med={null} vitalsRequired={false} onSaveVitalsFlag={saveVitalsFlag} onClose={() => setAddFor(null)} onDone={refetch} />}
     </div>
   );
-}
-
-// Choose Given/Refused/Held for a dose. Refused/Held require a documented reason
-// before the dose is recorded; the reason is saved on the administration record.
-async function doseAction(m: Row, slot: string, iso: string, marId: string, current: MarStatus, administer: (m: Row, slot: string, iso: string, marId: string, status: "GIVEN" | "REFUSED" | "HELD", reason?: string) => Promise<void>) {
-  const { value: status } = await Swal.fire({
-    title: `Record dose — ${splitName(s(m.name))[0]}`, input: "radio",
-    inputOptions: { GIVEN: "✅ Given", REFUSED: "❌ Refused", HELD: "⏸ Held" },
-    inputValue: current === "PENDING" ? "GIVEN" : current,
-    showCancelButton: true, confirmButtonText: "Continue", confirmButtonColor: "#2563eb",
-  });
-  if (!status) return;
-  let reason = "";
-  if (status === "REFUSED" || status === "HELD") {
-    const { value, isConfirmed } = await Swal.fire({
-      title: status === "REFUSED" ? "Reason for refusal" : "Reason held",
-      input: "textarea",
-      inputPlaceholder: status === "REFUSED" ? "Why did the resident refuse this dose?" : "Why is this dose being held?",
-      inputAttributes: { "aria-label": "Reason" },
-      showCancelButton: true, confirmButtonText: "Save dose", confirmButtonColor: "#2563eb",
-      inputValidator: (v: string) => (!v || !v.trim() ? "Please document a reason" : null),
-    });
-    if (!isConfirmed) return; // cancelling the reason aborts the record
-    reason = String(value || "").trim();
-  }
-  await administer(m, slot, iso, marId, status as "GIVEN" | "REFUSED" | "HELD", reason);
 }
 
 type StatAccent = "ink" | "given" | "pending" | "refused";

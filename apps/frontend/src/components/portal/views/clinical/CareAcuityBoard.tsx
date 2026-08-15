@@ -193,21 +193,23 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: isFinal ? (madePlan ? "Approved — level, care plan & tasks created" : "Approved — level assigned") : "Sent to admin", showConfirmButton: false, timer: 2000 });
     return true;
   };
-  // Reject — confirm with an optional reason.
-  const reject = async (a: Acuity): Promise<boolean> => {
-    const rn = resName(a.residentId);
-    const confirm = await Swal.fire({
-      title: "Reject assessment?",
-      html: `Reject <b>${rn.name}</b>'s acuity assessment? Add a reason for the record if you like.`,
-      input: "textarea", inputPlaceholder: "Reason for rejection (optional)…",
-      icon: "warning", showCancelButton: true,
-      confirmButtonColor: "#dc2626", cancelButtonColor: "#6b7280", confirmButtonText: "Reject",
-    });
-    if (!confirm.isConfirmed) return false;
-    const reason = String(confirm.value || "").trim() || undefined;
-    await persist(items.map((x) => (x.id === a.id ? { ...x, status: "REJECTED", rejectionReason: reason, decidedBy: clinicianName, decidedAt: new Date().toISOString() } : x)));
-    Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Assessment rejected", showConfirmButton: false, timer: 1600 });
-    return true;
+  // Reject — designed modal (replaces the bare Swal textarea prompt) collecting
+  // an optional reason before persisting.
+  const [rejectFor, setRejectFor] = useState<Acuity | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectBusy, setRejectBusy] = useState(false);
+  const reject = (a: Acuity) => { setRejectReason(""); setRejectFor(a); };
+  const submitReject = async () => {
+    if (!rejectFor) return;
+    const a = rejectFor;
+    setRejectBusy(true);
+    try {
+      const reason = rejectReason.trim() || undefined;
+      await persist(items.map((x) => (x.id === a.id ? { ...x, status: "REJECTED", rejectionReason: reason, decidedBy: clinicianName, decidedAt: new Date().toISOString() } : x)));
+      setRejectFor(null);
+      setViewing(null); // close the assessment view if the reject came from it
+      Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Assessment rejected", showConfirmButton: false, timer: 1600 });
+    } finally { setRejectBusy(false); }
   };
 
   return (
@@ -297,7 +299,7 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
           <ClinicalModal open onClose={() => setViewing(null)} title={`${rn.name} — Acuity Assessment`} description={`Room ${rn.room} · reviewed before approval`} size="lg"
             footer={<>
               <ClinicalButton variant="ghost" size="sm" onClick={() => setViewing(null)}>Close</ClinicalButton>
-              {(pendingNurse || pendingAdmin) && <ClinicalButton variant="danger" size="sm" onClick={() => void doThen(() => reject(a))}>Reject</ClinicalButton>}
+              {(pendingNurse || pendingAdmin) && <ClinicalButton variant="danger" size="sm" onClick={() => reject(a)}>Reject</ClinicalButton>}
               {pendingNurse && <ClinicalButton variant="primary" size="sm" onClick={() => void doThen(() => advance(a, "PENDING_ADMIN"))}>Approve → Admin</ClinicalButton>}
               {pendingAdmin && <ClinicalButton variant="accent" size="sm" onClick={() => void doThen(() => advance(a, "APPROVED"))}>Approve &amp; Assign Level</ClinicalButton>}
             </>}
@@ -328,6 +330,39 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
           </ClinicalModal>
         );
       })()}
+
+      {/* Reject assessment */}
+      <ClinicalModal
+        open={!!rejectFor}
+        onClose={() => setRejectFor(null)}
+        title="Reject assessment"
+        description="Decline this acuity assessment and note why for the record"
+        size="md"
+        footer={<>
+          <ClinicalButton variant="ghost" size="sm" onClick={() => setRejectFor(null)} disabled={rejectBusy}>Cancel</ClinicalButton>
+          <ClinicalButton variant="danger" onClick={submitReject} disabled={rejectBusy}>{rejectBusy ? "Rejecting…" : "Reject assessment"}</ClinicalButton>
+        </>}
+      >
+        {rejectFor && (() => {
+          const rn = resName(rejectFor.residentId);
+          return (
+            <div className="space-y-4">
+              <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: "var(--clinical-line)" }}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-bold text-[var(--clinical-ink)]">{rn.name}</p>
+                  <span className="text-xs text-[var(--clinical-muted)]">Room {rn.room}</span>
+                  <LevelChip level={rejectFor.level} label={rejectFor.levelName} />
+                </div>
+                <p className="mt-1 text-xs text-[var(--clinical-muted)]">Score {rejectFor.total}/50 · {rejectFor.trigger || "No trigger"}</p>
+              </div>
+              <div>
+                <FieldLabel htmlFor="ac-reject-reason">Reason for rejection <span className="font-normal text-[var(--clinical-muted)]">(optional)</span></FieldLabel>
+                <textarea id="ac-reject-reason" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={4} autoFocus placeholder="Why is this assessment being rejected? (kept on the record)" className={controlClass} />
+              </div>
+            </div>
+          );
+        })()}
+      </ClinicalModal>
     </ClinicalPage>
   );
 }

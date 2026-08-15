@@ -74,6 +74,9 @@ export default function PhysicianIncidents() {
   const [perPage, setPerPage] = useState(10);
   const [viewing, setViewing] = useState<Incident | null>(null);
   const [physicianNote, setPhysicianNote] = useState("");
+  const [signOffFor, setSignOffFor] = useState<Incident | null>(null);
+  const [signOffNotes, setSignOffNotes] = useState("");
+  const [signOffBusy, setSignOffBusy] = useState(false);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -149,29 +152,32 @@ export default function PhysicianIncidents() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setPage(1); }, [search, severityFilter, statusFilter, typeFilter, perPage]);
 
-  const handleSignOff = async (id: string) => {
-    const res = await Swal.fire({
-      title: "Physician Sign-off",
-      html: `<p class="text-left text-sm text-gray-600 mb-3">Add your clinical review notes for this incident:</p>`,
-      input: "textarea",
-      inputLabel: "Clinical Notes",
-      inputPlaceholder: "Reviewed and approved. No further action required...",
-      showCancelButton: true,
-      confirmButtonColor: "#10b981",
-      cancelButtonColor: "#6b7280",
-      confirmButtonText: "Sign Off",
-      inputValidator: (v) => !v || v.trim().length < 3 ? "Please enter at least 3 characters of clinical notes" : undefined,
-    });
-    if (!res.isConfirmed) return;
+  const openSignOff = (inc: Incident) => {
+    setSignOffFor(inc);
+    setSignOffNotes(physicianNote.trim());
+  };
+
+  const submitSignOff = async () => {
+    const inc = signOffFor;
+    if (!inc) return;
+    const notes = signOffNotes.trim();
+    if (notes.length < 3) return;
+    setSignOffBusy(true);
     try {
-      await updateRecord("incidents", id, {
+      await updateRecord("incidents", inc.id, {
         resolvedAt: new Date().toISOString(),
-        followUpNotes: `Physician review (${new Date().toLocaleDateString()}): ${res.value}`,
+        followUpNotes: `Physician review (${new Date().toLocaleDateString()}): ${notes}`,
       });
       await refetch();
+      setSignOffFor(null);
+      setSignOffNotes("");
+      setViewing(null);
+      setPhysicianNote("");
       Swal.fire({ title: "Sign-off Recorded", text: "Incident resolved with physician review.", icon: "success", timer: 1500, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ title: "Failed", text: err instanceof Error ? err.message : "Could not sign off.", icon: "error" });
+    } finally {
+      setSignOffBusy(false);
     }
   };
 
@@ -367,7 +373,7 @@ export default function PhysicianIncidents() {
                         <Eye className="w-3.5 h-3.5" /> View
                       </button>
                       {!i.resolved ? (
-                        <button onClick={() => void handleSignOff(i.id)} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded transition">
+                        <button onClick={() => openSignOff(i)} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded transition">
                           <Stethoscope className="w-3.5 h-3.5" /> Sign Off
                         </button>
                       ) : (
@@ -421,7 +427,7 @@ export default function PhysicianIncidents() {
                       <div className="flex items-center justify-center gap-1">
                         <button onClick={() => setViewing(i)} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
                         {!i.resolved ? (
-                          <button onClick={() => void handleSignOff(i.id)} className="p-1.5 rounded hover:bg-green-100 text-green-600 transition" title="Sign Off"><Stethoscope className="w-4 h-4" /></button>
+                          <button onClick={() => openSignOff(i)} className="p-1.5 rounded hover:bg-green-100 text-green-600 transition" title="Sign Off"><Stethoscope className="w-4 h-4" /></button>
                         ) : (
                           <button onClick={() => void handleReopen(i.id)} className="p-1.5 rounded hover:bg-amber-100 text-amber-600 transition" title="Reopen"><RefreshCw className="w-4 h-4" /></button>
                         )}
@@ -525,7 +531,7 @@ export default function PhysicianIncidents() {
                 className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Close</button>
               <div className="flex flex-wrap gap-2">
                 {!viewing.resolved ? (
-                  <button onClick={() => { void handleSignOff(viewing.id); setViewing(null); setPhysicianNote(""); }}
+                  <button onClick={() => openSignOff(viewing)}
                     className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm active:scale-95">
                     <Stethoscope className="w-4 h-4" /> Physician Sign-off
                   </button>
@@ -540,6 +546,39 @@ export default function PhysicianIncidents() {
                   <Trash2 className="w-4 h-4" /> Delete
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Physician Sign-off ──────────────────────────────────────── */}
+      {signOffFor && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onMouseDown={(e) => { if (e.target === e.currentTarget && !signOffBusy) setSignOffFor(null); }}>
+          <div className="bg-white w-full max-w-lg max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-xl shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-gradient-to-r from-green-500 to-emerald-600 px-5 py-4 text-white">
+              <h2 className="flex items-center gap-2 text-lg font-bold"><Stethoscope className="w-5 h-5" /> Physician Sign-off</h2>
+              <button onClick={() => setSignOffFor(null)} disabled={signOffBusy} className="rounded-lg p-1.5 transition hover:bg-white/20 disabled:opacity-50"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                <p className="flex items-center gap-2 font-semibold text-gray-900"><AlertTriangle className="w-4 h-4 text-red-500" />{signOffFor.type || "Incident"}{signOffFor.resident ? ` — ${signOffFor.resident}` : ""}{signOffFor.room ? ` · Room ${signOffFor.room}` : ""}</p>
+                {signOffFor.description && <p className="mt-1 line-clamp-2 text-xs text-gray-500">{signOffFor.description}</p>}
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-gray-700">Clinical Notes <span className="font-normal text-red-500">*</span></label>
+                <textarea autoFocus rows={5} value={signOffNotes} onChange={(e) => setSignOffNotes(e.target.value)}
+                  placeholder="Reviewed and approved. No further action required..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none resize-y text-sm" />
+                <p className="mt-1.5 text-[11px] text-gray-400">Signing off resolves the incident with your clinical review (at least 3 characters).</p>
+              </div>
+            </div>
+            <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
+              <button onClick={() => setSignOffFor(null)} disabled={signOffBusy} className="rounded-lg px-5 py-2 text-sm text-gray-700 transition hover:bg-gray-100 disabled:opacity-50">Cancel</button>
+              <button onClick={() => void submitSignOff()} disabled={signOffBusy || signOffNotes.trim().length < 3}
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50 active:scale-95">
+                {signOffBusy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} {signOffBusy ? "Signing…" : "Sign Off"}
+              </button>
             </div>
           </div>
         </div>

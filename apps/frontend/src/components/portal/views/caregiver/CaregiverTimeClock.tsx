@@ -6,7 +6,7 @@ import { useMemo, useState, useEffect } from "react";
 import {
   Timer, RefreshCw, BarChart3, Clock, Trash2, LogIn, LogOut,
   Coffee, Sun, Sunset, Moon, CheckCircle2, History, CalendarDays, UserCheck,
-  type LucideIcon,
+  X, Loader2, type LucideIcon,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import {
@@ -121,6 +121,10 @@ export default function CaregiverTimeClock() {
   const [shiftType, setShiftType] = useState<ShiftType | "">("");
   const [clockNotes, setClockNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  // Clock-out modal (replaces the bare Swal text prompt).
+  const [clockOutFor, setClockOutFor] = useState<EntryVM | null>(null);
+  const [clockOutNotes, setClockOutNotes] = useState("");
+  const [clockOutBusy, setClockOutBusy] = useState(false);
 
   const staffOptions = useMemo<StaffOption[]>(() => staffRows
     .filter((s) => s.isActive !== false)
@@ -240,20 +244,15 @@ export default function CaregiverTimeClock() {
     }
   };
 
-  const handleClockOut = async (e: EntryVM) => {
+  const handleClockOut = (e: EntryVM) => {
+    setClockOutNotes("");
+    setClockOutFor(e);
+  };
+  const submitClockOut = async () => {
+    if (!clockOutFor) return;
+    const e = clockOutFor;
     const worked = fmtDuration(workedMs(e, nowTs));
-    const result = await Swal.fire({
-      title: "Clock Out?",
-      html: `<b>${e.staffName}</b> — ${SHIFTS[e.shiftType].label} shift<br/><span style="color:#6b7280">Worked ${worked} (breaks excluded)</span>`,
-      input: "text",
-      inputPlaceholder: "End-of-shift notes (optional)…",
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonColor: "#10b981",
-      cancelButtonColor: "#6b7280",
-      confirmButtonText: "Clock Out",
-    });
-    if (!result.isConfirmed) return;
+    setClockOutBusy(true);
     // Fold an unfinished break into the total before closing the entry.
     const started = breakStart[e.id];
     const extraBreak = started ? Math.max(1, Math.round((Date.now() - started) / 60000)) : 0;
@@ -263,7 +262,7 @@ export default function CaregiverTimeClock() {
         endTime: new Date().toISOString(),
         breakDuration: e.breakDuration + extraBreak,
         ...(workedHours < 6 && e.status === "PRESENT" ? { status: "EARLY_LEAVE" } : {}),
-        ...(result.value ? { notes: [e.notes, String(result.value)].filter(Boolean).join(" | ") } : {}),
+        ...(clockOutNotes.trim() ? { notes: [e.notes, clockOutNotes.trim()].filter(Boolean).join(" | ") } : {}),
       });
       setBreakStart((prev) => {
         const next = { ...prev };
@@ -271,9 +270,12 @@ export default function CaregiverTimeClock() {
         return next;
       });
       await refetch();
+      setClockOutFor(null);
       Swal.fire({ title: "Clocked Out", text: `Shift closed — ${worked} worked.`, icon: "success", timer: 1600, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ title: "Clock-out Failed", text: err instanceof Error ? err.message : "Could not clock out.", icon: "error" });
+    } finally {
+      setClockOutBusy(false);
     }
   };
 
@@ -501,6 +503,33 @@ export default function CaregiverTimeClock() {
 
       {/* ── Analytics ── */}
       {view === "analytics" && <TimeAnalytics entries={entries} nowTs={nowTs} />}
+
+      {/* ── Clock-out modal ── */}
+      {clockOutFor && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setClockOutFor(null); }}>
+          <div className="bg-white w-full max-w-md max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-gradient-to-r from-red-400 to-red-500 px-5 py-4 text-white">
+              <h2 className="flex items-center gap-2 text-lg font-bold"><LogOut className="w-5 h-5" /> Clock Out</h2>
+              <button onClick={() => setClockOutFor(null)} className="rounded-lg p-1.5 transition hover:bg-white/20"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="font-semibold text-gray-900">{clockOutFor.staffName} <span className="font-normal text-gray-600">— {SHIFTS[clockOutFor.shiftType].label} shift</span></p>
+                <p className="mt-0.5 text-xs text-gray-500">Worked {fmtDuration(workedMs(clockOutFor, nowTs))} (breaks excluded)</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">End-of-shift notes <span className="font-normal text-gray-400">(optional)</span></label>
+                <input type="text" autoFocus value={clockOutNotes} onChange={(e) => setClockOutNotes(e.target.value)} placeholder="Handover, anything to flag…"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none text-sm" />
+              </div>
+            </div>
+            <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
+              <button onClick={() => setClockOutFor(null)} disabled={clockOutBusy} className="rounded-lg px-5 py-2 text-sm text-gray-700 transition hover:bg-gray-100 disabled:opacity-50">Cancel</button>
+              <button onClick={() => void submitClockOut()} disabled={clockOutBusy} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-red-400 to-red-500 px-6 py-2 text-sm font-semibold text-white transition hover:shadow-lg disabled:opacity-50">{clockOutBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />} {clockOutBusy ? "Clocking Out…" : "Clock Out"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

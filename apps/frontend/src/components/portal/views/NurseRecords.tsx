@@ -476,6 +476,10 @@ export default function NurseRecords() {
 /* ── Call Bells modal ────────────────────────────────────────────────── */
 
 function CallBellsModal({ r, onClose, refetchCallBells }: { r: RecordVM; onClose: () => void; refetchCallBells: () => void }) {
+  const [resolveFor, setResolveFor] = useState<CallBellVM | null>(null);
+  const [resolveNotes, setResolveNotes] = useState("");
+  const [resolveBusy, setResolveBusy] = useState(false);
+
   const handleRespond = async (bellId: string) => {
     try {
       await updateRecord("call-bells", bellId, {
@@ -499,40 +503,37 @@ function CallBellsModal({ r, onClose, refetchCallBells }: { r: RecordVM; onClose
     }
   };
 
-  const handleResolve = async (bellId: string) => {
-    const result = await Swal.fire({
-      title: "Resolve Call Bell?",
-      input: "textarea",
-      inputLabel: "Resolution notes",
-      inputPlaceholder: "What was done...",
-      showCancelButton: true,
-      confirmButtonColor: "#10b981",
-      cancelButtonColor: "#6b7280",
-      confirmButtonText: "Resolve",
-    });
+  const openResolve = (bell: CallBellVM) => {
+    setResolveNotes("");
+    setResolveFor(bell);
+  };
 
-    if (result.isConfirmed) {
-      try {
-        await updateRecord("call-bells", bellId, {
-          status: "RESOLVED",
-          resolvedAt: new Date().toISOString(),
-          notes: result.value || "Resolved",
-        });
-        refetchCallBells();
-        Swal.fire({
-          title: "Resolved",
-          text: "Call bell marked as resolved",
-          icon: "success",
-          timer: 1500,
-          showConfirmButton: false,
-        });
-      } catch (err) {
-        Swal.fire({
-          title: "Error",
-          text: err instanceof Error ? err.message : "Failed to resolve",
-          icon: "error",
-        });
-      }
+  const submitResolve = async () => {
+    if (!resolveFor) return;
+    setResolveBusy(true);
+    try {
+      await updateRecord("call-bells", resolveFor.id, {
+        status: "RESOLVED",
+        resolvedAt: new Date().toISOString(),
+        notes: resolveNotes.trim() || "Resolved",
+      });
+      refetchCallBells();
+      setResolveFor(null);
+      Swal.fire({
+        title: "Resolved",
+        text: "Call bell marked as resolved",
+        icon: "success",
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      Swal.fire({
+        title: "Error",
+        text: err instanceof Error ? err.message : "Failed to resolve",
+        icon: "error",
+      });
+    } finally {
+      setResolveBusy(false);
     }
   };
 
@@ -623,7 +624,7 @@ function CallBellsModal({ r, onClose, refetchCallBells }: { r: RecordVM; onClose
                           </button>
                         )}
                         <button
-                          onClick={() => void handleResolve(bell.id)}
+                          onClick={() => openResolve(bell)}
                           className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded text-sm transition"
                         >
                           <CheckCircle2 className="w-4 h-4" /> Resolve
@@ -652,6 +653,56 @@ function CallBellsModal({ r, onClose, refetchCallBells }: { r: RecordVM; onClose
           </button>
         </div>
       </div>
+
+      {/* Resolve call bell modal */}
+      {resolveFor && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={() => !resolveBusy && setResolveFor(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-green-400 to-green-500 text-white p-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold">Resolve Call Bell</h2>
+                <p className="text-sm text-green-100">{r.name} • Room {r.room}</p>
+              </div>
+              <button onClick={() => setResolveFor(null)} className="p-2 hover:bg-green-600/20 rounded-lg transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Reason</label>
+                <p className="text-gray-900 font-medium">{resolveFor.reason}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Resolution Notes</label>
+                <textarea
+                  autoFocus
+                  value={resolveNotes}
+                  onChange={(e) => setResolveNotes(e.target.value)}
+                  placeholder="What was done to resolve this call..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400 focus:border-transparent outline-none text-sm"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex gap-3">
+              <button
+                onClick={() => setResolveFor(null)}
+                disabled={resolveBusy}
+                className="flex-1 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void submitResolve()}
+                disabled={resolveBusy}
+                className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg transition disabled:opacity-60"
+              >
+                {resolveBusy ? "Resolving…" : "Mark Resolved"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

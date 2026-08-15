@@ -94,25 +94,24 @@ export default function MedSafetyDashboard() {
   );
   const discrepancies = reconciliation.filter((r) => r.latest && r.latest.discrepancy !== 0);
 
-  const recordCount = async (drug: string) => {
-    const expected = expectedNow(drug); // expected before this physical count
-    const res = await Swal.fire({
-      title: `Count — ${drug}`,
-      input: "number",
-      inputLabel: expected != null
-        ? `Expected on hand now: ${expected}. Enter the physical count:`
-        : "No prior count — enter the current physical count to set the baseline:",
-      inputAttributes: { min: "0", step: "1" },
-      showCancelButton: true, confirmButtonColor: "#7c3aed", confirmButtonText: "Record count",
-      inputValidator: (v) => (v === "" || Number(v) < 0 ? "Enter a valid count" : null),
-    });
-    if (!res.isConfirmed) return;
-    const counted = Math.round(Number(res.value));
+  // Physical-count capture — a designed in-component modal replaces the bare
+  // Swal number prompt. `countFor` holds the drug + the expected-on-hand snapshot
+  // taken when the modal opened (so the discrepancy math is unchanged).
+  const [countFor, setCountFor] = useState<{ drug: string; expected: number | null } | null>(null);
+  const [countValue, setCountValue] = useState("");
+  const [countBusy, setCountBusy] = useState(false);
+  const recordCount = (drug: string) => { setCountValue(""); setCountFor({ drug, expected: expectedNow(drug) }); };
+  const submitCount = async () => {
+    if (!countFor || countValue === "" || Number(countValue) < 0) return;
+    const { drug, expected } = countFor;
+    const counted = Math.round(Number(countValue));
     const discrepancy = expected != null ? counted - expected : 0;
     const rec: CountRec = { drug, count: counted, expected, discrepancy, at: new Date().toISOString(), by: me };
+    setCountBusy(true);
     try {
       await upsertRecord("app-settings", COUNTS_KEY, { key: COUNTS_KEY, value: JSON.stringify([...counts, rec].slice(-1000)) });
       await refetchSettings();
+      setCountFor(null);
       if (discrepancy !== 0) {
         Swal.fire({ title: "Count discrepancy", html: `<b>${drug}</b>: expected <b>${expected}</b>, counted <b>${counted}</b> — off by <b>${discrepancy > 0 ? "+" : ""}${discrepancy}</b>. Flagged for review; escalate per your controlled-substance policy.`, icon: "warning" });
       } else {
@@ -120,7 +119,7 @@ export default function MedSafetyDashboard() {
       }
     } catch (e) {
       Swal.fire("Save failed", e instanceof Error ? e.message : String(e), "error");
-    }
+    } finally { setCountBusy(false); }
   };
 
   const cards = [
@@ -217,6 +216,32 @@ export default function MedSafetyDashboard() {
         render={(r) => `${nameOf(r)} · ${medOf(r)?.name ?? "—"}${r.reasonForRefusal ? ` — ${r.reasonForRefusal}` : ""}`} />
       <ListPanel title="Controlled substances given (last 7 days)" icon={ShieldAlert} rows={m.controlled} empty="No controlled-substance administrations."
         render={(r) => `${nameOf(r)} · ${medOf(r)?.name ?? "—"} · witnessed by ${r.witnessName || "—"} · ${r.actualTime ? new Date(r.actualTime).toLocaleString() : ""}`} />
+
+      {countFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setCountFor(null); }}>
+          <div className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between bg-purple-600 px-5 py-4 text-white">
+              <h3 className="flex items-center gap-2 text-lg font-bold"><Boxes className="h-5 w-5" /> Count — {countFor.drug}</h3>
+              <button onClick={() => setCountFor(null)} className="rounded-lg p-1.5 hover:bg-white/15"><XCircle className="h-5 w-5" /></button>
+            </div>
+            <div className="space-y-4 p-6">
+              <div className="rounded-lg border border-purple-100 bg-purple-50 px-3 py-2.5 text-sm text-purple-900">
+                {countFor.expected != null
+                  ? <>Expected on hand now: <span className="font-bold">{countFor.expected}</span>. Enter the physical count.</>
+                  : <>No prior count — enter the current physical count to set the baseline.</>}
+              </div>
+              <div>
+                <label htmlFor="csc-count" className="mb-1.5 block text-sm font-bold text-gray-700">Physical count</label>
+                <input id="csc-count" type="number" min={0} step={1} value={countValue} autoFocus onChange={(e) => setCountValue(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && countValue !== "" && Number(countValue) >= 0 && !countBusy) void submitCount(); }} placeholder="0" className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-purple-400/40" />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-6 py-4">
+              <button onClick={() => setCountFor(null)} disabled={countBusy} className="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-black/5 disabled:opacity-50">Cancel</button>
+              <button onClick={submitCount} disabled={countBusy || countValue === "" || Number(countValue) < 0} className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-5 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:opacity-50">{countBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />} Record count</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

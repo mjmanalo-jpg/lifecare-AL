@@ -88,6 +88,11 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
 
   const [verifyingInsId, setVerifyingInsId] = useState<string | null>(null);
 
+  // Dispute / chargeback modal
+  const [chargebackInv, setChargebackInv] = useState<Invoice | null>(null);
+  const [chargebackReason, setChargebackReason] = useState("");
+  const [chargebackBusy, setChargebackBusy] = useState(false);
+
   // Form Fields
   const [invoiceForm, setInvoiceForm] = useState({
     residentId: "", description: "", dueDate: "", billingPeriodStart: "", billingPeriodEnd: "", addPendingCharges: true
@@ -125,15 +130,16 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
   // Raise a dispute / chargeback on an invoice: reverse any recorded payment
   // with a negative CHARGEBACK payment, flip the invoice back to SENT, and log
   // the dispute (billing_disputes) for the Library & Ledger audit trail.
-  const handleChargeback = async (inv: Invoice) => {
-    const { value: reason } = await Swal.fire({
-      title: "Raise dispute / chargeback",
-      input: "textarea",
-      inputPlaceholder: "Reason for the dispute or chargeback…",
-      showCancelButton: true, confirmButtonText: "Record chargeback", confirmButtonColor: "#e11d48",
-      inputValidator: (v) => (!v || String(v).trim().length < 3 ? "Enter a reason" : undefined),
-    });
-    if (!reason) return;
+  const handleChargeback = (inv: Invoice) => {
+    setChargebackInv(inv);
+    setChargebackReason("");
+  };
+
+  const submitChargeback = async () => {
+    const inv = chargebackInv;
+    const reason = chargebackReason.trim();
+    if (!inv || reason.length < 3) return;
+    setChargebackBusy(true);
     try {
       const amt = inv.amountPaid > 0 ? inv.amountPaid : inv.totalAmount;
       if (inv.amountPaid > 0) {
@@ -141,12 +147,16 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
         await updateRecord("invoices", inv.id, { amountPaid: 0, status: "SENT", paidAt: null });
       }
       const disputes = parseDisputes(settingRows.find((r) => (r.key || r.id) === BILLING_DISPUTES_KEY)?.value);
-      disputes.push({ id: newId("dsp"), invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, reason: String(reason), status: "CHARGEBACK", amount: amt, at: new Date().toISOString(), by: "Billing Admin" });
+      disputes.push({ id: newId("dsp"), invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, reason, status: "CHARGEBACK", amount: amt, at: new Date().toISOString(), by: "Billing Admin" });
       await upsertRecord("app-settings", BILLING_DISPUTES_KEY, { key: BILLING_DISPUTES_KEY, value: JSON.stringify(disputes) });
       await Promise.all([refetchInvoices(), refetchPayments(), refetchSettings()]);
+      setChargebackInv(null);
+      setChargebackReason("");
       Swal.fire({ title: "Chargeback recorded", icon: "success", timer: 1500, showConfirmButton: false });
     } catch (e) {
       Swal.fire({ title: "Failed", text: e instanceof Error ? e.message : "Try again", icon: "error" });
+    } finally {
+      setChargebackBusy(false);
     }
   };
 
@@ -1135,6 +1145,53 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setShowRecordPayment(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-semibold transition">Cancel</button>
               <button onClick={handleRecordPayment} className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-extrabold rounded-lg hover:shadow-lg transition">Log Payment Transaction</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: RAISE DISPUTE / CHARGEBACK ── */}
+      {chargebackInv && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => { if (!chargebackBusy) { setChargebackInv(null); setChargebackReason(""); } }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-gradient-to-r from-rose-500 to-red-600 text-black p-5 flex items-center justify-between">
+              <h2 className="text-xl font-bold flex items-center gap-2"><AlertTriangle className="w-5 h-5" /> Raise Dispute / Chargeback</h2>
+              <button onClick={() => { setChargebackInv(null); setChargebackReason(""); }} className="p-2 hover:bg-black/10 rounded-lg transition"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-4 sm:p-6 space-y-4">
+              <div className="bg-rose-50 border border-rose-100 rounded-lg p-3.5 text-xs text-rose-800 space-y-1">
+                <p className="font-bold">Invoice {chargebackInv.invoiceNumber} — {chargebackInv.residentName}</p>
+                <p className="font-medium text-gray-600">
+                  {chargebackInv.amountPaid > 0
+                    ? <>Recorded payment of <strong className="text-gray-900">₱{chargebackInv.amountPaid.toLocaleString()}</strong> will be reversed and the invoice flipped back to SENT.</>
+                    : <>No payment recorded — a dispute will be logged for <strong className="text-gray-900">₱{chargebackInv.totalAmount.toLocaleString()}</strong>.</>}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Reason for dispute / chargeback *</label>
+                <textarea
+                  autoFocus
+                  value={chargebackReason}
+                  onChange={(e) => setChargebackReason(e.target.value)}
+                  rows={3}
+                  placeholder="Reason for the dispute or chargeback…"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 resize-y"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">At least 3 characters required.</p>
+              </div>
+            </div>
+            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
+              <button onClick={() => { setChargebackInv(null); setChargebackReason(""); }} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-semibold transition">Cancel</button>
+              <button
+                onClick={submitChargeback}
+                disabled={chargebackBusy || chargebackReason.trim().length < 3}
+                className="px-5 py-2 bg-gradient-to-r from-rose-500 to-red-600 text-white font-extrabold rounded-lg hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {chargebackBusy ? "Recording…" : "Record Chargeback"}
+              </button>
             </div>
           </div>
         </div>

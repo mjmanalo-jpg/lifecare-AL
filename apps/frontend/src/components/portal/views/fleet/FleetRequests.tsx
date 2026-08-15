@@ -185,6 +185,11 @@ export default function FleetRequests() {
   const [assignForm, setAssignForm] = useState(emptyAssignForm);
   const [page, setPage] = useState(1);
   const perPage = 15;
+  // Decline-a-request flow: capture a required reason in a designed modal
+  // (replaces the bare Swal text prompt).
+  const [decliningReq, setDecliningReq] = useState<TransportRequest | null>(null);
+  const [declineReason, setDeclineReason] = useState("");
+  const [decliningBusy, setDecliningBusy] = useState(false);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -317,27 +322,27 @@ export default function FleetRequests() {
     }
   };
 
-  const handleDecline = async (req: TransportRequest) => {
-    const result = await Swal.fire({
-      title: "Decline Request",
-      text: `Decline transport for ${req.residentName}?`,
-      input: "text",
-      inputLabel: "Reason for declining",
-      inputPlaceholder: "e.g. No vehicle available at requested time",
-      icon: "warning", showCancelButton: true,
-      confirmButtonColor: "#ef4444", cancelButtonColor: "#6b7280", confirmButtonText: "Decline",
-      inputValidator: (v) => (!v ? "A decline reason is required." : null),
-    });
-    if (!result.isConfirmed) return;
+  const handleDecline = (req: TransportRequest) => {
+    setDeclineReason("");
+    setDecliningReq(req);
+  };
+  const submitDecline = async () => {
+    if (!decliningReq) return;
+    const reason = declineReason.trim();
+    if (!reason) return;
+    setDecliningBusy(true);
     try {
-      await updateRecord("transport-requests", req.id, {
-        status: "DECLINED", declineReason: String(result.value || ""),
+      await updateRecord("transport-requests", decliningReq.id, {
+        status: "DECLINED", declineReason: reason,
         reviewedBy: "Dispatcher", reviewedAt: new Date().toISOString(),
       });
       await refetch();
+      setDecliningReq(null);
       Swal.fire({ title: "Declined", text: "The request has been declined.", icon: "success", timer: 1500, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ title: "Decline Failed", text: err instanceof Error ? err.message : "Could not decline request.", icon: "error" });
+    } finally {
+      setDecliningBusy(false);
     }
   };
 
@@ -743,6 +748,32 @@ export default function FleetRequests() {
               <button onClick={handleAssign} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm flex items-center gap-2">
                 <Truck className="w-4 h-4" /> Schedule Trip
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Decline Request Modal — captures a required reason */}
+      {decliningReq && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setDecliningReq(null); }}>
+          <div className="bg-white w-full max-w-lg max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-xl shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-gradient-to-r from-red-500 to-red-600 px-5 py-4 text-white">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-bold"><Ban className="w-5 h-5" /> Decline Request</h2>
+                <p className="text-sm text-white/80">{decliningReq.residentName} · Rm {decliningReq.roomNumber} → {decliningReq.destination}</p>
+              </div>
+              <button onClick={() => setDecliningReq(null)} className="rounded-lg p-1.5 transition hover:bg-white/20"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-gray-700">Reason for declining <span className="text-red-500">*</span></label>
+                <textarea autoFocus rows={4} value={declineReason} onChange={(e) => setDeclineReason(e.target.value)} placeholder="e.g. No vehicle available at requested time" className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-red-400 outline-none" />
+                <p className="mt-1.5 text-[11px] text-gray-400">The reason is recorded on the request and shown to the requester.</p>
+              </div>
+            </div>
+            <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
+              <button onClick={() => setDecliningReq(null)} disabled={decliningBusy} className="rounded-lg px-5 py-2 text-sm text-gray-700 transition hover:bg-gray-100 disabled:opacity-50">Cancel</button>
+              <button onClick={() => void submitDecline()} disabled={decliningBusy || !declineReason.trim()} className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-6 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50">{decliningBusy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />} {decliningBusy ? "Declining…" : "Decline Request"}</button>
             </div>
           </div>
         </div>

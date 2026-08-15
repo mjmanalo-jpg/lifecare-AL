@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, Plus, X, Check, Ban, ClipboardCheck, UserRound, Truck, Search } from "lucide-react";
+import { CalendarClock, Plus, Check, Ban, ClipboardCheck, UserRound, Truck, Search, Info, Clock, CalendarDays, CheckCircle2 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord } from "@/lib/api";
-import { Clock, CalendarDays, CheckCircle2 } from "lucide-react";
-import { ClinicalButton, ClinicalHeader } from "./clinical-ui";
+import { ClinicalButton, ClinicalHeader, ClinicalModal, controlClass, FieldLabel } from "./clinical-ui";
 
 type Row = Record<string, unknown>;
 const s = (v: unknown) => (v == null ? "" : String(v));
@@ -32,6 +31,11 @@ const TRANSPORT_STATUS_LABEL: Record<string, string> = {
   COMPLETED: "Transport completed",
   CANCELLED: "Transport cancelled",
 };
+
+// One place for the palette so status, urgency, dots, and banners all read from
+// the same tuned indigo/rose/amber/emerald tokens (dark-safe) — no more raw
+// saturated hexes or the legacy sage colours fighting each other on one screen.
+const softTint = (c: string) => `color-mix(in srgb, ${c} 14%, var(--clinical-surface))`;
 
 /**
  * Referrals & Appointments (Modules 13 + 15) — specialist referrals follow the
@@ -160,14 +164,66 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
     finally { setBusy(false); }
   };
 
-  const patch = async (r: Row, data: Row, confirm?: { title: string; text: string; color?: string }) => {
-    if (confirm) { const res = await Swal.fire({ title: confirm.title, text: confirm.text, icon: "question", showCancelButton: true, confirmButtonColor: confirm.color ?? "#3b82f6" }); if (!res.isConfirmed) return; }
-    try { await updateRecord("hospital-referrals", s(r.id), data); await refetch(); } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not update.", "error"); }
+  // ── Reject wiring ─────────────────────────────────────────────────────────
+  const [rejectFor, setRejectFor] = useState<Row | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectBusy, setRejectBusy] = useState(false);
+  const reject = (r: Row) => { setRejectReason(""); setRejectFor(r); };
+  const submitReject = async () => {
+    if (!rejectFor) return;
+    setRejectBusy(true);
+    try {
+      await updateRecord("hospital-referrals", s(rejectFor.id), { status: "CANCELLED", rejectionReason: rejectReason.trim() || "Rejected" });
+      await refetch();
+      setRejectFor(null);
+      Swal.fire({ title: "Referral rejected", text: "The family and requester can see the reason on the record.", icon: "success", timer: 1900, showConfirmButton: false });
+    } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not reject.", "error"); }
+    finally { setRejectBusy(false); }
   };
 
-  const reject = async (r: Row) => { const res = await Swal.fire({ title: "Reject referral?", input: "textarea", inputLabel: "Reason", showCancelButton: true, confirmButtonColor: "#dc2626", confirmButtonText: "Reject" }); if (!res.isConfirmed) return; await patch(r, { status: "CANCELLED", rejectionReason: res.value || "Rejected" }); };
-  const schedule = async (r: Row) => { const res = await Swal.fire({ title: "Confirm & schedule", input: "text", inputLabel: "Appointment date (YYYY-MM-DD)", inputValue: new Date().toISOString().slice(0, 10), showCancelButton: true }); if (!res.isConfirmed) return; await patch(r, { status: "SCHEDULED", scheduledDate: new Date(res.value || Date.now()).toISOString() }); };
-  const complete = async (r: Row) => { const res = await Swal.fire({ title: "Document outcome", input: "textarea", inputLabel: "Findings, follow-up & notes", showCancelButton: true, confirmButtonText: "Complete", confirmButtonColor: "#16a34a" }); if (!res.isConfirmed) return; await patch(r, { status: "COMPLETED", outcome: res.value || "Completed", completedAt: new Date().toISOString() }); };
+  // ── Confirm & schedule wiring ─────────────────────────────────────────────
+  const [schedFor, setSchedFor] = useState<Row | null>(null);
+  const [schedDate, setSchedDate] = useState("");
+  const [schedBusy, setSchedBusy] = useState(false);
+  const schedule = (r: Row) => { setSchedDate(s(r.scheduledDate) ? toLocalInputValue(new Date(s(r.scheduledDate))) : toLocalInputValue(new Date())); setSchedFor(r); };
+  const submitSchedule = async () => {
+    if (!schedFor) return;
+    if (!schedDate) { Swal.fire("Pick a date", "Choose the confirmed appointment date and time.", "warning"); return; }
+    setSchedBusy(true);
+    try {
+      await updateRecord("hospital-referrals", s(schedFor.id), { status: "SCHEDULED", scheduledDate: new Date(schedDate).toISOString() });
+      await refetch();
+      setSchedFor(null);
+      Swal.fire({ title: "Appointment scheduled", text: "It now appears on the Appointment Calendar.", icon: "success", timer: 1900, showConfirmButton: false });
+    } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not schedule.", "error"); }
+    finally { setSchedBusy(false); }
+  };
+
+  // ── Document-outcome wiring ───────────────────────────────────────────────
+  // Replaces the bare Swal prompt with a designed modal. Findings ride in the
+  // free-text `outcome` column (migration-free); a follow-up line is appended
+  // when the toggle is on so it reads back cleanly on the card.
+  const OUTCOME_RESULTS = ["Seen — routine", "Seen — findings noted", "Treatment given", "Referred onward", "Did not attend", "Rescheduled"];
+  const [outcomeFor, setOutcomeFor] = useState<Row | null>(null);
+  const [outcomeForm, setOutcomeForm] = useState({ result: OUTCOME_RESULTS[0], findings: "", followUp: false, followUpDate: "" });
+  const [outcomeBusy, setOutcomeBusy] = useState(false);
+  const complete = (r: Row) => { setOutcomeForm({ result: OUTCOME_RESULTS[0], findings: "", followUp: false, followUpDate: "" }); setOutcomeFor(r); };
+  const submitOutcome = async () => {
+    if (!outcomeFor) return;
+    if (!outcomeForm.findings.trim()) { Swal.fire("Add the findings", "Enter what happened at the appointment before completing it.", "warning"); return; }
+    setOutcomeBusy(true);
+    try {
+      const followUp = outcomeForm.followUp
+        ? `Follow-up required${outcomeForm.followUpDate ? ` by ${new Date(outcomeForm.followUpDate).toLocaleDateString()}` : ""}.`
+        : "";
+      const outcome = [`${outcomeForm.result}: ${outcomeForm.findings.trim()}`, followUp].filter(Boolean).join(" ");
+      await updateRecord("hospital-referrals", s(outcomeFor.id), { status: "COMPLETED", outcome, completedAt: new Date().toISOString() });
+      await refetch();
+      setOutcomeFor(null);
+      Swal.fire({ title: "Outcome recorded", text: "The appointment has been marked completed.", icon: "success", timer: 1900, showConfirmButton: false });
+    } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not save the outcome.", "error"); }
+    finally { setOutcomeBusy(false); }
+  };
 
   // ── Transport-request wiring ──────────────────────────────────────────────
   // The referral carries transportRequestId (Prisma column) once wired, so no
@@ -241,19 +297,19 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
         right={<ClinicalButton onClick={() => setShowAdd(true)}><Plus className="h-4 w-4" /> New Referral</ClinicalButton>}
       />
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border bg-[var(--clinical-line)] lg:grid-cols-4" style={{ borderColor: "var(--clinical-line)" }}>
-        <Stat label="Pending Approval" value={String(stats.pending)} color="#D97706" icon={Clock} />
-        <Stat label="Scheduled" value={String(stats.scheduled)} color="#2563EB" icon={CalendarDays} />
-        <Stat label="Completed" value={String(stats.completed)} color="#16A34A" icon={CheckCircle2} />
-        <Stat label="Needs Transport" value={String(stats.needsTransport)} color="#DC2626" icon={Truck} />
+      {/* Stat cards — one tuned palette (amber / indigo / emerald / rose) */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat label="Pending Approval" value={String(stats.pending)} accent="var(--clinical-amber)" icon={Clock} />
+        <Stat label="Scheduled" value={String(stats.scheduled)} accent="var(--clinical-panel)" icon={CalendarDays} />
+        <Stat label="Completed" value={String(stats.completed)} accent="var(--clinical-green)" icon={CheckCircle2} />
+        <Stat label="Needs Transport" value={String(stats.needsTransport)} accent="var(--clinical-coral)" icon={Truck} />
       </div>
 
-      {/* Filter chips */}
+      {/* Search + filter chips */}
       <div className="flex flex-col gap-3 rounded-2xl border p-3 lg:flex-row lg:items-center" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--clinical-muted)]" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search resident, specialist, clinic, or purpose..." className="min-h-11 w-full rounded-xl border bg-[var(--clinical-surface)] py-2.5 pl-10 pr-4 text-sm text-[var(--clinical-ink)] outline-none transition focus:border-[var(--clinical-focus)] focus:ring-2 focus:ring-[var(--clinical-focus)]/20" style={{ borderColor: "var(--clinical-line)" }} />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search resident, specialist, clinic, or purpose..." className="min-h-11 w-full rounded-xl border bg-[var(--clinical-surface)] py-2.5 pl-10 pr-4 text-sm text-[var(--clinical-ink)] outline-none transition focus:border-[var(--clinical-focus)] focus:ring-2 focus:ring-[var(--clinical-focus)]/20" style={{ borderColor: "var(--clinical-line-strong)" }} />
         </div>
         <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl bg-[var(--clinical-surface-2)] p-1">
           {["all", "REQUESTED", "APPROVED", "SCHEDULED", "COMPLETED", "CANCELLED"].map((st) => (
@@ -264,13 +320,13 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
 
       {/* Record cards */}
       <div className="space-y-3">
-        {loading && filtered.length === 0 ? <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-400">Loading…</div>
-          : filtered.length === 0 ? <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-400">No referrals.</div>
+        {loading && filtered.length === 0 ? <EmptyRow>Loading…</EmptyRow>
+          : filtered.length === 0 ? <EmptyRow>No referrals.</EmptyRow>
           : filtered.map((r) => {
             const st = s(r.status);
             const urg = s(r.urgency) || "ROUTINE";
             const specialist = specialistFromNotes(r.notes);
-            const accent = urg === "EMERGENCY" ? "#DC2626" : urg === "URGENT" ? "#F59E0B" : "#2563EB";
+            const accent = urg === "EMERGENCY" ? "var(--clinical-coral)" : urg === "URGENT" ? "var(--clinical-amber)" : "var(--clinical-panel)";
             const linkedReqId = s(r.transportRequestId);
             const transportReq = linkedReqId ? transportById.get(linkedReqId) : undefined;
             const transportStatus = transportReq ? s(transportReq.status) : "";
@@ -278,12 +334,13 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
             const transportActive = !!transportReq && !["DECLINED", "CANCELLED"].includes(transportStatus);
             return (
               <div key={s(r.id)} className="rounded-2xl border p-4 transition hover:border-[var(--clinical-line-strong)] sm:p-5" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
-                <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
+                    <span className="inline-flex items-center gap-1.5 font-bold text-[var(--clinical-ink)]"><UserRound className="h-4 w-4 text-[var(--clinical-muted)]" />{rHeader(r)}</span>
                     <UrgencyBadge urgency={urg} />
                     <StatusBadge status={st} />
-                    {transportActive && <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700"><Truck className="w-3.5 h-3.5" /> Transport</span>}
-                    <span className="inline-flex items-center gap-1.5 font-bold text-[var(--clinical-ink)]"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: accent }} /><UserRound className="h-4 w-4 text-[var(--clinical-muted)]" />{rHeader(r)}</span>
+                    {transportActive && <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.05em]" style={{ backgroundColor: softTint("var(--clinical-panel)"), color: "var(--clinical-panel)" }}><Truck className="h-3 w-3" /> Transport</span>}
                   </div>
                   {s(r.scheduledDate) && <span className="rounded-lg bg-[var(--clinical-surface-2)] px-2.5 py-1 text-xs font-semibold text-[var(--clinical-muted)]">{fmtD(r.scheduledDate)}</span>}
                 </div>
@@ -295,128 +352,233 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
                   <Detail label={r.approvedByName ? "Approved By" : "Submitted By"} value={s(r.approvedByName) || s(r.referredByName) || rname(r)} />
                 </div>
 
-                {r.rejectionReason && <p className="text-sm text-red-600 font-medium mt-3">Rejected: {s(r.rejectionReason)}</p>}
+                {r.rejectionReason && (
+                  <Banner tone="coral" icon={Ban}><span className="font-semibold">Rejected:</span> {s(r.rejectionReason)}</Banner>
+                )}
 
                 {r.outcome && (
-                  <div className="mt-3 flex items-start gap-2 rounded-lg bg-green-50 border border-green-200 p-3">
-                    <Check className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
-                    <p className="text-sm text-slate-700"><span className="font-semibold">Outcome:</span> {s(r.outcome)}</p>
-                  </div>
+                  <Banner tone="green" icon={Check}><span className="font-semibold">Outcome:</span> {s(r.outcome)}</Banner>
                 )}
 
                 {st === "REQUESTED" && (
-                  <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 text-sm">
+                  <Banner tone="amber" icon={Info}>
                     Pending approval — nurse or care manager will approve/reject this in <b>Pending Approvals</b>, then confirm &amp; schedule here.
-                  </div>
+                  </Banner>
                 )}
 
                 {/* Transport — wired to Fleet Management as a driver-assignable request */}
-                {transportActive ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-700">
-                    <Truck className="w-4 h-4 shrink-0" />
+                {transportActive && (
+                  <Banner tone="teal" icon={Truck}>
                     <span className="font-semibold">{TRANSPORT_STATUS_LABEL[transportStatus] || `Transport: ${transportStatus}`}</span>
-                    {transportStatus === "DECLINED" && transportReq && s(transportReq.declineReason) && <span className="text-red-600">— {s(transportReq.declineReason)}</span>}
-                  </div>
-                ) : null}
+                    {transportStatus === "DECLINED" && transportReq && s(transportReq.declineReason) && <span className="text-[var(--clinical-coral)]"> — {s(transportReq.declineReason)}</span>}
+                  </Banner>
+                )}
 
-                <div className="flex flex-wrap items-center gap-2 mt-3">
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   {!transportActive && st !== "CANCELLED" && (
-                    <ClinicalButton variant="secondary" onClick={() => openRequest(r)} className="!min-h-9 !px-3.5 !text-xs"><Truck className="h-3.5 w-3.5" /> Request Transport</ClinicalButton>
+                    <ClinicalButton variant="secondary" size="sm" onClick={() => openRequest(r)} className="!min-h-9 !text-xs"><Truck className="h-3.5 w-3.5" /> Request Transport</ClinicalButton>
                   )}
                   {st === "APPROVED" && canApprove && (<>
-                    <button onClick={() => reject(r)} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition"><Ban className="w-3.5 h-3.5" /> Reject</button>
-                    <button onClick={() => schedule(r)} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-800 text-white text-xs font-semibold hover:bg-slate-900 transition"><CalendarClock className="w-3.5 h-3.5" /> Confirm &amp; schedule</button>
+                    <ClinicalButton variant="danger" size="sm" onClick={() => reject(r)} className="!min-h-9 !text-xs"><Ban className="h-3.5 w-3.5" /> Reject</ClinicalButton>
+                    <ClinicalButton variant="primary" size="sm" onClick={() => schedule(r)} className="!min-h-9 !text-xs"><CalendarClock className="h-3.5 w-3.5" /> Confirm &amp; schedule</ClinicalButton>
                   </>)}
-                  {st === "SCHEDULED" && <button onClick={() => complete(r)} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-green-600 text-white text-xs font-semibold hover:bg-green-700 transition"><ClipboardCheck className="w-3.5 h-3.5" /> Document outcome</button>}
+                  {st === "SCHEDULED" && (
+                    <ClinicalButton size="sm" onClick={() => complete(r)} className="!min-h-9 !text-xs !text-white hover:brightness-110" style={{ backgroundColor: "var(--clinical-green)" }}><ClipboardCheck className="h-3.5 w-3.5" /> Document outcome</ClinicalButton>
+                  )}
                 </div>
               </div>
             );
           })}
       </div>
 
-      {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-[#E5E7DF] bg-white px-5 py-4">
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#2E4A48]/10 text-[#2E4A48]"><CalendarClock className="h-5 w-5" /></span>
-                <div>
-                  <h2 className="text-lg font-bold leading-tight tracking-tight text-[#2B2B27]">New Referral / Appointment</h2>
-                  <p className="text-xs font-medium text-[#6B7280]">Coordinate a specialist appointment or referral</p>
-                </div>
-              </div>
-              <button onClick={() => setShowAdd(false)} className="rounded-lg p-1.5 text-[#9CA3AF] transition hover:bg-[#F1F2ED] hover:text-[#2B2B27]"><X className="h-5 w-5" /></button>
+      {/* New Referral / Appointment */}
+      <ClinicalModal
+        open={showAdd}
+        onClose={() => setShowAdd(false)}
+        title="New Referral / Appointment"
+        description="Coordinate a specialist appointment or referral"
+        size="lg"
+        footer={<>
+          <ClinicalButton variant="secondary" onClick={() => setShowAdd(false)} disabled={busy}>Cancel</ClinicalButton>
+          <ClinicalButton onClick={submit} disabled={busy}><CalendarClock className="h-4 w-4" /> {busy ? "Scheduling…" : "Schedule Appointment"}</ClinicalButton>
+        </>}
+      >
+        <div className="space-y-4">
+          <div>
+            <FieldLabel required>Resident</FieldLabel>
+            <select value={form.residentId} onChange={(e) => setForm({ ...form, residentId: e.target.value })} className={controlClass}><option value="">Select resident…</option>{residents.map((r) => <option key={r.id} value={r.id}>{r.name} — Room {r.room}</option>)}</select>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2"><FieldLabel required>Appointment Type</FieldLabel><select value={form.appointmentType} onChange={(e) => setForm({ ...form, appointmentType: e.target.value })} className={controlClass}>{APPOINTMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+            <div className="sm:col-span-2"><FieldLabel required>Date &amp; Time</FieldLabel><input type="datetime-local" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} className={controlClass} /></div>
+            <div><FieldLabel>Specialist / Doctor Name</FieldLabel><input value={form.specialist} onChange={(e) => setForm({ ...form, specialist: e.target.value })} placeholder="e.g. Dr. Santos" className={controlClass} /></div>
+            <div><FieldLabel>Clinic / Hospital</FieldLabel><input value={form.facilityName} onChange={(e) => setForm({ ...form, facilityName: e.target.value })} placeholder="e.g. St. Luke's Medical Center" className={controlClass} /></div>
+            <div className="sm:col-span-2"><FieldLabel required>Referral Reason / Purpose</FieldLabel><textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} rows={2} placeholder="Reason for appointment or referral details…" className={controlClass} /></div>
+            <div><FieldLabel>Documents Needed</FieldLabel><input value={form.documentsNeeded} onChange={(e) => setForm({ ...form, documentsNeeded: e.target.value })} placeholder="e.g. Lab results, referral letter, ID" className={controlClass} /></div>
+            <div><FieldLabel>Companion / Escort Assigned</FieldLabel><input value={form.companion} onChange={(e) => setForm({ ...form, companion: e.target.value })} placeholder="e.g. Nurse Maria, Family member" className={controlClass} /></div>
+            <div className="sm:col-span-2"><FieldLabel>Pre-Appointment Notes</FieldLabel><textarea value={form.preApptNotes} onChange={(e) => setForm({ ...form, preApptNotes: e.target.value })} rows={2} placeholder="Preparation instructions, fasting requirements, items to bring…" className={controlClass} /></div>
+            <div><FieldLabel>Urgency</FieldLabel><select value={form.urgency} onChange={(e) => setForm({ ...form, urgency: e.target.value })} className={controlClass}>{["ROUTINE", "URGENT", "EMERGENCY"].map((u) => <option key={u} value={u}>{u}</option>)}</select></div>
+          </div>
+          {/* Family Notified toggle — transport is arranged separately via the Request Transport action on each card. */}
+          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-4 py-3" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: "var(--clinical-line)" }}>
+            <span className="flex items-center gap-3">
+              <UserRound className="h-5 w-5 text-[var(--clinical-panel)]" />
+              <span><span className="block text-sm font-semibold text-[var(--clinical-ink)]">Family Notified</span><span className="block text-xs text-[var(--clinical-muted)]">Send the family sponsor an approval request (auto-approves after 24h)</span></span>
+            </span>
+            <button type="button" role="switch" aria-checked={form.familyNotified} onClick={() => setForm({ ...form, familyNotified: !form.familyNotified })} className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${form.familyNotified ? "bg-[var(--clinical-panel)]" : "bg-[var(--clinical-line-strong)]"}`}>
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${form.familyNotified ? "translate-x-5" : "translate-x-0.5"}`} />
+            </button>
+          </label>
+        </div>
+      </ClinicalModal>
+
+      {/* Request Transport */}
+      <ClinicalModal
+        open={!!reqFor}
+        onClose={() => setReqFor(null)}
+        title="Request Transport"
+        description="Arrange a driver-assigned trip for this appointment"
+        size="md"
+        footer={<>
+          <ClinicalButton variant="secondary" onClick={() => setReqFor(null)} disabled={reqBusy}>Cancel</ClinicalButton>
+          <ClinicalButton onClick={submitRequest} disabled={reqBusy}><Truck className="h-4 w-4" /> {reqBusy ? "Sending…" : reqForm.driverId ? "Assign & schedule" : "Request transport"}</ClinicalButton>
+        </>}
+      >
+        {reqFor && (
+          <div className="space-y-4">
+            <div className="rounded-lg px-3 py-2 text-sm text-[var(--clinical-ink)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}><span className="font-semibold">{rname(reqFor)}</span>{s(reqFor.scheduledDate) && <> · {fmtD(reqFor.scheduledDate)}</>}</div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div><FieldLabel>Pickup</FieldLabel><input value={reqForm.pickupLocation} onChange={(e) => setReqForm({ ...reqForm, pickupLocation: e.target.value })} className={controlClass} /></div>
+              <div><FieldLabel required>Destination</FieldLabel><input value={reqForm.destination} onChange={(e) => setReqForm({ ...reqForm, destination: e.target.value })} placeholder="Clinic / hospital" className={controlClass} /></div>
+              <div className="sm:col-span-2"><FieldLabel required>Pickup date &amp; time</FieldLabel><input type="datetime-local" value={reqForm.requestedDate} onChange={(e) => setReqForm({ ...reqForm, requestedDate: e.target.value })} className={controlClass} /></div>
+              <div><FieldLabel>Assign driver <span className="font-normal text-[var(--clinical-muted)]">(optional)</span></FieldLabel><select value={reqForm.driverId} onChange={(e) => setReqForm({ ...reqForm, driverId: e.target.value })} className={controlClass}><option value="">Leave to dispatch</option>{drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
+              <div><FieldLabel required={!!reqForm.driverId}>Vehicle</FieldLabel><select value={reqForm.vehicleId} onChange={(e) => setReqForm({ ...reqForm, vehicleId: e.target.value })} disabled={!reqForm.driverId} className={`${controlClass} disabled:opacity-50`}><option value="">Select…</option>{vehicles.filter((v) => v.status !== "MAINTENANCE").map((v) => <option key={v.id} value={v.id}>{v.name}{v.plate ? ` (${v.plate})` : ""}</option>)}</select></div>
             </div>
-            <div className="space-y-4 p-6">
-              <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Resident <span className="text-[#C0573F]">*</span></label>
-                <select value={form.residentId} onChange={(e) => setForm({ ...form, residentId: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/30"><option value="">Select resident…</option>{residents.map((r) => <option key={r.id} value={r.id}>{r.name} — Room {r.room}</option>)}</select></div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="sm:col-span-2"><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Appointment Type <span className="text-[#C0573F]">*</span></label><select value={form.appointmentType} onChange={(e) => setForm({ ...form, appointmentType: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/30">{APPOINTMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
-                <div className="sm:col-span-2"><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Date &amp; Time <span className="text-[#C0573F]">*</span></label><input type="datetime-local" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
-                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Specialist / Doctor Name</label><input value={form.specialist} onChange={(e) => setForm({ ...form, specialist: e.target.value })} placeholder="e.g. Dr. Santos" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
-                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Clinic / Hospital</label><input value={form.facilityName} onChange={(e) => setForm({ ...form, facilityName: e.target.value })} placeholder="e.g. St. Luke's Medical Center" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
-                <div className="sm:col-span-2"><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Referral Reason / Purpose <span className="text-[#C0573F]">*</span></label><textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} rows={2} placeholder="Reason for appointment or referral details…" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
-                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Documents Needed</label><input value={form.documentsNeeded} onChange={(e) => setForm({ ...form, documentsNeeded: e.target.value })} placeholder="e.g. Lab results, referral letter, ID" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
-                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Companion / Escort Assigned</label><input value={form.companion} onChange={(e) => setForm({ ...form, companion: e.target.value })} placeholder="e.g. Nurse Maria, Family member" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
-                <div className="sm:col-span-2"><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Pre-Appointment Notes</label><textarea value={form.preApptNotes} onChange={(e) => setForm({ ...form, preApptNotes: e.target.value })} rows={2} placeholder="Preparation instructions, fasting requirements, items to bring…" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
-                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Urgency</label><select value={form.urgency} onChange={(e) => setForm({ ...form, urgency: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/30">{["ROUTINE", "URGENT", "EMERGENCY"].map((u) => <option key={u} value={u}>{u}</option>)}</select></div>
+            <p className="text-xs text-[var(--clinical-muted)]">Creates a Fleet transport request. Leave the driver unassigned to send it to dispatch, or assign a driver &amp; vehicle now to schedule the trip directly.</p>
+          </div>
+        )}
+      </ClinicalModal>
+
+      {/* Document outcome */}
+      <ClinicalModal
+        open={!!outcomeFor}
+        onClose={() => setOutcomeFor(null)}
+        title="Document outcome"
+        description="Record what happened at the appointment and mark it completed"
+        size="md"
+        footer={<>
+          <ClinicalButton variant="secondary" onClick={() => setOutcomeFor(null)} disabled={outcomeBusy}>Cancel</ClinicalButton>
+          <ClinicalButton onClick={submitOutcome} disabled={outcomeBusy} className="!text-white hover:brightness-110" style={{ backgroundColor: "var(--clinical-green)" }}><ClipboardCheck className="h-4 w-4" /> {outcomeBusy ? "Saving…" : "Complete appointment"}</ClinicalButton>
+        </>}
+      >
+        {outcomeFor && (
+          <div className="space-y-4">
+            {/* Appointment context so the clinician knows exactly what they're closing out */}
+            <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: "var(--clinical-line)" }}>
+              <div className="flex items-center gap-2 font-semibold text-[var(--clinical-ink)]"><UserRound className="h-4 w-4 text-[var(--clinical-muted)]" />{rHeader(outcomeFor)}</div>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <div><p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">Specialist</p><p className="mt-0.5 text-sm text-[var(--clinical-ink)]">{specialistFromNotes(outcomeFor.notes) || "—"}</p></div>
+                <div><p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">Appointment date</p><p className="mt-0.5 text-sm text-[var(--clinical-ink)]">{fmtD(outcomeFor.scheduledDate)}</p></div>
               </div>
-              {/* Family Notified toggle — no Transport Required control (transport is arranged separately via the Request Transport action on each card). */}
-              <label className="flex items-center justify-between gap-3 rounded-lg bg-[#F0F1EA] px-4 py-3 cursor-pointer">
+            </div>
+
+            <div><FieldLabel>Result</FieldLabel><select value={outcomeForm.result} onChange={(e) => setOutcomeForm({ ...outcomeForm, result: e.target.value })} className={controlClass}>{OUTCOME_RESULTS.map((o) => <option key={o} value={o}>{o}</option>)}</select></div>
+
+            <div>
+              <FieldLabel required>Findings, follow-up &amp; notes</FieldLabel>
+              <textarea value={outcomeForm.findings} onChange={(e) => setOutcomeForm({ ...outcomeForm, findings: e.target.value })} rows={5} placeholder="What did the specialist find? Diagnosis, treatment given, medications changed, instructions for the care team…" className={controlClass} />
+            </div>
+
+            {/* Follow-up — reveals a date only when needed, so the form stays light */}
+            <div className="rounded-xl border" style={{ borderColor: "var(--clinical-line)" }}>
+              <label className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3">
                 <span className="flex items-center gap-3">
-                  <UserRound className="w-5 h-5 text-[#2E4A48]" />
-                  <span><span className="block text-sm font-semibold text-[#2B2B27]">Family Notified</span><span className="block text-xs text-[#8A8D82]">Family has been informed of this appointment</span></span>
+                  <CalendarClock className="h-5 w-5 text-[var(--clinical-panel)]" />
+                  <span><span className="block text-sm font-semibold text-[var(--clinical-ink)]">Follow-up required</span><span className="block text-xs text-[var(--clinical-muted)]">Flag that another appointment is needed</span></span>
                 </span>
-                <button type="button" role="switch" aria-checked={form.familyNotified} onClick={() => setForm({ ...form, familyNotified: !form.familyNotified })} className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${form.familyNotified ? "bg-[#2E4A48]" : "bg-[#C7CABD]"}`}>
-                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${form.familyNotified ? "translate-x-5" : "translate-x-0.5"}`} />
+                <button type="button" role="switch" aria-checked={outcomeForm.followUp} onClick={() => setOutcomeForm({ ...outcomeForm, followUp: !outcomeForm.followUp })} className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${outcomeForm.followUp ? "bg-[var(--clinical-panel)]" : "bg-[var(--clinical-line-strong)]"}`}>
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${outcomeForm.followUp ? "translate-x-5" : "translate-x-0.5"}`} />
                 </button>
               </label>
-            </div>
-            <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t border-[#D6D8CD] bg-[#F0F1EA] px-6 py-4"><button onClick={() => setShowAdd(false)} disabled={busy} className="rounded-lg px-4 py-2 text-[#2B2B27] hover:bg-[#E1E3D9] disabled:opacity-50">Cancel</button><button onClick={submit} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-[#2E4A48] hover:bg-[#25403D] px-6 py-2 font-semibold text-white shadow-sm disabled:opacity-50"><CalendarClock className="w-4 h-4" /> {busy ? "Scheduling…" : "Schedule Appointment"}</button></div>
-          </div>
-        </div>
-      )}
-
-      {reqFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-start justify-between gap-3 bg-[#2E4A48] px-5 py-4 text-white">
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15"><Truck className="h-5 w-5" /></span>
-                <div>
-                  <h2 className="text-lg font-bold leading-tight tracking-tight" style={{ color: "#ffffff" }}>Request Transport</h2>
-                  <p className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>Arrange a driver-assigned trip for this appointment</p>
+              {outcomeForm.followUp && (
+                <div className="border-t px-4 py-3" style={{ borderColor: "var(--clinical-line)" }}>
+                  <FieldLabel>Follow-up by <span className="font-normal text-[var(--clinical-muted)]">(optional)</span></FieldLabel>
+                  <input type="date" value={outcomeForm.followUpDate} onChange={(e) => setOutcomeForm({ ...outcomeForm, followUpDate: e.target.value })} className={controlClass} />
                 </div>
-              </div>
-              <button onClick={() => setReqFor(null)} className="rounded-lg p-1.5 text-white/80 transition hover:bg-white/20 hover:text-white"><X className="h-5 w-5" /></button>
+              )}
             </div>
-            <div className="space-y-4 p-6">
-              <div className="rounded-lg bg-[#F0F1EA] px-3 py-2 text-sm text-[#2B2B27]"><span className="font-semibold">{rname(reqFor)}</span>{s(reqFor.scheduledDate) && <> · {fmtD(reqFor.scheduledDate)}</>}</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Pickup</label><input value={reqForm.pickupLocation} onChange={(e) => setReqForm({ ...reqForm, pickupLocation: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
-                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Destination <span className="text-[#C0573F]">*</span></label><input value={reqForm.destination} onChange={(e) => setReqForm({ ...reqForm, destination: e.target.value })} placeholder="Clinic / hospital" className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
-                <div className="sm:col-span-2"><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Pickup date &amp; time <span className="text-[#C0573F]">*</span></label><input type="datetime-local" value={reqForm.requestedDate} onChange={(e) => setReqForm({ ...reqForm, requestedDate: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 outline-none focus:ring-2 focus:ring-[#2E4A48]/30" /></div>
-                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Assign driver <span className="text-[#8A8D82] font-normal">(optional)</span></label><select value={reqForm.driverId} onChange={(e) => setReqForm({ ...reqForm, driverId: e.target.value })} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/30"><option value="">Leave to dispatch</option>{drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
-                <div><label className="mb-1 block text-sm font-semibold text-[#2B2B27]">Vehicle {reqForm.driverId && <span className="text-[#C0573F]">*</span>}</label><select value={reqForm.vehicleId} onChange={(e) => setReqForm({ ...reqForm, vehicleId: e.target.value })} disabled={!reqForm.driverId} className="w-full rounded-lg border border-[#D6D8CD] px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#2E4A48]/30 disabled:opacity-50"><option value="">Select…</option>{vehicles.filter((v) => v.status !== "MAINTENANCE").map((v) => <option key={v.id} value={v.id}>{v.name}{v.plate ? ` (${v.plate})` : ""}</option>)}</select></div>
-              </div>
-              <p className="text-xs text-[#8A8D82]">Creates a Fleet transport request. Leave the driver unassigned to send it to dispatch, or assign a driver &amp; vehicle now to schedule the trip directly.</p>
-            </div>
-            <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t border-[#D6D8CD] bg-[#F0F1EA] px-6 py-4"><button onClick={() => setReqFor(null)} disabled={reqBusy} className="rounded-lg px-4 py-2 text-[#2B2B27] hover:bg-[#E1E3D9] disabled:opacity-50">Cancel</button><button onClick={submitRequest} disabled={reqBusy} className="inline-flex items-center gap-2 rounded-lg bg-[#2E4A48] hover:bg-[#25403D] px-6 py-2 font-semibold text-white shadow-sm disabled:opacity-50"><Truck className="w-4 h-4" /> {reqBusy ? "Sending…" : reqForm.driverId ? "Assign & schedule" : "Request transport"}</button></div>
           </div>
-        </div>
-      )}
+        )}
+      </ClinicalModal>
+
+      {/* Reject referral */}
+      <ClinicalModal
+        open={!!rejectFor}
+        onClose={() => setRejectFor(null)}
+        title="Reject referral"
+        description="Decline this referral and let the requester know why"
+        size="md"
+        footer={<>
+          <ClinicalButton variant="secondary" onClick={() => setRejectFor(null)} disabled={rejectBusy}>Cancel</ClinicalButton>
+          <ClinicalButton variant="danger" onClick={submitReject} disabled={rejectBusy}><Ban className="h-4 w-4" /> {rejectBusy ? "Rejecting…" : "Reject referral"}</ClinicalButton>
+        </>}
+      >
+        {rejectFor && (
+          <div className="space-y-4">
+            <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: "var(--clinical-line)" }}>
+              <div className="flex items-center gap-2 font-semibold text-[var(--clinical-ink)]"><UserRound className="h-4 w-4 text-[var(--clinical-muted)]" />{rHeader(rejectFor)}</div>
+              <p className="mt-1 text-xs text-[var(--clinical-muted)]">{specialistFromNotes(rejectFor.notes) || "—"} · {s(rejectFor.facilityName) || "—"}</p>
+            </div>
+            <div>
+              <FieldLabel>Reason for rejection</FieldLabel>
+              <textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={4} autoFocus placeholder="Why is this referral being declined? (shared with the requester and family)" className={controlClass} />
+            </div>
+          </div>
+        )}
+      </ClinicalModal>
+
+      {/* Confirm & schedule */}
+      <ClinicalModal
+        open={!!schedFor}
+        onClose={() => setSchedFor(null)}
+        title="Confirm & schedule"
+        description="Lock in the confirmed appointment date and time"
+        size="md"
+        footer={<>
+          <ClinicalButton variant="secondary" onClick={() => setSchedFor(null)} disabled={schedBusy}>Cancel</ClinicalButton>
+          <ClinicalButton onClick={submitSchedule} disabled={schedBusy}><CalendarClock className="h-4 w-4" /> {schedBusy ? "Scheduling…" : "Confirm & schedule"}</ClinicalButton>
+        </>}
+      >
+        {schedFor && (
+          <div className="space-y-4">
+            <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: "var(--clinical-line)" }}>
+              <div className="flex items-center gap-2 font-semibold text-[var(--clinical-ink)]"><UserRound className="h-4 w-4 text-[var(--clinical-muted)]" />{rHeader(schedFor)}</div>
+              <p className="mt-1 text-xs text-[var(--clinical-muted)]">{specialistFromNotes(schedFor.notes) || "—"} · {s(schedFor.facilityName) || "—"}</p>
+            </div>
+            <div>
+              <FieldLabel required>Appointment date &amp; time</FieldLabel>
+              <input type="datetime-local" value={schedDate} onChange={(e) => setSchedDate(e.target.value)} className={controlClass} />
+            </div>
+            <p className="text-xs text-[var(--clinical-muted)]">Scheduling marks the referral confirmed and lists it on the Appointment Calendar.</p>
+          </div>
+        )}
+      </ClinicalModal>
     </div>
   );
 }
 
-function Stat({ label, value, color, icon: Icon }: { label: string; value: string; color: string; icon: typeof Truck }) {
+function EmptyRow({ children }: { children: React.ReactNode }) {
+  return <div className="rounded-2xl border p-8 text-center text-sm text-[var(--clinical-muted)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>{children}</div>;
+}
+
+function Stat({ label, value, accent, icon: Icon }: { label: string; value: string; accent: string; icon: typeof Truck }) {
   return (
-    <div className="bg-[var(--clinical-surface)] p-4 sm:p-5">
-      <div className="flex items-start justify-between">
+    <div className="rounded-2xl border p-4 sm:p-5" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+      <div className="flex items-center justify-between">
         <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--clinical-muted)]">{label}</span>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--clinical-surface-2)]" style={{ color }}><Icon className="h-4 w-4" /></span>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: softTint(accent), color: accent }}><Icon className="h-4 w-4" /></span>
       </div>
-      <p className="mt-2 text-3xl font-bold leading-none" style={{ color }}>{value}</p>
+      <p className="mt-3 text-3xl font-bold leading-none tabular-nums" style={{ color: accent }}>{value}</p>
     </div>
   );
 }
@@ -430,13 +592,35 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-function UrgencyBadge({ urgency }: { urgency: string }) {
-  const cls = urgency === "EMERGENCY" ? "bg-red-100 text-red-700" : urgency === "URGENT" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600";
-  return <span className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] ${cls}`}>{urgency}</span>;
+// Soft-tinted inline notice — one shape for every banner (rejected / outcome /
+// pending / transport), coloured from a single token so they harmonise.
+function Banner({ tone, icon: Icon, children }: { tone: "amber" | "green" | "coral" | "teal"; icon: typeof Truck; children: React.ReactNode }) {
+  const c = { amber: "var(--clinical-amber)", green: "var(--clinical-green)", coral: "var(--clinical-coral)", teal: "var(--clinical-panel)" }[tone];
+  return (
+    <div className="mt-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-sm text-[var(--clinical-ink)]" style={{ backgroundColor: softTint(c), borderColor: `color-mix(in srgb, ${c} 30%, transparent)` }}>
+      <Icon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: c }} />
+      <span>{children}</span>
+    </div>
+  );
 }
 
+function UrgencyBadge({ urgency }: { urgency: string }) {
+  const c = urgency === "EMERGENCY" ? "var(--clinical-coral)" : urgency === "URGENT" ? "var(--clinical-amber)" : "var(--clinical-muted)";
+  return <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.05em]" style={{ backgroundColor: softTint(c), color: c }}>{urgency}</span>;
+}
+
+// Status → one pill. Solid fill signals a settled state; APPROVED (a brief gate
+// step) reads as a soft indigo tint so it stays distinct from SCHEDULED.
 function StatusBadge({ status }: { status: string }) {
   const label = status.charAt(0) + status.slice(1).toLowerCase();
-  const cls = status === "CANCELLED" ? "bg-red-500" : status === "COMPLETED" ? "bg-green-600" : status === "REQUESTED" ? "bg-amber-500" : "bg-slate-700";
-  return <span className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-white ${cls}`}>{label}</span>;
+  const MAP: Record<string, [string, boolean]> = {
+    REQUESTED: ["var(--clinical-amber)", true],
+    APPROVED: ["var(--clinical-panel)", false],
+    SCHEDULED: ["var(--clinical-panel)", true],
+    COMPLETED: ["var(--clinical-green)", true],
+    CANCELLED: ["var(--clinical-coral)", true],
+  };
+  const [c, solid] = MAP[status] ?? ["var(--clinical-muted)", false];
+  const style = solid ? { backgroundColor: c, color: "#fff" } : { backgroundColor: softTint(c), color: c };
+  return <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.05em]" style={style}>{label}</span>;
 }

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import {
   Users, CheckCircle2, ClipboardList, AlertTriangle, BellRing,
   Clock, Heart, Sun, Sunset, Moon, ChevronRight, Activity, Inbox, StickyNote, X,
-  type LucideIcon,
+  Loader2, type LucideIcon,
 } from "lucide-react";
 import { TASK_NOTES_FIELD, taskNotesOf, withAppendedNote, withoutNote } from "@/lib/taskNotes";
 import Swal from "@/lib/swal";
@@ -202,24 +202,29 @@ export default function CaregiverDashboard() {
 
   // Add / remove a caregiver note on a task. Stored on the task, so it reflects
   // live to the nurse, other caregivers, and the resident's QR profile.
-  const addTaskNote = async (t: Task) => {
-    const { value } = await Swal.fire({
-      title: "Add a note to this task",
-      input: "textarea",
-      inputPlaceholder: "e.g. Can't give the medication yet — resident hasn't eaten (no solid food).",
-      inputAttributes: { "aria-label": "Task note", maxlength: "500" },
-      showCancelButton: true,
-      confirmButtonText: "Add note",
-      confirmButtonColor: "#2E4A48",
-      inputValidator: (v) => (!v || String(v).trim().length < 2 ? "Please enter a note." : undefined),
-    });
-    if (!value) return;
+  // Add-note modal state (replaces the bare Swal textarea prompt).
+  const [noteFor, setNoteFor] = useState<Task | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
+  const addTaskNote = (t: Task) => {
+    setNoteText("");
+    setNoteFor(t);
+  };
+  const submitAddNote = async () => {
+    if (!noteFor) return;
+    const t = noteFor;
+    // Same validator as before — require a real note.
+    if (noteText.trim().length < 2) return;
+    setNoteBusy(true);
     try {
-      await updateRecord("tasks", t.id, { [TASK_NOTES_FIELD]: withAppendedNote((t.raw as Record<string, unknown>)?.[TASK_NOTES_FIELD], String(value), authorName) });
+      await updateRecord("tasks", t.id, { [TASK_NOTES_FIELD]: withAppendedNote((t.raw as Record<string, unknown>)?.[TASK_NOTES_FIELD], noteText.trim(), authorName) });
       await refetchTasks();
+      setNoteFor(null);
       Swal.fire({ title: "Note added", text: "Visible to the nurse, other caregivers, and on the resident's profile.", icon: "success", timer: 1800, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ title: "Couldn't add note", text: err instanceof Error ? err.message : "Try again.", icon: "error" });
+    } finally {
+      setNoteBusy(false);
     }
   };
   const removeTaskNote = async (t: Task, noteId: string) => {
@@ -398,6 +403,42 @@ export default function CaregiverDashboard() {
           </Panel>
         </div>
       </div>
+
+      {/* Add-note modal — reflects live to nurse + other caregivers + QR profile. */}
+      {noteFor && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setNoteFor(null); }}>
+          <div className="bg-white w-full max-w-md max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-[#2E4A48] px-5 py-4 text-white">
+              <h2 className="flex items-center gap-2 text-lg font-bold"><StickyNote className="w-5 h-5" /> Add a note to this task</h2>
+              <button onClick={() => setNoteFor(null)} className="rounded-lg p-1.5 transition hover:bg-white/15"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="font-semibold text-gray-900 truncate">{noteFor.title}</p>
+                <p className="mt-0.5 text-xs text-gray-500">{noteFor.resident} • Room {noteFor.room}</p>
+              </div>
+              <div>
+                <label htmlFor="dash-task-note" className="mb-1.5 block text-sm font-semibold text-gray-700">Note <span className="text-red-500">*</span></label>
+                <textarea
+                  id="dash-task-note"
+                  autoFocus
+                  rows={4}
+                  maxLength={500}
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                  placeholder="e.g. Can't give the medication yet — resident hasn't eaten (no solid food)."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2E4A48]/30 focus:border-[#2E4A48] outline-none text-sm resize-y"
+                />
+                <p className="mt-1.5 text-xs text-gray-400">Visible to the nurse, other caregivers, and on the resident&apos;s profile.</p>
+              </div>
+            </div>
+            <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
+              <button onClick={() => setNoteFor(null)} disabled={noteBusy} className="rounded-lg px-5 py-2 text-sm text-gray-700 transition hover:bg-gray-100 disabled:opacity-50">Cancel</button>
+              <button onClick={() => void submitAddNote()} disabled={noteBusy || noteText.trim().length < 2} className="inline-flex items-center gap-2 rounded-lg bg-[#2E4A48] px-6 py-2 text-sm font-semibold text-white transition hover:bg-[#25403D] disabled:opacity-50">{noteBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <StickyNote className="w-4 h-4" />} {noteBusy ? "Adding…" : "Add note"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -119,6 +119,12 @@ export default function ApprovalWorkflows() {
     try { await createRecord("notifications", { userId, type: "SYSTEM_ALERT", title, message, relatedEntityId: relatedId, relatedEntityType: relatedType, severity: "INFO" }); } catch { /* non-critical */ }
   };
 
+  // ── Reject wiring (designed modal replaces the bare Swal textarea prompt) ──
+  const [rejectFor, setRejectFor] = useState<Item | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectBusy, setRejectBusy] = useState(false);
+  const openReject = (it: Item) => { setRejectReason(""); setRejectFor(it); };
+
   // ── Decisions ─────────────────────────────────────────────────────────────
   const approve = async (it: Item) => {
     const m = it.row;
@@ -141,11 +147,12 @@ export default function ApprovalWorkflows() {
     } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not approve.", "error"); }
   };
 
-  const reject = async (it: Item) => {
+  const submitReject = async () => {
+    if (!rejectFor) return;
+    const it = rejectFor;
     const m = it.row;
-    const res = await Swal.fire({ title: "Reject request?", input: "textarea", inputLabel: "Reason (sent back to the submitter)", inputPlaceholder: "e.g. not clinically indicated…", showCancelButton: true, confirmButtonColor: "#dc2626", confirmButtonText: "Reject" });
-    if (!res.isConfirmed) return;
-    const reason = res.value || "Rejected";
+    const reason = rejectReason.trim() || "Rejected";
+    setRejectBusy(true);
     try {
       if (it.kind === "med") {
         await updateRecord("medications", it.id, { status: "DISCONTINUED", rejectionReason: reason, approvedByName: null, approvedAt: null });
@@ -158,8 +165,10 @@ export default function ApprovalWorkflows() {
       } else {
         await saveLabDecision(it.id, { decision: "REJECTED", by: session.name || "Reviewer", at: new Date().toISOString(), reason });
       }
+      setRejectFor(null);
       Swal.fire({ title: "Rejected", text: "The submitter has been notified.", icon: "success", timer: 1500, showConfirmButton: false });
     } catch (e) { Swal.fire("Failed", e instanceof Error ? e.message : "Could not reject.", "error"); }
+    finally { setRejectBusy(false); }
   };
 
   const saveLabDecision = async (labId: string, dec: LabDecision) => {
@@ -228,7 +237,7 @@ export default function ApprovalWorkflows() {
                 </div>
                 {it.state === "PENDING" && canAct(it.kind) ? (
                   <div className="flex items-center gap-2 shrink-0">
-                    <button onClick={() => reject(it)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50"><X className="w-4 h-4" /> Reject</button>
+                    <button onClick={() => openReject(it)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-sm font-semibold hover:bg-red-50"><X className="w-4 h-4" /> Reject</button>
                     <button onClick={() => approve(it)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700"><Check className="w-4 h-4" /> Approve</button>
                   </div>
                 ) : it.state === "PENDING" ? (
@@ -239,6 +248,37 @@ export default function ApprovalWorkflows() {
           );
         })}
       </div>
+
+      {rejectFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setRejectFor(null); }}>
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <div className="sticky top-0 flex items-center justify-between bg-red-600 p-5 text-white">
+              <h2 className="text-lg font-bold flex items-center gap-2"><X className="w-5 h-5" /> Reject request</h2>
+              <button onClick={() => setRejectFor(null)} className="rounded-lg p-1.5 hover:bg-white/15"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-4 p-6">
+              {(() => {
+                const it = rejectFor; const m = it.row; const meta = KIND_META[it.kind];
+                const label = it.kind === "med" ? `${s(m.name)} ${s(m.dosage)}`.trim() : it.kind === "lab" ? s(m.testName) : (s(m.reason) || "this appointment");
+                return (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-sm font-bold text-slate-900">{meta.label}</p>
+                    <p className="text-sm text-slate-600 mt-0.5">{label || "—"} · {rname(m)}</p>
+                  </div>
+                );
+              })()}
+              <div>
+                <label htmlFor="reject-reason" className="block text-sm font-bold text-slate-700 mb-1.5">Reason <span className="font-normal text-slate-400">(sent back to the submitter)</span></label>
+                <textarea id="reject-reason" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={4} autoFocus placeholder="e.g. not clinically indicated…" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-red-400/40 resize-y" />
+              </div>
+            </div>
+            <div className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4">
+              <button onClick={() => setRejectFor(null)} disabled={rejectBusy} className="rounded-xl px-4 py-2 text-slate-600 hover:bg-black/5 disabled:opacity-50">Cancel</button>
+              <button onClick={submitReject} disabled={rejectBusy} className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-6 py-2 font-semibold text-white hover:bg-red-700 disabled:opacity-50">{rejectBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />} {rejectBusy ? "Rejecting…" : "Reject"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showRequest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">

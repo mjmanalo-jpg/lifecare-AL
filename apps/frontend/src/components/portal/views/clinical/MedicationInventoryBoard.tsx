@@ -307,39 +307,92 @@ function AddItemModal({ item, residents, onClose, onSave }: { item: InvItem | nu
     finally { setSaving(false); }
   };
 
+  const TypeIcon = isMed ? Pill : Package;
+  const TYPE_META = {
+    MEDICATION: { label: "Medication", desc: "Clinical med · generic & brand", icon: Pill },
+    GENERAL: { label: "General Supply", desc: "Routed to Facility Inventory", icon: Package },
+  } as const;
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[95vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"><h2 className="font-bold text-slate-900 text-lg">{item ? "Edit" : "Add"} Inventory Item</h2><button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button></div>
-        <div className="p-5 overflow-y-auto flex-1 space-y-4">
-          {/* Two parts: Medication vs General */}
-          <div className="grid grid-cols-2 gap-2">
-            {(["MEDICATION", "GENERAL"] as const).map((t) => <button key={t} type="button" onClick={() => setType(t)} className={`inline-flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-semibold ${type === t ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"}`}>{t === "MEDICATION" ? <Pill className="w-4 h-4" /> : <Package className="w-4 h-4" />}{t === "MEDICATION" ? "Medication" : "General Supply"}</button>)}
+    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white w-full max-w-lg max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl shadow-2xl">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><TypeIcon className="w-5 h-5" /></span>
+            <div className="min-w-0">
+              <h2 className="font-bold text-slate-900 text-lg leading-tight">{item ? "Edit" : "Add"} Inventory Item</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Medication &amp; supply stock — facility or resident-assigned</p>
+            </div>
           </div>
-          <div><label className={lbl}>Assign to Resident <span className="text-slate-400 font-normal">(optional)</span></label><select value={residentId} onChange={(e) => setResidentId(e.target.value)} className={inp}><option value="">Facility stock (no resident)</option>{residents.map((r) => <option key={r.id} value={r.id}>{r.name}{r.room ? ` — Rm ${r.room}` : ""}</option>)}</select></div>
-          <div><label className={lbl}>{isMed ? "Medication Name" : "Item Name"} <span className="text-red-500">*</span></label><input value={name} onChange={(e) => setName(e.target.value)} placeholder={isMed ? "e.g., Amlodipine 5mg" : "e.g., Surgical gloves"} className={inp} /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className={lbl}>Category</label><input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g., Medical Supplies" className={inp} /></div>
-            <div><label className={lbl}>Supplier</label><input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="e.g., MedSupply Co." className={inp} /></div>
+          <button onClick={onClose} className="-mr-1.5 shrink-0 p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-5 overflow-y-auto flex-1 space-y-5">
+          {/* Item type */}
+          <div className="grid grid-cols-2 gap-2.5">
+            {(["MEDICATION", "GENERAL"] as const).map((t) => {
+              const m = TYPE_META[t]; const Icon = m.icon; const active = type === t;
+              return (
+                <button key={t} type="button" onClick={() => setType(t)} aria-pressed={active}
+                  className={`flex items-start gap-2.5 rounded-xl border-2 p-3 text-left transition ${active ? "border-blue-500 bg-blue-50/60" : "border-slate-200 bg-white hover:border-blue-300"}`}>
+                  <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${active ? "text-blue-600" : "text-slate-400"}`} />
+                  <span className="min-w-0">
+                    <span className={`block text-sm font-bold ${active ? "text-blue-800" : "text-slate-700"}`}>{m.label}</span>
+                    <span className="block text-[11px] leading-tight text-slate-500 mt-0.5">{m.desc}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
-          {isMed && (
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className={lbl}>Generic Name</label><input value={generic} onChange={(e) => setGeneric(e.target.value)} placeholder="e.g., Amlodipine besylate" className={inp} /></div>
-              <div><label className={lbl}>Brand Name</label><input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="e.g., Norvasc" className={inp} /></div>
+          {!isMed && (
+            <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800">
+              <Package className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>General supplies are saved to the shared <b>Facility Inventory</b> instead of this clinical list.</span>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className={lbl}>Unit <span className="text-red-500">*</span></label><select value={unit} onChange={(e) => setUnit(e.target.value)} className={inp}>{UNITS.map((u) => <option key={u} value={u}>{u}</option>)}</select></div>
-            <div><label className={lbl}>Current Quantity</label><input inputMode="numeric" value={quantity} onChange={(e) => setQuantity(e.target.value)} className={inp} /></div>
+
+          {/* Identification */}
+          <div className="space-y-3">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Item details</p>
+            <div><label className={lbl}>Assign to Resident <span className="text-slate-400 font-normal">(optional)</span></label><div className="relative"><User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><select value={residentId} onChange={(e) => setResidentId(e.target.value)} className={`${inp} pl-9`}><option value="">Facility stock (no resident)</option>{residents.map((r) => <option key={r.id} value={r.id}>{r.name}{r.room ? ` — Rm ${r.room}` : ""}</option>)}</select></div></div>
+            <div><label className={lbl}>{isMed ? "Medication Name" : "Item Name"} <span className="text-red-500">*</span></label><input value={name} onChange={(e) => setName(e.target.value)} placeholder={isMed ? "e.g., Amlodipine 5mg" : "e.g., Surgical gloves"} className={inp} /></div>
+            {isMed && (
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className={lbl}>Generic Name</label><input value={generic} onChange={(e) => setGeneric(e.target.value)} placeholder="e.g., Amlodipine besylate" className={inp} /></div>
+                <div><label className={lbl}>Brand Name</label><input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="e.g., Norvasc" className={inp} /></div>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lbl}>Category</label><input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g., Medical Supplies" className={inp} /></div>
+              <div><label className={lbl}>Supplier</label><input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="e.g., MedSupply Co." className={inp} /></div>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className={lbl}>Reorder Threshold</label><input inputMode="numeric" value={reorder} onChange={(e) => setReorder(e.target.value)} className={inp} /></div>
-            <div><label className={lbl}>Location / Cabinet</label><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g., Nurse Station A" className={inp} /></div>
+
+          {/* Stock & storage */}
+          <div className="space-y-3">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Stock &amp; storage</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lbl}>Unit <span className="text-red-500">*</span></label><select value={unit} onChange={(e) => setUnit(e.target.value)} className={inp}>{UNITS.map((u) => <option key={u} value={u}>{u}</option>)}</select></div>
+              <div><label className={lbl}>Current Quantity</label><input inputMode="numeric" value={quantity} onChange={(e) => setQuantity(e.target.value)} className={inp} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lbl}>Reorder Threshold</label><input inputMode="numeric" value={reorder} onChange={(e) => setReorder(e.target.value)} placeholder="10" className={inp} /></div>
+              <div><label className={lbl}>Location / Cabinet</label><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g., Nurse Station A" className={inp} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={lbl}>Expiry Date</label><input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} className={inp} /></div>
+            </div>
           </div>
-          <div><label className={lbl}>Expiry Date</label><input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} className={inp} /></div>
-          <div><label className={lbl}>Notes</label><textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className={inp} /></div>
+
+          {/* Notes */}
+          <div className="space-y-3">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Notes</p>
+            <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Handling, storage, or dispensing notes…" className={inp} />
+          </div>
         </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button><button onClick={submit} disabled={saving} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? "Saving…" : item ? "Save Changes" : "Add Item"}</button></div>
+
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100 bg-slate-50/60"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100">Cancel</button><button onClick={submit} disabled={saving} className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"><Plus className="w-4 h-4" /> {saving ? "Saving…" : item ? "Save Changes" : "Add Item"}</button></div>
       </div>
     </div>
   );

@@ -143,6 +143,11 @@ export default function FleetTrips() {
   const [page, setPage] = useState(1);
   const [inspecting, setInspecting] = useState<Trip | null>(null);
   const [checks, setChecks] = useState<boolean[]>(INSPECTION_ITEMS.map(() => false));
+  // Cancel-a-trip flow: capture a required reason in a designed modal
+  // (replaces the bare Swal text prompt).
+  const [cancellingTrip, setCancellingTrip] = useState<Trip | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancellingBusy, setCancellingBusy] = useState(false);
   const [expandedGps, setExpandedGps] = useState<Record<string, boolean>>({});
   const [, setTick] = useState(0); // re-render tick for GPS progress/time-ago
   const perPage = 12;
@@ -358,31 +363,30 @@ export default function FleetTrips() {
     }
   };
 
-  const handleCancel = async (trip: Trip) => {
-    const result = await Swal.fire({
-      title: "Cancel Trip?",
-      text: `Cancel the trip for ${trip.residentName} to ${trip.destination}?`,
-      input: "text",
-      inputLabel: "Cancellation reason",
-      inputPlaceholder: "e.g. Resident unwell, appointment moved",
-      icon: "warning", showCancelButton: true,
-      confirmButtonColor: "#ef4444", cancelButtonColor: "#6b7280", confirmButtonText: "Cancel Trip",
-      inputValidator: (v) => (!v ? "A cancellation reason is required." : null),
-    });
-    if (!result.isConfirmed) return;
+  const handleCancel = (trip: Trip) => {
+    setCancelReason("");
+    setCancellingTrip(trip);
+  };
+  const submitCancel = async () => {
+    if (!cancellingTrip) return;
+    const reason = cancelReason.trim();
+    if (!reason) return;
+    setCancellingBusy(true);
     try {
-      const reason = String(result.value || "");
-      await updateRecord("trips", trip.id, {
+      await updateRecord("trips", cancellingTrip.id, {
         status: "CANCELLED",
-        notes: trip.notes ? `${trip.notes} | Cancelled: ${reason}` : `Cancelled: ${reason}`,
+        notes: cancellingTrip.notes ? `${cancellingTrip.notes} | Cancelled: ${reason}` : `Cancelled: ${reason}`,
       });
-      if (trip.vehicleId && trip.vehicleStatus === "ON_TRIP") {
-        await updateRecord("vehicles", trip.vehicleId, { status: "AVAILABLE" });
+      if (cancellingTrip.vehicleId && cancellingTrip.vehicleStatus === "ON_TRIP") {
+        await updateRecord("vehicles", cancellingTrip.vehicleId, { status: "AVAILABLE" });
       }
       await refetch();
+      setCancellingTrip(null);
       Swal.fire({ title: "Trip Cancelled", icon: "success", timer: 1500, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ title: "Cancel Failed", text: err instanceof Error ? err.message : "Could not cancel the trip.", icon: "error" });
+    } finally {
+      setCancellingBusy(false);
     }
   };
 
@@ -666,6 +670,32 @@ export default function FleetTrips() {
                 className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4" /> Complete Inspection
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Trip Modal — captures a required reason */}
+      {cancellingTrip && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setCancellingTrip(null); }}>
+          <div className="bg-white w-full max-w-lg max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-xl shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-gradient-to-r from-red-500 to-red-600 px-5 py-4 text-white">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-bold"><Ban className="w-5 h-5" /> Cancel Trip</h2>
+                <p className="text-sm text-white/80">{cancellingTrip.residentName} · Rm {cancellingTrip.roomNumber} → {cancellingTrip.destination}</p>
+              </div>
+              <button onClick={() => setCancellingTrip(null)} className="rounded-lg p-1.5 transition hover:bg-white/20"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-gray-700">Cancellation reason <span className="text-red-500">*</span></label>
+                <textarea autoFocus rows={4} value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="e.g. Resident unwell, appointment moved" className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-red-400 outline-none" />
+                <p className="mt-1.5 text-[11px] text-gray-400">The reason is appended to the trip notes.</p>
+              </div>
+            </div>
+            <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
+              <button onClick={() => setCancellingTrip(null)} disabled={cancellingBusy} className="rounded-lg px-5 py-2 text-sm text-gray-700 transition hover:bg-gray-100 disabled:opacity-50">Keep Trip</button>
+              <button onClick={() => void submitCancel()} disabled={cancellingBusy || !cancelReason.trim()} className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-6 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50">{cancellingBusy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />} {cancellingBusy ? "Cancelling…" : "Cancel Trip"}</button>
             </div>
           </div>
         </div>

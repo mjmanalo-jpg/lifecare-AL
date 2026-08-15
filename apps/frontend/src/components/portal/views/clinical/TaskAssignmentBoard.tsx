@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { RefreshCw, Plus, X, CheckCircle2, Play, Undo2, StickyNote, ArrowLeftRight, Repeat } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -323,6 +323,10 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
   const [activeTab, setActiveTab] = useState<"board" | "mine" | "summary" | "handover">("board");
   const [completedScope, setCompletedScope] = useState<CompletedScope>("today");
   const [showAssign, setShowAssign] = useState(false);
+  // Add-note modal (replaces the bare Swal textarea prompt).
+  const [noteFor, setNoteFor] = useState<Task | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
   // "Now" tick for overdue badges (updated after mount + every minute; never Date.now() in render).
   const [nowMs, setNowMs] = useState(0);
   useEffect(() => { const tick = () => setNowMs(Date.now()); tick(); const id = setInterval(tick, 60_000); return () => clearInterval(id); }, []);
@@ -450,27 +454,25 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
     }
   };
 
-  // Append a timestamped note to the task's notes field (running log).
-  const addNote = async (task: Task) => {
-    const raw = (task.raw ?? {}) as Record<string, unknown>;
+  // Open the add-note modal for a task (a timestamped running log is appended on save).
+  const addNote = (task: Task) => { setNoteText(""); setNoteFor(task); };
+  const submitNote = async () => {
+    if (!noteFor) return;
+    const text = noteText.trim();
+    if (!text) { Swal.fire({ toast: true, position: "top-end", icon: "warning", title: "Enter a note", showConfirmButton: false, timer: 1400 }); return; }
+    const raw = (noteFor.raw ?? {}) as Record<string, unknown>;
     const existing = String(raw[TASK_NOTES_FIELD] ?? "");
-    const { value } = await Swal.fire({
-      title: "Add note", input: "textarea",
-      inputLabel: `Note for ${task.resident}${task.room ? ` · Rm ${task.room}` : ""}`,
-      inputPlaceholder: "e.g. Resident refused fluids at 3pm; will retry after rest.",
-      inputValue: "", showCancelButton: true, confirmButtonText: "Add note", confirmButtonColor: "#2563eb",
-      inputValidator: (v) => (!v || !v.trim() ? "Enter a note" : null),
-    });
-    if (!value || !String(value).trim()) return;
     const stamp = new Date().toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-    const entry = `[${stamp}] ${String(value).trim()}`;
+    const entry = `[${stamp}] ${text}`;
+    setNoteBusy(true);
     try {
-      await updateRecord("tasks", task.id, { [TASK_NOTES_FIELD]: existing ? `${existing}\n${entry}` : entry });
+      await updateRecord("tasks", noteFor.id, { [TASK_NOTES_FIELD]: existing ? `${existing}\n${entry}` : entry });
       await refetch();
+      setNoteFor(null);
       Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Note added", showConfirmButton: false, timer: 1400 });
     } catch (err) {
       Swal.fire({ title: "Failed", text: err instanceof Error ? err.message : "Could not add note.", icon: "error" });
-    }
+    } finally { setNoteBusy(false); }
   };
 
   return (
@@ -594,6 +596,67 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
           onSaved={() => { setShowAssign(false); refetch(); }}
         />
       )}
+
+      {noteFor && (
+        <NoteModal task={noteFor} value={noteText} onChange={setNoteText} busy={noteBusy} onClose={() => setNoteFor(null)} onSubmit={submitNote} />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Add-note modal — a timestamped running log per task. Shows prior notes so the
+// clinician has context before adding the next entry.
+// ---------------------------------------------------------------------------
+function NoteModal({ task, value, onChange, busy, onClose, onSubmit }: { task: Task; value: string; onChange: (v: string) => void; busy: boolean; onClose: () => void; onSubmit: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+  const raw = (task.raw ?? {}) as Record<string, unknown>;
+  const existing = String(raw[TASK_NOTES_FIELD] ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+  const submitOnCmdEnter = (e: ReactKeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !busy) onSubmit(); };
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm p-0 sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[88vh] sm:rounded-2xl">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><StickyNote className="h-5 w-5" /></span>
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold leading-tight text-slate-900">Add note</h2>
+              <p className="mt-0.5 truncate text-xs text-slate-500">{task.resident}{task.room ? ` · Rm ${task.room}` : ""}{task.title ? ` — ${task.title}` : ""}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="-mr-1.5 shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><X className="h-5 w-5" /></button>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+          {existing.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">Previous notes</p>
+              <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3">
+                {existing.map((line, i) => <p key={i} className="text-xs leading-relaxed text-slate-600">{line}</p>)}
+              </div>
+            </div>
+          )}
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-slate-700">New note</label>
+            <textarea autoFocus rows={4} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={submitOnCmdEnter}
+              placeholder="e.g. Resident refused fluids at 3pm; will retry after rest."
+              className="w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-transparent focus:ring-2 focus:ring-blue-400" />
+            <p className="mt-1.5 text-[11px] text-slate-400">A date &amp; time stamp is added automatically. Press ⌘/Ctrl + Enter to save.</p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-4">
+          <button onClick={onClose} disabled={busy} className="rounded-xl px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 disabled:opacity-60">Cancel</button>
+          <button onClick={onSubmit} disabled={busy || !value.trim()} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"><StickyNote className="h-4 w-4" /> {busy ? "Saving…" : "Add note"}</button>
+        </div>
+      </div>
     </div>
   );
 }

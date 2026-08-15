@@ -87,6 +87,10 @@ export default function FacilityIncidents({ readOnly = false, canResolve = false
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  // Review & close modal (replaces the bare Swal textarea prompt).
+  const [reviewFor, setReviewFor] = useState<Incident | null>(null);
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [reviewBusy, setReviewBusy] = useState(false);
   const setF = (k: keyof typeof emptyForm, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
 
   // Downscale + read the wound/scene photo to a data URI stored in photoUrl (no external storage needed).
@@ -206,23 +210,23 @@ export default function FacilityIncidents({ readOnly = false, canResolve = false
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setPage(1); }, [search, severityFilter, statusFilter, typeFilter, perPage]);
 
-  // Care Manager review-and-close: capture sign-off notes, then close the incident.
-  const handleResolve = async (id: string) => {
-    const res = await Swal.fire({
-      title: "Review & close incident",
-      input: "textarea",
-      inputLabel: "Review notes (Care Manager sign-off)",
-      inputPlaceholder: "Findings, corrective actions verified, outcome…",
-      showCancelButton: true, confirmButtonColor: "#10b981", cancelButtonColor: "#6b7280", confirmButtonText: "Close incident",
-    });
-    if (!res.isConfirmed) return;
+  // Care Manager review-and-close: open the sign-off modal for this incident.
+  const handleResolve = (id: string) => {
+    const inc = incidents.find((x) => x.id === id) ?? null;
+    setReviewNotes("");
+    setReviewFor(inc ?? ({ id } as Incident));
+  };
+  const submitReview = async () => {
+    if (!reviewFor) return;
+    setReviewBusy(true);
     try {
-      await updateRecord("incidents", id, { resolvedAt: new Date().toISOString(), reviewNotes: res.value || null });
+      await updateRecord("incidents", reviewFor.id, { resolvedAt: new Date().toISOString(), reviewNotes: reviewNotes.trim() || null });
       await refetch();
+      setReviewFor(null);
       Swal.fire({ title: "Reviewed & closed", icon: "success", timer: 1300, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ title: "Failed", text: err instanceof Error ? err.message : "Could not close.", icon: "error" });
-    }
+    } finally { setReviewBusy(false); }
   };
 
   const handleReopen = async (id: string) => {
@@ -704,6 +708,35 @@ export default function FacilityIncidents({ readOnly = false, canResolve = false
               <button onClick={() => void handleCreate()} disabled={saving} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm disabled:opacity-50">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} {saving ? "Saving…" : "Submit Report"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Review & close incident */}
+      {reviewFor && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setReviewFor(null); }}>
+          <div className="bg-white w-full max-w-lg max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-xl shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 px-5 py-4 text-white">
+              <h2 className="flex items-center gap-2 text-lg font-bold"><CheckCircle className="w-5 h-5" /> Review &amp; close incident</h2>
+              <button onClick={() => setReviewFor(null)} className="rounded-lg p-1.5 transition hover:bg-white/20"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {(reviewFor.type || reviewFor.resident) && (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                  <p className="flex items-center gap-2 font-semibold text-gray-900"><AlertTriangle className="w-4 h-4 text-red-500" />{reviewFor.type || "Incident"}{reviewFor.resident ? ` — ${reviewFor.resident}` : ""}{reviewFor.room ? ` · Rm ${reviewFor.room}` : ""}</p>
+                  {reviewFor.description && <p className="mt-1 line-clamp-2 text-xs text-gray-500">{reviewFor.description}</p>}
+                </div>
+              )}
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-gray-700">Review notes <span className="font-normal text-gray-400">(Care Manager sign-off)</span></label>
+                <textarea autoFocus rows={5} value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} placeholder="Findings, corrective actions verified, outcome…" className={incInp} />
+                <p className="mt-1.5 text-[11px] text-gray-400">Closing records the sign-off and marks the incident resolved.</p>
+              </div>
+            </div>
+            <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
+              <button onClick={() => setReviewFor(null)} disabled={reviewBusy} className="rounded-lg px-5 py-2 text-sm text-gray-700 transition hover:bg-gray-100 disabled:opacity-50">Cancel</button>
+              <button onClick={() => void submitReview()} disabled={reviewBusy} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50">{reviewBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} {reviewBusy ? "Closing…" : "Close incident"}</button>
             </div>
           </div>
         </div>
