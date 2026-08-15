@@ -91,6 +91,9 @@ export default function FamilyRelative() {
             <div className="relative w-full aspect-[4/3] md:aspect-video bg-black rounded-2xl overflow-hidden shadow-lg border-2 border-blue-200">
               <CameraVisionFeed
                 cameraMode="hybrid"
+                residentId={relative.id}
+                residentName={relative.name}
+                residentRoom={relative.room}
                 isFallen={fallAlert}
                 onFallTriggered={(a: { summary?: string }) => { setFallAlert(true); setFallSummary(a.summary || "Fall detected on camera."); }}
                 onFallCleared={() => setFallAlert(false)}

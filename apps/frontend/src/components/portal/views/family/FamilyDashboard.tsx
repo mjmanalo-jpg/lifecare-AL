@@ -2,24 +2,22 @@
 
 import { useMemo } from "react";
 import {
-  Wallet, Heart, Activity, HeartPulse, MessageSquare, Calendar,
-  AlertTriangle, ClipboardList,
+  Wallet, Activity, HeartPulse, MessageSquare, Calendar,
+  AlertTriangle, ClipboardList, ShieldCheck, Thermometer, Wind, CheckCircle2, Circle, type LucideIcon,
 } from "lucide-react";
-import StatCard from "@/components/portal/widgets/StatCard";
-import ChartContainer from "@/components/portal/widgets/ChartContainer";
-import VitalsPanel, { VitalReading } from "@/components/portal/widgets/VitalsPanel";
+import type { VitalReading } from "@/components/portal/widgets/VitalsPanel";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptIncident, humanize } from "@/lib/adapters";
 import AppointmentCalendar from "@/components/portal/AppointmentCalendar";
 import {
-  useRelative, Panel, LiveBadge, EMPTY_VITALS_TREND, type Row,
+  useRelative, Panel, LiveBadge, type Row,
 } from "./shared";
 
 /** Family Dashboard — the live overview that ties every module together. */
 export default function FamilyDashboard() {
   const { relative, displayName } = useRelative();
 
-  const { data: vitalsRows, loading: vitalsLoading } = useLiveQuery("vitals", {
+  const { data: vitalsRows } = useLiveQuery("vitals", {
     query: "include=resident&take=50",
     tables: ["VitalsLog"],
   });
@@ -39,9 +37,11 @@ export default function FamilyDashboard() {
     query: "take=100",
     tables: ["Visit"],
   });
+  // Care Team Activity updates near-realtime as tasks are created/completed.
   const { data: taskRows } = useLiveQuery("tasks", {
     query: "take=50",
     tables: ["Task"],
+    pollMs: 5000,
   });
 
   const incidents = useMemo(() => incidentRows.map(adaptIncident), [incidentRows]);
@@ -68,23 +68,6 @@ export default function FamilyDashboard() {
     return readings;
   }, [vitalsRows]);
 
-  // Heart-rate trend for the dashboard chart (real data if present).
-  const heartRateTrend = useMemo(() => {
-    return vitalsRows
-      .filter((v: Row) => v.type === "HEART_RATE")
-      .slice(0, 12)
-      .reverse()
-      .map((v: Row) => {
-        const numeric = parseFloat(String(v.value));
-        return {
-          name: v.recordedAt
-            ? new Date(v.recordedAt as string).toLocaleDateString([], { month: "short", day: "numeric" })
-            : "",
-          value: isNaN(numeric) ? 0 : numeric,
-        };
-      });
-  }, [vitalsRows]);
-
   const unreadMessages = messageRows.filter((m: Row) => !m.isRead).length;
 
   const balanceDue = invoiceRows.reduce((sum: number, inv: Row) => {
@@ -97,122 +80,91 @@ export default function FamilyDashboard() {
   const tasks = relative ? taskRows.filter((t) => !t.residentId || t.residentId === relative.id) : taskRows;
   const openTasks = tasks.filter((t) => String(t.status) !== "COMPLETED" && String(t.status) !== "CANCELLED");
 
-  const recentMessages = messageRows.slice(0, 3);
+  const completedTasks = tasks.filter((t) => String(t.status) === "COMPLETED").length;
+  const recentTasks = [...tasks]
+    .sort((a, b) => String(b.updatedAt ?? b.createdAt ?? "").localeCompare(String(a.updatedAt ?? a.createdAt ?? "")))
+    .slice(0, 4);
   const upcomingVisits = visitRows.slice(0, 3);
   const topAlerts = incidents.slice(0, 4);
-  const latestHR = liveVitals.find((v) => v.type === "HEART_RATE");
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2">
-          <Heart className="w-5 h-5 sm:w-6 sm:h-6 text-red-500 flex-shrink-0" /> Welcome — {displayName}
-        </h1>
-        <p className="text-gray-600 flex items-center gap-2 text-xs sm:text-sm mt-1">
-          <LiveBadge />
-          {relative ? `Room ${relative.room} • ${humanize(relative.careLevel)} Care${relative.age != null ? ` • Age ${relative.age}` : ""}` : "Your family member's care overview"}
-        </p>
-      </div>
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 lg:gap-4">
-        <StatCard
-          title="Care Status"
-          value={relative && relative.alertsCount > 0 ? `${relative.alertsCount} alert${relative.alertsCount === 1 ? "" : "s"}` : "Stable"}
-          icon={Activity}
-          backgroundColor={relative && relative.alertsCount > 0 ? "bg-red-50" : "bg-green-50"}
-          textColor={relative && relative.alertsCount > 0 ? "text-red-900" : "text-green-900"}
-          iconColor={relative && relative.alertsCount > 0 ? "text-red-500" : "text-green-500"}
-        />
-        <StatCard
-          title="Heart Rate"
-          value={latestHR ? String(latestHR.value) : "—"}
-          unit={latestHR ? "bpm" : ""}
-          icon={HeartPulse}
-          backgroundColor="bg-rose-50"
-          textColor="text-rose-900"
-          iconColor="text-rose-500"
-        />
-        <StatCard
-          title="Unread Messages"
-          value={String(unreadMessages)}
-          icon={MessageSquare}
-          backgroundColor="bg-blue-50"
-          textColor="text-blue-900"
-          iconColor="text-blue-500"
-        />
-        <StatCard
-          title="Appointments"
-          value={String(visitRows.length)}
-          icon={Calendar}
-          backgroundColor="bg-purple-50"
-          textColor="text-purple-900"
-          iconColor="text-purple-500"
-        />
-        <StatCard
-          title="Balance Due"
-          value={`₱${balanceDue.toFixed(0)}`}
-          icon={Wallet}
-          backgroundColor="bg-yellow-50"
-          textColor="text-yellow-900"
-          iconColor="text-yellow-500"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
-        {/* Left column: relative + vitals + trend */}
-        <div className="xl:col-span-2 space-y-4 sm:space-y-6">
-          {relative && (
-            <div className="bg-white rounded-lg p-4 sm:p-6 border border-gray-200">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900">{relative.name}</h3>
-                  <p className="text-gray-600 text-xs sm:text-sm mt-1">Room {relative.room} • {humanize(relative.careLevel)} Care{relative.age != null ? ` • Age ${relative.age}` : ""}</p>
+      {/* Hero — the answer to "is my relative okay right now?" up top:
+          a plain-language status plus their live vitals, for families watching from afar. */}
+      {(() => {
+        const stable = !relative || relative.alertsCount === 0;
+        const first = ((relative?.name || displayName || "").split(" ")[0]) || "Your relative";
+        const chips = [
+          { key: "HEART_RATE", label: "Heart rate", unit: "bpm", icon: HeartPulse, tint: "text-rose-600", bg: "bg-rose-50" },
+          { key: "TEMPERATURE", label: "Temperature", unit: "°C", icon: Thermometer, tint: "text-amber-600", bg: "bg-amber-50" },
+          { key: "BLOOD_PRESSURE", label: "Blood pressure", unit: "mmHg", icon: Activity, tint: "text-sky-600", bg: "bg-sky-50" },
+          { key: "OXYGEN", label: "Oxygen", unit: "%", icon: Wind, tint: "text-teal-600", bg: "bg-teal-50" },
+        ] as const;
+        return (
+          <section className="relative overflow-hidden rounded-3xl border border-teal-100 bg-gradient-to-br from-teal-50 via-white to-rose-50/40 p-5 sm:p-7 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_18px_40px_-20px_rgba(13,148,136,0.28)]">
+            <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Welcome — {relative?.name || displayName}</h1>
+                <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600">
+                  <LiveBadge />
+                  {relative ? `Room ${relative.room} · ${humanize(relative.careLevel)} Care${relative.age != null ? ` · Age ${relative.age}` : ""}` : "Your family member's care overview"}
+                </p>
+                <div className={`mt-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold ${stable ? "bg-teal-600/10 text-teal-800" : "bg-amber-500/15 text-amber-900"}`}>
+                  {stable ? <ShieldCheck className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                  {stable
+                    ? `${first} is resting comfortably — vitals in normal range`
+                    : `${relative?.alertsCount} active alert${relative?.alertsCount === 1 ? "" : "s"} — the care team has been notified`}
                 </div>
-                {relative.alertsCount > 0 && (
-                  <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-semibold flex-shrink-0">
-                    {relative.alertsCount} active alert{relative.alertsCount === 1 ? "" : "s"}
-                  </span>
-                )}
               </div>
-              {(relative.allergies || relative.medicalHistory) && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs font-semibold text-gray-600 mb-1">Allergies</p>
-                    <p className="text-sm text-gray-900">{relative.allergies || "None recorded"}</p>
-                  </div>
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs font-semibold text-gray-600 mb-1">Medical History</p>
-                    <p className="text-sm text-gray-900">{relative.medicalHistory || "None recorded"}</p>
-                  </div>
+
+              {/* Live vitals */}
+              <div className="grid w-full shrink-0 grid-cols-2 gap-2.5 sm:gap-3 lg:w-[360px]">
+                {chips.map((c) => {
+                  const v = liveVitals.find((x) => x.type === c.key);
+                  const Icon = c.icon;
+                  return (
+                    <div key={c.key} className="rounded-2xl border border-white bg-white/70 p-3 shadow-sm backdrop-blur-sm">
+                      <div className="flex items-center gap-2">
+                        <span className={`grid h-7 w-7 place-items-center rounded-lg ${c.bg} ${c.tint}`}><Icon className="h-4 w-4" /></span>
+                        <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500">{c.label}</span>
+                      </div>
+                      <p className="mt-1.5 text-xl font-bold text-slate-900">{v ? v.value : "—"}<span className="ml-1 text-xs font-medium text-slate-400">{v ? c.unit : ""}</span></p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        );
+      })()}
+
+      {/* Quick metrics */}
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4 lg:gap-4">
+        <KpiCard icon={MessageSquare} label="Unread messages" value={String(unreadMessages)} tint="text-blue-600" bg="bg-blue-50" />
+        <KpiCard icon={Calendar} label="Appointments" value={String(visitRows.length)} tint="text-teal-600" bg="bg-teal-50" />
+        <KpiCard icon={ClipboardList} label="Open care tasks" value={String(openTasks.length)} tint="text-emerald-600" bg="bg-emerald-50" />
+        <KpiCard icon={Wallet} label="Balance due" value={`₱${balanceDue.toFixed(0)}`} tint="text-amber-600" bg="bg-amber-50" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-3">
+        {/* Main column: care profile, alerts, live care-team activity */}
+        <div className="space-y-4 sm:space-y-6 xl:col-span-2">
+          {relative && (relative.allergies || relative.medicalHistory) && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Care profile</h3>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-xl bg-rose-50/70 p-3">
+                  <p className="text-xs font-semibold text-rose-700">Allergies</p>
+                  <p className="mt-0.5 text-sm text-slate-900">{relative.allergies || "None recorded"}</p>
                 </div>
-              )}
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <p className="text-xs font-semibold text-slate-600">Medical history</p>
+                  <p className="mt-0.5 text-sm text-slate-900">{relative.medicalHistory || "None recorded"}</p>
+                </div>
+              </div>
             </div>
           )}
 
-          {vitalsLoading && vitalsRows.length === 0 ? (
-            <VitalsPanel vitals={[]} resident={displayName} isLoading />
-          ) : (
-            <VitalsPanel vitals={liveVitals} resident={displayName} />
-          )}
-
-          <div className="bg-white rounded-lg p-3 sm:p-4 border border-gray-200">
-            <ChartContainer
-              title="Heart Rate Trend"
-              type="area"
-              data={heartRateTrend.length ? heartRateTrend : EMPTY_VITALS_TREND}
-              dataKey="value"
-              xAxisKey="name"
-              colors={["#ef4444"]}
-              height={220}
-            />
-          </div>
-        </div>
-
-        {/* Right column: alerts, care team, messages, appointments */}
-        <div className="space-y-4 sm:space-y-6">
-          {relative && <AppointmentCalendar residentId={relative.id} residentName={relative.name} title="Calendar" />}
           <Panel title="Recent Alerts" icon={AlertTriangle} count={incidents.length}>
             {topAlerts.length > 0 ? (
               <div className="space-y-2">
@@ -235,47 +187,54 @@ export default function FamilyDashboard() {
 
           <Panel title="Care Team Activity" icon={ClipboardList} count={openTasks.length}>
             {tasks.length > 0 ? (
-              <div className="space-y-2">
-                {tasks.slice(0, 3).map((t: Row, i: number) => (
-                  <div key={(t.id as string) ?? i} className="p-2.5 rounded-lg bg-purple-50/60 border border-purple-100">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className={`font-medium text-sm truncate ${String(t.status) === "COMPLETED" ? "text-gray-500 line-through" : "text-gray-900"}`}>{String(t.title ?? "Care task")}</span>
-                      <span className="text-xs text-gray-600 flex-shrink-0">{humanize(String(t.status ?? "PENDING"))}</span>
-                    </div>
-                    <p className="text-xs text-gray-600 truncate">Due {t.dueDate ? new Date(String(t.dueDate)).toLocaleDateString() : "—"}</p>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.round((completedTasks / tasks.length) * 100)}%` }} />
                   </div>
-                ))}
+                  <span className="shrink-0 text-xs font-semibold text-slate-600">{completedTasks} / {tasks.length} done</span>
+                </div>
+                <div className="space-y-2">
+                  {recentTasks.map((t: Row, i: number) => {
+                    const status = String(t.status ?? "PENDING").toUpperCase();
+                    const done = status === "COMPLETED";
+                    const meta = done ? { label: "Completed", cls: "bg-emerald-100 text-emerald-700" }
+                      : status === "IN_PROGRESS" ? { label: "In progress", cls: "bg-blue-100 text-blue-700" }
+                      : status === "CANCELLED" ? { label: "Cancelled", cls: "bg-slate-100 text-slate-500" }
+                      : { label: "Pending", cls: "bg-amber-100 text-amber-700" };
+                    return (
+                      <div key={(t.id as string) ?? i} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-2.5">
+                        {done ? <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" /> : <Circle className="h-5 w-5 shrink-0 text-slate-300" />}
+                        <div className="min-w-0 flex-1">
+                          <p className={`truncate text-sm font-medium ${done ? "text-slate-400 line-through" : "text-slate-900"}`}>{String(t.title ?? "Care task")}</p>
+                          <p className="truncate text-xs text-slate-400">Due {t.dueDate ? new Date(String(t.dueDate)).toLocaleDateString() : "—"}</p>
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${meta.cls}`}>{meta.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ) : (
               <p className="text-sm text-gray-500 py-4 text-center">No care tasks scheduled.</p>
             )}
           </Panel>
+        </div>
 
-          <Panel title="Recent Messages" icon={MessageSquare} count={unreadMessages}>
-            {recentMessages.length > 0 ? (
-              <div className="space-y-2">
-                {recentMessages.map((m: Row, i: number) => (
-                  <div key={(m.id as string) ?? i} className={`p-2.5 rounded-lg border ${m.isRead ? "border-gray-200" : "border-blue-200 bg-blue-50/50"}`}>
-                    <p className="font-medium text-gray-900 text-sm truncate">{(m.subject as string) || humanize(m.messageType as string) || "Message"}</p>
-                    <p className="text-xs text-gray-600 truncate">{(m.content as string) ?? ""}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500 py-4 text-center">No messages yet.</p>
-            )}
-          </Panel>
+        {/* Side column: schedule */}
+        <div className="space-y-4 sm:space-y-6">
+          {relative && <AppointmentCalendar residentId={relative.id} residentName={relative.name} title="Calendar" />}
 
           <Panel title="Upcoming Appointments" icon={Calendar} count={visitRows.length}>
             {upcomingVisits.length > 0 ? (
               <div className="space-y-2">
                 {upcomingVisits.map((v: Row, i: number) => (
-                  <div key={(v.id as string) ?? i} className="p-2.5 rounded-lg bg-purple-50 border border-purple-100">
+                  <div key={(v.id as string) ?? i} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium text-gray-900 text-sm truncate">{(v.visitorName as string) ?? "Visit"}</span>
-                      <span className="text-xs text-gray-600 flex-shrink-0">{v.checkInTime ? new Date(v.checkInTime as string).toLocaleDateString() : "—"}</span>
+                      <span className="text-xs text-gray-500 flex-shrink-0">{v.checkInTime ? new Date(v.checkInTime as string).toLocaleDateString() : "—"}</span>
                     </div>
-                    <p className="text-xs text-gray-600 truncate">{(v.relationship as string) ?? ""}{v.purpose ? ` • ${String(v.purpose)}` : ""}</p>
+                    <p className="text-xs text-gray-500 truncate">{(v.relationship as string) ?? ""}{v.purpose ? ` • ${String(v.purpose)}` : ""}</p>
                   </div>
                 ))}
               </div>
@@ -285,6 +244,17 @@ export default function FamilyDashboard() {
           </Panel>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Compact metric tile — cohesive palette, real depth, subtle hover lift. */
+function KpiCard({ icon: Icon, label, value, tint, bg }: { icon: LucideIcon; label: string; value: string; tint: string; bg: string }) {
+  return (
+    <div className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_22px_-16px_rgba(15,23,42,0.18)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_1px_2px_rgba(15,23,42,0.04),0_18px_30px_-16px_rgba(15,23,42,0.22)]">
+      <span className={`grid h-9 w-9 place-items-center rounded-xl ${bg} ${tint}`}><Icon className="h-[18px] w-[18px]" /></span>
+      <p className="mt-3 text-2xl font-bold tracking-tight text-slate-900">{value}</p>
+      <p className="mt-0.5 text-xs font-medium text-slate-500">{label}</p>
     </div>
   );
 }

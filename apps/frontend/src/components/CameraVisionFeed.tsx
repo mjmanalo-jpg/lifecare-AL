@@ -594,37 +594,19 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
     } catch { /* non-critical — ignore save errors */ }
   }, [residentId, residentName, residentRoom, cameraMode, aiVitals.heartRate, aiVitals.respirationRate, aiVitals.temperature, aiVitals.oxygen, bpEstimate?.systolicBP, bpEstimate?.diastolicBP]);
 
-  // Auto-escalation — when a fall is CONFIRMED, raise an EMERGENCY SBAR escalation so
-  // the clinical team is paged immediately, independent of any parent wiring. Debounced.
+  // Confirmed fall → the authoritative server handler creates ALL of: the Camera
+  // Activity Log entry, the EMERGENCY SBAR escalation, an Incident (→ Incident
+  // Reports + family Incident Alerts), and notifications to the care team AND the
+  // resident's family sponsor. Done server-side (raw prisma) so it works for every
+  // viewer role — a family/resident browser can't write those tables via /api/db.
+  // Deduped server-side (90s) so multiple open feeds don't stack duplicates. Debounced.
   const raiseFallEscalation = useCallback(async (confidence: number) => {
-    if (!residentId) return; // need a resident to route the escalation to
+    if (!residentId) return; // need a resident to route the alert to
     const now = Date.now();
     if (now - lastFallEscalationRef.current < FALL_ESCALATION_DEBOUNCE_MS) return;
     lastFallEscalationRef.current = now;
     const who = `${residentName || "Resident"}${residentRoom ? ` (Room ${residentRoom})` : ""}`;
-    try {
-      await fetch("/api/db/escalations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({
-          residentId,
-          situation: `Automated fall detection — ${who} appears to have fallen and is on the floor (confidence ${Math.round(confidence * 100)}%).`,
-          background: "Detected on-device by camera vision (pose + motion): the resident went horizontal on the floor and stayed still through the confirmation window.",
-          assessment: "Possible fall with risk of injury — needs an immediate in-person check.",
-          recommendation: "Dispatch a caregiver/nurse to the room now to assess the resident and take vitals.",
-          priority: "EMERGENCY",
-          status: "OPEN",
-          raisedBy: "Automated Fall Detection",
-          raisedByRole: "SYSTEM",
-          assignedToRole: "NURSE",
-        }),
-      });
-    } catch { /* non-critical — the on-screen EMERGENCY + fall log still fire */ }
-
-    // Close the loop: record an Incident (→ Incident Reports + family Incident
-    // Alerts) and notify the care team AND the resident's family sponsor. Deduped
-    // server-side so multiple open feeds don't stack duplicate incidents.
+    const a = analysisRef.current;
     try {
       await fetch("/api/monitoring/fall", {
         method: "POST",
@@ -635,10 +617,17 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
           kind: "FALL",
           confidence,
           summary: `${who} appears to have fallen and is on the floor.`,
+          emotion: a.globalEmotion,
+          behavior: a.globalBehavior,
+          posture: a.globalPosture,
+          sleepState: a.sleepState,
+          heartRate: aiVitals.heartRate,
+          temperature: aiVitals.temperature,
+          oxygen: aiVitals.oxygen,
         }),
       });
-    } catch { /* non-critical — the escalation + on-screen EMERGENCY still fire */ }
-  }, [residentId, residentName, residentRoom]);
+    } catch { /* non-critical — the on-screen EMERGENCY banner still fires */ }
+  }, [residentId, residentName, residentRoom, aiVitals.heartRate, aiVitals.temperature, aiVitals.oxygen]);
 
   // Wave detection - separate left and right history for accuracy
   const lWristHistRef = useRef<number[]>([]);
@@ -1773,7 +1762,9 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
             setSelfFallen(true);
             analysisRef.current = { ...analysisRef.current, fallConfidence: Math.round(fallConf * 100) / 100 };
             onFallTriggered?.(analysisRef.current);
-            saveMonitoringLog("FALL_DETECTION", analysisRef.current);
+            // The Camera Activity Log entry for the fall is authored server-side by
+            // raiseFallEscalation → /api/monitoring/fall (so it works for every viewer
+            // role and doesn't double-log); no client FALL_DETECTION write here.
             void raiseFallEscalation(fallConf);
           };
 

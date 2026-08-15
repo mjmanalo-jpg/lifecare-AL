@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   Activity, AlertTriangle, CheckCircle2, Clock, CreditCard, FileText, Printer,
-  Receipt, RefreshCw, Search, Wallet, X,
+  RefreshCw, Search, Wallet, X,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import {
@@ -20,6 +20,7 @@ import {
   useRelative, useNowTs, MoneyStat, TabLoading, EmptyState, LiveBadge,
 } from "./shared";
 import InvoiceDocument from "../billing/InvoiceDocument";
+import ReceiptDocument from "../billing/ReceiptDocument";
 
 type Invoice = ReturnType<typeof adaptInvoice>;
 type Payment = ReturnType<typeof adaptPayment>;
@@ -190,7 +191,7 @@ export default function FamilyBilling() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 flex items-center gap-2 tracking-tight">
-            <Receipt className="w-6 h-6 text-yellow-500 flex-shrink-0" /> Billing &amp; Finance
+            <Wallet className="w-6 h-6 text-emerald-600 flex-shrink-0" /> Billing &amp; Finance
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm mt-1">
             <LiveBadge />
@@ -200,7 +201,7 @@ export default function FamilyBilling() {
         <div className="flex items-center gap-2 flex-wrap">
           <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden bg-white shadow-sm">
             <button onClick={() => setBillView("list")} className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold transition ${billView === "list" ? "bg-yellow-400 text-black font-extrabold" : "text-gray-700 hover:bg-gray-50"}`}>
-              <Receipt className="w-4 h-4" /> Billing Modules
+              <Wallet className="w-4 h-4" /> Billing Modules
             </button>
             <button onClick={() => setBillView("analytics")} className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold transition border-l border-gray-300 ${billView === "analytics" ? "bg-yellow-400 text-black font-extrabold" : "text-gray-700 hover:bg-gray-50"}`}>
               <Activity className="w-4 h-4" /> Financial Reports
@@ -477,41 +478,21 @@ export default function FamilyBilling() {
       {/* ── PRINTABLE INVOICE MODAL ── */}
       {viewingInvoice && <InvoiceDocument invoice={viewingInvoice} facilityName={facilityName} onClose={() => setViewingInvoice(null)} />}
 
-      {/* ── PRINTABLE RECEIPTS MODAL ── */}
+      {/* ── PRINTABLE RECEIPT ── */}
       {viewingReceipt && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[92vh] overflow-y-auto">
-            <div className="p-8 space-y-6 relative overflow-hidden" id="printable-receipt">
-              <div className="absolute top-20 left-1/2 -translate-x-1/2 rotate-12 border-4 border-green-500/20 text-green-500/20 font-extrabold text-5xl px-6 py-2 tracking-widest pointer-events-none select-none rounded-xl">
-                PAID
-              </div>
-              <div className="text-center space-y-1">
-                <h2 className="text-2xl font-extrabold text-green-600 tracking-tight uppercase">Receipt of Payment</h2>
-                <p className="text-xs text-gray-500 font-semibold">{facilityName || "Facility"} Assisted Living Facility</p>
-                <p className="text-[10px] text-gray-400 font-mono mt-1">TXN ID: {viewingReceipt.transactionId}</p>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 space-y-4 text-xs mt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div><span className="text-gray-500 block">Resident Name</span><strong className="text-gray-800 text-sm">{viewingReceipt.residentName}</strong></div>
-                  <div><span className="text-gray-500 block">Invoice Reference</span><strong className="text-gray-800 text-sm">{viewingReceipt.invoiceNumber}</strong></div>
-                  <div><span className="text-gray-500 block">Payment Date</span><strong className="text-gray-800 text-sm">{viewingReceipt.paymentDate ? new Date(viewingReceipt.paymentDate).toLocaleDateString() : ""}</strong></div>
-                  <div><span className="text-gray-500 block">Method Used</span><strong className="text-gray-800 text-sm">{viewingReceipt.paymentMethod}</strong></div>
-                </div>
-                <div className="border-t border-dashed border-gray-200 pt-4 flex justify-between items-center text-sm">
-                  <span className="font-extrabold text-gray-700">Total Captured</span>
-                  <span className="font-black text-green-600 text-xl">₱{viewingReceipt.amount.toLocaleString()}</span>
-                </div>
-              </div>
-              <p className="text-center text-[9px] text-gray-400 mt-6 leading-relaxed">
-                Thank you for your payment. This receipt confirms that the funds have been successfully validated and processed.
-              </p>
-            </div>
-            <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap justify-between gap-2">
-              <button onClick={() => setViewingReceipt(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-xs font-bold transition">Close</button>
-              <button onClick={() => window.print()} className="flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-xs transition"><Printer className="w-3.5 h-3.5" /> Print Receipt</button>
-            </div>
-          </div>
-        </div>
+        <ReceiptDocument
+          facilityName={facilityName}
+          onClose={() => setViewingReceipt(null)}
+          receipt={{
+            receiptNumber: viewingReceipt.transactionId,
+            invoiceNumber: viewingReceipt.invoiceNumber,
+            date: viewingReceipt.paymentDate ? String(viewingReceipt.paymentDate) : null,
+            residentName: viewingReceipt.residentName,
+            paymentMethod: viewingReceipt.paymentMethod,
+            transactionId: viewingReceipt.transactionId,
+            total: Number(viewingReceipt.amount) || 0,
+          }}
+        />
       )}
     </div>
   );

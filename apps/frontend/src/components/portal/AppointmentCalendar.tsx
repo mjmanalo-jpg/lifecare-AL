@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarDays, Plus, X, Clock, Stethoscope, Users, ClipboardList, MapPin, Loader2, Calendar as CalIcon, Link2, Copy, Check, Download, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarDays, Plus, X, Clock, Stethoscope, Users, ClipboardList, MapPin, Loader2, Calendar as CalIcon, Link2, Copy, Check, Download, ExternalLink, ChevronLeft, ChevronRight, UserRound } from "lucide-react";
 import Swal from "@/lib/swal";
+import { residentName as residentNameOf } from "@/lib/adapters";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, upsertRecord } from "@/lib/api";
 import { buildIcsCalendar, buildIcsEvent, googleCalendarUrl, type IcsEvent } from "@/lib/ics";
@@ -33,6 +34,7 @@ function parseAppt(v: Row) {
     when: s(v.checkInTime),
     withWhom: s(v.visitorName),
     notes: s(v.notes),
+    residentName: v.resident ? residentNameOf(v.resident) : "",
     source: "visit",
   };
 }
@@ -53,6 +55,7 @@ function parseReferral(r: Row) {
     when: s(r.scheduledDate),
     withWhom: specialist || s(r.facilityName),
     notes: s(r.facilityName),
+    residentName: r.resident ? residentNameOf(r.resident) : "",
     source: "referral",
   };
 }
@@ -113,7 +116,7 @@ interface Props {
  *  conferences, tours. Shown on the family + resident dashboards; anyone with
  *  access can schedule, and it reflects on every viewer's calendar. */
 export default function AppointmentCalendar({ residentId, residentName, canSchedule = true, title = "Calendar" }: Props) {
-  const q = residentId ? `f_residentId=${residentId}&take=300` : "take=300";
+  const q = residentId ? `f_residentId=${residentId}&include=resident&take=300` : "include=resident&take=300";
   const { data: visitRows, refetch } = useLiveQuery<Row>("visits", { query: q, tables: ["Visit"] });
   const { data: referralRows } = useLiveQuery<Row>("hospital-referrals", { query: q, tables: ["HospitalReferral"] });
   const { data: settingRows } = useLiveQuery<Row>("app-settings", { tables: ["AppSetting"] });
@@ -452,6 +455,7 @@ export default function AppointmentCalendar({ residentId, residentName, canSched
                   <p className="text-sm font-medium" style={{ color: meta.color }}>{meta.label}</p>
                 </div>
                 <div className="space-y-1.5 text-sm text-gray-600">
+                  {detailAppt.residentName && <p className="flex items-center gap-2 font-semibold text-gray-900"><UserRound className="h-4 w-4 text-gray-400" />{detailAppt.residentName}</p>}
                   <p className="flex items-center gap-2"><Clock className="h-4 w-4 text-gray-400" />{new Date(detailAppt.when).toLocaleString(undefined, { weekday: "long", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
                   {detailAppt.withWhom && detailAppt.withWhom !== "—" && <p className="flex items-center gap-2"><Stethoscope className="h-4 w-4 text-gray-400" />{detailAppt.withWhom}</p>}
                   {detailAppt.notes && <p className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 text-gray-400" />{detailAppt.notes}</p>}

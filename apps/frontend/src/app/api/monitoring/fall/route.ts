@@ -70,6 +70,8 @@ export async function POST(request: NextRequest) {
     ? `Fall detected for ${who}${room} by AI camera monitoring${confPct}. Immediate in-person assistance required.${detail ? ` ${detail}` : ""}`
     : `Pre-fall risk detected for ${who}${room} by AI camera monitoring. ${detail || "Check the resident before a fall occurs."}`;
 
+  const numOrNull = (v: unknown) => (Number.isFinite(Number(v)) && Number(v) !== 0 ? Number(v) : null);
+
   const incident = await prisma.incident.create({
     data: {
       organizationId: ctx.organizationId,
@@ -84,6 +86,59 @@ export async function POST(request: NextRequest) {
       incidentDate: new Date(),
     },
   });
+
+  // Camera Activity Log entry (the browser feed can't write this for family/
+  // resident callers, so it's authored here so every fall shows in the log).
+  try {
+    await prisma.cameraMonitoringLog.create({
+      data: {
+        organizationId: ctx.organizationId,
+        communityId: ctx.communityId,
+        residentId: resident.id,
+        residentName: who,
+        roomNumber: resident.roomNumber,
+        logType: kind === "FALL" ? "FALL_DETECTION" : "ANALYSIS",
+        alert: true,
+        alertReason: kind === "FALL" ? "Fall detected — resident requires immediate assistance." : "Pre-fall risk — check the resident.",
+        summary: description,
+        emotion: body.emotion ? String(body.emotion) : null,
+        behavior: body.behavior ? String(body.behavior) : null,
+        posture: body.posture ? String(body.posture) : null,
+        sleepState: body.sleepState ? String(body.sleepState) : null,
+        heartRate: numOrNull(body.heartRate),
+        temperature: numOrNull(body.temperature),
+        oxygen: numOrNull(body.oxygen),
+        cameraId: "hybrid",
+      },
+    });
+  } catch (e) {
+    console.error("[monitoring/fall] camera log failed:", e instanceof Error ? e.message : e);
+  }
+
+  // SBAR escalation (EMERGENCY) — for confirmed falls only.
+  if (kind === "FALL") {
+    try {
+      await prisma.escalation.create({
+        data: {
+          organizationId: ctx.organizationId,
+          communityId: ctx.communityId,
+          residentId: resident.id,
+          situation: `Automated fall detection — ${who}${room} appears to have fallen and is on the floor${confPct}.`,
+          background: "Detected on-device by camera vision (pose + motion): the resident went horizontal on the floor and stayed still through the confirmation window.",
+          assessment: "Possible fall with risk of injury — needs an immediate in-person check.",
+          recommendation: "Dispatch a caregiver/nurse to the room now to assess the resident and take vitals.",
+          priority: "EMERGENCY",
+          status: "OPEN",
+          raisedBy: "Automated Fall Detection",
+          raisedByRole: "SYSTEM",
+          assignedToRole: "NURSE",
+          relatedIncidentId: incident.id,
+        },
+      });
+    } catch (e) {
+      console.error("[monitoring/fall] escalation failed:", e instanceof Error ? e.message : e);
+    }
+  }
 
   // Fan out notifications: care team + family sponsor + resident.
   try {

@@ -9,11 +9,12 @@
  */
 
 import { useMemo, useState } from "react";
-import { Search, User, Printer, CheckCircle2, FileText, Receipt as ReceiptIcon, Layers, Wallet } from "lucide-react";
+import { Search, User, Printer, CheckCircle2, FileText, Layers, Wallet } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFacilityConfig } from "@/lib/useFacilityConfig";
 import { adaptResident, adaptInvoice, adaptServiceCharge, adaptPayment } from "@/lib/adapters";
 import InvoiceDocument from "./InvoiceDocument";
+import ReceiptDocument from "./ReceiptDocument";
 
 const money = (n: number) => `₱${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const day = (v: string | null | undefined) => (v ? new Date(v).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—");
@@ -208,7 +209,16 @@ export default function ResidentBillingRecord() {
       </div>
 
       {viewInvoice && <InvoiceDocument invoice={viewInvoice} facilityName={facilityName} sponsorName={selected?.sponsorName || undefined} onClose={() => setViewInvoice(null)} />}
-      {viewReceipt && <ReceiptModal payment={viewReceipt} residentName={selected?.name || "—"} facilityName={facilityName} onClose={() => setViewReceipt(null)} />}
+      {viewReceipt && <ReceiptDocument facilityName={facilityName} onClose={() => setViewReceipt(null)} receipt={{
+        receiptNumber: viewReceipt.transactionId || viewReceipt.id,
+        invoiceNumber: viewReceipt.invoiceNumber,
+        date: viewReceipt.paymentDate ? String(viewReceipt.paymentDate) : null,
+        residentName: selected?.name || "—",
+        sponsorName: selected?.sponsorName || undefined,
+        paymentMethod: viewReceipt.paymentMethod,
+        transactionId: viewReceipt.transactionId || viewReceipt.id,
+        total: Number(viewReceipt.amount) || 0,
+      }} />}
     </div>
   );
 }
@@ -222,37 +232,3 @@ function Stat({ icon: Icon, label, value, tone }: { icon: React.ComponentType<{ 
   );
 }
 
-function ReceiptModal({ payment, residentName, facilityName, onClose }: { payment: Payment; residentName: string; facilityName?: string; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <style>{`@media print { body * { visibility: hidden !important; } #printable-receipt-doc, #printable-receipt-doc * { visibility: visible !important; } #printable-receipt-doc { position: absolute; left: 0; top: 0; width: 100%; padding: 24px; } .no-print { display: none !important; } }`}</style>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[92vh] overflow-y-auto">
-        <div id="printable-receipt-doc" className="p-8 space-y-6 relative overflow-hidden">
-          <div className="absolute top-20 left-1/2 -translate-x-1/2 rotate-12 border-4 border-green-500/20 text-green-500/20 font-extrabold text-5xl px-6 py-2 tracking-widest pointer-events-none select-none rounded-xl">PAID</div>
-          <div className="text-center space-y-1">
-            <h2 className="text-2xl font-extrabold text-green-600 tracking-tight uppercase flex items-center justify-center gap-2"><ReceiptIcon className="w-6 h-6" /> Receipt of Payment</h2>
-            <p className="text-xs text-slate-500 font-semibold">{facilityName || "Assisted Living Facility"}</p>
-            <p className="text-[10px] text-slate-400 font-mono mt-1">TXN ID: {payment.transactionId || payment.id}</p>
-          </div>
-          <div className="bg-slate-50 rounded-xl p-5 border border-slate-100 space-y-4 text-xs mt-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div><span className="text-slate-500 block">Resident</span><strong className="text-slate-800 text-sm">{residentName}</strong></div>
-              <div><span className="text-slate-500 block">Invoice Reference</span><strong className="text-slate-800 text-sm">{payment.invoiceNumber}</strong></div>
-              <div><span className="text-slate-500 block">Payment Date</span><strong className="text-slate-800 text-sm">{day(payment.paymentDate)}</strong></div>
-              <div><span className="text-slate-500 block">Method</span><strong className="text-slate-800 text-sm">{payment.paymentMethod || "—"}</strong></div>
-            </div>
-            <div className="border-t border-dashed border-slate-200 pt-4 flex justify-between items-center text-sm">
-              <span className="font-extrabold text-slate-700">Amount Paid</span>
-              <span className="font-black text-green-600 text-xl tabular-nums">{money(payment.amount)}</span>
-            </div>
-          </div>
-          <p className="text-center text-[9px] text-slate-400 mt-6 leading-relaxed">Thank you for your payment. This receipt confirms the funds have been successfully processed.</p>
-        </div>
-        <div className="no-print bg-slate-50 border-t border-slate-200 px-6 py-4 flex flex-wrap justify-between gap-2">
-          <button onClick={onClose} className="px-5 py-2 text-slate-700 hover:bg-slate-100 border border-slate-300 rounded-lg text-sm font-semibold transition">Close</button>
-          <button onClick={() => window.print()} className="flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-sm transition"><Printer className="w-4 h-4" /> Print / Save PDF</button>
-        </div>
-      </div>
-    </div>
-  );
-}

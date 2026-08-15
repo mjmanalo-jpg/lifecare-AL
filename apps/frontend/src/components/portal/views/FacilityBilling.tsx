@@ -2,16 +2,18 @@
 
 import { useMemo, useState } from "react";
 import {
-  DollarSign, Search, Eye, FileText, AlertTriangle, CheckCircle, Clock, X, Plus,
+  Search, Eye, FileText, AlertTriangle, CheckCircle, Clock, X, Plus,
   Printer, ShieldCheck, CreditCard, RefreshCw, Layers, ClipboardList, TrendingUp, Download, Library
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFacilityConfig } from "@/lib/useFacilityConfig";
 import { adaptInvoice, adaptServiceCharge, adaptInsuranceValidation, adaptPayment } from "@/lib/adapters";
-import { createRecord, updateRecord, deleteRecord, upsertRecord } from "@/lib/api";
+import { createRecord, updateRecord, upsertRecord } from "@/lib/api";
 import BillingLibraryTab from "./billing/BillingLibraryTab";
 import ResidentStatement from "./billing/ResidentStatement";
+import ReceiptDocument from "./billing/ReceiptDocument";
+import InvoiceDocument from "./billing/InvoiceDocument";
 import { BILLING_LIBRARY_KEY, BILLING_DISPUTES_KEY, parseTemplates, parseDisputes, newId } from "@/lib/billingLibrary";
 
 type Invoice = ReturnType<typeof adaptInvoice>;
@@ -55,7 +57,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
   const { data: paymentRows, loading: payLoading, refetch: refetchPayments } = useLiveQuery<Record<string, unknown>>(
     "payments", { query: "include=invoice&take=300", tables: ["Payment", "Invoice"] }
   );
-  const { facilityName, facilityAddress } = useFacilityConfig();
+  const { facilityName } = useFacilityConfig();
   const { data: settingRows, refetch: refetchSettings } = useLiveQuery<{ id: string; key?: string; value: string }>("app-settings", { tables: ["AppSetting"] });
   const chargeTemplates = useMemo(() => parseTemplates(settingRows.find((r) => (r.key || r.id) === BILLING_LIBRARY_KEY)?.value), [settingRows]);
   const [statementResident, setStatementResident] = useState<{ id: string; name: string } | null>(null);
@@ -875,173 +877,26 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
         </div>
       )}
 
-      {/* ── MODAL: VIEW INVOICE DETAIL ── */}
+      {/* ── VIEW INVOICE (shared classic-format document) ── */}
       {viewingInvoice && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92dvh] overflow-y-auto">
-            <div className="p-6 sm:p-8 space-y-6" id="printable-invoice">
-              {/* Invoice Branding Header */}
-              <div className="flex justify-between items-start border-b border-gray-200 pb-6 gap-4">
-                <div>
-                  <h2 className="text-2xl font-extrabold text-yellow-600 uppercase tracking-tight">{facilityName || "Facility"}</h2>
-                  <p className="text-xs text-gray-500">Assisted Living Facility</p>
-                  {facilityAddress && <p className="text-xs text-gray-500">{facilityAddress}</p>}
-                </div>
-                <div className="text-right">
-                  <h3 className="text-xl font-bold text-gray-900">INVOICE</h3>
-                  <p className="text-sm font-extrabold text-yellow-600">{viewingInvoice.invoiceNumber}</p>
-                  <p className="text-xs text-gray-500 mt-1">Status: <span className="font-bold">{viewingInvoice.status}</span></p>
-                </div>
-              </div>
-
-              {/* Billing / Metadata Info */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
-                <div>
-                  <h4 className="font-bold text-gray-400 uppercase text-xs mb-1.5">Billed To</h4>
-                  <p className="font-extrabold text-gray-900">{viewingInvoice.residentName}</p>
-                  <p className="text-gray-600">Room {viewingInvoice.room}</p>
-                </div>
-                <div className="text-right">
-                  <h4 className="font-bold text-gray-400 uppercase text-xs mb-1.5">Billing Terms</h4>
-                  {viewingInvoice.dueDate && <p className="text-gray-700"><span className="font-bold">Due Date:</span> {new Date(viewingInvoice.dueDate).toLocaleDateString()}</p>}
-                  {viewingInvoice.billingPeriodStart && (
-                    <p className="text-gray-600 text-xs mt-0.5">Period: {new Date(viewingInvoice.billingPeriodStart).toLocaleDateString()} – {new Date(viewingInvoice.billingPeriodEnd).toLocaleDateString()}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Description */}
-              {viewingInvoice.description && (
-                <div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-700 border border-gray-100">
-                  <span className="font-bold text-gray-600 block mb-1">Invoice Notes</span>
-                  {viewingInvoice.description}
-                </div>
-              )}
-
-              {/* Linked Service Charges Itemized List */}
-              <div className="space-y-3">
-                <h4 className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
-                  <ClipboardList className="w-4 h-4 text-yellow-600" />
-                  Itemized Service Charges &amp; Incidents
-                </h4>
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-gray-100 border-b border-gray-200 text-gray-600 font-semibold">
-                      <tr>
-                        <th className="px-4 py-2.5">Date</th>
-                        <th className="px-4 py-2.5">Category</th>
-                        <th className="px-4 py-2.5">Description</th>
-                        <th className="px-4 py-2.5 text-right">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 text-gray-700">
-                      {viewingInvoice.serviceCharges && viewingInvoice.serviceCharges.length > 0 ? (
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        viewingInvoice.serviceCharges.map((sc: any) => (
-                          <tr key={sc.id}>
-                            <td className="px-4 py-2">{sc.serviceDate ? new Date(sc.serviceDate).toLocaleDateString() : ""}</td>
-                            <td className="px-4 py-2 font-bold">{sc.category}</td>
-                            <td className="px-4 py-2">{sc.description}</td>
-                            <td className="px-4 py-2 text-right font-bold">₱{sc.amount.toLocaleString()}</td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={4} className="px-4 py-3 text-center text-gray-500 italic">No itemized charges linked. Flat base care rate.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Payments ledger summary */}
-              {viewingInvoice.payments && viewingInvoice.payments.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="font-bold text-gray-900 text-sm">Payments Ledger</h4>
-                  <div className="text-xs space-y-1.5">
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    {viewingInvoice.payments.map((p: any) => (
-                      <div key={p.id} className="flex justify-between bg-green-50/50 p-2 rounded border border-green-100 text-green-800">
-                        <span>Authorized txn <strong className="font-mono">{p.transactionId}</strong> via {p.paymentMethod} on {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString() : ""}</span>
-                        <span className="font-bold">-₱{p.amount.toLocaleString()}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Total calculations */}
-              <div className="border-t border-gray-200 pt-6 space-y-2 text-sm max-w-xs ml-auto">
-                <div className="flex justify-between font-semibold text-gray-600"><span>Subtotal:</span><span>₱{viewingInvoice.totalAmount.toLocaleString()}</span></div>
-                <div className="flex justify-between font-semibold text-green-600"><span>Paid to Date:</span><span>-₱{viewingInvoice.amountPaid.toLocaleString()}</span></div>
-                <div className="flex justify-between font-extrabold text-gray-900 border-t border-gray-200 pt-2 text-lg">
-                  <span>Balance Due:</span>
-                  <span className={viewingInvoice.balance > 0 ? "text-amber-600" : "text-green-600"}>₱{viewingInvoice.balance.toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-            {/* Modal Actions */}
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap gap-2 justify-between">
-              <button onClick={() => setViewingInvoice(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-semibold transition">
-                Close
-              </button>
-              <button onClick={() => window.print()} className="flex items-center gap-2 px-5 py-2 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-lg text-sm transition">
-                <Printer className="w-4 h-4" /> Print Invoice
-              </button>
-            </div>
-          </div>
-        </div>
+        <InvoiceDocument invoice={viewingInvoice} facilityName={facilityName} onClose={() => setViewingInvoice(null)} />
       )}
 
       {/* ── MODAL: VIEW RECEIPTS DETAIL ── */}
       {viewingReceipt && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92dvh] overflow-y-auto">
-            <div className="p-4 sm:p-8 space-y-6 relative overflow-hidden" id="printable-receipt">
-              {/* PAID Watermark */}
-              <div className="absolute top-24 left-1/2 -translate-x-1/2 rotate-12 border-4 border-green-500/20 text-green-500/20 font-extrabold text-6xl px-6 py-2 tracking-widest pointer-events-none select-none rounded-xl">
-                PAID
-              </div>
-
-              {/* branding */}
-              <div className="text-center space-y-1">
-                <h2 className="text-2xl font-extrabold text-green-600 tracking-tight uppercase">Receipt of Payment</h2>
-                <p className="text-xs text-gray-500">{facilityName || "Facility"} Assisted Living Facility</p>
-                <p className="text-xs text-gray-500 font-mono">TXN: {viewingReceipt.transactionId}</p>
-              </div>
-
-              {/* Receipt Body */}
-              <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 space-y-4 text-sm mt-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div><span className="text-gray-500 text-xs block">Resident Name</span><strong className="text-gray-800">{viewingReceipt.residentName}</strong></div>
-                  <div><span className="text-gray-500 text-xs block">Invoice Ref</span><strong className="text-gray-800">{viewingReceipt.invoiceNumber}</strong></div>
-                  <div><span className="text-gray-500 text-xs block">Payment Date</span><strong className="text-gray-800">{viewingReceipt.paymentDate ? new Date(viewingReceipt.paymentDate).toLocaleString() : ""}</strong></div>
-                  <div><span className="text-gray-500 text-xs block">Auth Method</span><strong className="text-gray-800">{viewingReceipt.paymentMethod}</strong></div>
-                </div>
-
-                <div className="border-t border-dashed border-gray-200 pt-4 flex justify-between items-center">
-                  <span className="font-extrabold text-gray-700 text-base">Total Captured</span>
-                  <span className="font-black text-green-600 text-2xl">₱{viewingReceipt.amount.toLocaleString()}</span>
-                </div>
-              </div>
-
-              {/* terms */}
-              <p className="text-center text-[10px] text-gray-400 mt-6 leading-relaxed">
-                Thank you for your payment. This receipt acts as official validation that funds have been processed and credited to the respective invoice balance.
-              </p>
-            </div>
-            {/* Modal Actions */}
-            <div className="bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap gap-2 justify-between">
-              <button onClick={() => setViewingReceipt(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-semibold transition">
-                Close
-              </button>
-              <button onClick={() => window.print()} className="flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-sm transition">
-                <Printer className="w-4 h-4" /> Print Receipt
-              </button>
-            </div>
-          </div>
-        </div>
+        <ReceiptDocument
+          facilityName={facilityName}
+          onClose={() => setViewingReceipt(null)}
+          receipt={{
+            receiptNumber: viewingReceipt.transactionId,
+            invoiceNumber: viewingReceipt.invoiceNumber,
+            date: viewingReceipt.paymentDate ? String(viewingReceipt.paymentDate) : null,
+            residentName: viewingReceipt.residentName,
+            paymentMethod: viewingReceipt.paymentMethod,
+            transactionId: viewingReceipt.transactionId,
+            total: Number(viewingReceipt.amount) || 0,
+          }}
+        />
       )}
 
       {/* ── MODAL: CREATE INVOICE ── */}
@@ -1153,7 +1008,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Amount ($) *</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Amount (₱) *</label>
                   <input type="number" placeholder="250" value={chargeForm.amount} onChange={(e) => setChargeForm({ ...chargeForm, amount: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 bg-white" />
                 </div>
                 <div>
@@ -1263,7 +1118,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Amount Paid ($) *</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Amount Paid (₱) *</label>
                   <input type="number" placeholder="2500" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 bg-white" />
                 </div>
                 <div>

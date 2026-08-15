@@ -78,8 +78,11 @@ function fmtDateTime(iso: string): { date: string; time: string } {
 }
 
 export default function CameraActivityLog() {
+  // Near-realtime: this is a live safety feed, so poll fast (3s). The realtime
+  // postgres_changes subscription fires instantly when it's available; the fast
+  // poll guarantees fresh events even when realtime isn't (publication is empty).
   const { data: rows, loading, error, refetch } = useLiveQuery<Row>(
-    "camera-monitoring-logs", { query: "take=500", tables: ["CameraMonitoringLog"] }
+    "camera-monitoring-logs", { query: "take=500", tables: ["CameraMonitoringLog"], pollMs: 3000 }
   );
 
   const logs = useMemo<CameraLog[]>(() => rows.map(adaptLog), [rows]);

@@ -96,6 +96,7 @@ function MonitoringViewInner() {
             <div className="absolute inset-0 z-30">
               <CameraVisionFeed
                 cameraMode="hybrid"
+                residentId={selected ? s(selected.id) : undefined}
                 residentName={residentName}
                 residentRoom={room}
               />

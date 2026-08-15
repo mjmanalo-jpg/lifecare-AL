@@ -167,22 +167,13 @@ export default function MiniPharmacyBoard({ clinicianRole = "NURSE" }: { clinici
     if (!confirm.isConfirmed) return;
 
     const nowIso = new Date().toISOString();
-    await saveItems(items.map((x) => (x.id === it.id ? { ...x, quantity: x.quantity - qty, updatedAt: nowIso } : x)));
 
-    // Post the resident charge (unbilled ServiceCharge → picked up by billing). The
-    // sponsor is recorded on the description so the charge is traceable to the payer;
-    // it reaches the family sponsor automatically via resident.sponsorId scoping.
-    let charged = true;
-    try {
-      await createRecord("service-charges", {
-        residentId,
-        description: `Mini Pharmacy — ${it.name} ×${qty} ${it.unit}${emergency ? " (emergency)" : ""}${reason ? ` — ${reason}` : ""}${sponsorName ? ` · billed to family sponsor ${sponsorName}` : ""}`,
-        amount,
-        category: CHARGE_CATEGORY,
-        serviceDate: nowIso,
-      });
-    } catch { charged = false; }
-
+    // Build every next-state up front, then fire the four independent writes in
+    // PARALLEL (inventory, purchase-requests, dispense-log app-settings + the
+    // resident ServiceCharge). Previously these ran sequentially and each save
+    // helper also awaited its own refetch — 7 remote round-trips on the Singapore
+    // pooler, which is the delay. Now it's one round-trip's worth + one refresh.
+    const nextItems = items.map((x) => (x.id === it.id ? { ...x, quantity: x.quantity - qty, updatedAt: nowIso } : x));
     const log: DispenseLog = { id: newId("disp"), itemId: it.id, itemName: it.name, unit: it.unit, qty, unitPrice: Number(it.unitPrice) || 0, amount, residentId, residentName, sponsorId: sponsorId || undefined, sponsorName: sponsorName || undefined, emergency, reason: reason || undefined, by: clinicianName, at: nowIso };
     const nextLogs = [log, ...logs];
 
@@ -192,10 +183,25 @@ export default function MiniPharmacyBoard({ clinicianRole = "NURSE" }: { clinici
     if (remaining <= it.reorder && !prs.some((p) => p.itemId === it.id && (p.status === "PENDING" || p.status === "APPROVED"))) {
       nextPRs = [{ id: newId("pr"), itemId: it.id, itemName: it.name, unit: it.unit, quantity: Math.max(it.reorder * 2 - remaining, it.reorder), urgency: remaining <= 0 ? "Urgent" : "Routine", notes: "Auto-queued after mini-pharmacy dispense", status: "PENDING", by: "System", byAt: nowIso }, ...prs];
     }
-    await savePRs(nextPRs);
-    await saveLogs(nextLogs);
+
+    const results = await Promise.allSettled([
+      upsertRecord("app-settings", ITEMS_KEY, { key: ITEMS_KEY, value: JSON.stringify(nextItems) }),
+      upsertRecord("app-settings", PR_KEY, { key: PR_KEY, value: JSON.stringify(nextPRs) }),
+      upsertRecord("app-settings", LOG_KEY, { key: LOG_KEY, value: JSON.stringify(nextLogs) }),
+      // The resident charge (unbilled ServiceCharge → picked up by billing); it
+      // reaches the family sponsor automatically via resident.sponsorId scoping.
+      createRecord("service-charges", {
+        residentId,
+        description: `Mini Pharmacy — ${it.name} ×${qty} ${it.unit}${emergency ? " (emergency)" : ""}${reason ? ` — ${reason}` : ""}${sponsorName ? ` · billed to family sponsor ${sponsorName}` : ""}`,
+        amount,
+        category: CHARGE_CATEGORY,
+        serviceDate: nowIso,
+      }),
+    ]);
+    const charged = results[3].status === "fulfilled";
 
     setDispenseItem(null);
+    void refetch(); // single background refresh (useLiveQuery also polls)
     Swal.fire({ toast: true, position: "top-end", icon: charged ? "success" : "warning", title: charged ? `Dispensed · ${peso(amount)} charged` : "Dispensed — charge failed, please add manually", showConfirmButton: false, timer: charged ? 1800 : 3200 });
   };
 
