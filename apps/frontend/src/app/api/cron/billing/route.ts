@@ -10,6 +10,8 @@ import {
 } from "@/lib/billingLibrary";
 import { ACUITY_ASSESSMENTS_KEY, parseAcuityItems, latestApprovedAcuityLevel } from "@/lib/locBilling";
 import { applyResidentLocCharge } from "@/lib/locBillingServer";
+import { PRIVATE_CARE_KEY, parsePrivateCare } from "@/lib/privateCaregiver";
+import { applyPrivateCareCharge } from "@/lib/privateCaregiverServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +32,7 @@ async function accrueForCommunity(organizationId: string, communityId: string) {
     where: { communityId, status: "ACTIVE" },
     select: { id: true, careLevel: true },
   });
-  if (!residents.length) return { created: 0, skipped: 0, residents: 0, loc: 0 };
+  if (!residents.length) return { created: 0, skipped: 0, residents: 0, loc: 0, pcg: 0 };
 
   const now = new Date();
   const tag = periodTag(now);
@@ -89,7 +91,23 @@ async function accrueForCommunity(organizationId: string, communityId: string) {
     }
   }
 
-  return { created, skipped, residents: residents.length, loc };
+  // 3) Private (1:1) caregiver — recurring flat fee for each ACTIVE assignment,
+  //    billed to the resident (→ family sponsor by resident.sponsorId scoping).
+  //    Idempotent per assignment/month via the [pcg:<id>:<period>] marker, so the
+  //    same monthly charge posts once regardless of how often the cron runs.
+  //    Per-day rates bill their 30-day monthly equivalent.
+  let pcg = 0;
+  const pcgSetting = await prisma.appSetting.findFirst({
+    where: { key: PRIVATE_CARE_KEY, communityId },
+    select: { value: true },
+  });
+  const pcgActive = parsePrivateCare(pcgSetting?.value).filter((a) => a.status === "ACTIVE");
+  for (const assignment of pcgActive) {
+    const posted = await applyPrivateCareCharge({ organizationId, communityId, assignment, now }).catch(() => false);
+    if (posted) pcg += 1;
+  }
+
+  return { created, skipped, residents: residents.length, loc, pcg };
 }
 
 export async function POST(request: NextRequest) {
@@ -97,13 +115,13 @@ export async function POST(request: NextRequest) {
   const auth = request.headers.get("authorization");
   if (process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`) {
     const communities = await prisma.community.findMany({ where: { isActive: true }, select: { id: true, organizationId: true } });
-    let created = 0, skipped = 0, loc = 0;
+    let created = 0, skipped = 0, loc = 0, pcg = 0;
     for (const c of communities) {
       if (!c.organizationId) continue;
-      const r = await accrueForCommunity(c.organizationId, c.id).catch(() => ({ created: 0, skipped: 0, residents: 0, loc: 0 }));
-      created += r.created; skipped += r.skipped; loc += r.loc;
+      const r = await accrueForCommunity(c.organizationId, c.id).catch(() => ({ created: 0, skipped: 0, residents: 0, loc: 0, pcg: 0 }));
+      created += r.created; skipped += r.skipped; loc += r.loc; pcg += r.pcg;
     }
-    return NextResponse.json({ ok: true, scope: "all", communities: communities.length, created, skipped, loc });
+    return NextResponse.json({ ok: true, scope: "all", communities: communities.length, created, skipped, loc, pcg });
   }
 
   // Signed-in billing/facility/super admin accrues their own community.

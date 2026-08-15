@@ -171,14 +171,14 @@ export default function FamilyRelative() {
         <div className="bg-white rounded-lg p-3 sm:p-4 md:p-6 border border-gray-200">
           <h4 className="font-semibold text-gray-900 mb-3 text-sm">Conditions &amp; Allergies</h4>
           {relative.allergies && (
-            <div className="mb-3 p-2 bg-red-50 border-l-4 border-red-400 rounded">
+            <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded">
               <p className="text-xs font-semibold text-red-700 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Allergies</p>
               <p className="text-sm text-gray-900 mt-0.5">{relative.allergies}</p>
             </div>
           )}
           <div className="flex flex-wrap gap-2">
             {conditions.length ? conditions.map((c, i) => (
-              <span key={i} className="px-2 py-1 bg-purple-50 text-purple-800 border border-purple-200 rounded text-xs font-medium">{c}</span>
+              <span key={i} className="px-2 py-1 bg-teal-50 text-teal-700 border border-teal-200 rounded text-xs font-medium">{c}</span>
             )) : <p className="text-sm text-gray-500">No chronic conditions recorded.</p>}
           </div>
         </div>
@@ -205,7 +205,7 @@ export default function FamilyRelative() {
 
       {/* Care notes */}
       {relative.notes && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded p-3 sm:p-4 md:p-6">
+        <div className="bg-yellow-50 border border-amber-200 rounded p-3 sm:p-4 md:p-6">
           <h4 className="font-semibold text-gray-900 mb-2 text-sm">Care Notes</h4>
           <p className="text-gray-700 text-sm">{relative.notes}</p>
         </div>

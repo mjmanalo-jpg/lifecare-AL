@@ -3,7 +3,7 @@
 import RefreshButton from "@/components/portal/RefreshButton";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Activity, CheckCircle2, RefreshCw, Search } from "lucide-react";
+import { AlertTriangle, Activity, CheckCircle2, Search } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptIncident } from "@/lib/adapters";
 import {
@@ -11,10 +11,10 @@ import {
 } from "./shared";
 
 const SEV: Record<string, { label: string; badge: string; border: string; bar: string; color: string }> = {
-  critical: { label: "Critical", badge: "bg-red-100 text-red-700", border: "border-l-red-500", bar: "bg-red-500", color: "text-red-500" },
-  high: { label: "High", badge: "bg-orange-100 text-orange-700", border: "border-l-orange-500", bar: "bg-orange-500", color: "text-orange-500" },
-  medium: { label: "Medium", badge: "bg-yellow-100 text-yellow-700", border: "border-l-yellow-500", bar: "bg-yellow-500", color: "text-yellow-600" },
-  low: { label: "Low", badge: "bg-blue-100 text-blue-700", border: "border-l-blue-500", bar: "bg-blue-500", color: "text-blue-500" },
+  critical: { label: "Critical", badge: "bg-red-100 text-red-700", border: "border-red-300", bar: "bg-red-500", color: "text-red-500" },
+  high: { label: "High", badge: "bg-orange-100 text-orange-700", border: "border-orange-300", bar: "bg-orange-500", color: "text-orange-500" },
+  medium: { label: "Medium", badge: "bg-yellow-100 text-yellow-700", border: "border-yellow-300", bar: "bg-yellow-500", color: "text-yellow-600" },
+  low: { label: "Low", badge: "bg-blue-100 text-blue-700", border: "border-blue-300", bar: "bg-blue-500", color: "text-blue-500" },
 };
 const SEV_KEYS = ["critical", "high", "medium", "low"] as const;
 
@@ -131,7 +131,7 @@ export default function FamilyAlerts() {
           {filtered.map((inc) => {
             const meta = SEV[inc.severity] ?? SEV.low;
             return (
-              <div key={inc.id} className={`bg-white rounded-lg border border-gray-200 border-l-4 ${meta.border} p-4`}>
+              <div key={inc.id} className={`bg-white rounded-lg border ${meta.border} p-4`}>
                 <div className="flex items-start gap-3">
                   <AlertTriangle className={`w-5 h-5 mt-0.5 flex-shrink-0 ${meta.color}`} />
                   <div className="flex-1 min-w-0">
@@ -144,7 +144,7 @@ export default function FamilyAlerts() {
                     </div>
                     <p className="text-sm text-gray-600 mt-0.5">{inc.resident}{inc.room ? ` • Room ${inc.room}` : ""}</p>
                     {inc.description && <p className="text-sm text-gray-800 mt-2">{inc.description}</p>}
-                    {inc.notes && <p className="text-sm text-gray-600 mt-2 p-2 bg-gray-50 rounded border-l-2 border-yellow-400">{inc.notes}</p>}
+                    {inc.notes && <p className="text-sm text-gray-600 mt-2 p-2 bg-gray-50 rounded border border-slate-200">{inc.notes}</p>}
                     <p className="text-xs text-gray-400 mt-2">{inc.timestamp ? new Date(String(inc.timestamp)).toLocaleString() : ""}{rel(inc.timestamp) ? ` • ${rel(inc.timestamp)}` : ""}</p>
                   </div>
                 </div>

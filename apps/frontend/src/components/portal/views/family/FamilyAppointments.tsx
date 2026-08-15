@@ -4,7 +4,7 @@ import RefreshButton from "@/components/portal/RefreshButton";
 
 import { useState } from "react";
 import {
-  Calendar, Clock, Activity, CheckCircle2, RefreshCw, Search, Plus, X, Phone,
+  Calendar, Clock, Activity, CheckCircle2, Search, Plus, X, Phone,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -14,7 +14,7 @@ import {
   type Row,
 } from "./shared";
 
-const AVATAR_COLORS = ["bg-blue-100 text-blue-700", "bg-purple-100 text-purple-700", "bg-green-100 text-green-700", "bg-rose-100 text-rose-700", "bg-amber-100 text-amber-700"];
+const AVATAR_COLORS = ["bg-blue-100 text-blue-700", "bg-teal-100 text-teal-700", "bg-green-100 text-green-700", "bg-rose-100 text-rose-700", "bg-amber-100 text-amber-700"];
 const EMPTY_FORM = { visitorName: "", relationship: "", purpose: "", date: "", phone: "", notes: "" };
 
 /** Appointments & Visits — live visit history and self-service visit requests. */
@@ -95,7 +95,7 @@ export default function FamilyAppointments() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
-            <Calendar className="w-6 h-6 text-purple-500 flex-shrink-0" /> Appointments &amp; Visits
+            <Calendar className="w-6 h-6 text-teal-600 flex-shrink-0" /> Appointments &amp; Visits
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm mt-1">
             <LiveBadge />
@@ -104,7 +104,7 @@ export default function FamilyAppointments() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <RefreshButton onRefresh={() => void refetchVisits()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
-          <button onClick={() => { setVisitForm(EMPTY_FORM); setShowVisitForm(true); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm"><Plus className="w-4 h-4" /> Request Visit</button>
+          <button onClick={() => { setVisitForm(EMPTY_FORM); setShowVisitForm(true); }} className="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm"><Plus className="w-4 h-4" /> Request Visit</button>
         </div>
       </div>
 
@@ -120,12 +120,12 @@ export default function FamilyAppointments() {
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden bg-white self-start">
           {(["all", "upcoming", "past"] as const).map((f) => (
-            <button key={f} onClick={() => setVisitFilter(f)} className={`px-4 py-2 text-sm font-medium capitalize transition ${visitFilter === f ? "bg-purple-500 text-white" : "text-gray-700 hover:bg-gray-50"}`}>{f}</button>
+            <button key={f} onClick={() => setVisitFilter(f)} className={`px-4 py-2 text-sm font-medium capitalize transition ${visitFilter === f ? "bg-teal-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}>{f}</button>
           ))}
         </div>
         <div className="relative flex-1">
           <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
-          <input type="text" placeholder="Search visitor, relationship, purpose…" value={visitSearch} onChange={(e) => setVisitSearch(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-purple-400 focus:border-transparent outline-none" />
+          <input type="text" placeholder="Search visitor, relationship, purpose…" value={visitSearch} onChange={(e) => setVisitSearch(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none" />
         </div>
       </div>
 
@@ -137,7 +137,7 @@ export default function FamilyAppointments() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((v) => (
-            <div key={v.id} className={`bg-white rounded-lg border p-4 ${v.upcoming ? "border-purple-200" : "border-gray-200"}`}>
+            <div key={v.id} className={`bg-white rounded-lg border p-4 ${v.upcoming ? "border-teal-200" : "border-gray-200"}`}>
               <div className="flex items-start gap-3">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold flex-shrink-0 ${v.avatar}`}>{v.name.charAt(0).toUpperCase()}</div>
                 <div className="flex-1 min-w-0">
@@ -154,7 +154,7 @@ export default function FamilyAppointments() {
                 {v.durationMin > 0 && <p className="flex items-center gap-2 text-gray-500 text-xs"><CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" /> {v.durationMin >= 60 ? `${Math.floor(v.durationMin / 60)}h ${v.durationMin % 60}m` : `${v.durationMin}m`} visit</p>}
                 {v.phone && <p className="flex items-center gap-2 text-gray-500 text-xs"><Phone className="w-4 h-4 text-gray-400 flex-shrink-0" /> {v.phone}</p>}
               </div>
-              {v.notes && <p className="mt-2 text-xs text-gray-600 p-2 bg-gray-50 rounded border-l-2 border-purple-300">{v.notes}</p>}
+              {v.notes && <p className="mt-2 text-xs text-gray-600 p-2 bg-gray-50 rounded border border-slate-200">{v.notes}</p>}
             </div>
           ))}
         </div>
@@ -164,23 +164,23 @@ export default function FamilyAppointments() {
       {showVisitForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-purple-500 to-purple-600 text-white p-5 flex items-center justify-between">
+            <div className="sticky top-0 bg-teal-600 hover:bg-teal-700 text-white p-5 flex items-center justify-between">
               <h2 className="text-xl font-bold">Request a Visit</h2>
               <button onClick={() => setShowVisitForm(false)} className="p-2 hover:bg-white/10 rounded-lg transition"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField label="Visitor Name *"><input type="text" value={visitForm.visitorName} onChange={(e) => setVisitForm((f) => ({ ...f, visitorName: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-purple-400 outline-none" /></FormField>
-                <FormField label="Relationship"><input type="text" value={visitForm.relationship} onChange={(e) => setVisitForm((f) => ({ ...f, relationship: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-purple-400 outline-none" /></FormField>
+                <FormField label="Visitor Name *"><input type="text" value={visitForm.visitorName} onChange={(e) => setVisitForm((f) => ({ ...f, visitorName: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-teal-400 outline-none" /></FormField>
+                <FormField label="Relationship"><input type="text" value={visitForm.relationship} onChange={(e) => setVisitForm((f) => ({ ...f, relationship: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-teal-400 outline-none" /></FormField>
               </div>
-              <FormField label="Date &amp; Time *"><input type="datetime-local" value={visitForm.date} onChange={(e) => setVisitForm((f) => ({ ...f, date: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-purple-400 outline-none" /></FormField>
-              <FormField label="Purpose"><input type="text" value={visitForm.purpose} onChange={(e) => setVisitForm((f) => ({ ...f, purpose: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-purple-400 outline-none" /></FormField>
-              <FormField label="Phone"><input type="text" value={visitForm.phone} onChange={(e) => setVisitForm((f) => ({ ...f, phone: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-purple-400 outline-none" /></FormField>
-              <FormField label="Notes"><textarea value={visitForm.notes} onChange={(e) => setVisitForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-purple-400 outline-none resize-y" /></FormField>
+              <FormField label="Date &amp; Time *"><input type="datetime-local" value={visitForm.date} onChange={(e) => setVisitForm((f) => ({ ...f, date: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-teal-400 outline-none" /></FormField>
+              <FormField label="Purpose"><input type="text" value={visitForm.purpose} onChange={(e) => setVisitForm((f) => ({ ...f, purpose: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-teal-400 outline-none" /></FormField>
+              <FormField label="Phone"><input type="text" value={visitForm.phone} onChange={(e) => setVisitForm((f) => ({ ...f, phone: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-teal-400 outline-none" /></FormField>
+              <FormField label="Notes"><textarea value={visitForm.notes} onChange={(e) => setVisitForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-teal-400 outline-none resize-y" /></FormField>
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setShowVisitForm(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
-              <button onClick={() => void createVisit()} disabled={savingVisit} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-60"><Plus className="w-4 h-4" /> {savingVisit ? "Saving…" : "Request Visit"}</button>
+              <button onClick={() => void createVisit()} disabled={savingVisit} className="flex items-center gap-2 px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-60"><Plus className="w-4 h-4" /> {savingVisit ? "Saving…" : "Request Visit"}</button>
             </div>
           </div>
         </div>
