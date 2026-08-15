@@ -139,7 +139,7 @@ export default function FamilyDailyReport() {
             <div className="space-y-2">
               {rawMeds.map((m, i) => (
                 <div key={i} className="p-2.5 rounded-lg bg-blue-50 border border-blue-100">
-                  <p className="font-medium text-gray-900 text-sm">💊 {String(m.name ?? "")} <span className="text-gray-500 font-normal">{String(m.dosage ?? "")}</span></p>
+                  <p className="font-medium text-gray-900 text-sm">{String(m.name ?? "")} <span className="text-gray-500 font-normal">{String(m.dosage ?? "")}</span></p>
                   <p className="text-xs text-gray-600">{String(m.frequency ?? "")}{m.status ? ` • ${humanize(String(m.status))}` : ""}</p>
                 </div>
               ))}

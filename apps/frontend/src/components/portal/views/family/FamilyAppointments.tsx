@@ -154,7 +154,7 @@ export default function FamilyAppointments() {
                 {v.durationMin > 0 && <p className="flex items-center gap-2 text-gray-500 text-xs"><CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" /> {v.durationMin >= 60 ? `${Math.floor(v.durationMin / 60)}h ${v.durationMin % 60}m` : `${v.durationMin}m`} visit</p>}
                 {v.phone && <p className="flex items-center gap-2 text-gray-500 text-xs"><Phone className="w-4 h-4 text-gray-400 flex-shrink-0" /> {v.phone}</p>}
               </div>
-              {v.notes && <p className="mt-2 text-xs text-gray-600 p-2 bg-gray-50 rounded border-l-2 border-purple-300">📝 {v.notes}</p>}
+              {v.notes && <p className="mt-2 text-xs text-gray-600 p-2 bg-gray-50 rounded border-l-2 border-purple-300">{v.notes}</p>}
             </div>
           ))}
         </div>

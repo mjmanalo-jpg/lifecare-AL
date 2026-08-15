@@ -51,7 +51,7 @@ const TRIP_STEP_LABELS: Record<string, string> = {
   CANCELLED: "Cancelled",
 };
 
-const FACILITY = "Golden Hearth Facility";
+const FACILITY = "LifeCare Facility";
 const emptyForm = {
   type: "MEDICAL_APPOINTMENT",
   pickupLocation: FACILITY,
@@ -360,7 +360,7 @@ export default function MyTransport() {
                   <div className="space-y-2">
                     <div className="relative">
                       <MapPin className="absolute left-3 top-2.5 w-4 h-4 text-green-500" />
-                      <input type="text" value={form.pickupLocation} onChange={(e) => set("pickupLocation", e.target.value)} placeholder="Pickup — e.g. Golden Hearth Facility" className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
+                      <input type="text" value={form.pickupLocation} onChange={(e) => set("pickupLocation", e.target.value)} placeholder="Pickup — e.g. LifeCare Facility" className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" />
                     </div>
                     <div className="relative">
                       <MapPin className="absolute left-3 top-2.5 w-4 h-4 text-red-500" />

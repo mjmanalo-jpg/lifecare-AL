@@ -44,12 +44,11 @@ export default function RolePortalChrome({ children }: { children: ReactNode }) 
     <PortalShell userRole={userRole} activeTab={activeTab} onLogout={handleLogout}>
       {children}
 
-      {/* Floating quick-actions launcher — persistent for the front-line clinical
-          roles, present on every tab. Lives here (not the page) so it doesn't
-          re-mount on navigation. */}
-      {userRole === "NURSE" && <DashboardQuickActions clinicianRole="NURSE" />}
-      {userRole === "CAREGIVER" && <DashboardQuickActions clinicianRole="CAREGIVER" />}
-      {userRole === "CARE_MANAGER" && <DashboardQuickActions clinicianRole="FACILITY_ADMIN" />}
+      {/* Floating quick-actions launcher — present for every role on every tab.
+          Its shortcuts are derived from the role's own sidebar links and each one
+          opens that tab's content in a drawer. Lives here (not the page) so it
+          doesn't re-mount on navigation. */}
+      <DashboardQuickActions role={userRole} />
     </PortalShell>
   );
 }

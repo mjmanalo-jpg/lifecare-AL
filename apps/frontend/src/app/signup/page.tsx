@@ -271,7 +271,7 @@ export default function SignupPage() {
                     type="text"
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
-                    placeholder="Golden Hearth Care Group"
+                    placeholder="LifeCare Care Group"
                     required
                     className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors"
                   />

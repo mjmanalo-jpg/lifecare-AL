@@ -123,7 +123,7 @@ const summarize = (domain: DomainKey, r: Row): string => {
     case "vitals": add("diastolic", r.diastolic); add("heartRate", r.heartRate); add("respiratoryRate", r.respRate); add("systolic", r.systolic); add("temp", r.temperature); add("spo2", r.spo2); break;
     case "meals": add("assistanceLevel", s(r.feedingAssist).toLowerCase()); add("hydrationMl", r.fluidAmountMl); add("mealType", s(r.mealType).toLowerCase()); add("intake", r.intakeLevel); break;
     case "bowel": add("bloodPresent", fmtBool(r.hasBlood)); add("bristolType", r.bristolType); add("continent", r.containment === "Continent" ? "true" : undefined); break;
-    case "urine": add("outputMl", r.outputMl); add("bloodPresent", fmtBool(r.hasBlood)); add("color", s(r.color).toLowerCase()); break;
+    case "urine": add("outputMl", r.outputMl); add("bloodPresent", fmtBool(r.hasBlood)); add("color", s(r.color).toLowerCase()); if (r.painful) p.push("painful"); break;
     case "edema": add("location", r.location); add("severity", s(r.severity).toLowerCase()); break;
     case "concerns": add("category", s(r.category).toLowerCase()); add("severity", s(r.severity).toLowerCase()); break;
     case "mood": add("mood", s(r.mood).toLowerCase()); if (r.behaviorNotes) p.push(s(r.behaviorNotes)); break;
@@ -153,6 +153,7 @@ function evalDomainTrigger(domain: DomainKey, d: Row, f: Row, name: string): Tri
     }
     case "urine": {
       if (d.outputMl === 0) return { type: "MEDICAL_EMERGENCY", severity: "SEVERE", title: "No urine output", description: `No urine output recorded for ${who} — possible retention. Assess bladder, consider a bladder scan and notify the nurse.` };
+      if (d.painful) return { type: "INFECTION", severity: d.hasBlood ? "SEVERE" : "MODERATE", title: "Painful urination (dysuria)", description: `${who} had painful/burning urination${d.hasBlood ? " with blood present" : ""} — possible UTI. Assess symptoms, consider a urinalysis and notify the nurse.` };
       if (s(d.color) === "Dark") return { type: "OTHER", severity: "MODERATE", title: "Dark urine", description: `${who}'s urine is dark — possible dehydration or concentrated output. Encourage fluids and monitor intake.` };
       return null;
     }
@@ -540,7 +541,17 @@ function Multi({ options, value, onChange }: { options: string[]; value: string[
   return <div className="flex flex-wrap gap-1.5">{options.map((o) => { const on = set.has(o); return <button key={o} type="button" onClick={() => { const n = new Set(set); if (on) n.delete(o); else n.add(o); onChange([...n]); }} className={`px-2.5 py-1 rounded-full border text-xs font-medium ${on ? chipOn : chipOff}`}>{o}</button>; })}</div>;
 }
 function Label({ children }: { children: React.ReactNode }) { return <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--clinical-muted)] mb-1.5">{children}</p>; }
-function Toggle({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) { return <button type="button" onClick={onClick} className={`py-2 rounded-lg border text-xs font-medium ${on ? chipOn : chipOff}`}>{on ? "✓ " : ""}{label}</button>; }
+function Toggle({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} role="switch" aria-checked={on}
+      className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border text-xs font-medium transition ${on ? chipOn : chipOff}`}>
+      <span className="text-left leading-tight">{label}</span>
+      <span className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${on ? "bg-white/85" : "bg-[var(--clinical-line-strong)]"}`}>
+        <span className={`inline-block h-3 w-3 rounded-full shadow-sm transition-transform ${on ? "translate-x-[14px] bg-[var(--clinical-panel)]" : "translate-x-0.5 bg-[var(--clinical-surface)]"}`} />
+      </span>
+    </button>
+  );
+}
 // Bowel reference image — a Bristol-type identification aid. Nurse/Care Manager
 // uploads it once (community-scoped, persists by default); caregivers see it
 // read-only in the Bowel form to identify the type.
@@ -616,7 +627,7 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianR
         if (f.bristolType == null && !f.containment) return null;
         return { resource: "bowel-records", data: { ...base, bristolType: f.bristolType ? Number(f.bristolType) : null, hasBlood: !!f.hasBlood, containment: f.containment || null } };
       case "urine":
-        return { resource: "urine-records", data: { ...base, color: f.color || null, outputMl: f.outputMl ? Number(f.outputMl) : null, hasBlood: !!f.hasBlood, containment: f.containment || null } };
+        return { resource: "urine-records", data: { ...base, color: f.color || null, outputMl: f.outputMl ? Number(f.outputMl) : null, hasBlood: !!f.hasBlood, painful: !!f.painful, containment: f.containment || null } };
       case "edema":
         if (!f.severity && !f.location) return null;
         return { resource: "edema-records", data: { ...base, location: f.location || "", severity: f.severity || "NONE", pitting: !!f.pitting } };
@@ -735,6 +746,7 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianR
             <div><Label>Color</Label><Chips cols={4} value={f.color || ""} onChange={(v) => set({ color: v })} options={["Clear", "Pale", "Yellow", "Dark"].map((x) => ({ v: x, label: x }))} /></div>
             <div><Label>Output (mL)</Label><input inputMode="numeric" value={f.outputMl ?? ""} onChange={(e) => set({ outputMl: e.target.value })} placeholder="mL" aria-label="Urine output in mL" className={num} /></div>
             <div className="grid grid-cols-2 gap-2"><Toggle label="No Blood" on={f.hasBlood === false} onClick={() => set({ hasBlood: f.hasBlood === false ? undefined : false })} /><Toggle label="Continent" on={f.containment === "Continent"} onClick={() => set({ containment: f.containment === "Continent" ? "" : "Continent" })} /></div>
+            <Toggle label="Painful / burning (dysuria)" on={!!f.painful} onClick={() => set({ painful: !f.painful })} />
           </>)}
           {tab === "edema" && (<>
             <div><Label>Location</Label><input value={f.location ?? ""} onChange={(e) => set({ location: e.target.value })} placeholder="e.g. Ankles, bilateral" className={txt} /></div>

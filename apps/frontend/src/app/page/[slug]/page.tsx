@@ -94,7 +94,7 @@ export default function CustomPageView() {
 
       <footer className="relative z-10 w-full px-6 py-12 max-w-7xl mx-auto border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-6 text-gray-500 text-sm">
         <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
-          <span className="text-foreground font-bold tracking-tight">Golden Hearth</span>
+          <span className="text-foreground font-bold tracking-tight">LifeCare</span>
           <span>© 2026 AI Powered Assisted Living.</span>
         </div>
         <Link href="/" className="hover:text-foreground transition-colors">← Back to Home</Link>

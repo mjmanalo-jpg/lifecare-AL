@@ -102,7 +102,7 @@ function StatusChip({ label, accent }: { label: string; accent: Accent }) {
   );
 }
 
-export default function ClinicalRecordsBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
+export default function ClinicalRecordsBoard({ clinicianRole = "NURSE", readOnly = false }: { clinicianRole?: ClinicianRole; readOnly?: boolean }) {
   // clinicianRole is kept for parity with sibling clinical boards.
   useClinician(clinicianRole);
   const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
@@ -201,11 +201,11 @@ export default function ClinicalRecordsBoard({ clinicianRole = "NURSE" }: { clin
       <ClinicalHeader
         title="Clinical Records"
         subtitle="Lab results, therapy, referrals, medication changes, physician orders & diagnoses"
-        right={
+        right={readOnly ? undefined : (
           <ClinicalButton variant="accent" onClick={() => { setEditing(null); setModalOpen(true); }} disabled={!residentId}>
             <Plus className="h-4 w-4" /> {active.addLabel}
           </ClinicalButton>
-        }
+        )}
       />
 
       <div className="mt-5 mb-5 flex items-center gap-3">
@@ -270,13 +270,13 @@ export default function ClinicalRecordsBoard({ clinicianRole = "NURSE" }: { clin
               error={vaxQ.error}
               empty={vaxRecords.length === 0}
               emptyTitle="No vaccines yet"
-              emptyHint="Click Add Vaccine to start."
-              emptyAction={<ClinicalButton variant="accent" onClick={() => { setEditing(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> Add Vaccine</ClinicalButton>}
+              emptyHint={readOnly ? "No vaccine records on file yet." : "Click Add Vaccine to start."}
+              emptyAction={readOnly ? undefined : <ClinicalButton variant="accent" onClick={() => { setEditing(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> Add Vaccine</ClinicalButton>}
               onRetry={() => void vaxQ.refetch()}
               skeletonRows={3}
             >
               <div className="space-y-3">
-                {vaxRecords.map((v) => <VaccineCard key={String(v.id)} rec={v} meta={vaxMetaMap[String(v.id)]} onEdit={() => { setEditing(v as unknown as BaseRec); setModalOpen(true); }} onDelete={() => removeVax(v)} />)}
+                {vaxRecords.map((v) => <VaccineCard key={String(v.id)} rec={v} meta={vaxMetaMap[String(v.id)]} readOnly={readOnly} onEdit={() => { setEditing(v as unknown as BaseRec); setModalOpen(true); }} onDelete={() => removeVax(v)} />)}
               </div>
             </DataState>
           ) : (
@@ -285,13 +285,13 @@ export default function ClinicalRecordsBoard({ clinicianRole = "NURSE" }: { clin
               error={error}
               empty={records.length === 0}
               emptyTitle={`No ${active.label.toLowerCase()} yet`}
-              emptyHint={`Click ${active.addLabel} to start.`}
-              emptyAction={<ClinicalButton variant="accent" onClick={() => { setEditing(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> {active.addLabel}</ClinicalButton>}
+              emptyHint={readOnly ? `No ${active.label.toLowerCase()} on file yet.` : `Click ${active.addLabel} to start.`}
+              emptyAction={readOnly ? undefined : <ClinicalButton variant="accent" onClick={() => { setEditing(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> {active.addLabel}</ClinicalButton>}
               onRetry={() => void refetch()}
               skeletonRows={3}
             >
               <div className="space-y-3">
-                {records.map((r) => <RecordCard key={r.id} tab={tab} rec={r} onEdit={() => { setEditing(r); setModalOpen(true); }} onDelete={() => remove(r)} />)}
+                {records.map((r) => <RecordCard key={r.id} tab={tab} rec={r} readOnly={readOnly} onEdit={() => { setEditing(r); setModalOpen(true); }} onDelete={() => remove(r)} />)}
               </div>
             </DataState>
           )}
@@ -309,7 +309,7 @@ export default function ClinicalRecordsBoard({ clinicianRole = "NURSE" }: { clin
 
 /* ---------- Record card ---------- */
 
-function RecordCard({ tab, rec, onEdit, onDelete }: { tab: TabId; rec: BaseRec; onEdit: () => void; onDelete: () => void }) {
+function RecordCard({ tab, rec, onEdit, onDelete, readOnly }: { tab: TabId; rec: BaseRec; onEdit: () => void; onDelete: () => void; readOnly?: boolean }) {
   const r = rec as unknown as Record<string, string | undefined>;
   let title = "";
   let pill: string | undefined;
@@ -342,10 +342,12 @@ function RecordCard({ tab, rec, onEdit, onDelete }: { tab: TabId; rec: BaseRec; 
           </a>
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <button onClick={onEdit} aria-label="Edit record" className="rounded-lg p-2 text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-ink)]"><Pencil className="h-4 w-4" /></button>
-        <button onClick={onDelete} aria-label="Delete record" className="rounded-lg p-2 text-[var(--clinical-coral)] transition hover:bg-[var(--clinical-surface-2)]"><Trash2 className="h-4 w-4" /></button>
-      </div>
+      {!readOnly && (
+        <div className="flex shrink-0 items-center gap-1">
+          <button onClick={onEdit} aria-label="Edit record" className="rounded-lg p-2 text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-ink)]"><Pencil className="h-4 w-4" /></button>
+          <button onClick={onDelete} aria-label="Delete record" className="rounded-lg p-2 text-[var(--clinical-coral)] transition hover:bg-[var(--clinical-surface-2)]"><Trash2 className="h-4 w-4" /></button>
+        </div>
+      )}
     </div>
   );
 }
@@ -544,7 +546,7 @@ function RecordModal({ open, tab, residentId, editing, onClose, onSave }: { open
 
 /* ---------- Vaccine card + modal (model-backed) ---------- */
 
-function VaccineCard({ rec, meta, onEdit, onDelete }: { rec: Record<string, unknown>; meta?: VaxMeta; onEdit: () => void; onDelete: () => void }) {
+function VaccineCard({ rec, meta, onEdit, onDelete, readOnly }: { rec: Record<string, unknown>; meta?: VaxMeta; onEdit: () => void; onDelete: () => void; readOnly?: boolean }) {
   const g = (k: string) => (rec[k] == null ? "" : String(rec[k]));
   const consent = meta?.consent || "";
   const line = [
@@ -566,10 +568,12 @@ function VaccineCard({ rec, meta, onEdit, onDelete }: { rec: Record<string, unkn
         {meta?.adverse && <p className="mt-1 text-sm text-[var(--clinical-coral)]">⚠ Reactions: {meta.adverse}</p>}
         {g("notes") && <p className="mt-1 text-sm text-[var(--clinical-muted)]">{g("notes")}</p>}
       </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <button onClick={onEdit} aria-label="Edit vaccine" className="rounded-lg p-2 text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-ink)]"><Pencil className="h-4 w-4" /></button>
-        <button onClick={onDelete} aria-label="Delete vaccine" className="rounded-lg p-2 text-[var(--clinical-coral)] transition hover:bg-[var(--clinical-surface-2)]"><Trash2 className="h-4 w-4" /></button>
-      </div>
+      {!readOnly && (
+        <div className="flex shrink-0 items-center gap-1">
+          <button onClick={onEdit} aria-label="Edit vaccine" className="rounded-lg p-2 text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-ink)]"><Pencil className="h-4 w-4" /></button>
+          <button onClick={onDelete} aria-label="Delete vaccine" className="rounded-lg p-2 text-[var(--clinical-coral)] transition hover:bg-[var(--clinical-surface-2)]"><Trash2 className="h-4 w-4" /></button>
+        </div>
+      )}
     </div>
   );
 }

@@ -17,13 +17,13 @@ const inDays = (n) => new Date(Date.now() + n * 24 * 3600 * 1000);
 
 async function seedStaff(users, tenant) {
   const rows = [
-    { email: "alan.reyes@goldenhearth.com", position: "Physician", department: "Medical", hireDate: daysAgo(1000), isApproved: true },
-    { email: "sarah.jenkins@goldenhearth.com", position: "Head Nurse", department: "Clinical Care", hireDate: daysAgo(1200), isApproved: true },
-    { email: "rebecca.wilson@goldenhearth.com", position: "RN - Supervisor", department: "Clinical Care", hireDate: daysAgo(1800), isApproved: true },
-    { email: "caleb.randall@goldenhearth.com", position: "Caregiver", department: "Daily Assistance", hireDate: daysAgo(560), isApproved: true },
-    { email: "james.mitchell@goldenhearth.com", position: "Caregiver", department: "Daily Assistance", hireDate: daysAgo(300), isApproved: false },
-    { email: "maria.santos@goldenhearth.com", position: "Nurse Aide", department: "Clinical Support", hireDate: daysAgo(1500), isActive: false, isApproved: false },
-    { email: "security.guard@goldenhearth.com", position: "Security Guard", department: "Safety & Security", hireDate: daysAgo(400), isApproved: true },
+    { email: "physician@lifecare.com", position: "Physician", department: "Medical", hireDate: daysAgo(1000), isApproved: true },
+    { email: "nurse@lifecare.com", position: "Head Nurse", department: "Clinical Care", hireDate: daysAgo(1200), isApproved: true },
+    { email: "nurse2@lifecare.com", position: "RN - Supervisor", department: "Clinical Care", hireDate: daysAgo(1800), isApproved: true },
+    { email: "caregiver@lifecare.com", position: "Caregiver", department: "Daily Assistance", hireDate: daysAgo(560), isApproved: true },
+    { email: "caregiver2@lifecare.com", position: "Caregiver", department: "Daily Assistance", hireDate: daysAgo(300), isApproved: false },
+    { email: "caregiver3@lifecare.com", position: "Nurse Aide", department: "Clinical Support", hireDate: daysAgo(1500), isActive: false, isApproved: false },
+    { email: "security@lifecare.com", position: "Security Guard", department: "Safety & Security", hireDate: daysAgo(400), isApproved: true },
   ];
   const out = [];
   for (const r of rows) {
@@ -80,9 +80,9 @@ async function main() {
   const R = residents;
   const nurse = staff.find((s) => s.position === "Head Nurse");
   const caregiver = staff.find((s) => s.position === "Caregiver");
-  const nurseUser = users["sarah.jenkins@goldenhearth.com"];
-  const familyUser = users["john.pendelton@family.com"];
-  const residentUser = users["arthur.pendelton@resident.com"];
+  const nurseUser = users["nurse@lifecare.com"];
+  const familyUser = users["family@lifecare.com"];
+  const residentUser = users["resident@lifecare.com"];
 
   // Link the family sponsor AND the resident self-login to Arthur (Room 302) so
   // both the Family and Resident portals are scoped to exactly that record.
@@ -188,11 +188,11 @@ async function main() {
     }
   };
 
-  const adminUser = users["admin@goldenhearth.com"];
-  const facAdminUser = users["facility.admin@goldenhearth.com"];
-  const physicianUser = users["alan.reyes@goldenhearth.com"];
-  const nurseUser2 = users["sarah.jenkins@goldenhearth.com"];
-  const caregiverUser = users["caleb.randall@goldenhearth.com"];
+  const adminUser = users["superadmin@lifecare.com"];
+  const facAdminUser = users["facilityadmin@lifecare.com"];
+  const physicianUser = users["physician@lifecare.com"];
+  const nurseUser2 = users["nurse@lifecare.com"];
+  const caregiverUser = users["caregiver@lifecare.com"];
 
   addNotif(adminUser, "SYSTEM_ALERT", "System Health Optimal", "All microservices and database engines responding at optimal speed (45ms).");
   addNotif(adminUser, "SYSTEM_ALERT", "Supabase Connection Healthy", "Realtime subscription pool contains 8 active channels.");
@@ -220,7 +220,7 @@ async function main() {
   addNotif(familyUser, "MEDICATION_REMINDER", "Medications Administered", "Head Nurse Sarah Jenkins successfully administered daily blood pressure pills.");
   addNotif(familyUser, "MESSAGE", "Daily Comfort Report", "Caleb Randall reports Arthur slept comfortably and participated in social games.");
 
-  const fleetUser = users["fleet.manager@goldenhearth.com"];
+  const fleetUser = users["fleet@lifecare.com"];
   addNotif(fleetUser, "TRANSPORT_UPDATE", "New Transport Request", "Arthur Pendelton requested a medical appointment transport to St. Luke's Medical Center for an Endocrinology consult — pending dispatcher review.");
   addNotif(fleetUser, "SYSTEM_ALERT", "Registration Expiring", "Wheelchair Van WV-001 registration expires in 14 days. File for renewal to maintain road compliance.");
   addNotif(fleetUser, "TASK_ASSIGNMENT", "Preventive Maintenance Overdue", "Sedan Escort SD-001 is 410 km overdue for its scheduled 88,000 km preventive service.");
@@ -287,9 +287,9 @@ async function main() {
 
   await seedIfEmpty("blogPost", () => [
     {
-      title: "Opening Golden Hearth: A New Era of Premium Wellness",
+      title: "Opening LifeCare: A New Era of Premium Wellness",
       description: "We are thrilled to officially open our doors in BGC, Manila, offering a unique blend of organic modern design and state-of-the-art care.",
-      content: "At Golden Hearth, our philosophy centers on redefining elder care. By pairing a luxurious, sanctuary-like residential design with cutting-edge optical safety networks and compassionate staff, we ensure that every resident experiences a higher quality of life. From chef-inspired organic dining to curated wellness programs, our doors are open for residents looking for peaceful, high-end care.",
+      content: "At LifeCare, our philosophy centers on redefining elder care. By pairing a luxurious, sanctuary-like residential design with cutting-edge optical safety networks and compassionate staff, we ensure that every resident experiences a higher quality of life. From chef-inspired organic dining to curated wellness programs, our doors are open for residents looking for peaceful, high-end care.",
       imageUrl: "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?q=80&w=1000",
       author: "System Admin",
       publishedAt: daysAgo(5),
@@ -298,7 +298,7 @@ async function main() {
     {
       title: "Designing for Comfort: The Power of Organic Architecture",
       description: "How our double-height lounge, therapeutic walking gardens, and private suites promote active recovery and mental well-being.",
-      content: "Studies show that connection to nature and natural sunlight significantly reduces stress levels and improves cardiovascular health in older adults. That is why Golden Hearth features floor-to-ceiling atrium windows looking onto private Japanese rock gardens. Our residence has been carefully designed down to the smallest detail, ensuring accessibility without compromising on premium, organic aesthetics.",
+      content: "Studies show that connection to nature and natural sunlight significantly reduces stress levels and improves cardiovascular health in older adults. That is why LifeCare features floor-to-ceiling atrium windows looking onto private Japanese rock gardens. Our residence has been carefully designed down to the smallest detail, ensuring accessibility without compromising on premium, organic aesthetics.",
       imageUrl: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=1000",
       author: "Sarah Jenkins",
       publishedAt: daysAgo(3),
@@ -326,9 +326,9 @@ async function main() {
   ]);
 
   await seedIfEmpty("driver", () => [
-    { name: "James Miguel", phone: "555-0401", email: "james.miguel@goldenhearth.com", licenseNumber: "DLN-99882", licenseClass: "Professional B", licenseExpiry: inDays(400), certifications: "Wheelchair Transport, First Aid, Defensive Driving", certificationExpiry: inDays(180), safetyScore: 96, tripHours: 412.5, isActive: true, hireDate: daysAgo(900) },
-    { name: "Rosa Santos", phone: "555-0402", email: "rosa.santos@goldenhearth.com", licenseNumber: "DLN-99883", licenseClass: "Professional B", licenseExpiry: inDays(21), certifications: "Ambulance Operations, BLS, First Aid", certificationExpiry: inDays(90), safetyScore: 88, tripHours: 268.0, isActive: true, hireDate: daysAgo(600), notes: "License renewal filed." },
-    { name: "Eddie Ramos", phone: "555-0403", email: "eddie.ramos@goldenhearth.com", licenseNumber: "DLN-99884", licenseClass: "Non-Professional", licenseExpiry: inDays(700), certifications: "Defensive Driving", safetyScore: 71, tripHours: 96.5, isActive: false, hireDate: daysAgo(300), notes: "On leave; retraining scheduled." },
+    { name: "James Miguel", phone: "555-0401", email: "driver@lifecare.com", licenseNumber: "DLN-99882", licenseClass: "Professional B", licenseExpiry: inDays(400), certifications: "Wheelchair Transport, First Aid, Defensive Driving", certificationExpiry: inDays(180), safetyScore: 96, tripHours: 412.5, isActive: true, hireDate: daysAgo(900) },
+    { name: "Rosa Santos", phone: "555-0402", email: "rosa.santos@lifecare.com", licenseNumber: "DLN-99883", licenseClass: "Professional B", licenseExpiry: inDays(21), certifications: "Ambulance Operations, BLS, First Aid", certificationExpiry: inDays(90), safetyScore: 88, tripHours: 268.0, isActive: true, hireDate: daysAgo(600), notes: "License renewal filed." },
+    { name: "Eddie Ramos", phone: "555-0403", email: "eddie.ramos@lifecare.com", licenseNumber: "DLN-99884", licenseClass: "Non-Professional", licenseExpiry: inDays(700), certifications: "Defensive Driving", safetyScore: 71, tripHours: 96.5, isActive: false, hireDate: daysAgo(300), notes: "On leave; retraining scheduled." },
   ]);
 
   // Resolve fleet ids for relation seeding (works on fresh AND re-run seeds).
@@ -344,7 +344,7 @@ async function main() {
   const drvRosa = drvByLicense["DLN-99883"];
 
   if (shuttle && wcVan && ambulance && drvJames && drvRosa) {
-    const FAC = "Golden Hearth Facility";
+    const FAC = "LifeCare Facility";
     await seedIfEmpty("transportRequest", () => [
       { residentId: R["302"].id, type: "MEDICAL_APPOINTMENT", pickupLocation: FAC, dropoffLocation: "St. Luke's Medical Center", destination: "St. Luke's Medical Center", purpose: "Endocrinology consult — diabetes review", requestedDate: hoursFromNow(24), returnRequired: true, escortRequired: true, escortRole: "NURSE", priority: "NORMAL", status: "PENDING", source: "PORTAL", notes: "Family requests morning slot." },
       { residentId: R["302"].id, type: "DIALYSIS", pickupLocation: FAC, dropoffLocation: "St. Luke's Dialysis Center", destination: "St. Luke's Dialysis Center", purpose: "Recurring dialysis run", requestedDate: hoursAgo(1), returnRequired: true, wheelchairNeeded: true, escortRequired: true, escortRole: "NURSE", priority: "HIGH", status: "SCHEDULED", source: "FRONT_DESK", reviewedBy: "Dispatcher", reviewedAt: daysAgo(1) },
@@ -736,12 +736,12 @@ async function main() {
     // Assessment.communityId is required (FK) → ensure an org + community exist,
     // then backfill residents so every assessment can attach to a community.
     let org = await prisma.organization.findFirst();
-    if (!org) org = await prisma.organization.create({ data: { name: "Golden Hearth Care Group" } });
+    if (!org) org = await prisma.organization.create({ data: { name: "LifeCare Living Solutions" } });
     let community = await prisma.community.findFirst();
     if (!community) {
       community = await prisma.community.create({ data: {
-        organizationId: org.id, name: "Golden Hearth Assisted Living",
-        city: "Taguig", state: "Metro Manila", communityType: "ASSISTED_LIVING",
+        organizationId: org.id, name: "LifeCare",
+        city: "Pasig City", state: "Metro Manila", communityType: "ASSISTED_LIVING",
         bedsTotal: 60, bedsAvailable: 8,
       } });
     }

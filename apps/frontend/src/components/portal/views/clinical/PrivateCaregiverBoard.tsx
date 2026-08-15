@@ -70,7 +70,19 @@ export default function PrivateCaregiverBoard({ clinicianRole = "NURSE" }: { cli
         severity: "INFO",
       }).catch(() => null);
     }
-    Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Sent for family approval · caregiver notified", showConfirmButton: false, timer: 2200 });
+    // Route the request to the family sponsor — it surfaces in their
+    // "Requests & Approvals" board (and notification bell) for approval.
+    if (rec.sponsorId) {
+      createRecord("notifications", {
+        userId: rec.sponsorId,
+        type: "TASK_ASSIGNMENT",
+        title: "Private caregiver — approval needed",
+        message: `A dedicated 1:1 caregiver (${rec.caregiverName}) was requested for ${rec.residentName} at ₱${Number(rec.rate).toLocaleString()} ${RATE_UNIT_LABEL[rec.rateUnit]}. Review and approve or decline in Requests & Approvals.`,
+        relatedEntityType: "approval",
+        severity: "WARNING",
+      }).catch(() => null);
+    }
+    Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Sent for family approval · family & caregiver notified", showConfirmButton: false, timer: 2200 });
   };
 
   const endAssignment = async (a: PrivateCareAssignment) => {

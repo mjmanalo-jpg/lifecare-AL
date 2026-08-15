@@ -802,7 +802,7 @@ function DriverRequestModal({ passengers, onClose, onSaved }: {
 }) {
   const [form, setForm] = useState({
     residentId: "", type: "MEDICAL_APPOINTMENT",
-    pickupLocation: "Golden Hearth Facility", dropoffLocation: "",
+    pickupLocation: "LifeCare Facility", dropoffLocation: "",
     requestedDate: "", notes: "",
   });
   const [saving, setSaving] = useState(false);
@@ -873,7 +873,7 @@ function DriverRequestModal({ passengers, onClose, onSaved }: {
             <div className="space-y-2">
               <div className="relative">
                 <MapPin className="absolute left-3 top-2.5 w-4 h-4 text-green-500" />
-                <input type="text" value={form.pickupLocation} onChange={e => set("pickupLocation", e.target.value)} placeholder="Pickup — e.g. Golden Hearth Facility" className={`${inputCls} pl-9`} />
+                <input type="text" value={form.pickupLocation} onChange={e => set("pickupLocation", e.target.value)} placeholder="Pickup — e.g. LifeCare Facility" className={`${inputCls} pl-9`} />
               </div>
               <div className="relative">
                 <MapPin className="absolute left-3 top-2.5 w-4 h-4 text-red-500" />

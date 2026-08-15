@@ -29,7 +29,7 @@ const slides = [
   {
     src: "/sanctuary_exterior.png",
     tag: "Architectural Render",
-    title: "Golden Hearth Wellness Residence",
+    title: "LifeCare Wellness Residence",
     desc: "A stunning, organic modern exterior set in lush, tranquil gardens designed for peace and recovery."
   },
   {
@@ -238,7 +238,7 @@ export default function Home() {
       {invitationCallback && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-6 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-blue-400/20 bg-slate-900 p-6 text-center text-white shadow-2xl"><ShieldCheck className="mx-auto h-8 w-8 text-blue-400"/><h2 className="mt-3 text-xl font-bold">Secure workspace invitation</h2><p className="mt-2 text-sm text-slate-300">{invitationCallback}</p></div></div>}
       <LandingBackground />
       <Navbar />
-      {/* Golden Hearth Background Element */}
+      {/* LifeCare Background Element */}
       <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[800px] h-[800px] opacity-30 pointer-events-none mix-blend-screen">
         <Image 
           src="/golden_hearth_glow.jpg" 
@@ -308,7 +308,7 @@ export default function Home() {
             The Sanctuary
           </h2>
           <p className="text-muted-foreground font-light max-w-2xl mx-auto">
-            A visual overview of the premium Golden Hearth Care facility, designed specifically for luxury living, wellness, and comfort for the aged.
+            A visual overview of the premium LifeCare Care facility, designed specifically for luxury living, wellness, and comfort for the aged.
           </p>
         </motion.div>
 
@@ -636,7 +636,7 @@ export default function Home() {
               Latest Updates
             </h2>
             <p className="text-muted-foreground font-light max-w-2xl mx-auto">
-              News, insights, and wellness updates from the Golden Hearth team.
+              News, insights, and wellness updates from the LifeCare team.
             </p>
           </motion.div>
 
@@ -718,7 +718,7 @@ export default function Home() {
             className="glass-panel p-8 md:p-10 rounded-3xl border border-white/5 hover:border-[var(--lp-accent,#f59e0b)]/20 transition-all duration-500 flex flex-col justify-between space-y-8 shadow-[0_0_50px_rgba(234,179,8,0.02)]"
           >
             <div className="space-y-6">
-              <h3 className="text-2xl font-bold text-foreground">Golden Hearth Residence</h3>
+              <h3 className="text-2xl font-bold text-foreground">LifeCare Residence</h3>
               <p className="text-muted-foreground font-light text-sm md:text-base leading-relaxed">
                 Experience a new standard of personalized, technology-enhanced assisted living. Our team is available 24/7 to assist with admissions, tours, and care coordination.
               </p>
@@ -732,7 +732,7 @@ export default function Home() {
                   <div>
                     <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Our Address</h4>
                     <p className="text-sm md:text-base text-foreground font-light whitespace-pre-line leading-relaxed">
-                      {sc("contact_address", "123 Golden Hearth Lane,\nBonifacio Global City, Taguig,\nMetro Manila, Philippines")}
+                      {sc("contact_address", "123 LifeCare Lane,\nOrtigas Center, Pasig City,\nMetro Manila, Philippines")}
                     </p>
                   </div>
                 </div>
@@ -760,8 +760,8 @@ export default function Home() {
                   <div>
                     <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Email Address</h4>
                     <p className="text-sm md:text-base text-foreground font-light leading-relaxed">
-                      <a href={`mailto:${sc("contact_email", "concierge@goldenhearth.com")}`} className="hover:text-[var(--lp-accent,#f59e0b)] transition-colors">
-                        {sc("contact_email", "concierge@goldenhearth.com")}
+                      <a href={`mailto:${sc("contact_email", "concierge@lifecare.com")}`} className="hover:text-[var(--lp-accent,#f59e0b)] transition-colors">
+                        {sc("contact_email", "concierge@lifecare.com")}
                       </a>
                     </p>
                   </div>
@@ -804,7 +804,7 @@ export default function Home() {
       {/* Footer */}
       <footer id="about" className="relative z-10 w-full px-6 py-12 max-w-7xl mx-auto border-t border-white/5 light:border-black/5 flex flex-col md:flex-row items-center justify-between gap-6 text-gray-500 text-sm">
         <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
-          <span className="text-foreground font-bold tracking-tight">Golden Hearth</span>
+          <span className="text-foreground font-bold tracking-tight">LifeCare</span>
           <span>{sc("footer_text", "© 2026 AI Powered Assisted Living. All rights reserved.")}</span>
         </div>
         <div className="flex gap-6">

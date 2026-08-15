@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import {
-  DollarSign, Heart, Activity, HeartPulse, MessageSquare, Calendar,
+  Wallet, Heart, Activity, HeartPulse, MessageSquare, Calendar,
   AlertTriangle, ClipboardList,
 } from "lucide-react";
 import StatCard from "@/components/portal/widgets/StatCard";
@@ -153,7 +153,7 @@ export default function FamilyDashboard() {
         <StatCard
           title="Balance Due"
           value={`₱${balanceDue.toFixed(0)}`}
-          icon={DollarSign}
+          icon={Wallet}
           backgroundColor="bg-yellow-50"
           textColor="text-yellow-900"
           iconColor="text-yellow-500"
@@ -229,7 +229,7 @@ export default function FamilyDashboard() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg p-3">✔ All vitals stable — no active alerts.</p>
+              <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg p-3">All vitals stable — no active alerts.</p>
             )}
           </Panel>
 

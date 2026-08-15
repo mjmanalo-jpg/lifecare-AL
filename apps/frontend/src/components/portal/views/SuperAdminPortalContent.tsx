@@ -325,10 +325,10 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   if (tab === "tasks") {
     return <DailyDocumentation clinicianRole="FACILITY_ADMIN" />;
   }
-  if (tab === "reports") {
+  if (tab === "reports" || tab === "clinicalreports") {
     return <ClinicalReports />;
   }
-  if (tab === "medications") {
+  if (tab === "medications" || tab === "mar") {
     return <MARBoard />;
   }
   if (tab === "escalations") {

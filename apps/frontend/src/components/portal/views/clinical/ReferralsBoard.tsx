@@ -155,11 +155,11 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
   // link map is needed. Fleet dispatch (FleetHub → RequestsTab) reads the same
   // "transport-requests" resource and, once assigned, the Driver portal sees it.
   const [reqFor, setReqFor] = useState<Row | null>(null);
-  const [reqForm, setReqForm] = useState({ pickupLocation: "Golden Hearth Facility", destination: "", requestedDate: "", driverId: "", vehicleId: "" });
+  const [reqForm, setReqForm] = useState({ pickupLocation: "LifeCare Facility", destination: "", requestedDate: "", driverId: "", vehicleId: "" });
   const [reqBusy, setReqBusy] = useState(false);
   const openRequest = (r: Row) => {
     setReqForm({
-      pickupLocation: "Golden Hearth Facility",
+      pickupLocation: "LifeCare Facility",
       destination: s(r.facilityName) || s(r.reason) || "",
       requestedDate: toLocalInputValue(s(r.scheduledDate) ? new Date(s(r.scheduledDate)) : new Date()),
       driverId: "", vehicleId: "",
@@ -177,7 +177,7 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
       const created = await createRecord("transport-requests", {
         residentId: s(reqFor.residentId),
         type: "MEDICAL_APPOINTMENT",
-        pickupLocation: reqForm.pickupLocation.trim() || "Golden Hearth Facility",
+        pickupLocation: reqForm.pickupLocation.trim() || "LifeCare Facility",
         dropoffLocation: reqForm.destination.trim(),
         destination: reqForm.destination.trim(),
         purpose: s(reqFor.reason) || (specialist ? `Appointment — ${specialist}` : "Medical appointment"),
@@ -195,10 +195,10 @@ export default function ReferralsBoard({ canApprove = false }: { canApprove?: bo
           residentId: s(reqFor.residentId),
           vehicleId: reqForm.vehicleId,
           driverId: reqForm.driverId,
-          pickupLocation: reqForm.pickupLocation.trim() || "Golden Hearth Facility",
+          pickupLocation: reqForm.pickupLocation.trim() || "LifeCare Facility",
           dropoffLocation: reqForm.destination.trim(),
           destination: reqForm.destination.trim(),
-          origin: reqForm.pickupLocation.trim() || "Golden Hearth Facility",
+          origin: reqForm.pickupLocation.trim() || "LifeCare Facility",
           scheduledAt: new Date(reqForm.requestedDate).toISOString(),
           status: "SCHEDULED",
           notes: s(reqFor.reason) || null,

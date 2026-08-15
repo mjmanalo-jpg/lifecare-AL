@@ -36,7 +36,7 @@ function adaptRequest(row: Record<string, unknown>) {
     roomNumber: resident ? str(resident.roomNumber, "—") : "—",
     type: str(row.type, "OTHER"),
     destination: str(row.destination, "—"),
-    pickupLocation: str(row.pickupLocation, "Golden Hearth Facility"),
+    pickupLocation: str(row.pickupLocation, "LifeCare Facility"),
     dropoffLocation: str(row.dropoffLocation) || str(row.destination, "—"),
     purpose: str(row.purpose),
     requestedDate: str(row.requestedDate),
@@ -127,7 +127,7 @@ const DEFAULT_CHARGE: Record<string, number> = {
 
 const emptyRequestForm = {
   residentId: "", type: "MEDICAL_APPOINTMENT",
-  pickupLocation: "Golden Hearth Facility", dropoffLocation: "", purpose: "",
+  pickupLocation: "LifeCare Facility", dropoffLocation: "", purpose: "",
   requestedDate: "", returnRequired: true, wheelchairNeeded: false,
   escortRequired: false, escortRole: "NURSE", priority: "NORMAL", notes: "",
 };
@@ -241,7 +241,7 @@ export default function FleetRequests() {
       ...emptyRequestForm,
       type: "EMERGENCY_TRANSFER",
       priority: "EMERGENCY",
-      pickupLocation: "Golden Hearth Facility",
+      pickupLocation: "LifeCare Facility",
       dropoffLocation: "Nearest Hospital — ER",
       requestedDate: toLocalInput(new Date().toISOString()),
     });
@@ -829,7 +829,7 @@ function RequestFormModal({ title, form, residents, onChange, onSave, onCancel }
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Pickup Location</label>
-              <input type="text" value={form.pickupLocation} onChange={set("pickupLocation")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="e.g. Golden Hearth Facility" />
+              <input type="text" value={form.pickupLocation} onChange={set("pickupLocation")} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 outline-none" placeholder="e.g. LifeCare Facility" />
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Drop-off Location</label>

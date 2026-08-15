@@ -22,6 +22,10 @@ import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTr
 import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
 import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker";
 import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
+import FamilyApprovals from "@/components/portal/views/family/FamilyApprovals";
+import ClinicalRecordsBoard from "@/components/portal/views/clinical/ClinicalRecordsBoard";
+import ResidentCareHistory from "@/components/portal/views/clinical/ResidentCareHistory";
+import FamilyEscalations from "@/components/portal/views/family/FamilyEscalations";
 
 interface FamilyPortalContentProps {
   tab: string;
@@ -69,7 +73,7 @@ export default function FamilyPortalContent({ tab }: FamilyPortalContentProps) {
     case "medications":
       return <NurseMedications />;
     case "escalations":
-      return <FamilyAlerts />;
+      return <FamilyEscalations />;
     case "tasks":
       return <DailyDocumentation clinicianRole="FACILITY_ADMIN" />;
     case "careplans":
@@ -80,6 +84,17 @@ export default function FamilyPortalContent({ tab }: FamilyPortalContentProps) {
       return <ResidentDocuments />;
     case "followups":
       return <FollowUpTracker />;
+    case "approvals":
+      return <FamilyApprovals />;
+    // Read-only clinical views — the residents query is sponsor-scoped by the API
+    // (tenantWhere → residentAccessWhere for FAMILY), so only the family's own
+    // resident(s) appear and can be opened. Wrapped in `clinical-portal-content`
+    // so the shared clinical-ui styling matches the Nurse/Care Manager portals
+    // (PortalShell only adds that class for the clinical roles, not FAMILY).
+    case "clinicalrecords":
+      return <div className="clinical-portal-content"><ClinicalRecordsBoard clinicianRole="FACILITY_ADMIN" readOnly /></div>;
+    case "carehistory":
+      return <div className="clinical-portal-content"><ResidentCareHistory clinicianRole="FACILITY_ADMIN" /></div>;
     default:
       return <FamilyDashboard />;
   }

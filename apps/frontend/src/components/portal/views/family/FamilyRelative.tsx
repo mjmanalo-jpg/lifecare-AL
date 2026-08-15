@@ -21,6 +21,14 @@ const VITALS = [
   { key: "OXYGEN", label: "Oxygen", icon: Wind, color: "text-green-500" },
 ];
 
+// Per-vital trend charts. Blood pressure charts the systolic value ("118/76" → 118).
+const VITAL_TRENDS = [
+  { key: "HEART_RATE", title: "Heart Rate (bpm)", color: "#ef4444" },
+  { key: "BLOOD_PRESSURE", title: "Blood Pressure (systolic, mmHg)", color: "#3b82f6" },
+  { key: "TEMPERATURE", title: "Temperature (°C)", color: "#f97316" },
+  { key: "OXYGEN", title: "Oxygen (%)", color: "#22c55e" },
+];
+
 const sevBadge = (s: string) =>
   s === "CRITICAL" ? "bg-red-100 text-red-700"
   : s === "SEVERE" ? "bg-orange-100 text-orange-700"
@@ -50,10 +58,14 @@ export default function FamilyRelative() {
   const conditions = relative.medicalHistory ? relative.medicalHistory.split(",").map((c) => c.trim()).filter(Boolean) : [];
 
   const relVitals = relVitalsOf(vitalsRows, relative);
-  const relHrTrend = relVitals
-    .filter((v) => v.type === "HEART_RATE")
+  const trendFor = (type: string) => relVitals
+    .filter((v) => v.type === type)
     .slice(0, 12).reverse()
-    .map((v) => ({ name: v.recordedAt ? new Date(String(v.recordedAt)).toLocaleDateString([], { month: "short", day: "numeric" }) : "", value: parseFloat(String(v.value)) || 0 }));
+    .map((v) => {
+      const raw = String(v.value);
+      const num = type === "BLOOD_PRESSURE" ? parseFloat(raw.split("/")[0]) : parseFloat(raw);
+      return { name: v.recordedAt ? new Date(String(v.recordedAt)).toLocaleDateString([], { month: "short", day: "numeric" }) : "", value: Number.isFinite(num) ? num : 0 };
+    });
 
   return (
     <div className="space-y-6">
@@ -125,9 +137,19 @@ export default function FamilyRelative() {
         </div>
       </div>
 
-      {/* HR trend */}
-      <div className="bg-white rounded-lg p-3 sm:p-4 border border-gray-200">
-        <ChartContainer title="Heart Rate Trend" type="area" data={relHrTrend.length ? relHrTrend : EMPTY_VITALS_TREND} dataKey="value" xAxisKey="name" colors={["#ef4444"]} height={200} />
+      {/* Vital sign trends — one chart per vital */}
+      <div>
+        <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm sm:text-base"><Activity className="w-4 h-4 text-blue-500" /> Vital Sign Trends</h3>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+          {VITAL_TRENDS.map((t) => {
+            const data = trendFor(t.key);
+            return (
+              <div key={t.key} className="bg-white rounded-lg p-3 sm:p-4 border border-gray-200">
+                <ChartContainer title={t.title} type="area" data={data.length ? data : EMPTY_VITALS_TREND} dataKey="value" xAxisKey="name" colors={[t.color]} height={180} />
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Medications + Conditions */}

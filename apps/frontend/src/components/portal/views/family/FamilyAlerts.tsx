@@ -144,7 +144,7 @@ export default function FamilyAlerts() {
                     </div>
                     <p className="text-sm text-gray-600 mt-0.5">{inc.resident}{inc.room ? ` • Room ${inc.room}` : ""}</p>
                     {inc.description && <p className="text-sm text-gray-800 mt-2">{inc.description}</p>}
-                    {inc.notes && <p className="text-sm text-gray-600 mt-2 p-2 bg-gray-50 rounded border-l-2 border-yellow-400">📝 {inc.notes}</p>}
+                    {inc.notes && <p className="text-sm text-gray-600 mt-2 p-2 bg-gray-50 rounded border-l-2 border-yellow-400">{inc.notes}</p>}
                     <p className="text-xs text-gray-400 mt-2">{inc.timestamp ? new Date(String(inc.timestamp)).toLocaleString() : ""}{rel(inc.timestamp) ? ` • ${rel(inc.timestamp)}` : ""}</p>
                   </div>
                 </div>

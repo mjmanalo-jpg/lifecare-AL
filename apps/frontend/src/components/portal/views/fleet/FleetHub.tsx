@@ -717,7 +717,7 @@ function RequestsTab({ onView }: { onView: (r: Record<string, unknown>) => void 
         pickupLocation: assigning.pickupLocation || null,
         dropoffLocation: assigning.dropoffLocation || assigning.destination,
         destination: assigning.destination,
-        origin: assigning.pickupLocation || "Golden Hearth Facility",
+        origin: assigning.pickupLocation || "LifeCare Facility",
         scheduledAt: new Date(assignForm.scheduledAt).toISOString(),
         status: "SCHEDULED",
         notes: assigning.purpose || null,

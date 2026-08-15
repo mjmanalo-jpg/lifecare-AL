@@ -87,7 +87,7 @@ export const DEFAULT_CONFIG: LandingConfig = {
 export const PRESETS: LandingPreset[] = [
   {
     id: "hearth",
-    name: "Golden Hearth",
+    name: "LifeCare",
     swatch: "#f59e0b",
     config: {
       baseTheme: "dark",

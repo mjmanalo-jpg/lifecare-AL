@@ -117,7 +117,7 @@ export default function AmbulanceBooking() {
         vehicleId: form.vehicleId,
         driverId: form.driverId || null,
         destination: form.destination.trim(),
-        origin: "Golden Hearth Facility",
+        origin: "LifeCare Facility",
         status: "SCHEDULED",
         scheduledAt: start.toISOString(),
         notes,

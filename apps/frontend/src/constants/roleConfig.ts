@@ -128,7 +128,7 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   tasks: "Daily Care Documentation & Monitoring",
   residents: "Resident Profile & Care Record",
   reports: "Shift Endorsement & Continuity",
-  relative: "Resident Profile & Care Record",
+  relative: "Monitoring",
   timeline: "Health Timeline",
   report: "Daily Care Documentation & Monitoring",
   alerts: "Alerts",
@@ -438,26 +438,31 @@ export const ROLES: Record<Role, RoleDetails> = {
     basePath: "/family",
     footerText: "Family Portal",
     sidebarLinks: [
-      { name: "Reporting & Care Intelligence", icon: Grid, route: "/family/dashboard" },
-      { name: "Resident Profile & Care Record", icon: User, route: "/family/relative" },
-      { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/family/report" },
-      { name: "Care Team", icon: Stethoscope, route: "/family/careteam" },
-      { name: "Care Planning", icon: Target, route: "/family/goals" },
-      { name: "Alerts", icon: AlertTriangle, route: "/family/alerts" },
-      { name: "Messages", icon: MessageSquare, route: "/family/messages" },
-      { name: "Appointments", icon: Clock, route: "/family/appointments" },
-      { name: "Transport", icon: Bus, route: "/family/transport" },
-      { name: "Hotel Services", icon: ConciergeBell, route: "/family/services" },
-      { name: "Community & Events", icon: CalendarDays, route: "/family/community" },
-      { name: "Billing", icon: DollarSign, route: "/family/expenses" },
-      // Core SLMS Modules Aligned
-      { name: "Assessment & Level of Care", icon: ClipboardList, route: "/family/rounds" },
-      { name: "Shift Endorsement & Continuity", icon: FileText, route: "/family/reports" },
-      { name: "Medication Management & Inventory", icon: Pill, route: "/family/medications" },
-      { name: "Sbar Escalation", icon: Siren, route: "/family/escalations" },
-      { name: "Vaccinations", icon: Syringe, route: "/family/vaccinations" },
+      // Overview
+      { name: "Reporting & Care Intelligence", icon: Grid, route: "/family/dashboard", group: "Overview" },
+      // Resident Care
+      { name: "Monitoring", icon: Activity, route: "/family/relative", group: "Resident Care" },
+      { name: "Clinical Records", icon: FolderOpen, route: "/family/clinicalrecords", group: "Resident Care" },
+      { name: "Care Timeline", icon: History, route: "/family/carehistory", group: "Resident Care" },
+      { name: "Incident Alerts", icon: AlertTriangle, route: "/family/alerts", group: "Resident Care" },
+      { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/family/report", group: "Resident Care" },
+      { name: "Care Planning", icon: Target, route: "/family/goals", group: "Resident Care" },
+      { name: "Assessment & Level of Care", icon: ClipboardList, route: "/family/rounds", group: "Resident Care" },
+      { name: "Shift Endorsement & Continuity", icon: FileText, route: "/family/reports", group: "Resident Care" },
       { name: "Sign & Upload", icon: FolderOpen, route: "/family/forms", group: "Resident Care" },
-      { name: "Follow-up Tracker", icon: CalendarCheck, route: "/family/followups" },
+      // Medication
+      { name: "Medication Management & Inventory", icon: Pill, route: "/family/medications", group: "Medication" },
+      // Coordination & Comms
+      { name: "Requests & Approvals", icon: BadgeCheck, route: "/family/approvals", group: "Coordination & Comms" },
+      { name: "Sbar Escalation", icon: Siren, route: "/family/escalations", group: "Coordination & Comms" },
+      { name: "Appointments", icon: Clock, route: "/family/appointments", group: "Coordination & Comms" },
+      // Billing & Finance
+      { name: "Billing", icon: Wallet, route: "/family/expenses", group: "Billing & Finance" },
+      // Hospitality & Services
+      { name: "Hotel Services", icon: ConciergeBell, route: "/family/services", group: "Hospitality & Services" },
+      { name: "Community & Events", icon: CalendarDays, route: "/family/community", group: "Hospitality & Services" },
+      // Fleet & Transport
+      { name: "Transport", icon: Bus, route: "/family/transport", group: "Fleet & Transport" },
     ],
   },
   CARE_MANAGER: {

@@ -604,7 +604,7 @@ function BillingAnalytics({ invoices }: { invoices: InvoiceVM[] }) {
               </div>
             ))}
           </div>
-        ) : <p className="text-sm text-green-700 py-6 text-center">All invoices are fully paid. 🎉</p>}
+        ) : <p className="text-sm text-green-700 py-6 text-center">All invoices are fully paid.</p>}
       </div>
     </div>
   );

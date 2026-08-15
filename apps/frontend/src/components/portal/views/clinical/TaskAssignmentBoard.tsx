@@ -106,11 +106,16 @@ interface HandoverEndorsement {
 /** A single task card with inline status-transition controls. */
 function TaskCard({ task, staffNameById, onSetStatus, onAddNote, nowMs }: { task: Task; staffNameById: Map<string, string>; onSetStatus: SetStatusFn; onAddNote: AddNoteFn; nowMs: number }) {
   const overdue = overdueMinutes(task, nowMs);
-  const raw = task.raw as { assignedToId?: string; status?: string; priority?: string } | undefined;
+  const raw = task.raw as { assignedToId?: string; status?: string; priority?: string; completedAt?: string } | undefined;
   const assignee = raw?.assignedToId ? staffNameById.get(raw.assignedToId) : null;
   const status = task.completed
     ? "COMPLETED"
     : String(raw?.status ?? "").toUpperCase() === "IN_PROGRESS" ? "IN_PROGRESS" : "PENDING";
+  const completedAt = (() => {
+    if (status !== "COMPLETED" || !raw?.completedAt) return null;
+    const d = new Date(raw.completedAt);
+    return Number.isNaN(d.getTime()) ? null : d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  })();
   const pill = PRIORITY_PILL[String(raw?.priority ?? "").toUpperCase()] ?? PRIORITY_PILL.LOW;
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -126,6 +131,12 @@ function TaskCard({ task, staffNameById, onSetStatus, onAddNote, nowMs }: { task
           ? <span className="ml-auto inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">Overdue {fmtDur(overdue)}</span>
           : task.dueTime && <span className="text-[11px] text-slate-400 ml-auto">Due {task.dueTime}</span>}
       </div>
+      {completedAt && (
+        <div className="flex items-center gap-1.5 mt-2 rounded-lg bg-green-50 px-2 py-1 text-[11px] font-medium text-green-700">
+          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+          <span>Completed {completedAt}{assignee ? ` · ${assignee}` : ""}</span>
+        </div>
+      )}
       <div className="mt-3 flex items-center justify-end gap-1">
         <button onClick={() => onAddNote(task)}
           title="Add note" className="p-1.5 rounded text-slate-500 hover:bg-slate-100 transition">
@@ -154,22 +165,42 @@ function TaskCard({ task, staffNameById, onSetStatus, onAddNote, nowMs }: { task
   );
 }
 
-/** A kanban status column: dot + label + count badge + card stack. */
-function Column({ label, dot, items, staffNameById, onSetStatus, onAddNote, nowMs }: {
-  label: string; dot: string; items: Task[]; staffNameById: Map<string, string>; onSetStatus: SetStatusFn; onAddNote: AddNoteFn; nowMs: number;
+/** A kanban status column: dot + label + count badge + card stack.
+ *  The card stack scrolls internally (capped height) so a column with many
+ *  cards — e.g. dozens of completed tasks — never grows the whole page. */
+function Column({ label, dot, items, staffNameById, onSetStatus, onAddNote, nowMs, headerRight, total }: {
+  label: string; dot: string; items: Task[]; staffNameById: Map<string, string>; onSetStatus: SetStatusFn; onAddNote: AddNoteFn; nowMs: number; headerRight?: React.ReactNode; total?: number;
 }) {
+  const badge = total != null && total !== items.length ? `${items.length}/${total}` : String(items.length);
   return (
     <div className="flex flex-col min-w-0">
-      <div className="flex items-center gap-2 px-1 pb-2">
-        <span className={`w-2 h-2 rounded-full ${dot}`} />
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 pb-2">
+        <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
         <span className="text-sm font-semibold text-slate-800">{label}</span>
-        <span className="inline-flex items-center justify-center min-w-6 h-5 px-1.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">{items.length}</span>
+        <span className="inline-flex items-center justify-center min-w-6 h-5 px-1.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">{badge}</span>
+        {headerRight && <div className="ml-auto shrink-0">{headerRight}</div>}
       </div>
-      <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-3 min-h-28">
+      <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-3 min-h-28 max-h-[70vh] overflow-y-auto">
         {items.length > 0
           ? items.map((t) => <TaskCard key={t.id} task={t} staffNameById={staffNameById} onSetStatus={onSetStatus} onAddNote={onAddNote} nowMs={nowMs} />)
           : <p className="text-center text-sm text-slate-400 py-8">No tasks</p>}
       </div>
+    </div>
+  );
+}
+
+/** Segmented Today / 7d / All scope control for the Completed column header. */
+const COMPLETED_SCOPES = [["today", "Today"], ["week", "7d"], ["all", "All"]] as const;
+type CompletedScope = (typeof COMPLETED_SCOPES)[number][0];
+function ScopeToggle({ value, onChange }: { value: CompletedScope; onChange: (v: CompletedScope) => void }) {
+  return (
+    <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+      {COMPLETED_SCOPES.map(([v, label]) => (
+        <button key={v} type="button" onClick={() => onChange(v)}
+          className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition ${value === v ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-800"}`}>
+          {label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -290,6 +321,7 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
   const [filterAssignee, setFilterAssignee] = useState("all");
   const [filterResident, setFilterResident] = useState("all");
   const [activeTab, setActiveTab] = useState<"board" | "mine" | "summary" | "handover">("board");
+  const [completedScope, setCompletedScope] = useState<CompletedScope>("today");
   const [showAssign, setShowAssign] = useState(false);
   // "Now" tick for overdue badges (updated after mount + every minute; never Date.now() in render).
   const [nowMs, setNowMs] = useState(0);
@@ -366,6 +398,21 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
     }
     return { pending, inProgress, completed };
   }, [tabTasks]);
+
+  // Completed can accumulate into the dozens; scope it by completion time so the
+  // column shows a short, relevant list by default (Today) — All still available.
+  const completedScoped = useMemo(() => {
+    if (completedScope === "all") return columns.completed;
+    const startOfToday = (() => { const d = new Date(nowMs || Date.now()); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+    const cutoff = completedScope === "today" ? startOfToday : (nowMs || Date.now()) - 7 * 24 * 60 * 60 * 1000;
+    const completedAtMs = (t: Task) => {
+      const raw = t.raw as { completedAt?: string; updatedAt?: string } | undefined;
+      const d = raw?.completedAt || t.dueDate || raw?.updatedAt;
+      const ts = d ? new Date(d).getTime() : 0;
+      return Number.isNaN(ts) ? 0 : ts;
+    };
+    return columns.completed.filter((t) => completedAtMs(t) >= cutoff);
+  }, [columns.completed, completedScope, nowMs]);
 
   // Shift Summary — per-status + per-assignee counts for the current shift.
   const summary = useMemo(() => {
@@ -531,10 +578,10 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
           ) : myHandovers.map((e) => <HandoverCard key={e.id} e={e} resName={resName} onOpenTasks={() => setActiveTab("board")} onOpenIncidents={() => { const seg = window.location.pathname.split("/")[1] || "caregiver"; window.location.href = `/${seg}/incidents`; }} />)}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3">
           <Column label="Pending" dot="bg-amber-400" items={columns.pending} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} nowMs={nowMs} />
           <Column label="In Progress" dot="bg-blue-500" items={columns.inProgress} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} nowMs={nowMs} />
-          <Column label="Completed" dot="bg-green-500" items={columns.completed} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} nowMs={nowMs} />
+          <Column label="Completed" dot="bg-green-500" items={completedScoped} total={columns.completed.length} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} nowMs={nowMs} headerRight={<ScopeToggle value={completedScope} onChange={setCompletedScope} />} />
         </div>
       )}
 
@@ -656,9 +703,10 @@ function AssignTaskModal({
                 {residents.length === 0 ? (
                   <p className="text-xs text-slate-400 p-3">No residents found.</p>
                 ) : residents.map((r) => (
-                  <label key={r.id} className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
-                    <input type="checkbox" checked={selectedResidents.has(r.id)} onChange={() => toggleResident(r.id)} className="rounded border-slate-300" />
-                    {r.name} — Rm {r.room}
+                  <label key={r.id} className="flex items-center gap-2.5 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
+                    <input type="checkbox" checked={selectedResidents.has(r.id)} onChange={() => toggleResident(r.id)}
+                      style={{ minHeight: 0, minWidth: 0 }} className="h-4 w-4 shrink-0 rounded border-slate-300 accent-blue-600" />
+                    <span className="truncate">{r.name} — Rm {r.room}</span>
                   </label>
                 ))}
               </div>

@@ -621,6 +621,23 @@ export default function CameraVisionFeed({ isFallen, onFallTriggered, onFallClea
         }),
       });
     } catch { /* non-critical — the on-screen EMERGENCY + fall log still fire */ }
+
+    // Close the loop: record an Incident (→ Incident Reports + family Incident
+    // Alerts) and notify the care team AND the resident's family sponsor. Deduped
+    // server-side so multiple open feeds don't stack duplicate incidents.
+    try {
+      await fetch("/api/monitoring/fall", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          residentId,
+          kind: "FALL",
+          confidence,
+          summary: `${who} appears to have fallen and is on the floor.`,
+        }),
+      });
+    } catch { /* non-critical — the escalation + on-screen EMERGENCY still fire */ }
   }, [residentId, residentName, residentRoom]);
 
   // Wave detection - separate left and right history for accuracy

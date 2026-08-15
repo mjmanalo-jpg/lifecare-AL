@@ -4049,6 +4049,7 @@ model UrineRecord {
   volume          String?
   estimatedMl     Int?
   hasBlood        Boolean    @default(false)
+  painful         Boolean    @default(false)
   odor            String?
   urgency         String?
   containment     String?
