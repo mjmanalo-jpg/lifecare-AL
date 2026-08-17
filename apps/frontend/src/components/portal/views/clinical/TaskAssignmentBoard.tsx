@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { RefreshCw, Plus, X, CheckCircle2, Play, Undo2, StickyNote, ArrowLeftRight, Repeat } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { RefreshCw, Plus, X, CheckCircle2, Play, Undo2, StickyNote, ArrowLeftRight, Repeat, CalendarCheck } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident, adaptTask } from "@/lib/adapters";
 import { createRecord, updateRecord } from "@/lib/api";
 import { TASK_NOTES_FIELD } from "@/lib/taskNotes";
+import { CAREGIVER_SCHEDULE_KEY, parseSchedules, type CaregiverSchedule } from "@/lib/caregiverSchedule";
 import type { ClinicianRole } from "./useClinician";
 
 /**
@@ -342,6 +343,12 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
   // Shift endorsements this user has acknowledged — surfaced so the carry-overs
   // (now their tasks) keep their handover context (source shift + sign-off snapshot).
   const { data: settingRows } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
+  // Caregiver roster — used to suggest the assignee already scheduled for a
+  // resident on the chosen shift.
+  const caregiverSchedules = useMemo(
+    () => parseSchedules(settingRows.find((r) => (r.key || r.id) === CAREGIVER_SCHEDULE_KEY)?.value),
+    [settingRows]
+  );
   const myHandovers = useMemo(() => {
     let list: HandoverEndorsement[] = [];
     try { const v = JSON.parse(settingRows.find((r) => (r.key || r.id) === "shift_endorsements")?.value || "[]"); if (Array.isArray(v)) list = v; } catch { /* ignore */ }
@@ -592,6 +599,7 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
           residents={residents}
           staffRows={assignableStaff}
           creatorStaffId={myStaffId}
+          schedules={caregiverSchedules}
           onClose={() => setShowAssign(false)}
           onSaved={() => { setShowAssign(false); refetch(); }}
         />
@@ -665,11 +673,12 @@ function NoteModal({ task, value, onChange, busy, onClose, onSubmit }: { task: T
 // Assign New Task modal (image 83)
 // ---------------------------------------------------------------------------
 function AssignTaskModal({
-  residents, staffRows, creatorStaffId, onClose, onSaved,
+  residents, staffRows, creatorStaffId, schedules, onClose, onSaved,
 }: {
   residents: ReturnType<typeof adaptResident>[];
   staffRows: StaffRow[];
   creatorStaffId: string | null;
+  schedules: CaregiverSchedule[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -691,6 +700,28 @@ function AssignTaskModal({
     });
   const selectAll = () => setSelectedResidents(new Set(residents.map((r) => r.id)));
   const clearAll = () => setSelectedResidents(new Set());
+
+  // Suggest the caregiver already rostered for the selected residents on this
+  // date+shift — but only when ONE caregiver covers every selected resident.
+  const suggestedStaffId = useMemo(() => {
+    if (selectedResidents.size === 0) return "";
+    const relevant = schedules.filter((s) => s.date === dueDate && s.shift === shiftKey);
+    const perResident = new Map<string, string>();
+    for (const s of relevant) for (const rid of s.residentIds) if (selectedResidents.has(rid)) perResident.set(rid, s.caregiverStaffId);
+    const ids = [...selectedResidents];
+    if (!ids.every((rid) => perResident.has(rid))) return "";
+    const set = new Set(ids.map((rid) => perResident.get(rid)));
+    return set.size === 1 ? [...set][0]! : "";
+  }, [schedules, selectedResidents, dueDate, shiftKey]);
+  const suggestedName = staffRows.find((s) => s.id === suggestedStaffId)?.user?.name;
+
+  // Auto-fill the assignee from the suggestion, without clobbering a manual pick.
+  const lastSuggested = useRef("");
+  useEffect(() => {
+    if (!suggestedStaffId) return;
+    setAssigneeId((prev) => (prev === "" || prev === lastSuggested.current ? suggestedStaffId : prev));
+    lastSuggested.current = suggestedStaffId;
+  }, [suggestedStaffId]);
 
   const valid = selectedResidents.size > 0 && assigneeId && title.trim() && dueDate && shiftKey;
   const inputCls = "w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none text-sm";
@@ -782,6 +813,9 @@ function AssignTaskModal({
                 <option value="">Select staff member…</option>
                 {staffRows.map((s) => <option key={s.id} value={s.id}>{s.user?.name ?? "Staff"}</option>)}
               </select>
+              {suggestedName && assigneeId === suggestedStaffId && (
+                <p className="mt-1 text-[11px] text-blue-600 flex items-center gap-1"><CalendarCheck className="w-3 h-3" /> Scheduled for {selectedResidents.size === 1 ? "this resident" : "these residents"} this shift</p>
+              )}
             </div>
 
             {/* Title */}

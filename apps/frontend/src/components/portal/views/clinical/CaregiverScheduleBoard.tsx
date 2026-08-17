@@ -134,7 +134,11 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
         id: targetId ?? newScheduleId(),
         date: form.date, shift: form.shift,
         caregiverStaffId: cg.id, caregiverUserId: cg.userId, caregiverName: cg.name,
-        residentIds: form.residentIds, note: form.note.trim() || undefined,
+        residentIds: form.residentIds,
+        // Snapshot names now (manager sees all residents) so the caregiver can
+        // read them on future shifts without live resident access.
+        residents: form.residentIds.map((id) => { const r = resById.get(id); return { id, name: r?.name ?? "Resident", room: r?.room ?? "" }; }),
+        note: form.note.trim() || undefined,
         createdBy: me, createdAt: now, updatedAt: now,
       };
       const next = targetId
@@ -210,10 +214,17 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
             const day = Number(date.slice(-2));
             const items = schedulesByDate.get(date) ?? [];
             const isToday = date === today;
+            // Residents left with no caregiver on a day that IS being rostered —
+            // the actionable gap (an empty future day isn't flagged as noise).
+            const coveredCount = new Set(items.flatMap((x) => x.residentIds)).size;
+            const uncovered = items.length > 0 ? Math.max(0, residents.length - coveredCount) : 0;
             return (
               <button key={date} onClick={() => setDayOpen(date)}
                 className={`min-h-[76px] rounded-lg border p-1.5 text-left transition hover:border-[var(--clinical-panel)] ${isToday ? "border-[var(--clinical-panel)] bg-[color-mix(in_srgb,var(--clinical-panel)_8%,transparent)]" : "border-[var(--clinical-line)] bg-[var(--clinical-surface)]"}`}>
-                <span className={`text-xs font-bold ${isToday ? "text-[var(--clinical-panel)]" : "text-[var(--clinical-ink-soft)]"}`}>{day}</span>
+                <div className="flex items-center justify-between">
+                  <span className={`text-xs font-bold ${isToday ? "text-[var(--clinical-panel)]" : "text-[var(--clinical-ink-soft)]"}`}>{day}</span>
+                  {uncovered > 0 && <span title={`${uncovered} resident(s) with no caregiver`} className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-[var(--clinical-coral)] text-white text-[9px] font-bold">{uncovered}</span>}
+                </div>
                 <div className="mt-1 space-y-0.5">
                   {SHIFTS.map((sh) => {
                     const n = items.filter((x) => x.shift === sh.key).length;
@@ -238,6 +249,7 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
           date={dayOpen}
           items={schedulesByDate.get(dayOpen) ?? []}
           resById={resById}
+          allResidents={residents}
           onClose={() => setDayOpen(null)}
           onAdd={(shift) => openAdd(dayOpen, shift)}
           onEdit={openEdit}
@@ -271,9 +283,14 @@ function ShiftCard({ s, resById, isToday }: { s: CaregiverSchedule; resById: Map
         <span className="ml-auto text-xs font-bold text-[var(--clinical-panel)] rounded px-2 py-0.5" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)" }}>{s.residentIds.length} resident{s.residentIds.length === 1 ? "" : "s"}</span>
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5">
-        {s.residentIds.map((rid) => { const r = resById.get(rid); return (
-          <span key={rid} className="text-[11px] font-medium px-2 py-0.5 rounded bg-[var(--clinical-surface-2)] text-[var(--clinical-ink-soft)]">{r?.name ?? "Resident"}{r?.room ? ` · Rm ${r.room}` : ""}</span>
-        ); })}
+        {s.residentIds.map((rid) => {
+          // Prefer the assign-time snapshot (works on future shifts); fall back to live.
+          const snap = s.residents?.find((x) => x.id === rid);
+          const r = snap ?? resById.get(rid);
+          return (
+            <span key={rid} className="text-[11px] font-medium px-2 py-0.5 rounded bg-[var(--clinical-surface-2)] text-[var(--clinical-ink-soft)]">{r?.name ?? "Resident"}{r?.room ? ` · Rm ${r.room}` : ""}</span>
+          );
+        })}
       </div>
       {s.note && <p className="mt-2 text-xs text-[var(--clinical-muted)] flex items-start gap-1"><Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />{s.note}</p>}
     </ClinicalCard>
@@ -281,11 +298,14 @@ function ShiftCard({ s, resById, isToday }: { s: CaregiverSchedule; resById: Map
 }
 
 // ── Day detail modal (manager) ────────────────────────────────────────────────
-function DayModal({ date, items, resById, onClose, onAdd, onEdit, onDelete }: {
+function DayModal({ date, items, resById, allResidents, onClose, onAdd, onEdit, onDelete }: {
   date: string; items: CaregiverSchedule[]; resById: Map<string, { name: string; room: string }>;
+  allResidents: { id: string; name: string; room: string }[];
   onClose: () => void; onAdd: (shift: ShiftKey) => void; onEdit: (s: CaregiverSchedule) => void; onDelete: (s: CaregiverSchedule) => void;
 }) {
   const pretty = new Date(date + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  const covered = new Set(items.flatMap((x) => x.residentIds));
+  const uncovered = allResidents.filter((r) => !covered.has(r.id));
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div role="dialog" aria-modal="true" className="flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl shadow-2xl sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl" style={{ backgroundColor: "var(--clinical-ground)" }}>
@@ -297,6 +317,14 @@ function DayModal({ date, items, resById, onClose, onAdd, onEdit, onDelete }: {
           <button onClick={onClose} aria-label="Close" className="rounded-lg p-2 hover:bg-white/10"><X className="w-5 h-5" /></button>
         </div>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
+          {uncovered.length > 0 && (
+            <div className="rounded-lg border p-3" style={{ borderColor: "var(--clinical-coral)", backgroundColor: "color-mix(in srgb, var(--clinical-coral) 8%, transparent)" }}>
+              <p className="text-xs font-bold text-[var(--clinical-coral)] flex items-center gap-1.5"><Info className="w-3.5 h-3.5" /> {uncovered.length} resident{uncovered.length === 1 ? "" : "s"} with no caregiver this day</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
+                {uncovered.map((r) => <span key={r.id} className="text-[11px] font-medium px-2 py-0.5 rounded bg-[var(--clinical-surface-2)] text-[var(--clinical-ink-soft)]">{r.name}{r.room ? ` · Rm ${r.room}` : ""}</span>)}
+              </div>
+            </div>
+          )}
           {SHIFTS.map((sh) => {
             const rows = items.filter((x) => x.shift === sh.key);
             const Icon = SHIFT_UI[sh.key].icon;

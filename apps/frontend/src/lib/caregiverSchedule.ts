@@ -37,7 +37,10 @@ export interface CaregiverSchedule {
   caregiverStaffId: string;
   caregiverUserId?: string; // resolved so the server lock can match by session userId
   caregiverName: string;
-  residentIds: string[];
+  residentIds: string[];              // the authority for access scoping
+  /** Name/room snapshot taken at assign time so a caregiver sees resident names
+   *  even for a future shift (their live resident reads are shift-scoped). */
+  residents?: { id: string; name: string; room: string }[];
   note?: string;
   createdBy?: string;
   createdAt: string;
