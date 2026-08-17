@@ -3,7 +3,7 @@ import { requireTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import {
-  CAREGIVER_BREAKGLASS_KEY, parseBreakglass, currentShiftEnd,
+  CAREGIVER_BREAKGLASS_KEY, parseBreakglass, endOfDay,
   newScheduleId, type BreakGlassGrant,
 } from "@/lib/caregiverSchedule";
 
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
     residentName,
     reason,
     at: now.toISOString(),
-    expiresAt: currentShiftEnd(now).toISOString(),
+    expiresAt: endOfDay(now).toISOString(),
   };
 
   // Append to the (server-only) break-glass setting, pruning expired grants.
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
         userId: m.userId,
         type: "SYSTEM_ALERT" as const,
         title: "Break-glass access used",
-        message: `${grant.caregiverName ?? "A caregiver"} opened emergency access to ${residentName}${roomTag} — "${reason}". Access expires at end of shift.`,
+        message: `${grant.caregiverName ?? "A caregiver"} opened emergency access to ${residentName}${roomTag} — "${reason}". Access expires at end of day.`,
         severity: "WARNING",
         relatedEntityId: residentId,
         relatedEntityType: "resident",

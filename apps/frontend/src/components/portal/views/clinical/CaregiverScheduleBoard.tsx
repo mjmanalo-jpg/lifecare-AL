@@ -202,7 +202,7 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
     <ClinicalPage className="space-y-6">
       <ClinicalHeader
         title="Caregiver Schedule"
-        subtitle="Roster a caregiver to a group of residents per shift. Assignments scope each caregiver's residents to their own shift."
+        subtitle="Roster a caregiver to a group of residents per shift. A caregiver can access their residents only on days they're scheduled."
         right={<ClinicalButton variant="accent" onClick={() => openAdd(today)}><Plus className="w-4 h-4" /> New Schedule</ClinicalButton>}
       />
 
@@ -441,7 +441,7 @@ function BreakGlassModal({ onClose }: { onClose: () => void }) {
           <button onClick={onClose} aria-label="Close" className="rounded-lg p-2 hover:bg-white/10"><X className="w-5 h-5" /></button>
         </div>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
-          <p className="text-xs text-[var(--clinical-muted)]">Open a resident who isn&apos;t on your shift. Access lasts until the end of this shift and is logged and reported to the nursing team.</p>
+          <p className="text-xs text-[var(--clinical-muted)]">Open a resident who isn&apos;t on your schedule. Access lasts until the end of today and is logged and reported to the nursing team.</p>
 
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--clinical-muted)]" />

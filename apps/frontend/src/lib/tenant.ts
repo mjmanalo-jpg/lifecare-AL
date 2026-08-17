@@ -18,10 +18,10 @@ export interface TenantContext {
   isOrganizationAdmin: boolean;
   /**
    * When set (CAREGIVER role only), the caller may only touch these resident ids
-   * — the residents on their active shift schedule, plus any unexpired
-   * break-glass grants. An empty array means "on no shift right now" → they see
-   * no resident-linked data. `undefined` means "not a scoped caregiver" (no
-   * restriction). Resolved once per context and cached with it.
+   * — the residents they are scheduled for TODAY (whole-day access), plus any
+   * unexpired break-glass grants. An empty array means "no schedule today" →
+   * they see no resident-linked data. `undefined` means "not a scoped caregiver"
+   * (no restriction). Resolved once per context and cached with it.
    */
   caregiverResidentIds?: string[];
 }
@@ -234,9 +234,9 @@ export async function requireTenantContext(options: { allowPlatform?: boolean; r
     isPlatform,
     isOrganizationAdmin,
   };
-  // Caregivers are locked to the residents on their active shift (+ break-glass).
-  // Resolve once here so tenantWhere() stays synchronous; cached with the context
-  // (IDENTITY_TTL_MS), so a shift boundary or a new break-glass grant takes effect
+  // Caregivers are locked to the residents they're scheduled for today (+ break-
+  // glass). Resolve once here so tenantWhere() stays synchronous; cached with the
+  // context (IDENTITY_TTL_MS), so a new schedule or break-glass grant takes effect
   // within that short window.
   if (context.role === "CAREGIVER" && context.communityId) {
     context.caregiverResidentIds = await resolveCaregiverResidentIds(context);
@@ -258,10 +258,13 @@ async function resolveCaregiverResidentIds(context: TenantContext): Promise<stri
       select: { key: true, value: true },
     }));
     const now = new Date();
+    // Schedule dates are picked in facility-local time; resolve "today" in that
+    // zone so a UTC server doesn't shift the day for a Manila facility.
+    const tz = process.env.FACILITY_TZ || "Asia/Manila";
     const schedRaw = rows.find((r) => r.key === CAREGIVER_SCHEDULE_KEY)?.value;
     const bgRaw = rows.find((r) => r.key === CAREGIVER_BREAKGLASS_KEY)?.value;
     const ids = new Set<string>();
-    activeResidentIdsFor(context.userId, parseSchedules(schedRaw), now).forEach((i) => ids.add(i));
+    activeResidentIdsFor(context.userId, parseSchedules(schedRaw), now, tz).forEach((i) => ids.add(i));
     activeBreakglassResidentIds(context.userId, parseBreakglass(bgRaw), now).forEach((i) => ids.add(i));
     return [...ids];
   } catch (e) {

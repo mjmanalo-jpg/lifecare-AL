@@ -72,20 +72,29 @@ export function shiftWindow(date: string, shift: ShiftKey): { start: Date; end: 
   return { start, end };
 }
 
-/** True when `at` falls inside the schedule entry's shift window. */
-export function isScheduleActiveAt(s: CaregiverSchedule, at: Date): boolean {
-  const { start, end } = shiftWindow(s.date, s.shift);
-  return at >= start && at < end;
+/**
+ * True when the schedule is for the same local calendar day as `at`.
+ *
+ * Access is a WHOLE-DAY model: a caregiver can reach their assigned residents
+ * anytime on a day they are scheduled (regardless of the shift's exact hours);
+ * with no schedule dated today, they see nothing. The AM/PM/NOC shift is kept
+ * for rostering/coverage, not for gating access.
+ */
+export function isScheduleActiveAt(s: CaregiverSchedule, at: Date, timeZone?: string): boolean {
+  return s.date === localDateStr(at, timeZone);
 }
 
 /**
- * Resident ids a caregiver (by session userId) is actively assigned to at `at`.
- * This is the authority for Phase 2's "only during the shift" access boundary.
+ * Resident ids a caregiver (by session userId) is assigned to on the day of `at`.
+ * This is the authority for Phase 2's access boundary. `timeZone` (IANA, e.g.
+ * "Asia/Manila") makes "today" the facility's local day — critical because
+ * schedule dates are picked in facility-local time but the server may run in UTC.
  */
-export function activeResidentIdsFor(userId: string, schedules: CaregiverSchedule[], at: Date): string[] {
+export function activeResidentIdsFor(userId: string, schedules: CaregiverSchedule[], at: Date, timeZone?: string): string[] {
+  const today = localDateStr(at, timeZone);
   const ids = new Set<string>();
   for (const s of schedules) {
-    if (s.caregiverUserId && s.caregiverUserId === userId && isScheduleActiveAt(s, at)) {
+    if (s.caregiverUserId && s.caregiverUserId === userId && s.date === today) {
       s.residentIds.forEach((r) => ids.add(r));
     }
   }
@@ -125,7 +134,15 @@ export function activeBreakglassResidentIds(userId: string, grants: BreakGlassGr
   return [...ids];
 }
 
-/** End of the shift window `at` falls in — a break-glass grant lives until then. */
+/** End of the local calendar day `at` — a break-glass grant lives until then
+ *  (matches the whole-day access model). */
+export function endOfDay(at: Date): Date {
+  const d = new Date(at);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+/** End of the shift window `at` falls in (kept for reference / shift math). */
 export function currentShiftEnd(at: Date): Date {
   const h = at.getHours();
   const d = new Date(at);
@@ -139,3 +156,15 @@ export function currentShiftEnd(at: Date): Date {
 const pad = (n: number) => String(n).padStart(2, "0");
 export const toDateStr = (d: Date): string => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 export const todayStr = (): string => toDateStr(new Date());
+
+/** YYYY-MM-DD for `at` in a given IANA time zone (falls back to server-local).
+ *  en-CA formats as YYYY-MM-DD. Used server-side so "today" is the facility's
+ *  calendar day, not the server's UTC day. */
+export function localDateStr(at: Date, timeZone?: string): string {
+  if (!timeZone) return toDateStr(at);
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+  } catch {
+    return toDateStr(at);
+  }
+}
