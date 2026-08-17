@@ -140,6 +140,67 @@ function Section({ code, title, points, subtotal, children }: { code: string; ti
   );
 }
 
+// ── Resident picker (converted-lead admissions) ───────────────────────────────
+// A converted CRM lead becomes an Admission (IN_PROGRESS). Rather than retyping
+// the resident's name, the assessor picks that admission here — name +
+// demographics prefill and the assessment links back via convertedAdmissionId.
+type AdmissionOpt = { id: string; name: string; dob?: string; sex?: string; phone?: string; contact?: string };
+
+const ageFromDob = (dob?: string): string => {
+  if (!dob) return "";
+  const d = new Date(dob);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  let a = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--;
+  return a >= 0 && a < 130 ? String(a) : "";
+};
+
+function ResidentPicker({ value, onChange, admissions, linkedId, onPick, onUnlink }: {
+  value?: string; onChange: (v: string) => void; admissions: AdmissionOpt[];
+  linkedId: string; onPick: (a: AdmissionOpt) => void; onUnlink: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const q = (value ?? "").trim().toLowerCase();
+  const matches = admissions.filter((a) => !q || a.name.toLowerCase().includes(q)).slice(0, 8);
+  return (
+    <label className="block relative">
+      <MicroLabel className="mb-1">Resident Name *</MicroLabel>
+      <div className="relative">
+        <input
+          value={value ?? ""}
+          onChange={(e) => { onChange(e.target.value); if (linkedId) onUnlink(); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+          placeholder="Search converted leads or type a name…"
+          className={`${input} ${linkedId ? "pr-24" : ""}`}
+          autoComplete="off"
+        />
+        {linkedId && (
+          <span className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded text-[var(--clinical-panel)]" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)" }}>
+            From CRM
+            <button type="button" aria-label="Unlink admission" onMouseDown={(e) => { e.preventDefault(); onUnlink(); }} className="hover:text-[var(--clinical-coral)]"><X className="w-3 h-3" /></button>
+          </span>
+        )}
+      </div>
+      {open && admissions.length > 0 && (
+        <div className="absolute z-30 mt-1 w-full max-h-56 overflow-y-auto rounded-lg border shadow-lg scrollbar-thin" style={{ backgroundColor: "var(--clinical-ground)", borderColor: "var(--clinical-line-strong)" }}>
+          {matches.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-[var(--clinical-muted)]">No in-progress admissions match — keep typing to enter a new name.</div>
+          ) : matches.map((a) => (
+            <button key={a.id} type="button" onMouseDown={(e) => { e.preventDefault(); onPick(a); setOpen(false); }}
+              className="w-full text-left px-3 py-2 hover:bg-[var(--clinical-surface-2)] border-b last:border-b-0" style={{ borderColor: "var(--clinical-line)" }}>
+              <div className="text-sm font-medium text-[var(--clinical-ink)]">{a.name}</div>
+              <div className="text-[11px] text-[var(--clinical-muted)]">{[a.sex, a.dob && `DOB ${a.dob}`, a.phone].filter(Boolean).join(" · ") || "Converted lead · in-progress admission"}</div>
+            </button>
+          ))}
+        </div>
+      )}
+    </label>
+  );
+}
+
 const EMPTY: PreAdmissionData = { otherConditions: [], adl: {}, behaviors: [], nursing: [], risk: {}, carePriorities: [], staffing: [] };
 const META_KEYS = new Set(["id", "status", "scores", "createdAt", "updatedAt", "convertedAdmissionId"]);
 const stripMeta = (a: PreAdmissionAssessment): PreAdmissionData =>
@@ -153,6 +214,24 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
     [settingRows]
   );
 
+  // Converted CRM leads land here as in-progress admissions — offer them for the
+  // resident picker so the assessor selects instead of retyping.
+  const { data: admissionRows } = useLiveQuery<{ id: string; firstName?: string; lastName?: string; dateOfBirth?: string; gender?: string; phone?: string; sponsorName?: string; status?: string }>("admissions", { query: "take=500", tables: ["Admission"] });
+  const admissionOpts = useMemo<AdmissionOpt[]>(
+    () => admissionRows
+      .filter((r) => String(r.status || "").toUpperCase() === "IN_PROGRESS")
+      .map((r) => ({
+        id: String(r.id),
+        name: `${r.firstName ?? ""} ${r.lastName ?? ""}`.replace(/\s*—\s*$/, "").trim(),
+        dob: r.dateOfBirth ? String(r.dateOfBirth).slice(0, 10) : undefined,
+        sex: r.gender || undefined,
+        phone: r.phone || undefined,
+        contact: r.sponsorName || undefined,
+      }))
+      .filter((a) => a.name),
+    [admissionRows]
+  );
+
   const [me, setMe] = useState("");
   useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => { if (d?.authenticated) setMe(d.session?.name ?? ""); }).catch(() => {}); }, []);
 
@@ -163,13 +242,27 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
   const [search, setSearch] = useState("");
   const [reviewing, setReviewing] = useState<PreAdmissionAssessment | null>(null);
   const [showPin, setShowPin] = useState(false);
+  const [linkedAdmissionId, setLinkedAdmissionId] = useState("");
   const nowISO = new Date().toISOString();
 
   const set = (patch: Partial<PreAdmissionData>) => setForm((f) => ({ ...f, ...patch }));
   const scores = useMemo(() => scoreAssessment(form), [form]);
 
-  const openNew = () => { setEditingId(null); setForm({ ...EMPTY, dateOfAssessment: new Date().toISOString().slice(0, 10), assessor: me }); setOpen(true); };
-  const openEdit = (a: PreAdmissionAssessment) => { setEditingId(a.id); setForm({ ...EMPTY, ...stripMeta(a) }); setOpen(true); };
+  const openNew = () => { setEditingId(null); setLinkedAdmissionId(""); setForm({ ...EMPTY, dateOfAssessment: new Date().toISOString().slice(0, 10), assessor: me }); setOpen(true); };
+  const openEdit = (a: PreAdmissionAssessment) => { setEditingId(a.id); setLinkedAdmissionId(a.convertedAdmissionId ?? ""); setForm({ ...EMPTY, ...stripMeta(a) }); setOpen(true); };
+
+  // Selecting a converted-lead admission fills the demographics and links the record.
+  const pickAdmission = (a: AdmissionOpt) => {
+    set({
+      residentName: a.name,
+      dateOfBirth: a.dob || form.dateOfBirth,
+      sex: a.sex || form.sex,
+      age: ageFromDob(a.dob) || form.age,
+      contactNo: a.phone || form.contactNo,
+      primaryContact: a.contact || form.primaryContact,
+    });
+    setLinkedAdmissionId(a.id);
+  };
 
   const persist = async (next: PreAdmissionAssessment[]) => {
     await upsertRecord("app-settings", PREADMISSION_KEY, { key: PREADMISSION_KEY, value: JSON.stringify(next) });
@@ -183,10 +276,11 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
       const now = new Date().toISOString();
       const snap = scoreAssessment(form);
       let next: PreAdmissionAssessment[];
+      const link = linkedAdmissionId || undefined;
       if (editingId) {
-        next = assessments.map((a) => (a.id === editingId ? { ...a, ...form, status, scores: snap, updatedAt: now } : a));
+        next = assessments.map((a) => (a.id === editingId ? { ...a, ...form, status, scores: snap, updatedAt: now, convertedAdmissionId: link ?? a.convertedAdmissionId } : a));
       } else {
-        const rec: PreAdmissionAssessment = { ...form, id: newId(), status, scores: snap, createdAt: now, updatedAt: now };
+        const rec: PreAdmissionAssessment = { ...form, id: newId(), status, scores: snap, createdAt: now, updatedAt: now, ...(link ? { convertedAdmissionId: link } : {}) };
         next = [rec, ...assessments];
         setEditingId(rec.id);
       }
@@ -274,6 +368,7 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
                   {a.carePlan && <span className="text-[10px] font-semibold px-2 py-0.5 rounded text-[var(--clinical-panel)]" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)" }}>Care plan · {a.carePlan.problems.length} problem{a.carePlan.problems.length === 1 ? "" : "s"}</span>}
                   {due && <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-[var(--clinical-coral)] text-white"><AlertTriangle className="w-3 h-3" /> Reassessment due</span>}
                   {a.priorAssessmentId && <span className="text-[10px] font-semibold px-2 py-0.5 rounded text-[var(--clinical-muted)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}>Reassessment</span>}
+                  {a.convertedAdmissionId && <span className="text-[10px] font-semibold px-2 py-0.5 rounded text-[var(--clinical-panel)]" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)" }}>From CRM</span>}
                 </div>
 
                 <div className="mt-3 flex items-center justify-between gap-3">
@@ -329,7 +424,7 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
               {/* A — Resident Information */}
               <Section code="A" title="Resident Information">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Text label="Resident Name *" value={form.residentName} onChange={(v) => set({ residentName: v })} />
+                  <ResidentPicker value={form.residentName} onChange={(v) => set({ residentName: v })} admissions={admissionOpts} linkedId={linkedAdmissionId} onPick={pickAdmission} onUnlink={() => setLinkedAdmissionId("")} />
                   <div className="grid grid-cols-2 gap-3">
                     <Text label="Age" value={form.age} onChange={(v) => set({ age: v })} />
                     <Text label="Sex" value={form.sex} onChange={(v) => set({ sex: v })} placeholder="Male / Female" />
