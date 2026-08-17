@@ -89,6 +89,21 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [bgOpen, setBgOpen] = useState(false);
+  // Caregiver name fallback: their live `residents` read is shift-scoped, so a
+  // FUTURE (or pre-snapshot) shift can't resolve names from resById. Pull the
+  // community roster (names/rooms only) so every shift card shows real names.
+  const [rosterNames, setRosterNames] = useState<Map<string, { name: string; room: string }>>(new Map());
+  useEffect(() => {
+    if (sessionRole && MANAGER_ROLES.has(sessionRole)) return; // managers use resById
+    let alive = true;
+    fetch("/api/caregiver/break-glass").then((r) => (r.ok ? r.json() : { data: [] })).then((d) => {
+      if (!alive) return;
+      const m = new Map<string, { name: string; room: string }>();
+      (Array.isArray(d?.data) ? d.data : []).forEach((r: { id: string; name: string; room: string }) => m.set(r.id, { name: r.name, room: r.room }));
+      setRosterNames(m);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [sessionRole]);
 
   const monthCells = useMemo(() => {
     const first = new Date(cursor.y, cursor.m, 1);
@@ -164,6 +179,9 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
       .filter((s) => (sessionUserId && s.caregiverUserId === sessionUserId))
       .filter((s) => s.date >= today)
       .sort((a, b) => (a.date + a.shift).localeCompare(b.date + b.shift));
+    // resById (shift-scoped) + the community roster fallback → names on every card.
+    const nameMap = new Map(resById);
+    rosterNames.forEach((v, k) => { if (!nameMap.has(k)) nameMap.set(k, v); });
     return (
       <ClinicalPage className="space-y-6">
         <ClinicalHeader title="My Schedule" subtitle="Your assigned shifts and the residents in your care. Set by the nursing team."
@@ -171,7 +189,7 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
         <DataState loading={loading && schedules.length === 0} error={error} empty={mine.length === 0}
           emptyTitle="No upcoming shifts" emptyHint="When the nursing team rosters you to residents, your shifts appear here." onRetry={() => void refetch()} skeletonRows={3}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {mine.map((s) => <ShiftCard key={s.id} s={s} resById={resById} isToday={s.date === today} />)}
+            {mine.map((s) => <ShiftCard key={s.id} s={s} resById={nameMap} isToday={s.date === today} />)}
           </div>
         </DataState>
         {bgOpen && <BreakGlassModal onClose={() => setBgOpen(false)} />}
