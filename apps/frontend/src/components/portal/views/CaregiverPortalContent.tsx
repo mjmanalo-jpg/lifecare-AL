@@ -3,6 +3,7 @@
 import CaregiverDashboard from "@/components/portal/views/caregiver/CaregiverDashboard";
 import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
 import TaskAssignmentBoard from "@/components/portal/views/clinical/TaskAssignmentBoard";
+import CaregiverScheduleBoard from "@/components/portal/views/clinical/CaregiverScheduleBoard";
 import ResidentCareHistory from "@/components/portal/views/clinical/ResidentCareHistory";
 import VitalsTrendBoard from "@/components/portal/views/clinical/VitalsTrendBoard";
 import CaregiverCallBells from "@/components/portal/views/caregiver/CaregiverCallBells";
@@ -48,6 +49,8 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
       return <CaregiverTasks />;
     case "taskassignment":
       return <TaskAssignmentBoard clinicianRole="CAREGIVER" />;
+    case "caregiverschedule":
+      return <CaregiverScheduleBoard clinicianRole="CAREGIVER" />;
     case "carehistory":
       return <ResidentCareHistory clinicianRole="CAREGIVER" />;
     case "vitalstrend":

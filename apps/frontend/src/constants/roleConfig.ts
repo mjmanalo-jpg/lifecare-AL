@@ -214,6 +214,7 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   appointmentcalendar: "Appointments Calendar",
   taskboard: "Task Assignment",
   taskassignment: "Task Assignment",
+  caregiverschedule: "Caregiver Schedule",
   securitylog: "Security & Incident Log",
   cameralogs: "Camera Activity Log",
   cameras: "Camera Registry",
@@ -328,6 +329,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Consent & Move-in Forms", icon: ClipboardList, route: "/superadmin/consentforms" },
       { name: "Admissions & Registration", icon: UserPlus, route: "/superadmin/admissions" },
       { name: "Staff Registry", icon: Users, route: "/superadmin/staff" },
+      { name: "Caregiver Schedule", icon: CalendarCheck, route: "/superadmin/caregiverschedule" },
       { name: "AI Assistant", icon: Sparkles, route: "/superadmin/assistant" },
       { name: "Landing Studio", icon: Palette, route: "/superadmin/appearance" },
       // Core SLMS Modules Aligned
@@ -390,6 +392,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Physician Comms", icon: PhoneCall, route: "/nurse/physiciancomms", group: "Coordination & Comms" },
       // Administration
       { name: "Task Board", icon: ListTodo, route: "/nurse/taskassignment", group: "Administration" },
+      { name: "Caregiver Schedule", icon: CalendarCheck, route: "/nurse/caregiverschedule", group: "Administration" },
       { name: "Progress Reports", icon: FileText, route: "/nurse/progressreport", group: "Administration" },
       { name: "Pre-Admission", icon: FileCheck, route: "/nurse/prescreen", group: "Administration" },
       { name: "Audit Trail", icon: ScrollText, route: "/nurse/auditlog", group: "Administration" },
@@ -411,6 +414,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Incident Reports", icon: AlertTriangle, route: "/caregiver/incidents", group: "Clinical Monitoring" },
       // Resident Care
       { name: "Task Board", icon: ListTodo, route: "/caregiver/taskassignment", group: "Resident Care" },
+      { name: "My Schedule", icon: CalendarCheck, route: "/caregiver/caregiverschedule", group: "Resident Care" },
       { name: "Daily Care Logs", icon: NotebookPen, route: "/caregiver/carelogs", group: "Resident Care" },
       { name: "Care Timeline", icon: History, route: "/caregiver/carehistory", group: "Resident Care" },
       { name: "Daily Living (ADL)", icon: Accessibility, route: "/caregiver/adlmonitoring", group: "Resident Care" },
@@ -511,6 +515,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Physician Comms", icon: MessageSquare, route: "/care_manager/physiciancomms", group: "Coordination & Comms" },
       // Administration
       { name: "Task Board", icon: ListTodo, route: "/care_manager/taskassignment", group: "Administration" },
+      { name: "Caregiver Schedule", icon: CalendarCheck, route: "/care_manager/caregiverschedule", group: "Administration" },
       { name: "Progress Reports", icon: FileText, route: "/care_manager/progressreport", group: "Administration" },
       { name: "Quality & Outcomes", icon: TrendingUp, route: "/care_manager/quality", group: "Administration" },
       { name: "Audit Trail", icon: ScrollText, route: "/care_manager/auditlog", group: "Administration" },

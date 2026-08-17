@@ -23,6 +23,7 @@ import ApprovalWorkflows from "@/components/portal/views/clinical/ApprovalWorkfl
 import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
 import InventoryAlertsPanel from "@/components/portal/views/clinical/InventoryAlertsPanel";
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
+import CaregiverScheduleBoard from "@/components/portal/views/clinical/CaregiverScheduleBoard";
 import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
 import CameraRegistryBoard from "@/components/portal/views/CameraRegistryBoard";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
@@ -324,6 +325,9 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   }
   if (tab === "tasks") {
     return <DailyDocumentation clinicianRole="FACILITY_ADMIN" />;
+  }
+  if (tab === "caregiverschedule") {
+    return <CaregiverScheduleBoard clinicianRole="FACILITY_ADMIN" />;
   }
   if (tab === "reports" || tab === "clinicalreports") {
     return <ClinicalReports />;

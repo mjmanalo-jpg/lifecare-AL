@@ -36,6 +36,7 @@ import ShiftEndorsementDashboard from "@/components/portal/views/clinical/ShiftE
 import MedicationComplianceBoard from "@/components/portal/views/clinical/MedicationComplianceBoard";
 import ResidentProgressReport from "@/components/portal/views/clinical/ResidentProgressReport";
 import TaskAssignmentBoard from "@/components/portal/views/clinical/TaskAssignmentBoard";
+import CaregiverScheduleBoard from "@/components/portal/views/clinical/CaregiverScheduleBoard";
 import ResidentCareHistory from "@/components/portal/views/clinical/ResidentCareHistory";
 import VitalsTrendBoard from "@/components/portal/views/clinical/VitalsTrendBoard";
 import ClinicalRecordsBoard from "@/components/portal/views/clinical/ClinicalRecordsBoard";
@@ -831,6 +832,9 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   }
   if (tab === "taskassignment") {
     return <TaskAssignmentBoard clinicianRole="NURSE" />;
+  }
+  if (tab === "caregiverschedule") {
+    return <CaregiverScheduleBoard clinicianRole="NURSE" />;
   }
   if (tab === "carehistory") {
     return <ResidentCareHistory clinicianRole="NURSE" />;

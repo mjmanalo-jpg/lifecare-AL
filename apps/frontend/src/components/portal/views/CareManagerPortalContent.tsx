@@ -18,6 +18,7 @@ import ShiftEndorsementDashboard from "@/components/portal/views/clinical/ShiftE
 import MedicationComplianceBoard from "@/components/portal/views/clinical/MedicationComplianceBoard";
 import ResidentProgressReport from "@/components/portal/views/clinical/ResidentProgressReport";
 import TaskAssignmentBoard from "@/components/portal/views/clinical/TaskAssignmentBoard";
+import CaregiverScheduleBoard from "@/components/portal/views/clinical/CaregiverScheduleBoard";
 import ResidentCareHistory from "@/components/portal/views/clinical/ResidentCareHistory";
 import VitalsTrendBoard from "@/components/portal/views/clinical/VitalsTrendBoard";
 import ClinicalRecordsBoard from "@/components/portal/views/clinical/ClinicalRecordsBoard";
@@ -101,6 +102,8 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
       return <AppointmentCalendar title="Appointments Calendar" canSchedule={false} />;
     case "taskassignment":
       return <TaskAssignmentBoard clinicianRole="FACILITY_ADMIN" />;
+    case "caregiverschedule":
+      return <CaregiverScheduleBoard clinicianRole="FACILITY_ADMIN" />;
     case "carehistory":
       return <ResidentCareHistory clinicianRole="FACILITY_ADMIN" />;
     case "clinicalrecords":
