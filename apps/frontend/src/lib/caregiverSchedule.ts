@@ -12,6 +12,9 @@
  */
 
 export const CAREGIVER_SCHEDULE_KEY = "caregiver_schedules";
+/** Break-glass grants are hidden from the client (`__` prefix — the generic
+ *  /api/db route filters those out) and written only by the dedicated endpoint. */
+export const CAREGIVER_BREAKGLASS_KEY = "__caregiver_breakglass";
 
 export type ShiftKey = "AM" | "PM" | "NOC";
 
@@ -84,6 +87,49 @@ export function activeResidentIdsFor(userId: string, schedules: CaregiverSchedul
     }
   }
   return [...ids];
+}
+
+// ── Break-glass (emergency off-assignment access) ─────────────────────────────
+export interface BreakGlassGrant {
+  id: string;
+  caregiverUserId: string;
+  caregiverName?: string;
+  residentId: string;
+  residentName?: string;
+  reason: string;
+  at: string;         // ISO granted-at
+  expiresAt: string;  // ISO — end of the shift the grant was opened in
+}
+
+export function parseBreakglass(raw: string | undefined | null): BreakGlassGrant[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    if (!Array.isArray(v)) return [];
+    return v.filter((g): g is BreakGlassGrant =>
+      !!g && typeof g.caregiverUserId === "string" && typeof g.residentId === "string" && typeof g.expiresAt === "string");
+  } catch {
+    return [];
+  }
+}
+
+/** Resident ids a caregiver has an UNEXPIRED break-glass grant for at `at`. */
+export function activeBreakglassResidentIds(userId: string, grants: BreakGlassGrant[], at: Date): string[] {
+  const ids = new Set<string>();
+  for (const g of grants) {
+    if (g.caregiverUserId === userId && new Date(g.expiresAt) > at) ids.add(g.residentId);
+  }
+  return [...ids];
+}
+
+/** End of the shift window `at` falls in — a break-glass grant lives until then. */
+export function currentShiftEnd(at: Date): Date {
+  const h = at.getHours();
+  const d = new Date(at);
+  if (h >= 6 && h < 14) { d.setHours(14, 0, 0, 0); return d; }   // AM → 14:00
+  if (h >= 14 && h < 22) { d.setHours(22, 0, 0, 0); return d; }  // PM → 22:00
+  if (h >= 22) { d.setDate(d.getDate() + 1); d.setHours(6, 0, 0, 0); return d; } // Noc → next 06:00
+  d.setHours(6, 0, 0, 0); return d;                              // 0–5 → Noc end 06:00
 }
 
 // ── Local date helpers (calendar grid) ────────────────────────────────────────

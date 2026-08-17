@@ -10,6 +10,11 @@ import { prisma } from "@/lib/prisma";
 import { invalidatePortalDataPrefix } from "@/lib/dataCache";
 import { createMedTaskForSchedule } from "@/lib/medTaskSync";
 import { canEditResidentProfile } from "@/lib/residentAccess";
+import { CAREGIVER_SCHEDULE_KEY, CAREGIVER_BREAKGLASS_KEY } from "@/lib/caregiverSchedule";
+
+// Roles allowed to set the caregiver roster (mirrors the scheduler roles that
+// get the Caregiver Schedule board). Everyone else is read-only on it.
+const SCHEDULER_ROLES = new Set(["NURSE", "CARE_MANAGER", "FACILITY_ADMIN", "SUPERADMIN", "ORGANIZATION_ADMIN"]);
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -237,6 +242,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const input = await request.json();
   if (typeof input !== "object" || !input || Array.isArray(input)) return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  // Protect the caregiver scheduling settings from tampering: the roster may only
+  // be written by scheduling roles, and break-glass grants only by the dedicated
+  // /api/caregiver/break-glass endpoint — never a caregiver rewriting their own scope.
+  if (model === "app-settings" && !context.isPlatform) {
+    const settingKey = String((input as { key?: unknown; id?: unknown }).key ?? (input as { id?: unknown }).id ?? "").trim();
+    if (settingKey === CAREGIVER_BREAKGLASS_KEY) {
+      return NextResponse.json({ error: "Break-glass access is granted through the break-glass endpoint." }, { status: 403 });
+    }
+    if (settingKey === CAREGIVER_SCHEDULE_KEY && !SCHEDULER_ROLES.has(context.role) && !context.isOrganizationAdmin) {
+      return NextResponse.json({ error: "Only nursing/care management can set the caregiver schedule." }, { status: 403 });
+    }
+  }
   const data = sanitizeTenantWrite(model, input, context);
   // A present-but-empty residentId ("") is falsy, so the old truthiness check
   // skipped validation and let Prisma raise a raw foreign-key error. Validate

@@ -1,6 +1,10 @@
 import { prisma, withDbRetry } from "./prisma";
 import { getSession, type SessionData } from "./auth";
 import { ACCESS_STATUSES } from "./subscriptionStatus";
+import {
+  CAREGIVER_SCHEDULE_KEY, CAREGIVER_BREAKGLASS_KEY,
+  parseSchedules, parseBreakglass, activeResidentIdsFor, activeBreakglassResidentIds,
+} from "./caregiverSchedule";
 
 export interface TenantContext {
   session: SessionData;
@@ -12,6 +16,14 @@ export interface TenantContext {
   communityId?: string;
   isPlatform: boolean;
   isOrganizationAdmin: boolean;
+  /**
+   * When set (CAREGIVER role only), the caller may only touch these resident ids
+   * — the residents on their active shift schedule, plus any unexpired
+   * break-glass grants. An empty array means "on no shift right now" → they see
+   * no resident-linked data. `undefined` means "not a scoped caregiver" (no
+   * restriction). Resolved once per context and cached with it.
+   */
+  caregiverResidentIds?: string[];
 }
 
 const DIRECT_COMMUNITY = new Set([
@@ -222,8 +234,40 @@ export async function requireTenantContext(options: { allowPlatform?: boolean; r
     isPlatform,
     isOrganizationAdmin,
   };
+  // Caregivers are locked to the residents on their active shift (+ break-glass).
+  // Resolve once here so tenantWhere() stays synchronous; cached with the context
+  // (IDENTITY_TTL_MS), so a shift boundary or a new break-glass grant takes effect
+  // within that short window.
+  if (context.role === "CAREGIVER" && context.communityId) {
+    context.caregiverResidentIds = await resolveCaregiverResidentIds(context);
+  }
   contextCache.set(cacheKey, context);
   return context;
+}
+
+/** The residents a caregiver may access right now: active-shift assignments plus
+ *  unexpired break-glass grants. On a DB error, fail safe (empty = no access). */
+async function resolveCaregiverResidentIds(context: TenantContext): Promise<string[]> {
+  try {
+    const rows = await withDbRetry(() => prisma.appSetting.findMany({
+      where: {
+        organizationId: context.organizationId,
+        communityId: context.communityId,
+        key: { in: [CAREGIVER_SCHEDULE_KEY, CAREGIVER_BREAKGLASS_KEY] },
+      },
+      select: { key: true, value: true },
+    }));
+    const now = new Date();
+    const schedRaw = rows.find((r) => r.key === CAREGIVER_SCHEDULE_KEY)?.value;
+    const bgRaw = rows.find((r) => r.key === CAREGIVER_BREAKGLASS_KEY)?.value;
+    const ids = new Set<string>();
+    activeResidentIdsFor(context.userId, parseSchedules(schedRaw), now).forEach((i) => ids.add(i));
+    activeBreakglassResidentIds(context.userId, parseBreakglass(bgRaw), now).forEach((i) => ids.add(i));
+    return [...ids];
+  } catch (e) {
+    console.error("[tenant] caregiver scope resolution failed:", e instanceof Error ? e.message : e);
+    return [];
+  }
 }
 
 function residentAccessWhere(context: TenantContext) {
@@ -261,35 +305,51 @@ export function tenantWhere(modelKey: string, context: TenantContext): Record<st
   if (!context.communityId) return DENY;
 
   const selfService = context.role === "FAMILY" || context.role === "RESIDENT";
-  if (modelKey === "residents") return selfService ? residentAccessWhere(context) : { communityId: context.communityId };
+  // A scheduled caregiver is narrowed to their active-shift residents. An empty
+  // set becomes `{ id: { in: [] } }`, which Prisma resolves to zero rows — so
+  // off-shift they see no resident-linked data at all.
+  const cgScoped = Array.isArray(context.caregiverResidentIds);
+  const cgIds = context.caregiverResidentIds ?? [];
+  // The staff-side resident where-clause, further narrowed for caregivers.
+  const residentWhere: Record<string, unknown> = selfService
+    ? residentAccessWhere(context)
+    : cgScoped
+    ? { communityId: context.communityId, id: { in: cgIds } }
+    : { communityId: context.communityId };
+
+  if (modelKey === "residents") return residentWhere;
   if (modelKey === "admissions") {
     // Admissions are community-scoped, NOT resident-scoped: an in-progress
     // admission has no linked resident yet (the Resident is created only on
     // completion), so scoping by the resident relation would hide every
     // in-progress move-in. Staff see the community's admissions; a family/
-    // resident sees only their own resident's admission.
+    // resident sees only their own resident's admission. (Caregivers don't
+    // manage intake, so they keep community-level visibility here.)
     return selfService ? { resident: residentAccessWhere(context) } : { communityId: context.communityId };
   }
   if (modelKey === "tasks") {
     // Tasks carry a required residentId. Staff see the whole community's tasks;
-    // a resident/family may only see (and complete) their own.
-    return selfService ? { resident: residentAccessWhere(context) } : { communityId: context.communityId };
+    // a caregiver sees only their active-shift residents' tasks; a resident/
+    // family may only see (and complete) their own.
+    if (selfService) return { resident: residentAccessWhere(context) };
+    if (cgScoped) return { communityId: context.communityId, residentId: { in: cgIds } };
+    return { communityId: context.communityId };
   }
   if (RESIDENT_SCOPED.has(modelKey)) {
-    return { resident: selfService ? residentAccessWhere(context) : { communityId: context.communityId } };
+    return { resident: residentWhere };
   }
   if (modelKey === "payments") {
-    return { invoice: { resident: selfService ? residentAccessWhere(context) : { communityId: context.communityId } } };
+    return { invoice: { resident: residentWhere } };
   }
   if (modelKey === "time-tracking") return { staff: { communityId: context.communityId } };
   if (modelKey === "care-plan-items" || modelKey === "care-plan-reviews") {
-    return { carePlan: { resident: selfService ? residentAccessWhere(context) : { communityId: context.communityId } } };
+    return { carePlan: { resident: residentWhere } };
   }
   if (modelKey === "medication-change-logs") {
-    return { medication: { resident: selfService ? residentAccessWhere(context) : { communityId: context.communityId } } };
+    return { medication: { resident: residentWhere } };
   }
   if (["bowel-records", "urine-records", "edema-records", "concern-records", "pain-records", "mood-records", "round-sleep-records", "mobility-records", "meal-records", "vital-signs"].includes(modelKey)) {
-    return { dailyRound: { resident: selfService ? residentAccessWhere(context) : { communityId: context.communityId } } };
+    return { dailyRound: { resident: residentWhere } };
   }
   if (DIRECT_COMMUNITY.has(modelKey)) return { communityId: context.communityId };
   // All remaining application models receive direct organization/community

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Plus, X, Trash2, ChevronLeft, ChevronRight, CalendarDays,
-  Users, Sun, Sunset, Moon, Pencil, Info,
+  Users, Sun, Sunset, Moon, Pencil, Info, ShieldAlert, Search, Loader2,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -88,6 +88,7 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
   const [dayOpen, setDayOpen] = useState<string | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [bgOpen, setBgOpen] = useState(false);
 
   const monthCells = useMemo(() => {
     const first = new Date(cursor.y, cursor.m, 1);
@@ -161,13 +162,15 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
       .sort((a, b) => (a.date + a.shift).localeCompare(b.date + b.shift));
     return (
       <ClinicalPage className="space-y-6">
-        <ClinicalHeader title="My Schedule" subtitle="Your assigned shifts and the residents in your care. Set by the nursing team." />
+        <ClinicalHeader title="My Schedule" subtitle="Your assigned shifts and the residents in your care. Set by the nursing team."
+          right={<ClinicalButton variant="secondary" onClick={() => setBgOpen(true)}><ShieldAlert className="w-4 h-4" /> Break-glass access</ClinicalButton>} />
         <DataState loading={loading && schedules.length === 0} error={error} empty={mine.length === 0}
           emptyTitle="No upcoming shifts" emptyHint="When the nursing team rosters you to residents, your shifts appear here." onRetry={() => void refetch()} skeletonRows={3}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {mine.map((s) => <ShiftCard key={s.id} s={s} resById={resById} isToday={s.date === today} />)}
           </div>
         </DataState>
+        {bgOpen && <BreakGlassModal onClose={() => setBgOpen(false)} />}
       </ClinicalPage>
     );
   }
@@ -331,6 +334,100 @@ function DayModal({ date, items, resById, onClose, onAdd, onEdit, onDelete }: {
               </div>
             );
           })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Break-glass modal (caregiver emergency access) ────────────────────────────
+type BgResident = { id: string; name: string; room: string; assigned: boolean };
+function BreakGlassModal({ onClose }: { onClose: () => void }) {
+  const [list, setList] = useState<BgResident[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
+  const [picked, setPicked] = useState<BgResident | null>(null);
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/caregiver/break-glass").then((r) => r.json()).then((d) => {
+      if (alive) setList(Array.isArray(d?.data) ? d.data : []);
+    }).catch(() => {}).finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  const matches = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    // Only residents NOT already on the caregiver's shift need break-glass.
+    return list.filter((r) => !r.assigned).filter((r) => !s || r.name.toLowerCase().includes(s) || r.room.toLowerCase().includes(s)).slice(0, 40);
+  }, [list, q]);
+
+  const submit = async () => {
+    if (!picked || reason.trim().length < 4) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/caregiver/break-glass", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ residentId: picked.id, reason: reason.trim() }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d?.error || "Failed");
+      onClose();
+      Swal.fire({ icon: "success", title: "Access granted", text: `You can now open ${d.residentName ?? picked.name} for this shift. The nursing team has been notified.`, timer: 2600, showConfirmButton: false });
+    } catch (e) {
+      Swal.fire({ icon: "error", title: "Could not grant access", text: e instanceof Error ? e.message : "Try again." });
+    } finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div role="dialog" aria-modal="true" className="flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl shadow-2xl sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl" style={{ backgroundColor: "var(--clinical-ground)" }}>
+        <div className="flex flex-none items-center justify-between px-5 py-4 text-white" style={{ backgroundColor: "var(--clinical-coral)" }}>
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5" />
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/80">Emergency override</p>
+              <h2 className="text-lg font-bold">Break-glass access</h2>
+            </div>
+          </div>
+          <button onClick={onClose} aria-label="Close" className="rounded-lg p-2 hover:bg-white/10"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
+          <p className="text-xs text-[var(--clinical-muted)]">Open a resident who isn&apos;t on your shift. Access lasts until the end of this shift and is logged and reported to the nursing team.</p>
+
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--clinical-muted)]" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search resident by name or room…" className={`${controlClass} pl-9`} />
+          </div>
+
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-[var(--clinical-muted)] py-6 justify-center"><Loader2 className="w-4 h-4 animate-spin" /> Loading residents…</div>
+          ) : (
+            <div className="max-h-52 overflow-y-auto rounded-lg border divide-y scrollbar-thin" style={{ borderColor: "var(--clinical-line-strong)" }}>
+              {matches.length === 0 ? (
+                <p className="text-xs text-[var(--clinical-muted)] p-3">No other residents match.</p>
+              ) : matches.map((r) => (
+                <button key={r.id} type="button" onClick={() => setPicked(r)}
+                  className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-[var(--clinical-surface-2)] ${picked?.id === r.id ? "bg-[color-mix(in_srgb,var(--clinical-coral)_10%,transparent)]" : ""}`} style={{ borderColor: "var(--clinical-line)" }}>
+                  <span className={`w-3.5 h-3.5 rounded-full border shrink-0 ${picked?.id === r.id ? "bg-[var(--clinical-coral)] border-[var(--clinical-coral)]" : "border-[var(--clinical-line-strong)]"}`} />
+                  <span className="text-[var(--clinical-ink)]">{r.name}</span>{r.room && <span className="text-[var(--clinical-muted)]">· Rm {r.room}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <label className="block">
+            <MicroLabel className="mb-1">Reason <span className="text-[var(--clinical-coral)]">*</span></MicroLabel>
+            <textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Responding to a fall in Room 210 while the assigned caregiver is off-floor." className={controlClass} />
+          </label>
+        </div>
+        <div className="flex flex-none items-center justify-end gap-2 border-t px-5 py-3.5" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
+          <ClinicalButton variant="secondary" size="sm" onClick={onClose} disabled={submitting}>Cancel</ClinicalButton>
+          <ClinicalButton variant="danger" onClick={submit} disabled={submitting || !picked || reason.trim().length < 4}>
+            <ShieldAlert className="w-4 h-4" /> {submitting ? "Granting…" : "Grant emergency access"}
+          </ClinicalButton>
         </div>
       </div>
     </div>
