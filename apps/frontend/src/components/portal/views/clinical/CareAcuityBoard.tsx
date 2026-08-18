@@ -14,7 +14,8 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, updateRecord } from "@/lib/api";
 import { generateCarePlanForResident } from "@/lib/carePlanGen";
-import { recordLocChange, parseLocHistory, historyForResident, LOC_HISTORY_KEY, LOC_SOURCE_LABEL, type LocHistoryEntry } from "@/lib/lifecare/locHistory";
+import { recordLocChange, parseLocHistory, historyForResident, LOC_HISTORY_KEY, LOC_SOURCE_LABEL, type LocHistoryEntry, type LocSource } from "@/lib/lifecare/locHistory";
+import type { AssessmentV42 } from "@/lib/lifecare/assessment";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import {
@@ -27,6 +28,19 @@ const ACUITY_KEY = "acuity_assessments";
 const s = (v: unknown) => (v == null ? "" : String(v));
 const newId = () => globalThis.crypto?.randomUUID?.() ?? `ac-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 const fmtDate = (isoStr: string) => (isoStr ? new Date(isoStr).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—");
+
+// v4.2 scored assessment domains (labels kept local to avoid pulling the full
+// rule-data bundle) + generic 0–4 anchor labels for the LOC-history detail view.
+const V42_DOMAINS: { code: string; label: string }[] = [
+  { code: "AS-01", label: "ADLs / Personal Care" }, { code: "AS-02", label: "Mobility / Transfers" },
+  { code: "AS-03", label: "Fall Risk" }, { code: "AS-04", label: "Cognition" },
+  { code: "AS-05", label: "Behavior / BPSD" }, { code: "AS-06", label: "Clinical Monitoring" },
+  { code: "AS-07", label: "Medication Support" }, { code: "AS-08", label: "Nutrition / Hydration" },
+  { code: "AS-09", label: "Communication" }, { code: "AS-10", label: "Continence / Toileting" },
+  { code: "AS-11", label: "Skin Integrity" }, { code: "AS-12", label: "Sleep / Daily Routine" },
+  { code: "AS-13", label: "Safety / Supervision" }, { code: "AS-14", label: "Reablement / Therapy" },
+];
+const V42_ANCHOR = ["Independent", "Low / intermittent", "Moderate / regular", "High / extensive", "Very high / near-total"];
 
 interface Domain { key: string; label: string; scale: string[] }
 const DOMAINS: Domain[] = [
@@ -152,6 +166,14 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
   const resName = (id: string) => { const r = residents.find((x: Row) => s(x.id) === id); return r ? { name: s(r.name), room: s(r.room) } : { name: id, room: "" }; };
   // Unified Level of Care history (pre-admission + reassessment + acuity approvals).
   const locHistory = useMemo(() => parseLocHistory(settingRows.find((r) => (r.key || r.id) === LOC_HISTORY_KEY)?.value), [settingRows]);
+  // Source assessments behind each LOC-history entry (for the detail view).
+  const v42ById = useMemo(() => {
+    const row = settingRows.find((r) => (r.key || r.id) === "assessments_v42");
+    let arr: AssessmentV42[] = [];
+    try { const v = JSON.parse(row?.value || "[]"); if (Array.isArray(v)) arr = v as AssessmentV42[]; } catch { /* ignore */ }
+    const m = new Map<string, AssessmentV42>(); arr.forEach((a) => { if (a?.id) m.set(a.id, a); }); return m;
+  }, [settingRows]);
+  const acuityById = useMemo(() => { const m = new Map<string, Acuity>(); items.forEach((a) => m.set(a.id, a)); return m; }, [items]);
 
   const [tab, setTab] = useState<"queue" | "packages" | "activities" | "history">("queue");
   const [newOpen, setNewOpen] = useState(false);
@@ -313,7 +335,7 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
 
       {tab === "activities" && <CareActivitiesView />}
 
-      {tab === "history" && <LevelHistoryView residents={residents} approved={approved} locHistory={locHistory} />}
+      {tab === "history" && <LevelHistoryView residents={residents} approved={approved} locHistory={locHistory} v42ById={v42ById} acuityById={acuityById} />}
 
       <NewAssessmentModal open={newOpen} residents={residents} onClose={() => setNewOpen(false)} onSubmit={submitNew} />
 
@@ -430,11 +452,13 @@ function CareActivitiesView() {
 
 // ── Level History — per-resident level-change timeline ───────────────────────
 // Unified level-of-care timeline entry (merged from loc_history + legacy acuity).
-type LocTimelineItem = { at: string; level: number; source: string; by?: string; rawScore?: number; scoreMax: number; notes?: string };
+type LocKind = "v42" | "acuity";
+type LocTimelineItem = { key: string; at: string; level: number; source: string; sourceKey: LocSource | "ACUITY_APPROVAL"; kind: LocKind; assessmentId?: string; by?: string; role?: string; rawScore?: number; scoreMax: number; previousLevel?: number; notes?: string };
 const levelNum = (v: unknown) => { const m = /([1-5])/.exec(String(v ?? "")); return m ? Number(m[1]) : 0; };
 
-function LevelHistoryView({ residents, approved, locHistory }: { residents: Row[]; approved: Acuity[]; locHistory: LocHistoryEntry[] }) {
+function LevelHistoryView({ residents, approved, locHistory, v42ById, acuityById }: { residents: Row[]; approved: Acuity[]; locHistory: LocHistoryEntry[]; v42ById: Map<string, AssessmentV42>; acuityById: Map<string, Acuity> }) {
   const [sel, setSel] = useState("");
+  const [detail, setDetail] = useState<LocTimelineItem | null>(null);
   const resId = sel || (residents[0] ? s(residents[0].id) : "");
 
   // Merge the durable loc_history with any legacy approved-acuity records not yet
@@ -442,20 +466,22 @@ function LevelHistoryView({ residents, approved, locHistory }: { residents: Row[
   const timeline = useMemo<LocTimelineItem[]>(() => {
     const mine = historyForResident(locHistory, resId);
     const seenAssessment = new Set(mine.map((e) => e.assessmentId).filter(Boolean) as string[]);
-    const fromHistory: LocTimelineItem[] = mine.map((e) => ({
-      at: e.at, level: levelNum(e.level), source: LOC_SOURCE_LABEL[e.source] || e.source,
-      by: e.by, rawScore: e.rawScore, scoreMax: e.source === "ACUITY_APPROVAL" ? 50 : 56, notes: e.notes,
+    const fromHistory: LocTimelineItem[] = mine.map((e, i) => ({
+      key: e.id || `h-${i}`, at: e.at, level: levelNum(e.level), source: LOC_SOURCE_LABEL[e.source] || e.source, sourceKey: e.source,
+      kind: e.source === "ACUITY_APPROVAL" ? "acuity" : "v42", assessmentId: e.assessmentId,
+      by: e.by, role: e.role, rawScore: e.rawScore, scoreMax: e.source === "ACUITY_APPROVAL" ? 50 : 56,
+      previousLevel: e.previousLevel ? levelNum(e.previousLevel) : undefined, notes: e.notes,
     }));
     const fromAcuity: LocTimelineItem[] = approved
       .filter((a) => a.residentId === resId && !seenAssessment.has(a.id))
-      .map((a) => ({ at: s(a.decidedAt || a.createdAt), level: a.level, source: "Acuity Approval", by: a.decidedBy || a.createdBy, rawScore: a.total, scoreMax: 50, notes: a.trigger ? `Trigger: ${a.trigger}` : undefined }));
+      .map((a) => ({ key: `a-${a.id}`, at: s(a.decidedAt || a.createdAt), level: a.level, source: "Acuity Approval", sourceKey: "ACUITY_APPROVAL", kind: "acuity", assessmentId: a.id, by: a.decidedBy || a.createdBy, rawScore: a.total, scoreMax: 50, notes: a.trigger ? `Trigger: ${a.trigger}` : undefined }));
     return [...fromHistory, ...fromAcuity].sort((x, y) => (y.at || "").localeCompare(x.at || ""));
   }, [locHistory, approved, resId]);
 
   return (
     <ClinicalCard className="p-5">
       <h2 className="text-lg font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>Care Level History</h2>
-      <p className="mb-3 text-sm text-[var(--clinical-muted)]">Full record of every level of care a resident has been through — pre-admission, reassessments and acuity approvals.</p>
+      <p className="mb-3 text-sm text-[var(--clinical-muted)]">Full record of every level of care a resident has been through — pre-admission, reassessments and acuity approvals. Select an entry to view all recorded details.</p>
       <select value={resId} onChange={(e) => setSel(e.target.value)} aria-label="Select resident" className={`${controlClass} max-w-sm`}>
         {residents.length === 0 && <option value="">No residents</option>}
         {residents.map((r) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — {s(r.room)}</option>)}
@@ -463,19 +489,79 @@ function LevelHistoryView({ residents, approved, locHistory }: { residents: Row[
       <div className="mt-4">
         {timeline.length === 0 ? <p className="text-[var(--clinical-muted)]">No level changes recorded.</p>
           : <div className="space-y-2">
-              {timeline.map((t, i) => { const prev = timeline[i + 1]; return (
-                <div key={`${t.at}-${i}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2.5" style={{ borderColor: "var(--clinical-line)" }}>
+              {timeline.map((t) => { const prev = t.previousLevel; return (
+                <button type="button" key={t.key} onClick={() => setDetail(t)} className="flex w-full flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-black/[0.03] hover:border-[var(--clinical-line-strong)]" style={{ borderColor: "var(--clinical-line)" }}>
                   <div className="flex items-center gap-2">
                     <LevelChip level={t.level} label={LEVELS.find((l) => l.n === t.level)?.name} />
-                    {prev && prev.level !== t.level && <span className="text-xs font-semibold" style={{ color: ACCENT_VAR[accentFor(t.level)] }}>{prev.level < t.level ? "▲" : "▼"} from L{prev.level}</span>}
+                    {prev != null && prev !== t.level && <span className="text-xs font-semibold" style={{ color: ACCENT_VAR[accentFor(t.level)] }}>{prev < t.level ? "▲" : "▼"} from L{prev}</span>}
                     <span className="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide border" style={{ borderColor: "var(--clinical-line-strong)", color: "var(--clinical-muted)" }}>{t.source}</span>
                   </div>
-                  <span className="text-xs text-[var(--clinical-muted)]">{t.rawScore != null ? `${t.rawScore}/${t.scoreMax} · ` : ""}{fmtDate(t.at)} · {t.by || "—"}</span>
-                </div>
+                  <span className="text-xs text-[var(--clinical-muted)]">{t.rawScore != null ? `${t.rawScore}/${t.scoreMax} · ` : ""}{fmtDate(t.at)} · {t.by || "—"} ›</span>
+                </button>
               ); })}
             </div>}
       </div>
+      {detail && <LevelHistoryDetail item={detail} v42={detail.assessmentId ? v42ById.get(detail.assessmentId) : undefined} acuity={detail.assessmentId ? acuityById.get(detail.assessmentId) : undefined} onClose={() => setDetail(null)} />}
     </ClinicalCard>
+  );
+}
+
+// Full detail of a single LOC-history entry — shows every recorded field plus the
+// underlying assessment (14-domain v4.2 or 10-domain acuity) behind the level.
+function Meta({ label, value }: { label: string; value?: React.ReactNode }) {
+  if (value == null || value === "") return null;
+  return <div className="flex justify-between gap-3 py-1 text-sm"><span className="text-[var(--clinical-muted)]">{label}</span><span className="text-right font-medium text-[var(--clinical-ink)]">{value}</span></div>;
+}
+
+function LevelHistoryDetail({ item, v42, acuity, onClose }: { item: LocTimelineItem; v42?: AssessmentV42; acuity?: Acuity; onClose: () => void }) {
+  const lvl = LEVELS.find((l) => l.n === item.level);
+  return (
+    <ClinicalModal open onClose={onClose} title={`Level of Care — ${item.source}`} description={lvl ? `Level ${item.level} — ${lvl.name}` : `Level ${item.level}`} size="lg">
+      <div className="space-y-4">
+        <div className="rounded-xl border p-3" style={{ borderColor: "var(--clinical-line)" }}>
+          <Meta label="Level" value={<LevelChip level={item.level} label={lvl?.name} />} />
+          {item.previousLevel != null && item.previousLevel !== item.level && <Meta label="Changed from" value={`Level ${item.previousLevel}`} />}
+          <Meta label="Source" value={item.source} />
+          <Meta label="Raw score" value={item.rawScore != null ? `${item.rawScore} / ${item.scoreMax}` : undefined} />
+          <Meta label="Recorded" value={fmtDate(item.at)} />
+          <Meta label="By" value={[item.by, item.role].filter(Boolean).join(" · ")} />
+          {item.notes && <div className="pt-1 text-sm"><p className="text-[var(--clinical-muted)]">Notes</p><p className="whitespace-pre-wrap text-[var(--clinical-ink)]">{item.notes}</p></div>}
+        </div>
+
+        {v42 && (
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--clinical-muted)]">v4.2 Assessment · {v42.domains ? Object.values(v42.domains).reduce((n, d) => n + (typeof d?.score === "number" ? d.score : 0), 0) : 0}/56</p>
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              {V42_DOMAINS.map((d) => { const sc = v42.domains?.[d.code as keyof typeof v42.domains]?.score ?? 0; return (
+                <div key={d.code} className="flex items-center justify-between rounded-lg border px-2.5 py-1.5" style={{ borderColor: "var(--clinical-line)" }}>
+                  <span className="text-xs text-[var(--clinical-ink)]">{d.label}</span>
+                  <span className="text-xs font-semibold text-[var(--clinical-panel)]" title={V42_ANCHOR[sc]}>{sc} · {V42_ANCHOR[sc]}</span>
+                </div>
+              ); })}
+            </div>
+            {v42.layer3?.finalLevelJustification && <p className="mt-2 text-sm"><span className="font-semibold text-[var(--clinical-ink)]">Justification:</span> <span className="text-[var(--clinical-muted)]">{v42.layer3.finalLevelJustification}</span></p>}
+            {v42.layer1?.reasonForAdmission && <p className="mt-1 text-sm"><span className="font-semibold text-[var(--clinical-ink)]">Reason for admission:</span> <span className="text-[var(--clinical-muted)]">{v42.layer1.reasonForAdmission}</span></p>}
+          </div>
+        )}
+
+        {!v42 && acuity && (
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--clinical-muted)]">Acuity Assessment · {acuity.total}/50{acuity.trigger ? ` · ${acuity.trigger}` : ""}</p>
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+              {DOMAINS.map((d) => { const sc = Number(acuity.scores?.[d.key] ?? 0); return (
+                <div key={d.key} className="flex items-center justify-between rounded-lg border px-2.5 py-1.5" style={{ borderColor: "var(--clinical-line)" }}>
+                  <span className="text-xs text-[var(--clinical-ink)]">{d.label}</span>
+                  <span className="text-xs font-semibold text-[var(--clinical-panel)]" title={d.scale[sc]}>{sc} · {d.scale[sc]}</span>
+                </div>
+              ); })}
+            </div>
+            {acuity.notes && <p className="mt-2 text-sm"><span className="font-semibold text-[var(--clinical-ink)]">Notes:</span> <span className="text-[var(--clinical-muted)]">{acuity.notes}</span></p>}
+          </div>
+        )}
+
+        {!v42 && !acuity && <p className="text-sm text-[var(--clinical-muted)]">The detailed assessment behind this entry is no longer available, but the recorded summary above is preserved.</p>}
+      </div>
+    </ClinicalModal>
   );
 }
 
