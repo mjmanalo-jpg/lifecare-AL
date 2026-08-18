@@ -58,38 +58,6 @@
   ],
   "baselineByDomain": [
     {
-      "domain": "Decision Engine",
-      "L1": "Question",
-      "L2": "Primary Output",
-      "L3": "Fee Principle",
-      "L4": "",
-      "modifierRule": ""
-    },
-    {
-      "domain": "A — Level of Care",
-      "L1": "What recurring care complexity/package does the resident require?",
-      "L2": "L1–L5 + modifiers",
-      "L3": "Monthly LOC fee",
-      "L4": "",
-      "modifierRule": ""
-    },
-    {
-      "domain": "B — Dedicated Staffing",
-      "L1": "Does resident require incremental dedicated 1:1 staffing beyond shared LOC resources?",
-      "L2": "None / night / 8h / 12h / 24h / temporary / elective",
-      "L3": "PCG or dedicated staffing fee only when justified",
-      "L4": "",
-      "modifierRule": ""
-    },
-    {
-      "domain": "C — Additional Clinical Services",
-      "L1": "Is there a discrete skilled/ancillary service outside LOC package?",
-      "L2": "Included / billable skilled service / recurring-package reassessment / capability escalation",
-      "L3": "Charge only for non-included service; no duplicate billing",
-      "L4": "",
-      "modifierRule": ""
-    },
-    {
       "domain": "Personal ADLs",
       "L1": "Independent; setup/cueing or intermittent minimal help",
       "L2": "Regular assistance in selected ADLs",

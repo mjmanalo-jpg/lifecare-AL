@@ -14,7 +14,9 @@ import {
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { upsertRecord } from "@/lib/api";
+import { upsertRecord, updateRecord } from "@/lib/api";
+import { generateCarePlanFromV42 } from "@/lib/carePlanV42Gen";
+import { downstreamForAssessment } from "@/lib/lifecare/downstream.ts";
 import {
   ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalCard, StatCard,
   SearchInput, DataState, StatusPill, MicroLabel, controlClass, DISPLAY,
@@ -302,6 +304,37 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE" }: { cli
     }
     const now = new Date().toISOString();
     await save("VALIDATED", { validation: { by: me || "Clinician", role: roleLabel, at: now, decision, notes: notes || undefined } }, "Level of Care validated");
+
+    // Wire the validated Final LOC into the production flow (engine-A output):
+    // set resident.careLevel, post the LOC charge, and generate a care plan.
+    // Only fires for an APPROVED decision on an assessment linked to an existing
+    // resident. Governance: no auto-fee change without this authorised approval;
+    // the generated plan is a DRAFT the nurse individualises before activation.
+    if (decision === "APPROVED") {
+      const ds = downstreamForAssessment({
+        residentId: draft.layer1.residentId,
+        finalLevel: draft.layer3.finalLevel,
+        validated: true,
+      });
+      if (ds) {
+        try {
+          await updateRecord("residents", ds.residentId, { careLevel: ds.careLevelEnum });
+          if (ds.postLocCharge) {
+            await fetch("/api/billing/loc-charge", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ residentId: ds.residentId, level: ds.numericLevel }),
+            }).catch(() => {});
+          }
+          if (ds.generatePlan) {
+            await generateCarePlanFromV42({
+              residentId: ds.residentId,
+              assessment: { ...draft, status: "VALIDATED" } as AssessmentV42,
+              createdByName: me || "Clinician",
+            });
+          }
+        } catch { /* best-effort: validation already saved; downstream is idempotent */ }
+      }
+    }
   };
 
   const remove = async (a: AssessmentV42) => {
