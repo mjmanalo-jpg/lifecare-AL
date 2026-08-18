@@ -2,6 +2,15 @@ import { createRecord } from "@/lib/api";
 import { generateDraftPlan, suggestTaskIds, type CarePlanLineInput } from "@/lib/lifecare/carePlan";
 import { domainScores, type AssessmentV42 } from "@/lib/lifecare/assessment";
 import { levelRank } from "@/lib/lifecare/downstream";
+import { parseSchedules, assigneeForResidentToday } from "@/lib/caregiverSchedule";
+
+async function fetchSchedules() {
+  try {
+    const r = await fetch("/api/db/app-settings?f_key=caregiver_schedules&take=1", { credentials: "same-origin", cache: "no-store" });
+    const j = await r.json();
+    return parseSchedules((j?.data as Array<{ value?: string }> | undefined)?.[0]?.value);
+  } catch { return []; }
+}
 
 /**
  * Assessment-driven Care Plan generator (Phase 2 in production form).
@@ -77,6 +86,7 @@ export async function generateCarePlanFromV42(opts: {
   }
 
   const due = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const assignee = assigneeForResidentToday(await fetchSchedules(), opts.residentId);
   let taskCount = 0;
   for (const line of draft.lines) {
     try {
@@ -86,6 +96,7 @@ export async function generateCarePlanFromV42(opts: {
         description: `From v4.2 care plan · ${line.taskId}${line.frequency ? ` · ${line.frequency}` : ""}`,
         category: line.domain, status: "PENDING", priority: "MEDIUM",
         dueDate: due, generatedFrom: planId,
+        assignedToId: assignee?.caregiverStaffId || undefined,
       });
       taskCount++;
     } catch { /* best-effort per task */ }

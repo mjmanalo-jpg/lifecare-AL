@@ -101,6 +101,40 @@ export function activeResidentIdsFor(userId: string, schedules: CaregiverSchedul
   return [...ids];
 }
 
+/** The AM/PM/NOC shift `at` falls in (AM 06–14, PM 14–22, else NOC). */
+export function currentShiftKey(at: Date = new Date()): ShiftKey {
+  const h = at.getHours();
+  if (h >= 6 && h < 14) return "AM";
+  if (h >= 14 && h < 22) return "PM";
+  return "NOC";
+}
+
+/** Caregivers scheduled to a resident on the local day of `at` (any shift). */
+export function caregiversForResidentToday(
+  schedules: CaregiverSchedule[], residentId: string, at: Date = new Date(), timeZone?: string,
+): { caregiverStaffId: string; caregiverUserId?: string; caregiverName?: string; shift: ShiftKey }[] {
+  const today = localDateStr(at, timeZone);
+  return schedules
+    .filter((s) => s.date === today && s.residentIds.includes(residentId) && s.caregiverStaffId)
+    .map((s) => ({ caregiverStaffId: s.caregiverStaffId, caregiverUserId: s.caregiverUserId, caregiverName: s.caregiverName, shift: s.shift }));
+}
+
+/**
+ * Best single assignee for a resident's generated tasks today: the caregiver on
+ * the CURRENT shift, else the first caregiver scheduled today, else null (leave
+ * the task unassigned). Used to route generated tasks straight to the caregiver
+ * who is covering the resident.
+ */
+export function assigneeForResidentToday(
+  schedules: CaregiverSchedule[], residentId: string, at: Date = new Date(), timeZone?: string,
+): { caregiverStaffId: string; caregiverName?: string } | null {
+  const list = caregiversForResidentToday(schedules, residentId, at, timeZone);
+  if (!list.length) return null;
+  const cur = currentShiftKey(at);
+  const pick = list.find((c) => c.shift === cur) ?? list[0];
+  return { caregiverStaffId: pick.caregiverStaffId, caregiverName: pick.caregiverName };
+}
+
 // ── Break-glass (emergency off-assignment access) ─────────────────────────────
 export interface BreakGlassGrant {
   id: string;

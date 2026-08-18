@@ -1,5 +1,16 @@
 import { createRecord } from "@/lib/api";
 import careLevelModel from "@/lib/lifecare/data/care_level_model.json";
+import { domainInPackage, domainCodeFromLabel } from "@/lib/lifecare/carePackage";
+import { parseSchedules, assigneeForResidentToday } from "@/lib/caregiverSchedule";
+
+/** Read the caregiver roster (migration-free app-setting) to route tasks. */
+async function fetchSchedules() {
+  try {
+    const r = await fetch("/api/db/app-settings?f_key=caregiver_schedules&take=1", { credentials: "same-origin", cache: "no-store" });
+    const j = await r.json();
+    return parseSchedules((j?.data as Array<{ value?: string }> | undefined)?.[0]?.value);
+  } catch { return []; }
+}
 
 /**
  * Shared care-plan + task generator — the Stage 6 → 8 → 9 bridge.
@@ -76,11 +87,27 @@ export async function generateCarePlanForResident(opts: {
   level: number;
   communityId?: string | null;
   createdByName?: string;
-}): Promise<{ planId: string; taskCount: number }> {
+  /** Route generated tasks to the caregiver scheduled for this resident today. Default true. */
+  assignToScheduledCaregivers?: boolean;
+}): Promise<{ planId: string; taskCount: number; assignedTo?: string }> {
   const level = Math.min(5, Math.max(1, Math.round(opts.level) || 2));
   const tpl = levelPlan(level);
   const now = new Date().toISOString();
   const community = opts.communityId || undefined;
+
+  // Package filter — only keep interventions whose domain is INCLUDED in this
+  // resident's Level-of-Care package (out-of-package care is a DT-014 service, not
+  // a routine task). Unmappable interventions are kept.
+  const interventions = tpl.interventions.filter((iv) => {
+    const code = domainCodeFromLabel(iv.title);
+    return !code || domainInPackage(level, code);
+  });
+
+  // Route to the caregiver covering this resident today (so the task lands on
+  // their Task Assignment dashboard). Null → leave unassigned.
+  const assignee = opts.assignToScheduledCaregivers === false
+    ? null
+    : assigneeForResidentToday(await fetchSchedules(), opts.residentId);
 
   const planRes = await createRecord("care-plans", {
     residentId: opts.residentId,
@@ -90,7 +117,7 @@ export async function generateCarePlanForResident(opts: {
     startDate: now,
     reviewFrequency: REVIEW_FREQ[level] || "MONTHLY",
     careGoals: tpl.goals.join("\n"),
-    interventions: tpl.interventions.map((i) => `${i.title} (${i.freq})`).join("\n"),
+    interventions: interventions.map((i) => `${i.title} (${i.freq})`).join("\n"),
     notes: `Auto-generated from approved Level of Care ${level} (v3.9 baseline package). Review & personalize.`,
     createdByName: opts.createdByName || "System",
   });
@@ -102,23 +129,26 @@ export async function generateCarePlanForResident(opts: {
   for (const g of tpl.goals) {
     await createRecord("care-plan-items", { carePlanId: planId, communityId: community, category: "GOAL", title: g, status: "ACTIVE", sortOrder: order++ }).catch(() => null);
   }
-  for (const iv of tpl.interventions) {
+  for (const iv of interventions) {
     await createRecord("care-plan-items", { carePlanId: planId, communityId: community, category: "INTERVENTION", title: iv.title, description: `Frequency: ${iv.freq}`, status: "ACTIVE", sortOrder: order++ }).catch(() => null);
   }
 
-  // Interventions → caregiver tasks (due within a day), tagged back to the plan.
+  // Interventions → caregiver tasks (due within a day), tagged back to the plan
+  // and assigned to today's scheduled caregiver so they appear on that dashboard.
   const due = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   let taskCount = 0;
-  for (const iv of tpl.interventions) {
+  for (const iv of interventions) {
     try {
       await createRecord("tasks", {
         residentId: opts.residentId, communityId: community,
         title: iv.title, description: `From care plan · ${iv.freq}`,
-        category: "Personal Care", status: "PENDING", priority: "MEDIUM",
+        category: iv.title.split(":")[0].trim() || "Personal Care",
+        status: "PENDING", priority: "MEDIUM",
         dueDate: due, generatedFrom: planId,
+        assignedToId: assignee?.caregiverStaffId || undefined,
       });
       taskCount++;
     } catch { /* best-effort per task */ }
   }
-  return { planId, taskCount };
+  return { planId, taskCount, assignedTo: assignee?.caregiverName };
 }

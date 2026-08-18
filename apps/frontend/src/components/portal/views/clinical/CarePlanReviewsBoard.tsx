@@ -85,9 +85,9 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
     setGenBusy(true);
     try {
       const raw = (resident.raw || {}) as Row;
-      const { taskCount } = await generateCarePlanForResident({ residentId: s(resident.id), level: n, communityId: s(raw.communityId) || undefined, createdByName: clinicianName });
+      const { taskCount, assignedTo } = await generateCarePlanForResident({ residentId: s(resident.id), level: n, communityId: s(raw.communityId) || undefined, createdByName: clinicianName });
       await cpQ.refetch?.();
-      Swal.fire({ icon: "success", title: "Care plan created", text: `${taskCount} caregiver task${taskCount === 1 ? "" : "s"} generated from the plan.`, timer: 2400, showConfirmButton: false });
+      Swal.fire({ icon: "success", title: "Care plan created", text: `${taskCount} Level ${n}-package task${taskCount === 1 ? "" : "s"} generated${assignedTo ? ` and sent to ${assignedTo}` : " (no caregiver scheduled today — left unassigned)"}.`, timer: 2800, showConfirmButton: false });
     } catch (e) { Swal.fire("Couldn't generate", e instanceof Error ? e.message : "Please try again.", "error"); }
     finally { setGenBusy(false); }
   };
@@ -128,7 +128,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
                 </ClinicalButton>
               )}
             </div>
-            {resident && <p className="mt-2 text-xs text-[var(--clinical-muted)]">Builds a Level {levelOf(resident).n} plan from the approved level of care and spins its interventions into caregiver tasks. Auto-runs on Care Acuity approval — use this for residents approved earlier.</p>}
+            {resident && <p className="mt-2 text-xs text-[var(--clinical-muted)]">Builds a Level {levelOf(resident).n} plan from the approved level of care and spins the interventions <b>included in that level&apos;s package</b> into caregiver tasks — routed straight to the caregiver scheduled for this resident today. Auto-runs on Care Acuity approval — use this for residents approved earlier.</p>}
           </ClinicalCard>
 
           {!resident && (
