@@ -16,7 +16,10 @@
 // Verified against the workbook "Level of Care Validation" sheet (LOC-001..018)
 // by tests/lifecare-classification.test.ts.
 
-import { MODEL_VERSION } from "./dataset.ts";
+// Import the model version directly (not via ./dataset) so the engine stays
+// bundle-light — importing classify() must not pull the 220-task / 93-event
+// masters into a consumer's client bundle.
+import MODEL_VERSION from "./data/model_version.json" with { type: "json" };
 import {
   DOMAIN_CODES, BASIC_ADL,
   type CareLevel, type DomainCode, type DomainScores, type ClinicalContext,

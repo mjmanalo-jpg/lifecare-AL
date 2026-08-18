@@ -1,11 +1,13 @@
 "use client";
 
 /**
- * Care Acuity & Level of Care — a 10-domain acuity assessment (0–5 each → 0/50)
- * that assigns a Level of Care (1–5) through a Nurse-review → Admin-approval
- * workflow, plus Service Packages, Care Activities, and Level History. Migration-
- * free: assessments are a JSON array in the app-setting `acuity_assessments`;
- * approval best-effort maps the level onto the resident's careLevel.
+ * Care Acuity & Level of Care — a LifeCare v4.2 14-domain acuity assessment
+ * (AS-01..AS-14, 0–4 each → 0/56) that assigns a Level of Care (1–5) via the
+ * deterministic classification engine, through a Nurse-review → Admin-approval
+ * workflow, plus Service Packages, Care Activities, and Level History. Existing
+ * legacy 10-domain (0–5, /50) records still render via LEGACY_ACUITY_DOMAINS.
+ * Migration-free: assessments are a JSON array in the app-setting
+ * `acuity_assessments`; approval best-effort maps the level onto careLevel.
  */
 
 import { useMemo, useState } from "react";
@@ -16,6 +18,9 @@ import { upsertRecord, updateRecord } from "@/lib/api";
 import { generateCarePlanForResident } from "@/lib/carePlanGen";
 import { recordLocChange, parseLocHistory, historyForResident, LOC_HISTORY_KEY, LOC_SOURCE_LABEL, type LocHistoryEntry, type LocSource } from "@/lib/lifecare/locHistory";
 import type { AssessmentV42 } from "@/lib/lifecare/assessment";
+import { classify } from "@/lib/lifecare/classification";
+import type { DomainScores } from "@/lib/lifecare/types";
+import assessmentDomains from "@/lib/lifecare/data/assessment_domains.json";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import {
@@ -29,21 +34,19 @@ const s = (v: unknown) => (v == null ? "" : String(v));
 const newId = () => globalThis.crypto?.randomUUID?.() ?? `ac-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 const fmtDate = (isoStr: string) => (isoStr ? new Date(isoStr).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—");
 
-// v4.2 scored assessment domains (labels kept local to avoid pulling the full
-// rule-data bundle) + generic 0–4 anchor labels for the LOC-history detail view.
-const V42_DOMAINS: { code: string; label: string }[] = [
-  { code: "AS-01", label: "ADLs / Personal Care" }, { code: "AS-02", label: "Mobility / Transfers" },
-  { code: "AS-03", label: "Fall Risk" }, { code: "AS-04", label: "Cognition" },
-  { code: "AS-05", label: "Behavior / BPSD" }, { code: "AS-06", label: "Clinical Monitoring" },
-  { code: "AS-07", label: "Medication Support" }, { code: "AS-08", label: "Nutrition / Hydration" },
-  { code: "AS-09", label: "Communication" }, { code: "AS-10", label: "Continence / Toileting" },
-  { code: "AS-11", label: "Skin Integrity" }, { code: "AS-12", label: "Sleep / Daily Routine" },
-  { code: "AS-13", label: "Safety / Supervision" }, { code: "AS-14", label: "Reablement / Therapy" },
-];
-const V42_ANCHOR = ["Independent", "Low / intermittent", "Moderate / regular", "High / extensive", "Very high / near-total"];
-
 interface Domain { key: string; label: string; scale: string[] }
-const DOMAINS: Domain[] = [
+
+// LifeCare v4.2 — the 14 SCORED assessment domains (AS-01..AS-14, 0–4 each → /56).
+// Sourced directly from the rule-data JSON; each domain's 5 anchors become the
+// 0–4 selector labels. NS-01 (non-scored) is filtered out. Used by NEW records.
+interface DomainDefRaw { code: string; name: string; scored: boolean; anchors: string[] }
+const V42_SCORED: Domain[] = (assessmentDomains as DomainDefRaw[])
+  .filter((d) => d.scored)
+  .map((d) => ({ key: d.code, label: d.name, scale: d.anchors }));
+
+// Legacy 10-domain acuity model (0–5 each → /50). KEPT so pre-v4.2 records still
+// render correctly in the review modal and Level-History detail view.
+const LEGACY_ACUITY_DOMAINS: Domain[] = [
   { key: "adl", label: "Activities of Daily Living", scale: ["Fully independent", "Minimal setup or cueing", "Some help with 1–2 ADLs", "Help with most ADLs", "Extensive assistance (one-person)", "Total dependence (two-person)"] },
   { key: "mobility", label: "Mobility & Fall Risk", scale: ["Independent, no fall risk", "Steady with device, low risk", "Supervision, occasionally unsteady", "Assist to transfer, moderate risk", "High fall risk, extensive assist", "Non-ambulatory / bedbound"] },
   { key: "cognition", label: "Cognition & Memory", scale: ["Fully oriented", "Mild forgetfulness", "Occasional confusion", "Moderate impairment, needs cueing", "Severe impairment, disoriented", "Profound impairment"] },
@@ -70,7 +73,6 @@ const LEVELS: Level[] = [
   { n: 4, name: "Comprehensive Care Management", min: 31, max: 40, accent: "coral", careLevel: "MEMORY", package: "Near-total dependency w/ supervision OR pervasive cognitive/behavioral supervision", services: ["Comprehensive / near-total ADL care", "Pervasive dementia / BPSD supervision", "Comprehensive mobility & transfer support", "Multi-condition monitoring & coordination"] },
   { n: 5, name: "Specialized Palliative / End-of-Life Care", min: 41, max: 50, accent: "coral", careLevel: "SKILLED", package: "Authorized comfort-focused advanced-illness / end-of-life pathway (not a dependency score)", services: ["Goal-directed comfort care", "Symptom observation & management", "Dignity, family & provider coordination", "Authorized goals-of-care / end-of-life pathway"] },
 ];
-const levelFor = (total: number) => LEVELS.find((l) => total >= l.min && total <= l.max) ?? LEVELS[LEVELS.length - 1];
 const accentFor = (n: number) => LEVELS.find((l) => l.n === n)?.accent ?? "coral";
 // The 4-value careLevel enum → its representative Level (1–5). ASSISTED covers both
 // L2 & L3, so it reads as L2. Used to heal admission-seeded records whose stored
@@ -135,6 +137,13 @@ const TRIGGERS = ["Scheduled / Quarterly", "Condition Change", "Post-Fall", "Pos
 type AStatus = "PENDING_NURSE" | "PENDING_ADMIN" | "APPROVED" | "REJECTED";
 interface Acuity { id: string; residentId: string; scores: Record<string, number>; total: number; level: number; levelName: string; trigger?: string; notes?: string; status: AStatus; createdBy?: string; createdAt: string; decidedBy?: string; decidedAt?: string; rejectionReason?: string; }
 const parseAcuity = (raw: string | null | undefined): Acuity[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((a) => a && typeof a.id === "string") : []; } catch { return []; } };
+// A record is a v4.2 14-domain assessment (0–4, /56) if its scores are keyed by
+// AS-codes; otherwise it's a legacy 10-domain acuity record (0–5, /50).
+const isV42Acuity = (a: Acuity): boolean => "AS-01" in (a.scores || {});
+const scaleMaxOf = (a: Acuity): number => (isV42Acuity(a) ? 56 : 50);
+// Domain set + per-domain max used to RENDER a given record.
+const domainsFor = (a: Acuity): { domains: Domain[]; max: number } =>
+  isV42Acuity(a) ? { domains: V42_SCORED, max: 4 } : { domains: LEGACY_ACUITY_DOMAINS, max: 5 };
 
 export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   const { name: clinicianName } = useClinician(clinicianRole);
@@ -211,7 +220,7 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
       title: isFinal ? "Approve & assign level?" : "Approve for admin?",
       html: isFinal
         ? `Approve <b>${rn.name}</b> at <b>Level ${a.level} — ${a.levelName}</b> and assign this level of care?`
-        : `Send <b>${rn.name}</b>'s assessment (Score ${a.total}/50) to admin for final approval?`,
+        : `Send <b>${rn.name}</b>'s assessment (Score ${a.total}/${scaleMaxOf(a)}) to admin for final approval?`,
       icon: "question", showCancelButton: true,
       confirmButtonColor: "#4F46E5", cancelButtonColor: "#6b7280",
       confirmButtonText: isFinal ? "Approve & assign" : "Approve → Admin",
@@ -303,7 +312,7 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="flex flex-wrap items-center gap-2"><p className="font-bold text-[var(--clinical-ink)]">{rn.name}</p><span className="text-xs text-[var(--clinical-muted)]">Room {rn.room}</span><LevelChip level={a.level} label={a.levelName} /></div>
-                    <p className="mt-1 text-xs text-[var(--clinical-muted)]">Score {a.total}/50 · {a.trigger || "No trigger"} · by {a.createdBy || "—"} · {fmtDate(a.createdAt)}</p>
+                    <p className="mt-1 text-xs text-[var(--clinical-muted)]">Score {a.total}/{scaleMaxOf(a)} · {a.trigger || "No trigger"} · by {a.createdBy || "—"} · {fmtDate(a.createdAt)}</p>
                     {a.notes && <p className="mt-1.5 text-sm text-[var(--clinical-ink-soft)]">{a.notes}</p>}
                   </div>
                   <StatusPill status={a.status === "PENDING_NURSE" ? "PENDING" : "PENDING_APPROVAL"}>{a.status === "PENDING_NURSE" ? "Nurse Review" : "Admin Approval"}</StatusPill>
@@ -360,20 +369,22 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
               </div>
               <p className="text-xs text-[var(--clinical-muted)]">{a.trigger || "No trigger"} · by {a.createdBy || "—"} · {fmtDate(a.createdAt)}</p>
               {a.notes && <div className="rounded-lg border p-3 text-sm text-[var(--clinical-ink-soft)]" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>{a.notes}</div>}
+              {(() => { const { domains, max } = domainsFor(a); return (
               <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--clinical-line)" }}>
-                {DOMAINS.map((d, i) => { const sc = a.scores?.[d.key] ?? 0; return (
+                {domains.map((d, i) => { const sc = a.scores?.[d.key] ?? 0; return (
                   <div key={d.key} className="flex items-start justify-between gap-3 p-3" style={i ? { borderTop: "1px solid var(--clinical-line)" } : undefined}>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-[var(--clinical-ink)]">{d.label}</p>
                       <p className="text-xs text-[var(--clinical-muted)]">{d.scale[sc] ?? "—"}</p>
                     </div>
-                    <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs font-bold text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>{sc}/5</span>
+                    <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs font-bold text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>{sc}/{max}</span>
                   </div>
                 ); })}
               </div>
+              ); })()}
               <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
                 <span className="text-sm font-semibold text-[var(--clinical-ink)]">Total Acuity Score</span>
-                <span className="text-lg font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>{a.total}/50</span>
+                <span className="text-lg font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>{a.total}/{scaleMaxOf(a)}</span>
               </div>
             </div>
           </ClinicalModal>
@@ -402,7 +413,7 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
                   <span className="text-xs text-[var(--clinical-muted)]">Room {rn.room}</span>
                   <LevelChip level={rejectFor.level} label={rejectFor.levelName} />
                 </div>
-                <p className="mt-1 text-xs text-[var(--clinical-muted)]">Score {rejectFor.total}/50 · {rejectFor.trigger || "No trigger"}</p>
+                <p className="mt-1 text-xs text-[var(--clinical-muted)]">Score {rejectFor.total}/{scaleMaxOf(rejectFor)} · {rejectFor.trigger || "No trigger"}</p>
               </div>
               <div>
                 <FieldLabel htmlFor="ac-reject-reason">Reason for rejection <span className="font-normal text-[var(--clinical-muted)]">(optional)</span></FieldLabel>
@@ -466,17 +477,23 @@ function LevelHistoryView({ residents, approved, locHistory, v42ById, acuityById
   const timeline = useMemo<LocTimelineItem[]>(() => {
     const mine = historyForResident(locHistory, resId);
     const seenAssessment = new Set(mine.map((e) => e.assessmentId).filter(Boolean) as string[]);
-    const fromHistory: LocTimelineItem[] = mine.map((e, i) => ({
-      key: e.id || `h-${i}`, at: e.at, level: levelNum(e.level), source: LOC_SOURCE_LABEL[e.source] || e.source, sourceKey: e.source,
-      kind: e.source === "ACUITY_APPROVAL" ? "acuity" : "v42", assessmentId: e.assessmentId,
-      by: e.by, role: e.role, rawScore: e.rawScore, scoreMax: e.source === "ACUITY_APPROVAL" ? 50 : 56,
-      previousLevel: e.previousLevel ? levelNum(e.previousLevel) : undefined, notes: e.notes,
-    }));
+    const fromHistory: LocTimelineItem[] = mine.map((e, i) => {
+      // For acuity approvals, derive the scale from the linked record (56 for
+      // v4.2, 50 for legacy); old history entries were /50 → fallback 50.
+      const linked = e.source === "ACUITY_APPROVAL" && e.assessmentId ? acuityById.get(e.assessmentId) : undefined;
+      const scoreMax = e.source === "ACUITY_APPROVAL" ? (linked ? scaleMaxOf(linked) : 50) : 56;
+      return {
+        key: e.id || `h-${i}`, at: e.at, level: levelNum(e.level), source: LOC_SOURCE_LABEL[e.source] || e.source, sourceKey: e.source,
+        kind: e.source === "ACUITY_APPROVAL" ? "acuity" : "v42", assessmentId: e.assessmentId,
+        by: e.by, role: e.role, rawScore: e.rawScore, scoreMax,
+        previousLevel: e.previousLevel ? levelNum(e.previousLevel) : undefined, notes: e.notes,
+      };
+    });
     const fromAcuity: LocTimelineItem[] = approved
       .filter((a) => a.residentId === resId && !seenAssessment.has(a.id))
-      .map((a) => ({ key: `a-${a.id}`, at: s(a.decidedAt || a.createdAt), level: a.level, source: "Acuity Approval", sourceKey: "ACUITY_APPROVAL", kind: "acuity", assessmentId: a.id, by: a.decidedBy || a.createdBy, rawScore: a.total, scoreMax: 50, notes: a.trigger ? `Trigger: ${a.trigger}` : undefined }));
+      .map((a) => ({ key: `a-${a.id}`, at: s(a.decidedAt || a.createdAt), level: a.level, source: "Acuity Approval", sourceKey: "ACUITY_APPROVAL", kind: "acuity", assessmentId: a.id, by: a.decidedBy || a.createdBy, rawScore: a.total, scoreMax: scaleMaxOf(a), notes: a.trigger ? `Trigger: ${a.trigger}` : undefined }));
     return [...fromHistory, ...fromAcuity].sort((x, y) => (y.at || "").localeCompare(x.at || ""));
-  }, [locHistory, approved, resId]);
+  }, [locHistory, approved, resId, acuityById]);
 
   return (
     <ClinicalCard className="p-5">
@@ -578,8 +595,8 @@ function LevelHistoryDetail({ item, v42, acuity, onClose }: { item: LocTimelineI
               <span className="rounded-md px-2 py-0.5 text-xs font-bold text-white" style={{ backgroundColor: "var(--clinical-panel)" }}>{v42Total} / 56</span>
             </div>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              {V42_DOMAINS.map((d) => { const sc = v42.domains?.[d.code as keyof typeof v42.domains]?.score ?? 0; return (
-                <DomainScoreRow key={d.code} label={d.label} score={sc} max={4} anchor={V42_ANCHOR[sc] ?? ""} />
+              {V42_SCORED.map((d) => { const sc = v42.domains?.[d.key as keyof typeof v42.domains]?.score ?? 0; return (
+                <DomainScoreRow key={d.key} label={d.label} score={sc} max={4} anchor={d.scale[sc] ?? ""} />
               ); })}
             </div>
             {v42.layer3?.finalLevelJustification && <p className="mt-3 rounded-lg border p-3 text-sm" style={{ borderColor: "var(--clinical-line)" }}><span className="font-semibold text-[var(--clinical-ink)]">Justification:</span> <span className="text-[var(--clinical-muted)]">{v42.layer3.finalLevelJustification}</span></p>}
@@ -587,20 +604,20 @@ function LevelHistoryDetail({ item, v42, acuity, onClose }: { item: LocTimelineI
           </div>
         )}
 
-        {!v42 && acuity && (
+        {!v42 && acuity && (() => { const { domains, max } = domainsFor(acuity); const scaleMax = scaleMaxOf(acuity); const dc = domains.length; return (
           <div>
             <div className="mb-2.5 flex items-center justify-between">
-              <p className="text-xs font-bold uppercase tracking-wide text-[var(--clinical-ink)]">Acuity Assessment — 10 domains{acuity.trigger ? ` · ${acuity.trigger}` : ""}</p>
-              <span className="rounded-md px-2 py-0.5 text-xs font-bold text-white" style={{ backgroundColor: "var(--clinical-panel)" }}>{acuity.total} / 50</span>
+              <p className="text-xs font-bold uppercase tracking-wide text-[var(--clinical-ink)]">Acuity Assessment — {dc} domains{acuity.trigger ? ` · ${acuity.trigger}` : ""}</p>
+              <span className="rounded-md px-2 py-0.5 text-xs font-bold text-white" style={{ backgroundColor: "var(--clinical-panel)" }}>{acuity.total} / {scaleMax}</span>
             </div>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              {DOMAINS.map((d) => { const sc = Number(acuity.scores?.[d.key] ?? 0); return (
-                <DomainScoreRow key={d.key} label={d.label} score={sc} max={5} anchor={d.scale[sc] ?? ""} />
+              {domains.map((d) => { const sc = Number(acuity.scores?.[d.key] ?? 0); return (
+                <DomainScoreRow key={d.key} label={d.label} score={sc} max={max} anchor={d.scale[sc] ?? ""} />
               ); })}
             </div>
             {acuity.notes && <p className="mt-3 rounded-lg border p-3 text-sm" style={{ borderColor: "var(--clinical-line)" }}><span className="font-semibold text-[var(--clinical-ink)]">Notes:</span> <span className="text-[var(--clinical-muted)]">{acuity.notes}</span></p>}
           </div>
-        )}
+        ); })()}
 
         {!v42 && !acuity && <p className="rounded-lg border p-3 text-sm text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line)" }}>The detailed assessment behind this entry is no longer available, but the recorded summary above is preserved.</p>}
       </div>
@@ -610,13 +627,19 @@ function LevelHistoryDetail({ item, v42, acuity, onClose }: { item: LocTimelineI
 
 function NewAssessmentModal({ open, residents, onClose, onSubmit }: { open: boolean; residents: Row[]; onClose: () => void; onSubmit: (a: Omit<Acuity, "id" | "status" | "createdBy" | "createdAt">) => Promise<void> }) {
   const [resId, setResId] = useState("");
-  const [scores, setScores] = useState<Record<string, number>>(Object.fromEntries(DOMAINS.map((d) => [d.key, 0])));
+  const [scores, setScores] = useState<Record<string, number>>(Object.fromEntries(V42_SCORED.map((d) => [d.key, 0])));
   const [trigger, setTrigger] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const total = DOMAINS.reduce((sum, d) => sum + (scores[d.key] || 0), 0);
-  const lvl = levelFor(total);
+  const total = V42_SCORED.reduce((sum, d) => sum + (scores[d.key] || 0), 0);
+  // Level assignment via the deterministic classification engine (MLR floors +
+  // advisory band), not a raw score band. suggestedLevel is "L1".."L5".
+  const levelN = useMemo(() => {
+    const suggested = classify(scores as DomainScores, {}, { bandingEnabled: true }).suggestedLevel;
+    return Number(/([1-5])/.exec(suggested)?.[1] || 2);
+  }, [scores]);
+  const lvl = LEVELS.find((l) => l.n === levelN) ?? LEVELS[1];
   const setScore = (k: string, v: number) => setScores((p) => ({ ...p, [k]: v }));
 
   const submit = async () => {
@@ -631,7 +654,7 @@ function NewAssessmentModal({ open, residents, onClose, onSubmit }: { open: bool
       open={open}
       onClose={onClose}
       title="New Acuity Assessment"
-      description="Score 10 domains (0–5 each) to assign a Level of Care"
+      description="Score 14 domains (0–4 each) to assign a Level of Care"
       size="lg"
       footer={<>
         <ClinicalButton variant="ghost" size="sm" onClick={onClose}>Cancel</ClinicalButton>
@@ -646,15 +669,15 @@ function NewAssessmentModal({ open, residents, onClose, onSubmit }: { open: bool
 
         <div className="rounded-xl border p-3" style={{ borderColor: "var(--clinical-line)" }}>
           <div className="mb-1 flex items-center justify-between">
-            <p className="text-sm font-bold text-[var(--clinical-ink)]">Domain Scoring <span className="font-normal text-[var(--clinical-muted)]">(0–5 each)</span></p>
-            <p className="text-2xl font-bold tabular-nums text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>{total}<span className="text-sm text-[var(--clinical-muted)]">/50</span></p>
+            <p className="text-sm font-bold text-[var(--clinical-ink)]">Domain Scoring <span className="font-normal text-[var(--clinical-muted)]">(0–4 each)</span></p>
+            <p className="text-2xl font-bold tabular-nums text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>{total}<span className="text-sm text-[var(--clinical-muted)]">/56</span></p>
           </div>
           <div className="mb-3"><LevelChip level={lvl.n} label={lvl.name} /></div>
           <div className="divide-y" style={{ borderColor: "var(--clinical-line)" }}>
-            {DOMAINS.map((d) => { const v = scores[d.key] || 0; return (
+            {V42_SCORED.map((d) => { const v = scores[d.key] || 0; return (
               <div key={d.key} className="py-2.5">
                 <div className="flex items-center justify-between gap-2"><p className="text-sm font-semibold text-[var(--clinical-ink)]">{d.label}</p><span className="text-sm font-bold text-[var(--clinical-ink-soft)]">{v}</span></div>
-                <div className="mt-1.5 flex gap-1" role="group" aria-label={`Score for ${d.label}`}>{[0, 1, 2, 3, 4, 5].map((n) => <button key={n} type="button" aria-label={`${d.label}: ${n}`} aria-pressed={v === n} onClick={() => setScore(d.key, n)} className={`h-7 w-7 rounded-lg border text-xs font-bold transition-colors ${v === n ? "bg-[var(--clinical-panel)] text-white border-[var(--clinical-panel)]" : "text-[var(--clinical-muted)] hover:border-[var(--clinical-panel)]"}`} style={v === n ? undefined : { backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line-strong)" }}>{n}</button>)}</div>
+                <div className="mt-1.5 flex gap-1" role="group" aria-label={`Score for ${d.label}`}>{[0, 1, 2, 3, 4].map((n) => <button key={n} type="button" aria-label={`${d.label}: ${n}`} aria-pressed={v === n} onClick={() => setScore(d.key, n)} className={`h-7 w-7 rounded-lg border text-xs font-bold transition-colors ${v === n ? "bg-[var(--clinical-panel)] text-white border-[var(--clinical-panel)]" : "text-[var(--clinical-muted)] hover:border-[var(--clinical-panel)]"}`} style={v === n ? undefined : { backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line-strong)" }}>{n}</button>)}</div>
                 <p className="mt-1 text-[11px] text-[var(--clinical-muted)]">{v} — {d.scale[v]}</p>
               </div>
             ); })}
