@@ -508,58 +508,101 @@ function LevelHistoryView({ residents, approved, locHistory, v42ById, acuityById
 
 // Full detail of a single LOC-history entry — shows every recorded field plus the
 // underlying assessment (14-domain v4.2 or 10-domain acuity) behind the level.
-function Meta({ label, value }: { label: string; value?: React.ReactNode }) {
-  if (value == null || value === "") return null;
-  return <div className="flex justify-between gap-3 py-1 text-sm"><span className="text-[var(--clinical-muted)]">{label}</span><span className="text-right font-medium text-[var(--clinical-ink)]">{value}</span></div>;
+// Severity colour for a 0–max domain score (green → teal → amber → coral).
+function scoreColor(score: number, max: number): string {
+  const r = max > 0 ? score / max : 0;
+  if (r <= 0.15) return "var(--clinical-green)";
+  if (r <= 0.35) return "var(--clinical-panel)";
+  if (r <= 0.55) return "var(--clinical-amber)";
+  return "var(--clinical-coral)";
+}
+
+function StatTile({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border px-3 py-2" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--clinical-muted)]">{label}</p>
+      <p className="mt-0.5 text-sm font-semibold text-[var(--clinical-ink)]">{value}</p>
+    </div>
+  );
+}
+
+// One domain row: colour-coded score badge + domain name + anchor label.
+function DomainScoreRow({ label, score, max, anchor }: { label: string; score: number; max: number; anchor: string }) {
+  const color = scoreColor(score, max);
+  return (
+    <div className="flex items-center gap-3 rounded-lg border p-2.5" style={{ borderColor: "var(--clinical-line)" }}>
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-sm font-bold text-white" style={{ backgroundColor: color }}>{score}</span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-semibold leading-tight text-[var(--clinical-ink)]">{label}</p>
+        <p className="mt-0.5 text-[11px] leading-snug text-[var(--clinical-muted)]">{anchor}</p>
+      </div>
+    </div>
+  );
 }
 
 function LevelHistoryDetail({ item, v42, acuity, onClose }: { item: LocTimelineItem; v42?: AssessmentV42; acuity?: Acuity; onClose: () => void }) {
   const lvl = LEVELS.find((l) => l.n === item.level);
+  const v42Total = v42?.domains ? Object.values(v42.domains).reduce((n, d) => n + (typeof d?.score === "number" ? d.score : 0), 0) : 0;
   return (
     <ClinicalModal open onClose={onClose} title={`Level of Care — ${item.source}`} description={lvl ? `Level ${item.level} — ${lvl.name}` : `Level ${item.level}`} size="lg">
-      <div className="space-y-4">
-        <div className="rounded-xl border p-3" style={{ borderColor: "var(--clinical-line)" }}>
-          <Meta label="Level" value={<LevelChip level={item.level} label={lvl?.name} />} />
-          {item.previousLevel != null && item.previousLevel !== item.level && <Meta label="Changed from" value={`Level ${item.previousLevel}`} />}
-          <Meta label="Source" value={item.source} />
-          <Meta label="Raw score" value={item.rawScore != null ? `${item.rawScore} / ${item.scoreMax}` : undefined} />
-          <Meta label="Recorded" value={fmtDate(item.at)} />
-          <Meta label="By" value={[item.by, item.role].filter(Boolean).join(" · ")} />
-          {item.notes && <div className="pt-1 text-sm"><p className="text-[var(--clinical-muted)]">Notes</p><p className="whitespace-pre-wrap text-[var(--clinical-ink)]">{item.notes}</p></div>}
+      <div className="space-y-5">
+        {/* Summary header — level + source, then stat tiles */}
+        <div className="rounded-xl border p-4" style={{ borderColor: "var(--clinical-line)" }}>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <LevelChip level={item.level} label={lvl?.name} />
+            {item.previousLevel != null && item.previousLevel !== item.level && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: ACCENT_VAR[accentFor(item.level)] }}>
+                {item.previousLevel < item.level ? "▲" : "▼"} from Level {item.previousLevel}
+              </span>
+            )}
+            <span className="ml-auto inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide border" style={{ borderColor: "var(--clinical-line-strong)", color: "var(--clinical-muted)" }}>{item.source}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+            {item.rawScore != null && <StatTile label="Raw score" value={`${item.rawScore} / ${item.scoreMax}`} />}
+            <StatTile label="Recorded" value={fmtDate(item.at)} />
+            <StatTile label="By" value={item.by || "—"} />
+            {item.role && <StatTile label="Role" value={item.role} />}
+          </div>
+          {item.notes && (
+            <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--clinical-line)" }}>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--clinical-muted)]">Notes</p>
+              <p className="mt-0.5 whitespace-pre-wrap text-sm text-[var(--clinical-ink)]">{item.notes}</p>
+            </div>
+          )}
         </div>
 
         {v42 && (
           <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--clinical-muted)]">v4.2 Assessment · {v42.domains ? Object.values(v42.domains).reduce((n, d) => n + (typeof d?.score === "number" ? d.score : 0), 0) : 0}/56</p>
-            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            <div className="mb-2.5 flex items-center justify-between">
+              <p className="text-xs font-bold uppercase tracking-wide text-[var(--clinical-ink)]">v4.2 Assessment — 14 domains</p>
+              <span className="rounded-md px-2 py-0.5 text-xs font-bold text-white" style={{ backgroundColor: "var(--clinical-panel)" }}>{v42Total} / 56</span>
+            </div>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
               {V42_DOMAINS.map((d) => { const sc = v42.domains?.[d.code as keyof typeof v42.domains]?.score ?? 0; return (
-                <div key={d.code} className="flex items-center justify-between rounded-lg border px-2.5 py-1.5" style={{ borderColor: "var(--clinical-line)" }}>
-                  <span className="text-xs text-[var(--clinical-ink)]">{d.label}</span>
-                  <span className="text-xs font-semibold text-[var(--clinical-panel)]" title={V42_ANCHOR[sc]}>{sc} · {V42_ANCHOR[sc]}</span>
-                </div>
+                <DomainScoreRow key={d.code} label={d.label} score={sc} max={4} anchor={V42_ANCHOR[sc] ?? ""} />
               ); })}
             </div>
-            {v42.layer3?.finalLevelJustification && <p className="mt-2 text-sm"><span className="font-semibold text-[var(--clinical-ink)]">Justification:</span> <span className="text-[var(--clinical-muted)]">{v42.layer3.finalLevelJustification}</span></p>}
-            {v42.layer1?.reasonForAdmission && <p className="mt-1 text-sm"><span className="font-semibold text-[var(--clinical-ink)]">Reason for admission:</span> <span className="text-[var(--clinical-muted)]">{v42.layer1.reasonForAdmission}</span></p>}
+            {v42.layer3?.finalLevelJustification && <p className="mt-3 rounded-lg border p-3 text-sm" style={{ borderColor: "var(--clinical-line)" }}><span className="font-semibold text-[var(--clinical-ink)]">Justification:</span> <span className="text-[var(--clinical-muted)]">{v42.layer3.finalLevelJustification}</span></p>}
+            {v42.layer1?.reasonForAdmission && <p className="mt-2 text-sm"><span className="font-semibold text-[var(--clinical-ink)]">Reason for admission:</span> <span className="text-[var(--clinical-muted)]">{v42.layer1.reasonForAdmission}</span></p>}
           </div>
         )}
 
         {!v42 && acuity && (
           <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--clinical-muted)]">Acuity Assessment · {acuity.total}/50{acuity.trigger ? ` · ${acuity.trigger}` : ""}</p>
-            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            <div className="mb-2.5 flex items-center justify-between">
+              <p className="text-xs font-bold uppercase tracking-wide text-[var(--clinical-ink)]">Acuity Assessment — 10 domains{acuity.trigger ? ` · ${acuity.trigger}` : ""}</p>
+              <span className="rounded-md px-2 py-0.5 text-xs font-bold text-white" style={{ backgroundColor: "var(--clinical-panel)" }}>{acuity.total} / 50</span>
+            </div>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
               {DOMAINS.map((d) => { const sc = Number(acuity.scores?.[d.key] ?? 0); return (
-                <div key={d.key} className="flex items-center justify-between rounded-lg border px-2.5 py-1.5" style={{ borderColor: "var(--clinical-line)" }}>
-                  <span className="text-xs text-[var(--clinical-ink)]">{d.label}</span>
-                  <span className="text-xs font-semibold text-[var(--clinical-panel)]" title={d.scale[sc]}>{sc} · {d.scale[sc]}</span>
-                </div>
+                <DomainScoreRow key={d.key} label={d.label} score={sc} max={5} anchor={d.scale[sc] ?? ""} />
               ); })}
             </div>
-            {acuity.notes && <p className="mt-2 text-sm"><span className="font-semibold text-[var(--clinical-ink)]">Notes:</span> <span className="text-[var(--clinical-muted)]">{acuity.notes}</span></p>}
+            {acuity.notes && <p className="mt-3 rounded-lg border p-3 text-sm" style={{ borderColor: "var(--clinical-line)" }}><span className="font-semibold text-[var(--clinical-ink)]">Notes:</span> <span className="text-[var(--clinical-muted)]">{acuity.notes}</span></p>}
           </div>
         )}
 
-        {!v42 && !acuity && <p className="text-sm text-[var(--clinical-muted)]">The detailed assessment behind this entry is no longer available, but the recorded summary above is preserved.</p>}
+        {!v42 && !acuity && <p className="rounded-lg border p-3 text-sm text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line)" }}>The detailed assessment behind this entry is no longer available, but the recorded summary above is preserved.</p>}
       </div>
     </ClinicalModal>
   );
