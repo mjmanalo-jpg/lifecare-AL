@@ -3,6 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { getTenantRealtime } from "./supabaseClient";
 import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
+import { cacheQuery, readCachedQuery, snapshotAppSettings } from "./offline/cache";
+import { pendingForModel } from "./offline/outbox";
+import { applyOutboxToRows, applyOutboxToAppSettings } from "./offline/merge";
+import { subscribeSync } from "./offline/sync";
+import type { Rec } from "./offline/types";
+
+/** Fold pending offline writes for `model` into a rowset (optimistic display). */
+async function mergeOutbox(model: string, rows: Rec[]): Promise<Rec[]> {
+  const ops = await pendingForModel(model);
+  if (!ops.length) return rows;
+  return model === "app-settings" ? applyOutboxToAppSettings(rows, ops) : applyOutboxToRows(rows, ops);
+}
 
 // Monotonic counter so every hook instance gets a UNIQUE realtime channel
 // topic. Supabase throws if two channels share a topic and `.on()` is called
@@ -83,16 +95,29 @@ export function useLiveQuery<T = Record<string, unknown>>(
   const fetchData = useCallback(async () => {
     try {
       const json = (await coalescedFetch(url)) as { data?: T[] };
-      const next = (json.data ?? []) as T[];
-      responseCache.set(url, next);
-      setData(next);
+      const server = (json.data ?? []) as Rec[];
+      // Persist a durable snapshot so reads survive a server outage.
+      void cacheQuery(url, server);
+      if (model === "app-settings") void snapshotAppSettings(server);
+      const merged = (await mergeOutbox(model, server)) as T[];
+      responseCache.set(url, merged);
+      setData(merged);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Request failed");
+      // Server unreachable → serve the last-known snapshot + queued offline writes.
+      const cached = await readCachedQuery(url);
+      if (cached) {
+        const merged = (await mergeOutbox(model, cached)) as T[];
+        responseCache.set(url, merged);
+        setData(merged);
+        setError(null);
+      } else {
+        setError(err instanceof Error ? err.message : "Request failed");
+      }
     } finally {
       setLoading(false);
     }
-  }, [url]);
+  }, [url, model]);
 
   // When the url changes (e.g. a new filter), reset to that url's cached rows —
   // only show a spinner when nothing is cached yet. This is React's "adjust state
@@ -115,6 +140,13 @@ export function useLiveQuery<T = Record<string, unknown>>(
     run(); // initial load
     const interval = setInterval(run, pollMs); // polling fallback
 
+    // Re-run when the offline outbox changes (a queued write appears, or a sync
+    // drains) so optimistic rows show immediately and reconcile after sync.
+    let lastPending = -1;
+    const unsubSync = subscribeSync((st) => {
+      if (st.pending !== lastPending || !st.syncing) { lastPending = st.pending; run(); }
+    });
+
     // Realtime is opt-in and authenticated. The channel is filtered to the
     // active workspace; polling remains the safe fallback.
     let realtimeClient: SupabaseClient | null = null;
@@ -132,6 +164,7 @@ export function useLiveQuery<T = Record<string, unknown>>(
     return () => {
       cancelled = true;
       clearInterval(interval);
+      unsubSync();
       if (realtimeClient && channel) realtimeClient.removeChannel(channel);
     };
   }, [fetchData, enabled, pollMs, model, tablesKey]);

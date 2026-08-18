@@ -37,6 +37,7 @@ import {
 import Link from "next/link";
 import LcmsLogo from "@/components/LcmsLogo";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
+import OfflineIndicator from "@/components/OfflineIndicator";
 import ChangePasswordDialog from "@/components/portal/ChangePasswordDialog";
 import LogoutDialog from "@/components/portal/LogoutDialog";
 import SignatureModal from "@/components/portal/SignatureModal";
@@ -872,6 +873,8 @@ export default function PortalShell({
 
           {/* Right Section: Theme + Profile */}
           <div className="flex items-center gap-1 sm:gap-3 md:gap-4">
+            {/* Offline / sync status */}
+            <OfflineIndicator />
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
