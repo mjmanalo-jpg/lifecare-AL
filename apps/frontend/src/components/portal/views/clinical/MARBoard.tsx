@@ -1,13 +1,14 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Pill, Plus, X, Trash2, Search, CheckCircle, Loader2 } from "lucide-react";
+import { Pill, Plus, X, Trash2, Search, CheckCircle, Loader2, Lock } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 import { StatusPill, ClinicalHeader, ClinicalCard, MicroLabel } from "./clinical-ui";
 import { classifyMedication, medFlagLabels, isPrn, prnIntervalHours } from "@/lib/medSafety";
+import { MAR_WINDOW_MIN, classifyDoseWindow, fmtWindowTime } from "@/lib/marWindow";
 
 const inputCls = "w-full rounded-md border border-[#D6D8CD] bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2E4A48]/30";
 // Keys MUST match the Prisma MARStatus enum.
@@ -40,6 +41,11 @@ export default function MARBoard() {
   const [me, setMe] = useState<{ id: string | null; name: string | null }>({ id: null, name: null });
   useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => { if (d?.authenticated) setMe({ id: d.session?.userId ?? null, name: d.session?.name ?? "Clinician" }); }).catch(() => {}); }, []);
 
+  // Live clock so the strict administration window (and locked "Mark Given"
+  // buttons) open/close without a manual refresh.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => { const id = setInterval(() => setNowMs(Date.now()), 30_000); return () => clearInterval(id); }, []);
+
   const router = useRouter();
   const pathname = usePathname();
   // Send the clinician to Daily Rounds → Vitals for this resident so they can
@@ -71,14 +77,45 @@ export default function MARBoard() {
   const [witnessFor, setWitnessFor] = useState<any>(null);
   const [witnessName, setWitnessName] = useState("");
   const [witnessBusy, setWitnessBusy] = useState(false);
+  // Late-administration note captured before a witness prompt, carried into the
+  // eventual GIVEN write so it isn't lost through the witness modal.
+  const [pendingLateNote, setPendingLateNote] = useState<string | undefined>(undefined);
 
   // Run controlled-substance, vitals, and PRN-interval safety checks before a
   // dose is marked GIVEN. Returns { ok:false } to abort, { needsWitness:true }
   // when a controlled-substance witness must be captured, or { ok:true } to give.
-  const runGiveChecks = async (mar: any): Promise<{ ok: boolean; witnessName?: string; needsWitness?: boolean }> => {
+  const runGiveChecks = async (mar: any): Promise<{ ok: boolean; witnessName?: string; needsWitness?: boolean; lateNote?: string }> => {
     const med: any = medMap.get(mar.medicationId);
     const flags = classifyMedication(med?.name);
     const resName = resMap.get(mar.residentId)?.name || "this resident";
+
+    // Strict administration window (skips PRN). Before the window opens the dose
+    // is hard-blocked; after it closes it's allowed but flagged Late with a reason.
+    let lateNote: string | undefined;
+    const schedMs = mar.scheduledTime ? new Date(mar.scheduledTime).getTime() : NaN;
+    if (!isPrn(med?.frequency) && !Number.isNaN(schedMs)) {
+      const w = classifyDoseWindow(schedMs, nowMs);
+      if (w.phase === "EARLY") {
+        await Swal.fire({
+          title: "Too early to administer",
+          html: `The administration window for <b>${med?.name || "this dose"}</b> opens at <b>${fmtWindowTime(w.openMs)}</b> (scheduled ${fmtWindowTime(schedMs)} ± ${MAR_WINDOW_MIN} min).`,
+          icon: "warning", confirmButtonColor: "#C0573F", confirmButtonText: "OK",
+        });
+        return { ok: false };
+      }
+      if (w.phase === "LATE") {
+        const res = await Swal.fire({
+          title: "Outside scheduled window",
+          input: "text",
+          inputLabel: `The ${fmtWindowTime(schedMs)} window closed at ${fmtWindowTime(w.closeMs)}. Document why this dose is being given late.`,
+          inputPlaceholder: "Reason for late administration",
+          showCancelButton: true, confirmButtonColor: "#2E4A48", confirmButtonText: "Record late",
+          inputValidator: (v) => (!String(v || "").trim() ? "A reason is required" : undefined),
+        });
+        if (!res.isConfirmed) return { ok: false };
+        lateNote = `Late administration — ${String(res.value).trim()}`;
+      }
+    }
 
     // PRN over-dispensing guard: block if the last dose was within the interval.
     if (isPrn(med?.frequency)) {
@@ -124,9 +161,9 @@ export default function MARBoard() {
     // Controlled substances require a witness — captured in a designed modal
     // (opened by markGiven) rather than inline here.
     if (flags.controlled && !(mar.witnessName || "").trim()) {
-      return { ok: false, needsWitness: true };
+      return { ok: false, needsWitness: true, lateNote };
     }
-    return { ok: true, witnessName: mar.witnessName || undefined };
+    return { ok: true, witnessName: mar.witnessName || undefined, lateNote };
   };
 
   const filtered = useMemo(() => {
@@ -181,25 +218,26 @@ export default function MARBoard() {
   };
   // Write the GIVEN dose (optionally with a witness). Shared by the row action
   // and the controlled-substance witness modal.
-  const applyGiven = async (mar: { id: string; witnessName?: string | null }, witness?: string) => {
+  const applyGiven = async (mar: { id: string; witnessName?: string | null }, witness?: string, note?: string) => {
     await updateRecord("medication-administrations", mar.id, {
       status: "GIVEN", actualTime: new Date().toISOString(),
       recordedById: me.id, recordedByName: me.name,
       ...(witness ? { witnessName: witness } : {}),
+      ...(note ? { notes: note } : {}),
     });
     refetch();
     Swal.fire({ icon: "success", title: "Recorded", timer: 1200, showConfirmButton: false });
   };
   const markGiven = async (mar: { id: string; witnessName?: string | null }) => {
     const chk = await runGiveChecks(mar);
-    if (chk.needsWitness) { setWitnessName(mar.witnessName || ""); setWitnessFor(mar); return; }
+    if (chk.needsWitness) { setWitnessName(mar.witnessName || ""); setPendingLateNote(chk.lateNote); setWitnessFor(mar); return; }
     if (!chk.ok) return;
-    await applyGiven(mar, chk.witnessName);
+    await applyGiven(mar, chk.witnessName, chk.lateNote);
   };
   const submitWitness = async () => {
     if (!witnessFor || !witnessName.trim()) return;
     setWitnessBusy(true);
-    try { await applyGiven(witnessFor, witnessName.trim()); setWitnessFor(null); }
+    try { await applyGiven(witnessFor, witnessName.trim(), pendingLateNote); setWitnessFor(null); setPendingLateNote(undefined); }
     catch { Swal.fire("Error", "Could not record the administration.", "error"); }
     finally { setWitnessBusy(false); }
   };
@@ -296,9 +334,13 @@ export default function MARBoard() {
                           <td className="px-4 py-3 text-[#3C3C36]">{admin}</td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex justify-end gap-1">
-                              {mar.status === "SCHEDULED" && (
-                                <button onClick={() => markGiven(mar)} className="p-1.5 text-[#7E9B6F] hover:bg-[#7E9B6F]/12 rounded" title="Mark Given"><CheckCircle className="w-4 h-4" /></button>
-                              )}
+                              {mar.status === "SCHEDULED" && (() => {
+                                const schedMs = mar.scheduledTime ? new Date(mar.scheduledTime).getTime() : NaN;
+                                const win = !isPrn(med?.frequency) && !Number.isNaN(schedMs) ? classifyDoseWindow(schedMs, nowMs) : null;
+                                return win?.phase === "EARLY"
+                                  ? <button disabled className="p-1.5 text-[#8A8D82] rounded cursor-not-allowed" title={`Window opens at ${fmtWindowTime(win.openMs)}`}><Lock className="w-4 h-4" /></button>
+                                  : <button onClick={() => markGiven(mar)} className="p-1.5 text-[#7E9B6F] hover:bg-[#7E9B6F]/12 rounded" title="Mark Given"><CheckCircle className="w-4 h-4" /></button>;
+                              })()}
                               <button onClick={() => handleDelete(mar.id)} className="p-1.5 text-[#C0573F] hover:bg-[#C0573F]/10 rounded" title="Delete"><Trash2 className="w-4 h-4" /></button>
                             </div>
                           </td>

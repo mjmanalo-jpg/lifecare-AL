@@ -7,7 +7,7 @@
 // the deterministic MLR-floor + modifier + override + L5-pathway engine drives
 // the suggested Level of Care (GAP-001: banding not yet calibrated).
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus, X, Trash2, Pencil, CheckCircle2, Gauge, AlertTriangle,
   ShieldCheck, RefreshCw, Info, Layers,
@@ -197,7 +197,7 @@ function parseAssessments(raw?: string): AssessmentV42[] {
 // Draft working state = the full assessment sans list metadata; we edit it in place.
 type Draft = AssessmentV42;
 
-export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedded = false }: { clinicianRole?: string; embedded?: boolean }) {
+export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedded = false, deepLinkResident = null }: { clinicianRole?: string; embedded?: boolean; deepLinkResident?: { id: string; name: string } | null }) {
   const roleLabel = clinicianRole === "CARE_MANAGER" || clinicianRole === "FACILITY_ADMIN" ? "Care Manager" : "Nurse";
 
   const { data: settingRows, loading, error, refetch } = useLiveQuery<SettingRow>("app-settings", { tables: ["AppSetting"] });
@@ -262,6 +262,27 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     setEditingId(a.id); setLinkedAdmissionId(a.layer1?.convertedAdmissionId ?? "");
     setDraft(JSON.parse(JSON.stringify(a))); setLayer(1); setOpen(true);
   };
+  // Deep-link target: open the resident's latest assessment, or start a new one
+  // pre-filled with the resident (the "why a private caregiver is needed" is
+  // documented here). Called once when arrived via ?resident=<id>.
+  const openForResident = (rid: string, rname: string) => {
+    const existing = assessments.find((a) => a.layer1?.residentId === rid);
+    if (existing) { openEdit(existing); return; }
+    const a = newAssessment(newId(), me || undefined, new Date().toISOString());
+    a.layer1.residentId = rid;
+    a.layer1.residentName = rname;
+    setEditingId(null); setLinkedAdmissionId(""); setDraft(a); setLayer(1); setOpen(true);
+  };
+  const deepRef = useRef(false);
+  useEffect(() => {
+    if (deepRef.current) return;
+    const dl = deepLinkResident;
+    if (!dl?.id || !dl.name) return; // wait until the resident name resolves
+    if (loading) return; // wait until assessments have loaded (edit-vs-new)
+    deepRef.current = true;
+    void (async () => { openForResident(dl.id, dl.name || ""); })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkResident, loading]);
 
   const pickAdmission = (a: AdmissionOpt) => {
     patchLayer1({

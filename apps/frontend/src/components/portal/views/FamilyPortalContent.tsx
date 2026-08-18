@@ -24,6 +24,7 @@ import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker"
 import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
 import FamilyApprovals from "@/components/portal/views/family/FamilyApprovals";
 import ClinicalRecordsBoard from "@/components/portal/views/clinical/ClinicalRecordsBoard";
+import ResidentJourneyBoard from "@/components/portal/views/clinical/ResidentJourneyBoard";
 import ResidentCareHistory from "@/components/portal/views/clinical/ResidentCareHistory";
 import FamilyEscalations from "@/components/portal/views/family/FamilyEscalations";
 
@@ -93,6 +94,8 @@ export default function FamilyPortalContent({ tab }: FamilyPortalContentProps) {
     // (PortalShell only adds that class for the clinical roles, not FAMILY).
     case "clinicalrecords":
       return <div className="clinical-portal-content"><ClinicalRecordsBoard clinicianRole="FACILITY_ADMIN" readOnly /></div>;
+    case "residentjourney":
+      return <div className="clinical-portal-content"><ResidentJourneyBoard clinicianRole="FACILITY_ADMIN" readOnly /></div>;
     case "carehistory":
       return <div className="clinical-portal-content"><ResidentCareHistory clinicianRole="FACILITY_ADMIN" /></div>;
     default:

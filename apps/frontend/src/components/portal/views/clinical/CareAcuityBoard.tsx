@@ -12,6 +12,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { parseLocHistory, historyForResident, LOC_HISTORY_KEY, LOC_SOURCE_LABEL, type LocHistoryEntry, type LocSource } from "@/lib/lifecare/locHistory";
@@ -143,10 +144,18 @@ const domainsFor = (a: Acuity): { domains: Domain[]; max: number } =>
   isV42Acuity(a) ? { domains: V42_SCORED, max: 4 } : { domains: LEGACY_ACUITY_DOMAINS, max: 5 };
 
 export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
+  const searchParams = useSearchParams();
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const { data: settingRows } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
 
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
+  // Deep-link (?resident=<id>) from other boards → open that resident's assessment.
+  const deepLinkResident = useMemo(() => {
+    const rid = searchParams?.get("resident") || "";
+    if (!rid) return null;
+    const r = residents.find((x: Row) => s(x.id) === rid);
+    return { id: rid, name: r ? s(r.name) : "" };
+  }, [searchParams, residents]);
   const careLevelById = useMemo(() => {
     const m = new Map<string, string>();
     (resQ.data || []).forEach((r) => m.set(s(r.id), s(r.careLevel)));
@@ -225,7 +234,7 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
 
       {/* Assessments — the single v4.2 3-layer instrument, embedded. New → complete
           → nurse-validate → care plan; stores to assessments_v42. */}
-      {tab === "queue" && <ResidentAssessmentV42 clinicianRole={roleForV42} embedded />}
+      {tab === "queue" && <ResidentAssessmentV42 clinicianRole={roleForV42} embedded deepLinkResident={deepLinkResident} />}
 
       {tab === "packages" && (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">

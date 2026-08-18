@@ -9,7 +9,8 @@
  */
 
 import { useMemo, useState } from "react";
-import { HeartHandshake, Plus, UserRound, CalendarClock, Ban, AlertTriangle, ShieldCheck } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
+import { HeartHandshake, Plus, UserRound, CalendarClock, Ban, AlertTriangle, ShieldCheck, ClipboardList, Sparkles, ExternalLink } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
@@ -23,8 +24,10 @@ import {
   PRIVATE_CARE_KEY, parsePrivateCare, RATE_UNIT_LABEL, PRIVATE_CARE_STATUS_META,
   monthlyEquivalent, pcgAntiDoubleCharge, pcgReviewOverdue,
   PCG_INTENSITY_META, PCG_INTENSITY_ORDER, PCG_RULE_REFS,
-  type PrivateCareAssignment, type RateUnit, type PcgIntensity,
+  PCG_COVERAGE_OPTIONS, PCG_SHIFT_OPTIONS, composeSchedule, coverageToIntensity, suggestPcgFromTriggers,
+  type PrivateCareAssignment, type RateUnit, type PcgIntensity, type PcgCoverage, type PcgShift, type PcgSuggestion,
 } from "@/lib/privateCaregiver";
+import { ASSESSMENTS_V42_KEY, classifyAssessment, finalLevel, type AssessmentV42 } from "@/lib/lifecare/assessment";
 
 type Row = Record<string, unknown>;
 type StaffRow = { id: string; userId?: string; user?: { name?: string; role?: string } };
@@ -35,13 +38,72 @@ const fmtDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString(undefi
 
 type ResOpt = { id: string; name: string; room: string; sponsorId: string; sponsorName: string };
 
+/** Assessment-derived DT-013 (private-caregiver) recommendation for a resident. */
+export type PcgReco = {
+  hasAssessment: boolean;
+  recommend: boolean;
+  triggers: string[];
+  rationale: string;
+  level: string | null;
+  status: string;
+  assessedAt: string;
+  suggestion: PcgSuggestion;
+};
+
+const parseV42 = (raw: string | null | undefined): AssessmentV42[] => {
+  if (!raw) return [];
+  try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((a) => a && typeof a.id === "string") : []; } catch { return []; }
+};
+
 export default function PrivateCaregiverBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   const { name: clinicianName } = useClinician(clinicianRole);
+  const router = useRouter();
+  const pathname = usePathname();
   const { data: settingRows, refetch, loading } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
   const resQ = useLiveQuery<Row>("residents", { query: "include=sponsor", tables: ["Resident", "User"] });
   const staffQ = useLiveQuery<StaffRow>("staff", { query: "include=user&take=300", tables: ["Staff"] });
 
   const assignments = useMemo(() => parsePrivateCare(settingRows.find((r) => (r.key || r.id) === PRIVATE_CARE_KEY)?.value), [settingRows]);
+
+  // DT-013 recommendation per resident, from their LATEST v4.2 assessment. This is
+  // the reassessment/LOC signal that flags whether a resident should have a private
+  // caregiver — the clinical "why" is documented in the assessment form, not typed
+  // fresh here. Keyed by residentId.
+  const recoByResident = useMemo(() => {
+    const v42 = parseV42(settingRows.find((r) => (r.key || r.id) === ASSESSMENTS_V42_KEY)?.value);
+    const latest = new Map<string, AssessmentV42>();
+    for (const a of v42) {
+      const rid = a.layer1?.residentId;
+      if (!rid) continue;
+      const prev = latest.get(rid);
+      if (!prev || (a.updatedAt || "") > (prev.updatedAt || "")) latest.set(rid, a);
+    }
+    const m = new Map<string, PcgReco>();
+    for (const [rid, a] of latest) {
+      const dt = classifyAssessment(a).dt013;
+      m.set(rid, {
+        hasAssessment: true,
+        recommend: dt.recommendReview,
+        triggers: dt.triggers,
+        rationale: dt.triggers.length ? dt.triggers.join("; ") : dt.rationale,
+        level: finalLevel(a),
+        status: a.status,
+        assessedAt: a.updatedAt || a.createdAt || "",
+        suggestion: suggestPcgFromTriggers(dt.triggers),
+      });
+    }
+    return m;
+  }, [settingRows]);
+
+  // Route to the resident assessment form (Acuity & Level of Care → Assessments)
+  // where the DT-013 justification for a private caregiver is documented.
+  const openAssessment = (residentId?: string) => {
+    // Care Manager portal passes clinicianRole="FACILITY_ADMIN", so derive the
+    // portal segment from the live URL instead of the role. Carry the resident so
+    // the assessment form opens straight to them.
+    const seg = (pathname || "").split("/").filter(Boolean)[0] || clinicianRole.toLowerCase();
+    router.push(`/${seg}/careacuity${residentId ? `?resident=${encodeURIComponent(residentId)}` : ""}`);
+  };
   const residents = useMemo<ResOpt[]>(() => (resQ.data || []).map((raw) => {
     const a = adaptResident(raw);
     const sp = (raw.sponsor ?? null) as { id?: unknown; name?: unknown } | null;
@@ -155,20 +217,23 @@ export default function PrivateCaregiverBoard({ clinicianRole = "NURSE" }: { cli
         </DataState>
       </div>
 
-      {assignOpen && <AssignModal residents={residents} caregivers={caregivers} onClose={() => setAssignOpen(false)} onCreate={createAssignment} />}
+      {assignOpen && <AssignModal residents={residents} caregivers={caregivers} recoByResident={recoByResident} onOpenAssessment={openAssessment} onClose={() => setAssignOpen(false)} onCreate={createAssignment} />}
     </ClinicalPage>
   );
 }
 
-function AssignModal({ residents, caregivers, onClose, onCreate }: {
+function AssignModal({ residents, caregivers, recoByResident, onOpenAssessment, onClose, onCreate }: {
   residents: ResOpt[];
   caregivers: { id: string; name: string }[];
+  recoByResident: Map<string, PcgReco>;
+  onOpenAssessment: (residentId?: string) => void;
   onClose: () => void;
   onCreate: (a: Omit<PrivateCareAssignment, "id" | "status" | "requestedBy" | "requestedAt">) => Promise<void>;
 }) {
   const [residentId, setResidentId] = useState("");
   const [caregiverId, setCaregiverId] = useState("");
-  const [schedule, setSchedule] = useState("");
+  const [coverage, setCoverage] = useState<PcgCoverage>(8);
+  const [shift, setShift] = useState<PcgShift>("MORNING");
   const [rate, setRate] = useState("");
   const [rateUnit, setRateUnit] = useState<RateUnit>("month");
   const [notes, setNotes] = useState("");
@@ -179,22 +244,54 @@ function AssignModal({ residents, caregivers, onClose, onCreate }: {
   const [expectedDurationDays, setExpectedDurationDays] = useState("");
   const [exitCriteria, setExitCriteria] = useState("");
   const [busy, setBusy] = useState(false);
+  // Track whether the assessor hand-edited the rationale, so we don't clobber it
+  // when re-prefilling from the assessment on resident change.
+  const [rationaleTouched, setRationaleTouched] = useState(false);
 
   const resident = residents.find((r) => r.id === residentId);
   const caregiver = caregivers.find((c) => c.id === caregiverId);
+  const reco = residentId ? recoByResident.get(residentId) : undefined;
+  // Residents the assessment flags for a private caregiver float to the top.
+  const sortedResidents = useMemo(() => [...residents].sort((a, b) => {
+    const ra = recoByResident.get(a.id)?.recommend ? 1 : 0;
+    const rb = recoByResident.get(b.id)?.recommend ? 1 : 0;
+    return ra !== rb ? rb - ra : a.name.localeCompare(b.name);
+  }), [residents, recoByResident]);
   const amount = Number(rate) || 0;
   const im = PCG_INTENSITY_META[intensity];
   const mandatory = im.mandatory;
   const isTemporary = intensity === "temporary";
+  const effShift: PcgShift = coverage === 24 ? "FULL" : shift;
+  const schedule = composeSchedule(coverage, effShift);
   // Live anti-double-charge preview (BR-013.05 / PCG-011).
   const guard = pcgAntiDoubleCharge({ rationale, intensity, incrementalConfirmed });
+
+  // Changing coverage/shift updates the composed schedule and defaults the clinical
+  // intensity (unless the assessor deliberately chose temporary/elective).
+  const applyCoverage = (cov: PcgCoverage, sh: PcgShift) => {
+    setCoverage(cov); setShift(sh);
+    setIntensity((prev) => (prev === "temporary" || prev === "elective") ? prev : coverageToIntensity(cov, sh));
+  };
+
+  // When a resident is picked, pull the DT-013 justification + suggested coverage
+  // from their latest assessment. The "why" is documented in the assessment form;
+  // here it pre-fills so the assigner confirms rather than retypes.
+  const selectResident = (id: string) => {
+    setResidentId(id);
+    const rc = id ? recoByResident.get(id) : undefined;
+    if (!rc) return;
+    const sug = rc.suggestion;
+    setCoverage(sug.coverage);
+    setShift(sug.coverage === 24 || sug.shift === "FULL" ? "MORNING" : sug.shift);
+    setIntensity((prev) => (prev === "temporary" || prev === "elective") ? prev : sug.intensity);
+    if (!rationaleTouched && rc.rationale) setRationale(rc.rationale);
+  };
 
   const submit = async () => {
     if (!residentId) { Swal.fire({ title: "Select a resident", icon: "warning" }); return; }
     if (!caregiverId) { Swal.fire({ title: "Select a caregiver", icon: "warning" }); return; }
-    if (!schedule.trim()) { Swal.fire({ title: "Enter a schedule", text: "e.g. Day shift · 8h/day", icon: "warning" }); return; }
     if (!(amount > 0)) { Swal.fire({ title: "Enter a valid rate", icon: "warning" }); return; }
-    if (mandatory && !rationale.trim()) { Swal.fire({ title: "Rationale required", text: `A mandatory PCG (${im.ruleId}) needs a documented reason why shared 1:6 staffing is insufficient.`, icon: "warning" }); return; }
+    if (mandatory && !rationale.trim()) { Swal.fire({ title: "Justification required", text: `A mandatory PCG (${im.ruleId}) needs a documented reason why shared 1:6 staffing is insufficient — document it in the resident assessment (DT-013).`, icon: "warning" }); return; }
     if (mandatory && !reviewDate) { Swal.fire({ title: "Review date required", text: "A mandatory PCG needs a review date (PCG-002/004/011).", icon: "warning" }); return; }
     if (isTemporary && (!expectedDurationDays.trim() || !exitCriteria.trim())) { Swal.fire({ title: "Temporary PCG details required", text: "PCG-005: temporary intensity needs an expected duration + exit criteria.", icon: "warning" }); return; }
     if (!guard.allowed) { Swal.fire({ title: "Confirm incremental staffing", text: guard.reason, icon: "warning" }); return; }
@@ -204,7 +301,8 @@ function AssignModal({ residents, caregivers, onClose, onCreate }: {
         residentId, residentName: resident?.name || "", room: resident?.room || undefined,
         sponsorId: resident?.sponsorId || undefined, sponsorName: resident?.sponsorName || undefined,
         caregiverId, caregiverName: caregiver?.name || "",
-        schedule: schedule.trim(), rate: amount, rateUnit, notes: notes.trim() || undefined,
+        schedule, coverageHours: coverage, shift: effShift,
+        rate: amount, rateUnit, notes: notes.trim() || undefined,
         intensity, rationale: rationale.trim() || undefined, reviewDate: reviewDate || undefined,
         incrementalConfirmed: guard.overlaps ? incrementalConfirmed : undefined,
         expectedDurationDays: isTemporary ? Number(expectedDurationDays) || undefined : undefined,
@@ -228,14 +326,48 @@ function AssignModal({ residents, caregivers, onClose, onCreate }: {
       <div className="space-y-4">
         <div>
           <FieldLabel>Resident</FieldLabel>
-          <select value={residentId} onChange={(e) => setResidentId(e.target.value)} className={controlClass}>
+          <select value={residentId} onChange={(e) => selectResident(e.target.value)} className={controlClass}>
             <option value="">Select resident…</option>
-            {residents.map((r) => <option key={r.id} value={r.id}>{r.name}{r.room ? ` — Rm ${r.room}` : ""}</option>)}
+            {sortedResidents.map((r) => {
+              const rc = recoByResident.get(r.id);
+              return <option key={r.id} value={r.id}>{r.name}{r.room ? ` — Rm ${r.room}` : ""}{rc?.recommend ? "  ⚑ PCG recommended" : ""}</option>;
+            })}
           </select>
           {resident && (resident.sponsorName
             ? <p className="mt-1 text-xs text-[var(--clinical-muted)]">Family sponsor (payer): <b>{resident.sponsorName}</b></p>
             : <p className="mt-1 text-xs text-[var(--clinical-amber)]">This resident has no family sponsor on file — approval &amp; billing need one.</p>)}
         </div>
+
+        {/* Assessment-driven justification — the "why" lives in the resident assessment (DT-013). */}
+        {resident && (
+          reco?.hasAssessment ? (
+            <div className="rounded-xl border px-4 py-3" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: reco.recommend ? "var(--clinical-panel)" : "var(--clinical-line)" }}>
+              <div className="flex items-start justify-between gap-3">
+                <p className="flex items-center gap-1.5 text-sm font-bold text-[var(--clinical-ink)]">
+                  {reco.recommend ? <Sparkles className="h-4 w-4 text-[var(--clinical-panel)]" /> : <ClipboardList className="h-4 w-4 text-[var(--clinical-muted)]" />}
+                  {reco.recommend ? "Assessment recommends a private caregiver" : "Assessment on file"}
+                </p>
+                <button type="button" onClick={() => onOpenAssessment(residentId)} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[var(--clinical-panel)] hover:underline">Open assessment <ExternalLink className="h-3 w-3" /></button>
+              </div>
+              <p className="mt-1 text-xs text-[var(--clinical-ink-soft)]">
+                {reco.level ? <>Level of care <b>{reco.level}</b> · </> : null}{reco.status.toLowerCase()} assessment
+              </p>
+              {reco.recommend && reco.triggers.length > 0 ? (
+                <ul className="mt-2 space-y-1">
+                  {reco.triggers.map((t, i) => <li key={i} className="flex items-start gap-1.5 text-xs text-[var(--clinical-ink-soft)]"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[var(--clinical-panel)]" />{t}</li>)}
+                </ul>
+              ) : (
+                <p className="mt-1 text-xs text-[var(--clinical-muted)]">No dedicated-staffing indicators from the latest assessment — document the reason in the assessment (DT-013) if a private caregiver is still needed.</p>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-xl border px-4 py-3" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: "var(--clinical-amber)" }}>
+              <p className="flex items-center gap-1.5 text-sm font-bold text-[var(--clinical-amber)]"><AlertTriangle className="h-4 w-4" /> No assessment on file</p>
+              <p className="mt-1 text-xs text-[var(--clinical-ink-soft)]">The clinical justification for a private caregiver is documented in the resident assessment (DT-013). Complete it first.</p>
+              <button type="button" onClick={() => onOpenAssessment(residentId)} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--clinical-panel)] hover:underline">Open assessment form <ExternalLink className="h-3 w-3" /></button>
+            </div>
+          )
+        )}
         <div>
           <FieldLabel>Caregiver</FieldLabel>
           <select value={caregiverId} onChange={(e) => setCaregiverId(e.target.value)} className={controlClass}>
@@ -244,9 +376,22 @@ function AssignModal({ residents, caregivers, onClose, onCreate }: {
           </select>
           {caregivers.length === 0 && <p className="mt-1 text-xs text-[var(--clinical-muted)]">No caregivers found for this community.</p>}
         </div>
-        <div>
-          <FieldLabel>Schedule</FieldLabel>
-          <input value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="e.g. Day shift · 8h/day" className={controlClass} />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <FieldLabel>Coverage</FieldLabel>
+            <select value={coverage} onChange={(e) => applyCoverage(Number(e.target.value) as PcgCoverage, shift)} className={controlClass}>
+              {PCG_COVERAGE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <FieldLabel>Shift</FieldLabel>
+            <select value={coverage === 24 ? "FULL" : shift} onChange={(e) => applyCoverage(coverage, e.target.value as PcgShift)} disabled={coverage === 24} className={controlClass}>
+              {coverage === 24
+                ? <option value="FULL">All shifts (continuous)</option>
+                : PCG_SHIFT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <p className="col-span-2 -mt-1 text-xs text-[var(--clinical-muted)]">Schedule: <b className="text-[var(--clinical-ink-soft)]">{schedule}</b></p>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -270,8 +415,8 @@ function AssignModal({ residents, caregivers, onClose, onCreate }: {
         </div>
 
         <div>
-          <FieldLabel required={mandatory}>Rationale <span className="font-normal text-[var(--clinical-muted)]">(why shared 1:6 staffing is insufficient)</span></FieldLabel>
-          <textarea rows={2} value={rationale} onChange={(e) => setRationale(e.target.value)} placeholder="Trigger → intervention → frequency/duration → shared-staffing insufficiency → alternatives attempted" className={controlClass} />
+          <FieldLabel required={mandatory}>Justification <span className="font-normal text-[var(--clinical-muted)]">(from assessment — why shared 1:6 staffing is insufficient)</span></FieldLabel>
+          <textarea rows={2} value={rationale} onChange={(e) => { setRationale(e.target.value); setRationaleTouched(true); }} placeholder="Prefilled from the resident assessment (DT-013). Trigger → intervention → frequency/duration → shared-staffing insufficiency → alternatives attempted" className={controlClass} />
         </div>
 
         {guard.overlaps && (

@@ -9,8 +9,10 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Pill, Search, Plus, ChevronRight, ChevronLeft, Clock, CheckCircle2, XCircle, PauseCircle, Pencil, Trash2, X, Activity, BellRing } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
+import { Pill, Search, Plus, ChevronRight, ChevronLeft, Clock, CheckCircle2, XCircle, PauseCircle, Pencil, Trash2, X, Activity, BellRing, Lock } from "lucide-react";
 import Swal from "@/lib/swal";
+import { classifyDoseWindow, type DoseWindow } from "@/lib/marWindow";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord, upsertRecord } from "@/lib/api";
@@ -41,6 +43,25 @@ const to12h = (hhmm: string): string => {
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${h12}:${String(m ?? 0).padStart(2, "0")} ${ampm}`;
 };
+// Friendly 12-hour time from an absolute timestamp (ms) — used for window edges.
+const msTo12h = (ms: number): string => {
+  const d = new Date(ms); let h = d.getHours(); const m = d.getMinutes();
+  const ampm = h < 12 ? "AM" : "PM"; h = h % 12 === 0 ? 12 : h % 12;
+  return `${h}:${String(m).padStart(2, "0")} ${ampm}`;
+};
+
+// Strict administration window: a dose may be given within ±MAR_WINDOW_MIN of its
+// scheduled slot time. Earlier than that is blocked; later is allowed but flagged
+// "Late". PRN has no window. The comparison is against the real clock, so a future
+// date reads EARLY (blocked) and a past date reads LATE (back-documentation).
+const doseTiming = (slot: string, iso: string, nowMs: number): DoseWindow | null => {
+  if (slot === "PRN") return null;
+  const [h, mm] = s(SLOT_TIME[slot]).split(":").map(Number);
+  const [y, mo, d] = iso.split("-").map(Number);
+  if ([h, mm, y, mo, d].some((n) => Number.isNaN(n))) return null;
+  const scheduledMs = new Date(y, mo - 1, d, h, mm, 0, 0).getTime();
+  return classifyDoseWindow(scheduledMs, nowMs);
+};
 
 function parseSlots(frequency: string): string[] {
   const f = frequency.toLowerCase();
@@ -67,6 +88,14 @@ const DOSE_OPTS = [
 
 export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   const { name: clinicianName, userId } = useClinician(clinicianRole);
+  const router = useRouter();
+  const pathname = usePathname();
+  // Send the clinician to Daily Care Logs → Vitals for this resident. The portal
+  // segment comes from the URL (the Care Manager portal passes FACILITY_ADMIN).
+  const goRecordVitals = (residentId: string) => {
+    const seg = (pathname || "").split("/").filter(Boolean)[0] || clinicianRole.toLowerCase();
+    router.push(`/${seg}/carelogs?resident=${encodeURIComponent(residentId)}&focus=vitals`);
+  };
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const medQ = useLiveQuery<Row>("medications", { query: "take=1000", tables: ["Medication"] });
   const marQ = useLiveQuery<Row>("medication-administrations", { query: "take=3000", tables: ["MedicationAdministration"] });
@@ -103,6 +132,10 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
 
   const [tab, setTab] = useState<"daily" | "summary">("daily");
   const [date, setDate] = useState(todayIso());
+  // Live clock (re-evaluated each minute) so administration windows open/close and
+  // locked dose tiles update without a manual refresh.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => { const id = setInterval(() => setNowMs(Date.now()), 30_000); return () => clearInterval(id); }, []);
   const [search, setSearch] = useState("");
   const [openRes, setOpenRes] = useState<Row | null>(null);
   const [addFor, setAddFor] = useState<Row | null>(null);
@@ -141,7 +174,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
   };
   const facility = useMemo(() => { let total = 0, given = 0, refusedHeld = 0; residents.forEach((r: Row) => { const st = resStats(s(r.id)); total += st.total; given += st.given; refusedHeld += st.refused + st.held; }); return { total, given, pending: total - given - refusedHeld, refusedHeld }; }, [residents, medsByRes, marQ.data, date]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const administer = async (m: Row, slot: string, iso: string, marId: string, status: "GIVEN" | "REFUSED" | "HELD", reason = "") => {
+  const administer = async (m: Row, slot: string, iso: string, marId: string, status: "GIVEN" | "REFUSED" | "HELD", reason = "", late = false) => {
     // Vitals-first alert: block a GIVEN dose on a flagged med until vitals are
     // recorded today for the resident (nurse may override with reason).
     if (status === "GIVEN" && isVitalsRequired(s(m.id)) && !vitalsTodayByResident.has(s(m.residentId))) {
@@ -163,6 +196,9 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
       recordedByName: clinicianName,
       reasonForRefusal: status === "REFUSED" ? (cleanReason || null) : null,
       heldReason: status === "HELD" ? (cleanReason || null) : null,
+      // Late GIVEN doses are tagged in `notes` for audit; cleared otherwise so a
+      // status change (e.g. Late→on-time re-record) never leaves a stale flag.
+      notes: late && status === "GIVEN" ? `Late administration${cleanReason ? ` — ${cleanReason}` : ""}` : null,
     };
     try {
       if (marId) await updateRecord("medication-administrations", marId, payload);
@@ -201,14 +237,26 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
   // vitals-first confirm (a Swal inside `administer`) never stacks on the modal.
   const submitDose = async () => {
     if (!doseFor) return;
+    const { m, slot, iso, marId } = doseFor;
+    const timing = doseTiming(slot, iso, Date.now());
+    // Strict window: a GIVEN dose is hard-blocked before the window opens.
+    if (doseStatus === "GIVEN" && timing?.phase === "EARLY") {
+      Swal.fire("Too early to administer", `The administration window for this dose opens at ${msTo12h(timing.openMs)}. You can still record it as Refused or Held.`, "warning");
+      return;
+    }
     if ((doseStatus === "REFUSED" || doseStatus === "HELD") && !doseReason.trim()) {
       Swal.fire("Reason required", doseStatus === "REFUSED" ? "Please document why the resident refused this dose." : "Please document why this dose is being held.", "warning");
       return;
     }
-    const { m, slot, iso, marId } = doseFor;
+    const late = doseStatus === "GIVEN" && timing?.phase === "LATE";
+    // A late GIVEN dose must be justified for the audit trail.
+    if (late && !doseReason.trim()) {
+      Swal.fire("Reason required", "This dose is outside its scheduled window. Please document why it is being given late.", "warning");
+      return;
+    }
     const status = doseStatus, reason = doseReason.trim();
     setDoseFor(null);
-    await administer(m, slot, iso, marId, status, reason);
+    await administer(m, slot, iso, marId, status, reason, late);
   };
 
   const q = search.trim().toLowerCase();
@@ -265,6 +313,13 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
   // ── Resident detail ────────────────────────────────────────────────────────
   if (openRes) {
     const rMeds = (medsByRes.get(s(openRes.id)) || []).filter((m) => activeOn(m, date));
+    // Timing of the dose currently open in the record modal, vs. the strict window.
+    const doseT = doseFor ? doseTiming(doseFor.slot, doseFor.iso, nowMs) : null;
+    const blockedEarly = doseStatus === "GIVEN" && doseT?.phase === "EARLY";
+    const lateGiven = doseStatus === "GIVEN" && doseT?.phase === "LATE";
+    // Vitals-first: this med is flagged "vitals required" and the resident has no
+    // vitals reading recorded today (from Daily Care Logs → VitalsLog).
+    const vitalsNeeded = !!doseFor && isVitalsRequired(s(doseFor.m.id)) && !vitalsTodayByResident.has(s(doseFor.m.residentId));
     return (
       <div className="min-h-full bg-[var(--clinical-ground)] -m-4 sm:-m-6 p-4 sm:p-6">
         <div className="flex items-center gap-3 mb-4"><label className="text-sm text-slate-500" htmlFor="mar-date-detail">Date:</label><input id="mar-date-detail" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm" /></div>
@@ -281,10 +336,18 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
                   <div className="flex items-center gap-1"><button onClick={() => setAddFor({ ...m, __edit: true })} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><Pencil className="w-4 h-4" /></button><button onClick={async () => { const c = await Swal.fire({ title: "Discontinue medication?", icon: "warning", showCancelButton: true, confirmButtonColor: "#dc2626" }); if (c.isConfirmed) { await updateRecord("medications", s(m.id), { status: "DISCONTINUED" }); await refetch(); } }} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500"><Trash2 className="w-4 h-4" /></button></div>
                 </div>
                 <div className="flex flex-wrap gap-2 mt-3">
-                  {occ.map((o, i) => { const Icon = STATUS_ICON[o.status]; return (
-                    <button key={i} onClick={() => openDose(m, o.slot, date, o.marId, o.status)} title={o.reason || undefined} className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl border ${STATUS_CLS[o.status]}`}>
+                  {occ.map((o, i) => {
+                    const t = doseTiming(o.slot, date, nowMs);
+                    const locked = o.status === "PENDING" && t?.phase === "EARLY";
+                    const late = o.status === "PENDING" && t?.phase === "LATE";
+                    const Icon = locked ? Lock : STATUS_ICON[o.status];
+                    const cls = locked ? "bg-slate-50 text-slate-400 border-slate-200 border-dashed" : STATUS_CLS[o.status];
+                    const label = locked ? "Not yet" : late ? "Overdue" : o.status === "PENDING" ? "Pending" : o.status[0] + o.status.slice(1).toLowerCase();
+                    const title = locked && t ? `Window opens at ${msTo12h(t.openMs)}` : (o.reason || undefined);
+                    return (
+                    <button key={i} onClick={() => openDose(m, o.slot, date, o.marId, o.status)} title={title} className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl border ${cls}`}>
                       <span className="text-sm font-bold">{o.time}</span>
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium"><Icon className="w-3.5 h-3.5" />{o.status === "PENDING" ? "Pending" : o.status[0] + o.status.slice(1).toLowerCase()}</span>
+                      <span className={`inline-flex items-center gap-1 text-[11px] font-medium${late ? " text-amber-600" : ""}`}><Icon className="w-3.5 h-3.5" />{label}</span>
                     </button>
                   ); })}
                 </div>
@@ -309,7 +372,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
           size="sm"
           footer={<>
             <ClinicalButton variant="secondary" onClick={() => setDoseFor(null)}>Cancel</ClinicalButton>
-            <ClinicalButton onClick={submitDose} className="!text-white hover:brightness-110" style={{ backgroundColor: (DOSE_OPTS.find((o) => o.v === doseStatus)?.color) ?? "var(--clinical-panel)" }}>Save dose</ClinicalButton>
+            <ClinicalButton onClick={submitDose} disabled={blockedEarly} className="!text-white hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100" style={{ backgroundColor: (DOSE_OPTS.find((o) => o.v === doseStatus)?.color) ?? "var(--clinical-panel)" }}>Save dose</ClinicalButton>
           </>}
         >
           {doseFor && (
@@ -318,6 +381,26 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
                 <p className="text-sm font-bold text-[var(--clinical-ink)]">{s(openRes.name)}</p>
                 <p className="mt-0.5 text-xs text-[var(--clinical-muted)]">{s(doseFor.m.route) || "Oral"} · {doseFor.slot === "PRN" ? "PRN (as needed)" : to12h(SLOT_TIME[doseFor.slot] || "")} · {date}</p>
               </div>
+
+              {vitalsNeeded && (
+                <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "var(--clinical-amber)", backgroundColor: "color-mix(in srgb, var(--clinical-amber) 14%, var(--clinical-surface))", color: "var(--clinical-amber)" }}>
+                  <span className="flex items-center gap-1.5 font-bold"><Activity className="w-4 h-4" /> Vitals required before administration</span>
+                  <span className="mt-1 block text-xs" style={{ color: "color-mix(in srgb, var(--clinical-amber) 78%, var(--clinical-ink))" }}>No vitals are recorded today for this resident. Record vitals in Daily Care Logs first, then return here to administer.</span>
+                  <button type="button" onClick={() => { setDoseFor(null); goRecordVitals(s(doseFor.m.residentId)); }} className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white" style={{ backgroundColor: "var(--clinical-amber)" }}><Activity className="h-3.5 w-3.5" /> Record vitals now</button>
+                </div>
+              )}
+              {doseT?.phase === "EARLY" && (
+                <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "var(--clinical-coral)", backgroundColor: "color-mix(in srgb, var(--clinical-coral) 12%, var(--clinical-surface))", color: "var(--clinical-coral)" }}>
+                  <span className="flex items-center gap-1.5 font-bold"><Lock className="w-4 h-4" /> Too early to give</span>
+                  <span className="mt-1 block text-xs" style={{ color: "color-mix(in srgb, var(--clinical-coral) 80%, var(--clinical-ink))" }}>Scheduled {to12h(SLOT_TIME[doseFor.slot] || "")} · window opens <b>{msTo12h(doseT.openMs)}</b>. Only Refused or Held can be recorded before then.</span>
+                </div>
+              )}
+              {doseT?.phase === "LATE" && (
+                <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "var(--clinical-amber)", backgroundColor: "color-mix(in srgb, var(--clinical-amber) 14%, var(--clinical-surface))", color: "var(--clinical-amber)" }}>
+                  <span className="flex items-center gap-1.5 font-bold"><Clock className="w-4 h-4" /> Outside scheduled window</span>
+                  <span className="mt-1 block text-xs" style={{ color: "color-mix(in srgb, var(--clinical-amber) 78%, var(--clinical-ink))" }}>The {to12h(SLOT_TIME[doseFor.slot] || "")} window closed at <b>{msTo12h(doseT.closeMs)}</b>. Recording as Given will flag it <b>Late</b> and requires a reason.</span>
+                </div>
+              )}
 
               <div>
                 <FieldLabel>Outcome</FieldLabel>
@@ -338,11 +421,11 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
                 </div>
               </div>
 
-              {(doseStatus === "REFUSED" || doseStatus === "HELD") && (
+              {(doseStatus === "REFUSED" || doseStatus === "HELD" || lateGiven) && (
                 <div>
-                  <FieldLabel required>{doseStatus === "REFUSED" ? "Reason for refusal" : "Reason held"}</FieldLabel>
+                  <FieldLabel required>{doseStatus === "REFUSED" ? "Reason for refusal" : doseStatus === "HELD" ? "Reason held" : "Reason for late administration"}</FieldLabel>
                   <textarea value={doseReason} onChange={(e) => setDoseReason(e.target.value)} rows={3} autoFocus
-                    placeholder={doseStatus === "REFUSED" ? "Why did the resident refuse this dose?" : "Why is this dose being held?"} className={controlClass} />
+                    placeholder={doseStatus === "REFUSED" ? "Why did the resident refuse this dose?" : doseStatus === "HELD" ? "Why is this dose being held?" : "Why is this dose being given outside its scheduled window?"} className={controlClass} />
                 </div>
               )}
             </div>

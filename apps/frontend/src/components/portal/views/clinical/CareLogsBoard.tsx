@@ -19,7 +19,8 @@
  *     `care_log_notes` (a JSON array), folded back into the timeline / counts.
  */
 
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Activity, Utensils, Droplets, Smile, Zap, Footprints, Moon, Wind,
   CalendarDays, Sun, Clock,
@@ -484,6 +485,24 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
   const [logFor, setLogFor] = useState<Row | null>(null);
   const [logTab, setLogTab] = useState<DomainKey>("AS-01");
   const [statusFilter, setStatusFilter] = useState<"all" | "needs" | "documented">("all");
+
+  // Deep-link from the eMAR "Record vitals now" button:
+  //   /{role}/carelogs?resident=<id>&focus=vitals
+  // Preselect the resident and open their quick-log on the Vitals (AS-06) domain.
+  const searchParams = useSearchParams();
+  const deepRef = useRef(false);
+  useEffect(() => {
+    if (deepRef.current) return;
+    const rid = searchParams?.get("resident");
+    if (!rid) return;
+    if (loading) return; // wait until residents load so we can match the row
+    const row = residents.find((r: Row) => s(r.id) === rid);
+    if (!row) return;
+    deepRef.current = true;
+    const focus = searchParams?.get("focus");
+    void (async () => { setLogTab(focus === "vitals" ? "AS-06" : "AS-01"); setLogFor(row); })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, loading, residents]);
 
   const q = search.trim().toLowerCase();
   const documentedResidents = residents.filter((r: Row) => (byResident.get(s(r.id)) || []).length > 0).length;

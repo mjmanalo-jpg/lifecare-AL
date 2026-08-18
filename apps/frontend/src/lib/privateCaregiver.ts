@@ -46,6 +46,55 @@ export const PCG_INTENSITY_META: Record<PcgIntensity, PcgIntensityMeta> = {
 
 export const PCG_INTENSITY_ORDER: PcgIntensity[] = ["none", "night", "8h", "12h", "24h", "temporary", "elective"];
 
+// ── Structured coverage + shift ──────────────────────────────────────────────
+// The scheduling the assigner picks: how many hours per day the dedicated
+// caregiver covers, and on which shift. Composed into the human `schedule`
+// string and used to default the clinical intensity.
+export type PcgCoverage = 8 | 12 | 24;
+export type PcgShift = "MORNING" | "NIGHT" | "FULL";
+
+export const PCG_COVERAGE_OPTIONS: { value: PcgCoverage; label: string }[] = [
+  { value: 8, label: "8 hours / day" },
+  { value: 12, label: "12 hours / day" },
+  { value: 24, label: "24 hours (continuous)" },
+];
+export const PCG_SHIFT_OPTIONS: { value: PcgShift; label: string }[] = [
+  { value: "MORNING", label: "Morning shift" },
+  { value: "NIGHT", label: "Night shift" },
+];
+export const PCG_SHIFT_LABEL: Record<PcgShift, string> = { MORNING: "Morning", NIGHT: "Night", FULL: "Continuous" };
+
+/** Human schedule string from structured coverage + shift (stored in `schedule`). */
+export function composeSchedule(coverage: PcgCoverage, shift: PcgShift): string {
+  if (coverage === 24) return "24h continuous · all shifts";
+  return `${PCG_SHIFT_LABEL[shift]} shift · ${coverage}h/day`;
+}
+
+/**
+ * Default clinical intensity (→ PCG rule) implied by a coverage/shift choice.
+ * The assigner may still override to temporary/elective for the clinical nuance.
+ *   24h → PCG-002 line-of-sight · 12h → PCG-003 · 8h night → PCG-004 · 8h day → PCG-003.
+ */
+export function coverageToIntensity(coverage: PcgCoverage, shift: PcgShift): PcgIntensity {
+  if (coverage === 24) return "24h";
+  if (coverage === 12) return "12h";
+  return shift === "NIGHT" ? "night" : "8h";
+}
+
+/**
+ * Map a DT-013 assessment recommendation's triggers to a suggested coverage/shift
+ * (used to pre-fill the assign form when the reassessment flags a private-caregiver
+ * need). Ordered by clinical weight: continuous line-of-sight > extended > night.
+ */
+export interface PcgSuggestion { coverage: PcgCoverage; shift: PcgShift; intensity: PcgIntensity }
+export function suggestPcgFromTriggers(triggers: string[]): PcgSuggestion {
+  const t = (triggers || []).join(" ");
+  if (/PCG-002/.test(t)) return { coverage: 24, shift: "FULL", intensity: "24h" };
+  if (/PCG-004/.test(t)) return { coverage: 8, shift: "NIGHT", intensity: "night" };
+  if (/PCG-003|PCG-006/.test(t)) return { coverage: 12, shift: "MORNING", intensity: "12h" };
+  return { coverage: 8, shift: "MORNING", intensity: "8h" };
+}
+
 export interface PrivateCareAssignment {
   id: string;
   residentId: string;
@@ -55,7 +104,9 @@ export interface PrivateCareAssignment {
   sponsorName?: string;
   caregiverId: string;     // Staff.id of the assigned caregiver
   caregiverName: string;
-  schedule: string;        // free text, e.g. "Day shift · 8h/day"
+  schedule: string;        // composed human string, e.g. "Morning shift · 8h/day"
+  coverageHours?: PcgCoverage; // structured coverage behind `schedule` (8 | 12 | 24)
+  shift?: PcgShift;            // structured shift behind `schedule`
   rate: number;            // flat fee amount (PHP)
   rateUnit: RateUnit;      // per day / per month
   status: PrivateCareStatus;
