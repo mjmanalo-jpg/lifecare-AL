@@ -25,6 +25,7 @@ import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoar
 import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import PreAdmissionAssessmentForm from "@/components/portal/views/clinical/PreAdmissionAssessmentForm";
+import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAssessmentV42";
 import CareLogsBoard, { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
 import ADLMonitoringBoard from "@/components/portal/views/clinical/ADLMonitoringBoard";
 import WeightMonitoringBoard from "@/components/portal/views/clinical/WeightMonitoringBoard";
@@ -723,6 +724,9 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   // and scoped to the NURSE role for authorship/attribution.
   if (tab === "prescreen") {
     return <PreAdmissionAssessmentForm clinicianRole="NURSE" />;
+  }
+  if (tab === "assessmentv42") {
+    return <ResidentAssessmentV42 clinicianRole="NURSE" />;
   }
   if (tab === "carelogs") {
     return <CareLogsTimeline clinicianRole="NURSE" />;
