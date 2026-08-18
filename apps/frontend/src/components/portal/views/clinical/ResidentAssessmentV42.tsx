@@ -197,7 +197,7 @@ function parseAssessments(raw?: string): AssessmentV42[] {
 // Draft working state = the full assessment sans list metadata; we edit it in place.
 type Draft = AssessmentV42;
 
-export default function ResidentAssessmentV42({ clinicianRole = "NURSE" }: { clinicianRole?: string }) {
+export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedded = false }: { clinicianRole?: string; embedded?: boolean }) {
   const roleLabel = clinicianRole === "CARE_MANAGER" || clinicianRole === "FACILITY_ADMIN" ? "Care Manager" : "Nurse";
 
   const { data: settingRows, loading, error, refetch } = useLiveQuery<SettingRow>("app-settings", { tables: ["AppSetting"] });
@@ -408,13 +408,24 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE" }: { cli
   const stat = (lvl: CareLevel) =>
     assessments.filter((a) => (a.layer3?.finalLevel ?? (a.status !== "DRAFT" ? classifyAssessment(a).suggestedLevel : undefined)) === lvl).length;
 
-  return (
-    <ClinicalPage className="space-y-6">
-      <ClinicalHeader
-        title="Resident Assessment (v4.2)"
-        subtitle="LifeCare Resident Assessment v4.2 — three-layer assessment. 14 scored domains (raw /56, advisory), deterministic MLR-floor engine, and a nurse-confirmed Final Level of Care. Replaces the legacy 50-point pre-admission form."
-        right={<ClinicalButton variant="accent" onClick={openNew}><Plus className="w-4 h-4" /> New Assessment</ClinicalButton>}
-      />
+  // When embedded inside another board (e.g. Care Acuity), suppress this
+  // component's own page chrome + big H1 so it composes cleanly: render a light
+  // container (just the New-Assessment control, stats, list and modals) instead
+  // of the full ClinicalPage + ClinicalHeader.
+  const body = (
+    <>
+      {embedded ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-[var(--clinical-muted)]">Three-layer v4.2 assessment · 14 scored domains (raw /56, advisory) · nurse-confirmed Final Level of Care.</p>
+          <ClinicalButton variant="accent" onClick={openNew}><Plus className="w-4 h-4" /> New Assessment</ClinicalButton>
+        </div>
+      ) : (
+        <ClinicalHeader
+          title="Resident Assessment (v4.2)"
+          subtitle="LifeCare Resident Assessment v4.2 — three-layer assessment. 14 scored domains (raw /56, advisory), deterministic MLR-floor engine, and a nurse-confirmed Final Level of Care. Replaces the legacy 50-point pre-admission form."
+          right={<ClinicalButton variant="accent" onClick={openNew}><Plus className="w-4 h-4" /> New Assessment</ClinicalButton>}
+        />
+      )}
 
       {/* Level distribution */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -813,8 +824,10 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE" }: { cli
         title="Sign to complete assessment"
         description="Enter your 4-digit signing PIN to submit this v4.2 resident assessment."
       />
-    </ClinicalPage>
+    </>
   );
+
+  return embedded ? <div className="space-y-6">{body}</div> : <ClinicalPage className="space-y-6">{body}</ClinicalPage>;
 }
 
 // ── Validation block (nurse → admin approval), mirrors LevelOfCareReview ──────

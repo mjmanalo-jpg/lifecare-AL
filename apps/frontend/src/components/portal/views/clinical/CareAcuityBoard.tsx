@@ -1,37 +1,35 @@
 "use client";
 
 /**
- * Care Acuity & Level of Care — a LifeCare v4.2 14-domain acuity assessment
- * (AS-01..AS-14, 0–4 each → 0/56) that assigns a Level of Care (1–5) via the
- * deterministic classification engine, through a Nurse-review → Admin-approval
- * workflow, plus Service Packages, Care Activities, and Level History. Existing
- * legacy 10-domain (0–5, /50) records still render via LEGACY_ACUITY_DOMAINS.
- * Migration-free: assessments are a JSON array in the app-setting
- * `acuity_assessments`; approval best-effort maps the level onto careLevel.
+ * Care Acuity & Level of Care — unified onto the LifeCare v4.2 assessment.
+ * The "Assessments" tab embeds ResidentAssessmentV42 (the full 3-layer
+ * pre-admission form: New → complete → nurse-validate → care plan), so there is
+ * ONE assessment instrument everywhere; it stores to the app-setting
+ * `assessments_v42`. Service Packages, Care Activities and Level History remain.
+ * Level History merges the durable `loc_history` (populated by v4.2 validation)
+ * with legacy approved `acuity_assessments` records so pre-v4.2 10/14-domain
+ * (0–5 /50 · 0–4 /56) history still renders. Migration-free.
  */
 
 import { useMemo, useState } from "react";
-import { ClipboardCheck, CheckCircle2, Eye } from "lucide-react";
-import Swal from "@/lib/swal";
+import { CheckCircle2 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { upsertRecord, updateRecord } from "@/lib/api";
-import { generateCarePlanForResident } from "@/lib/carePlanGen";
-import { recordLocChange, parseLocHistory, historyForResident, LOC_HISTORY_KEY, LOC_SOURCE_LABEL, type LocHistoryEntry, type LocSource } from "@/lib/lifecare/locHistory";
-import type { AssessmentV42 } from "@/lib/lifecare/assessment";
-import { classify } from "@/lib/lifecare/classification";
-import type { DomainScores } from "@/lib/lifecare/types";
+import { parseLocHistory, historyForResident, LOC_HISTORY_KEY, LOC_SOURCE_LABEL, type LocHistoryEntry, type LocSource } from "@/lib/lifecare/locHistory";
+import { ASSESSMENTS_V42_KEY, type AssessmentV42, type AssessmentStatus } from "@/lib/lifecare/assessment";
+import { careLevelEnumToLevel } from "@/lib/lifecare/carePackage";
+import type { CareLevel } from "@/lib/lifecare/types";
 import assessmentDomains from "@/lib/lifecare/data/assessment_domains.json";
 import { adaptResident } from "@/lib/adapters";
-import { useClinician, type ClinicianRole } from "./useClinician";
+import type { ClinicianRole } from "./useClinician";
+import ResidentAssessmentV42 from "./ResidentAssessmentV42";
 import {
-  ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalCard, ClinicalModal,
-  StatCard, DataState, FieldLabel, controlClass, StatusPill, SERIF,
+  ClinicalPage, ClinicalHeader, ClinicalCard, ClinicalModal,
+  StatCard, controlClass, SERIF,
 } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const ACUITY_KEY = "acuity_assessments";
 const s = (v: unknown) => (v == null ? "" : String(v));
-const newId = () => globalThis.crypto?.randomUUID?.() ?? `ac-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 const fmtDate = (isoStr: string) => (isoStr ? new Date(isoStr).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—");
 
 interface Domain { key: string; label: string; scale: string[] }
@@ -74,10 +72,6 @@ const LEVELS: Level[] = [
   { n: 5, name: "Specialized Palliative / End-of-Life Care", min: 41, max: 50, accent: "coral", careLevel: "SKILLED", package: "Authorized comfort-focused advanced-illness / end-of-life pathway (not a dependency score)", services: ["Goal-directed comfort care", "Symptom observation & management", "Dignity, family & provider coordination", "Authorized goals-of-care / end-of-life pathway"] },
 ];
 const accentFor = (n: number) => LEVELS.find((l) => l.n === n)?.accent ?? "coral";
-// The 4-value careLevel enum → its representative Level (1–5). ASSISTED covers both
-// L2 & L3, so it reads as L2. Used to heal admission-seeded records whose stored
-// level pre-dates the careLevel-based seed fix.
-const CARELEVEL_TO_LEVEL: Record<string, number> = { INDEPENDENT: 1, ASSISTED: 2, MEMORY: 4, SKILLED: 5 };
 
 // Theme-safe level chip: ink label + a coloured dot (matches WoundCare's status chip).
 function LevelChip({ level, label }: { level: number; label?: string }) {
@@ -132,11 +126,14 @@ const CARE_ACTIVITIES: { category: string; activity: string; frequency: string; 
   { category: "Skilled Nursing", activity: "IV / injectable therapy", frequency: "Per order", shift: "All shifts", duration: "15 min", levels: [5] },
 ];
 
-const TRIGGERS = ["Scheduled / Quarterly", "Condition Change", "Post-Fall", "Post-Hospitalization", "Family Request", "Admission"];
-
 type AStatus = "PENDING_NURSE" | "PENDING_ADMIN" | "APPROVED" | "REJECTED";
 interface Acuity { id: string; residentId: string; scores: Record<string, number>; total: number; level: number; levelName: string; trigger?: string; notes?: string; status: AStatus; createdBy?: string; createdAt: string; decidedBy?: string; decidedAt?: string; rejectionReason?: string; }
 const parseAcuity = (raw: string | null | undefined): Acuity[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((a) => a && typeof a.id === "string") : []; } catch { return []; } };
+// Small local safe parser for the v4.2 assessment app-setting (JSON array of
+// AssessmentV42). Header stats + Level-History source-lookup read from this;
+// we avoid importing the full rule-data bundle just to parse a list.
+const parseV42 = (raw: string | null | undefined): AssessmentV42[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((a) => a && typeof a.id === "string") : []; } catch { return []; } };
+const levelFromCare = (v: CareLevel | number | undefined): number | null => { if (typeof v === "number") return v; if (!v) return null; const m = /([1-5])/.exec(String(v)); return m ? Number(m[1]) : null; };
 // A record is a v4.2 14-domain assessment (0–4, /56) if its scores are keyed by
 // AS-codes; otherwise it's a legacy 10-domain acuity record (0–5, /50).
 const isV42Acuity = (a: Acuity): boolean => "AS-01" in (a.scores || {});
@@ -146,12 +143,8 @@ const domainsFor = (a: Acuity): { domains: Domain[]; max: number } =>
   isV42Acuity(a) ? { domains: V42_SCORED, max: 4 } : { domains: LEGACY_ACUITY_DOMAINS, max: 5 };
 
 export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
-  const { name: clinicianName } = useClinician(clinicianRole);
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
-  const cpQ = useLiveQuery<Row>("care-plans", { query: "take=300", tables: ["CarePlan"] });
-  const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
-  // Residents that already have a (non-discontinued) care plan — skip auto-generation for them.
-  const residentsWithPlan = useMemo(() => new Set((cpQ.data || []).filter((p) => s(p.status) !== "DISCONTINUED").map((p) => s(p.residentId))), [cpQ.data]);
+  const { data: settingRows } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
 
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
   const careLevelById = useMemo(() => {
@@ -159,130 +152,64 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
     (resQ.data || []).forEach((r) => m.set(s(r.id), s(r.careLevel)));
     return m;
   }, [resQ.data]);
-  // Heal admission-seeded records still awaiting review: recompute their level from
-  // the resident's current careLevel so older seeds (which stored a mis-derived
-  // level) display — and approve — at the correct Level of Care.
-  const items = useMemo(() => {
-    const raw = parseAcuity(settingRows.find((r) => (r.key || r.id) === ACUITY_KEY)?.value);
-    return raw.map((a) => {
-      if (a.trigger !== "Admission" || (a.status !== "PENDING_NURSE" && a.status !== "PENDING_ADMIN")) return a;
-      const n = CARELEVEL_TO_LEVEL[careLevelById.get(a.residentId) || ""];
-      if (!n || n === a.level) return a;
-      const lvl = LEVELS.find((l) => l.n === n);
-      return lvl ? { ...a, level: n, levelName: lvl.name } : a;
-    });
-  }, [settingRows, careLevelById]);
-  const resName = (id: string) => { const r = residents.find((x: Row) => s(x.id) === id); return r ? { name: s(r.name), room: s(r.room) } : { name: id, room: "" }; };
-  // Unified Level of Care history (pre-admission + reassessment + acuity approvals).
-  const locHistory = useMemo(() => parseLocHistory(settingRows.find((r) => (r.key || r.id) === LOC_HISTORY_KEY)?.value), [settingRows]);
-  // Source assessments behind each LOC-history entry (for the detail view).
-  const v42ById = useMemo(() => {
-    const row = settingRows.find((r) => (r.key || r.id) === "assessments_v42");
-    let arr: AssessmentV42[] = [];
-    try { const v = JSON.parse(row?.value || "[]"); if (Array.isArray(v)) arr = v as AssessmentV42[]; } catch { /* ignore */ }
-    const m = new Map<string, AssessmentV42>(); arr.forEach((a) => { if (a?.id) m.set(a.id, a); }); return m;
-  }, [settingRows]);
+
+  // Legacy 10/14-domain acuity records (READ-ONLY) — kept so pre-v4.2 approved
+  // records still surface in Level History. No new records are written here.
+  const items = useMemo(() => parseAcuity(settingRows.find((r) => (r.key || r.id) === ACUITY_KEY)?.value), [settingRows]);
+  const approved = useMemo(() => items.filter((a) => a.status === "APPROVED").sort((a, b) => (b.decidedAt || "").localeCompare(a.decidedAt || "")), [items]);
   const acuityById = useMemo(() => { const m = new Map<string, Acuity>(); items.forEach((a) => m.set(a.id, a)); return m; }, [items]);
 
+  // v4.2 assessments (the single instrument) — drives header stats + Level-History detail.
+  const v42List = useMemo(() => parseV42(settingRows.find((r) => (r.key || r.id) === ASSESSMENTS_V42_KEY)?.value), [settingRows]);
+  const v42ById = useMemo(() => { const m = new Map<string, AssessmentV42>(); v42List.forEach((a) => m.set(a.id, a)); return m; }, [v42List]);
+
+  // Unified Level of Care history (pre-admission + reassessment + acuity approvals).
+  const locHistory = useMemo(() => parseLocHistory(settingRows.find((r) => (r.key || r.id) === LOC_HISTORY_KEY)?.value), [settingRows]);
+
   const [tab, setTab] = useState<"queue" | "packages" | "activities" | "history">("queue");
-  const [newOpen, setNewOpen] = useState(false);
-  const [viewing, setViewing] = useState<Acuity | null>(null);
 
-  const pendingNurse = items.filter((a) => a.status === "PENDING_NURSE");
-  const pendingAdmin = items.filter((a) => a.status === "PENDING_ADMIN");
-  const approved = items.filter((a) => a.status === "APPROVED").sort((a, b) => (b.decidedAt || "").localeCompare(a.decidedAt || ""));
-  const queue = [...pendingNurse, ...pendingAdmin].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+  // v4.2 workflow states → header stats.
+  const countByStatus = (st: AssessmentStatus) => v42List.filter((a) => a.status === st).length;
+  const awaitingValidation = countByStatus("COMPLETED"); // completed, awaiting nurse validation
+  const inProgress = countByStatus("DRAFT");             // still being assessed
 
-  // Latest approved level per resident → distribution.
+  // Level distribution — latest VALIDATED v4.2 finalLevel per resident; fall back
+  // to resident.careLevel for residents without a validated assessment.
   const dist = useMemo(() => {
-    const latest = new Map<string, Acuity>();
-    approved.forEach((a) => { if (!latest.has(a.residentId)) latest.set(a.residentId, a); });
     const d: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    latest.forEach((a) => { d[a.level] = (d[a.level] || 0) + 1; });
-    return d;
-  }, [approved]);
-
-  const persist = async (next: Acuity[]) => { await upsertRecord("app-settings", ACUITY_KEY, { key: ACUITY_KEY, value: JSON.stringify(next) }); await refetch(); };
-
-  const submitNew = async (a: Omit<Acuity, "id" | "status" | "createdBy" | "createdAt">) => {
-    const rec: Acuity = { ...a, id: newId(), status: "PENDING_NURSE", createdBy: clinicianName, createdAt: new Date().toISOString() };
-    await persist([rec, ...items]);
-    setNewOpen(false);
-    Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Submitted for nurse review", showConfirmButton: false, timer: 1600 });
-  };
-
-  // Approve — confirm first (modal alert), then advance the workflow. Returns
-  // whether the action was actually applied (false if the user cancelled).
-  const advance = async (a: Acuity, to: AStatus): Promise<boolean> => {
-    const rn = resName(a.residentId);
-    const isFinal = to === "APPROVED";
-    const confirm = await Swal.fire({
-      title: isFinal ? "Approve & assign level?" : "Approve for admin?",
-      html: isFinal
-        ? `Approve <b>${rn.name}</b> at <b>Level ${a.level} — ${a.levelName}</b> and assign this level of care?`
-        : `Send <b>${rn.name}</b>'s assessment (Score ${a.total}/${scaleMaxOf(a)}) to admin for final approval?`,
-      icon: "question", showCancelButton: true,
-      confirmButtonColor: "#4F46E5", cancelButtonColor: "#6b7280",
-      confirmButtonText: isFinal ? "Approve & assign" : "Approve → Admin",
+    const byResident = new Map<string, number>();
+    v42List
+      .filter((a) => a.status === "VALIDATED")
+      .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""))
+      .forEach((a) => {
+        const rid = s(a.layer1?.residentId);
+        if (!rid || byResident.has(rid)) return;
+        const n = levelFromCare(a.layer3?.finalLevel);
+        if (n) byResident.set(rid, n);
+      });
+    residents.forEach((r) => {
+      const rid = s(r.id);
+      const n = byResident.get(rid) ?? careLevelEnumToLevel(careLevelById.get(rid));
+      if (n) d[n] = (d[n] || 0) + 1;
     });
-    if (!confirm.isConfirmed) return false;
-    const next = items.map((x) => (x.id === a.id ? { ...x, status: to, decidedBy: clinicianName, decidedAt: new Date().toISOString() } : x));
-    await persist(next);
-    let madePlan = false;
-    if (isFinal) {
-      const lvl = LEVELS.find((l) => l.n === a.level);
-      if (lvl) await updateRecord("residents", a.residentId, { careLevel: lvl.careLevel }).catch(() => null);
-      // Level-of-Care billing: post/switch this resident's monthly care fee for the
-      // approved level (best-effort). Re-assessment to a new level voids the old
-      // unbilled fee and posts the new one; the billing cron re-applies it monthly.
-      fetch("/api/billing/loc-charge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ residentId: a.residentId, level: a.level }) }).catch(() => null);
-      // Append to the resident's Level of Care history (only records an actual change).
-      void recordLocChange({ residentId: a.residentId, residentName: rn.name, level: `L${a.level}`, source: "ACUITY_APPROVAL", assessmentId: a.id, rawScore: a.total, by: clinicianName, role: "Care Acuity", notes: a.trigger ? `Trigger: ${a.trigger}` : undefined });
-      // Stage 6 → 8 → 9: on final approval, auto-build the care plan + caregiver
-      // tasks — unless the resident already has a plan. Best-effort.
-      if (!residentsWithPlan.has(a.residentId)) {
-        try {
-          const raw = (resQ.data || []).find((r) => s(r.id) === a.residentId);
-          await generateCarePlanForResident({ residentId: a.residentId, level: a.level, communityId: raw ? s(raw.communityId) : undefined, createdByName: clinicianName });
-          madePlan = true;
-        } catch { /* best-effort — approval already applied */ }
-      }
-    }
-    Swal.fire({ toast: true, position: "top-end", icon: "success", title: isFinal ? (madePlan ? "Approved — level, care plan & tasks created" : "Approved — level assigned") : "Sent to admin", showConfirmButton: false, timer: 2000 });
-    return true;
-  };
-  // Reject — designed modal (replaces the bare Swal textarea prompt) collecting
-  // an optional reason before persisting.
-  const [rejectFor, setRejectFor] = useState<Acuity | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
-  const [rejectBusy, setRejectBusy] = useState(false);
-  const reject = (a: Acuity) => { setRejectReason(""); setRejectFor(a); };
-  const submitReject = async () => {
-    if (!rejectFor) return;
-    const a = rejectFor;
-    setRejectBusy(true);
-    try {
-      const reason = rejectReason.trim() || undefined;
-      await persist(items.map((x) => (x.id === a.id ? { ...x, status: "REJECTED", rejectionReason: reason, decidedBy: clinicianName, decidedAt: new Date().toISOString() } : x)));
-      setRejectFor(null);
-      setViewing(null); // close the assessment view if the reject came from it
-      Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Assessment rejected", showConfirmButton: false, timer: 1600 });
-    } finally { setRejectBusy(false); }
-  };
+    return d;
+  }, [v42List, residents, careLevelById]);
+
+  // Map the board's role to a valid v4.2 clinician role.
+  const roleForV42 = clinicianRole === "FACILITY_ADMIN" ? "CARE_MANAGER" : clinicianRole;
 
   return (
     <ClinicalPage>
       <ClinicalHeader
         title="Care Acuity & Level of Care"
         subtitle="Assessment scoring, level assignment, and care planning"
-        right={<ClinicalButton variant="accent" onClick={() => setNewOpen(true)}><ClipboardCheck className="h-4 w-4" /> New Assessment</ClinicalButton>}
       />
 
       {/* Stats */}
       <div className="mt-5 mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard value={residents.length} label="Total Residents" accent="ink" />
-        <StatCard value={pendingNurse.length} label="Pending Nurse Review" accent="amber" />
-        <StatCard value={pendingAdmin.length} label="Pending Admin Approval" accent="coral" />
+        <StatCard value={awaitingValidation} label="Awaiting Validation" accent="amber" />
+        <StatCard value={inProgress} label="In Progress" accent="coral" />
         <ClinicalCard top="green" className="p-4 text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">Level Distribution</p>
           <div className="mt-2 flex items-center justify-center gap-2 flex-wrap">{LEVELS.map((l) => <span key={l.n} className="text-xs font-bold tabular-nums" style={{ color: ACCENT_VAR[l.accent] }}>L{l.n}:{dist[l.n] || 0}</span>)}</div>
@@ -291,43 +218,14 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
 
       {/* Tabs */}
       <div className="mb-5 inline-flex flex-wrap gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
-        {([["queue", "Assessments Queue"], ["packages", "Service Packages"], ["activities", "Care Activities"], ["history", "Level History"]] as const).map(([v, label]) => (
-          <button key={v} onClick={() => setTab(v)} className={`rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors ${tab === v ? "bg-[var(--clinical-surface)] shadow-sm text-[var(--clinical-ink)]" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>{label}{v === "queue" && queue.length ? ` (${queue.length})` : ""}</button>
+        {([["queue", "Assessments"], ["packages", "Service Packages"], ["activities", "Care Activities"], ["history", "Level History"]] as const).map(([v, label]) => (
+          <button key={v} onClick={() => setTab(v)} className={`rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors ${tab === v ? "bg-[var(--clinical-surface)] shadow-sm text-[var(--clinical-ink)]" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>{label}</button>
         ))}
       </div>
 
-      {tab === "queue" && (
-        <DataState
-          loading={loading && items.length === 0}
-          error={error}
-          empty={queue.length === 0}
-          emptyTitle="No pending assessments"
-          emptyHint="All reviews are up to date."
-          onRetry={() => void refetch()}
-          skeletonRows={3}
-        >
-          <div className="space-y-3">
-            {queue.map((a) => { const rn = resName(a.residentId); return (
-              <div key={a.id} className="rounded-xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2"><p className="font-bold text-[var(--clinical-ink)]">{rn.name}</p><span className="text-xs text-[var(--clinical-muted)]">Room {rn.room}</span><LevelChip level={a.level} label={a.levelName} /></div>
-                    <p className="mt-1 text-xs text-[var(--clinical-muted)]">Score {a.total}/{scaleMaxOf(a)} · {a.trigger || "No trigger"} · by {a.createdBy || "—"} · {fmtDate(a.createdAt)}</p>
-                    {a.notes && <p className="mt-1.5 text-sm text-[var(--clinical-ink-soft)]">{a.notes}</p>}
-                  </div>
-                  <StatusPill status={a.status === "PENDING_NURSE" ? "PENDING" : "PENDING_APPROVAL"}>{a.status === "PENDING_NURSE" ? "Nurse Review" : "Admin Approval"}</StatusPill>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <ClinicalButton variant="secondary" size="sm" onClick={() => setViewing(a)}><Eye className="h-4 w-4" /> View</ClinicalButton>
-                  {a.status === "PENDING_NURSE" && <ClinicalButton variant="primary" size="sm" onClick={() => advance(a, "PENDING_ADMIN")}>Approve → Admin</ClinicalButton>}
-                  {a.status === "PENDING_ADMIN" && <ClinicalButton variant="accent" size="sm" onClick={() => advance(a, "APPROVED")}>Approve &amp; Assign Level</ClinicalButton>}
-                  <ClinicalButton variant="danger" size="sm" onClick={() => reject(a)}>Reject</ClinicalButton>
-                </div>
-              </div>
-            ); })}
-          </div>
-        </DataState>
-      )}
+      {/* Assessments — the single v4.2 3-layer instrument, embedded. New → complete
+          → nurse-validate → care plan; stores to assessments_v42. */}
+      {tab === "queue" && <ResidentAssessmentV42 clinicianRole={roleForV42} embedded />}
 
       {tab === "packages" && (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -345,84 +243,6 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
       {tab === "activities" && <CareActivitiesView />}
 
       {tab === "history" && <LevelHistoryView residents={residents} approved={approved} locHistory={locHistory} v42ById={v42ById} acuityById={acuityById} />}
-
-      <NewAssessmentModal open={newOpen} residents={residents} onClose={() => setNewOpen(false)} onSubmit={submitNew} />
-
-      {viewing && (() => {
-        const a = viewing; const rn = resName(a.residentId);
-        const pendingNurse = a.status === "PENDING_NURSE";
-        const pendingAdmin = a.status === "PENDING_ADMIN";
-        const doThen = async (fn: () => Promise<boolean>) => { const ok = await fn(); if (ok) setViewing(null); };
-        return (
-          <ClinicalModal open onClose={() => setViewing(null)} title={`${rn.name} — Acuity Assessment`} description={`Room ${rn.room} · reviewed before approval`} size="lg"
-            footer={<>
-              <ClinicalButton variant="ghost" size="sm" onClick={() => setViewing(null)}>Close</ClinicalButton>
-              {(pendingNurse || pendingAdmin) && <ClinicalButton variant="danger" size="sm" onClick={() => reject(a)}>Reject</ClinicalButton>}
-              {pendingNurse && <ClinicalButton variant="primary" size="sm" onClick={() => void doThen(() => advance(a, "PENDING_ADMIN"))}>Approve → Admin</ClinicalButton>}
-              {pendingAdmin && <ClinicalButton variant="accent" size="sm" onClick={() => void doThen(() => advance(a, "APPROVED"))}>Approve &amp; Assign Level</ClinicalButton>}
-            </>}
-          >
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <LevelChip level={a.level} label={a.levelName} />
-                <StatusPill status={a.status === "PENDING_NURSE" ? "PENDING" : a.status === "PENDING_ADMIN" ? "PENDING_APPROVAL" : a.status === "APPROVED" ? "APPROVED" : "REJECTED"}>{a.status.replace(/_/g, " ")}</StatusPill>
-              </div>
-              <p className="text-xs text-[var(--clinical-muted)]">{a.trigger || "No trigger"} · by {a.createdBy || "—"} · {fmtDate(a.createdAt)}</p>
-              {a.notes && <div className="rounded-lg border p-3 text-sm text-[var(--clinical-ink-soft)]" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>{a.notes}</div>}
-              {(() => { const { domains, max } = domainsFor(a); return (
-              <div className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--clinical-line)" }}>
-                {domains.map((d, i) => { const sc = a.scores?.[d.key] ?? 0; return (
-                  <div key={d.key} className="flex items-start justify-between gap-3 p-3" style={i ? { borderTop: "1px solid var(--clinical-line)" } : undefined}>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-[var(--clinical-ink)]">{d.label}</p>
-                      <p className="text-xs text-[var(--clinical-muted)]">{d.scale[sc] ?? "—"}</p>
-                    </div>
-                    <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs font-bold text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>{sc}/{max}</span>
-                  </div>
-                ); })}
-              </div>
-              ); })()}
-              <div className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
-                <span className="text-sm font-semibold text-[var(--clinical-ink)]">Total Acuity Score</span>
-                <span className="text-lg font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>{a.total}/{scaleMaxOf(a)}</span>
-              </div>
-            </div>
-          </ClinicalModal>
-        );
-      })()}
-
-      {/* Reject assessment */}
-      <ClinicalModal
-        open={!!rejectFor}
-        onClose={() => setRejectFor(null)}
-        title="Reject assessment"
-        description="Decline this acuity assessment and note why for the record"
-        size="md"
-        footer={<>
-          <ClinicalButton variant="ghost" size="sm" onClick={() => setRejectFor(null)} disabled={rejectBusy}>Cancel</ClinicalButton>
-          <ClinicalButton variant="danger" onClick={submitReject} disabled={rejectBusy}>{rejectBusy ? "Rejecting…" : "Reject assessment"}</ClinicalButton>
-        </>}
-      >
-        {rejectFor && (() => {
-          const rn = resName(rejectFor.residentId);
-          return (
-            <div className="space-y-4">
-              <div className="rounded-xl border p-3" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: "var(--clinical-line)" }}>
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-bold text-[var(--clinical-ink)]">{rn.name}</p>
-                  <span className="text-xs text-[var(--clinical-muted)]">Room {rn.room}</span>
-                  <LevelChip level={rejectFor.level} label={rejectFor.levelName} />
-                </div>
-                <p className="mt-1 text-xs text-[var(--clinical-muted)]">Score {rejectFor.total}/{scaleMaxOf(rejectFor)} · {rejectFor.trigger || "No trigger"}</p>
-              </div>
-              <div>
-                <FieldLabel htmlFor="ac-reject-reason">Reason for rejection <span className="font-normal text-[var(--clinical-muted)]">(optional)</span></FieldLabel>
-                <textarea id="ac-reject-reason" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={4} autoFocus placeholder="Why is this assessment being rejected? (kept on the record)" className={controlClass} />
-              </div>
-            </div>
-          );
-        })()}
-      </ClinicalModal>
     </ClinicalPage>
   );
 }
@@ -620,78 +440,6 @@ function LevelHistoryDetail({ item, v42, acuity, onClose }: { item: LocTimelineI
         ); })()}
 
         {!v42 && !acuity && <p className="rounded-lg border p-3 text-sm text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line)" }}>The detailed assessment behind this entry is no longer available, but the recorded summary above is preserved.</p>}
-      </div>
-    </ClinicalModal>
-  );
-}
-
-function NewAssessmentModal({ open, residents, onClose, onSubmit }: { open: boolean; residents: Row[]; onClose: () => void; onSubmit: (a: Omit<Acuity, "id" | "status" | "createdBy" | "createdAt">) => Promise<void> }) {
-  const [resId, setResId] = useState("");
-  const [scores, setScores] = useState<Record<string, number>>(Object.fromEntries(V42_SCORED.map((d) => [d.key, 0])));
-  const [trigger, setTrigger] = useState("");
-  const [notes, setNotes] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const total = V42_SCORED.reduce((sum, d) => sum + (scores[d.key] || 0), 0);
-  // Level assignment via the deterministic classification engine (MLR floors +
-  // advisory band), not a raw score band. suggestedLevel is "L1".."L5".
-  const levelN = useMemo(() => {
-    const suggested = classify(scores as DomainScores, {}, { bandingEnabled: true }).suggestedLevel;
-    return Number(/([1-5])/.exec(suggested)?.[1] || 2);
-  }, [scores]);
-  const lvl = LEVELS.find((l) => l.n === levelN) ?? LEVELS[1];
-  const setScore = (k: string, v: number) => setScores((p) => ({ ...p, [k]: v }));
-
-  const submit = async () => {
-    if (!resId) { Swal.fire({ title: "Select a resident", icon: "warning" }); return; }
-    setSaving(true);
-    try { await onSubmit({ residentId: resId, scores, total, level: lvl.n, levelName: lvl.name, trigger: trigger || undefined, notes: notes || undefined }); }
-    finally { setSaving(false); }
-  };
-
-  return (
-    <ClinicalModal
-      open={open}
-      onClose={onClose}
-      title="New Acuity Assessment"
-      description="Score 14 domains (0–4 each) to assign a Level of Care"
-      size="lg"
-      footer={<>
-        <ClinicalButton variant="ghost" size="sm" onClick={onClose}>Cancel</ClinicalButton>
-        <ClinicalButton variant="accent" onClick={submit} disabled={saving}>{saving ? "Submitting…" : "Submit for Nurse Review"}</ClinicalButton>
-      </>}
-    >
-      <div className="space-y-4">
-        <div>
-          <FieldLabel required htmlFor="ac-res">Resident</FieldLabel>
-          <select id="ac-res" value={resId} onChange={(e) => setResId(e.target.value)} className={controlClass}><option value="">Select resident</option>{residents.map((r) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Room {s(r.room)}</option>)}</select>
-        </div>
-
-        <div className="rounded-xl border p-3" style={{ borderColor: "var(--clinical-line)" }}>
-          <div className="mb-1 flex items-center justify-between">
-            <p className="text-sm font-bold text-[var(--clinical-ink)]">Domain Scoring <span className="font-normal text-[var(--clinical-muted)]">(0–4 each)</span></p>
-            <p className="text-2xl font-bold tabular-nums text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>{total}<span className="text-sm text-[var(--clinical-muted)]">/56</span></p>
-          </div>
-          <div className="mb-3"><LevelChip level={lvl.n} label={lvl.name} /></div>
-          <div className="divide-y" style={{ borderColor: "var(--clinical-line)" }}>
-            {V42_SCORED.map((d) => { const v = scores[d.key] || 0; return (
-              <div key={d.key} className="py-2.5">
-                <div className="flex items-center justify-between gap-2"><p className="text-sm font-semibold text-[var(--clinical-ink)]">{d.label}</p><span className="text-sm font-bold text-[var(--clinical-ink-soft)]">{v}</span></div>
-                <div className="mt-1.5 flex gap-1" role="group" aria-label={`Score for ${d.label}`}>{[0, 1, 2, 3, 4].map((n) => <button key={n} type="button" aria-label={`${d.label}: ${n}`} aria-pressed={v === n} onClick={() => setScore(d.key, n)} className={`h-7 w-7 rounded-lg border text-xs font-bold transition-colors ${v === n ? "bg-[var(--clinical-panel)] text-white border-[var(--clinical-panel)]" : "text-[var(--clinical-muted)] hover:border-[var(--clinical-panel)]"}`} style={v === n ? undefined : { backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line-strong)" }}>{n}</button>)}</div>
-                <p className="mt-1 text-[11px] text-[var(--clinical-muted)]">{v} — {d.scale[v]}</p>
-              </div>
-            ); })}
-          </div>
-        </div>
-
-        <div>
-          <FieldLabel htmlFor="ac-trigger">Trigger / Reason for Assessment</FieldLabel>
-          <select id="ac-trigger" value={trigger} onChange={(e) => setTrigger(e.target.value)} className={controlClass}><option value="">Select trigger (optional)</option>{TRIGGERS.map((t) => <option key={t} value={t}>{t}</option>)}</select>
-        </div>
-        <div>
-          <FieldLabel htmlFor="ac-notes">Assessment Notes</FieldLabel>
-          <textarea id="ac-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Clinical observations, rationale…" className={controlClass} />
-        </div>
       </div>
     </ClinicalModal>
   );
