@@ -43,20 +43,29 @@ const s = (v: unknown) => (v == null ? "" : String(v));
 // Initials for the resident picker-card avatar.
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 
-// All 10 care domains, each its own grid row (matches the quick-log domains).
-type HookDomain = "vitals" | "meals" | "bowel" | "urine" | "edema" | "concerns" | "mood" | "pain" | "mobility" | "sleep";
+// Care-history grid rows keyed to the shared hook's domain vocabulary — the 14
+// LifeCare v4.2 assessment domains (AS-01 … AS-14) that `useCareLogData` emits,
+// plus the standalone Pain symptom log. AS-13 (Safety / Concerns) has no row of
+// its own; it only escalates whatever day it lands on.
+type HookDomain =
+  | "AS-01" | "AS-02" | "AS-03" | "AS-04" | "AS-05" | "AS-06" | "AS-07"
+  | "AS-08" | "AS-09" | "AS-10" | "AS-11" | "AS-12" | "AS-13" | "AS-14" | "pain";
 interface GridDomain { key: string; label: string; icon: LucideIcon; sources: HookDomain[]; }
 const GRID_DOMAINS: GridDomain[] = [
-  { key: "vitals", label: "Vitals", icon: Activity, sources: ["vitals"] },
-  { key: "meals", label: "Meals", icon: Utensils, sources: ["meals"] },
-  { key: "bowel", label: "Bowel", icon: Droplets, sources: ["bowel"] },
-  { key: "urine", label: "Urine", icon: Droplets, sources: ["urine"] },
-  { key: "edema", label: "Edema", icon: Wind, sources: ["edema"] },
-  { key: "concerns", label: "Concerns", icon: AlertTriangle, sources: ["concerns"] },
-  { key: "mood", label: "Mood", icon: Smile, sources: ["mood"] },
+  { key: "adls", label: "ADLs / Personal Care", icon: CheckCircle2, sources: ["AS-01"] },
+  { key: "mobility", label: "Mobility / Transfers", icon: Footprints, sources: ["AS-02"] },
+  { key: "fall", label: "Fall Risk", icon: AlertTriangle, sources: ["AS-03"] },
+  { key: "cognition", label: "Cognition", icon: MessageSquare, sources: ["AS-04"] },
+  { key: "behavior", label: "Behavior / BPSD", icon: Smile, sources: ["AS-05"] },
+  { key: "clinical", label: "Clinical Monitoring", icon: Activity, sources: ["AS-06"] },
+  { key: "medication", label: "Medication", icon: CheckCircle2, sources: ["AS-07"] },
+  { key: "nutrition", label: "Nutrition / Hydration", icon: Utensils, sources: ["AS-08"] },
+  { key: "communication", label: "Communication", icon: MessageSquare, sources: ["AS-09"] },
+  { key: "continence", label: "Continence / Toileting", icon: Droplets, sources: ["AS-10"] },
+  { key: "skin", label: "Skin Integrity", icon: Wind, sources: ["AS-11"] },
+  { key: "sleep", label: "Sleep / Daily Routine", icon: Moon, sources: ["AS-12"] },
+  { key: "reablement", label: "Reablement / Therapy", icon: Zap, sources: ["AS-14"] },
   { key: "pain", label: "Pain", icon: Zap, sources: ["pain"] },
-  { key: "mobility", label: "Mobility", icon: Footprints, sources: ["mobility"] },
-  { key: "sleep", label: "Sleep", icon: Moon, sources: ["sleep"] },
 ];
 // Map every hook domain → the grid row it feeds (concerns has no row of its own;
 // it is used only to escalate whatever day it falls on).
@@ -135,10 +144,10 @@ export default function ResidentCareHistory({ clinicianRole = "NURSE" }: { clini
     GRID_DOMAINS.forEach((d) => { g[d.key] = {}; days.forEach((day) => { g[d.key][day] = "missing"; }); });
     // Days that carry a concern → escalate every logged domain that day.
     const concernDays = new Set<string>();
-    entriesInWindow.forEach((e) => { if (e.domain === "concerns") concernDays.add(dayKey(e.at)); });
+    entriesInWindow.forEach((e) => { if (e.domain === "AS-13") concernDays.add(dayKey(e.at)); });
     entriesInWindow.forEach((e) => {
       const gridKey = SOURCE_TO_GRID[e.domain as HookDomain];
-      if (!gridKey) return; // concerns / edema — no row
+      if (!gridKey) return; // AS-13 (Safety/Concerns) — no row of its own
       const k = dayKey(e.at);
       if (!(k in g[gridKey])) return;
       const escalated = concernDays.has(k) || isEscalatedSummary(e.summary);
@@ -168,9 +177,9 @@ export default function ResidentCareHistory({ clinicianRole = "NURSE" }: { clini
     return { key: d.key, done, total: days.length, pct: days.length ? Math.round((done / days.length) * 100) : 0 };
   }), [grid, days]);
 
-  // Caregiver notes — domain entries in the window (badge + time + summary text).
+  // Caregiver notes — all domain entries in the window (badge + time + summary
+  // text); AS-13 Safety/Concerns entries are included as they carry rich text.
   const notes = useMemo(() => entriesInWindow
-    .filter((e) => e.domain !== "concerns" || true) // include concerns too (they carry the richest text)
     .slice()
     .sort((a, b) => b.at.localeCompare(a.at)), [entriesInWindow]);
 

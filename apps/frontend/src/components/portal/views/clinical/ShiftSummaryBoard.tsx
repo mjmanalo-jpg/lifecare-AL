@@ -1,33 +1,39 @@
 "use client";
 
 /**
- * Shift Summary — today's documentation-completion matrix across the seven core
- * care domains (Vitals, Meals, Elimination, Mood, Pain, Mobility, Sleep) for
- * every resident, plus an overall-completion header. Rolls up the same DailyRounds
- * data as Care Logs via the shared useCareLogData hook (Elimination folds
- * bowel/urine/edema/concerns). Read-only; no schema changes.
+ * Shift Summary — today's documentation-completion matrix across the 14 LifeCare
+ * v4.2 assessment domains (AS-01 … AS-14) for every resident, plus an overall-
+ * completion header. Rolls up the same data as Care Logs via the shared
+ * useCareLogData hook (whose domainsByRes is now keyed by the AS-codes).
+ * Read-only; no schema changes.
  */
 
 import { useMemo } from "react";
-import { Activity, Utensils, Droplets, Smile, Zap, Footprints, Moon, Wind, CheckCircle2, Circle, AlertTriangle, RefreshCw, type LucideIcon } from "lucide-react";
+import { Activity, Utensils, Droplets, Smile, Footprints, Moon, Wind, CheckCircle2, Circle, AlertTriangle, RefreshCw, Bath, TrendingDown, Brain, Pill, MessageCircle, Dumbbell, ShieldAlert, type LucideIcon } from "lucide-react";
 import { useCareLogData, levelOf } from "./CareLogsBoard";
 import { type ClinicianRole } from "./useClinician";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (v: unknown) => (v == null ? "" : String(v));
 
-// Ten domain columns — the same ten areas as Daily Rounds / the quick-log modal.
+// 14 domain columns — the LifeCare v4.2 assessment domains (AS-01 … AS-14), the
+// same domain keys the shared hook's domainsByRes now uses. Pain is a standalone
+// symptom log (not one of the 14), so it is not a completion column here.
 const COLS: { key: string; label: string; icon: LucideIcon }[] = [
-  { key: "vitals", label: "Vitals", icon: Activity },
-  { key: "meals", label: "Meals", icon: Utensils },
-  { key: "bowel", label: "Bowel", icon: Droplets },
-  { key: "urine", label: "Urine", icon: Droplets },
-  { key: "edema", label: "Edema", icon: Wind },
-  { key: "concerns", label: "Concerns", icon: AlertTriangle },
-  { key: "mood", label: "Mood", icon: Smile },
-  { key: "pain", label: "Pain", icon: Zap },
-  { key: "mobility", label: "Mobility", icon: Footprints },
-  { key: "sleep", label: "Sleep", icon: Moon },
+  { key: "AS-01", label: "ADLs", icon: Bath },
+  { key: "AS-02", label: "Mobility", icon: Footprints },
+  { key: "AS-03", label: "Fall Risk", icon: TrendingDown },
+  { key: "AS-04", label: "Cognition", icon: Brain },
+  { key: "AS-05", label: "Behavior", icon: Smile },
+  { key: "AS-06", label: "Clinical", icon: Activity },
+  { key: "AS-07", label: "Medication", icon: Pill },
+  { key: "AS-08", label: "Nutrition", icon: Utensils },
+  { key: "AS-09", label: "Communication", icon: MessageCircle },
+  { key: "AS-10", label: "Continence", icon: Droplets },
+  { key: "AS-11", label: "Skin", icon: Wind },
+  { key: "AS-12", label: "Sleep", icon: Moon },
+  { key: "AS-13", label: "Safety", icon: ShieldAlert },
+  { key: "AS-14", label: "Reablement", icon: Dumbbell },
 ];
 
 export default function ShiftSummaryBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {

@@ -10,6 +10,7 @@ import {
 import { taskNotesOf } from "@/lib/taskNotes";
 import { patientCode } from "@/lib/patientId";
 import { parseAcuityItems, LOC_LEVEL_META } from "@/lib/locBilling";
+import { parseLocHistory, historyForResident, LOC_SOURCE_LABEL } from "@/lib/lifecare/locHistory";
 import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
 
@@ -139,6 +140,7 @@ export default function ResidentCardPage() {
   const [allergyRecs, setAllergyRecs] = useState<Row[]>([]);
   const [acuityRows, setAcuityRows] = useState<Row[]>([]);
   const [assessV42Rows, setAssessV42Rows] = useState<Row[]>([]);
+  const [locHistoryRows, setLocHistoryRows] = useState<Row[]>([]);
   const [sponsor, setSponsor] = useState<Row | null>(null);
   const [tab, setTab] = useState<TabKey>("family");
   const [cardUrl, setCardUrl] = useState("");
@@ -157,7 +159,7 @@ export default function ResidentCardPage() {
       if (res.status === 401) { setDenied(true); setLoading(false); return; }
       const r = res.data as Row | null;
       setResident(r);
-      const [m, sr, tk, pc, dt, adm, vax, alg, acu, av42] = await Promise.all([
+      const [m, sr, tk, pc, dt, adm, vax, alg, acu, av42, lh] = await Promise.all([
         getJson(`/api/db/medications?f_residentId=${id}&take=100`),
         getJson(`/api/db/service-requests?f_residentId=${id}&take=100`),
         getJson(`/api/db/tasks?f_residentId=${id}&take=100`),
@@ -168,6 +170,7 @@ export default function ResidentCardPage() {
         getJson(`/api/db/allergies?f_residentId=${id}&take=100`),
         getJson(`/api/db/app-settings?f_key=acuity_assessments&take=50`),
         getJson(`/api/db/app-settings?f_key=assessments_v42&take=100`),
+        getJson(`/api/db/app-settings?f_key=loc_history&take=1`),
       ]);
       if (!alive) return;
       setMeds((m.data as Row[]) || []);
@@ -180,6 +183,7 @@ export default function ResidentCardPage() {
       setAllergyRecs((alg.data as Row[]) || []);
       setAcuityRows((acu.data as Row[]) || []);
       setAssessV42Rows((av42.data as Row[]) || []);
+      setLocHistoryRows((lh.data as Row[]) || []);
       const sponsorId = s(r?.sponsorId);
       if (sponsorId) {
         const sp = await getJson(`/api/db/users?f_id=${sponsorId}&take=1`);
@@ -226,6 +230,12 @@ export default function ResidentCardPage() {
     const admissionIds = admissions.map((a) => s(a.id));
     return latestV42For(parseV42Items(row ? s(row.value) : ""), id, admissionIds);
   }, [assessV42Rows, admissions, id]);
+  // Full Level of Care history (pre-admission → reassessments → acuity approvals).
+  const locTimeline = useMemo(() => {
+    const row = locHistoryRows.find((x) => s(x.key) === "loc_history") || locHistoryRows[0];
+    const admissionIds = admissions.map((a) => s(a.id));
+    return historyForResident(parseLocHistory(row ? s(row.value) : ""), id, admissionIds);
+  }, [locHistoryRows, admissions, id]);
 
   // Resident has no diagnosis/medicalAssessment column, and allergies/medicalHistory
   // may be blank on the resident while the linked Admission holds them — so fall
@@ -535,6 +545,32 @@ export default function ResidentCardPage() {
               ) : (
                 <p className="text-sm text-gray-400">No acuity (Level of Care) assessment recorded yet.</p>
               )}
+              <div className="mt-5 border-t border-gray-100 pt-4">
+                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Level of Care History</p>
+                {locTimeline.length === 0 ? (
+                  <p className="text-sm text-gray-400">No level changes recorded yet.</p>
+                ) : (
+                  <ol className="relative space-y-3 border-l-2 border-gray-200 pl-4">
+                    {locTimeline.map((e, i) => {
+                      const prev = locTimeline[i + 1];
+                      const prevN = prev ? Number(/([1-5])/.exec(prev.level)?.[1] || 0) : 0;
+                      const curN = Number(/([1-5])/.exec(e.level)?.[1] || 0);
+                      return (
+                        <li key={e.id || i} className="relative">
+                          <span className="absolute -left-[21px] top-1 h-3 w-3 rounded-full bg-[#2E4A48] ring-2 ring-white" />
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center rounded-lg bg-[#2E4A48] px-2.5 py-0.5 text-xs font-bold text-white">{e.level}</span>
+                            {prev && prevN !== curN && <span className={`text-xs font-semibold ${curN > prevN ? "text-red-600" : "text-emerald-600"}`}>{curN > prevN ? "▲" : "▼"} from {prev.level}</span>}
+                            <span className="inline-flex items-center rounded border border-gray-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-500">{LOC_SOURCE_LABEL[e.source] || e.source}</span>
+                          </div>
+                          <p className="mt-0.5 text-xs text-gray-500">{e.rawScore != null ? `Score ${e.rawScore} · ` : ""}{fmtDate(e.at)}{e.by ? ` · ${e.by}` : ""}</p>
+                          {e.notes ? <p className="mt-0.5 text-xs text-gray-400 whitespace-pre-wrap">{e.notes}</p> : null}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+              </div>
             </Section>
           )}
         </div>

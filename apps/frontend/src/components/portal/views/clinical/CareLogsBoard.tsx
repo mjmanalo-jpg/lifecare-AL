@@ -4,20 +4,29 @@
  * Care documentation over the DailyRounds models (Stage 10–11), migration-free.
  * Two views share one data hook:
  *   • CareLogsBoard (default)  — the Residents tab: level filters, level badge,
- *     per-shift domain progress, 10 domain quick-log shortcuts, QR + View modal.
+ *     per-shift domain progress, 14 domain quick-log shortcuts, QR + View modal.
  *   • CareLogsTimeline (named) — the Care Logs tab: resident cards showing today's
  *     logged entries with "+ Log" and expand.
- * Both open the shared 10-domain quick-log modal (Vitals, Meals, Bowel, Urine,
- * Edema, Concerns, Mood, Pain, Mobility, Sleep — the ten Daily Rounds areas).
+ * Both open the shared quick-log modal keyed to the 14 LifeCare v4.2 assessment
+ * domains (AS-01 … AS-14) plus a standalone Pain symptom log:
+ *   • Model-backed domains reuse the existing rich Daily Rounds forms
+ *     (Clinical Monitoring→vital-signs, Nutrition→meal-records, Continence→
+ *     bowel+urine, Skin→edema, Behavior→mood, Sleep→round-sleep-records,
+ *     Safety→concern-records, Mobility→mobility-records, Pain→pain-records).
+ *   • The remaining domains (ADLs, Fall Risk, Cognition, Medication,
+ *     Communication, Reablement, plus a Skin note) are captured as generic
+ *     0–4 status + note quick-logs stored migration-free in the app-setting
+ *     `care_log_notes` (a JSON array), folded back into the timeline / counts.
  */
 
 import { useMemo, useState, useRef } from "react";
 import {
-  Activity, Utensils, Droplets, Smile, Zap, Footprints, Moon, Wind, AlertTriangle,
+  Activity, Utensils, Droplets, Smile, Zap, Footprints, Moon, Wind,
   CalendarDays, Sun, Clock,
   ChevronUp, ChevronDown, Plus, QrCode, Eye, Download, Sparkles,
   UserRound, Pill, Check, Camera, Image as ImageIcon, Trash2, Pencil, UserX,
-  ExternalLink, type LucideIcon,
+  ExternalLink, Bath, TrendingDown, Brain, MessageCircle, Dumbbell, ShieldAlert,
+  type LucideIcon,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -28,7 +37,20 @@ import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, SearchInput, DataState, controlClass } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-type DomainKey = "vitals" | "meals" | "bowel" | "urine" | "edema" | "concerns" | "mood" | "pain" | "mobility" | "sleep";
+
+// The 14 LifeCare v4.2 assessment domains (AS-01 … AS-14) that the board charts,
+// plus a standalone "pain" symptom log (Pain doesn't map to one v4.2 domain, so
+// it stays available as its own quick-log). DomainKey is the tab / chip identity.
+type DomainKey =
+  | "AS-01" | "AS-02" | "AS-03" | "AS-04" | "AS-05" | "AS-06" | "AS-07"
+  | "AS-08" | "AS-09" | "AS-10" | "AS-11" | "AS-12" | "AS-13" | "AS-14" | "pain";
+
+// Which underlying quick-log form a domain renders. Model-backed forms reuse the
+// existing rich Daily Rounds inputs (unchanged); "generic" is the 0–4 status +
+// note store; "continence" shows bowel+urine; "skin" shows edema + a skin note.
+type FormKind =
+  | "vitals" | "meals" | "continence" | "skin" | "mood" | "sleep" | "concerns"
+  | "mobility" | "pain" | "generic";
 
 // Local calendar day (YYYY-MM-DD). Rounds are created at LOCAL midnight, so the
 // "today" filter must compare on the local day too — comparing UTC dates dropped
@@ -103,23 +125,48 @@ async function toDataUrl(file: File, maxDim = 900, quality = 0.7): Promise<strin
   });
 }
 
-const DOMAINS: { key: DomainKey; label: string; icon: LucideIcon; tint: string; bg: string; pill: string; resource: string }[] = [
-  { key: "vitals", label: "Vitals", icon: Activity, tint: "text-rose-500", bg: "bg-rose-50", pill: "bg-rose-100 text-rose-600", resource: "vital-signs" },
-  { key: "meals", label: "Meals", icon: Utensils, tint: "text-green-600", bg: "bg-green-50", pill: "bg-green-100 text-green-700", resource: "meal-records" },
-  { key: "bowel", label: "Bowel", icon: Droplets, tint: "text-amber-600", bg: "bg-amber-50", pill: "bg-amber-100 text-amber-700", resource: "bowel-records" },
-  { key: "urine", label: "Urine", icon: Droplets, tint: "text-yellow-600", bg: "bg-yellow-50", pill: "bg-yellow-100 text-yellow-700", resource: "urine-records" },
-  { key: "edema", label: "Edema", icon: Wind, tint: "text-sky-600", bg: "bg-sky-50", pill: "bg-sky-100 text-sky-700", resource: "edema-records" },
-  { key: "concerns", label: "Concerns", icon: AlertTriangle, tint: "text-red-600", bg: "bg-red-50", pill: "bg-red-100 text-red-700", resource: "concern-records" },
-  { key: "mood", label: "Mood", icon: Smile, tint: "text-purple-500", bg: "bg-purple-50", pill: "bg-purple-100 text-purple-700", resource: "mood-records" },
-  { key: "pain", label: "Pain", icon: Zap, tint: "text-orange-500", bg: "bg-orange-50", pill: "bg-orange-100 text-orange-700", resource: "pain-records" },
-  { key: "mobility", label: "Mobility", icon: Footprints, tint: "text-teal-600", bg: "bg-teal-50", pill: "bg-teal-100 text-teal-700", resource: "mobility-records" },
-  { key: "sleep", label: "Sleep", icon: Moon, tint: "text-indigo-500", bg: "bg-indigo-50", pill: "bg-indigo-100 text-indigo-700", resource: "round-sleep-records" },
-];
+// The record shape a summary/collect step reads. Distinct from DomainKey because
+// AS-10 Continence folds TWO record shapes (bowel + urine) into one domain, and a
+// generic quick-log has its own shape. Model-backed forms keep their old shapes.
+type SumKind = "vitals" | "meals" | "bowel" | "urine" | "edema" | "concerns" | "mood" | "pain" | "mobility" | "sleep" | "generic";
 
-const summarize = (domain: DomainKey, r: Row): string => {
+// The 14 v4.2 domains + Pain. `form` selects which quick-log UI renders;
+// `resource` is the Prisma model for single-model-backed domains (used when the
+// duplicate-per-day check needs the domain's primary resource / label).
+const DOMAINS: { key: DomainKey; code: string; label: string; icon: LucideIcon; tint: string; bg: string; pill: string; form: FormKind; resource?: string }[] = [
+  { key: "AS-01", code: "AS-01", label: "ADLs / Personal Care", icon: Bath, tint: "text-cyan-600", bg: "bg-cyan-50", pill: "bg-cyan-100 text-cyan-700", form: "generic" },
+  { key: "AS-02", code: "AS-02", label: "Mobility / Transfers", icon: Footprints, tint: "text-teal-600", bg: "bg-teal-50", pill: "bg-teal-100 text-teal-700", form: "mobility", resource: "mobility-records" },
+  { key: "AS-03", code: "AS-03", label: "Fall Risk", icon: TrendingDown, tint: "text-red-600", bg: "bg-red-50", pill: "bg-red-100 text-red-700", form: "generic" },
+  { key: "AS-04", code: "AS-04", label: "Cognition", icon: Brain, tint: "text-violet-600", bg: "bg-violet-50", pill: "bg-violet-100 text-violet-700", form: "generic" },
+  { key: "AS-05", code: "AS-05", label: "Behavior / BPSD", icon: Smile, tint: "text-purple-500", bg: "bg-purple-50", pill: "bg-purple-100 text-purple-700", form: "mood", resource: "mood-records" },
+  { key: "AS-06", code: "AS-06", label: "Clinical Monitoring", icon: Activity, tint: "text-rose-500", bg: "bg-rose-50", pill: "bg-rose-100 text-rose-600", form: "vitals", resource: "vital-signs" },
+  { key: "AS-07", code: "AS-07", label: "Medication", icon: Pill, tint: "text-emerald-600", bg: "bg-emerald-50", pill: "bg-emerald-100 text-emerald-700", form: "generic" },
+  { key: "AS-08", code: "AS-08", label: "Nutrition / Hydration", icon: Utensils, tint: "text-green-600", bg: "bg-green-50", pill: "bg-green-100 text-green-700", form: "meals", resource: "meal-records" },
+  { key: "AS-09", code: "AS-09", label: "Communication", icon: MessageCircle, tint: "text-blue-600", bg: "bg-blue-50", pill: "bg-blue-100 text-blue-700", form: "generic" },
+  { key: "AS-10", code: "AS-10", label: "Continence / Toileting", icon: Droplets, tint: "text-amber-600", bg: "bg-amber-50", pill: "bg-amber-100 text-amber-700", form: "continence", resource: "bowel-records" },
+  { key: "AS-11", code: "AS-11", label: "Skin Integrity", icon: Wind, tint: "text-sky-600", bg: "bg-sky-50", pill: "bg-sky-100 text-sky-700", form: "skin", resource: "edema-records" },
+  { key: "AS-12", code: "AS-12", label: "Sleep / Daily Routine", icon: Moon, tint: "text-indigo-500", bg: "bg-indigo-50", pill: "bg-indigo-100 text-indigo-700", form: "sleep", resource: "round-sleep-records" },
+  { key: "AS-13", code: "AS-13", label: "Safety / Supervision", icon: ShieldAlert, tint: "text-orange-600", bg: "bg-orange-50", pill: "bg-orange-100 text-orange-700", form: "concerns", resource: "concern-records" },
+  { key: "AS-14", code: "AS-14", label: "Reablement / Therapy", icon: Dumbbell, tint: "text-lime-600", bg: "bg-lime-50", pill: "bg-lime-100 text-lime-700", form: "generic" },
+  { key: "pain", code: "Pain", label: "Pain", icon: Zap, tint: "text-orange-500", bg: "bg-orange-50", pill: "bg-orange-100 text-orange-700", form: "pain", resource: "pain-records" },
+];
+const DOMAIN_BY_KEY = new Map(DOMAINS.map((d) => [d.key, d]));
+
+// 0–4 status anchor labels (v4.2 independence / risk scale) for generic quick-logs.
+const STATUS_ANCHORS: { v: number; label: string }[] = [
+  { v: 0, label: "Independent" }, { v: 1, label: "Low" }, { v: 2, label: "Moderate" }, { v: 3, label: "High" }, { v: 4, label: "Very high" },
+];
+const statusLabel = (n: unknown) => STATUS_ANCHORS.find((a) => a.v === Number(n))?.label ?? "";
+
+// A generic quick-log record stored in the `care_log_notes` app-setting array.
+type NoteRec = { id: string; residentId: string; dailyRoundId?: string; domain: string; status?: number; note?: string; shift?: string; by?: string; at: string };
+const CARE_LOG_NOTES_KEY = "care_log_notes";
+const parseNotes = (raw: string | undefined): NoteRec[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? (v as NoteRec[]) : []; } catch { return []; } };
+
+const summarize = (kind: SumKind, r: Row): string => {
   const p: string[] = [];
   const add = (k: string, v: unknown) => { if (v !== undefined && v !== null && v !== "") p.push(`${k}: ${v}`); };
-  switch (domain) {
+  switch (kind) {
     case "vitals": add("diastolic", r.diastolic); add("heartRate", r.heartRate); add("respiratoryRate", r.respRate); add("systolic", r.systolic); add("temp", r.temperature); add("spo2", r.spo2); break;
     case "meals": add("assistanceLevel", s(r.feedingAssist).toLowerCase()); add("hydrationMl", r.fluidAmountMl); add("mealType", s(r.mealType).toLowerCase()); add("intake", r.intakeLevel); break;
     case "bowel": add("bloodPresent", fmtBool(r.hasBlood)); add("bristolType", r.bristolType); add("continent", r.containment === "Continent" ? "true" : undefined); break;
@@ -130,6 +177,7 @@ const summarize = (domain: DomainKey, r: Row): string => {
     case "pain": add("painScore", r.score); add("location", r.location); add("type", s(r.type).toLowerCase()); break;
     case "mobility": add("assistanceLevel", s(r.assistanceLevel).toLowerCase()); add("assistiveDevice", r.assistiveDevice); add("fallIncident", fmtBool(r.fallOccurred)); break;
     case "sleep": add("hoursSlept", r.totalHours); add("quality", s(r.quality).toLowerCase()); add("disturbances", r.interruptionReason); break;
+    case "generic": { const st = statusLabel(r.status); if (st) p.push(`status ${r.status} (${st})`); if (r.note) p.push(s(r.note).slice(0, 80)); break; }
   }
   return p.join(" · ") || "logged";
 };
@@ -142,9 +190,12 @@ const summarize = (domain: DomainKey, r: Row): string => {
 // intentionally NOT re-evaluated here to avoid double-logging.
 type TriggerAlert = { type: string; severity: "MINOR" | "MODERATE" | "SEVERE" | "CRITICAL"; title: string; description: string };
 const cap = (v: string) => (v ? v[0] + v.slice(1).toLowerCase() : v);
-function evalDomainTrigger(domain: DomainKey, d: Row, f: Row, name: string): TriggerAlert | null {
+// Keyed by the record shape (SumKind), not the domain, so a single record type
+// keeps its clinical trigger regardless of which v4.2 domain it now lives under
+// (e.g. bowel/urine both belong to AS-10 Continence, edema to AS-11 Skin).
+function evalDomainTrigger(kind: SumKind, d: Row, f: Row, name: string): TriggerAlert | null {
   const who = name || "Resident";
-  switch (domain) {
+  switch (kind) {
     case "bowel": {
       if (d.bristolType == null) return { type: "OTHER", severity: "MODERATE", title: "No bowel movement", description: `No bowel movement recorded for ${who}. Monitor bowel pattern — escalate if no BM for 3+ days (constipation / impaction risk).` };
       if (d.bristolType === 1) return { type: "OTHER", severity: "MODERATE", title: "Constipation signs", description: `${who} passed hard, lumpy stool (Bristol Type 1) — constipation risk. Review hydration, diet and bowel protocol.` };
@@ -218,16 +269,25 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
     return m;
   }, [roundQ.data]);
 
+  // Generic 0–4 status + note quick-logs (AS-01/03/04/07/09/14 + Skin note),
+  // migration-free in the `care_log_notes` app-setting JSON array.
+  const noteRecs = useMemo<NoteRec[]>(() => parseNotes(settingRows.find((r) => (r.key || r.id) === CARE_LOG_NOTES_KEY)?.value), [settingRows]);
+
   const entries = useMemo<Entry[]>(() => {
     const out: Entry[] = [];
-    const collect = (rows: Row[] | undefined, domain: DomainKey) => (rows || []).forEach((r) => {
-      const resId = roundToRes.get(s(r.dailyRoundId)); if (resId) out.push({ id: s(r.id), resId, domain, at: s(r.time || r.createdAt || todayDate()), summary: summarize(domain, r) });
+    const collect = (rows: Row[] | undefined, domain: DomainKey, kind: SumKind) => (rows || []).forEach((r) => {
+      const resId = roundToRes.get(s(r.dailyRoundId)); if (resId) out.push({ id: s(r.id), resId, domain, at: s(r.time || r.createdAt || todayDate()), summary: summarize(kind, r) });
     });
-    collect(vitQ.data, "vitals"); collect(mealQ.data, "meals"); collect(bowQ.data, "bowel"); collect(uriQ.data, "urine");
-    collect(edeQ.data, "edema"); collect(conQ.data, "concerns"); collect(moodQ.data, "mood"); collect(painQ.data, "pain");
-    collect(mobQ.data, "mobility"); collect(sleepQ.data, "sleep");
+    collect(vitQ.data, "AS-06", "vitals"); collect(mealQ.data, "AS-08", "meals");
+    collect(bowQ.data, "AS-10", "bowel"); collect(uriQ.data, "AS-10", "urine");
+    collect(edeQ.data, "AS-11", "edema"); collect(conQ.data, "AS-13", "concerns");
+    collect(moodQ.data, "AS-05", "mood"); collect(painQ.data, "pain", "pain");
+    collect(mobQ.data, "AS-02", "mobility"); collect(sleepQ.data, "AS-12", "sleep");
+    // Generic notes: only today's, and only ones targeting a known domain chip.
+    const day = todayKey();
+    noteRecs.forEach((n) => { if (localDayKey(n.at) === day && DOMAIN_BY_KEY.has(n.domain as DomainKey)) out.push({ id: s(n.id), resId: s(n.residentId), domain: n.domain as DomainKey, at: s(n.at), summary: summarize("generic", n) }); });
     return out.sort((a, b) => b.at.localeCompare(a.at));
-  }, [roundToRes, vitQ.data, mealQ.data, bowQ.data, uriQ.data, edeQ.data, conQ.data, moodQ.data, painQ.data, mobQ.data, sleepQ.data]);
+  }, [roundToRes, vitQ.data, mealQ.data, bowQ.data, uriQ.data, edeQ.data, conQ.data, moodQ.data, painQ.data, mobQ.data, sleepQ.data, noteRecs]);
 
   const byResident = useMemo(() => {
     const m = new Map<string, Entry[]>();
@@ -267,30 +327,40 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
   }, [roundQ.data]);
   const allEntries = useMemo<Entry[]>(() => {
     const out: Entry[] = [];
-    const collect = (rows: Row[] | undefined, domain: DomainKey) => (rows || []).forEach((r) => {
+    const collect = (rows: Row[] | undefined, domain: DomainKey, kind: SumKind) => (rows || []).forEach((r) => {
       const info = roundToResAll.get(s(r.dailyRoundId));
-      if (info) out.push({ id: s(r.id), resId: info.resId, domain, at: s(r.time || r.createdAt || info.date), summary: summarize(domain, r) });
+      if (info) out.push({ id: s(r.id), resId: info.resId, domain, at: s(r.time || r.createdAt || info.date), summary: summarize(kind, r) });
     });
-    collect(vitQ.data, "vitals"); collect(mealQ.data, "meals"); collect(bowQ.data, "bowel"); collect(uriQ.data, "urine");
-    collect(edeQ.data, "edema"); collect(conQ.data, "concerns"); collect(moodQ.data, "mood"); collect(painQ.data, "pain");
-    collect(mobQ.data, "mobility"); collect(sleepQ.data, "sleep");
+    collect(vitQ.data, "AS-06", "vitals"); collect(mealQ.data, "AS-08", "meals");
+    collect(bowQ.data, "AS-10", "bowel"); collect(uriQ.data, "AS-10", "urine");
+    collect(edeQ.data, "AS-11", "edema"); collect(conQ.data, "AS-13", "concerns");
+    collect(moodQ.data, "AS-05", "mood"); collect(painQ.data, "pain", "pain");
+    collect(mobQ.data, "AS-02", "mobility"); collect(sleepQ.data, "AS-12", "sleep");
+    noteRecs.forEach((n) => { if (DOMAIN_BY_KEY.has(n.domain as DomainKey)) out.push({ id: s(n.id), resId: s(n.residentId), domain: n.domain as DomainKey, at: s(n.at), summary: summarize("generic", n) }); });
     return out.sort((a, b) => b.at.localeCompare(a.at));
-  }, [roundToResAll, vitQ.data, mealQ.data, bowQ.data, uriQ.data, edeQ.data, conQ.data, moodQ.data, painQ.data, mobQ.data, sleepQ.data]);
+  }, [roundToResAll, vitQ.data, mealQ.data, bowQ.data, uriQ.data, edeQ.data, conQ.data, moodQ.data, painQ.data, mobQ.data, sleepQ.data, noteRecs]);
+
+  // Append a generic quick-log to `care_log_notes` (read-modify-write the array).
+  const saveNote = async (rec: Omit<NoteRec, "id" | "at" | "by" | "shift"> & { at?: string }) => {
+    const next: NoteRec[] = [{ id: `cln-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, at: rec.at || new Date().toISOString(), by: clinicianName, shift: shiftNow(), ...rec }, ...noteRecs];
+    await upsertRecord("app-settings", CARE_LOG_NOTES_KEY, { key: CARE_LOG_NOTES_KEY, value: JSON.stringify(next) });
+    await refetchSettings();
+  };
 
   const refetchResidents = () => resQ.refetch();
 
-  return { residents, entries, allEntries, byResident, domainsByRes, bowelRef, saveBowelRef, ensureRound, refetchAll, refetchResidents, loading: resQ.loading };
+  return { residents, entries, allEntries, byResident, domainsByRes, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, refetchResidents, loading: resQ.loading };
 }
 
 // ── Residents tab — quick-log list (Image 15) ────────────────────────────────
 export default function CareLogsBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
-  const { residents, domainsByRes, ensureRound, refetchAll, refetchResidents, bowelRef, saveBowelRef, loading } = useCareLogData(clinicianRole);
+  const { residents, domainsByRes, ensureRound, saveNote, refetchAll, refetchResidents, bowelRef, saveBowelRef, loading } = useCareLogData(clinicianRole);
 
   const [search, setSearch] = useState("");
   const [careLevelFilter, setCareLevelFilter] = useState("");
   const [roomFilter, setRoomFilter] = useState("");
   const [logFor, setLogFor] = useState<Row | null>(null);
-  const [logTab, setLogTab] = useState<DomainKey>("vitals");
+  const [logTab, setLogTab] = useState<DomainKey>("AS-01");
   const [qrFor, setQrFor] = useState<Row | null>(null);
   const [viewFor, setViewFor] = useState<Row | null>(null);
   const [editFor, setEditFor] = useState<Row | null>(null);
@@ -385,7 +455,7 @@ export default function CareLogsBoard({ clinicianRole = "NURSE" }: { clinicianRo
         </div>
       </DataState>
 
-      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} ensureRound={ensureRound} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
+      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
       {qrFor && <QrModal resident={qrFor} onClose={() => setQrFor(null)} />}
       {viewFor && <ViewModal resident={viewFor} loggedDomains={domainsByRes.get(s(viewFor.id)) || new Set()} onOpenLog={(t) => { setViewFor(null); openLog(viewFor, t); }} onClose={() => setViewFor(null)} />}
       {editFor && <EditResidentModal resident={editFor} onSaved={refetchResidents} onClose={() => setEditFor(null)} />}
@@ -395,11 +465,11 @@ export default function CareLogsBoard({ clinicianRole = "NURSE" }: { clinicianRo
 
 // ── Care Logs tab — today's log timeline (Image 18) ──────────────────────────
 export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
-  const { residents, entries, byResident, domainsByRes, bowelRef, saveBowelRef, ensureRound, refetchAll, loading } = useCareLogData(clinicianRole);
+  const { residents, entries, byResident, domainsByRes, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, loading } = useCareLogData(clinicianRole);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [logFor, setLogFor] = useState<Row | null>(null);
-  const [logTab, setLogTab] = useState<DomainKey>("vitals");
+  const [logTab, setLogTab] = useState<DomainKey>("AS-01");
   const [statusFilter, setStatusFilter] = useState<"all" | "needs" | "documented">("all");
 
   const q = search.trim().toLowerCase();
@@ -450,7 +520,7 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
           </div>
           <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Entries today</p><p className="mt-2 text-2xl font-bold tabular-nums">{entries.length}</p></div>
           <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Still due</p><p className="mt-2 text-2xl font-bold tabular-nums">{needsDocumentation}</p></div>
-          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Domains charted</p><p className="mt-2 text-2xl font-bold tabular-nums">{documentedDomains}<span className="ml-1 text-sm font-semibold text-blue-100">/ 10</span></p></div>
+          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Domains charted</p><p className="mt-2 text-2xl font-bold tabular-nums">{documentedDomains}<span className="ml-1 text-sm font-semibold text-blue-100">/ 14</span></p></div>
         </div>
       </section>
 
@@ -480,7 +550,10 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
           {filtered.map((r: Row) => {
             const list = byResident.get(s(r.id)) || [];
             const open = expanded.has(s(r.id));
-            const domainCount = domainsByRes.get(s(r.id))?.size || 0;
+            // Count only the 14 v4.2 assessment domains toward coverage (Pain is a
+            // standalone symptom log, not one of the 14).
+            const set = domainsByRes.get(s(r.id));
+            const domainCount = set ? [...set].filter((k) => k !== "pain").length : 0;
             const lastEntry = list[0];
             return (
               <div key={s(r.id)} className="group overflow-hidden rounded-2xl border transition hover:border-[var(--clinical-line-strong)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
@@ -496,11 +569,11 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
                     </div>
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center justify-between gap-3 text-xs"><span className="font-semibold text-[var(--clinical-ink-soft)]">{domainCount} of 10 domains</span><span className="text-[var(--clinical-muted)]">{lastEntry ? rel(lastEntry.at) : "No entry yet"}</span></div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--clinical-surface-2)]" aria-label={`${domainCount} of 10 care domains documented`}><div className="h-full rounded-full bg-[var(--clinical-green)] transition-[width] duration-500" style={{ width: `${domainCount * 10}%` }} /></div>
+                    <div className="flex items-center justify-between gap-3 text-xs"><span className="font-semibold text-[var(--clinical-ink-soft)]">{domainCount} of 14 domains</span><span className="text-[var(--clinical-muted)]">{lastEntry ? rel(lastEntry.at) : "No entry yet"}</span></div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--clinical-surface-2)]" aria-label={`${domainCount} of 14 care domains documented`}><div className="h-full rounded-full bg-[var(--clinical-green)] transition-[width] duration-500" style={{ width: `${Math.round((domainCount / 14) * 100)}%` }} /></div>
                   </div>
                   <div className="flex items-center justify-end gap-2">
-                    <ClinicalButton variant={list.length ? "secondary" : "primary"} size="sm" onClick={() => { setLogTab("vitals"); setLogFor(r); }}><Plus className="h-4 w-4" /> {list.length ? "Add entry" : "Start log"}</ClinicalButton>
+                    <ClinicalButton variant={list.length ? "secondary" : "primary"} size="sm" onClick={() => { setLogTab("AS-01"); setLogFor(r); }}><Plus className="h-4 w-4" /> {list.length ? "Add entry" : "Start log"}</ClinicalButton>
                     {list.length > 0 && <button onClick={() => toggle(s(r.id))} aria-label={open ? "Collapse logs" : "Review today's logs"} className="flex h-11 w-11 items-center justify-center rounded-xl text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-ink)]">{open ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}</button>}
                   </div>
                 </div>
@@ -521,12 +594,12 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
         </div>
       </DataState>
 
-      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} ensureRound={ensureRound} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
+      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
     </ClinicalPage>
   );
 }
 
-// ── Quick-log modal (10 domains) ─────────────────────────────────────────────
+// ── Quick-log modal (14 v4.2 domains + Pain) ─────────────────────────────────
 const chip = "px-2.5 py-1.5 rounded-lg border text-xs font-medium transition text-center";
 const chipOn = "bg-[var(--clinical-panel)] text-white border-[var(--clinical-panel)]";
 const chipOff = "bg-[var(--clinical-surface)] text-[var(--clinical-ink-soft)] border-[var(--clinical-line-strong)] hover:border-[var(--clinical-panel)]";
@@ -591,8 +664,8 @@ const APPETITE_BY_INTAKE: Record<string, string> = { "0%": "REFUSED", "25%": "PO
 const MOOD_MAP: Record<string, string> = { Calm: "CALM", Happy: "HAPPY", Anxious: "ANXIOUS", Agitated: "AGITATED", Confused: "CONFUSED", Withdrawn: "WITHDRAWN", Distressed: "SAD", Combative: "AGGRESSIVE" };
 const SLEEP_MAP: Record<string, string> = { Excellent: "RESTFUL", Good: "FAIR", Fair: "RESTLESS", Poor: "POOR", "Very Poor": "INSOMNIA" };
 
-function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianRole, bowelRef, saveBowelRef, onDone, onClose }: {
-  resident: Row; initialTab: DomainKey; loggedDomains: Set<DomainKey>; ensureRound: (id: string) => Promise<string>; clinicianRole: ClinicianRole; bowelRef: string; saveBowelRef: (dataUrl: string | null) => Promise<void>; onDone: () => Promise<void>; onClose: () => void;
+function LogModal({ resident, initialTab, loggedDomains, ensureRound, saveNote, clinicianRole, bowelRef, saveBowelRef, onDone, onClose }: {
+  resident: Row; initialTab: DomainKey; loggedDomains: Set<DomainKey>; ensureRound: (id: string) => Promise<string>; saveNote: (rec: { residentId: string; dailyRoundId?: string; domain: string; status?: number; note?: string }) => Promise<void>; clinicianRole: ClinicianRole; bowelRef: string; saveBowelRef: (dataUrl: string | null) => Promise<void>; onDone: () => Promise<void>; onClose: () => void;
 }) { // rendered only when open (parent gates on logFor); ClinicalModal open is always true here
   const [tab, setTab] = useState<DomainKey>(initialTab);
   const [f, setF] = useState<Row>({});
@@ -604,48 +677,57 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianR
   const switchTab = (t: DomainKey) => { setTab(t); setF({}); setNotes(""); };
   const logged = new Set(loggedDomains);
   const nowT = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const dom = DOMAINS.find((d) => d.key === tab)!;
+  const dom = DOMAIN_BY_KEY.get(tab)!;
+  const form = dom.form;
 
   const aiNote = () => {
     const bits = Object.entries(f).filter(([, v]) => v !== "" && v != null && v !== false && !(Array.isArray(v) && !v.length)).map(([k, v]) => `${k} ${Array.isArray(v) ? v.join(", ") : v}`);
     setNotes(bits.length ? `${resident.name}: ${tab} — ${bits.join("; ")}.` : `${resident.name}: ${tab} log recorded.`);
   };
 
-  const buildPayload = (roundId: string): { resource: string; data: Row } | null => {
+  // Build the model-backed write(s) for the selected form. Returns one item per
+  // record to create, each tagged with its SumKind so the clinical trigger keeps
+  // working. Continence (AS-10) can emit both a bowel and a urine record; Skin
+  // (AS-11) emits the edema record (the free-text skin note is saved separately).
+  type Payload = { resource: string; data: Row; kind: SumKind };
+  const buildPayloads = (roundId: string): Payload[] => {
     const base = { dailyRoundId: roundId, time: new Date().toISOString(), notes: notes || null };
-    switch (tab) {
+    const out: Payload[] = [];
+    switch (form) {
       case "vitals": {
         const d: Row = { ...base, temperatureUnit: "°C", weightUnit: "kg" };
         ["systolic", "diastolic", "heartRate", "respRate", "spo2", "weight", "temperature"].forEach((k) => { if (f[k] !== "" && f[k] != null) d[k] = Number(f[k]); });
-        if (d.systolic == null && d.heartRate == null && d.temperature == null && d.spo2 == null && d.respRate == null && d.weight == null) return null;
-        return { resource: "vital-signs", data: d };
+        if (!(d.systolic == null && d.heartRate == null && d.temperature == null && d.spo2 == null && d.respRate == null && d.weight == null)) out.push({ resource: "vital-signs", data: d, kind: "vitals" });
+        break;
       }
       case "meals":
-        if (!f.mealType) return null;
-        return { resource: "meal-records", data: { ...base, mealType: f.mealType, appetite: APPETITE_BY_INTAKE[s(f.intakeLevel)] || "FAIR", intakeLevel: s(f.intakeLevel) || "0%", feedingAssist: f.feedingAssist || null, fluidAmountMl: f.fluidAmountMl ? Number(f.fluidAmountMl) : null } };
-      case "bowel":
-        if (f.bristolType == null && !f.containment) return null;
-        return { resource: "bowel-records", data: { ...base, bristolType: f.bristolType ? Number(f.bristolType) : null, hasBlood: !!f.hasBlood, containment: f.containment || null } };
-      case "urine":
-        return { resource: "urine-records", data: { ...base, color: f.color || null, outputMl: f.outputMl ? Number(f.outputMl) : null, hasBlood: !!f.hasBlood, painful: !!f.painful, containment: f.containment || null } };
-      case "edema":
-        if (!f.severity && !f.location) return null;
-        return { resource: "edema-records", data: { ...base, location: f.location || "", severity: f.severity || "NONE", pitting: !!f.pitting } };
+        if (f.mealType) out.push({ resource: "meal-records", data: { ...base, mealType: f.mealType, appetite: APPETITE_BY_INTAKE[s(f.intakeLevel)] || "FAIR", intakeLevel: s(f.intakeLevel) || "0%", feedingAssist: f.feedingAssist || null, fluidAmountMl: f.fluidAmountMl ? Number(f.fluidAmountMl) : null }, kind: "meals" });
+        break;
+      case "continence": {
+        if (f.bristolType != null || f.containment) out.push({ resource: "bowel-records", data: { ...base, bristolType: f.bristolType ? Number(f.bristolType) : null, hasBlood: !!f.hasBlood, containment: f.containment || null }, kind: "bowel" });
+        if (f.uColor || f.outputMl || f.uPainful || f.uHasBlood || f.uContainment) out.push({ resource: "urine-records", data: { ...base, color: f.uColor || null, outputMl: f.outputMl ? Number(f.outputMl) : null, hasBlood: !!f.uHasBlood, painful: !!f.uPainful, containment: f.uContainment || null }, kind: "urine" });
+        break;
+      }
+      case "skin":
+        if (f.severity || f.location) out.push({ resource: "edema-records", data: { ...base, location: f.location || "", severity: f.severity || "NONE", pitting: !!f.pitting }, kind: "edema" });
+        break;
       case "concerns":
-        if (!f.description && !notes) return null;
-        return { resource: "concern-records", data: { ...base, category: f.category || "PHYSICAL", description: f.description || notes || "", severity: f.severity || "LOW" } };
+        if (f.description || notes) out.push({ resource: "concern-records", data: { ...base, category: f.category || "PHYSICAL", description: f.description || notes || "", severity: f.severity || "LOW" }, kind: "concerns" });
+        break;
       case "mood":
-        if (!f.mood) return null;
-        return { resource: "mood-records", data: { ...base, mood: MOOD_MAP[f.mood] || "CALM", behaviorNotes: [f.baseline ? `Baseline: ${f.baseline}` : "", (f.tags || []).length ? `Tags: ${(f.tags || []).join(", ")}` : ""].filter(Boolean).join(" · ") || null } };
+        if (f.mood) out.push({ resource: "mood-records", data: { ...base, mood: MOOD_MAP[f.mood] || "CALM", behaviorNotes: [f.baseline ? `Baseline: ${f.baseline}` : "", (f.tags || []).length ? `Tags: ${(f.tags || []).join(", ")}` : ""].filter(Boolean).join(" · ") || null }, kind: "mood" });
+        break;
       case "pain":
-        return { resource: "pain-records", data: { ...base, score: Number(f.score) || 0, location: f.location || "", type: f.type || null, reliefActions: (f.interventions || []).join(", ") || null } };
+        out.push({ resource: "pain-records", data: { ...base, score: Number(f.score) || 0, location: f.location || "", type: f.type || null, reliefActions: (f.interventions || []).join(", ") || null }, kind: "pain" });
+        break;
       case "mobility":
-        if (!f.assistanceLevel) return null;
-        return { resource: "mobility-records", data: { ...base, activityType: f.ambulated === false ? "BED_REST" : "AMBULATION", assistanceLevel: f.assistanceLevel, assistiveDevice: f.assistiveDevice || null, fallOccurred: !!f.fallOccurred } };
+        if (f.assistanceLevel) out.push({ resource: "mobility-records", data: { ...base, activityType: f.ambulated === false ? "BED_REST" : "AMBULATION", assistanceLevel: f.assistanceLevel, assistiveDevice: f.assistiveDevice || null, fallOccurred: !!f.fallOccurred }, kind: "mobility" });
+        break;
       case "sleep":
-        if (!f.totalHours) return null;
-        return { resource: "round-sleep-records", data: { ...base, totalHours: Number(f.totalHours), quality: SLEEP_MAP[f.quality] || "FAIR", interruptionReason: (f.disturbances || []).join(", ") || null } };
+        if (f.totalHours) out.push({ resource: "round-sleep-records", data: { ...base, totalHours: Number(f.totalHours), quality: SLEEP_MAP[f.quality] || "FAIR", interruptionReason: (f.disturbances || []).join(", ") || null }, kind: "sleep" });
+        break;
     }
+    return out;
   };
 
   const mirrorVitals = async (d: Row) => {
@@ -674,20 +756,43 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianR
     try {
       const roundId = await ensureRound(s(resident.id));
       if (!roundId) throw new Error("Could not open a care round for this resident.");
-      const built = buildPayload(roundId);
-      if (!built) { Swal.fire({ title: "Nothing to save", text: "Enter at least one value for this domain.", icon: "info" }); setSaving(false); return; }
-      await createRecord(built.resource, built.data);
-      if (tab === "vitals") { try { await mirrorVitals(built.data); } catch { /* best-effort */ } }
-      // Clinically-significant values auto-raise an Incident (Recent Incidents).
-      // Best-effort — a trigger failure must never block the care log itself.
-      const alert = tab === "vitals" ? null : evalDomainTrigger(tab, built.data, f, s(resident.name));
-      if (alert) {
-        try {
-          await createRecord("incidents", { residentId: s(resident.id), incidentType: alert.type, severity: alert.severity, description: alert.description, followUpRequired: alert.severity === "SEVERE" || alert.severity === "CRITICAL", incidentDate: new Date().toISOString() });
-        } catch { /* best-effort */ }
+
+      // Generic 0–4 status + note domains → the migration-free care_log_notes store.
+      if (form === "generic") {
+        if (f.status == null && !notes.trim()) { Swal.fire({ title: "Nothing to save", text: "Select a status or add a note for this domain.", icon: "info" }); setSaving(false); return; }
+        await saveNote({ residentId: s(resident.id), dailyRoundId: roundId, domain: tab, status: f.status != null ? Number(f.status) : undefined, note: notes.trim() || undefined });
+        setSavedNow((prev) => new Set(prev).add(tab));
+        await onDone();
+        Swal.fire({ toast: true, position: "top-end", icon: "success", title: `${dom.label} logged`, showConfirmButton: false, timer: 1500 });
+        setF({}); setNotes("");
+        setSaving(false);
+        return;
       }
+
+      const built = buildPayloads(roundId);
+      // Skin (AS-11) also accepts a free-text skin note stored generically.
+      const skinNote = form === "skin" ? s(f.skinNote).trim() : "";
+      if (!built.length && !skinNote) { Swal.fire({ title: "Nothing to save", text: "Enter at least one value for this domain.", icon: "info" }); setSaving(false); return; }
+
+      let raisedAlert: TriggerAlert | null = null;
+      for (const p of built) {
+        await createRecord(p.resource, p.data);
+        if (p.kind === "vitals") { try { await mirrorVitals(p.data); } catch { /* best-effort */ } }
+        // Clinically-significant values auto-raise an Incident (Recent Incidents).
+        // Best-effort — a trigger failure must never block the care log itself.
+        const alert = p.kind === "vitals" ? null : evalDomainTrigger(p.kind, p.data, f, s(resident.name));
+        if (alert) {
+          raisedAlert = alert;
+          try {
+            await createRecord("incidents", { residentId: s(resident.id), incidentType: alert.type, severity: alert.severity, description: alert.description, followUpRequired: alert.severity === "SEVERE" || alert.severity === "CRITICAL", incidentDate: new Date().toISOString() });
+          } catch { /* best-effort */ }
+        }
+      }
+      if (skinNote) { try { await saveNote({ residentId: s(resident.id), dailyRoundId: roundId, domain: tab, note: skinNote }); } catch { /* best-effort */ } }
+
       setSavedNow((prev) => new Set(prev).add(tab));
       await onDone();
+      const alert = raisedAlert;
       Swal.fire({ toast: true, position: "top-end", icon: alert ? "warning" : "success", title: alert ? `${dom.label} logged — ${alert.title} alert raised` : `${dom.label} logged`, text: alert ? "Logged to Recent Incidents for clinical review." : undefined, showConfirmButton: false, timer: alert ? 2800 : 1500 });
       setF({}); setNotes("");
     } catch (e) { Swal.fire({ title: "Save failed", text: e instanceof Error ? e.message : "Could not save.", icon: "error" }); }
@@ -704,22 +809,29 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianR
       footer={
         <div className="flex flex-1 items-center justify-between">
           <ClinicalButton variant="ghost" size="sm" onClick={onClose}>Close</ClinicalButton>
-          <span className="text-[11px] text-[var(--clinical-muted)]">{new Set([...logged, ...savedNow]).size}/10 logged</span>
+          <span className="text-[11px] text-[var(--clinical-muted)]">{new Set([...logged, ...savedNow].filter((k) => k !== "pain")).size}/14 logged</span>
         </div>
       }
     >
-      <div className="mb-5 grid grid-cols-5 gap-1 rounded-2xl bg-[var(--clinical-surface-2)] p-1.5 sm:grid-cols-10">
+      <div className="mb-5 grid grid-cols-5 gap-1 rounded-2xl bg-[var(--clinical-surface-2)] p-1.5 sm:grid-cols-8 lg:grid-cols-8">
         {DOMAINS.map((d) => { const on = d.key === tab; const doneD = logged.has(d.key) || savedNow.has(d.key); const Icon = d.icon; return (
-          <button key={d.key} onClick={() => switchTab(d.key)} aria-label={d.label} className={`relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-xl px-1 transition ${on ? "bg-[var(--clinical-surface)] text-[var(--clinical-panel)] shadow-sm" : "text-[var(--clinical-muted)] hover:bg-[var(--clinical-surface)] hover:text-[var(--clinical-ink)]"}`}>
-            <Icon className="h-4 w-4" />
-            <span className="text-[10px] font-semibold">{d.label}</span>
+          <button key={d.key} onClick={() => switchTab(d.key)} aria-label={`${d.code} ${d.label}`} title={`${d.code} · ${d.label}`} className={`relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 transition ${on ? "bg-[var(--clinical-surface)] text-[var(--clinical-panel)] shadow-sm" : "text-[var(--clinical-muted)] hover:bg-[var(--clinical-surface)] hover:text-[var(--clinical-ink)]"}`}>
+            <Icon className="h-4 w-4 shrink-0" />
+            <span className="text-[9px] font-semibold leading-tight text-center line-clamp-2">{d.label}</span>
             {doneD && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--clinical-green)]" aria-label="Already documented" />}
           </button>
         ); })}
       </div>
 
       <div className="space-y-4">
-          {tab === "vitals" && (<>
+          <div className="flex items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>
+            <span className="rounded-md bg-[var(--clinical-panel)] px-1.5 py-0.5 text-[10px] font-bold text-white">{dom.code}</span>
+            <span className="text-sm font-semibold text-[var(--clinical-ink)]">{dom.label}</span>
+          </div>
+          {form === "generic" && (<>
+            <div><Label>Status (v4.2 anchor)</Label><Chips cols={5} value={s(f.status)} onChange={(v) => set({ status: v === "" ? undefined : Number(v) })} options={STATUS_ANCHORS.map((a) => ({ v: String(a.v), label: `${a.v} · ${a.label}` }))} /><p className="text-[10px] text-[var(--clinical-muted)] mt-1">0 Independent · 1 Low · 2 Moderate · 3 High · 4 Very high</p></div>
+          </>)}
+          {form === "vitals" && (<>
             <div><Label>Blood Pressure</Label><div className="grid grid-cols-2 gap-2">
               <div><input inputMode="numeric" value={f.systolic ?? ""} onChange={(e) => set({ systolic: e.target.value })} placeholder="Systolic" aria-label="Systolic" className={num} /><p className="text-[10px] text-[var(--clinical-muted)] mt-1">90–139 mmHg</p></div>
               <div><input inputMode="numeric" value={f.diastolic ?? ""} onChange={(e) => set({ diastolic: e.target.value })} placeholder="Diastolic" aria-label="Diastolic" className={num} /><p className="text-[10px] text-[var(--clinical-muted)] mt-1">60–89 mmHg</p></div>
@@ -730,52 +842,57 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, clinicianR
             <VitalField label="Respiratory Rate" unit="/min" hint="12–20 /min" value={f.respRate} onChange={(v) => set({ respRate: v })} />
             <VitalField label="Weight" unit="kg" hint="per baseline" value={f.weight} onChange={(v) => set({ weight: v })} />
           </>)}
-          {tab === "meals" && (<>
+          {form === "meals" && (<>
             <div><Label>Meal Type</Label><Chips cols={4} value={f.mealType || ""} onChange={(v) => set({ mealType: v })} options={[{ v: "BREAKFAST", label: "Breakfast" }, { v: "LUNCH", label: "Lunch" }, { v: "DINNER", label: "Dinner" }, { v: "SNACK", label: "Snack" }]} /></div>
             <div><Label>% Consumed</Label><Chips cols={5} value={f.intakeLevel || ""} onChange={(v) => set({ intakeLevel: v })} options={["0%", "25%", "50%", "75%", "100%"].map((x) => ({ v: x, label: x }))} /></div>
             <div><Label>Assistance</Label><Chips cols={2} value={f.feedingAssist || ""} onChange={(v) => set({ feedingAssist: v })} options={[{ v: "Independent", label: "Independent" }, { v: "Setup Only", label: "Setup Only" }, { v: "Partial Assist", label: "Partial Assist" }, { v: "Full Assist", label: "Full Assist" }]} /></div>
             <div><Label>Hydration (mL)</Label><div className="flex flex-wrap gap-1.5 items-center">{[0, 100, 150, 200, 250, 300].map((n) => <button key={n} type="button" onClick={() => set({ fluidAmountMl: (Number(f.fluidAmountMl) || 0) + n })} className={`${chip} ${chipOff}`}>+{n}</button>)}<span className="ml-1 text-xs font-bold text-[var(--clinical-panel)]">{Number(f.fluidAmountMl) || 0}mL</span><button type="button" onClick={() => set({ fluidAmountMl: 0 })} className="text-[10px] text-[var(--clinical-muted)] underline">reset</button></div></div>
           </>)}
-          {tab === "bowel" && (<>
-            <Label>Bristol Stool Scale</Label>
-            <Chips cols={4} value={s(f.bristolType)} onChange={(v) => set({ bristolType: v })} options={[1, 2, 3, 4, 5, 6, 7].map((n) => ({ v: String(n), label: `Type ${n}` })).concat([{ v: "", label: "None" }])} />
-            <div className="grid grid-cols-2 gap-2"><Toggle label="No Blood" on={f.hasBlood === false} onClick={() => set({ hasBlood: f.hasBlood === false ? undefined : false })} /><Toggle label="Continent" on={f.containment === "Continent"} onClick={() => set({ containment: f.containment === "Continent" ? "" : "Continent" })} /></div>
-            <BowelReference photo={bowelRef} canEdit={clinicianRole === "NURSE" || clinicianRole === "FACILITY_ADMIN"} onSave={saveBowelRef} />
+          {form === "continence" && (<>
+            <div className="rounded-xl border p-3 space-y-3" style={{ borderColor: "var(--clinical-line)" }}>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--clinical-panel)]">Bowel</p>
+              <Label>Bristol Stool Scale</Label>
+              <Chips cols={4} value={s(f.bristolType)} onChange={(v) => set({ bristolType: v })} options={[1, 2, 3, 4, 5, 6, 7].map((n) => ({ v: String(n), label: `Type ${n}` })).concat([{ v: "", label: "None" }])} />
+              <div className="grid grid-cols-2 gap-2"><Toggle label="No Blood" on={f.hasBlood === false} onClick={() => set({ hasBlood: f.hasBlood === false ? undefined : false })} /><Toggle label="Continent" on={f.containment === "Continent"} onClick={() => set({ containment: f.containment === "Continent" ? "" : "Continent" })} /></div>
+              <BowelReference photo={bowelRef} canEdit={clinicianRole === "NURSE" || clinicianRole === "FACILITY_ADMIN"} onSave={saveBowelRef} />
+            </div>
+            <div className="rounded-xl border p-3 space-y-3" style={{ borderColor: "var(--clinical-line)" }}>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--clinical-panel)]">Urine</p>
+              <div><Label>Color</Label><Chips cols={4} value={f.uColor || ""} onChange={(v) => set({ uColor: v })} options={["Clear", "Pale", "Yellow", "Dark"].map((x) => ({ v: x, label: x }))} /></div>
+              <div><Label>Output (mL)</Label><input inputMode="numeric" value={f.outputMl ?? ""} onChange={(e) => set({ outputMl: e.target.value })} placeholder="mL" aria-label="Urine output in mL" className={num} /></div>
+              <div className="grid grid-cols-2 gap-2"><Toggle label="No Blood" on={f.uHasBlood === false} onClick={() => set({ uHasBlood: f.uHasBlood === false ? undefined : false })} /><Toggle label="Continent" on={f.uContainment === "Continent"} onClick={() => set({ uContainment: f.uContainment === "Continent" ? "" : "Continent" })} /></div>
+              <Toggle label="Painful / burning (dysuria)" on={!!f.uPainful} onClick={() => set({ uPainful: !f.uPainful })} />
+            </div>
           </>)}
-          {tab === "urine" && (<>
-            <div><Label>Color</Label><Chips cols={4} value={f.color || ""} onChange={(v) => set({ color: v })} options={["Clear", "Pale", "Yellow", "Dark"].map((x) => ({ v: x, label: x }))} /></div>
-            <div><Label>Output (mL)</Label><input inputMode="numeric" value={f.outputMl ?? ""} onChange={(e) => set({ outputMl: e.target.value })} placeholder="mL" aria-label="Urine output in mL" className={num} /></div>
-            <div className="grid grid-cols-2 gap-2"><Toggle label="No Blood" on={f.hasBlood === false} onClick={() => set({ hasBlood: f.hasBlood === false ? undefined : false })} /><Toggle label="Continent" on={f.containment === "Continent"} onClick={() => set({ containment: f.containment === "Continent" ? "" : "Continent" })} /></div>
-            <Toggle label="Painful / burning (dysuria)" on={!!f.painful} onClick={() => set({ painful: !f.painful })} />
-          </>)}
-          {tab === "edema" && (<>
-            <div><Label>Location</Label><input value={f.location ?? ""} onChange={(e) => set({ location: e.target.value })} placeholder="e.g. Ankles, bilateral" className={txt} /></div>
-            <div><Label>Severity</Label><Chips cols={3} value={f.severity || ""} onChange={(v) => set({ severity: v })} options={["NONE", "TRACE", "MILD", "MODERATE", "SEVERE", "DEEP"].map((x) => ({ v: x, label: x[0] + x.slice(1).toLowerCase() }))} /></div>
+          {form === "skin" && (<>
+            <div><Label>Edema Location</Label><input value={f.location ?? ""} onChange={(e) => set({ location: e.target.value })} placeholder="e.g. Ankles, bilateral" className={txt} /></div>
+            <div><Label>Edema Severity</Label><Chips cols={3} value={f.severity || ""} onChange={(v) => set({ severity: v })} options={["NONE", "TRACE", "MILD", "MODERATE", "SEVERE", "DEEP"].map((x) => ({ v: x, label: x[0] + x.slice(1).toLowerCase() }))} /></div>
             <Toggle label="Pitting" on={!!f.pitting} onClick={() => set({ pitting: !f.pitting })} />
+            <div><Label>Skin Note (pressure areas, wounds, integrity)</Label><textarea rows={2} value={f.skinNote ?? ""} onChange={(e) => set({ skinNote: e.target.value })} placeholder="e.g. Sacrum intact, no redness…" className={txt} /></div>
           </>)}
-          {tab === "concerns" && (<>
+          {form === "concerns" && (<>
             <div><Label>Category</Label><Chips cols={3} value={f.category || ""} onChange={(v) => set({ category: v })} options={["PHYSICAL", "BEHAVIORAL", "SKIN", "PAIN", "HYDRATION", "OTHER"].map((x) => ({ v: x, label: x[0] + x.slice(1).toLowerCase() }))} /></div>
             <div><Label>Severity</Label><Chips cols={4} value={f.severity || ""} onChange={(v) => set({ severity: v })} options={["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((x) => ({ v: x, label: x[0] + x.slice(1).toLowerCase() }))} /></div>
             <div><Label>Description</Label><textarea rows={2} value={f.description ?? ""} onChange={(e) => set({ description: e.target.value })} className={txt} /></div>
           </>)}
-          {tab === "mood" && (<>
+          {form === "mood" && (<>
             <div><Label>Current Mood</Label><Chips cols={4} value={f.mood || ""} onChange={(v) => set({ mood: v })} options={["Calm", "Happy", "Anxious", "Agitated", "Confused", "Withdrawn", "Distressed", "Combative"].map((x) => ({ v: x, label: x }))} /></div>
             <div><Label>Baseline Mood</Label><Chips cols={4} value={f.baseline || ""} onChange={(v) => set({ baseline: v })} options={["Calm", "Happy", "Anxious", "Variable"].map((x) => ({ v: x, label: x }))} /></div>
             <div><Label>Behavior Tags</Label><Multi value={f.tags || []} onChange={(v) => set({ tags: v })} options={["Cooperative", "Resistive", "Wandering", "Calling out", "Sleeping excessively", "Appetite change", "Sundowning"]} /></div>
           </>)}
-          {tab === "pain" && (<>
+          {form === "pain" && (<>
             <div><Label>Pain Score (0–10)</Label><Chips cols={6} value={s(f.score)} onChange={(v) => set({ score: v })} options={Array.from({ length: 11 }, (_, i) => ({ v: String(i), label: String(i) }))} /></div>
             <div><Label>Location</Label><Multi value={f.location ? [f.location] : []} onChange={(v) => set({ location: v[v.length - 1] || "" })} options={["Head", "Chest", "Abdomen", "Back", "Hip", "Leg", "Arm", "Shoulder", "Knee", "Foot", "Generalized"]} /></div>
             <div><Label>Pain Type</Label><Chips cols={3} value={f.type || ""} onChange={(v) => set({ type: v })} options={["Aching", "Sharp", "Burning", "Throbbing", "Cramping", "Pressure"].map((x) => ({ v: x, label: x }))} /></div>
             <div><Label>Intervention</Label><Multi value={f.interventions || []} onChange={(v) => set({ interventions: v })} options={["Repositioned", "Medication given", "Ice/Heat applied", "Notified nurse", "Family notified"]} /></div>
           </>)}
-          {tab === "mobility" && (<>
+          {form === "mobility" && (<>
             <div><Label>Assistance Level</Label><Chips cols={2} value={f.assistanceLevel || ""} onChange={(v) => set({ assistanceLevel: v })} options={[{ v: "INDEPENDENT", label: "Independent" }, { v: "SUPERVISED", label: "Supervision" }, { v: "MINIMAL", label: "Minimal Assist" }, { v: "MODERATE", label: "Moderate Assist" }, { v: "MAXIMAL", label: "Maximum Assist" }, { v: "DEPENDENT", label: "Dependent" }]} /></div>
             <div><Label>Mobility Aid</Label><Chips cols={3} value={f.assistiveDevice || ""} onChange={(v) => set({ assistiveDevice: v })} options={["None", "Cane", "Walker", "Wheelchair", "Bed-bound", "Gait belt"].map((x) => ({ v: x, label: x }))} /></div>
             <Toggle label="Did not ambulate" on={f.ambulated === false} onClick={() => set({ ambulated: f.ambulated === false ? undefined : false })} />
             <button type="button" onClick={() => set({ fallOccurred: !f.fallOccurred })} className="w-full py-2 rounded-lg border text-xs font-semibold" style={f.fallOccurred ? { backgroundColor: "var(--clinical-coral)", color: "#fff", borderColor: "var(--clinical-coral)" } : { color: "var(--clinical-coral)", borderColor: "var(--clinical-coral)" }}>⚠ Report Fall Incident</button>
           </>)}
-          {tab === "sleep" && (<>
+          {form === "sleep" && (<>
             <div><Label>Hours of Sleep</Label><Chips cols={5} value={s(f.totalHours)} onChange={(v) => set({ totalHours: v })} options={[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({ v: String(n), label: `${n}h` }))} /></div>
             <div><Label>Sleep Quality</Label><Chips cols={5} value={f.quality || ""} onChange={(v) => set({ quality: v })} options={["Excellent", "Good", "Fair", "Poor", "Very Poor"].map((x) => ({ v: x, label: x }))} /></div>
             <div><Label>Disturbances</Label><Multi value={f.disturbances || []} onChange={(v) => set({ disturbances: v })} options={["Pain", "Anxiety", "Noise", "Nocturia", "Confusion", "Nightmares", "Restlessness"]} /></div>

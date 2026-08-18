@@ -26,6 +26,13 @@ type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-exp
 const KEY = "shift_endorsements";
 const ADL_KEY = "adl_logs";
 const s = (v: unknown) => (v == null ? "" : String(v));
+// Readable label for a care-log domain code (the v4.2 AS-codes emitted by the
+// shared useCareLogData hook) used when composing endorsement section text.
+const CARE_DOMAIN_LABELS: Record<string, string> = {
+  "AS-01": "ADLs", "AS-02": "Mobility", "AS-05": "Behavior", "AS-08": "Nutrition",
+  "AS-10": "Continence", "AS-11": "Skin", "AS-13": "Concern", "pain": "Pain",
+};
+const careDomainLabel = (d: string) => CARE_DOMAIN_LABELS[d] ?? d;
 const newId = () => globalThis.crypto?.randomUUID?.() ?? `end-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 const isoDate = (d: Date) => d.toISOString().split("T")[0];
 const nowTime = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
@@ -178,16 +185,17 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
     if (sleep.length) gc += `${gc ? " " : ""}${sleep.join("; ")}.`;
     if (gc) out.generalCondition = gc.trim();
 
-    // 2. Intake & Elimination — care logs + ADL continence
-    const ie = careEntries.filter((e) => e.resId === rid && inDay(e.at) && ["meals", "bowel", "urine", "edema"].includes(e.domain)).map((e) => `${cap(e.domain)}: ${e.summary}`);
+    // 2. Intake & Elimination — care logs + ADL continence. Care-log domains are
+    // the v4.2 AS-codes: AS-08 Nutrition/Hydration, AS-10 Continence, AS-11 Skin.
+    const ie = careEntries.filter((e) => e.resId === rid && inDay(e.at) && ["AS-08", "AS-10", "AS-11"].includes(e.domain)).map((e) => `${careDomainLabel(e.domain)}: ${e.summary}`);
     const cont = adl.filter((l: Row) => s(l.domain).toLowerCase() === "continence").map(adlLine);
     const ieAll = [...ie, ...cont];
     if (ieAll.length) out.intakeElimination = ieAll.join(" ");
 
-    // 3. ADL & Mobility
+    // 3. ADL & Mobility — AS-01 ADLs/Personal Care + AS-02 Mobility/Transfers.
     const adlDomains = ["bathing", "dressing", "grooming", "toileting", "transfers", "feeding", "mobility"];
     const adlM = adl.filter((l: Row) => adlDomains.includes(s(l.domain).toLowerCase())).map(adlLine);
-    const mob = careEntries.filter((e) => e.resId === rid && inDay(e.at) && e.domain === "mobility").map((e) => `Mobility: ${e.summary}`);
+    const mob = careEntries.filter((e) => e.resId === rid && inDay(e.at) && ["AS-01", "AS-02"].includes(e.domain)).map((e) => `${careDomainLabel(e.domain)}: ${e.summary}`);
     const amAll = [...adlM, ...mob];
     if (amAll.length) out.adlMobility = amAll.join("; ");
 
@@ -195,8 +203,8 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
     const wounds = woundRecords.filter((w: Row) => s(w.residentId) === rid && !["HEALED", "RESOLVED", "CLOSED"].includes(s(w.status).toUpperCase()));
     if (wounds.length) out.skinWound = wounds.map((w: Row) => [s(w.location) || s(w.bodyLocation) || "Wound", s(w.type) || s(w.woundType), s(w.stage) ? `(${s(w.stage)})` : "", s(w.status) ? `· ${s(w.status)}` : ""].filter(Boolean).join(" ")).join("; ");
 
-    // 5. Behavior & Cognitive
-    const concerns = careEntries.filter((e) => e.resId === rid && inDay(e.at) && ["concerns", "mood"].includes(e.domain)).map((e) => `${cap(e.domain)}: ${e.summary}`);
+    // 5. Behavior & Cognitive — AS-13 Safety/Concerns + AS-05 Behavior/BPSD.
+    const concerns = careEntries.filter((e) => e.resId === rid && inDay(e.at) && ["AS-13", "AS-05"].includes(e.domain)).map((e) => `${careDomainLabel(e.domain)}: ${e.summary}`);
     const cog = adl.filter((l: Row) => ["cognition", "behavior"].includes(s(l.domain).toLowerCase())).map(adlLine);
     const bcAll = [...concerns, ...cog];
     if (bcAll.length) out.behaviorCognitive = bcAll.join(" ");

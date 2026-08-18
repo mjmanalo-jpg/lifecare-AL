@@ -14,6 +14,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, updateRecord } from "@/lib/api";
 import { generateCarePlanForResident } from "@/lib/carePlanGen";
+import { recordLocChange, parseLocHistory, historyForResident, LOC_HISTORY_KEY, LOC_SOURCE_LABEL, type LocHistoryEntry } from "@/lib/lifecare/locHistory";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import {
@@ -46,12 +47,14 @@ const DOMAINS: Domain[] = [
 type LevelAccent = "green" | "teal" | "amber" | "coral";
 const ACCENT_VAR: Record<LevelAccent, string> = { green: "var(--clinical-green)", teal: "var(--clinical-panel)", amber: "var(--clinical-amber)", coral: "var(--clinical-coral)" };
 interface Level { n: number; name: string; min: number; max: number; accent: LevelAccent; careLevel: string; package: string; services: string[] }
+// LifeCare v3.9 Care Level Model (L1–L5). Names, profiles and baseline care
+// packages mirror the "Operational Care Task Package — Baseline by LOC" sheet.
 const LEVELS: Level[] = [
-  { n: 1, name: "Independent Living Plus", min: 0, max: 10, accent: "green", careLevel: "INDEPENDENT", package: "Wellness & light-touch support", services: ["Weekly wellness check", "Medication reminders", "Community activities", "Housekeeping & laundry"] },
-  { n: 2, name: "Assisted Living", min: 11, max: 20, accent: "teal", careLevel: "ASSISTED", package: "Daily assistance", services: ["Daily ADL assistance", "Nurse-administered medications", "Escort to meals/activities", "Scheduled vitals"] },
-  { n: 3, name: "Enhanced Assisted Care", min: 21, max: 30, accent: "amber", careLevel: "ASSISTED", package: "Extensive daily care", services: ["Extensive ADL assistance", "Fall-prevention program", "Continence care", "Frequent nursing review"] },
-  { n: 4, name: "Memory / Comprehensive Care", min: 31, max: 40, accent: "coral", careLevel: "MEMORY", package: "Comprehensive & memory support", services: ["Secured/memory support", "Behavioral care plan", "Two-person transfers", "24-hour supervision"] },
-  { n: 5, name: "Skilled / Complex Care", min: 41, max: 50, accent: "coral", careLevel: "SKILLED", package: "Skilled & complex medical", services: ["Skilled nursing interventions", "Complex medication management", "Wound / IV / tube care", "Dedicated caregiver"] },
+  { n: 1, name: "Minimal Care Support", min: 0, max: 10, accent: "green", careLevel: "INDEPENDENT", package: "Mostly independent; intermittent cueing/setup, no pervasive supervision", services: ["Routine wellness observation", "Basic individualized fall prevention", "Self-managed / low-complexity medication support", "Encourage independence & meaningful activity"] },
+  { n: 2, name: "Moderate Care Support", min: 11, max: 20, accent: "teal", careLevel: "ASSISTED", package: "Regular assistance in selected ADLs / mobility / toileting / medication", services: ["Regular assistance in selected ADLs", "Routine authorized medication administration", "Structured monitoring per condition/order", "Defined fall/safety controls during activities"] },
+  { n: 3, name: "Extensive Care Support", min: 21, max: 30, accent: "amber", careLevel: "ASSISTED", package: "Multiple dependencies or substantial physical assistance; high-frequency care", services: ["Extensive hands-on help across multiple ADLs", "Frequent hands-on toileting / continence care", "Complex medication monitoring & reconciliation", "Frequent structured clinical monitoring/coordination"] },
+  { n: 4, name: "Comprehensive Care Management", min: 31, max: 40, accent: "coral", careLevel: "MEMORY", package: "Near-total dependency w/ supervision OR pervasive cognitive/behavioral supervision", services: ["Comprehensive / near-total ADL care", "Pervasive dementia / BPSD supervision", "Comprehensive mobility & transfer support", "Multi-condition monitoring & coordination"] },
+  { n: 5, name: "Specialized Palliative / End-of-Life Care", min: 41, max: 50, accent: "coral", careLevel: "SKILLED", package: "Authorized comfort-focused advanced-illness / end-of-life pathway (not a dependency score)", services: ["Goal-directed comfort care", "Symptom observation & management", "Dignity, family & provider coordination", "Authorized goals-of-care / end-of-life pathway"] },
 ];
 const levelFor = (total: number) => LEVELS.find((l) => total >= l.min && total <= l.max) ?? LEVELS[LEVELS.length - 1];
 const accentFor = (n: number) => LEVELS.find((l) => l.n === n)?.accent ?? "coral";
@@ -70,27 +73,47 @@ function LevelChip({ level, label }: { level: number; label?: string }) {
   );
 }
 
-// Care-activity catalog by level (Category · Activity · Frequency · Shift · Duration).
+// Care-activity catalog by level, aligned to the LifeCare v4.2 14-domain
+// taxonomy (Domain/Category · Activity · Frequency · Shift · Duration).
 const CARE_ACTIVITIES: { category: string; activity: string; frequency: string; shift: string; duration: string; levels: number[] }[] = [
-  { category: "Wellness", activity: "Weekly wellness check", frequency: "Weekly", shift: "Morning", duration: "15 min", levels: [1] },
-  { category: "Vitals & Monitoring", activity: "Routine vital signs", frequency: "Daily", shift: "Morning", duration: "10 min", levels: [1, 2, 3, 4, 5] },
-  { category: "Psychosocial", activity: "Social engagement & activities", frequency: "Daily", shift: "Afternoon", duration: "30 min", levels: [1, 2, 3, 4] },
+  // AS-01 ADLs / Personal Care
+  { category: "ADLs / Personal Care", activity: "Assist with bathing", frequency: "Daily", shift: "Morning", duration: "20 min", levels: [2, 3, 4, 5] },
+  { category: "ADLs / Personal Care", activity: "Assist with dressing & grooming", frequency: "Daily", shift: "Morning", duration: "15 min", levels: [2, 3, 4, 5] },
+  { category: "ADLs / Personal Care", activity: "Comprehensive / near-total ADL support", frequency: "Every shift", shift: "All shifts", duration: "30 min", levels: [4, 5] },
+  // AS-02 Mobility / Transfers
+  { category: "Mobility / Transfers", activity: "Ambulation & transfer assistance", frequency: "Every shift", shift: "All shifts", duration: "15 min", levels: [2, 3, 4, 5] },
+  { category: "Mobility / Transfers", activity: "Repositioning", frequency: "Every 2 hrs", shift: "All shifts", duration: "10 min", levels: [4, 5] },
+  // AS-03 Fall Risk
+  { category: "Fall Prevention", activity: "Fall-prevention controls & safety rounding", frequency: "Hourly", shift: "All shifts", duration: "5 min", levels: [3, 4, 5] },
+  // AS-04 Cognition
+  { category: "Cognition", activity: "Reorientation & cueing", frequency: "Every shift", shift: "All shifts", duration: "10 min", levels: [3, 4, 5] },
+  // AS-05 Behavior / BPSD
+  { category: "Behavior / BPSD", activity: "Behavioral care-plan check-in", frequency: "Every shift", shift: "All shifts", duration: "15 min", levels: [4, 5] },
+  // AS-06 Clinical Monitoring
+  { category: "Clinical Monitoring", activity: "Routine vital signs", frequency: "Daily", shift: "Morning", duration: "10 min", levels: [1, 2, 3, 4, 5] },
+  { category: "Clinical Monitoring", activity: "Structured condition monitoring & coordination", frequency: "Per order", shift: "All shifts", duration: "15 min", levels: [3, 4, 5] },
+  // AS-07 Medication
   { category: "Medication", activity: "Medication administration", frequency: "Per schedule", shift: "All shifts", duration: "10 min", levels: [2, 3, 4, 5] },
-  { category: "Personal Care", activity: "Assist with bathing", frequency: "Daily", shift: "Morning", duration: "20 min", levels: [2, 3, 4, 5] },
-  { category: "Personal Care", activity: "Assist with dressing & grooming", frequency: "Daily", shift: "Morning", duration: "15 min", levels: [2, 3, 4, 5] },
-  { category: "Mobility", activity: "Ambulation & transfer assistance", frequency: "Every shift", shift: "All shifts", duration: "15 min", levels: [2, 3, 4, 5] },
-  { category: "Nutrition", activity: "Meal setup & encouragement", frequency: "Each meal", shift: "All shifts", duration: "10 min", levels: [2, 3] },
-  { category: "Fall Prevention", activity: "Hourly safety rounding", frequency: "Hourly", shift: "All shifts", duration: "5 min", levels: [3, 4, 5] },
-  { category: "Continence", activity: "Scheduled toileting", frequency: "Every 2–3 hrs", shift: "All shifts", duration: "10 min", levels: [3, 4, 5] },
-  { category: "Cognitive", activity: "Reorientation & cueing", frequency: "Every shift", shift: "All shifts", duration: "10 min", levels: [3, 4, 5] },
-  { category: "Night Care", activity: "Scheduled night checks", frequency: "Every 2 hrs", shift: "Night", duration: "5 min", levels: [3, 4, 5] },
-  { category: "Mobility", activity: "Repositioning", frequency: "Every 2 hrs", shift: "All shifts", duration: "10 min", levels: [4, 5] },
-  { category: "Nutrition", activity: "Feeding assistance", frequency: "Each meal", shift: "All shifts", duration: "25 min", levels: [4, 5] },
-  { category: "Behavioral", activity: "Behavioral care-plan check-in", frequency: "Every shift", shift: "All shifts", duration: "15 min", levels: [4, 5] },
-  { category: "Medication", activity: "Complex medication management", frequency: "Per schedule", shift: "All shifts", duration: "20 min", levels: [4, 5] },
-  { category: "Skilled Nursing", activity: "Wound care", frequency: "Daily", shift: "Morning", duration: "20 min", levels: [5] },
+  { category: "Medication", activity: "Complex medication management & reconciliation", frequency: "Per schedule", shift: "All shifts", duration: "20 min", levels: [3, 4, 5] },
+  // AS-08 Nutrition / Hydration
+  { category: "Nutrition / Hydration", activity: "Meal setup, encouragement & intake monitoring", frequency: "Each meal", shift: "All shifts", duration: "10 min", levels: [2, 3] },
+  { category: "Nutrition / Hydration", activity: "Feeding assistance", frequency: "Each meal", shift: "All shifts", duration: "25 min", levels: [4, 5] },
+  // AS-09 Communication
+  { category: "Communication", activity: "Communication support & adaptations", frequency: "Every shift", shift: "All shifts", duration: "10 min", levels: [3, 4, 5] },
+  // AS-10 Continence / Toileting
+  { category: "Continence / Toileting", activity: "Scheduled toileting & continence care", frequency: "Every 2–3 hrs", shift: "All shifts", duration: "10 min", levels: [2, 3, 4, 5] },
+  // AS-11 Skin Integrity
+  { category: "Skin Integrity", activity: "Skin checks & pressure-injury prevention", frequency: "Daily", shift: "All shifts", duration: "10 min", levels: [3, 4, 5] },
+  { category: "Skin Integrity", activity: "Wound care", frequency: "Daily", shift: "Morning", duration: "20 min", levels: [5] },
+  // AS-12 Sleep / Daily Routine
+  { category: "Sleep / Daily Routine", activity: "Scheduled night checks & routine support", frequency: "Every 2 hrs", shift: "Night", duration: "5 min", levels: [3, 4, 5] },
+  // AS-13 Safety / Supervision
+  { category: "Safety / Supervision", activity: "Supervision for safety / wandering", frequency: "Every shift", shift: "All shifts", duration: "15 min", levels: [3, 4] },
+  { category: "Safety / Supervision", activity: "Continuous supervision", frequency: "Continuous", shift: "All shifts", duration: "—", levels: [5] },
+  // AS-14 Reablement / Therapy
+  { category: "Reablement / Therapy", activity: "Reablement / therapy carryover & engagement", frequency: "Daily", shift: "Afternoon", duration: "30 min", levels: [1, 2, 3, 4] },
+  // Skilled nursing add-on (DT-014)
   { category: "Skilled Nursing", activity: "IV / injectable therapy", frequency: "Per order", shift: "All shifts", duration: "15 min", levels: [5] },
-  { category: "Night Care", activity: "Continuous night supervision", frequency: "Continuous", shift: "Night", duration: "—", levels: [5] },
 ];
 
 const TRIGGERS = ["Scheduled / Quarterly", "Condition Change", "Post-Fall", "Post-Hospitalization", "Family Request", "Admission"];
@@ -127,6 +150,8 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
     });
   }, [settingRows, careLevelById]);
   const resName = (id: string) => { const r = residents.find((x: Row) => s(x.id) === id); return r ? { name: s(r.name), room: s(r.room) } : { name: id, room: "" }; };
+  // Unified Level of Care history (pre-admission + reassessment + acuity approvals).
+  const locHistory = useMemo(() => parseLocHistory(settingRows.find((r) => (r.key || r.id) === LOC_HISTORY_KEY)?.value), [settingRows]);
 
   const [tab, setTab] = useState<"queue" | "packages" | "activities" | "history">("queue");
   const [newOpen, setNewOpen] = useState(false);
@@ -180,6 +205,8 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
       // approved level (best-effort). Re-assessment to a new level voids the old
       // unbilled fee and posts the new one; the billing cron re-applies it monthly.
       fetch("/api/billing/loc-charge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ residentId: a.residentId, level: a.level }) }).catch(() => null);
+      // Append to the resident's Level of Care history (only records an actual change).
+      void recordLocChange({ residentId: a.residentId, residentName: rn.name, level: `L${a.level}`, source: "ACUITY_APPROVAL", assessmentId: a.id, rawScore: a.total, by: clinicianName, role: "Care Acuity", notes: a.trigger ? `Trigger: ${a.trigger}` : undefined });
       // Stage 6 → 8 → 9: on final approval, auto-build the care plan + caregiver
       // tasks — unless the resident already has a plan. Best-effort.
       if (!residentsWithPlan.has(a.residentId)) {
@@ -286,7 +313,7 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
 
       {tab === "activities" && <CareActivitiesView />}
 
-      {tab === "history" && <LevelHistoryView residents={residents} approved={approved} />}
+      {tab === "history" && <LevelHistoryView residents={residents} approved={approved} locHistory={locHistory} />}
 
       <NewAssessmentModal open={newOpen} residents={residents} onClose={() => setNewOpen(false)} onSubmit={submitNew} />
 
@@ -402,28 +429,48 @@ function CareActivitiesView() {
 }
 
 // ── Level History — per-resident level-change timeline ───────────────────────
-function LevelHistoryView({ residents, approved }: { residents: Row[]; approved: Acuity[] }) {
+// Unified level-of-care timeline entry (merged from loc_history + legacy acuity).
+type LocTimelineItem = { at: string; level: number; source: string; by?: string; rawScore?: number; scoreMax: number; notes?: string };
+const levelNum = (v: unknown) => { const m = /([1-5])/.exec(String(v ?? "")); return m ? Number(m[1]) : 0; };
+
+function LevelHistoryView({ residents, approved, locHistory }: { residents: Row[]; approved: Acuity[]; locHistory: LocHistoryEntry[] }) {
   const [sel, setSel] = useState("");
   const resId = sel || (residents[0] ? s(residents[0].id) : "");
-  const history = approved.filter((a) => a.residentId === resId).sort((a, b) => (b.decidedAt || b.createdAt || "").localeCompare(a.decidedAt || a.createdAt || ""));
+
+  // Merge the durable loc_history with any legacy approved-acuity records not yet
+  // represented there (matched by assessmentId), into one chronological timeline.
+  const timeline = useMemo<LocTimelineItem[]>(() => {
+    const mine = historyForResident(locHistory, resId);
+    const seenAssessment = new Set(mine.map((e) => e.assessmentId).filter(Boolean) as string[]);
+    const fromHistory: LocTimelineItem[] = mine.map((e) => ({
+      at: e.at, level: levelNum(e.level), source: LOC_SOURCE_LABEL[e.source] || e.source,
+      by: e.by, rawScore: e.rawScore, scoreMax: e.source === "ACUITY_APPROVAL" ? 50 : 56, notes: e.notes,
+    }));
+    const fromAcuity: LocTimelineItem[] = approved
+      .filter((a) => a.residentId === resId && !seenAssessment.has(a.id))
+      .map((a) => ({ at: s(a.decidedAt || a.createdAt), level: a.level, source: "Acuity Approval", by: a.decidedBy || a.createdBy, rawScore: a.total, scoreMax: 50, notes: a.trigger ? `Trigger: ${a.trigger}` : undefined }));
+    return [...fromHistory, ...fromAcuity].sort((x, y) => (y.at || "").localeCompare(x.at || ""));
+  }, [locHistory, approved, resId]);
+
   return (
     <ClinicalCard className="p-5">
       <h2 className="text-lg font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>Care Level History</h2>
-      <p className="mb-3 text-sm text-[var(--clinical-muted)]">Select a resident to view their level change history</p>
+      <p className="mb-3 text-sm text-[var(--clinical-muted)]">Full record of every level of care a resident has been through — pre-admission, reassessments and acuity approvals.</p>
       <select value={resId} onChange={(e) => setSel(e.target.value)} aria-label="Select resident" className={`${controlClass} max-w-sm`}>
         {residents.length === 0 && <option value="">No residents</option>}
         {residents.map((r) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — {s(r.room)}</option>)}
       </select>
       <div className="mt-4">
-        {history.length === 0 ? <p className="text-[var(--clinical-muted)]">No level changes recorded.</p>
+        {timeline.length === 0 ? <p className="text-[var(--clinical-muted)]">No level changes recorded.</p>
           : <div className="space-y-2">
-              {history.map((a, i) => { const prev = history[i + 1]; return (
-                <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2.5" style={{ borderColor: "var(--clinical-line)" }}>
+              {timeline.map((t, i) => { const prev = timeline[i + 1]; return (
+                <div key={`${t.at}-${i}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2.5" style={{ borderColor: "var(--clinical-line)" }}>
                   <div className="flex items-center gap-2">
-                    <LevelChip level={a.level} label={a.levelName} />
-                    {prev && prev.level !== a.level && <span className="text-xs text-[var(--clinical-muted)]">changed from L{prev.level}</span>}
+                    <LevelChip level={t.level} label={LEVELS.find((l) => l.n === t.level)?.name} />
+                    {prev && prev.level !== t.level && <span className="text-xs font-semibold" style={{ color: ACCENT_VAR[accentFor(t.level)] }}>{prev.level < t.level ? "▲" : "▼"} from L{prev.level}</span>}
+                    <span className="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide border" style={{ borderColor: "var(--clinical-line-strong)", color: "var(--clinical-muted)" }}>{t.source}</span>
                   </div>
-                  <span className="text-xs text-[var(--clinical-muted)]">{a.total}/50 · {fmtDate(a.decidedAt || a.createdAt)} · {a.decidedBy || a.createdBy || "—"}</span>
+                  <span className="text-xs text-[var(--clinical-muted)]">{t.rawScore != null ? `${t.rawScore}/${t.scoreMax} · ` : ""}{fmtDate(t.at)} · {t.by || "—"}</span>
                 </div>
               ); })}
             </div>}

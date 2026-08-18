@@ -17,6 +17,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, updateRecord } from "@/lib/api";
 import { generateCarePlanFromV42 } from "@/lib/carePlanV42Gen";
 import { downstreamForAssessment } from "@/lib/lifecare/downstream.ts";
+import { recordLocChange } from "@/lib/lifecare/locHistory";
 import {
   ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalCard, StatCard,
   SearchInput, DataState, StatusPill, MicroLabel, controlClass, DISPLAY,
@@ -370,6 +371,21 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE" }: { cli
           }
         } catch { /* best-effort: validation already saved; downstream is idempotent */ }
       }
+      // Append to the resident's Level of Care history — captured from pre-admission
+      // onward (keyed by residentId when admitted, else the linked admission), and
+      // again on each reassessment, so the full LOC trail is preserved.
+      void recordLocChange({
+        residentId: draft.layer1.residentId,
+        admissionId: draft.layer1.convertedAdmissionId,
+        residentName: draft.layer1.residentName,
+        level: draft.layer3.finalLevel,
+        source: draft.layer3.priorAssessmentId ? "REASSESSMENT" : "PRE_ADMISSION",
+        assessmentId: draft.id,
+        rawScore: assessmentRawScore(draft),
+        by: me || "Clinician",
+        role: roleLabel,
+        notes: draft.layer3.finalLevelJustification,
+      });
     }
   };
 

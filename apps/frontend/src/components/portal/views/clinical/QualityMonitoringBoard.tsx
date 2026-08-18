@@ -16,9 +16,9 @@ type Row = Record<string, unknown>;
 const s = (v: unknown) => (v == null ? "" : String(v));
 const fmt = (v: number | null, unit = "") => (v == null ? "—" : `${v}${unit}`);
 
-// The care-log workflow documents ten domains per resident; coverage is measured
-// against that total.
-const CARE_DOMAINS_TOTAL = 10;
+// The care-log workflow documents the 14 LifeCare v4.2 assessment domains per
+// resident; coverage is measured against that total.
+const CARE_DOMAINS_TOTAL = 14;
 
 /** 0–100 score → colour band (higher is better). */
 function scoreTone(v: number | null): { text: string; bar: string; bg: string } {
