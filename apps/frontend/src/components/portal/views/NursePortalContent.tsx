@@ -26,6 +26,12 @@ import CameraActivityLog from "@/components/portal/views/clinical/CameraActivity
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import PreAdmissionAssessmentForm from "@/components/portal/views/clinical/PreAdmissionAssessmentForm";
 import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAssessmentV42";
+import TodaysCareBoard from "@/components/portal/views/clinical/TodaysCareBoard";
+import AdditionalServicesBoard from "@/components/portal/views/clinical/AdditionalServicesBoard";
+import SafeguardingBoard from "@/components/portal/views/clinical/SafeguardingBoard";
+import InfectionControlBoard from "@/components/portal/views/clinical/InfectionControlBoard";
+import EmergencyProtocolBoard from "@/components/portal/views/clinical/EmergencyProtocolBoard";
+import ClinicalProtocolsBoard from "@/components/portal/views/clinical/ClinicalProtocolsBoard";
 import CareLogsBoard, { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
 import ADLMonitoringBoard from "@/components/portal/views/clinical/ADLMonitoringBoard";
 import WeightMonitoringBoard from "@/components/portal/views/clinical/WeightMonitoringBoard";
@@ -727,6 +733,24 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   }
   if (tab === "assessmentv42") {
     return <ResidentAssessmentV42 clinicianRole="NURSE" />;
+  }
+  if (tab === "todayscare") {
+    return <TodaysCareBoard role="NURSE" />;
+  }
+  if (tab === "additionalservices") {
+    return <AdditionalServicesBoard clinicianRole="NURSE" />;
+  }
+  if (tab === "safeguarding") {
+    return <SafeguardingBoard role="NURSE" />;
+  }
+  if (tab === "infectioncontrol") {
+    return <InfectionControlBoard role="NURSE" />;
+  }
+  if (tab === "emergencyprotocol") {
+    return <EmergencyProtocolBoard role="NURSE" />;
+  }
+  if (tab === "clinicalprotocols") {
+    return <ClinicalProtocolsBoard role="NURSE" />;
   }
   if (tab === "carelogs") {
     return <CareLogsTimeline clinicianRole="NURSE" />;
