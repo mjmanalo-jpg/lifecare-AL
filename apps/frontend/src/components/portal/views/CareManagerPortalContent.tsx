@@ -5,7 +5,6 @@ import AlertCenter from "@/components/portal/views/clinical/AlertCenter";
 import ApprovalWorkflows from "@/components/portal/views/clinical/ApprovalWorkflows";
 import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
-import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAssessmentV42";
 import TodaysCareBoard from "@/components/portal/views/clinical/TodaysCareBoard";
 import AdditionalServicesBoard from "@/components/portal/views/clinical/AdditionalServicesBoard";
@@ -146,7 +145,8 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
     case "clinicalprotocols":
       return <ClinicalProtocolsBoard role="FACILITY_ADMIN" />;
     case "rounds":
-      return <AssessmentAcuityBoard clinicianRole="FACILITY_ADMIN" />;
+      // Retired legacy acuity board → governed v4.2 Care Acuity board.
+      return <CareAcuityBoard clinicianRole="FACILITY_ADMIN" />;
     case "careplans":
       return <CarePlanReviewsBoard clinicianRole="FACILITY_ADMIN" />;
     case "privatecare":

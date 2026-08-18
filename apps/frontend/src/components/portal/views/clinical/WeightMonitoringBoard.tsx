@@ -17,6 +17,7 @@ import { upsertRecord } from "@/lib/api";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, DataState, FieldLabel, SearchInput, controlClass, SERIF } from "./clinical-ui";
+import { CLINICAL_ALERT_RULES } from "@/lib/lifecare/clinicalAlerts";
 
 // Initials from a resident name for the row avatar.
 
@@ -343,17 +344,21 @@ function ConcernsView({ residents, logs, onViewHistory }: { residents: Row[]; lo
       const asc = list.sort((a, b) => a.date.localeCompare(b.date));
       const latest = asc[asc.length - 1];
       const warns: string[] = [];
-      // Rule 1 — weight loss in the last 30 days.
-      const cutoff = new Date(new Date(latest.date).getTime() - 30 * 86_400_000);
+      // Rule 1 — weight loss within the configured window (rule data).
+      const windowDays = CLINICAL_ALERT_RULES.weight.lossWindowDays;
+      const cutoff = new Date(new Date(latest.date).getTime() - windowDays * 86_400_000);
       const baseline = [...asc].reverse().find((e) => new Date(e.date) <= cutoff) || asc[0];
       if (baseline && baseline !== latest && baseline.weightKg! > latest.weightKg!) {
         const loss = baseline.weightKg! - latest.weightKg!;
-        warns.push(`Weight loss of ${loss.toFixed(1)} kg in the last 30 days (from ${Math.round(baseline.weightKg!)} kg to ${Math.round(latest.weightKg!)} kg).`);
+        warns.push(`Weight loss of ${loss.toFixed(1)} kg in the last ${windowDays} days (from ${Math.round(baseline.weightKg!)} kg to ${Math.round(latest.weightKg!)} kg).`);
       }
-      // Rule 2 — three consecutive weight drops.
-      if (asc.length >= 3) {
-        const [a, b, c] = asc.slice(-3);
-        if (a.weightKg! > b.weightKg! && b.weightKg! > c.weightKg!) warns.push(`3 consecutive weight drops: ${Math.round(a.weightKg!)} kg → ${Math.round(b.weightKg!)} kg → ${Math.round(c.weightKg!)} kg.`);
+      // Rule 2 — N consecutive weight drops (N from rule data).
+      const n = CLINICAL_ALERT_RULES.weight.consecutiveDrops;
+      if (asc.length >= n) {
+        const tail = asc.slice(-n);
+        let dropping = true;
+        for (let i = 1; i < tail.length; i++) if (!(tail[i - 1].weightKg! > tail[i].weightKg!)) dropping = false;
+        if (dropping) warns.push(`${n} consecutive weight drops: ${tail.map((t) => `${Math.round(t.weightKg!)} kg`).join(" → ")}.`);
       }
       if (warns.length) out.push({ id, warns });
     });

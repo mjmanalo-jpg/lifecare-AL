@@ -1,0 +1,5 @@
+{
+  "pain": { "severeGte": 7, "moderateGte": 4 },
+  "sleep": { "poorHoursLt": 4 },
+  "weight": { "lossWindowDays": 30, "consecutiveDrops": 3 }
+}

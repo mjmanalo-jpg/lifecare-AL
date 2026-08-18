@@ -37,6 +37,7 @@ import { qrDataUrl } from "@/lib/qr";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, SearchInput, DataState, controlClass } from "./clinical-ui";
 import { careLevelEnumToLevel, domainInPackage, DOMAIN_LABEL, recordOutOfPackageService } from "@/lib/lifecare/carePackage";
+import { CLINICAL_ALERT_RULES } from "@/lib/lifecare/clinicalAlerts";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -234,8 +235,8 @@ function evalDomainTrigger(kind: SumKind, d: Row, f: Row, name: string): Trigger
     }
     case "pain": {
       const score = Number(d.score) || 0;
-      if (score >= 7) return { type: "MEDICAL_EMERGENCY", severity: "SEVERE", title: `Severe pain (${score}/10)`, description: `${who} reported severe pain of ${score}/10${f.location ? ` at ${s(f.location)}` : ""}. Assess, treat per orders and notify the nurse.` };
-      if (score >= 4) return { type: "OTHER", severity: "MODERATE", title: `Moderate pain (${score}/10)`, description: `${who} reported pain of ${score}/10${f.location ? ` at ${s(f.location)}` : ""}. Review analgesia and reassess.` };
+      if (score >= CLINICAL_ALERT_RULES.pain.severeGte) return { type: "MEDICAL_EMERGENCY", severity: "SEVERE", title: `Severe pain (${score}/10)`, description: `${who} reported severe pain of ${score}/10${f.location ? ` at ${s(f.location)}` : ""}. Assess, treat per orders and notify the nurse.` };
+      if (score >= CLINICAL_ALERT_RULES.pain.moderateGte) return { type: "OTHER", severity: "MODERATE", title: `Moderate pain (${score}/10)`, description: `${who} reported pain of ${score}/10${f.location ? ` at ${s(f.location)}` : ""}. Review analgesia and reassess.` };
       return null;
     }
     case "mobility": {
@@ -247,7 +248,7 @@ function evalDomainTrigger(kind: SumKind, d: Row, f: Row, name: string): Trigger
     case "sleep": {
       const hrs = Number(d.totalHours) || 0;
       const q = s(f.quality);
-      if (hrs > 0 && hrs < 4) return { type: "OTHER", severity: "MODERATE", title: `Poor sleep (${hrs}h)`, description: `${who} slept only ${hrs}h${q ? ` (${q.toLowerCase()} quality)` : ""}. Review causes (pain, anxiety, nocturia) and sleep hygiene.` };
+      if (hrs > 0 && hrs < CLINICAL_ALERT_RULES.sleep.poorHoursLt) return { type: "OTHER", severity: "MODERATE", title: `Poor sleep (${hrs}h)`, description: `${who} slept only ${hrs}h${q ? ` (${q.toLowerCase()} quality)` : ""}. Review causes (pain, anxiety, nocturia) and sleep hygiene.` };
       if (q === "Poor" || q === "Very Poor") return { type: "OTHER", severity: "MODERATE", title: "Poor sleep quality", description: `${who}'s sleep quality was ${q.toLowerCase()}${Array.isArray(f.disturbances) && f.disturbances.length ? ` — disturbances: ${(f.disturbances as string[]).join(", ")}` : ""}. Review contributing factors.` };
       return null;
     }

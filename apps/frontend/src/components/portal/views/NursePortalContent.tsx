@@ -23,7 +23,6 @@ import ReferralsBoard from "@/components/portal/views/clinical/ReferralsBoard";
 import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
 import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
-import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAssessmentV42";
 import TodaysCareBoard from "@/components/portal/views/clinical/TodaysCareBoard";
 import AdditionalServicesBoard from "@/components/portal/views/clinical/AdditionalServicesBoard";
@@ -779,7 +778,9 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
     return <ShiftEndorsementDashboard clinicianRole="NURSE" />;
   }
   if (tab === "rounds") {
-    return <AssessmentAcuityBoard clinicianRole="NURSE" />;
+    // Retired the legacy 9-dimension acuity board — route to the governed v4.2
+    // Care Acuity & Level of Care board (rule-data driven).
+    return <CareAcuityBoard clinicianRole="NURSE" />;
   }
   if (tab === "orders") {
     return <PhysicianOrders />;

@@ -30,7 +30,7 @@ import ShiftEndorsementBoard from "@/components/portal/views/clinical/ShiftEndor
 import ShiftEndorsementDashboard from "@/components/portal/views/clinical/ShiftEndorsementDashboard";
 import WeightMonitoringBoard from "@/components/portal/views/clinical/WeightMonitoringBoard";
 import ShiftSummaryBoard from "@/components/portal/views/clinical/ShiftSummaryBoard";
-import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
+import CareAcuityBoard from "@/components/portal/views/clinical/CareAcuityBoard";
 import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
 
 interface CaregiverPortalContentProps {
@@ -89,7 +89,7 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
     case "escalations":
       return <EscalationsBoard role="CAREGIVER" />;
     case "rounds":
-      return <AssessmentAcuityBoard clinicianRole="CAREGIVER" />;
+      return <CareAcuityBoard clinicianRole="CAREGIVER" />;
     case "careplans":
       return <CarePlanReviewsBoard clinicianRole="CAREGIVER" />;
     case "medications":

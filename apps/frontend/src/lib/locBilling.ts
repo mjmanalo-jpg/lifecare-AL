@@ -13,6 +13,7 @@
  */
 
 import { periodTag } from "./billingLibrary";
+import { LEVEL_MODEL } from "./lifecare/levelModel";
 
 export const LOC_PRICING_KEY = "loc_pricing";
 export const ACUITY_ASSESSMENTS_KEY = "acuity_assessments";
@@ -27,14 +28,9 @@ export interface LocPrice {
   active: boolean;  // false → no charge posted for this level
 }
 
-// Level names mirror CareAcuityBoard's LEVELS so the pricing table reads the same.
-export const LOC_LEVEL_META: { level: number; name: string }[] = [
-  { level: 1, name: "Independent Living Plus" },
-  { level: 2, name: "Assisted Living" },
-  { level: 3, name: "Enhanced Assisted Care" },
-  { level: 4, name: "Memory / Comprehensive Care" },
-  { level: 5, name: "Skilled / Complex Care" },
-];
+// Level names come from the canonical care-level model (care_level_model.json)
+// so the pricing table reads identically to CareAcuityBoard — one source, no drift.
+export const LOC_LEVEL_META: { level: number; name: string }[] = LEVEL_MODEL.map((m) => ({ level: m.n, name: m.name }));
 
 export const DEFAULT_LOC_PRICING: LocPrice[] = LOC_LEVEL_META.map((m) => ({
   level: m.level,
