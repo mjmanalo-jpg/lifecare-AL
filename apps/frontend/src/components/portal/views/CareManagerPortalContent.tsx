@@ -6,7 +6,6 @@ import ApprovalWorkflows from "@/components/portal/views/clinical/ApprovalWorkfl
 import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
-import PreAdmissionAssessmentForm from "@/components/portal/views/clinical/PreAdmissionAssessmentForm";
 import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAssessmentV42";
 import TodaysCareBoard from "@/components/portal/views/clinical/TodaysCareBoard";
 import AdditionalServicesBoard from "@/components/portal/views/clinical/AdditionalServicesBoard";
@@ -124,7 +123,8 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
     case "monitoring":
       return <MonitoringView />;
     case "prescreen":
-      return <PreAdmissionAssessmentForm clinicianRole="FACILITY_ADMIN" />;
+      // Pre-Admission is now the v4.2 three-layer assessment (replaces the legacy 50-point form).
+      return <ResidentAssessmentV42 clinicianRole="CARE_MANAGER" />;
     case "assessmentv42":
       return <ResidentAssessmentV42 clinicianRole="CARE_MANAGER" />;
     case "todayscare":

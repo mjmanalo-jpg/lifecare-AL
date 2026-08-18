@@ -57,7 +57,7 @@ const ACUITY_DOMAIN_LABEL: Record<string, string> = {
   elimination: "Elimination", medication: "Medication", medical: "Medical", psychosocial: "Psychosocial", night: "Night Care",
 };
 
-type TabKey = "family" | "emergency" | "vaccines" | "adl" | "medical" | "advance" | "acuity";
+type TabKey = "family" | "emergency" | "vaccines" | "adl" | "medical" | "advance" | "acuity" | "preadmit";
 const TABS: { key: TabKey; label: string; icon: typeof Pill }[] = [
   { key: "family", label: "Family", icon: Users },
   { key: "emergency", label: "Emergency", icon: Phone },
@@ -65,6 +65,7 @@ const TABS: { key: TabKey; label: string; icon: typeof Pill }[] = [
   { key: "adl", label: "ADL Baseline", icon: Activity },
   { key: "medical", label: "Medical Hx", icon: ClipboardList },
   { key: "advance", label: "Advance Care", icon: HeartPulse },
+  { key: "preadmit", label: "Pre-Admission (v4.2)", icon: ClipboardList },
   { key: "acuity", label: "Care Acuity", icon: Gauge },
 ];
 
@@ -88,6 +89,39 @@ function latestAcuityFor(items: Array<Record<string, unknown>>, residentId: stri
   return pool.sort((a, b) => s(b.decidedAt || b.createdAt).localeCompare(s(a.decidedAt || a.createdAt)))[0] || null;
 }
 
+// The 14 scored v4.2 assessment domains (labels kept local to avoid pulling the
+// full rule-data bundle into the resident card).
+const V42_DOMAIN_LABEL: Record<string, string> = {
+  "AS-01": "ADLs / Personal Care", "AS-02": "Mobility / Transfers", "AS-03": "Fall Risk",
+  "AS-04": "Cognition", "AS-05": "Behavior / BPSD", "AS-06": "Clinical Monitoring",
+  "AS-07": "Medication Support", "AS-08": "Nutrition / Hydration", "AS-09": "Communication",
+  "AS-10": "Continence / Toileting", "AS-11": "Skin Integrity", "AS-12": "Sleep / Daily Routine",
+  "AS-13": "Safety / Supervision", "AS-14": "Reablement / Therapy",
+};
+type V42 = {
+  id?: string; status?: string; updatedAt?: string; createdAt?: string;
+  layer1?: { residentId?: string; convertedAdmissionId?: string; reasonForAdmission?: string; goalsPreferences?: string };
+  domains?: Record<string, { score?: number }>;
+  layer3?: { finalLevel?: string; finalLevelJustification?: string };
+};
+function parseV42Items(raw: string): V42[] {
+  if (!raw) return [];
+  try { const v = JSON.parse(raw); return Array.isArray(v) ? (v as V42[]) : []; } catch { return []; }
+}
+/** Latest v4.2 assessment for a resident — matched by linked residentId or admission id. */
+function latestV42For(items: V42[], residentId: string, admissionIds: string[]): V42 | null {
+  const mine = items.filter((a) =>
+    a?.layer1?.residentId === residentId ||
+    (a?.layer1?.convertedAdmissionId && admissionIds.includes(String(a.layer1.convertedAdmissionId))));
+  const validated = mine.filter((a) => a.status === "VALIDATED" || a.status === "COMPLETED");
+  const pool = validated.length ? validated : mine;
+  return pool.sort((a, b) => s(b.updatedAt || b.createdAt).localeCompare(s(a.updatedAt || a.createdAt)))[0] || null;
+}
+function v42RawScore(a: V42 | null): number {
+  if (!a?.domains) return 0;
+  return Object.values(a.domains).reduce((sum, d) => sum + (typeof d?.score === "number" ? d.score : 0), 0);
+}
+
 export default function ResidentCardPage() {
   const params = useParams();
   const id = String(params?.id ?? "");
@@ -104,6 +138,7 @@ export default function ResidentCardPage() {
   const [vaccinations, setVaccinations] = useState<Row[]>([]);
   const [allergyRecs, setAllergyRecs] = useState<Row[]>([]);
   const [acuityRows, setAcuityRows] = useState<Row[]>([]);
+  const [assessV42Rows, setAssessV42Rows] = useState<Row[]>([]);
   const [sponsor, setSponsor] = useState<Row | null>(null);
   const [tab, setTab] = useState<TabKey>("family");
   const [cardUrl, setCardUrl] = useState("");
@@ -122,7 +157,7 @@ export default function ResidentCardPage() {
       if (res.status === 401) { setDenied(true); setLoading(false); return; }
       const r = res.data as Row | null;
       setResident(r);
-      const [m, sr, tk, pc, dt, adm, vax, alg, acu] = await Promise.all([
+      const [m, sr, tk, pc, dt, adm, vax, alg, acu, av42] = await Promise.all([
         getJson(`/api/db/medications?f_residentId=${id}&take=100`),
         getJson(`/api/db/service-requests?f_residentId=${id}&take=100`),
         getJson(`/api/db/tasks?f_residentId=${id}&take=100`),
@@ -132,6 +167,7 @@ export default function ResidentCardPage() {
         getJson(`/api/db/vaccinations?f_residentId=${id}&take=100`),
         getJson(`/api/db/allergies?f_residentId=${id}&take=100`),
         getJson(`/api/db/app-settings?f_key=acuity_assessments&take=50`),
+        getJson(`/api/db/app-settings?f_key=assessments_v42&take=100`),
       ]);
       if (!alive) return;
       setMeds((m.data as Row[]) || []);
@@ -143,6 +179,7 @@ export default function ResidentCardPage() {
       setVaccinations((vax.data as Row[]) || []);
       setAllergyRecs((alg.data as Row[]) || []);
       setAcuityRows((acu.data as Row[]) || []);
+      setAssessV42Rows((av42.data as Row[]) || []);
       const sponsorId = s(r?.sponsorId);
       if (sponsorId) {
         const sp = await getJson(`/api/db/users?f_id=${sponsorId}&take=1`);
@@ -183,6 +220,12 @@ export default function ResidentCardPage() {
     const row = acuityRows.find((x) => s(x.key) === "acuity_assessments") || acuityRows[0];
     return latestAcuityFor(parseAcuityItems(row ? s(row.value) : null), id);
   }, [acuityRows, id]);
+  // Latest v4.2 Pre-Admission assessment for this resident (matched by residentId or admission).
+  const assessV42 = useMemo(() => {
+    const row = assessV42Rows.find((x) => s(x.key) === "assessments_v42") || assessV42Rows[0];
+    const admissionIds = admissions.map((a) => s(a.id));
+    return latestV42For(parseV42Items(row ? s(row.value) : ""), id, admissionIds);
+  }, [assessV42Rows, admissions, id]);
 
   // Resident has no diagnosis/medicalAssessment column, and allergies/medicalHistory
   // may be blank on the resident while the linked Admission holds them — so fall
@@ -434,6 +477,39 @@ export default function ResidentCardPage() {
             </Section>
           )}
 
+          {tab === "preadmit" && (
+            <Section title="Pre-Admission Assessment (v4.2)" icon={ClipboardList}>
+              {assessV42 ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {assessV42.layer3?.finalLevel ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-bold bg-[#2E4A48] text-white">Final LOC · {s(assessV42.layer3.finalLevel)}</span>
+                    ) : (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold border border-amber-200 bg-amber-50 text-amber-700">Final LOC pending</span>
+                    )}
+                    <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-bold border border-gray-200 bg-gray-50 text-gray-700">Raw {v42RawScore(assessV42)}/56</span>
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded text-[10px] font-bold uppercase border ${assessV42.status === "VALIDATED" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-amber-100 text-amber-700 border-amber-200"}`}>{s(assessV42.status).replace(/_/g, " ") || "DRAFT"}</span>
+                  </div>
+                  <p className="text-xs text-gray-500">Assessed {fmtDate(assessV42.updatedAt || assessV42.createdAt)} · advisory raw score (banding not yet calibrated — GAP-001)</p>
+                  {assessV42.domains && typeof assessV42.domains === "object" ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {Object.entries(V42_DOMAIN_LABEL).map(([code, label]) => (
+                        <div key={code} className="rounded-lg border border-gray-200 p-2 flex items-center justify-between">
+                          <span className="text-xs text-gray-600">{label}</span>
+                          <span className="text-sm font-bold text-[#2E4A48]">{s(assessV42.domains?.[code]?.score ?? 0)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {assessV42.layer3?.finalLevelJustification ? <p className="text-xs text-gray-500 whitespace-pre-wrap pt-1"><b className="text-gray-700">Justification:</b> {s(assessV42.layer3.finalLevelJustification)}</p> : null}
+                  {assessV42.layer1?.reasonForAdmission ? <p className="text-xs text-gray-500 whitespace-pre-wrap"><b className="text-gray-700">Reason for admission:</b> {s(assessV42.layer1.reasonForAdmission)}</p> : null}
+                  {assessV42.layer1?.goalsPreferences ? <p className="text-xs text-gray-500 whitespace-pre-wrap"><b className="text-gray-700">Goals / preferences:</b> {s(assessV42.layer1.goalsPreferences)}</p> : null}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">No v4.2 pre-admission assessment recorded yet.</p>
+              )}
+            </Section>
+          )}
           {tab === "acuity" && (
             <Section title="Care Acuity — Level of Care" icon={Gauge}>
               {acuity ? (

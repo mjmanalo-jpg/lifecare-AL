@@ -24,7 +24,6 @@ import DailyDocumentation from "@/components/portal/views/clinical/DailyDocument
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
 import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
-import PreAdmissionAssessmentForm from "@/components/portal/views/clinical/PreAdmissionAssessmentForm";
 import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAssessmentV42";
 import TodaysCareBoard from "@/components/portal/views/clinical/TodaysCareBoard";
 import AdditionalServicesBoard from "@/components/portal/views/clinical/AdditionalServicesBoard";
@@ -729,7 +728,8 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   // clinical toolset (rounds, orders, notes, vitals, secure messages), all live
   // and scoped to the NURSE role for authorship/attribution.
   if (tab === "prescreen") {
-    return <PreAdmissionAssessmentForm clinicianRole="NURSE" />;
+    // Pre-Admission is now the v4.2 three-layer assessment (replaces the legacy 50-point form).
+    return <ResidentAssessmentV42 clinicianRole="NURSE" />;
   }
   if (tab === "assessmentv42") {
     return <ResidentAssessmentV42 clinicianRole="NURSE" />;
