@@ -85,6 +85,35 @@ function Bool({ label, value, onChange }: { label: string; value?: boolean; onCh
     </button>
   );
 }
+function Choice({ label, value, options, onChange }: { label: string; value?: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <MicroLabel className="mb-1">{label}</MicroLabel>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((o) => (
+          <button key={o.value} type="button" onClick={() => onChange(o.value)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${value === o.value ? chipOn : chipOff}`}>{o.label}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+function MultiChoice({ label, values = [], options, onToggle }: { label: string; values?: string[]; options: { value: string; label: string }[]; onToggle: (v: string) => void }) {
+  return (
+    <div>
+      <MicroLabel className="mb-1">{label}</MicroLabel>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((o) => {
+          const on = values.includes(o.value);
+          return (
+            <button key={o.value} type="button" onClick={() => onToggle(o.value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${on ? chipOn : chipOff}`}>{o.label}</button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 function Section({ code, title, subtitle, children }: { code?: string; title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <ClinicalCard top="teal" className="p-4 sm:p-5">
@@ -208,6 +237,13 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE" }: { cli
 
   // ── draft mutation helpers ──────────────────────────────────────────────────
   const patchLayer1 = (p: Partial<AssessmentLayer1>) => setDraft((d) => (d ? { ...d, layer1: { ...d.layer1, ...p } } : d));
+  const toggleLayer1Multi = (key: "familyInvolvement" | "overallGoals", v: string) =>
+    setDraft((d) => {
+      if (!d) return d;
+      const cur = d.layer1[key] ?? [];
+      const next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v];
+      return { ...d, layer1: { ...d.layer1, [key]: next } };
+    });
   const patchContext = (p: Partial<ClinicalContext>) => setDraft((d) => (d ? { ...d, context: { ...d.context, ...p } } : d));
   const patchLayer3 = (p: Partial<AssessmentV42["layer3"]>) => setDraft((d) => (d ? { ...d, layer3: { ...d.layer3, ...p } } : d));
   const patchDomain = (code: DomainCode, p: Partial<DomainEntry>) =>
@@ -470,38 +506,70 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE" }: { cli
               {/* ── LAYER 1 ── */}
               {layer === 1 && (
                 <>
-                  <Section code="A" title="Resident Profile">
+                  <Section code="A" title="Resident Profile & Clinical Context">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <ResidentPicker value={draft.layer1.residentName} onChange={(v) => patchLayer1({ residentName: v })} admissions={admissionOpts} linkedId={linkedAdmissionId} onPick={pickAdmission} onUnlink={() => { setLinkedAdmissionId(""); patchLayer1({ convertedAdmissionId: undefined }); }} />
-                      <div className="grid grid-cols-2 gap-3">
-                        <Text label="Age" value={draft.layer1.age} onChange={(v) => patchLayer1({ age: v })} />
-                        <Text label="Sex" value={draft.layer1.sex} onChange={(v) => patchLayer1({ sex: v })} placeholder="Male / Female" />
-                      </div>
-                      <Text label="Date of Birth" type="date" value={draft.layer1.dateOfBirth} onChange={(v) => patchLayer1({ dateOfBirth: v })} />
                       <Text label="Assessment Date" type="date" value={draft.layer1.assessmentDate} onChange={(v) => patchLayer1({ assessmentDate: v })} />
-                      <Text label="Assessment Location" value={draft.layer1.location} onChange={(v) => patchLayer1({ location: v })} />
-                      <Text label="Assessor" value={draft.layer1.assessor} onChange={(v) => patchLayer1({ assessor: v })} />
-                      <Text label="Primary Contact" value={draft.layer1.primaryContact} onChange={(v) => patchLayer1({ primaryContact: v })} />
+                      <div className="grid grid-cols-3 gap-2">
+                        <Text label="Date of Birth" type="date" value={draft.layer1.dateOfBirth} onChange={(v) => patchLayer1({ dateOfBirth: v })} />
+                        <Text label="Age" value={draft.layer1.age} onChange={(v) => patchLayer1({ age: v })} />
+                        <Text label="Sex" value={draft.layer1.sex} onChange={(v) => patchLayer1({ sex: v })} placeholder="M / F" />
+                      </div>
+                      <Text label="Assessment Location" value={draft.layer1.assessmentLocation ?? draft.layer1.location} onChange={(v) => patchLayer1({ assessmentLocation: v })} />
+                      <Text label="Primary Contact / Relationship" value={draft.layer1.primaryContact} onChange={(v) => patchLayer1({ primaryContact: v })} placeholder="Name — relationship" />
                       <Text label="Contact No." value={draft.layer1.contactNo} onChange={(v) => patchLayer1({ contactNo: v })} />
+                      <Text label="Referral Source" value={draft.layer1.referralSource} onChange={(v) => patchLayer1({ referralSource: v })} />
+                      <Text label="Assessor / Role" value={draft.layer1.assessor} onChange={(v) => patchLayer1({ assessor: v })} placeholder="Name — role" />
+                      <Text label="Current Living Arrangement" value={draft.layer1.currentLivingArrangement} onChange={(v) => patchLayer1({ currentLivingArrangement: v })} />
+                      <Text label="Primary Caregiver" value={draft.layer1.primaryCaregiver} onChange={(v) => patchLayer1({ primaryCaregiver: v })} />
+                      <Text label="Reason for Admission / Referral" value={draft.layer1.reasonForAdmission} onChange={(v) => patchLayer1({ reasonForAdmission: v })} />
+                      <Text label="Admission Target Date" type="date" value={draft.layer1.admissionTargetDate} onChange={(v) => patchLayer1({ admissionTargetDate: v })} />
                     </div>
                   </Section>
 
                   <Section code="B" title="Clinical History" subtitle="Non-scored clinical baseline">
-                    <Area label="Diagnoses" value={draft.layer1.diagnoses} onChange={(v) => patchLayer1({ diagnoses: v })} />
-                    <Area label="Current Medications" value={draft.layer1.medications} onChange={(v) => patchLayer1({ medications: v })} />
+                    <Area label="Primary / current diagnoses" value={draft.layer1.diagnoses} onChange={(v) => patchLayer1({ diagnoses: v })} />
+                    <Area label="Significant history / surgeries" value={draft.layer1.surgeries} onChange={(v) => patchLayer1({ surgeries: v })} />
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <Text label="Allergies" value={draft.layer1.allergies} onChange={(v) => patchLayer1({ allergies: v })} />
-                      <Text label="Previous Surgeries" value={draft.layer1.surgeries} onChange={(v) => patchLayer1({ surgeries: v })} />
+                      <Choice label="Medication list reviewed?" value={draft.layer1.medicationListReviewed}
+                        onChange={(v) => patchLayer1({ medicationListReviewed: v as AssessmentLayer1["medicationListReviewed"] })}
+                        options={[{ value: "YES", label: "Yes" }, { value: "NO", label: "No" }, { value: "NEEDS_VERIFICATION", label: "Needs Verification" }]} />
                     </div>
-                    <Area label="Hospitalizations" value={draft.layer1.hospitalizations} onChange={(v) => patchLayer1({ hospitalizations: v })} />
+                    <Area label="Current medications" value={draft.layer1.medications} onChange={(v) => patchLayer1({ medications: v })} />
+                    <div className="flex flex-wrap items-end gap-3">
+                      <Bool label="Hospital / ED within 12 months?" value={draft.layer1.hospitalEd12mo} onChange={(v) => patchLayer1({ hospitalEd12mo: v })} />
+                      {draft.layer1.hospitalEd12mo && <div className="flex-1 min-w-[200px]"><Text label="Reason / date" value={draft.layer1.hospitalEdReason} onChange={(v) => patchLayer1({ hospitalEdReason: v })} /></div>}
+                    </div>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <Bool label="Significant change in condition (last 30–90 days)?" value={draft.layer1.significantChange3090} onChange={(v) => patchLayer1({ significantChange3090: v })} />
+                      {draft.layer1.significantChange3090 && <div className="flex-1 min-w-[200px]"><Text label="Describe" value={draft.layer1.significantChangeDescribe} onChange={(v) => patchLayer1({ significantChangeDescribe: v })} /></div>}
+                    </div>
+                    <Text label="Current physician / specialist follow-up" value={draft.layer1.physicianFollowUp} onChange={(v) => patchLayer1({ physicianFollowUp: v })} />
                   </Section>
 
-                  <Section code={NS01?.code ?? "NS-01"} title={NS01?.name ?? "Goals / Preferences / Decision Support"} subtitle={`Non-scored — ${NS01?.calibrationNote ?? "do not add to acuity score."}`}>
-                    <Area label="Resident Goals & Preferences" rows={3} value={draft.layer1.goalsPreferences} onChange={(v) => patchLayer1({ goalsPreferences: v })} placeholder={NS01?.evidenceRequired} />
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <Text label="Authorized Representative / Supporter" value={draft.layer1.authorizedRepresentative} onChange={(v) => patchLayer1({ authorizedRepresentative: v })} />
+                  <Section code={NS01?.code ?? "NS-01"} title="Decision Support & Person-Centered Baseline" subtitle={`Non-scored — ${NS01?.calibrationNote ?? "do not add to acuity score."}`}>
+                    <Choice label="Can resident participate in care decisions?" value={draft.layer1.canParticipate}
+                      onChange={(v) => patchLayer1({ canParticipate: v as AssessmentLayer1["canParticipate"] })}
+                      options={[{ value: "INDEPENDENTLY", label: "Independently" }, { value: "WITH_SUPPORT", label: "With support" }, { value: "LIMITED_NO", label: "Limited / No" }]} />
+                    <Text label="Authorized decision-maker / representative (name / relationship)" value={draft.layer1.authorizedRepresentative} onChange={(v) => patchLayer1({ authorizedRepresentative: v })} />
+                    <div>
+                      <MultiChoice label="Family involvement desired" values={draft.layer1.familyInvolvement}
+                        onToggle={(v) => toggleLayer1Multi("familyInvolvement", v)}
+                        options={[{ value: "ROUTINE", label: "Routine updates" }, { value: "SIGNIFICANT", label: "Significant changes only" }, { value: "SHARED", label: "Shared decisions" }, { value: "OTHER", label: "Other" }]} />
+                      {draft.layer1.familyInvolvement?.includes("OTHER") && <div className="mt-2"><Text label="Other — describe" value={draft.layer1.familyInvolvementOther} onChange={(v) => patchLayer1({ familyInvolvementOther: v })} /></div>}
                     </div>
-                    <Area label="Advance-Care Context" value={draft.layer1.advanceCareContext} onChange={(v) => patchLayer1({ advanceCareContext: v })} />
+                    <Choice label="Advance directive / POLST / goals-of-care document" value={draft.layer1.advanceDirective}
+                      onChange={(v) => patchLayer1({ advanceDirective: v as AssessmentLayer1["advanceDirective"] })}
+                      options={[{ value: "AVAILABLE", label: "Available" }, { value: "REQUESTED", label: "Requested" }, { value: "NOT_AVAILABLE", label: "Not available" }, { value: "NOT_APPLICABLE", label: "Not applicable" }]} />
+                    <Text label="Important cultural / spiritual / privacy preferences" value={draft.layer1.culturalPreferences} onChange={(v) => patchLayer1({ culturalPreferences: v })} />
+                    <div>
+                      <MultiChoice label="Resident's overall goals" values={draft.layer1.overallGoals}
+                        onToggle={(v) => toggleLayer1Multi("overallGoals", v)}
+                        options={[{ value: "INDEPENDENCE", label: "Maintain independence" }, { value: "FUNCTION", label: "Improve function" }, { value: "COMFORT", label: "Comfort / safety" }, { value: "SOCIAL", label: "Social engagement" }, { value: "OTHER", label: "Other" }]} />
+                      {draft.layer1.overallGoals?.includes("OTHER") && <div className="mt-2"><Text label="Other — describe" value={draft.layer1.overallGoalsOther} onChange={(v) => patchLayer1({ overallGoalsOther: v })} /></div>}
+                    </div>
+                    <Area label="Additional goals / preferences (free text)" rows={2} value={draft.layer1.goalsPreferences} onChange={(v) => patchLayer1({ goalsPreferences: v })} placeholder={NS01?.evidenceRequired} />
                   </Section>
                 </>
               )}

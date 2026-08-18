@@ -14,28 +14,56 @@ export const ASSESSMENTS_V42_KEY = "assessments_v42";
 
 export type AssessmentStatus = "DRAFT" | "COMPLETED" | "VALIDATED" | "SUPERSEDED";
 
+export type YesNoVerify = "YES" | "NO" | "NEEDS_VERIFICATION";
+export type ParticipationLevel = "INDEPENDENTLY" | "WITH_SUPPORT" | "LIMITED_NO";
+export type AdvanceDirectiveStatus = "AVAILABLE" | "REQUESTED" | "NOT_AVAILABLE" | "NOT_APPLICABLE";
+
 /** Layer 1 — resident profile + clinical history + decision-support baseline. */
 export interface AssessmentLayer1 {
+  // Resident profile
   residentName: string;
-  residentId?: string;          // linked resident record, once admitted
-  convertedAdmissionId?: string; // link to in-progress admission (CRM lead)
+  residentId?: string;               // linked resident record, once admitted
+  convertedAdmissionId?: string;     // link to in-progress admission (CRM lead)
   dateOfBirth?: string;
   age?: string;
   sex?: string;
   assessmentDate?: string;
-  assessor?: string;
-  location?: string;
+  assessmentLocation?: string;       // (was `location`)
+  location?: string;                 // retained for backward-compat
   primaryContact?: string;
+  primaryContactRelationship?: string;
   contactNo?: string;
+  referralSource?: string;
+  assessor?: string;
+  assessorRole?: string;
+  currentLivingArrangement?: string;
+  primaryCaregiver?: string;
+  reasonForAdmission?: string;
+  admissionTargetDate?: string;
+
   // Clinical history (non-scored baseline)
-  diagnoses?: string;
-  medications?: string;
+  diagnoses?: string;                // primary/current diagnoses
+  surgeries?: string;                // significant history / surgeries
   allergies?: string;
-  surgeries?: string;
-  hospitalizations?: string;
-  // NS-01 goals / preferences / decision support (non-scored)
-  goalsPreferences?: string;
-  authorizedRepresentative?: string;
+  medications?: string;
+  medicationListReviewed?: YesNoVerify;
+  hospitalEd12mo?: boolean;
+  hospitalEdReason?: string;
+  significantChange3090?: boolean;
+  significantChangeDescribe?: string;
+  physicianFollowUp?: string;
+  hospitalizations?: string;         // retained for backward-compat
+
+  // Decision support & person-centered baseline (NS-01, non-scored)
+  canParticipate?: ParticipationLevel;
+  authorizedRepresentative?: string; // name / relationship
+  familyInvolvement?: string[];      // routine / significant-only / shared / other
+  familyInvolvementOther?: string;
+  advanceDirective?: AdvanceDirectiveStatus;
+  culturalPreferences?: string;      // cultural / spiritual / privacy
+  overallGoals?: string[];           // independence / function / comfort-safety / social / other
+  overallGoalsOther?: string;
+  goalsPreferences?: string;         // free-text NS-01 goals/preferences
   advanceCareContext?: string;
 }
 
