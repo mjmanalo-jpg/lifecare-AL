@@ -8,7 +8,7 @@
  */
 
 import { useState } from "react";
-import { AlertTriangle, ListOrdered, FileText, ArrowUpCircle, ChevronDown } from "lucide-react";
+import { AlertTriangle, ListOrdered, FileText, ArrowUpCircle, ChevronDown, Scale } from "lucide-react";
 import type { Protocol } from "@/lib/lifecare/decisionTrees";
 import { MicroLabel } from "./clinical-ui";
 
@@ -82,6 +82,24 @@ export default function ProtocolReference({ protocol, defaultOpen = true }: { pr
               ))}
             </ul>
           </Section>
+
+          {protocol.atomicRules && protocol.atomicRules.length > 0 && (
+            <div className="sm:col-span-2">
+              <Section icon={Scale} title={`Atomic rules (${protocol.atomicRules.length})`} accent="var(--clinical-panel)">
+                <div className="space-y-2">
+                  {protocol.atomicRules.map((r) => (
+                    <div key={r.id} className="rounded-lg border px-3 py-2" style={{ borderColor: "var(--clinical-line)" }}>
+                      <p className="text-sm font-semibold text-[var(--clinical-ink)]">
+                        <span className="text-[var(--clinical-coral)]">{r.id}</span> · {r.name}
+                      </p>
+                      {r.decisionQuestion && <p className="mt-0.5 text-xs text-[var(--clinical-muted)]">{r.decisionQuestion}</p>}
+                      {r.ruleOutcome && <p className="mt-1 text-xs text-[var(--clinical-ink)]"><span className="font-semibold">Outcome:</span> {r.ruleOutcome}</p>}
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            </div>
+          )}
         </div>
       )}
     </div>

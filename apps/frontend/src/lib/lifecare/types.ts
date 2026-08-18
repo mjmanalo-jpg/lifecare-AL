@@ -68,6 +68,23 @@ export interface DecisionTree {
   id: string; name: string; domain: string; purpose: string; priority: string;
 }
 
+/** Atomic business rule (BR-*) — the per-decision-tree rule breakdown (sheet 2). */
+export interface AtomicRule {
+  decisionTreeId: string;
+  id: string;              // BR-XXX.YY
+  name: string;
+  decisionQuestion: string;
+  requiredInputs: string;
+  ruleOutcome: string;
+  decisionOwner: string;
+  requiredEvidence: string;
+  benchmarkBasis: string;
+  priority: string;
+  careEventTrigger: string;
+  carePlanImpact: string;
+  status: string;
+}
+
 export interface CareTask {
   id: string; name: string; domain: string; careLevel: string; category: string;
   definition: string; triggerFrequencyLogic: string; observableOutcome: string;

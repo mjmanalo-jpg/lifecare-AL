@@ -11,6 +11,7 @@ import careLevelModel from "./data/care_level_model.json" with { type: "json" };
 import pcgRules from "./data/pcg_rules.json" with { type: "json" };
 import acsRules from "./data/acs_rules.json" with { type: "json" };
 import decisionTrees from "./data/decision_trees.json" with { type: "json" };
+import atomicRules from "./data/atomic_rules.json" with { type: "json" };
 import careTaskMaster from "./data/care_task_master.json" with { type: "json" };
 import careEventMaster from "./data/care_event_master.json" with { type: "json" };
 import locValidationCases from "./data/loc_validation_cases.json" with { type: "json" };
@@ -20,7 +21,7 @@ import modelVersion from "./data/model_version.json" with { type: "json" };
 
 import type {
   MlrRule, ClinicalModifier, DomainDef, PcgRule, AcsRule,
-  DecisionTree, CareTask, CareEvent,
+  DecisionTree, CareTask, CareEvent, AtomicRule,
 } from "./types.ts";
 
 export const MODEL_VERSION = modelVersion;
@@ -35,6 +36,7 @@ export const CARE_LEVEL_MODEL = careLevelModel as {
 export const PCG_RULES = pcgRules as PcgRule[];
 export const ACS_RULES = acsRules as AcsRule[];
 export const DECISION_TREES = decisionTrees as DecisionTree[];
+export const ATOMIC_RULES = atomicRules as AtomicRule[];
 export const CARE_TASK_MASTER = careTaskMaster as CareTask[];
 export const CARE_EVENT_MASTER = careEventMaster as CareEvent[];
 export const LOC_VALIDATION_CASES = locValidationCases as Array<Record<string, unknown>>;
@@ -63,6 +65,9 @@ export const mlrById = (id: string): MlrRule | undefined =>
   MLR_RULES.find((r) => r.id === id);
 export const decisionTreeById = (id: string): DecisionTree | undefined =>
   DECISION_TREES.find((d) => d.id === id);
+/** The atomic BR-* rules that belong to a decision tree (e.g. "DT-004"). */
+export const atomicRulesForTree = (dtId: string): AtomicRule[] =>
+  ATOMIC_RULES.filter((r) => r.decisionTreeId === dtId);
 
 /**
  * Merge a bundled default table with an optional app-settings override array.

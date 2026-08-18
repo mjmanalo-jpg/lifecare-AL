@@ -1,6 +1,23 @@
 // Phase 6 verify — Clinical Decision Trees protocol engine.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { ATOMIC_RULES, atomicRulesForTree } from "../src/lib/lifecare/dataset.ts";
+
+test("atomic BR-* rules cover all 14 decision trees", () => {
+  assert.equal(ATOMIC_RULES.length, 132);
+  const trees = new Set(ATOMIC_RULES.map((r) => r.decisionTreeId));
+  assert.equal(trees.size, 14);
+  for (const dt of ["DT-001", "DT-004", "DT-007", "DT-014"]) {
+    assert.ok(atomicRulesForTree(dt).length > 0, `${dt} has atomic rules`);
+  }
+});
+
+test("protocols are enriched with their atomic rules", () => {
+  const p = getProtocol("DT-004");
+  assert.ok(p?.atomicRules && p.atomicRules.length > 0, "DT-004 protocol carries BR rules");
+  assert.ok(p!.atomicRules!.every((r) => r.decisionTreeId === "DT-004"));
+  assert.ok(allProtocols().every((pr) => Array.isArray(pr.atomicRules)));
+});
 
 import { DECISION_TREES } from "../src/lib/lifecare/dataset.ts";
 import {

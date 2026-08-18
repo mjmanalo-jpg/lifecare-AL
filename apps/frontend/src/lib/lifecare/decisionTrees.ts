@@ -14,7 +14,8 @@
 //
 // Pure + typed: no React, no I/O. Safe to import from tests and from server code.
 
-import { DECISION_TREES } from "./dataset.ts";
+import { DECISION_TREES, atomicRulesForTree } from "./dataset.ts";
+import type { AtomicRule } from "./types.ts";
 
 /** A single ordered step of a protocol pathway. */
 export interface ProtocolStep {
@@ -44,6 +45,8 @@ export interface Protocol {
   escalation: EscalationRule[];
   /** Set when the tree is operationalised by an existing module. */
   linkedModule?: string;
+  /** Authoritative atomic business rules (BR-*) for this tree, from the workbook. */
+  atomicRules?: AtomicRule[];
 }
 
 // Register metadata, keyed by id, so a protocol always mirrors the dataset's
@@ -461,14 +464,16 @@ export const PROTOCOLS: Record<string, Protocol> = {
   "DT-013": DT_013, "DT-014": DT_014,
 };
 
-/** Lookup a protocol by decision-tree id (e.g. "DT-007"). */
+/** Lookup a protocol by decision-tree id (e.g. "DT-007"), enriched with its atomic BR-* rules. */
 export function getProtocol(id: string): Protocol | undefined {
-  return PROTOCOLS[id];
+  const p = PROTOCOLS[id];
+  if (!p) return undefined;
+  return { ...p, atomicRules: atomicRulesForTree(id) };
 }
 
-/** All protocols in register order (DT-001..DT-014). */
+/** All protocols in register order (DT-001..DT-014), each enriched with its atomic BR-* rules. */
 export function allProtocols(): Protocol[] {
-  return DECISION_TREES.map((t) => PROTOCOLS[t.id]).filter(Boolean) as Protocol[];
+  return DECISION_TREES.map((t) => getProtocol(t.id)).filter(Boolean) as Protocol[];
 }
 
 /** Ids of the three trees given first-class protocol boards in this phase. */
