@@ -1,0 +1,242 @@
+[
+  {
+    "code": "AS-01",
+    "name": "ADLs / Personal Care",
+    "scored": true,
+    "anchors": [
+      "Independent in basic ADLs; no routine staff help",
+      "Cueing/setup or occasional minimal help in 1 ADL",
+      "Regular hands-on help in 1–2 ADLs",
+      "Extensive hands-on help across multiple ADLs",
+      "Near-total/total dependence across most basic ADLs"
+    ],
+    "evidenceRequired": "Specify which ADLs + assistance type + frequency",
+    "calibrationNote": "Score resident need regardless of whether LifeCare staff or PCG performs it",
+    "scope": "Bathing, dressing, grooming, toileting, eating, continence, transfers",
+    "owner": "Care Manager/Nurse"
+  },
+  {
+    "code": "AS-02",
+    "name": "Mobility / Transfers",
+    "scored": true,
+    "anchors": [
+      "Independent safe transfers/ambulation",
+      "Device/setup or intermittent standby",
+      "Recurring supervision/contact guard/minimal physical assist",
+      "Substantial physical assist or complex transfers; frequent mobility help",
+      "Near-total mobility dependence / non-ambulatory with extensive transfer support"
+    ],
+    "evidenceRequired": "Transfer method, assist level, device, frequency",
+    "calibrationNote": "Wheelchair availability alone does not equal 4",
+    "scope": "Ambulation, transfer assistance, gait, balance, assistive devices",
+    "owner": "Nurse/Care Manager"
+  },
+  {
+    "code": "AS-03",
+    "name": "Fall Risk",
+    "scored": true,
+    "anchors": [
+      "No material identified fall risk",
+      "Low risk; routine prevention only",
+      "Moderate risk requiring individualized precautions",
+      "High risk requiring regular supervision/assistance during risk activities",
+      "Very high/recurrent unsafe mobility despite controls; intensive prevention"
+    ],
+    "evidenceRequired": "Falls/near-falls, risk factors, supervision required",
+    "calibrationNote": "Fall risk alone is a modifier; do not use score as automatic LOC floor",
+    "scope": "History, gait/balance, medications/risk factors, environmental contributors",
+    "owner": "Nurse"
+  },
+  {
+    "code": "AS-04",
+    "name": "Cognition",
+    "scored": true,
+    "anchors": [
+      "Intact cognition/self-direction for daily care",
+      "Mild forgetfulness; occasional cueing",
+      "Regular cueing/reorientation; some impaired judgment",
+      "Substantial impairment affecting multiple daily-care decisions",
+      "Severe impairment with inability to self-direct care and pervasive support need"
+    ],
+    "evidenceRequired": "Examples of cueing, judgment, orientation and self-direction",
+    "calibrationNote": "Diagnosis of dementia alone does not determine score",
+    "scope": "Orientation, memory, judgment, ability to follow directions",
+    "owner": "Qualified assessor"
+  },
+  {
+    "code": "AS-05",
+    "name": "Behavior / BPSD",
+    "scored": true,
+    "anchors": [
+      "No care-impacting behavior",
+      "Rare/mild behavior managed with routine approach",
+      "Recurring behavior requiring planned redirection",
+      "Frequent behavior materially affecting care/safety",
+      "Persistent/severe behavior requiring intensive individualized management"
+    ],
+    "evidenceRequired": "Frequency, triggers, intervention, safety impact",
+    "calibrationNote": "Score current care burden, not historical diagnosis alone",
+    "scope": "Behavioral symptoms, triggers, distress, sleep, psychosocial needs",
+    "owner": "Nurse/Care Manager"
+  },
+  {
+    "code": "AS-06",
+    "name": "Clinical Monitoring",
+    "scored": true,
+    "anchors": [
+      "Stable; routine wellness observation only",
+      "One stable condition needing limited scheduled monitoring",
+      "Regular structured monitoring/coordination for one or more conditions",
+      "Frequent monitoring/coordination across interacting conditions",
+      "Very frequent/high-complexity monitoring approaching capability threshold"
+    ],
+    "evidenceRequired": "What is monitored, frequency, thresholds, coordination",
+    "calibrationNote": "Acute instability uses change-of-condition/capability pathway, not score inflation",
+    "scope": "Chronic conditions, acute issues, frailty, monitoring needs, clinical interventions",
+    "owner": "Nurse/health professional"
+  },
+  {
+    "code": "AS-07",
+    "name": "Medication Support",
+    "scored": true,
+    "anchors": [
+      "Self-manages where permitted / no staff medication support",
+      "Routine low-complexity medication assistance/administration",
+      "Multiple scheduled meds or monitoring requiring regular staff oversight",
+      "High-risk/complex regimen with enhanced monitoring/reconciliation",
+      "Very high medication-management burden requiring intensive licensed oversight"
+    ],
+    "evidenceRequired": "MAR burden, high-risk meds, monitoring, changes",
+    "calibrationNote": "Medication count alone is insufficient",
+    "scope": "Medication complexity, assistance level, monitoring and risks",
+    "owner": "Nurse/authorized role"
+  },
+  {
+    "code": "AS-08",
+    "name": "Nutrition / Hydration",
+    "scored": true,
+    "anchors": [
+      "Independent intake; no material nutrition risk",
+      "Setup/cueing or minor diet support",
+      "Regular meal assistance, supplementation or intake monitoring",
+      "Significant intake/weight/swallowing-related support requiring frequent intervention",
+      "Near-total feeding dependence or severe persistent nutrition/hydration burden within capability"
+    ],
+    "evidenceRequired": "Diet, feeding assist, intake/weight trend, supplements",
+    "calibrationNote": "Dysphagia/aspiration is also a modifier; weight trend must be contextualized",
+    "scope": "Dietary needs, intake risk, swallowing concerns, assistance needs",
+    "owner": "Nurse/dietitian where applicable"
+  },
+  {
+    "code": "AS-09",
+    "name": "Communication",
+    "scored": true,
+    "anchors": [
+      "Communicates needs reliably",
+      "Minor hearing/speech/language barrier; simple adaptation",
+      "Regular communication support/cueing required",
+      "Major impairment requiring frequent interpretation/structured techniques",
+      "Unable to reliably express basic needs without intensive individualized support"
+    ],
+    "evidenceRequired": "How resident expresses needs; adaptations required",
+    "calibrationNote": "Do not score social withdrawal or dementia diagnosis unless communication itself is impaired",
+    "scope": "Hearing, vision, speech/language, communication barriers",
+    "owner": "Care team"
+  },
+  {
+    "code": "AS-10",
+    "name": "Continence / Toileting",
+    "scored": true,
+    "anchors": [
+      "Independent toileting/continence care",
+      "Occasional cueing/setup or rare accident assistance",
+      "Regular toileting assistance or continence care",
+      "Frequent hands-on toileting/diaper care with substantial workload",
+      "Near-total toileting/continence dependence with very high-frequency care"
+    ],
+    "evidenceRequired": "Assist level + episodes/24h + night frequency + hygiene",
+    "calibrationNote": "Frequency matters: task + intensity + frequency must be captured",
+    "scope": "Continence status, toileting needs, skin risk",
+    "owner": "Nurse/Care team"
+  },
+  {
+    "code": "AS-11",
+    "name": "Skin Integrity",
+    "scored": true,
+    "anchors": [
+      "Intact skin; routine prevention",
+      "Risk factors requiring routine prevention/observation",
+      "Elevated risk requiring structured prevention/skin checks",
+      "Active or high-risk skin issue requiring frequent care/coordination",
+      "Complex/persistent skin burden requiring intensive prevention/treatment within capability"
+    ],
+    "evidenceRequired": "Current skin status, risk, frequency, treatment",
+    "calibrationNote": "Resolved wound should not be scored as active high burden",
+    "scope": "Pressure injury risk, wounds, skin monitoring needs",
+    "owner": "Nurse"
+  },
+  {
+    "code": "AS-12",
+    "name": "Sleep / Daily Routine",
+    "scored": true,
+    "anchors": [
+      "Stable routine; no staff intervention",
+      "Occasional cueing/reassurance",
+      "Regular nighttime/routine intervention",
+      "Frequent disruption requiring substantial staff intervention",
+      "Persistent day/night disruption requiring intensive individualized support"
+    ],
+    "evidenceRequired": "Night interventions, frequency, duration",
+    "calibrationNote": "Insomnia diagnosis alone does not determine score",
+    "scope": "Sleep pattern, routines, preferences, night support",
+    "owner": "Care Manager"
+  },
+  {
+    "code": "AS-13",
+    "name": "Safety / Supervision",
+    "scored": true,
+    "anchors": [
+      "Safely self-directs within environment",
+      "Intermittent checks/cueing",
+      "Regular supervision during defined activities/periods",
+      "Frequent supervision across substantial portions of day/night",
+      "Pervasive/near-continuous supervision to remain safe"
+    ],
+    "evidenceRequired": "When, why, frequency, duration, line-of-sight need",
+    "calibrationNote": "This domain is central to LOC vs PCG; document dedicated vs shared supervision",
+    "scope": "Wandering, unsafe judgment, supervision needs, environmental risks",
+    "owner": "Nurse/Care Manager"
+  },
+  {
+    "code": "AS-14",
+    "name": "Reablement / Therapy Support",
+    "scored": true,
+    "anchors": [
+      "No active staff/therapy coordination need",
+      "Simple encouragement/home exercise support",
+      "Regular staff carryover or therapy coordination",
+      "Frequent structured carryover/coordination with material staff workload",
+      "Intensive multi-disciplinary reablement support affecting daily care delivery"
+    ],
+    "evidenceRequired": "Therapy plan, staff carryover tasks, frequency",
+    "calibrationNote": "Score staff/coordination burden—not rehabilitation potential",
+    "scope": "Goals, function, therapy needs, maintenance/recovery potential",
+    "owner": "Care team/AHP"
+  },
+  {
+    "code": "NS-01",
+    "name": "Goals / Preferences / Decision Support",
+    "scored": false,
+    "anchors": [
+      "NON-SCORED: preferences/decision support readily identified",
+      "NON-SCORED: minor routine customization or decision support",
+      "NON-SCORED: regular coordination to implement preferences/goals",
+      "NON-SCORED: substantial supporter/decision coordination affecting care delivery",
+      "NON-SCORED: complex goals-of-care/decision conflict requiring intensive coordination"
+    ],
+    "evidenceRequired": "Resident preferences, routines, goals, authorized representative/supporter, consent/decision support and advance-care context as applicable",
+    "calibrationNote": "Do not add to acuity score. Embed preferences within active care domains; trigger goals-of-care/decision-support review when needed.",
+    "scope": "Resident goals, preferences, routines, desired involvement, authorized supporter/decision-maker involvement and advance-care context where applicable",
+    "owner": "Resident + care team"
+  }
+]

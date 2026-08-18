@@ -1,0 +1,563 @@
+{
+  "scenarios": [
+    {
+      "id": "SC-01",
+      "archetype": "Mostly independent resident",
+      "provisionalLevel": "L1",
+      "modifiers": "",
+      "profile": "Independent with most ADLs; occasional cue/setup; stable mobility",
+      "expectedTaskLogic": "Baseline L1 tasks only; promote independence",
+      "expectedCareEvents": "Routine observations; no abnormal events",
+      "expectedEscalation": "Routine review",
+      "architectureResult": "Architecture passes"
+    },
+    {
+      "id": "SC-02",
+      "archetype": "Selected ADL assistance",
+      "provisionalLevel": "L2",
+      "modifiers": "",
+      "profile": "Needs regular assistance with bathing/dressing; ambulates with limited support",
+      "expectedTaskLogic": "ADL assistance + mobility support as assessed",
+      "expectedCareEvents": "Refusal/unable or functional decline",
+      "expectedEscalation": "DT-003 if material change; reassessment",
+      "architectureResult": "Architecture passes"
+    },
+    {
+      "id": "SC-03",
+      "archetype": "High fall risk",
+      "provisionalLevel": "L2",
+      "modifiers": "MOD-MOB-01",
+      "profile": "History of falls/near-falls; needs transfer/ambulation support",
+      "expectedTaskLogic": "Transfer + ambulation + fall-prevention controls",
+      "expectedCareEvents": "Near-fall, instability, fall",
+      "expectedEscalation": "DT-004; DT-012",
+      "architectureResult": "Architecture passes; frequency needs clinical approval"
+    },
+    {
+      "id": "SC-04",
+      "archetype": "Cognitive impairment",
+      "provisionalLevel": "L3",
+      "modifiers": "MOD-COG-01",
+      "profile": "Needs frequent cueing/supervision; occasional unsafe judgment",
+      "expectedTaskLogic": "Cognitive cueing + supervision + ADL/mobility support",
+      "expectedCareEvents": "Acute confusion, behavioral escalation",
+      "expectedEscalation": "DT-003; DT-007 where applicable",
+      "architectureResult": "Architecture passes"
+    },
+    {
+      "id": "SC-05",
+      "archetype": "Dysphagia risk",
+      "provisionalLevel": "L3",
+      "modifiers": "MOD-NUT-01",
+      "profile": "Requires assessed meal assistance and swallowing precautions",
+      "expectedTaskLogic": "Meal assistance + clinically specified observation",
+      "expectedCareEvents": "Coughing/choking/respiratory change",
+      "expectedEscalation": "DT-003",
+      "architectureResult": "Architecture passes; clinical protocol needed"
+    },
+    {
+      "id": "SC-06",
+      "archetype": "Medication complexity",
+      "provisionalLevel": "L2",
+      "modifiers": "MOD-MED-01",
+      "profile": "Needs authorized medication support and observation",
+      "expectedTaskLogic": "Medication support + variance/adverse-effect monitoring",
+      "expectedCareEvents": "Missed/wrong dose/adverse response",
+      "expectedEscalation": "DT-006",
+      "architectureResult": "Architecture passes; scope-of-practice validation needed"
+    },
+    {
+      "id": "SC-07",
+      "archetype": "Recent hospitalization",
+      "provisionalLevel": "L3",
+      "modifiers": "MOD-CLN-01",
+      "profile": "Returns with changed function and medication changes",
+      "expectedTaskLogic": "Temporary enhanced monitoring + reconciliation + reassessment",
+      "expectedCareEvents": "Deterioration/new symptoms",
+      "expectedEscalation": "DT-003; DT-009; DT-012",
+      "architectureResult": "Architecture passes"
+    },
+    {
+      "id": "SC-08",
+      "archetype": "Complex mobility/ADL dependency",
+      "provisionalLevel": "L3",
+      "modifiers": "MOD-MOB-02",
+      "profile": "Multiple ADL dependencies and extensive transfer support",
+      "expectedTaskLogic": "Enhanced ADL + transfer + ambulation tasks",
+      "expectedCareEvents": "New weakness, inability, pain",
+      "expectedEscalation": "DT-003; DT-012",
+      "architectureResult": "Architecture passes"
+    },
+    {
+      "id": "SC-09",
+      "archetype": "Comprehensive dementia support",
+      "provisionalLevel": "L4",
+      "modifiers": "MOD-COG-01; MOD-COG-02",
+      "profile": "Significant cognitive impairment, supervision and behavioral triggers",
+      "expectedTaskLogic": "Comprehensive cognitive/behavioral supervision + ADL/mobility support",
+      "expectedCareEvents": "Behavioral escalation, acute change, injury risk",
+      "expectedEscalation": "DT-003; DT-007; DT-012",
+      "architectureResult": "Architecture passes"
+    },
+    {
+      "id": "SC-10",
+      "archetype": "Skin/wound risk",
+      "provisionalLevel": "L3",
+      "modifiers": "MOD-SKN-01",
+      "profile": "Reduced mobility and identified skin risk requiring clinical plan",
+      "expectedTaskLogic": "Skin observation + prevention tasks + mobility/ADL support",
+      "expectedCareEvents": "New breakdown/deterioration",
+      "expectedEscalation": "Clinical review; DT-003",
+      "architectureResult": "Architecture passes; wound protocol required if applicable"
+    },
+    {
+      "id": "SC-11",
+      "archetype": "Poor intake/dehydration risk",
+      "provisionalLevel": "L2",
+      "modifiers": "MOD-NUT-02",
+      "profile": "Reduced intake requiring monitoring and assistance",
+      "expectedTaskLogic": "Meal/hydration support + intake observation",
+      "expectedCareEvents": "Persistent poor intake or dehydration concern",
+      "expectedEscalation": "DT-003; reassessment",
+      "architectureResult": "Architecture passes; threshold needs clinical approval"
+    },
+    {
+      "id": "SC-12",
+      "archetype": "Palliative/end-of-life",
+      "provisionalLevel": "L5",
+      "modifiers": "MOD-END-01",
+      "profile": "Comfort-focused goals with symptom monitoring",
+      "expectedTaskLogic": "Comfort-focused ADL/nutrition/skin/clinical tasks",
+      "expectedCareEvents": "Symptom or goal change",
+      "expectedEscalation": "Clinical escalation/review",
+      "architectureResult": "Architecture passes; goals-of-care protocol required"
+    },
+    {
+      "id": "SC-13",
+      "archetype": "Poor intake / weight decline",
+      "provisionalLevel": "L2",
+      "modifiers": "MOD-NUT-02",
+      "profile": "Resident has progressively reduced intake over several days with emerging weight decline but no acute instability.",
+      "expectedTaskLogic": "Generate NUT-103/NUT-105 and level-appropriate hydration/intake support; preserve choice and identify baseline change.",
+      "expectedCareEvents": "NUT-E01; NUT-E03; NUT-E10",
+      "expectedEscalation": "Review intake trend, assess contributing factors and escalate nutrition/clinical review according to approved thresholds.",
+      "architectureResult": "Expected pathway: baseline → trend event → review; threshold validation pending."
+    },
+    {
+      "id": "SC-14",
+      "archetype": "Swallowing concern",
+      "provisionalLevel": "L3",
+      "modifiers": "MOD-NUT-01",
+      "profile": "Resident coughs during meals and has a documented texture modification requirement.",
+      "expectedTaskLogic": "Generate NUT-204 plus applicable meal-assistance tasks; require texture/feeding precautions and competency gate.",
+      "expectedCareEvents": "NUT-E04; NUT-E07",
+      "expectedEscalation": "Stop unsafe feeding approach, notify nurse/clinical lead and follow approved swallowing pathway.",
+      "architectureResult": "Expected hard safety gate; clinical protocol thresholds pending."
+    },
+    {
+      "id": "SC-15",
+      "archetype": "Comfort-focused nutrition/hydration",
+      "provisionalLevel": "L5",
+      "modifiers": "MOD-END-01",
+      "profile": "Resident is on a comfort-focused plan with reduced appetite and variable fluid tolerance.",
+      "expectedTaskLogic": "Generate NUT-401–NUT-405 according to goals; avoid automatic intake targets that conflict with comfort goals.",
+      "expectedCareEvents": "NUT-E04; NUT-E05; NUT-E10",
+      "expectedEscalation": "Clinical/goals-of-care review when tolerance, symptoms or goals change.",
+      "architectureResult": "Expected goal-aligned pathway; local palliative policy validation pending."
+    },
+    {
+      "id": "SC-16",
+      "archetype": "New/worsening symptom",
+      "provisionalLevel": "L2",
+      "modifiers": "MOD-CLN-01",
+      "profile": "Resident develops a new symptom not part of the established baseline.",
+      "expectedTaskLogic": "Generate CLN-103/CLN-004 as applicable; capture symptom details and initiate change-in-condition logic.",
+      "expectedCareEvents": "CLN-E04; CLN-E08",
+      "expectedEscalation": "Assess significance and escalate for clinical review according to approved protocol.",
+      "architectureResult": "Baseline comparison → event → assessment → escalation/review; thresholds pending clinical validation."
+    },
+    {
+      "id": "SC-17",
+      "archetype": "Abnormal vital sign",
+      "provisionalLevel": "L3",
+      "modifiers": "MOD-CLN-01",
+      "profile": "A scheduled vital sign is outside the resident's individualized parameter.",
+      "expectedTaskLogic": "Capture CLN-E02; require parameter comparison and clinical response workflow; do not hard-code universal thresholds.",
+      "expectedCareEvents": "CLN-E02; CLN-E08",
+      "expectedEscalation": "Verify measurement as appropriate, assess context, escalate according to individualized parameters/protocol.",
+      "architectureResult": "Hard parameter gate; actual thresholds remain clinical-policy dependent."
+    },
+    {
+      "id": "SC-18",
+      "archetype": "Post-hospital deterioration",
+      "provisionalLevel": "L3",
+      "modifiers": "MOD-CLN-01",
+      "profile": "Resident returns from hospital and shows increased weakness and reduced intake compared with discharge baseline.",
+      "expectedTaskLogic": "Generate CLN-203 plus cross-domain monitoring; link nutrition/mobility events and consider care-plan reassessment.",
+      "expectedCareEvents": "CLN-E05; CLN-E07; CLN-E08",
+      "expectedEscalation": "Clinical review and transition-of-care reassessment if deterioration is identified.",
+      "architectureResult": "Expected cross-domain synthesis and DT-009/DT-003 pathway."
+    },
+    {
+      "id": "SC-19",
+      "archetype": "Multi-domain deterioration",
+      "provisionalLevel": "L4",
+      "modifiers": "MOD-CLN-01",
+      "profile": "Resident shows simultaneous cognitive, mobility and nutrition changes over several days.",
+      "expectedTaskLogic": "Generate CLN-303/CLN-304; link events across domains and evaluate care-level change.",
+      "expectedCareEvents": "CLN-E07; CLN-E10",
+      "expectedEscalation": "Trigger clinical/care-plan reassessment and determine whether level/tasks require change.",
+      "architectureResult": "Expected multi-domain trigger rather than isolated task escalation."
+    },
+    {
+      "id": "SC-20",
+      "archetype": "Comfort symptom escalation",
+      "provisionalLevel": "L5",
+      "modifiers": "MOD-END-01",
+      "profile": "Resident has worsening symptoms despite the current comfort plan.",
+      "expectedTaskLogic": "Generate CLN-402/CLN-405; support timely clinical review and goal-of-care alignment.",
+      "expectedCareEvents": "CLN-E03; CLN-E08; CLN-E09",
+      "expectedEscalation": "Escalate for clinical review; assess whether goals, interventions or service capability need change.",
+      "architectureResult": "Expected comfort-focused escalation without automatic curative treatment assumptions."
+    },
+    {
+      "id": "SC-21",
+      "archetype": "New incontinence",
+      "provisionalLevel": "L2",
+      "modifiers": "MOD-SKN-01",
+      "profile": "Resident develops new urinary incontinence not present at baseline.",
+      "expectedTaskLogic": "Generate SKN-102/SKN-105; capture pattern change and assess whether clinical review is required.",
+      "expectedCareEvents": "SKN-E02; SKN-E08",
+      "expectedEscalation": "Assess new pattern and escalate according to approved clinical protocol.",
+      "architectureResult": "Expected baseline comparison → event → assessment → plan/task adjustment."
+    },
+    {
+      "id": "SC-22",
+      "archetype": "New skin breakdown",
+      "provisionalLevel": "L3",
+      "modifiers": "MOD-SKN-01",
+      "profile": "Resident develops a new open area or pressure-related skin concern.",
+      "expectedTaskLogic": "Generate SKN-202/SKN-204; capture skin event and initiate clinical review.",
+      "expectedCareEvents": "SKN-E04; SKN-E08",
+      "expectedEscalation": "Clinical assessment and prevention/plan review.",
+      "architectureResult": "Expected skin-integrity gate; exact clinical staging/thresholds remain policy-dependent."
+    },
+    {
+      "id": "SC-23",
+      "archetype": "Continence + nutrition + mobility risk",
+      "provisionalLevel": "L3",
+      "modifiers": "MOD-SKN-01; MOD-NUT-02; MOD-MOB-02",
+      "profile": "Reduced mobility, poor intake and increased incontinence jointly increase skin breakdown risk.",
+      "expectedTaskLogic": "Link SKN-203 with nutrition/mobility prevention tasks; create cross-domain event.",
+      "expectedCareEvents": "SKN-E05; SKN-E10",
+      "expectedEscalation": "Integrated care-plan review and prevention escalation.",
+      "architectureResult": "Expected cross-domain synthesis rather than isolated skin task."
+    },
+    {
+      "id": "SC-24",
+      "archetype": "Dementia-related continence difficulty",
+      "provisionalLevel": "L4",
+      "modifiers": "MOD-SKN-01; MOD-COG-01",
+      "profile": "Resident with dementia repeatedly resists toileting and becomes incontinent.",
+      "expectedTaskLogic": "Generate SKN-301/SKN-304; adapt approach while preserving dignity and avoiding unsafe coercion.",
+      "expectedCareEvents": "SKN-E01; SKN-E06",
+      "expectedEscalation": "Review communication/behavior approach and care plan.",
+      "architectureResult": "Expected cognition-aware task adaptation and event capture."
+    },
+    {
+      "id": "SC-25",
+      "archetype": "Comfort-focused skin concern",
+      "provisionalLevel": "L5",
+      "modifiers": "MOD-END-01; MOD-SKN-01",
+      "profile": "Resident receiving comfort-focused care develops moisture-related skin discomfort.",
+      "expectedTaskLogic": "Generate SKN-401/SKN-404; align intervention with comfort goals and escalate if symptoms are uncontrolled.",
+      "expectedCareEvents": "SKN-E03; SKN-E08; SKN-E09",
+      "expectedEscalation": "Clinical review if comfort cannot be maintained within current plan.",
+      "architectureResult": "Expected comfort-focused response; no automatic curative pathway."
+    },
+    {
+      "id": "LOC-001",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L1",
+      "modifiers": "None / low-intensity modifiers",
+      "profile": "Mostly independent; occasional setup/cueing; no material safety or clinical complexity.",
+      "expectedTaskLogic": "Should remain L1; baseline tasks only.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=2; band=L1; expected=L1; MATCH"
+    },
+    {
+      "id": "LOC-002",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L2",
+      "modifiers": "None",
+      "profile": "Needs regular help with bathing, dressing and toileting; mobility mostly stable.",
+      "expectedTaskLogic": "Should classify L2; regular ADL/continence tasks.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=9; band=L1; expected=L2; REVIEW"
+    },
+    {
+      "id": "LOC-003",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L2",
+      "modifiers": "MOD-MOB-02; possibly MOD-MOB-01",
+      "profile": "Uses assistive device; regular transfer assistance; otherwise stable and cognitively intact.",
+      "expectedTaskLogic": "Should remain L2 if safety needs are manageable within L2 package.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=7; band=L1; expected=L2; REVIEW"
+    },
+    {
+      "id": "LOC-004",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L3",
+      "modifiers": "MOD-MOB-02",
+      "profile": "Requires regular assistance with bathing, dressing, toileting, eating and transfers; stable clinically.",
+      "expectedTaskLogic": "Should reach L3 through cumulative dependency.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=15; band=L2; expected=L3; REVIEW"
+    },
+    {
+      "id": "LOC-005",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L2",
+      "modifiers": "MOD-MOB-01; MOD-COG-01/02 only if supported",
+      "profile": "Regular ADL support and high fall risk; no major clinical complexity.",
+      "expectedTaskLogic": "Critical test: high fall risk should add controls, not automatically inflate level.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=15; band=L2; expected=L2; MATCH"
+    },
+    {
+      "id": "LOC-006",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L2",
+      "modifiers": "MOD-CLN-01",
+      "profile": "Recent hospitalization; increased monitoring temporarily needed; ADL needs remain moderate.",
+      "expectedTaskLogic": "Should trigger enhanced monitoring/transition tasks; level may change if needs persist.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=16; band=L2; expected=L2; MATCH"
+    },
+    {
+      "id": "LOC-007",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L3",
+      "modifiers": "MOD-CLN-01 as applicable; MOD-SKN-01 if risk evidence exists",
+      "profile": "Multiple chronic conditions, frequent monitoring, several ADL dependencies, but cognition stable.",
+      "expectedTaskLogic": "Should classify L3 with enhanced clinical monitoring.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=23; band=L3; expected=L3; MATCH"
+    },
+    {
+      "id": "LOC-008",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L4",
+      "modifiers": "MOD-COG-01; MOD-COG-02",
+      "profile": "Substantial cognitive impairment, frequent supervision, behavioral support and multiple ADL dependencies.",
+      "expectedTaskLogic": "Should classify L4 due to comprehensive supervision/cognitive complexity.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=31; band=L4; expected=L4; MATCH"
+    },
+    {
+      "id": "LOC-009",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L4",
+      "modifiers": "MOD-COG-01; MOD-MOB-01/02; MOD-NUT-02; MOD-SKN-01/02",
+      "profile": "Cognitive impairment plus mobility, fall, nutrition and continence risks requiring coordinated management.",
+      "expectedTaskLogic": "Should classify L4; cross-domain care package required.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=38; band=L4; expected=L4; MATCH"
+    },
+    {
+      "id": "LOC-010",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L2",
+      "modifiers": "MOD-NUT-01",
+      "profile": "Regular assistance with meals and clinically specified swallowing precautions; otherwise moderate needs.",
+      "expectedTaskLogic": "Test that dysphagia modifier adds meal positioning/observation without automatically making L3.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=18; band=L2; expected=L2; MATCH"
+    },
+    {
+      "id": "LOC-011",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L3",
+      "modifiers": "MOD-NUT-02; MOD-SKN-01; MOD-MOB-02",
+      "profile": "Reduced intake, weight trend concern and declining mobility; emerging skin risk.",
+      "expectedTaskLogic": "Should classify L3 and generate cross-domain monitoring.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=23; band=L3; expected=L3; MATCH"
+    },
+    {
+      "id": "LOC-012",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L2",
+      "modifiers": "MOD-MED-01",
+      "profile": "Complex/high-risk medication support with regular monitoring, but otherwise moderate ADL needs.",
+      "expectedTaskLogic": "Test that medication complexity drives authorized monitoring/support without double-counting into level.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=14; band=L2; expected=L2; MATCH"
+    },
+    {
+      "id": "LOC-013",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L4",
+      "modifiers": "MOD-MOB-02; MOD-SKN-02",
+      "profile": "Near-total assistance with ADLs, transfers, mobility and continence; substantial supervision.",
+      "expectedTaskLogic": "Should classify L4 through high dependency and supervision; verify service capability.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=32; band=L4; expected=L4; MATCH"
+    },
+    {
+      "id": "LOC-014",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L5",
+      "modifiers": "MOD-END-01",
+      "profile": "Advanced illness with comfort-focused goals, symptom monitoring and end-of-life pathway; dependency score alone should not determine L5.",
+      "expectedTaskLogic": "Separate L5 pathway should override score-derived L3/L4 when authorized criteria are met.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=36; band=L4; expected=L5; MATCH"
+    },
+    {
+      "id": "LOC-015",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L1",
+      "modifiers": "None",
+      "profile": "Previously L3; now functionally improved with fewer assistance needs and stable clinical status.",
+      "expectedTaskLogic": "Test reassessment can reduce level when evidence supports improvement; preserve history/audit trail.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=10; band=L1; expected=L1; MATCH"
+    },
+    {
+      "id": "LOC-016",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L2",
+      "modifiers": "MOD-CLN-01",
+      "profile": "Score lands in L2 range but new acute instability/safety risk requires higher level pending clinical resolution.",
+      "expectedTaskLogic": "Test clinical override/minimum-level rule; final level should not be determined by score alone if safety threshold is exceeded.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=24; band=L3; expected=L2; REVIEW"
+    },
+    {
+      "id": "LOC-017",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L5",
+      "modifiers": "MOD-END-01",
+      "profile": "Resident has relatively modest dependency score but is on an authorized comfort/end-of-life pathway.",
+      "expectedTaskLogic": "Critical L5 test: confirms L5 is pathway-based, not score-based.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=15; band=L2; expected=L5; MATCH"
+    },
+    {
+      "id": "LOC-018",
+      "archetype": "Level-of-Care Validation",
+      "provisionalLevel": "L4",
+      "modifiers": "Multiple modifiers",
+      "profile": "High dependency and complex care needs but goals are not palliative/end-of-life.",
+      "expectedTaskLogic": "Should remain L4 unless separate L5 criteria are met.",
+      "expectedCareEvents": "Classification event; applicable domain events",
+      "expectedEscalation": "Apply score validation, modifier rules, capability gate and clinical override as applicable",
+      "architectureResult": "Draft score=42; band=L4; expected=L4; MATCH"
+    }
+  ],
+  "gaps": [
+    {
+      "id": "GAP-001",
+      "area": "Clinical scoring thresholds",
+      "requiredDefinition": "Validate AS-01 to AS-14 anchors, 56-point threshold bands, minimum-level rules, modifier effects, L5 criteria and inter-rater reliability against real LifeCare resident cases before production.",
+      "affectedAsset": "DT-002; Assessment & Care Logic; SLMS classification engine",
+      "priority": "Critical"
+    },
+    {
+      "id": "GAP-002",
+      "area": "Clinical override criteria",
+      "requiredDefinition": "Define objective override triggers and approval hierarchy",
+      "affectedAsset": "DT-002",
+      "priority": "Critical before automation"
+    },
+    {
+      "id": "GAP-003",
+      "area": "Task frequency rules",
+      "requiredDefinition": "Define clinically/operationally approved frequencies by task/status",
+      "affectedAsset": "Care Matrix",
+      "priority": "Critical before task engine release"
+    },
+    {
+      "id": "GAP-004",
+      "area": "Minimum safe level logic",
+      "requiredDefinition": "Define when a modifier/need makes a level insufficient",
+      "affectedAsset": "DT-002",
+      "priority": "Critical"
+    },
+    {
+      "id": "GAP-005",
+      "area": "Medication scope",
+      "requiredDefinition": "Define exact authorized medication-support activities by role",
+      "affectedAsset": "MED tasks",
+      "priority": "Critical"
+    },
+    {
+      "id": "GAP-006",
+      "area": "Dysphagia protocol",
+      "requiredDefinition": "Define clinical precautions, observations and escalation thresholds",
+      "affectedAsset": "NUT modifier",
+      "priority": "Critical"
+    },
+    {
+      "id": "GAP-007",
+      "area": "Palliative/goals-of-care protocol",
+      "requiredDefinition": "Define approved comfort-care tasks, symptom monitoring and escalation",
+      "affectedAsset": "L5",
+      "priority": "Critical"
+    },
+    {
+      "id": "GAP-008",
+      "area": "Event severity model",
+      "requiredDefinition": "Define severity levels for abnormal events and escalation timing",
+      "affectedAsset": "Care Event Master",
+      "priority": "High"
+    },
+    {
+      "id": "GAP-009",
+      "area": "Refusal pathway",
+      "requiredDefinition": "Define when refusal is routine choice vs safety/clinical escalation",
+      "affectedAsset": "Care Event Master",
+      "priority": "High"
+    },
+    {
+      "id": "GAP-010",
+      "area": "Temporary modifier lifecycle",
+      "requiredDefinition": "Define start/end dates, review and automatic expiration",
+      "affectedAsset": "Clinical Modifiers",
+      "priority": "High"
+    },
+    {
+      "id": "GAP-011",
+      "area": "Staff competency gates",
+      "requiredDefinition": "Define which tasks require competency before SLMS assignment",
+      "affectedAsset": "Task Master/LXP",
+      "priority": "High"
+    },
+    {
+      "id": "GAP-012",
+      "area": "Audit/KPI model",
+      "requiredDefinition": "Define task completion, exception, outcome and escalation indicators",
+      "affectedAsset": "Quality",
+      "priority": "High"
+    }
+  ]
+}

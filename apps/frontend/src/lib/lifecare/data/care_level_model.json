@@ -1,0 +1,189 @@
+{
+  "levels": [
+    {
+      "level": "L1",
+      "conceptualProfile": "Minimal Care Support",
+      "typicalNeedPattern": "Mostly independent; intermittent cueing/setup or limited assistance; no pervasive supervision",
+      "baselineCarePackage": "Standard support package with low-frequency individualized tasks",
+      "reviewEscalation": "Routine review; reassess on sustained increase in assistance/frequency",
+      "intensity": "Standard",
+      "dedicatedStaffingPrinciple": "LOC represents recurring care complexity",
+      "privateCaregiverPrinciple": "PCG only for incremental dedicated 1:1 staffing beyond shared L1 package",
+      "feeSafeguard": "Do not charge PCG for tasks already included in LOC"
+    },
+    {
+      "level": "L2",
+      "conceptualProfile": "Moderate Care Support",
+      "typicalNeedPattern": "Regular assistance in selected ADLs/mobility/toileting/medication or defined supervision; needs remain deliverable through shared staffing",
+      "baselineCarePackage": "Expanded recurring task package with moderate frequency and condition-specific modifiers",
+      "reviewEscalation": "Scheduled + trigger-based reassessment",
+      "intensity": "Moderate",
+      "dedicatedStaffingPrinciple": "LOC represents recurring care complexity",
+      "privateCaregiverPrinciple": "PCG only when L2 shared staffing cannot safely meet dedicated need",
+      "feeSafeguard": "Document incremental hours/tasks"
+    },
+    {
+      "level": "L3",
+      "conceptualProfile": "Extensive Care Support",
+      "typicalNeedPattern": "Multiple dependencies or substantial physical assistance; high-frequency care events, significant mobility/safety burden, or frequent structured clinical support",
+      "baselineCarePackage": "High-frequency hands-on task package + enhanced monitoring/coordination",
+      "reviewEscalation": "Closer clinical review; assess staffing burden and capability",
+      "intensity": "High",
+      "dedicatedStaffingPrinciple": "LOC represents recurring care complexity",
+      "privateCaregiverPrinciple": "High LOC does not automatically require PCG",
+      "feeSafeguard": "Separate LOC and PCG justification"
+    },
+    {
+      "level": "L4",
+      "conceptualProfile": "Comprehensive Care Management",
+      "typicalNeedPattern": "Near-total functional dependency with substantial supervision OR pervasive cognitive/behavioral supervision OR sustained comprehensive multi-domain complexity requiring very high shared-care resources",
+      "baselineCarePackage": "Comprehensive hands-on care, supervision, prevention, monitoring and coordination package",
+      "reviewEscalation": "Frequent multidisciplinary/capability review; PCG assessed separately",
+      "intensity": "Very High",
+      "dedicatedStaffingPrinciple": "LOC represents recurring care complexity",
+      "privateCaregiverPrinciple": "PCG may coexist with L4 only when dedicated staffing remains necessary",
+      "feeSafeguard": "Separate dedicated staffing from comprehensive care package"
+    },
+    {
+      "level": "L5",
+      "conceptualProfile": "Specialized Palliative / End-of-Life Care",
+      "typicalNeedPattern": "Authorized comfort-focused advanced-illness/end-of-life pathway; not a dependency score above L4",
+      "baselineCarePackage": "Goal-directed comfort care + symptom observation + dignity/family/provider coordination",
+      "reviewEscalation": "Frequent goals-of-care and capability reassessment",
+      "intensity": "Specialized",
+      "dedicatedStaffingPrinciple": "L5 is goals/clinical pathway",
+      "privateCaregiverPrinciple": "PCG only if dedicated staffing is additionally required and within capability",
+      "feeSafeguard": "PCG cannot substitute for services beyond LifeCare capability"
+    }
+  ],
+  "baselineByDomain": [
+    {
+      "domain": "Decision Engine",
+      "L1": "Question",
+      "L2": "Primary Output",
+      "L3": "Fee Principle",
+      "L4": "",
+      "modifierRule": ""
+    },
+    {
+      "domain": "A — Level of Care",
+      "L1": "What recurring care complexity/package does the resident require?",
+      "L2": "L1–L5 + modifiers",
+      "L3": "Monthly LOC fee",
+      "L4": "",
+      "modifierRule": ""
+    },
+    {
+      "domain": "B — Dedicated Staffing",
+      "L1": "Does resident require incremental dedicated 1:1 staffing beyond shared LOC resources?",
+      "L2": "None / night / 8h / 12h / 24h / temporary / elective",
+      "L3": "PCG or dedicated staffing fee only when justified",
+      "L4": "",
+      "modifierRule": ""
+    },
+    {
+      "domain": "C — Additional Clinical Services",
+      "L1": "Is there a discrete skilled/ancillary service outside LOC package?",
+      "L2": "Included / billable skilled service / recurring-package reassessment / capability escalation",
+      "L3": "Charge only for non-included service; no duplicate billing",
+      "L4": "",
+      "modifierRule": ""
+    },
+    {
+      "domain": "Personal ADLs",
+      "L1": "Independent; setup/cueing or intermittent minimal help",
+      "L2": "Regular assistance in selected ADLs",
+      "L3": "Extensive hands-on help across multiple ADLs",
+      "L4": "Comprehensive/near-total assistance as required, with cognitive/safety adaptations",
+      "modifierRule": "Resident-specific assistance intensity and frequency override generic examples"
+    },
+    {
+      "domain": "Mobility / Transfers",
+      "L1": "Independent or intermittent standby",
+      "L2": "Regular standby/contact guard/minimal assist",
+      "L3": "Frequent/substantial physical assist or complex transfers",
+      "L4": "Comprehensive assisted mobility/transfer support with supervision adaptations",
+      "modifierRule": "Fall/mobility modifier adds controls; PCG decision remains separate"
+    },
+    {
+      "domain": "Toileting / Continence",
+      "L1": "Independent or occasional cue/setup",
+      "L2": "Regular toileting/continence assistance",
+      "L3": "Frequent hands-on toileting/continence care",
+      "L4": "Comprehensive/high-frequency toileting, hygiene and skin protection",
+      "modifierRule": "Capture episodes/24h + night pattern; high-frequency modifier if material"
+    },
+    {
+      "domain": "Meals / Nutrition",
+      "L1": "Independent; setup/cueing as assessed",
+      "L2": "Regular setup/meal assistance or intake observation",
+      "L3": "Frequent meal assistance + structured intake/nutrition support",
+      "L4": "Comprehensive feeding/cueing/support within safe capability",
+      "modifierRule": "Aspiration/weight-loss modifiers add specific tasks and escalation"
+    },
+    {
+      "domain": "Medication",
+      "L1": "Self-management where approved or low-complexity support",
+      "L2": "Routine authorized administration/assistance",
+      "L3": "Complex/high-risk regimen monitoring and reconciliation",
+      "L4": "Comprehensive medication support with cognitive/behavioral adaptations",
+      "modifierRule": "Medication changes/risks add monitoring; discrete procedures use DT-014"
+    },
+    {
+      "domain": "Clinical Monitoring",
+      "L1": "Routine wellness observation",
+      "L2": "Regular structured monitoring per condition/order",
+      "L3": "Frequent structured monitoring/coordination",
+      "L4": "Comprehensive multi-condition monitoring/coordination",
+      "modifierRule": "Acute change uses DT-003; skilled add-on uses DT-014"
+    },
+    {
+      "domain": "Cognition / Behavior",
+      "L1": "Independent; occasional cueing",
+      "L2": "Regular cueing/routine support",
+      "L3": "Frequent cueing, behavior observation and defined supervision",
+      "L4": "Comprehensive dementia/BPSD support and close supervision as assessed",
+      "modifierRule": "Diagnosis alone does not set LOC; supervision duration matters"
+    },
+    {
+      "domain": "Safety / Fall Prevention",
+      "L1": "Basic individualized prevention",
+      "L2": "Defined controls during relevant activities",
+      "L3": "Enhanced controls and frequent safety support",
+      "L4": "Comprehensive environmental/supervision/behavior-based controls",
+      "modifierRule": "Dedicated 1:1 requirement is evaluated only after final LOC via DT-013"
+    },
+    {
+      "domain": "Skin Integrity",
+      "L1": "Routine observation/prevention",
+      "L2": "Structured prevention if risk identified",
+      "L3": "Frequent prevention/skin checks when risk burden is material",
+      "L4": "Comprehensive prevention/skin support within capability",
+      "modifierRule": "Active/complex wound treatment may invoke DT-014"
+    },
+    {
+      "domain": "Communication",
+      "L1": "Preferred communication approach",
+      "L2": "Regular adaptations/cueing if needed",
+      "L3": "Frequent structured communication support",
+      "L4": "Intensive individualized communication support if required",
+      "modifierRule": "Score/support communication impairment itself, not diagnosis"
+    },
+    {
+      "domain": "Sleep / Routine",
+      "L1": "No material intervention",
+      "L2": "Regular routine/night support if assessed",
+      "L3": "Frequent night/routine interventions",
+      "L4": "Comprehensive day/night routine support when materially required",
+      "modifierRule": "Capture actual nighttime interventions and duration"
+    },
+    {
+      "domain": "Reablement / Engagement",
+      "L1": "Encourage independence and meaningful activity",
+      "L2": "Regular staff carryover/participation support",
+      "L3": "Frequent structured carryover/coordination",
+      "L4": "Comprehensive individualized participation/reablement support",
+      "modifierRule": "Therapy potential alone does not increase LOC; score staff workload"
+    }
+  ]
+}

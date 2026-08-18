@@ -1,0 +1,167 @@
+[
+  {
+    "id": "ACS-001",
+    "service": "Change-of-condition assessment & routine short-term monitoring",
+    "includedInLoc": "Yes",
+    "separateCharge": "Usually No",
+    "decisionRule": "Routine nursing assessment, documentation, physician/family coordination and reasonable short-term enhanced monitoring remain part of the resident's LOC nursing oversight.",
+    "examples": "Extra vital signs, bleeding observation after medication change, short-term symptom checks.",
+    "requiredDocumentation": "Change-of-condition note; orders; monitoring plan.",
+    "reassessmentSafeguard": "If intensity/duration becomes material or recurrent, reassess LOC/modifier/service.",
+    "status": "Working Draft"
+  },
+  {
+    "id": "ACS-002",
+    "service": "Discrete skilled nursing procedure",
+    "includedInLoc": "No, unless specifically bundled in package",
+    "separateCharge": "Yes",
+    "decisionRule": "A procedure requiring licensed nursing skill, material nursing time or special competency may be separately charged when outside the defined LOC inclusion.",
+    "examples": "IM/SC injection, catheter insertion/change, selected complex procedures.",
+    "requiredDocumentation": "Order/clinical indication; procedure record; staff qualification; fee disclosure.",
+    "reassessmentSafeguard": "Do not separately charge if explicitly included in resident's package.",
+    "status": "Working Draft"
+  },
+  {
+    "id": "ACS-003",
+    "service": "IV therapy / IV hydration / IV medication",
+    "includedInLoc": "No",
+    "separateCharge": "Yes + capability review",
+    "decisionRule": "IV therapy is an additional skilled service and must also pass LifeCare capability/scope criteria.",
+    "examples": "IV insertion/reinsertion, hydration, IV medication.",
+    "requiredDocumentation": "Physician order; consent as applicable; supplies; monitoring; capability approval.",
+    "reassessmentSafeguard": "Escalate/transfer if acuity exceeds capability.",
+    "status": "Working Draft"
+  },
+  {
+    "id": "ACS-004",
+    "service": "Simple wound care",
+    "includedInLoc": "Define package threshold",
+    "separateCharge": "Maybe",
+    "decisionRule": "Low-complexity, limited-frequency wound care may be bundled by LOC/package; charge separately only when outside the published inclusion.",
+    "examples": "Example: simple dressing at limited frequency vs recurring skilled wound treatment.",
+    "requiredDocumentation": "Wound assessment; order; frequency; supplies; package comparison.",
+    "reassessmentSafeguard": "Persistent wound triggers LOC/modifier/capability reassessment.",
+    "status": "Working Draft"
+  },
+  {
+    "id": "ACS-005",
+    "service": "Complex/high-frequency wound care",
+    "includedInLoc": "No",
+    "separateCharge": "Yes",
+    "decisionRule": "Complex, high-frequency or resource-intensive wound care is an additional skilled nursing service.",
+    "examples": "Complex dressing regimen, frequent treatment, specialized materials.",
+    "requiredDocumentation": "Wound plan; frequency; procedure time; materials; progress review.",
+    "reassessmentSafeguard": "Do not let recurring wound charges continue indefinitely without care-model reassessment.",
+    "status": "Working Draft"
+  },
+  {
+    "id": "ACS-006",
+    "service": "Routine medication administration",
+    "includedInLoc": "Yes according to LOC/package",
+    "separateCharge": "No",
+    "decisionRule": "Routine medication administration/support already included in the resident's approved package is not separately charged.",
+    "examples": "Scheduled oral medication administration.",
+    "requiredDocumentation": "MAR; care plan.",
+    "reassessmentSafeguard": "Medication complexity may modify LOC/care package but should not create duplicate fees.",
+    "status": "Working Draft"
+  },
+  {
+    "id": "ACS-007",
+    "service": "Short-course injection therapy",
+    "includedInLoc": "No unless bundled",
+    "separateCharge": "Yes",
+    "decisionRule": "A prescribed short course of injections may be charged per procedure/service schedule.",
+    "examples": "e.g., ordered IM/SC medication course.",
+    "requiredDocumentation": "Order; administration record; drug/supply source; duration.",
+    "reassessmentSafeguard": "End charge when course ends; reassess if it becomes chronic.",
+    "status": "Working Draft"
+  },
+  {
+    "id": "ACS-008",
+    "service": "Chronic recurring skilled procedure",
+    "includedInLoc": "Reclassify before indefinite add-on",
+    "separateCharge": "Potentially, under defined recurring-service package",
+    "decisionRule": "When a temporary procedure becomes a stable recurring need, determine whether it belongs in LOC/package, a recurring clinical add-on, or exceeds capability.",
+    "examples": "Daily long-term injections, recurring specialized treatment.",
+    "requiredDocumentation": "Utilization history; clinical need; LOC comparison; pricing approval.",
+    "reassessmentSafeguard": "Mandatory periodic review; avoid perpetual 'temporary' billing.",
+    "status": "Working Draft"
+  },
+  {
+    "id": "ACS-009",
+    "service": "Special medical supplies/equipment",
+    "includedInLoc": "No unless package states otherwise",
+    "separateCharge": "Yes / pass-through",
+    "decisionRule": "Resident-specific consumables/equipment outside standard inclusions may be charged separately with transparent pricing.",
+    "examples": "Special wound materials, IV supplies, external equipment rental.",
+    "requiredDocumentation": "Item/service record; source cost/fee; family disclosure.",
+    "reassessmentSafeguard": "Avoid markup ambiguity; define standard included supplies.",
+    "status": "Working Draft"
+  },
+  {
+    "id": "ACS-010",
+    "service": "Dedicated private-duty nursing",
+    "includedInLoc": "No",
+    "separateCharge": "Yes",
+    "decisionRule": "Dedicated licensed nursing time is distinct from shared LOC nursing oversight and from a private caregiver.",
+    "examples": "1:1 nurse for defined hours/procedure monitoring.",
+    "requiredDocumentation": "Clinical rationale; hours; nursing scope; authorization; review date.",
+    "reassessmentSafeguard": "Use only when within capability and clinically justified.",
+    "status": "Working Draft"
+  },
+  {
+    "id": "ACS-011",
+    "service": "External professional service",
+    "includedInLoc": "No",
+    "separateCharge": "Yes / direct provider billing",
+    "decisionRule": "External physician, therapist, laboratory, diagnostic or specialist services are outside the core LOC unless contractually included.",
+    "examples": "External PT, specialist, lab/diagnostics.",
+    "requiredDocumentation": "Referral/order; provider; family authorization; invoice arrangement.",
+    "reassessmentSafeguard": "Clarify LifeCare coordination fee, if any, separately.",
+    "status": "Working Draft"
+  },
+  {
+    "id": "ACS-012",
+    "service": "Transport / medical escort",
+    "includedInLoc": "No unless package states otherwise",
+    "separateCharge": "Yes",
+    "decisionRule": "Transport and dedicated escort outside routine community services may be separately charged.",
+    "examples": "Hospital/specialist transport, staff medical escort.",
+    "requiredDocumentation": "Trip/escort record; duration; destination; fee basis.",
+    "reassessmentSafeguard": "Emergency transport follows emergency pathway.",
+    "status": "Working Draft"
+  },
+  {
+    "id": "ACS-013",
+    "service": "Acute instability beyond assisted-living capability",
+    "includedInLoc": "No",
+    "separateCharge": "Do not solve by fee alone",
+    "decisionRule": "Additional charges cannot be used to retain a resident whose condition requires services beyond LifeCare's safe capability.",
+    "examples": "Unstable condition requiring hospital-level management.",
+    "requiredDocumentation": "Clinical assessment; escalation/transfer decision.",
+    "reassessmentSafeguard": "Safety/capability overrides revenue considerations.",
+    "status": "Working Draft"
+  },
+  {
+    "id": "ACS-014",
+    "service": "Anti-double-charge test",
+    "includedInLoc": "N/A",
+    "separateCharge": "Required before charging",
+    "decisionRule": "Before any additional clinical fee, verify that the same intervention/time/material is not already included in LOC, PCG, dedicated nursing or another billed package.",
+    "examples": "Cross-check service against package inclusions and other active add-ons.",
+    "requiredDocumentation": "Service-to-package comparison; billing rationale.",
+    "reassessmentSafeguard": "No duplicate billing for the same unit of service.",
+    "status": "Working Draft"
+  },
+  {
+    "id": "ACS-015",
+    "service": "Temporary-to-recurring threshold",
+    "includedInLoc": "N/A",
+    "separateCharge": "Reassessment trigger",
+    "decisionRule": "A temporary additional service that persists beyond the defined course/review period must trigger reassessment rather than automatic continued billing.",
+    "examples": "Repeated wound care, injections, intensive monitoring.",
+    "requiredDocumentation": "Start date; utilization/frequency; review date; reassessment outcome.",
+    "reassessmentSafeguard": "Set service-specific review periods in policy/fee schedule.",
+    "status": "Working Draft"
+  }
+]

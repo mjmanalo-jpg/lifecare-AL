@@ -1,0 +1,151 @@
+[
+  {
+    "id": "MOD-MOB-01",
+    "name": "High fall risk",
+    "affectedDomains": [
+      "MOB",
+      "FALL"
+    ],
+    "taskPlanEffect": "Add transfer/ambulation precautions, supervision and fall-prevention controls as assessed.",
+    "escalationLink": "Near-fall/fall/new instability → DT-004 / DT-012",
+    "priority": "P1"
+  },
+  {
+    "id": "MOD-MOB-02",
+    "name": "Reduced transfer ability",
+    "affectedDomains": [
+      "MOB",
+      "ADL"
+    ],
+    "taskPlanEffect": "Increase transfer assistance and equipment requirements according to assessment.",
+    "escalationLink": "New inability/pain/weakness → DT-003",
+    "priority": "P1"
+  },
+  {
+    "id": "MOD-COG-01",
+    "name": "Cognitive impairment",
+    "affectedDomains": [
+      "COG",
+      "ADL",
+      "FALL"
+    ],
+    "taskPlanEffect": "Add cueing, supervision and communication adaptations; do not assume dementia solely from a score.",
+    "escalationLink": "Acute change → DT-003",
+    "priority": "P1"
+  },
+  {
+    "id": "MOD-COG-02",
+    "name": "Behavioral symptoms",
+    "affectedDomains": [
+      "COG",
+      "FALL"
+    ],
+    "taskPlanEffect": "Add individualized trigger management and supervision.",
+    "escalationLink": "Significant escalation/injury risk → DT-003/DT-007 as applicable",
+    "priority": "P1"
+  },
+  {
+    "id": "MOD-MED-01",
+    "name": "Medication complexity/high-risk medication",
+    "affectedDomains": [
+      "MED",
+      "FALL"
+    ],
+    "taskPlanEffect": "Add only clinically authorized monitoring/support and risk controls.",
+    "escalationLink": "Medication variance/adverse sign → DT-006",
+    "priority": "P1"
+  },
+  {
+    "id": "MOD-NUT-01",
+    "name": "Swallowing/dysphagia risk",
+    "affectedDomains": [
+      "NUT",
+      "CLN"
+    ],
+    "taskPlanEffect": "Add clinically specified meal positioning, assistance and observation.",
+    "escalationLink": "Coughing/choking/respiratory change → DT-003",
+    "priority": "P1"
+  },
+  {
+    "id": "MOD-NUT-02",
+    "name": "Poor intake/dehydration risk",
+    "affectedDomains": [
+      "NUT",
+      "CLN"
+    ],
+    "taskPlanEffect": "Add intake monitoring and defined escalation thresholds once clinically approved.",
+    "escalationLink": "Persistent poor intake/dehydration concern → DT-003/reassessment",
+    "priority": "P1"
+  },
+  {
+    "id": "MOD-CLN-01",
+    "name": "Recent hospitalization / acute change",
+    "affectedDomains": [
+      "CLN",
+      "MOB",
+      "MED",
+      "NUT"
+    ],
+    "taskPlanEffect": "Add temporary enhanced monitoring and transition/reconciliation tasks.",
+    "escalationLink": "Deterioration → DT-003/DT-009",
+    "priority": "P1"
+  },
+  {
+    "id": "MOD-SKN-01",
+    "name": "Skin/wound risk",
+    "affectedDomains": [
+      "SKN",
+      "ADL"
+    ],
+    "taskPlanEffect": "Add specified prevention/skin observation tasks within scope.",
+    "escalationLink": "Deterioration/new wound → nurse review",
+    "priority": "P1"
+  },
+  {
+    "id": "MOD-SKN-02",
+    "name": "Continence risk",
+    "affectedDomains": [
+      "SKN",
+      "ADL"
+    ],
+    "taskPlanEffect": "Add individualized continence schedule/support and skin protection.",
+    "escalationLink": "New change/skin issue → review",
+    "priority": "P2"
+  },
+  {
+    "id": "MOD-END-01",
+    "name": "Palliative/end-of-life",
+    "affectedDomains": [
+      "CLN",
+      "ADL",
+      "NUT",
+      "SKN"
+    ],
+    "taskPlanEffect": "Reorient tasks toward comfort, symptom observation, dignity and goals of care.",
+    "escalationLink": "Symptom/goal change → clinical review",
+    "priority": "P1"
+  },
+  {
+    "id": "MOD-NUT-03",
+    "name": "Unintended weight loss / nutrition decline",
+    "affectedDomains": [
+      "NUT",
+      "CLN"
+    ],
+    "taskPlanEffect": "Add weight/intake trend monitoring, supplementation/diet-plan tasks and defined escalation thresholds.",
+    "escalationLink": "Continued loss/poor intake/dehydration concern → clinical review / DT-003 / reassessment",
+    "priority": "P1"
+  },
+  {
+    "id": "MOD-CON-01",
+    "name": "High-frequency toileting / continence workload",
+    "affectedDomains": [
+      "ADL",
+      "SKN",
+      "MOB"
+    ],
+    "taskPlanEffect": "Add individualized toileting assistance with episode frequency/day-night pattern, hygiene/skin protection and workload capture.",
+    "escalationLink": "Increase in frequency, inability, falls, skin change or urinary symptoms → clinical review",
+    "priority": "P1"
+  }
+]
