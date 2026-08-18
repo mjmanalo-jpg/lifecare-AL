@@ -42,6 +42,7 @@ export const MODELS: Record<string, ModelDef> = {
   inventory: { delegate: prisma.inventoryItem, table: "InventoryItem", orderBy: { itemName: "asc" } },
   "purchase-requests": { delegate: prisma.purchaseRequest, table: "PurchaseRequest", orderBy: { createdAt: "desc" } },
   "service-charges": { delegate: prisma.serviceCharge, table: "ServiceCharge", orderBy: { serviceDate: "desc" } },
+  "care-events": { delegate: prisma.careEvent, table: "CareEvent", orderBy: { occurredAt: "desc" } },
   "insurance-validations": { delegate: prisma.insuranceValidation, table: "InsuranceValidation", orderBy: { createdAt: "desc" } },
   payments: { delegate: prisma.payment, table: "Payment", orderBy: { paymentDate: "desc" } },
   vehicles: { delegate: prisma.vehicle, table: "Vehicle", orderBy: { name: "asc" } },

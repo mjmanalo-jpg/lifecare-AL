@@ -7,6 +7,13 @@ import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
 import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import PreAdmissionAssessmentForm from "@/components/portal/views/clinical/PreAdmissionAssessmentForm";
+import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAssessmentV42";
+import TodaysCareBoard from "@/components/portal/views/clinical/TodaysCareBoard";
+import AdditionalServicesBoard from "@/components/portal/views/clinical/AdditionalServicesBoard";
+import SafeguardingBoard from "@/components/portal/views/clinical/SafeguardingBoard";
+import InfectionControlBoard from "@/components/portal/views/clinical/InfectionControlBoard";
+import EmergencyProtocolBoard from "@/components/portal/views/clinical/EmergencyProtocolBoard";
+import ClinicalProtocolsBoard from "@/components/portal/views/clinical/ClinicalProtocolsBoard";
 import CareLogsBoard, { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
 import ADLMonitoringBoard from "@/components/portal/views/clinical/ADLMonitoringBoard";
 import WeightMonitoringBoard from "@/components/portal/views/clinical/WeightMonitoringBoard";
@@ -118,6 +125,20 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
       return <MonitoringView />;
     case "prescreen":
       return <PreAdmissionAssessmentForm clinicianRole="FACILITY_ADMIN" />;
+    case "assessmentv42":
+      return <ResidentAssessmentV42 clinicianRole="CARE_MANAGER" />;
+    case "todayscare":
+      return <TodaysCareBoard role="FACILITY_ADMIN" />;
+    case "additionalservices":
+      return <AdditionalServicesBoard clinicianRole="FACILITY_ADMIN" />;
+    case "safeguarding":
+      return <SafeguardingBoard role="FACILITY_ADMIN" />;
+    case "infectioncontrol":
+      return <InfectionControlBoard role="FACILITY_ADMIN" />;
+    case "emergencyprotocol":
+      return <EmergencyProtocolBoard role="FACILITY_ADMIN" />;
+    case "clinicalprotocols":
+      return <ClinicalProtocolsBoard role="FACILITY_ADMIN" />;
     case "rounds":
       return <AssessmentAcuityBoard clinicianRole="FACILITY_ADMIN" />;
     case "careplans":

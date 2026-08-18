@@ -1,0 +1,122 @@
+[
+  {
+    "id": "PCG-001",
+    "decisionFactor": "Routine recurring care within LOC package",
+    "trigger": "ADL/toileting/mobility/monitoring can be safely delivered through shared staffing included in resident's final LOC",
+    "locEffect": "Increase LOC if overall recurring complexity warrants",
+    "pcgEffect": "No mandatory PCG",
+    "requiredDocumentation": "Care plan + task frequencies",
+    "reviewSafeguard": "Do not charge PCG for care already represented in LOC",
+    "status": "Working Draft"
+  },
+  {
+    "id": "PCG-002",
+    "decisionFactor": "Dedicated line-of-sight supervision",
+    "trigger": "Resident requires continuous or near-continuous individual observation for safety",
+    "locEffect": "LOC may also rise if supervision reflects overall complexity",
+    "pcgEffect": "PCG may be required for defined hours",
+    "requiredDocumentation": "Trigger, duration, incidents, alternatives attempted, why shared staffing is insufficient",
+    "reviewSafeguard": "Set review date; reassess after change",
+    "status": "Working Draft"
+  },
+  {
+    "id": "PCG-003",
+    "decisionFactor": "Prolonged 1:1 hands-on assistance",
+    "trigger": "Resident requires one staff member dedicated for prolonged periods beyond normal episodic LOC care",
+    "locEffect": "LOC reflects dependency; avoid duplicate charging",
+    "pcgEffect": "PCG may be required for 8/12/24h according to actual dedicated staffing need",
+    "requiredDocumentation": "Tasks, frequency, duration, staffing analysis",
+    "reviewSafeguard": "Document which services are already included in LOC",
+    "status": "Working Draft"
+  },
+  {
+    "id": "PCG-004",
+    "decisionFactor": "Night-specific safety need",
+    "trigger": "Repeated unsafe nighttime mobility/toileting/wandering requires dedicated overnight observation/assistance",
+    "locEffect": "LOC based on overall 24h complexity",
+    "pcgEffect": "Night PCG if shared night staffing cannot safely meet need",
+    "requiredDocumentation": "Night events/frequency, supervision type, alternatives",
+    "reviewSafeguard": "Review at least after material change and periodically",
+    "status": "Working Draft"
+  },
+  {
+    "id": "PCG-005",
+    "decisionFactor": "Temporary post-acute/transitional need",
+    "trigger": "Short-term decline requires dedicated assistance exceeding baseline package",
+    "locEffect": "Reassess LOC; avoid permanent increase for clearly transient need unless sustained",
+    "pcgEffect": "Temporary PCG may be appropriate",
+    "requiredDocumentation": "Start date, reason, expected duration, exit criteria",
+    "reviewSafeguard": "Mandatory stop/review date",
+    "status": "Working Draft"
+  },
+  {
+    "id": "PCG-006",
+    "decisionFactor": "Behavioral/cognitive safety requiring dedicated staffing",
+    "trigger": "Frequent unsafe behavior, wandering, agitation or inability to remain safe without individual supervision",
+    "locEffect": "May increase LOC via cognition/supervision rules",
+    "pcgEffect": "PCG if dedicated individual staffing is still required beyond final LOC package",
+    "requiredDocumentation": "Behavior/event evidence, frequency, interventions attempted",
+    "reviewSafeguard": "Clinical review; least-restrictive safe approach",
+    "status": "Working Draft"
+  },
+  {
+    "id": "PCG-007",
+    "decisionFactor": "Family-requested companion",
+    "trigger": "Family requests individual companion/support without assessed clinical/operational necessity",
+    "locEffect": "No LOC change",
+    "pcgEffect": "Elective PCG/add-on",
+    "requiredDocumentation": "Family request and agreed scope",
+    "reviewSafeguard": "Clearly label elective vs mandatory",
+    "status": "Working Draft"
+  },
+  {
+    "id": "PCG-008",
+    "decisionFactor": "High care needs but shared staffing remains sufficient",
+    "trigger": "Resident is L3/L4 yet tasks can be safely delivered within approved staffing model",
+    "locEffect": "LOC reflects higher care burden",
+    "pcgEffect": "No PCG solely because resident is high LOC",
+    "requiredDocumentation": "Staffing/care plan evidence",
+    "reviewSafeguard": "Prevents automatic PCG assignment by level",
+    "status": "Working Draft"
+  },
+  {
+    "id": "PCG-009",
+    "decisionFactor": "Private caregiver currently masks resident dependency",
+    "trigger": "PCG performs ADLs/supervision that resident intrinsically requires",
+    "locEffect": "Assess LOC from resident need regardless of who performs it",
+    "pcgEffect": "PCG decision made separately after final LOC",
+    "requiredDocumentation": "Required-care map + provider/source",
+    "reviewSafeguard": "Do not score resident as more independent because PCG performs care",
+    "status": "Working Draft"
+  },
+  {
+    "id": "PCG-010",
+    "decisionFactor": "Needs exceed LifeCare capability",
+    "trigger": "Required clinical/safety care remains beyond approved scope/capability even with dedicated staffing",
+    "locEffect": "LOC classification alone does not solve capability issue",
+    "pcgEffect": "PCG must not be used to substitute for required higher-acuity service",
+    "requiredDocumentation": "Capability review, escalation rationale",
+    "reviewSafeguard": "Escalate/transfer/alternative service pathway",
+    "status": "Working Draft"
+  },
+  {
+    "id": "PCG-011",
+    "decisionFactor": "Mandatory PCG fee justification",
+    "trigger": "LifeCare requires PCG as condition of safe continued care",
+    "locEffect": "No duplicate LOC charge for same staffing rationale",
+    "pcgEffect": "PCG fee permitted only for documented incremental dedicated staffing",
+    "requiredDocumentation": "Trigger → intervention → frequency/duration → shared-staffing insufficiency → alternatives → review date",
+    "reviewSafeguard": "Family discussion + authorized approval required",
+    "status": "Working Draft"
+  },
+  {
+    "id": "PCG-012",
+    "decisionFactor": "PCG discontinuation/reduction",
+    "trigger": "Dedicated staffing need decreases or can now be safely absorbed within LOC package",
+    "locEffect": "Reassess LOC independently",
+    "pcgEffect": "Reduce/discontinue PCG hours",
+    "requiredDocumentation": "Evidence of improvement/stability + staffing assessment",
+    "reviewSafeguard": "No indefinite PCG without current justification",
+    "status": "Working Draft"
+  }
+]

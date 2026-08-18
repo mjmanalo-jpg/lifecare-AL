@@ -1,0 +1,100 @@
+[
+  {
+    "id": "DT-001",
+    "name": "Admission Suitability",
+    "domain": "Admission",
+    "purpose": "Determine whether requested services and risks can be safely supported",
+    "priority": "P1"
+  },
+  {
+    "id": "DT-002",
+    "name": "Level of Care & Care Complexity",
+    "domain": "Care Model",
+    "purpose": "Determine care level from structured assessment and clinical validation",
+    "priority": "P1"
+  },
+  {
+    "id": "DT-003",
+    "name": "Change in Condition",
+    "domain": "Clinical",
+    "purpose": "Determine appropriate response to a resident change in condition",
+    "priority": "P1"
+  },
+  {
+    "id": "DT-004",
+    "name": "Fall Response",
+    "domain": "Clinical",
+    "purpose": "Determine immediate response, escalation and post-fall pathway",
+    "priority": "P1"
+  },
+  {
+    "id": "DT-005",
+    "name": "Clinical Escalation",
+    "domain": "Clinical",
+    "purpose": "Determine routine vs urgent vs emergency escalation",
+    "priority": "P1"
+  },
+  {
+    "id": "DT-006",
+    "name": "Medication Variance",
+    "domain": "Clinical",
+    "purpose": "Determine response to medication error/variance/adverse event",
+    "priority": "P1"
+  },
+  {
+    "id": "DT-007",
+    "name": "Safeguarding",
+    "domain": "Clinical",
+    "purpose": "Determine protection, reporting and escalation for suspected abuse/neglect/exploitation",
+    "priority": "P1"
+  },
+  {
+    "id": "DT-008",
+    "name": "Infection / Outbreak",
+    "domain": "Clinical",
+    "purpose": "Determine precautions, escalation and outbreak response",
+    "priority": "P1"
+  },
+  {
+    "id": "DT-009",
+    "name": "Hospital Transfer",
+    "domain": "Clinical",
+    "purpose": "Determine whether transfer is required and manage handoff/return",
+    "priority": "P1"
+  },
+  {
+    "id": "DT-010",
+    "name": "Emergency / Evacuation",
+    "domain": "Operations",
+    "purpose": "Determine shelter/evacuation/accountability/recovery actions",
+    "priority": "P1"
+  },
+  {
+    "id": "DT-011",
+    "name": "Care Task Exception",
+    "domain": "Care Delivery",
+    "purpose": "Determine response to missed/refused/unsafe/uncompleted care task",
+    "priority": "P1"
+  },
+  {
+    "id": "DT-012",
+    "name": "Care Level Change",
+    "domain": "Care Model",
+    "purpose": "Determine when reassessment and level-of-care change are required",
+    "priority": "P1"
+  },
+  {
+    "id": "DT-013",
+    "name": "Dedicated Staffing / Private Caregiver Determination",
+    "domain": "Care Model",
+    "purpose": "Determine whether resident needs can be met within final LOC shared staffing or require incremental dedicated 1:1 staffing",
+    "priority": "P1"
+  },
+  {
+    "id": "DT-014",
+    "name": "Additional Clinical & Skilled Services Determination",
+    "domain": "Care Model",
+    "purpose": "Determine whether a change-of-condition intervention is included LOC nursing oversight, separately chargeable skilled/ancillary service, recurring package need, or capability escalation",
+    "priority": "P1"
+  }
+]

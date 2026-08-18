@@ -1,0 +1,37 @@
+[
+  {
+    "id": "CEG-01",
+    "rule": "CEG-01 Routine completion",
+    "control": "Approved routine reaches due/trigger point"
+  },
+  {
+    "id": "CEG-02",
+    "rule": "CEG-02 Assistance variance",
+    "control": "Delivered assistance > approved baseline"
+  },
+  {
+    "id": "CEG-03",
+    "rule": "CEG-03 Frequency variance",
+    "control": "Observed frequency materially exceeds plan"
+  },
+  {
+    "id": "CEG-04",
+    "rule": "CEG-04 Acute/skilled event",
+    "control": "New wound/injection/IV/acute treatment etc."
+  },
+  {
+    "id": "CEG-05",
+    "rule": "CEG-05 Safety/incident",
+    "control": "Fall, unsafe task, medication error, acute deterioration"
+  },
+  {
+    "id": "CEG-06",
+    "rule": "CEG-06 Repeated variance",
+    "control": "2+ material variances or persistent pattern in review window"
+  },
+  {
+    "id": "CEG-07",
+    "rule": "CEG-07 Care-plan approval",
+    "control": "Nurse approves revised draft"
+  }
+]

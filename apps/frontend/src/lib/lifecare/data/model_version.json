@@ -1,0 +1,10 @@
+{
+  "assessmentVersion": "v4.2",
+  "careModelVersion": "v3.9",
+  "rulesVersion": "2026-08-17",
+  "scoreBandingEnabled": false,
+  "rawScoreMax": 56,
+  "domainCount": 14,
+  "source": "LifeCare Decision Rules Documentation (56pp) + Care Model v3.9 workbook (26 sheets) + Resident Assessment v4.2",
+  "notes": "Deterministic MLR-floor + modifier + override + L5-pathway engine. Automated score->level banding stays behind scoreBandingEnabled=false until LifeCare clinicians calibrate 56-point thresholds against real residents (GAP-001)."
+}

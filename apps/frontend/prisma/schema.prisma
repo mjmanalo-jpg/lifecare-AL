@@ -4322,3 +4322,69 @@ model DietOrder {
   @@index([residentId])
   @@index([active])
 }
+
+// ─────────────────────────────────────────────────────────────
+// LifeCare v3.9/v4.2 — Care Event (SLMS Phase 4).
+// The universal care-event record produced by the Today's Care shift engine:
+// expected completions and exception/change events (archetypes CE-01..07).
+// No event auto-changes level or fee — material/repeated variance only
+// increments a counter and raises a review alert; a human authorises change.
+// ─────────────────────────────────────────────────────────────
+model CareEvent {
+  id             String   @id @default(uuid())
+  organizationId String?
+  communityId    String?
+  residentId     String
+  residentName   String?
+
+  // Master linkage (Care Event Master EV-*/CE-*/etc. + archetype CE-01..07)
+  eventId        String?  // Care Event Master id
+  eventName      String?
+  domain         String?
+  eventType      String?  // Expected | Exception | Choice | Clinical change | ...
+  archetype      String?  // CE-01..CE-07
+
+  // Routine / plan linkage
+  taskId         String?  // Care Task Master id
+  carePlanId     String?
+  routineId      String?
+  bundle         String?  // BND-AM/BR/MEAL/MOB/NOC/RN / COC
+  planVersion    String?
+  modelVersion   String?
+
+  // Universal payload
+  outcome        String   @default("Completed") // Completed | Not Required | Refused | Unable | Unsafe | Increased Assist | Frequency Variance | Clinical Change
+  assistanceDelivered String?
+  quantValue     String?
+  residentResponse    String?
+  observation    String?  @db.Text
+  exceptionDetail String? @db.Text
+  precautions    String?
+
+  // Classification / escalation
+  isException    Boolean  @default(false)
+  isVariance     Boolean  @default(false)
+  varianceType   String?
+  immediateEscalation Boolean @default(false)
+  linkedDecisionTree  String?
+  escalationAction    String?  // notify_nurse | incident | plan_review | dt013_review | dt014_review | none
+  escalatedTo    String?
+  reviewAlertRaised   Boolean @default(false)
+
+  // Actor / context
+  shift          String?  // AM | PM | NOC
+  actorId        String?
+  actorName      String?
+  reporterRole   String?
+
+  occurredAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([communityId])
+  @@index([organizationId])
+  @@index([residentId])
+  @@index([occurredAt])
+  @@index([isException])
+  @@index([taskId])
+}
