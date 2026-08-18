@@ -77,6 +77,8 @@ import {
   FileSignature,
   PhoneCall,
   Inbox,
+  Fingerprint,
+  MapPin,
 } from "lucide-react";
 
 export type Role =
@@ -231,6 +233,9 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   carehistory: "Care History",
   residentjourney: "One Care · One Journey",
   clinicalrecords: "Clinical Records",
+  staffprofiles: "Staff Profiles & Records",
+  clockin: "Time In · Clock In / Out",
+  geofencing: "Geofencing",
   vitalstrend: "Vitals Trend",
   adlmonitoring: "ADL Monitoring",
   weightmonitoring: "Weight Monitoring",
@@ -331,6 +336,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Daily Rounds (10-Area Bedside)", icon: ClipboardCheck, route: "/superadmin/dailyrounds" },
       { name: "Camera Activity Log", icon: Activity, route: "/superadmin/cameralogs" },
       { name: "Camera Registry", icon: Camera, route: "/superadmin/cameras" },
+      { name: "Geofencing", icon: MapPin, route: "/superadmin/geofencing", group: "Administration" },
       // "Portal Matrix" is merged into "SLMS Feature Matrix" as its Access Control tab.
       { name: "CRM & Leads", icon: UserPlus, route: "/superadmin/crm" },
       { name: "Consent & Move-in Forms", icon: ClipboardList, route: "/superadmin/consentforms" },
@@ -366,6 +372,7 @@ export const ROLES: Record<Role, RoleDetails> = {
     footerText: "Nurse Clinical Portal",
     sidebarLinks: [
       { name: "Care Command Center", icon: LayoutDashboard, route: "/nurse/dashboard" },
+      { name: "Time In · Clock In / Out", icon: Fingerprint, route: "/nurse/clockin", group: "Overview" },
       // Clinical Monitoring
       { name: "Clinical Alerts", icon: BellRing, route: "/nurse/alertcenter", group: "Clinical Monitoring" },
       { name: "Incident Reports", icon: AlertTriangle, route: "/nurse/incidents", group: "Clinical Monitoring" },
@@ -422,6 +429,7 @@ export const ROLES: Record<Role, RoleDetails> = {
     footerText: "Caregiver Shift Portal",
     sidebarLinks: [
       { name: "Care Command Center", icon: LayoutDashboard, route: "/caregiver/dashboard" },
+      { name: "Time In · Clock In / Out", icon: Fingerprint, route: "/caregiver/clockin", group: "Overview" },
       // Clinical Monitoring
       { name: "Camera Activity Log", icon: Video, route: "/caregiver/cameralogs", group: "Clinical Monitoring" },
       { name: "Call Bells", icon: BellRing, route: "/caregiver/callbells", group: "Clinical Monitoring" },
@@ -443,8 +451,6 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Shift Handover", icon: Repeat, route: "/caregiver/shiftendorsements", group: "Coordination & Comms" },
       { name: "Endorsement Dashboard", icon: Inbox, route: "/caregiver/endorsementdashboard", group: "Coordination & Comms" },
       { name: "SBAR Escalations", icon: Siren, route: "/caregiver/escalations", group: "Coordination & Comms" },
-      // Administration
-      { name: "Time Clock", icon: Timer, route: "/caregiver/timeclock", group: "Administration" },
     ],
   },
   FAMILY: {
@@ -506,6 +512,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Care Timeline", icon: History, route: "/care_manager/carehistory", group: "Resident Care" },
       { name: "Clinical Records", icon: FolderOpen, route: "/care_manager/clinicalrecords", group: "Resident Care" },
       { name: "One Care · One Journey", icon: Route, route: "/care_manager/residentjourney", group: "Resident Care" },
+      { name: "Staff Profiles & Records", icon: BadgeCheck, route: "/care_manager/staffprofiles", group: "Administration" },
       { name: "Daily Living (ADL)", icon: Accessibility, route: "/care_manager/adlmonitoring", group: "Resident Care" },
       { name: "Weight Tracking", icon: Scale, route: "/care_manager/weightmonitoring", group: "Resident Care" },
       { name: "Vital Sign Trends", icon: HeartPulse, route: "/care_manager/vitalstrend", group: "Resident Care" },
@@ -840,6 +847,9 @@ const LINK_GROUP_MAP: Record<string, SidebarGroup> = {
   "Care History": "Resident Care",
   "One Care · One Journey": "Resident Care",
   "Clinical Records": "Resident Care",
+  "Staff Profiles & Records": "Administration",
+  "Time In · Clock In / Out": "Overview",
+  "Geofencing": "Administration",
   "Vitals Trend": "Resident Care",
   "ADL Monitoring": "Resident Care",
   "Weight Monitoring": "Resident Care",

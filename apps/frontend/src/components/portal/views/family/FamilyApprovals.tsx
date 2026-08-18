@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Swal from "sweetalert2";
-import { HeartHandshake, Check, X, Clock, CheckCircle2, XCircle, RefreshCw, Inbox, CalendarClock } from "lucide-react";
+import { HeartHandshake, Check, X, Clock, CheckCircle2, XCircle, RefreshCw, Inbox, CalendarClock, ClipboardList, ChevronRight, Sparkles, Gauge } from "lucide-react";
 import { RATE_UNIT_LABEL, PRIVATE_CARE_STATUS_META, type PrivateCareAssignment } from "@/lib/privateCaregiver";
 
 /**
@@ -34,6 +34,8 @@ export default function FamilyApprovals() {
   >(null);
   const [declineReason, setDeclineReason] = useState("");
   const [declineBusy, setDeclineBusy] = useState(false);
+  // The assessment currently open for review (before approve/decline).
+  const [viewAssessment, setViewAssessment] = useState<PrivateCareAssignment | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -190,6 +192,21 @@ export default function FamilyApprovals() {
                   <Detail label="Requested by" value={`${a.requestedBy} · ${fmtDate(a.requestedAt)}`} />
                 </div>
 
+                {/* Assessment — review the completed assessment before deciding */}
+                <div className="border-t border-slate-100 px-5 py-3">
+                  {a.assessment ? (
+                    <button onClick={() => setViewAssessment(a)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50/60 px-3.5 py-3 text-left transition hover:bg-blue-50">
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-1.5 text-sm font-bold text-blue-800"><ClipboardList className="h-4 w-4" /> Resident assessment{a.assessment.level ? ` · Level ${a.assessment.level}` : ""}</span>
+                        <span className="mt-0.5 block truncate text-xs text-slate-500">{a.assessment.recommend ? "Recommends a private caregiver — " : ""}{a.assessment.triggers?.[0] || a.assessment.rationale || "See the full assessment results"}</span>
+                      </span>
+                      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-blue-700">Review <ChevronRight className="h-4 w-4" /></span>
+                    </button>
+                  ) : (
+                    <p className="text-xs text-slate-400">No assessment was attached to this request.</p>
+                  )}
+                </div>
+
                 {/* Actions */}
                 <div className="flex items-center justify-end gap-2 px-5 py-4">
                   <button disabled={busyId === a.id} onClick={() => decide(a, "DECLINE")}
@@ -324,6 +341,73 @@ export default function FamilyApprovals() {
           </div>
         );
       })()}
+
+      {/* Assessment review — the completed assessment behind a private-caregiver request */}
+      {viewAssessment?.assessment && <AssessmentModal a={viewAssessment} onClose={() => setViewAssessment(null)} />}
+    </div>
+  );
+}
+
+/** Read-only view of the completed resident assessment attached to a PCG request. */
+function AssessmentModal({ a, onClose }: { a: PrivateCareAssignment; onClose: () => void }) {
+  const sn = a.assessment!;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl ring-1 ring-slate-900/5 sm:max-h-[88vh] sm:rounded-2xl">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-sm"><ClipboardList className="h-5 w-5" /></span>
+            <div>
+              <h2 className="text-[15px] font-bold text-slate-900">Resident Assessment</h2>
+              <p className="mt-0.5 text-xs text-slate-500">{a.residentName}{a.room ? ` · Room ${a.room}` : ""}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"><X className="h-5 w-5" /></button>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <div className="flex flex-wrap gap-2 text-xs">
+            {sn.level && <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700"><Gauge className="h-3.5 w-3.5" /> Level of care {sn.level}</span>}
+            {typeof sn.rawScore === "number" && <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">Acuity score {sn.rawScore}/56</span>}
+            {sn.status && <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold capitalize text-slate-700">{sn.status.toLowerCase()} assessment</span>}
+          </div>
+          <p className="text-[11px] text-slate-400">Assessed {fmtDate(sn.assessedAt)}{sn.assessor ? ` · by ${sn.assessor}` : ""}</p>
+
+          <div className="rounded-xl border px-4 py-3" style={{ borderColor: sn.recommend ? "#bfdbfe" : "#e2e8f0", backgroundColor: sn.recommend ? "#eff6ff" : "#f8fafc" }}>
+            <p className="flex items-center gap-1.5 text-sm font-bold text-slate-900"><Sparkles className="h-4 w-4 text-blue-600" /> Why a private caregiver is needed</p>
+            {sn.triggers?.length ? (
+              <ul className="mt-2 space-y-1">
+                {sn.triggers.map((t, i) => <li key={i} className="flex items-start gap-2 text-xs text-slate-700"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-blue-500" />{t}</li>)}
+              </ul>
+            ) : <p className="mt-1 text-xs text-slate-600">{sn.rationale || "The care team assessed the resident and requested dedicated 1:1 support."}</p>}
+            {sn.rationale && sn.triggers?.length ? <p className="mt-2 text-xs italic text-slate-600">{sn.rationale}</p> : null}
+          </div>
+
+          {sn.domains?.length ? (
+            <div>
+              <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">Assessment findings</p>
+              <div className="space-y-1.5">
+                {sn.domains.map((d) => (
+                  <div key={d.code} className="flex items-center gap-3">
+                    <span className="w-40 shrink-0 truncate text-xs font-medium text-slate-700">{d.label}</span>
+                    <span className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100"><span className="block h-full rounded-full bg-blue-500" style={{ width: `${(d.score / 4) * 100}%` }} /></span>
+                    <span className="w-8 shrink-0 text-right text-xs font-semibold tabular-nums text-slate-600">{d.score}/4</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {(sn.reassessmentInterval || sn.nextReviewDate) && (
+            <p className="text-xs text-slate-500">Reassessment: {sn.reassessmentInterval || "—"}{sn.nextReviewDate ? ` · next review ${fmtDate(sn.nextReviewDate)}` : ""}</p>
+          )}
+          <p className="text-[11px] text-slate-400">This shows the assessment as completed when the request was submitted.</p>
+        </div>
+
+        <div className="flex items-center justify-end border-t border-slate-100 bg-slate-50/70 px-5 py-4">
+          <button onClick={onClose} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">Close</button>
+        </div>
+      </div>
     </div>
   );
 }

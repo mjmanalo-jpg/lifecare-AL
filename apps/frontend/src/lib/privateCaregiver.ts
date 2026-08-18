@@ -95,6 +95,28 @@ export function suggestPcgFromTriggers(triggers: string[]): PcgSuggestion {
   return { coverage: 8, shift: "MORNING", intensity: "8h" };
 }
 
+/** One elevated assessment domain, for the family-facing clinical picture. */
+export interface PcgDomainScore { code: string; label: string; score: number }
+
+/**
+ * Snapshot of the resident's assessment taken when the PCG request was submitted —
+ * shown to the family so they can see the completed assessment (and WHY a private
+ * caregiver is needed) before approving/declining. Frozen at request time for audit.
+ */
+export interface PcgAssessmentSnapshot {
+  level: string | null;
+  rawScore?: number;
+  status?: string;              // DRAFT | COMPLETED | VALIDATED
+  assessedAt?: string;
+  assessor?: string;
+  recommend?: boolean;          // DT-013 recommended a private caregiver
+  triggers: string[];           // the DT-013 triggers = why a PCG is indicated
+  rationale?: string;
+  reassessmentInterval?: string;
+  nextReviewDate?: string;
+  domains: PcgDomainScore[];    // elevated domains (score >= 2)
+}
+
 export interface PrivateCareAssignment {
   id: string;
   residentId: string;
@@ -134,6 +156,8 @@ export interface PrivateCareAssignment {
   /** PCG-005 temporary intensity extras. */
   expectedDurationDays?: number;
   exitCriteria?: string;
+  /** Assessment snapshot at request time — the family reviews this before deciding. */
+  assessment?: PcgAssessmentSnapshot;
 }
 
 /** Human-readable PCG rule references surfaced in the UI. */

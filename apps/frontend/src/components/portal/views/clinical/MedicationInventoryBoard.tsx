@@ -7,7 +7,7 @@
  * requests in `inventory_purchase_requests`.
  */
 
-import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { Package, Pill, Search, Plus, RefreshCw, ShoppingCart, Pencil, X, CheckCircle2, User, Upload, Download } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -287,6 +287,12 @@ function AddItemModal({ item, residents, onClose, onSave }: { item: InvItem | nu
   const [name, setName] = useState(item?.name || "");
   const [generic, setGeneric] = useState(item?.generic || "");
   const [brand, setBrand] = useState(item?.brand || "");
+  // Drug-name lookup (RxNorm) → generic/brand suggestions dropdown.
+  type MedSugg = { rxcui: string; name: string; generic: string; brand: string };
+  const [suggestions, setSuggestions] = useState<MedSugg[]>([]);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const [showSuggest, setShowSuggest] = useState(false);
+  const [didSearch, setDidSearch] = useState(false);
   const [category, setCategory] = useState(item?.category || "");
   const [supplier, setSupplier] = useState(item?.supplier || "");
   const [unit, setUnit] = useState(item?.unit || "tablets");
@@ -298,6 +304,31 @@ function AddItemModal({ item, residents, onClose, onSave }: { item: InvItem | nu
   const [residentId, setResidentId] = useState(item?.residentId || "");
   const [saving, setSaving] = useState(false);
   const isMed = type === "MEDICATION";
+
+  // Debounced RxNorm lookup as the medication name is typed. All state writes live
+  // in the timeout callback (not the effect body) so this stays render-pure.
+  useEffect(() => {
+    if (!isMed) return;
+    const q = name.trim();
+    const handle = setTimeout(async () => {
+      if (q.length < 3) { setSuggestions([]); setDidSearch(false); return; }
+      setSuggestLoading(true);
+      try {
+        const res = await fetch(`/api/meds/lookup?q=${encodeURIComponent(q)}`);
+        const json = res.ok ? await res.json() : null;
+        setSuggestions(Array.isArray(json?.suggestions) ? (json.suggestions as MedSugg[]) : []);
+      } catch { setSuggestions([]); }
+      finally { setSuggestLoading(false); setDidSearch(true); }
+    }, 350);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, isMed]);
+
+  const pickSuggestion = (sg: MedSugg) => {
+    if (sg.generic) setGeneric(sg.generic);
+    if (sg.brand) setBrand(sg.brand);
+    setShowSuggest(false);
+  };
 
   const submit = async () => {
     if (!name.trim()) { Swal.fire({ title: `${isMed ? "Medication" : "Item"} name is required`, icon: "warning" }); return; }
@@ -356,7 +387,30 @@ function AddItemModal({ item, residents, onClose, onSave }: { item: InvItem | nu
           <div className="space-y-3">
             <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Item details</p>
             <div><label className={lbl}>Assign to Resident <span className="text-slate-400 font-normal">(optional)</span></label><div className="relative"><User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><select value={residentId} onChange={(e) => setResidentId(e.target.value)} className={`${inp} pl-9`}><option value="">Facility stock (no resident)</option>{residents.map((r) => <option key={r.id} value={r.id}>{r.name}{r.room ? ` — Rm ${r.room}` : ""}</option>)}</select></div></div>
-            <div><label className={lbl}>{isMed ? "Medication Name" : "Item Name"} <span className="text-red-500">*</span></label><input value={name} onChange={(e) => setName(e.target.value)} placeholder={isMed ? "e.g., Amlodipine 5mg" : "e.g., Surgical gloves"} className={inp} /></div>
+            <div className="relative">
+              <label className={lbl}>{isMed ? "Medication Name" : "Item Name"} <span className="text-red-500">*</span></label>
+              <input value={name}
+                onChange={(e) => { setName(e.target.value); if (isMed) setShowSuggest(true); }}
+                onFocus={() => { if (isMed && suggestions.length) setShowSuggest(true); }}
+                onBlur={() => window.setTimeout(() => setShowSuggest(false), 150)}
+                placeholder={isMed ? "e.g., Amlodipine 5mg" : "e.g., Surgical gloves"} className={inp} autoComplete="off" />
+              {isMed && showSuggest && (suggestLoading || suggestions.length > 0 || didSearch) && (
+                <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+                  {suggestLoading ? (
+                    <div className="px-3 py-2 text-xs text-slate-400">Searching drug database…</div>
+                  ) : suggestions.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-slate-400">No matches found — enter generic &amp; brand manually.</div>
+                  ) : suggestions.map((sg) => (
+                    <button key={sg.rxcui} type="button" onMouseDown={(e) => { e.preventDefault(); pickSuggestion(sg); }}
+                      className="flex w-full flex-col items-start gap-0.5 border-b border-slate-50 px-3 py-2 text-left last:border-0 hover:bg-blue-50/60">
+                      <span className="text-sm font-semibold text-slate-800">{sg.generic || sg.name}</span>
+                      <span className="text-[11px] text-slate-500">{[sg.generic && `Generic: ${sg.generic}`, sg.brand && `Brand: ${sg.brand}`].filter(Boolean).join(" · ") || sg.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {isMed && <p className="mt-1 text-[11px] text-slate-400">Start typing — generic &amp; brand are suggested from the RxNorm drug database (best-effort; edit freely).</p>}
+            </div>
             {isMed && (
               <div className="grid grid-cols-2 gap-3">
                 <div><label className={lbl}>Generic Name</label><input value={generic} onChange={(e) => setGeneric(e.target.value)} placeholder="e.g., Amlodipine besylate" className={inp} /></div>

@@ -26,6 +26,7 @@ import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoar
 import CaregiverScheduleBoard from "@/components/portal/views/clinical/CaregiverScheduleBoard";
 import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
 import CameraRegistryBoard from "@/components/portal/views/CameraRegistryBoard";
+import GeofenceSettingsBoard from "@/components/portal/views/clinical/GeofenceSettingsBoard";
 import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import FeatureMatrixDashboard from "@/components/portal/views/superadmin/FeatureMatrixDashboard";
 import { Trash2, Search, Eye, Edit, X, UserPlus } from "lucide-react";
@@ -311,6 +312,10 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   }
   if (tab === "cameras") {
     return <CameraRegistryBoard />;
+  }
+
+  if (tab === "geofencing") {
+    return <GeofenceSettingsBoard />;
   }
 
   // Core SLMS Modules Aligned

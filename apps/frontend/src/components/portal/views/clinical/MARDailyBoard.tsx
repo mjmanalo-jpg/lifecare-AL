@@ -16,7 +16,7 @@ import { classifyDoseWindow, type DoseWindow } from "@/lib/marWindow";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord, upsertRecord } from "@/lib/api";
-import { planMedConsumption, parseInvItems, parseInvPRs, INV_ITEMS_KEY, INV_PR_KEY } from "@/lib/medInventory";
+import { planMedConsumption, parseInvItems, parseInvPRs, INV_ITEMS_KEY, INV_PR_KEY, type InvItem } from "@/lib/medInventory";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalHeader, ClinicalButton, ClinicalCard, DataState, SERIF, ClinicalModal, controlClass, FieldLabel } from "./clinical-ui";
 import SignatureModal from "@/components/portal/SignatureModal";
@@ -361,7 +361,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
               </div>
             ); })}
         </div>
-        {addFor && <AddMedicationModal resident={openRes} med={addFor.__edit ? addFor : null} vitalsRequired={addFor.__edit ? isVitalsRequired(s(addFor.id)) : false} onSaveVitalsFlag={saveVitalsFlag} onClose={() => setAddFor(null)} onDone={refetch} />}
+        {addFor && <AddMedicationModal resident={openRes} med={addFor.__edit ? addFor : null} vitalsRequired={addFor.__edit ? isVitalsRequired(s(addFor.id)) : false} medInventory={invItems} onSaveVitalsFlag={saveVitalsFlag} onClose={() => setAddFor(null)} onDone={refetch} />}
 
         {/* Record-dose modal — status tiles + conditional reason, replacing the Swal prompts */}
         <ClinicalModal
@@ -508,7 +508,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
         </DataState>
       </>) : <SummaryView residents={residents} meds={meds} />}
 
-      {addFor && <AddMedicationModal resident={addFor} med={null} vitalsRequired={false} onSaveVitalsFlag={saveVitalsFlag} onClose={() => setAddFor(null)} onDone={refetch} />}
+      {addFor && <AddMedicationModal resident={addFor} med={null} vitalsRequired={false} medInventory={invItems} onSaveVitalsFlag={saveVitalsFlag} onClose={() => setAddFor(null)} onDone={refetch} />}
     </div>
   );
 }
@@ -586,7 +586,7 @@ function SummaryView({ residents, meds }: { residents: Row[]; meds: Row[] }) {
 }
 
 // ── Add / Edit Medication (no prescriber input per request) ──────────────────
-function AddMedicationModal({ resident, med, vitalsRequired = false, onSaveVitalsFlag, onClose, onDone }: { resident: Row; med: Row | null; vitalsRequired?: boolean; onSaveVitalsFlag: (medId: string, required: boolean) => Promise<void>; onClose: () => void; onDone: () => Promise<void> }) {
+function AddMedicationModal({ resident, med, vitalsRequired = false, medInventory = [], onSaveVitalsFlag, onClose, onDone }: { resident: Row; med: Row | null; vitalsRequired?: boolean; medInventory?: InvItem[]; onSaveVitalsFlag: (medId: string, required: boolean) => Promise<void>; onClose: () => void; onDone: () => Promise<void> }) {
   const editing = !!med;
   const [brand, gen] = med ? splitName(s(med.name)) : ["", ""];
   const [brandName, setBrandName] = useState(brand);
@@ -601,6 +601,24 @@ function AddMedicationModal({ resident, med, vitalsRequired = false, onSaveVital
   const [needsVitals, setNeedsVitals] = useState(vitalsRequired);
   const [saving, setSaving] = useState(false);
   const [showPin, setShowPin] = useState(false);
+  const [invPick, setInvPick] = useState("");
+
+  // Medications already in inventory for this resident (or facility stock) — the
+  // nurse/care manager can pick one instead of typing a new order from scratch.
+  const medInv = useMemo(
+    () => medInventory.filter((it) => it.type === "MEDICATION" && (!it.residentId || it.residentId === s(resident.id))),
+    [medInventory, resident.id],
+  );
+  const pickInventory = (id: string) => {
+    setInvPick(id);
+    const it = medInventory.find((x) => x.id === id);
+    if (!it) return;
+    setBrandName(it.brand || it.name);
+    setGeneric(it.generic || "");
+    // Pull a strength out of the item name into the dose field when present.
+    const m = /(\d+(?:\.\d+)?\s*(?:mg|mcg|g|ml|iu|%))/i.exec(it.name);
+    if (m) setDosage(m[1].replace(/\s+/g, ""));
+  };
 
   // Validate, then require the 4-digit signing PIN before the order is written.
   const tryAdd = () => {
@@ -623,31 +641,75 @@ function AddMedicationModal({ resident, med, vitalsRequired = false, onSaveVital
   };
   const inp = "w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
   const lbl = "block text-sm font-bold text-slate-700 mb-1.5";
+  const sec = "text-[11px] font-bold uppercase tracking-[0.09em] text-slate-400";
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[95vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"><h2 className="font-bold text-slate-900 text-lg">{editing ? "Edit" : "Add"} Medication <span className="font-normal text-slate-400">— {s(resident.name)}</span></h2><button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button></div>
-        <div className="p-5 overflow-y-auto flex-1 space-y-4">
-          <div><label className={lbl}>Brand Name <span className="text-red-500">*</span></label><input value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="e.g., Amlodipine" className={inp} /></div>
-          <div><label className={lbl}>Generic Name</label><input value={generic} onChange={(e) => setGeneric(e.target.value)} placeholder="e.g., Amlodipine besylate" className={inp} /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className={lbl}>Dose <span className="text-red-500">*</span></label><input value={dosage} onChange={(e) => setDosage(e.target.value)} placeholder="e.g., 5mg" className={inp} /></div>
-            <div><label className={lbl}>Route <span className="text-red-500">*</span></label><select value={route} onChange={(e) => setRoute(e.target.value)} className={inp}>{ROUTES.map((r) => <option key={r} value={r}>{r}</option>)}</select></div>
+    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white w-full sm:max-w-xl max-h-[94dvh] sm:max-h-[90vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl shadow-2xl">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-6 py-5 border-b border-slate-100">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><Pill className="w-5 h-5" /></span>
+            <div className="min-w-0">
+              <h2 className="font-bold text-slate-900 text-lg leading-tight">{editing ? "Edit" : "Add"} Medication</h2>
+              <p className="mt-0.5 truncate text-xs text-slate-500">{s(resident.name)}{s(resident.room) ? ` · Room ${s(resident.room)}` : ""}</p>
+            </div>
           </div>
-          <div><label className={lbl}>Frequency <span className="text-red-500">*</span></label><select value={frequency} onChange={(e) => setFrequency(e.target.value)} className={inp}><option value="">Select frequency</option>{FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}</select></div>
-          {frequency && <div><label className={lbl}>Scheduled Times</label><div className="flex flex-wrap gap-1.5">{parseSlots(frequency).map((sl) => <span key={sl} className="text-xs font-medium text-blue-600 border border-blue-200 rounded-lg px-2 py-1">{SLOT_TIME[sl]}</span>)}</div><p className="text-[11px] text-slate-400 mt-1">Derived from frequency.</p></div>}
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className={lbl}>Start Date</label><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inp} /></div>
-            <div><label className={lbl}>End Date</label><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inp} /></div>
-          </div>
-          <div><label className={lbl}>Indication</label><input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g., Hypertension management" className={inp} /></div>
-          <div><label className={lbl}>Special Instructions</label><input value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="e.g., Take with food, monitor BP" className={inp} /></div>
-          <label className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3 cursor-pointer">
-            <input type="checkbox" checked={needsVitals} onChange={(e) => setNeedsVitals(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-400" />
-            <span><span className="flex items-center gap-1.5 text-sm font-bold text-amber-800"><Activity className="w-4 h-4" /> Requires vitals before administration</span><span className="block text-xs text-amber-700 mt-0.5">Nurses are alerted to record vitals first (Vitals First) when marking a dose Given.</span></span>
-          </label>
+          <button onClick={onClose} aria-label="Close" className="-mr-1.5 shrink-0 p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
         </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100"><ClinicalButton variant="ghost" size="sm" onClick={onClose}>Cancel</ClinicalButton><ClinicalButton variant="accent" onClick={tryAdd} disabled={saving}>{saving ? "Saving…" : editing ? "Save Changes" : "Add Medication"}</ClinicalButton></div>
+
+        {/* Body */}
+        <div className="px-6 py-5 overflow-y-auto flex-1 space-y-6">
+          {!editing && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3.5">
+              <label className={lbl}>Add from inventory <span className="font-normal text-slate-500">(optional)</span></label>
+              <select value={invPick} onChange={(e) => pickInventory(e.target.value)} disabled={medInv.length === 0} className={`${inp} disabled:opacity-60`}>
+                <option value="">{medInv.length === 0 ? "No medications in inventory yet" : "Choose a medication in stock…"}</option>
+                {medInv.map((it) => <option key={it.id} value={it.id}>{it.name}{it.brand ? ` — ${it.brand}` : ""} · {it.residentName ? it.residentName : "Facility stock"} · {it.quantity} {it.unit}</option>)}
+              </select>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">{medInv.length === 0
+                ? "Add medications in Medication Inventory to pick them here. You can still enter one manually below."
+                : "Prefills name, generic & dose from an inventory record — you can still edit before saving."}</p>
+            </div>
+          )}
+
+          {/* Medication identity */}
+          <section className="space-y-3.5">
+            <p className={sec}>Medication</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div><label className={lbl}>Generic Name</label><input value={generic} onChange={(e) => setGeneric(e.target.value)} placeholder="e.g., Amlodipine besylate" className={inp} /></div>
+              <div><label className={lbl}>Brand Name <span className="text-red-500">*</span></label><input value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="e.g., Norvasc" className={inp} /></div>
+            </div>
+          </section>
+
+          {/* Dosing & schedule */}
+          <section className="space-y-3.5 border-t border-slate-100 pt-5">
+            <p className={sec}>Dosing &amp; schedule</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div><label className={lbl}>Dose <span className="text-red-500">*</span></label><input value={dosage} onChange={(e) => setDosage(e.target.value)} placeholder="e.g., 5mg" className={inp} /></div>
+              <div><label className={lbl}>Route <span className="text-red-500">*</span></label><select value={route} onChange={(e) => setRoute(e.target.value)} className={inp}>{ROUTES.map((r) => <option key={r} value={r}>{r}</option>)}</select></div>
+            </div>
+            <div><label className={lbl}>Frequency <span className="text-red-500">*</span></label><select value={frequency} onChange={(e) => setFrequency(e.target.value)} className={inp}><option value="">Select frequency</option>{FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}</select></div>
+            {frequency && <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-3.5 py-3"><label className={lbl}>Scheduled Times</label><div className="flex flex-wrap gap-1.5">{parseSlots(frequency).map((sl) => <span key={sl} className="rounded-lg border border-blue-200 bg-white px-2 py-1 text-xs font-semibold text-blue-600">{SLOT_TIME[sl]}</span>)}</div><p className="mt-1.5 text-[11px] text-slate-400">Derived automatically from the frequency.</p></div>}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div><label className={lbl}>Start Date</label><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inp} /></div>
+              <div><label className={lbl}>End Date</label><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inp} /></div>
+            </div>
+          </section>
+
+          {/* Clinical detail */}
+          <section className="space-y-3.5 border-t border-slate-100 pt-5">
+            <p className={sec}>Clinical detail</p>
+            <div><label className={lbl}>Indication</label><input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g., Hypertension management" className={inp} /></div>
+            <div><label className={lbl}>Special Instructions</label><input value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="e.g., Take with food, monitor BP" className={inp} /></div>
+            <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 cursor-pointer">
+              <input type="checkbox" checked={needsVitals} onChange={(e) => setNeedsVitals(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-400" />
+              <span><span className="flex items-center gap-1.5 text-sm font-bold text-amber-800"><Activity className="w-4 h-4" /> Requires vitals before administration</span><span className="mt-0.5 block text-xs leading-relaxed text-amber-700">Nurses are alerted to record vitals first (Vitals First) when marking a dose Given.</span></span>
+            </label>
+          </section>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/60"><ClinicalButton variant="ghost" size="sm" onClick={onClose}>Cancel</ClinicalButton><ClinicalButton variant="accent" onClick={tryAdd} disabled={saving}>{saving ? "Saving…" : editing ? "Save Changes" : "Add Medication"}</ClinicalButton></div>
       </div>
       <SignatureModal open={showPin} onClose={() => setShowPin(false)} onSigned={doSubmit} mode="sign" title="Sign to save medication" description={`Enter your 4-digit signing PIN to ${editing ? "update" : "add"} this medication order.`} />
     </div>

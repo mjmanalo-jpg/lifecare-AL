@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { PATH_TO_ROLE, Role } from "@/constants/roleConfig";
 import NursePortalContent from "@/components/portal/views/NursePortalContent";
+import ClockInGate from "@/components/portal/ClockInGate";
 import PhysicianPortalContent from "@/components/portal/views/PhysicianPortalContent";
 import CaregiverPortalContent from "@/components/portal/views/CaregiverPortalContent";
 import FamilyPortalContent from "@/components/portal/views/FamilyPortalContent";
@@ -33,9 +34,9 @@ export default function RolePortalPage() {
 
   return (
     <>
-      {userRole === "NURSE" && <NursePortalContent tab={tab} />}
+      {userRole === "NURSE" && <ClockInGate role="NURSE" tab={tab}><NursePortalContent tab={tab} /></ClockInGate>}
       {userRole === "PHYSICIAN" && <PhysicianPortalContent tab={tab} />}
-      {userRole === "CAREGIVER" && <CaregiverPortalContent tab={tab} />}
+      {userRole === "CAREGIVER" && <ClockInGate role="CAREGIVER" tab={tab}><CaregiverPortalContent tab={tab} /></ClockInGate>}
       {/* Resident/Patient sees the customized resident dashboard, family sees family view */}
       {userRole === "FAMILY" && <FamilyPortalContent tab={tab} />}
       {userRole === "RESIDENT" && <ResidentPortalContent tab={tab} />}

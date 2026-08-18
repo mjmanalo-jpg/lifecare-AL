@@ -9,7 +9,7 @@ import ResidentCareHistory from "@/components/portal/views/clinical/ResidentCare
 import VitalsTrendBoard from "@/components/portal/views/clinical/VitalsTrendBoard";
 import CaregiverCallBells from "@/components/portal/views/caregiver/CaregiverCallBells";
 import CaregiverResidents from "@/components/portal/views/caregiver/CaregiverResidents";
-import CaregiverTimeClock from "@/components/portal/views/caregiver/CaregiverTimeClock";
+import ClockInBoard from "@/components/portal/views/clinical/ClockInBoard";
 import CaregiverReports from "@/components/portal/views/caregiver/CaregiverReports";
 import CaregiverCareTeam from "@/components/portal/views/caregiver/CaregiverCareTeam";
 import CaregiverMonitoring from "@/components/portal/views/caregiver/CaregiverMonitoring";
@@ -78,8 +78,8 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
       return <CaregiverCallBells />;
     case "residents":
       return <CaregiverResidents />;
-    case "timeclock":
-      return <CaregiverTimeClock />;
+    case "clockin":
+      return <ClockInBoard clinicianRole="CAREGIVER" />;
     case "reports":
       return <CaregiverReports />;
     case "careteam":
