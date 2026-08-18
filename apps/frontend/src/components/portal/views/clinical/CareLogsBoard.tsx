@@ -35,6 +35,7 @@ import { createRecord, upsertRecord, updateRecord } from "@/lib/api";
 import { qrDataUrl } from "@/lib/qr";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, SearchInput, DataState, controlClass } from "./clinical-ui";
+import { careLevelEnumToLevel, domainInPackage, DOMAIN_LABEL, recordOutOfPackageService } from "@/lib/lifecare/carePackage";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -100,6 +101,18 @@ const genderLabel = (g: unknown) => { const v = s(g).toLowerCase(); return v.sta
 // hardcoded bg-*-100 pills that lost contrast in dark mode).
 function DomainChip({ label }: { label: string }) {
   return <span className="shrink-0 mt-0.5 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--clinical-ink-soft)]" style={{ borderColor: "var(--clinical-line-strong)", backgroundColor: "var(--clinical-surface-2)" }}>{label}</span>;
+}
+// LOC package gate — a domain is out-of-package when it's a scored AS-code not in
+// the resident's Level-of-Care package. "pain" is a standalone symptom log and is
+// NEVER gated. Care outside the package is warned (not blocked) and routed to
+// DT-014 Additional Clinical Services.
+const outOfPackage = (level: number, key: DomainKey): boolean =>
+  key !== "pain" && /^AS-\d{2}$/.test(key) && !domainInPackage(level, key);
+// Small amber "Not in L{level} package" pill for a gated domain.
+function PackageBadge({ level }: { level: number }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.03em]" style={{ borderColor: "var(--clinical-amber)", color: "var(--clinical-amber)", backgroundColor: "color-mix(in srgb, var(--clinical-amber) 12%, transparent)" }}>Not in L{level}</span>
+  );
 }
 const BOWEL_REF_KEY = "bowel_reference_photo"; // migration-free: one community reference image (data URL), set by nurse/care manager
 
@@ -671,6 +684,7 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, saveNote, 
   const [f, setF] = useState<Row>({});
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const level = careLevelEnumToLevel(s(resident.careLevel));
   // Domains logged during this modal session (added to the prop set from today).
   const [savedNow, setSavedNow] = useState<Set<DomainKey>>(new Set());
   const set = (patch: Row) => setF((p) => ({ ...p, ...patch }));
@@ -752,6 +766,18 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, saveNote, 
       });
       if (!proceed.isConfirmed) return;
     }
+    // LOC package gate — care outside the resident's Level package is an Additional
+    // Clinical Service (DT-014): warn (never block), and on proceed flag it for review.
+    const gated = outOfPackage(level, tab);
+    if (gated) {
+      const proceed = await Swal.fire({
+        title: "Outside care package",
+        text: `${DOMAIN_LABEL[tab] ?? dom.label} is not in ${s(resident.name)}'s Level ${level} package. Care outside the package is an Additional Clinical Service and may be chargeable (DT-014). Proceed anyway?`,
+        icon: "warning", showCancelButton: true, confirmButtonColor: "#d97706",
+        confirmButtonText: "Proceed & flag for DT-014", cancelButtonText: "Cancel",
+      });
+      if (!proceed.isConfirmed) return;
+    }
     setSaving(true);
     try {
       const roundId = await ensureRound(s(resident.id));
@@ -761,6 +787,7 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, saveNote, 
       if (form === "generic") {
         if (f.status == null && !notes.trim()) { Swal.fire({ title: "Nothing to save", text: "Select a status or add a note for this domain.", icon: "info" }); setSaving(false); return; }
         await saveNote({ residentId: s(resident.id), dailyRoundId: roundId, domain: tab, status: f.status != null ? Number(f.status) : undefined, note: notes.trim() || undefined });
+        if (gated) await recordOutOfPackageService({ residentId: s(resident.id), residentName: s(resident.name), room: s(resident.room) || undefined, domainCode: tab, domainLabel: DOMAIN_LABEL[tab] ?? dom.label, level, notes: notes.trim() || undefined });
         setSavedNow((prev) => new Set(prev).add(tab));
         await onDone();
         Swal.fire({ toast: true, position: "top-end", icon: "success", title: `${dom.label} logged`, showConfirmButton: false, timer: 1500 });
@@ -789,6 +816,7 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, saveNote, 
         }
       }
       if (skinNote) { try { await saveNote({ residentId: s(resident.id), dailyRoundId: roundId, domain: tab, note: skinNote }); } catch { /* best-effort */ } }
+      if (gated) await recordOutOfPackageService({ residentId: s(resident.id), residentName: s(resident.name), room: s(resident.room) || undefined, domainCode: tab, domainLabel: DOMAIN_LABEL[tab] ?? dom.label, level, notes: notes.trim() || undefined });
 
       setSavedNow((prev) => new Set(prev).add(tab));
       await onDone();
@@ -814,20 +842,25 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, saveNote, 
       }
     >
       <div className="mb-5 grid grid-cols-5 gap-1 rounded-2xl bg-[var(--clinical-surface-2)] p-1.5 sm:grid-cols-8 lg:grid-cols-8">
-        {DOMAINS.map((d) => { const on = d.key === tab; const doneD = logged.has(d.key) || savedNow.has(d.key); const Icon = d.icon; return (
-          <button key={d.key} onClick={() => switchTab(d.key)} aria-label={`${d.code} ${d.label}`} title={`${d.code} · ${d.label}`} className={`relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 transition ${on ? "bg-[var(--clinical-surface)] text-[var(--clinical-panel)] shadow-sm" : "text-[var(--clinical-muted)] hover:bg-[var(--clinical-surface)] hover:text-[var(--clinical-ink)]"}`}>
-            <Icon className="h-4 w-4 shrink-0" />
+        {DOMAINS.map((d) => { const on = d.key === tab; const doneD = logged.has(d.key) || savedNow.has(d.key); const oop = outOfPackage(level, d.key); const Icon = d.icon; return (
+          <button key={d.key} onClick={() => switchTab(d.key)} aria-label={`${d.code} ${d.label}${oop ? ` — not in Level ${level} package` : ""}`} title={oop ? `${d.code} · ${d.label} — not in Level ${level} package (DT-014)` : `${d.code} · ${d.label}`} className={`relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 transition ${on ? "bg-[var(--clinical-surface)] text-[var(--clinical-panel)] shadow-sm" : "text-[var(--clinical-muted)] hover:bg-[var(--clinical-surface)] hover:text-[var(--clinical-ink)]"}`}>
+            <Icon className="h-4 w-4 shrink-0" style={oop ? { color: "var(--clinical-amber)" } : undefined} />
             <span className="text-[9px] font-semibold leading-tight text-center line-clamp-2">{d.label}</span>
+            {oop && <span className="absolute left-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[var(--clinical-amber)]" aria-hidden />}
             {doneD && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--clinical-green)]" aria-label="Already documented" />}
           </button>
         ); })}
       </div>
 
       <div className="space-y-4">
-          <div className="flex items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>
             <span className="rounded-md bg-[var(--clinical-panel)] px-1.5 py-0.5 text-[10px] font-bold text-white">{dom.code}</span>
             <span className="text-sm font-semibold text-[var(--clinical-ink)]">{dom.label}</span>
+            {outOfPackage(level, tab) && <PackageBadge level={level} />}
           </div>
+          {outOfPackage(level, tab) && (
+            <p className="text-[11px] leading-relaxed text-[var(--clinical-amber)]">Not in Level {level} package — logging this is an Additional Clinical Service (DT-014) and may be chargeable.</p>
+          )}
           {form === "generic" && (<>
             <div><Label>Status (v4.2 anchor)</Label><Chips cols={5} value={s(f.status)} onChange={(v) => set({ status: v === "" ? undefined : Number(v) })} options={STATUS_ANCHORS.map((a) => ({ v: String(a.v), label: `${a.v} · ${a.label}` }))} /><p className="text-[10px] text-[var(--clinical-muted)] mt-1">0 Independent · 1 Low · 2 Moderate · 3 High · 4 Very high</p></div>
           </>)}
@@ -977,11 +1010,11 @@ function ViewModal({ resident, loggedDomains, onOpenLog, onClose }: { resident: 
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--clinical-muted)] mb-2">Today&apos;s Care Logging</p>
           <div className="grid grid-cols-4 gap-2">
-            {DOMAINS.map((d) => { const on = loggedDomains.has(d.key); const Icon = d.icon; return (
-              <button key={d.key} onClick={() => onOpenLog(d.key)} aria-label={`Log ${d.label}`} className="rounded-xl border p-2 flex flex-col items-center gap-1 hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: on ? "var(--clinical-green)" : "var(--clinical-line)", backgroundColor: on ? "color-mix(in srgb, var(--clinical-green) 12%, transparent)" : "transparent" }}>
-                <Icon className="w-4 h-4" style={{ color: on ? "var(--clinical-green)" : "var(--clinical-ink-soft)" }} />
+            {DOMAINS.map((d) => { const on = loggedDomains.has(d.key); const oop = outOfPackage(lvl.n, d.key); const Icon = d.icon; return (
+              <button key={d.key} onClick={() => onOpenLog(d.key)} aria-label={`Log ${d.label}${oop ? ` — not in Level ${lvl.n} package` : ""}`} title={oop ? `${d.label} — not in Level ${lvl.n} package (DT-014)` : undefined} className="relative rounded-xl border p-2 flex flex-col items-center gap-1 hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: on ? "var(--clinical-green)" : oop ? "var(--clinical-amber)" : "var(--clinical-line)", backgroundColor: on ? "color-mix(in srgb, var(--clinical-green) 12%, transparent)" : "transparent" }}>
+                <Icon className="w-4 h-4" style={{ color: on ? "var(--clinical-green)" : oop ? "var(--clinical-amber)" : "var(--clinical-ink-soft)" }} />
                 <span className="text-[10px] text-[var(--clinical-ink-soft)]">{d.label}</span>
-                {on ? <Check className="w-3 h-3" style={{ color: "var(--clinical-green)" }} /> : <span className="text-[9px] text-[var(--clinical-muted)]">log</span>}
+                {on ? <Check className="w-3 h-3" style={{ color: "var(--clinical-green)" }} /> : oop ? <PackageBadge level={lvl.n} /> : <span className="text-[9px] text-[var(--clinical-muted)]">log</span>}
               </button>
             ); })}
           </div>

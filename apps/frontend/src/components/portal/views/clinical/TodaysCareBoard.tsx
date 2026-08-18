@@ -21,6 +21,7 @@ import {
 } from "@/lib/lifecare/todaysCare.ts";
 import { buildCareEventRecord, type Outcome } from "@/lib/lifecare/careEvents.ts";
 import { MODEL_VERSION } from "@/lib/lifecare/dataset.ts";
+import { domainCodeFromLabel, domainInPackage, DOMAIN_LABEL, recordOutOfPackageService } from "@/lib/lifecare/carePackage";
 
 /**
  * Phase 3 — Today's Care shift board (standalone; the parent wires the tab).
@@ -78,6 +79,18 @@ function parseAssessments(value: string | undefined): AssessmentV42[] {
 
 /** Stable key per encounter within a resident (bundle is unique in the view). */
 const encKey = (residentId: string, e: ShiftEncounter) => `${residentId}::${e.bundle}`;
+
+/** finalLevel ("L1".."L5") → level number 1–5 (defaults to 2 when unparseable). */
+const levelFromFinal = (finalLevel: string): number => Number(/([1-5])/.exec(finalLevel || "")?.[1] || 2);
+
+/** Resolve an encounter's AS-domain (via its bundle label). null = don't gate. */
+const encDomainCode = (e: ShiftEncounter) => domainCodeFromLabel(e.label);
+
+/** Is an encounter out of the resident's Level package? (null domain → never). */
+const encOutOfPackage = (level: number, e: ShiftEncounter): boolean => {
+  const code = encDomainCode(e);
+  return code != null && !domainInPackage(level, code);
+};
 
 export default function TodaysCareBoard({ role }: { role?: string }) {
   const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>(
@@ -173,6 +186,20 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
     observation: string,
   ) => {
     if (!selected) return;
+    // LOC package gate — charting care outside the resident's Level package is an
+    // Additional Clinical Service (DT-014): warn (never block), flag on proceed.
+    const level = levelFromFinal(selected.finalLevel);
+    const code = encDomainCode(enc);
+    const gated = code != null && !domainInPackage(level, code);
+    if (gated && code) {
+      const proceed = await Swal.fire({
+        title: "Outside care package",
+        text: `${DOMAIN_LABEL[code] ?? enc.label} is not in ${selected.residentName}'s Level ${level} package. Care outside the package is an Additional Clinical Service and may be chargeable (DT-014). Proceed anyway?`,
+        icon: "warning", showCancelButton: true, confirmButtonColor: "#d97706",
+        confirmButtonText: "Proceed & flag for DT-014", cancelButtonText: "Cancel",
+      });
+      if (!proceed.isConfirmed) return;
+    }
     setBusy(true);
     try {
       const record = buildCareEventRecord(
@@ -194,6 +221,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
         MODEL_VERSION_STRING,
       );
       await createRecord("care-events", record);
+      if (gated && code) await recordOutOfPackageService({ residentId: selected.residentId, residentName: selected.residentName, domainCode: code, domainLabel: DOMAIN_LABEL[code] ?? enc.label, level, by: me || undefined, notes: observation.trim() || undefined });
       setCharted((prev) => new Map(prev).set(encKey(selected.residentId, enc), outcome));
       Swal.fire({
         toast: true, position: "top-end", icon: outcome === "Completed" ? "success" : "info",
@@ -321,6 +349,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
                 icon={<User2 className="h-4 w-4" />}
                 encounters={selected.queues.Caregiver}
                 residentId={selected.residentId}
+                level={levelFromFinal(selected.finalLevel)}
                 charted={charted}
                 busy={busy}
                 onComplete={(enc) => chartEvent(enc, "Completed", "")}
@@ -334,6 +363,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
                   icon={<Stethoscope className="h-4 w-4" />}
                   encounters={selected.queues.Nurse}
                   residentId={selected.residentId}
+                  level={levelFromFinal(selected.finalLevel)}
                   charted={charted}
                   busy={busy}
                   onComplete={(enc) => chartEvent(enc, "Completed", "")}
@@ -442,12 +472,13 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
 // Queue section — a labelled stack of encounter cards for one role.
 // ---------------------------------------------------------------------------
 function QueueSection({
-  title, icon, encounters, residentId, charted, busy, onComplete, onException,
+  title, icon, encounters, residentId, level, charted, busy, onComplete, onException,
 }: {
   title: string;
   icon: React.ReactNode;
   encounters: ShiftEncounter[];
   residentId: string;
+  level: number;
   charted: Map<string, Outcome>;
   busy: boolean;
   onComplete: (enc: ShiftEncounter) => void;
@@ -470,6 +501,8 @@ function QueueSection({
             <EncounterCard
               key={`${residentId}::${enc.bundle}`}
               enc={enc}
+              outOfPackage={encOutOfPackage(level, enc)}
+              level={level}
               outcome={charted.get(`${residentId}::${enc.bundle}`)}
               busy={busy}
               onComplete={() => onComplete(enc)}
@@ -487,9 +520,11 @@ function QueueSection({
 // events, plus large Complete / Exception tap targets.
 // ---------------------------------------------------------------------------
 function EncounterCard({
-  enc, outcome, busy, onComplete, onException,
+  enc, outOfPackage, level, outcome, busy, onComplete, onException,
 }: {
   enc: ShiftEncounter;
+  outOfPackage: boolean;
+  level: number;
   outcome: Outcome | undefined;
   busy: boolean;
   onComplete: () => void;
@@ -500,7 +535,7 @@ function EncounterCard({
     <div
       className="rounded-xl border p-3.5"
       style={{
-        borderColor: enc.temporary ? "var(--clinical-coral)" : "var(--clinical-line)",
+        borderColor: enc.temporary ? "var(--clinical-coral)" : outOfPackage ? "var(--clinical-amber)" : "var(--clinical-line)",
         backgroundColor: "var(--clinical-surface)",
       }}
     >
@@ -511,6 +546,9 @@ function EncounterCard({
         </div>
         <div className="flex items-center gap-1.5">
           {enc.temporary && <StatusPill status="URGENT">Change of condition</StatusPill>}
+          {outOfPackage && (
+            <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.03em]" style={{ borderColor: "var(--clinical-amber)", color: "var(--clinical-amber)", backgroundColor: "color-mix(in srgb, var(--clinical-amber) 12%, transparent)" }} title="Additional Clinical Service (DT-014)">Not in L{level} package</span>
+          )}
           {done && (
             <StatusPill status={outcome === "Completed" ? "COMPLETED" : "REFUSED"}>{outcome}</StatusPill>
           )}

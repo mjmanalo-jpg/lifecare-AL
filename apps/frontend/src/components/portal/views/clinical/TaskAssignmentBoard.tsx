@@ -8,6 +8,7 @@ import { adaptResident, adaptTask } from "@/lib/adapters";
 import { createRecord, updateRecord } from "@/lib/api";
 import { TASK_NOTES_FIELD } from "@/lib/taskNotes";
 import { CAREGIVER_SCHEDULE_KEY, parseSchedules, type CaregiverSchedule } from "@/lib/caregiverSchedule";
+import { careLevelEnumToLevel, domainCodeFromLabel, domainInPackage, DOMAIN_LABEL, recordOutOfPackageService } from "@/lib/lifecare/carePackage";
 import type { ClinicianRole } from "./useClinician";
 
 /**
@@ -725,15 +726,41 @@ function AssignTaskModal({
 
   const valid = selectedResidents.size > 0 && assigneeId && title.trim() && dueDate && shiftKey;
   const inputCls = "w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none text-sm";
+  // The AS-domain this task maps to (category first, then title). null = not gated.
+  const taskDomainCode = domainCodeFromLabel(category) ?? domainCodeFromLabel(title);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid || saving) return;
+
+    // LOC package gate — a task whose domain (from its category/title) is outside
+    // a selected resident's Level package is an Additional Clinical Service
+    // (DT-014): warn (never block), and on proceed flag each gated resident.
+    // domainCodeFromLabel returns null when unmappable → those residents aren't gated.
+    const domainCode = taskDomainCode;
+    const gatedResidents = domainCode
+      ? residents.filter((r) => selectedResidents.has(r.id) && !domainInPackage(careLevelEnumToLevel(r.careLevel), domainCode))
+      : [];
+    if (domainCode && gatedResidents.length > 0) {
+      const label = DOMAIN_LABEL[domainCode] ?? category;
+      const who = gatedResidents.length === 1
+        ? `${gatedResidents[0].name}'s Level ${careLevelEnumToLevel(gatedResidents[0].careLevel)} package`
+        : `the Level-of-Care package for ${gatedResidents.length} selected residents`;
+      const proceed = await Swal.fire({
+        title: "Outside care package",
+        text: `${label} is not in ${who}. Care outside the package is an Additional Clinical Service and may be chargeable (DT-014). Proceed anyway?`,
+        icon: "warning", showCancelButton: true, confirmButtonColor: "#d97706",
+        confirmButtonText: "Proceed & flag for DT-014", cancelButtonText: "Cancel",
+      });
+      if (!proceed.isConfirmed) return;
+    }
+
     setSaving(true);
     try {
       // The task is due by the END of the chosen shift on the due date; it goes
       // overdue after that. (Task has no shift column — the deadline encodes it.)
       const dueISO = shiftDeadlineISO(dueDate, shiftKey);
+      const gatedIds = new Set(gatedResidents.map((r) => r.id));
       // One Task per selected resident, all to the same assignee.
       for (const residentId of selectedResidents) {
         await createRecord("tasks", {
@@ -750,6 +777,11 @@ function AssignTaskModal({
           description: notes.trim() || null,
           [TASK_NOTES_FIELD]: notes.trim() || null,
         });
+        // Out-of-package assignment → flag a pending DT-014 determination.
+        if (domainCode && gatedIds.has(residentId)) {
+          const r = residents.find((rr) => rr.id === residentId);
+          if (r) await recordOutOfPackageService({ residentId, residentName: r.name, room: r.room || undefined, domainCode, domainLabel: DOMAIN_LABEL[domainCode] ?? category, level: careLevelEnumToLevel(r.careLevel), by: undefined, notes: `Task: ${title.trim()}${notes.trim() ? ` — ${notes.trim()}` : ""}` });
+        }
       }
       // Notify the assignee (e.g. the caregiver) so the new assignment lands in
       // their portal notification bell in real time. Best-effort — never blocks
@@ -796,13 +828,17 @@ function AssignTaskModal({
               <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-300 divide-y divide-slate-100">
                 {residents.length === 0 ? (
                   <p className="text-xs text-slate-400 p-3">No residents found.</p>
-                ) : residents.map((r) => (
+                ) : residents.map((r) => {
+                  const oop = !!taskDomainCode && !domainInPackage(careLevelEnumToLevel(r.careLevel), taskDomainCode);
+                  return (
                   <label key={r.id} className="flex items-center gap-2.5 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
                     <input type="checkbox" checked={selectedResidents.has(r.id)} onChange={() => toggleResident(r.id)}
                       style={{ minHeight: 0, minWidth: 0 }} className="h-4 w-4 shrink-0 rounded border-slate-300 accent-blue-600" />
                     <span className="truncate">{r.name} — Rm {r.room}</span>
+                    {oop && <span className="ml-auto shrink-0 inline-flex items-center rounded-full border border-amber-400 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700" title="Additional Clinical Service (DT-014)">Not in L{careLevelEnumToLevel(r.careLevel)}</span>}
                   </label>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
