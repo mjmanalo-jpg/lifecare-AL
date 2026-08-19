@@ -13,6 +13,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFacilityConfig } from "@/lib/useFacilityConfig";
 import { ASSESSMENTS_V42_KEY, originOf, classifyAssessment, assessmentRawScore, type AssessmentV42 } from "@/lib/lifecare/assessment";
 import { createRecord, updateRecord, upsertRecord, deleteRecord } from "@/lib/api";
+import { recordAudit } from "@/lib/auditClient";
 import { insuranceProvider } from "@/lib/integrations/insurance";
 import { qrDataUrl } from "@/lib/qr";
 
@@ -953,6 +954,14 @@ export default function AdmissionsContent() {
           completedSteps: JSON.stringify(Array.from({ length: STEP_COUNT }, (_, i) => i + 1)), currentStep: STEP_COUNT,
         });
       }
+      recordAudit({
+        action: "CREATE",
+        entityType: "admissions",
+        entityId: residentId || id || newId(),
+        residentId: residentId || undefined,
+        residentName: `${form.firstName} ${form.lastName}`.trim(),
+        reason: `Admitted ${form.firstName} ${form.lastName} as a resident${seededAcuity ? " (care-acuity assessment seeded for nurse review)" : ""}`,
+      });
       await refetch();
       setWizardOpen(false);
       Swal.fire({ title: "Admission Complete", text: `${form.firstName} ${form.lastName} is now a resident.${seededAcuity ? " A care-acuity assessment is pending nurse review." : ""}`, icon: "success", timer: 2300, showConfirmButton: false });

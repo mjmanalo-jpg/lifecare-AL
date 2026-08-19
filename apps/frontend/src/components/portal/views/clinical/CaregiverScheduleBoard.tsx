@@ -9,6 +9,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { upsertRecord } from "@/lib/api";
+import { recordAudit } from "@/lib/auditClient";
 import {
   ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalCard, StatCard,
   DataState, MicroLabel, controlClass,
@@ -160,6 +161,12 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
         ? schedules.map((s) => (s.id === targetId ? { ...s, ...base, createdAt: s.createdAt } : s))
         : [base, ...schedules];
       await persist(next);
+      recordAudit({
+        action: targetId ? "UPDATE" : "CREATE",
+        entityType: "caregiver-schedules",
+        entityId: base.id,
+        reason: `${targetId ? "Updated" : "Added"} ${form.shift} shift for ${cg.name} on ${form.date} — ${form.residentIds.length} resident${form.residentIds.length === 1 ? "" : "s"}`,
+      });
       setForm(null);
       Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Schedule saved", showConfirmButton: false, timer: 1400 });
     } catch (e) {

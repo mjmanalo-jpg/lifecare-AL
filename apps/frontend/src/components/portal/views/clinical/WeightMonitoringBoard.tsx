@@ -14,6 +14,7 @@ import { Plus, Calendar, History, AlertTriangle, ChevronRight, TrendingUp, Trend
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
+import { recordAudit } from "@/lib/auditClient";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, DataState, FieldLabel, SearchInput, controlClass, SERIF } from "./clinical-ui";
@@ -135,6 +136,15 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
     const record: WeightLog = { id: newId(), residentId: data.residentId, type: data.type, weekOf: data.date, date: data.date, shift: data.shift, weightKg: data.weightKg, unit: data.unit, unable: data.unable, note: data.note, by: clinicianName, at: now };
     await persist([record, ...rest]);
     if (data.weightKg != null) fetch("/api/vitals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ residentId: data.residentId, type: "WEIGHT", value: String(data.weightKg), unit: "kg" }) }).catch(() => null);
+    const resName = s(residents.find((x: Row) => s(x.id) === data.residentId)?.name) || "resident";
+    recordAudit({
+      action: "CREATE",
+      entityType: "weight-logs",
+      entityId: record.id,
+      residentId: data.residentId,
+      residentName: resName,
+      reason: `Weight ${data.type} check for ${resName} — ${data.unable ? "unable to record" : `${data.weightKg ?? "—"} ${data.unit || "kg"}`}`,
+    });
     setRec(null);
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Weight recorded", showConfirmButton: false, timer: 1500 });
   };

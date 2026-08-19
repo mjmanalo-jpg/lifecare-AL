@@ -19,6 +19,7 @@ import {
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, createRecord } from "@/lib/api";
+import { recordAudit } from "@/lib/auditClient";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { PREADMISSION_KEY, parseAssessments, continenceScore, newId, type AdlItem } from "@/lib/preadmissionAssessment";
@@ -150,8 +151,16 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
     // Replace any existing entry for this domain+shift (re-log), else prepend.
     const rest = logs.filter((l) => !(l.residentId === resId && l.date === date && l.shift === shift && l.domain === domain));
     await persist([rec, ...rest]);
+    const label = DOMAINS.find((d) => d.key === domain)?.label || domain;
+    recordAudit({
+      action: "CREATE",
+      entityType: "adl-logs",
+      entityId: rec.id,
+      residentId: resId,
+      residentName: s(resident?.name) || undefined,
+      reason: `ADL · ${label} for ${s(resident?.name) || "resident"} — ${payload.assistance} (${payload.change})`,
+    });
     if (payload.flags.createTask) {
-      const label = DOMAINS.find((d) => d.key === domain)!.label;
       await createRecord("tasks", { residentId: resId, title: `ADL follow-up — ${label}`, description: payload.notes || `${label}: ${payload.assistance} (${payload.change}).`, status: "PENDING", priority: payload.change === "Significant Decline" ? "HIGH" : "MEDIUM", category: "Personal Care" }).catch(() => null);
     }
     setLogDomain(null);

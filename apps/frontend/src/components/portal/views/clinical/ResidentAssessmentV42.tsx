@@ -16,6 +16,7 @@ import {
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, updateRecord } from "@/lib/api";
+import { recordAudit } from "@/lib/auditClient";
 import { generateCarePlanFromV42 } from "@/lib/carePlanV42Gen";
 import { downstreamForAssessment } from "@/lib/lifecare/downstream.ts";
 import { recordLocChange } from "@/lib/lifecare/locHistory";
@@ -371,6 +372,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     }
     setSaving(true);
     try {
+      const isEdit = !!editingId;
       const rec = buildRecord(status, extra);
       let next: AssessmentV42[];
       if (editingId) {
@@ -381,6 +383,13 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
       }
       setDraft(rec);
       await persist(next);
+      recordAudit({
+        action: isEdit ? "UPDATE" : "CREATE",
+        entityType: "assessments",
+        entityId: rec.id,
+        residentName: rec.layer1.residentName?.trim() || undefined,
+        reason: `${status === "COMPLETED" ? "Completed" : isEdit ? "Updated" : "Started"} resident assessment for ${rec.layer1.residentName?.trim() || "resident"}`,
+      });
       if (toast) Swal.fire({ title: toast, icon: "success", timer: 1600, showConfirmButton: false });
     } catch (e) {
       Swal.fire({ title: "Save failed", text: e instanceof Error ? e.message : "Could not save.", icon: "error" });

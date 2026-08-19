@@ -19,6 +19,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { upsertRecord, createRecord } from "@/lib/api";
+import { recordAudit } from "@/lib/auditClient";
 import { exportInventoryCsv, parseInventoryCsv, inventoryHeaders, importSummaryHtml } from "@/lib/inventoryCsv";
 import { mirrorFacilityInventory } from "@/lib/inventoryMirror";
 import { useClinician, type ClinicianRole } from "./useClinician";
@@ -109,14 +110,24 @@ export default function MiniPharmacyBoard({ clinicianRole = "NURSE" }: { clinici
 
   const upsertItem = async (it: InvItem) => {
     const rec = { ...it, updatedAt: new Date().toISOString() };
+    const isEdit = items.some((x) => x.id === it.id);
     setAddOpen(false); setEditItem(null); // close instantly
     if (await routeIfFacilityGeneral(rec)) return;
-    try { await saveItems([rec, ...items.filter((x) => x.id !== rec.id)]); }
+    try {
+      await saveItems([rec, ...items.filter((x) => x.id !== rec.id)]);
+      recordAudit({
+        action: isEdit ? "UPDATE" : "CREATE",
+        entityType: "pharmacy-inventory",
+        entityId: rec.id,
+        reason: `${isEdit ? "Updated" : "Added"} pharmacy item "${rec.name}" — ${rec.quantity} ${rec.unit}`,
+      });
+    }
     catch { Swal.fire({ toast: true, position: "top-end", icon: "error", title: "Couldn't save — please retry", showConfirmButton: false, timer: 2600 }); }
   };
   const restock = async (it: InvItem, add: number) => {
     setRestockItem(null); // close instantly
     await saveItems(items.map((x) => (x.id === it.id ? { ...x, quantity: x.quantity + add, updatedAt: new Date().toISOString() } : x)));
+    recordAudit({ action: "UPDATE", entityType: "pharmacy-inventory", entityId: it.id, reason: `Restocked pharmacy item "${it.name}" +${add} ${it.unit}` });
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: `Restocked +${add}`, showConfirmButton: false, timer: 1400 });
   };
   const submitPR = async (it: InvItem, quantity: number, urgency: string, notes: string) => { const rec: PR = { id: newId("pr"), itemId: it.id, itemName: it.name, unit: it.unit, quantity, urgency, notes: notes || undefined, status: "PENDING", by: clinicianName, byAt: new Date().toISOString() }; await savePRs([rec, ...prs]); setRequestItem(null); Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Purchase request submitted", showConfirmButton: false, timer: 1600 }); };
@@ -199,6 +210,15 @@ export default function MiniPharmacyBoard({ clinicianRole = "NURSE" }: { clinici
       }),
     ]);
     const charged = results[3].status === "fulfilled";
+
+    recordAudit({
+      action: "CREATE",
+      entityType: "pharmacy-dispense",
+      entityId: log.id,
+      residentId,
+      residentName,
+      reason: `Dispensed ${qty} ${it.unit} of "${it.name}" to ${residentName}${emergency ? " (emergency)" : ""} — ${peso(amount)}${sponsorName ? ` billed to ${sponsorName}` : ""}`,
+    });
 
     setDispenseItem(null);
     void refetch(); // single background refresh (useLiveQuery also polls)

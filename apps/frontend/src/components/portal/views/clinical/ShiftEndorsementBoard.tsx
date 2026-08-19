@@ -16,6 +16,7 @@ import {
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, createRecord } from "@/lib/api";
+import { recordAudit } from "@/lib/auditClient";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { useCareLogData } from "./CareLogsBoard";
@@ -272,6 +273,12 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
   const createEndorsement = async (data: { shiftLabel: string; shiftRange: string; generalNotes?: string; medicationNotes?: string; aiSummary?: string }) => {
     const rec: Endorsement = { ...data, id: newId(), number: `#${2940000 + items.length + 1}`, date: isoDate(new Date()), outgoingBy: clinicianName, outgoingById: clinicianUserId, incomingBy: "(pending)", signedAt: nowTime(), status: "PENDING", residents: [], carryOvers: [], checklist: {}, createdAt: new Date().toISOString() };
     await persist([rec, ...items]);
+    recordAudit({
+      action: "CREATE",
+      entityType: "shift-endorsements",
+      entityId: rec.id,
+      reason: `Created shift endorsement ${rec.number} — ${data.shiftLabel}${data.shiftRange ? ` (${data.shiftRange})` : ""}`,
+    });
     setNewOpen(false);
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Endorsement created", showConfirmButton: false, timer: 1600 });
   };

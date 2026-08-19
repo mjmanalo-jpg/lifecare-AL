@@ -88,6 +88,9 @@ const DOSE_OPTS = [
 
 export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   const { name: clinicianName, userId } = useClinician(clinicianRole);
+  // Caregivers only administer doses — they don't manage the medication list.
+  // Adding, editing and discontinuing meds stay with nurses / care managers.
+  const canManageMeds = clinicianRole !== "CAREGIVER";
   const router = useRouter();
   const pathname = usePathname();
   // Send the clinician to Daily Care Logs → Vitals for this resident. The portal
@@ -239,9 +242,10 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
     if (!doseFor) return;
     const { m, slot, iso, marId } = doseFor;
     const timing = doseTiming(slot, iso, Date.now());
-    // Strict window: a GIVEN dose is hard-blocked before the window opens.
-    if (doseStatus === "GIVEN" && timing?.phase === "EARLY") {
-      Swal.fire("Too early to administer", `The administration window for this dose opens at ${msTo12h(timing.openMs)}. You can still record it as Refused or Held.`, "warning");
+    // Strict window: NO outcome (Given, Refused or Held) can be recorded before
+    // the window opens — the dose event hasn't happened yet.
+    if (timing?.phase === "EARLY") {
+      Swal.fire("Too early to record", `This dose can't be recorded yet. Its window opens at ${msTo12h(timing.openMs)} — come back then to mark it Given, Refused or Held.`, "warning");
       return;
     }
     if ((doseStatus === "REFUSED" || doseStatus === "HELD") && !doseReason.trim()) {
@@ -315,7 +319,9 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
     const rMeds = (medsByRes.get(s(openRes.id)) || []).filter((m) => activeOn(m, date));
     // Timing of the dose currently open in the record modal, vs. the strict window.
     const doseT = doseFor ? doseTiming(doseFor.slot, doseFor.iso, nowMs) : null;
-    const blockedEarly = doseStatus === "GIVEN" && doseT?.phase === "EARLY";
+    // Before the window opens NOTHING can be recorded (Given/Refused/Held all
+    // locked) — the dose event hasn't occurred yet.
+    const blockedEarly = doseT?.phase === "EARLY";
     const lateGiven = doseStatus === "GIVEN" && doseT?.phase === "LATE";
     // Vitals-first: this med is flagged "vitals required" and the resident has no
     // vitals reading recorded today (from Daily Care Logs → VitalsLog).
@@ -325,7 +331,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
         <div className="flex items-center gap-3 mb-4"><label className="text-sm text-slate-500" htmlFor="mar-date-detail">Date:</label><input id="mar-date-detail" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm" /></div>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
           <div className="flex items-center gap-3"><ClinicalButton variant="secondary" size="sm" onClick={() => setOpenRes(null)}><ChevronLeft className="w-4 h-4" /> Back</ClinicalButton><div><h1 className="text-2xl font-bold text-[var(--clinical-ink)]">{s(openRes.name)}</h1><p className="text-sm text-[var(--clinical-muted)]">Daily MAR — {date}</p></div></div>
-          <ClinicalButton variant="accent" onClick={() => setAddFor(openRes)}><Plus className="w-4 h-4" /> Add Medication</ClinicalButton>
+          {canManageMeds && <ClinicalButton variant="accent" onClick={() => setAddFor(openRes)}><Plus className="w-4 h-4" /> Add Medication</ClinicalButton>}
         </div>
         <div className="space-y-3">
           {rMeds.length === 0 ? <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-400">No active medications for this date.</div>
@@ -333,7 +339,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
               <div key={s(m.id)} className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div><p className="font-bold text-slate-900 flex flex-wrap items-center gap-2">{brand}{isVitalsRequired(s(m.id)) && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700"><Activity className="w-3 h-3" /> Vitals required</span>}</p>{generic && <p className="text-xs text-slate-400">{generic}</p>}<p className="text-sm text-slate-600 mt-0.5">{s(m.dosage) || "NA"} · {s(m.route) || "oral"} · {s(m.frequency)}</p>{s(m.reason) && <p className="text-xs text-slate-400 mt-0.5">For: {s(m.reason)}</p>}</div>
-                  <div className="flex items-center gap-1"><button onClick={() => setAddFor({ ...m, __edit: true })} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><Pencil className="w-4 h-4" /></button><button onClick={async () => { const c = await Swal.fire({ title: "Discontinue medication?", icon: "warning", showCancelButton: true, confirmButtonColor: "#dc2626" }); if (c.isConfirmed) { await updateRecord("medications", s(m.id), { status: "DISCONTINUED" }); await refetch(); } }} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500"><Trash2 className="w-4 h-4" /></button></div>
+                  {canManageMeds && <div className="flex items-center gap-1"><button onClick={() => setAddFor({ ...m, __edit: true })} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><Pencil className="w-4 h-4" /></button><button onClick={async () => { const c = await Swal.fire({ title: "Discontinue medication?", icon: "warning", showCancelButton: true, confirmButtonColor: "#dc2626" }); if (c.isConfirmed) { await updateRecord("medications", s(m.id), { status: "DISCONTINUED" }); await refetch(); } }} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500"><Trash2 className="w-4 h-4" /></button></div>}
                 </div>
                 <div className="flex flex-wrap gap-2 mt-3">
                   {occ.map((o, i) => {
@@ -391,8 +397,8 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
               )}
               {doseT?.phase === "EARLY" && (
                 <div className="rounded-xl border p-3 text-sm" style={{ borderColor: "var(--clinical-coral)", backgroundColor: "color-mix(in srgb, var(--clinical-coral) 12%, var(--clinical-surface))", color: "var(--clinical-coral)" }}>
-                  <span className="flex items-center gap-1.5 font-bold"><Lock className="w-4 h-4" /> Too early to give</span>
-                  <span className="mt-1 block text-xs" style={{ color: "color-mix(in srgb, var(--clinical-coral) 80%, var(--clinical-ink))" }}>Scheduled {to12h(SLOT_TIME[doseFor.slot] || "")} · window opens <b>{msTo12h(doseT.openMs)}</b>. Only Refused or Held can be recorded before then.</span>
+                  <span className="flex items-center gap-1.5 font-bold"><Lock className="w-4 h-4" /> Too early to record</span>
+                  <span className="mt-1 block text-xs" style={{ color: "color-mix(in srgb, var(--clinical-coral) 80%, var(--clinical-ink))" }}>Scheduled {to12h(SLOT_TIME[doseFor.slot] || "")} · window opens <b>{msTo12h(doseT.openMs)}</b>. No outcome — Given, Refused or Held — can be recorded before then.</span>
                 </div>
               )}
               {doseT?.phase === "LATE" && (
@@ -409,8 +415,8 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
                     const active = doseStatus === o.v;
                     const Icon = o.icon;
                     return (
-                      <button key={o.v} type="button" onClick={() => setDoseStatus(o.v)} aria-pressed={active}
-                        className="flex flex-col items-center gap-1.5 rounded-xl border-2 px-2 py-3 text-center transition"
+                      <button key={o.v} type="button" onClick={() => setDoseStatus(o.v)} aria-pressed={active} disabled={blockedEarly}
+                        className="flex flex-col items-center gap-1.5 rounded-xl border-2 px-2 py-3 text-center transition disabled:cursor-not-allowed disabled:opacity-50"
                         style={{ borderColor: active ? o.color : "var(--clinical-line-strong)", backgroundColor: active ? `color-mix(in srgb, ${o.color} 12%, var(--clinical-surface))` : "var(--clinical-surface)" }}>
                         <Icon className="h-6 w-6" style={{ color: active ? o.color : "var(--clinical-muted)" }} />
                         <span className="text-sm font-bold" style={{ color: active ? o.color : "var(--clinical-ink)" }}>{o.label}</span>

@@ -7,6 +7,7 @@ import {
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
+import { recordAudit } from "@/lib/auditClient";
 import {
   ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalCard, StatCard,
   SearchInput, DataState, StatusPill, MicroLabel, controlClass, DISPLAY,
@@ -277,14 +278,22 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
       const snap = scoreAssessment(form);
       let next: PreAdmissionAssessment[];
       const link = linkedAdmissionId || undefined;
+      const recordId = editingId ?? newId();
       if (editingId) {
         next = assessments.map((a) => (a.id === editingId ? { ...a, ...form, status, scores: snap, updatedAt: now, convertedAdmissionId: link ?? a.convertedAdmissionId } : a));
       } else {
-        const rec: PreAdmissionAssessment = { ...form, id: newId(), status, scores: snap, createdAt: now, updatedAt: now, ...(link ? { convertedAdmissionId: link } : {}) };
+        const rec: PreAdmissionAssessment = { ...form, id: recordId, status, scores: snap, createdAt: now, updatedAt: now, ...(link ? { convertedAdmissionId: link } : {}) };
         next = [rec, ...assessments];
         setEditingId(rec.id);
       }
       await persist(next);
+      recordAudit({
+        action: editingId ? "UPDATE" : "CREATE",
+        entityType: "assessments",
+        entityId: recordId,
+        residentName: form.residentName?.trim() || undefined,
+        reason: `${status === "COMPLETED" ? "Completed" : editingId ? "Updated" : "Saved"} pre-admission assessment for ${form.residentName?.trim() || "prospect"} — ${snap.levelLabel} (${snap.total}/50)`,
+      });
       if (status === "COMPLETED") { setOpen(false); Swal.fire({ title: "Assessment completed", text: `${form.residentName} — ${snap.levelLabel} (${snap.total}/50).`, icon: "success", timer: 2200, showConfirmButton: false }); }
       else Swal.fire({ title: "Draft saved", icon: "success", timer: 1200, showConfirmButton: false });
     } catch (e) {

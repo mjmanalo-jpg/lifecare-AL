@@ -508,7 +508,10 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
   const q = search.trim().toLowerCase();
   const documentedResidents = residents.filter((r: Row) => (byResident.get(s(r.id)) || []).length > 0).length;
   const needsDocumentation = Math.max(0, residents.length - documentedResidents);
-  const documentedDomains = new Set(entries.map((entry) => entry.domain)).size;
+  // Count only the 14 v4.2 assessment domains toward "/ 14" — Pain is a standalone
+  // symptom, not one of the 14, so it's excluded here too (matching the per-resident
+  // "X of 14 domains" progress below; otherwise the two counts disagree).
+  const documentedDomains = new Set(entries.map((entry) => entry.domain).filter((d) => d !== "pain")).size;
   const coverage = residents.length ? Math.round((documentedResidents / residents.length) * 100) : 0;
   const filtered = residents.filter((r: Row) => {
     const matchesQuery = !q || s(r.name).toLowerCase().includes(q) || s(r.room).toLowerCase().includes(q);
@@ -613,10 +616,10 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
                 {open && list.length > 0 && (
                   <div className="space-y-3 border-t bg-[var(--clinical-surface-2)] px-4 py-4 sm:px-5" style={{ borderColor: "var(--clinical-line)" }}>
                     {list.map((e, i) => { const d = DOMAINS.find((x) => x.key === e.domain)!; return (
-                      <div key={i} className="flex items-start gap-3 rounded-xl bg-[var(--clinical-surface)] p-3">
+                      <div key={i} className="flex flex-wrap items-start gap-x-3 gap-y-1.5 rounded-xl bg-[var(--clinical-surface)] p-3">
                         <DomainChip label={d.label} />
-                        <span className="text-sm text-[var(--clinical-ink-soft)] flex-1 min-w-0">{e.summary}</span>
-                        <span className="text-xs text-[var(--clinical-muted)] shrink-0">{rel(e.at)}</span>
+                        <span className="order-3 w-full break-words text-sm text-[var(--clinical-ink-soft)] sm:order-2 sm:w-auto sm:flex-1 sm:min-w-0">{e.summary}</span>
+                        <span className="order-2 ml-auto shrink-0 text-xs text-[var(--clinical-muted)] sm:order-3 sm:ml-0">{rel(e.at)}</span>
                       </div>
                     ); })}
                   </div>

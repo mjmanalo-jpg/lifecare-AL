@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
+import { logAudit } from "@/lib/audit";
 import { OUTCOMES, classifyOutcome, evaluateVariance, VARIANCE_REVIEW_THRESHOLD, type Outcome } from "@/lib/lifecare/careEvents";
 import { MODEL_VERSION } from "@/lib/lifecare/dataset";
 
@@ -129,6 +130,21 @@ export async function POST(request: NextRequest) {
       });
     } catch { /* best-effort */ }
   }
+
+  // Audit trail — the caregiver's care delivery (task completion / variance)
+  // recorded against their name, visible to Nurse + Care Manager.
+  logAudit({
+    actorId: ctx.userId,
+    actorName: actorName,
+    actorRole: ctx.role,
+    action: "CREATE",
+    entityType: "care-events",
+    entityId: created.id,
+    organizationId,
+    communityId,
+    after: { residentId, residentName },
+    reason: `Care delivered${residentName ? ` for ${residentName}` : ""} — "${outcome}"${c.isVariance ? " (variance)" : ""}${observation ? `: ${observation}` : ""}`,
+  });
 
   return NextResponse.json({ ok: true, eventId: created.id, escalated: escalate, notified: notifyNurse && nurseIds.length > 0, reviewAlertRaised });
 }

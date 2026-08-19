@@ -297,6 +297,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return delegate.create({ data });
     });
     if (OVERVIEW_COUNT_MODELS.has(model) && context.organizationId) invalidatePortalDataPrefix(`org-admin:${context.organizationId}:`);
+    // Audit snapshot. Daily-round sub-records (pain, mood, meal, vitals, …) carry
+    // no residentId of their own — the resident lives on the parent DailyRound —
+    // so resolve it here, otherwise the Audit Trail's Resident column is blank.
+    const auditAfter = snapshot(created) as Record<string, unknown>;
+    const createdRec = created as Record<string, unknown>;
+    if (!auditAfter.residentId && createdRec.dailyRoundId) {
+      const round = await prisma.dailyRound
+        .findUnique({ where: { id: String(createdRec.dailyRoundId) }, select: { residentId: true } })
+        .catch(() => null);
+      if (round?.residentId) auditAfter.residentId = round.residentId;
+    }
     logAudit({
       actorId: context.userId,
       actorRole: context.role,
@@ -305,7 +316,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       entityId: created.id,
       organizationId: context.organizationId,
       communityId: context.communityId,
-      after: snapshot(created),
+      after: auditAfter,
     });
     // Severe/Critical incidents auto-alert the Care Manager (+ nurses) the moment
     // they're reported — they surface in the Alert Center with an SLA countdown.

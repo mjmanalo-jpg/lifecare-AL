@@ -13,6 +13,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { upsertRecord } from "@/lib/api";
+import { recordAudit } from "@/lib/auditClient";
 import { exportInventoryCsv, parseInventoryCsv, inventoryHeaders, importSummaryHtml } from "@/lib/inventoryCsv";
 import { mirrorFacilityInventory } from "@/lib/inventoryMirror";
 import { useClinician, type ClinicianRole } from "./useClinician";
@@ -84,13 +85,23 @@ export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { 
 
   const upsertItem = async (it: InvItem) => {
     const rec = { ...it, updatedAt: new Date().toISOString() };
+    const isEdit = items.some((x) => x.id === it.id);
     setAddOpen(false); setEditItem(null);
     if (await routeIfFacilityGeneral(rec)) return;
     await saveItems([rec, ...items.filter((x) => x.id !== rec.id)]);
+    recordAudit({
+      action: isEdit ? "UPDATE" : "CREATE",
+      entityType: "med-inventory",
+      entityId: rec.id,
+      residentId: rec.residentId,
+      residentName: rec.residentName,
+      reason: `${isEdit ? "Updated" : "Added"} ${rec.type === "MEDICATION" ? "medication" : "supply"} "${rec.name}" — ${rec.quantity} ${rec.unit}${rec.residentName ? ` for ${rec.residentName}` : ""}`,
+    });
   };
   const restock = async (it: InvItem, add: number) => {
     await saveItems(items.map((x) => (x.id === it.id ? { ...x, quantity: x.quantity + add, updatedAt: new Date().toISOString() } : x)));
     setRestockItem(null);
+    recordAudit({ action: "UPDATE", entityType: "med-inventory", entityId: it.id, reason: `Restocked "${it.name}" +${add} ${it.unit}` });
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: `Restocked +${add}`, showConfirmButton: false, timer: 1400 });
   };
   const submitPR = async (it: InvItem, quantity: number, urgency: string, notes: string) => { const rec: PR = { id: newId("pr"), itemId: it.id, itemName: it.name, unit: it.unit, quantity, urgency, notes: notes || undefined, status: "PENDING", by: clinicianName, byAt: new Date().toISOString() }; await savePRs([rec, ...prs]); setRequestItem(null); Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Purchase request submitted", showConfirmButton: false, timer: 1600 }); };

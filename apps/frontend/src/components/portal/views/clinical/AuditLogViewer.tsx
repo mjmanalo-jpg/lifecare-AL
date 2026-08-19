@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { Shield, Search, Filter, Download, Loader2, Clock, User, FileText, Stethoscope } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { adaptResident } from "@/lib/adapters";
 
 const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none text-sm";
 const actionColors: Record<string, string> = {
@@ -30,6 +31,13 @@ const CLINICAL_ENTITIES = new Set<string>([
   "escalations", "incidents", "hospital-referrals", "follow-ups",
   "physician-communications", "vitals", "vital-signs", "wound-cares",
   "shift-reports",
+  // Caregiver activity recorded outside /api/db (attendance, care delivery,
+  // ADL and weight all persist via app-settings / dedicated routes).
+  "attendance", "care-events", "adl-logs", "weight-logs",
+  // Nurse / care-manager clinical & operational actions that persist outside
+  // /api/db (mostly app-settings) — logged semantically via /api/audit.
+  "med-inventory", "pharmacy-inventory", "pharmacy-dispense",
+  "shift-endorsements", "admissions", "staff-profiles", "caregiver-schedules",
 ]);
 
 // Human-readable labels for entity slugs (used everywhere; falls back to the
@@ -47,6 +55,10 @@ const ENTITY_LABELS: Record<string, string> = {
   "follow-ups": "Follow-up", "physician-communications": "Physician comms", vitals: "Vitals",
   "vital-signs": "Vitals", "wound-cares": "Wound care", "shift-reports": "Shift report",
   residents: "Resident", invoices: "Invoice", payments: "Payment", "app-settings": "System setting",
+  attendance: "Attendance (clock in/out)", "care-events": "Care delivery", "adl-logs": "Daily living (ADL)",
+  "weight-logs": "Weight check", "med-inventory": "Medication inventory", "pharmacy-inventory": "Pharmacy inventory",
+  "pharmacy-dispense": "Pharmacy dispense", "shift-endorsements": "Shift endorsement", admissions: "Admission",
+  "staff-profiles": "Staff profile", "caregiver-schedules": "Caregiver schedule",
 };
 function entityLabel(slug?: string): string {
   if (!slug) return "—";
@@ -58,6 +70,13 @@ function describeActivity(log: any): string {
   const after = log.after || {};
   const status = typeof after.status === "string" ? after.status : null;
   const noun = entityLabel(log.entityType);
+  if (log.entityType === "attendance") {
+    if (log.action === "LOGIN") return "Clocked in";
+    if (log.action === "LOGOUT") return "Clocked out";
+  }
+  if (log.entityType === "care-events") return "Care delivered";
+  if (log.entityType === "adl-logs") return "Daily living (ADL) logged";
+  if (log.entityType === "weight-logs") return "Weight recorded";
   if (log.entityType === "tasks") {
     if (status === "COMPLETED") return "Task completed";
     if (status) return `Task marked ${status.toLowerCase().replace(/_/g, " ")}`;
@@ -72,9 +91,32 @@ function describeActivity(log: any): string {
   return `${noun} ${verb}`;
 }
 
+// Resolve the resident an audit entry concerns. Two sources: a name/id stashed
+// in the `after`/`before` snapshot — /api/db writes snapshot `residentId`, and
+// semantic /api/audit entries carry `residentName`/`residentId`. Returns "" when
+// the action isn't resident-specific (e.g. attendance, staff profiles).
+function resolveResidentName(
+  log: { after?: Record<string, unknown> | null; before?: Record<string, unknown> | null },
+  byId: Map<string, string>,
+): string {
+  const after = (log.after || {}) as Record<string, unknown>;
+  const before = (log.before || {}) as Record<string, unknown>;
+  const name = after.residentName ?? before.residentName;
+  if (typeof name === "string" && name.trim()) return name.trim();
+  const rid = after.residentId ?? before.residentId;
+  if (typeof rid === "string" && byId.has(rid)) return byId.get(rid) || "";
+  return "";
+}
+
 export default function AuditLogViewer({ focus = "all" }: { focus?: "all" | "clinical" }) {
   const isClinical = focus === "clinical";
   const { data: auditRows, loading } = useLiveQuery("audit-logs", { query: "take=1000", tables: ["AuditLog"] });
+  const { data: residentRows } = useLiveQuery<Record<string, unknown>>("residents", { query: "take=500", tables: ["Resident"] });
+  const residentsById = useMemo(() => {
+    const m = new Map<string, string>();
+    (residentRows || []).forEach((raw) => { const r = adaptResident(raw); if (r.id) m.set(String(r.id), String(r.name)); });
+    return m;
+  }, [residentRows]);
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("ALL");
   const [entityFilter, setEntityFilter] = useState("ALL");
@@ -92,11 +134,11 @@ export default function AuditLogViewer({ focus = "all" }: { focus?: "all" | "cli
       if (entityFilter !== "ALL" && a.entityType !== entityFilter) return false;
       if (search) {
         const q = search.toLowerCase();
-        return (a.actorName || "").toLowerCase().includes(q) || entityLabel(a.entityType).toLowerCase().includes(q) || (a.entityType || "").toLowerCase().includes(q) || (a.reason || "").toLowerCase().includes(q) || describeActivity(a).toLowerCase().includes(q);
+        return (a.actorName || "").toLowerCase().includes(q) || entityLabel(a.entityType).toLowerCase().includes(q) || (a.entityType || "").toLowerCase().includes(q) || (a.reason || "").toLowerCase().includes(q) || describeActivity(a).toLowerCase().includes(q) || resolveResidentName(a, residentsById).toLowerCase().includes(q);
       }
       return true;
     }).sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-  }, [scopedRows, actionFilter, entityFilter, search]);
+  }, [scopedRows, actionFilter, entityFilter, search, residentsById]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -154,6 +196,7 @@ export default function AuditLogViewer({ focus = "all" }: { focus?: "all" | "cli
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">User</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">Action</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">{isClinical ? "Activity" : "Entity"}</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Resident</th>
                     <th className="px-4 py-3 text-left font-semibold text-gray-600">Details</th>
                   </tr>
                 </thead>
@@ -179,6 +222,9 @@ export default function AuditLogViewer({ focus = "all" }: { focus?: "all" | "cli
                         ) : (
                           <>{entityLabel(log.entityType)} {log.entityId && <span className="text-xs text-gray-400">({log.entityId.slice(0, 8)}...)</span>}</>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700 text-sm whitespace-nowrap">
+                        {resolveResidentName(log, residentsById) || <span className="text-gray-300">—</span>}
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs max-w-xs truncate">{log.reason || (isClinical ? entityLabel(log.entityType) : describeActivity(log))}</td>
                     </tr>

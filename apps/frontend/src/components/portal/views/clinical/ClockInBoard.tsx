@@ -15,6 +15,7 @@ import { MapPin, ScanFace, LogIn, LogOut, CheckCircle2, XCircle, Loader2, Clock,
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
+import { recordAudit } from "@/lib/auditClient";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, StatCard, SERIF } from "./clinical-ui";
 import CameraCapture from "@/components/portal/CameraCapture";
@@ -51,6 +52,17 @@ export default function ClockInBoard({ clinicianRole = "NURSE" }: { clinicianRol
       geoOk, geoDistanceM: Number.isFinite(geoDistanceM) ? Math.round(geoDistanceM) : undefined, lat, lng,
     };
     await upsertRecord("app-settings", STAFF_CLOCK_KEY, { key: STAFF_CLOCK_KEY, value: JSON.stringify([ev, ...events]) });
+    // Record a meaningful attendance line in the audit trail (nurse + care
+    // manager) — clock in/out lives in app-settings, so it never flows through
+    // the /api/db audit path on its own.
+    recordAudit({
+      action: type === "IN" ? "LOGIN" : "LOGOUT",
+      entityType: "attendance",
+      entityId: ev.id,
+      reason: `Clocked ${type === "IN" ? "in" : "out"} at ${fmtTime(ev.at)}`
+        + `${face.ok ? " · face verified" : " · face unverified"}`
+        + `${geoOk ? (Number.isFinite(geoDistanceM) ? ` · on-site (${Math.round(geoDistanceM)}m)` : " · on-site") : " · location not confirmed"}`,
+    });
     await refetch();
     setVerifying(null);
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: `Clocked ${type === "IN" ? "in" : "out"} · ${fmtTime(ev.at)}`, showConfirmButton: false, timer: 2000 });

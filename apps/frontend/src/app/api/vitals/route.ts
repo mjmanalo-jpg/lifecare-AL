@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { VitalType, IncidentType, IncidentSeverity } from "@prisma/client";
 import { requireTenantContext, tenantWhere } from "@/lib/tenant";
 import { withTenantDb } from "@/lib/tenantDb";
+import { logAudit } from "@/lib/audit";
 import { isDbConfigured } from "@/lib/models";
 import { DEMO } from "@/lib/demoData";
 import { isAbnormalVital, vitalSeverity, VITAL_META } from "@/lib/vitalThresholds";
@@ -35,6 +36,20 @@ export async function POST(request: NextRequest) {
   if (!isDbConfigured()) return NextResponse.json({ data: { id: `demo-${Date.now()}`, residentId, type, value: String(body.value) }, demo: true }, { status: 201 });
   const valueStr = String(body.value);
   const data = await withTenantDb(context, (tx) => tx.vitalsLog.create({ data: { organizationId: context.organizationId, communityId: context.communityId, residentId, type: type as VitalType, value: valueStr, unit: body.unit || null, notes: body.notes != null ? String(body.notes) : null, recordedAt: new Date(), recordedBy: context.userId } }));
+
+  // Audit — vitals are recorded outside /api/db (this dedicated route), so log
+  // the reading against the staff member who took it for the audit trail.
+  logAudit({
+    actorId: context.userId,
+    actorRole: context.role,
+    action: "CREATE",
+    entityType: "vitals",
+    entityId: (data as { id?: string })?.id || residentId,
+    organizationId: context.organizationId,
+    communityId: context.communityId,
+    after: { residentId },
+    reason: `${VITAL_META[type as VitalType]?.label ?? type} recorded — ${valueStr}${body.unit ? ` ${body.unit}` : ""}`,
+  });
 
   // Abnormal reading → also log a clinical Incident so it surfaces in the
   // resident's "Recent Incidents" (visible to caregiver/nurse/care manager),

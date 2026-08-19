@@ -12,6 +12,7 @@ import { Search, Plus, Trash2, X, BadgeCheck, GraduationCap, Upload, ShieldCheck
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
+import { recordAudit } from "@/lib/auditClient";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, StatCard, DataState, FieldLabel, controlClass, SERIF } from "./clinical-ui";
 import CameraCapture from "@/components/portal/CameraCapture";
@@ -75,10 +76,18 @@ export default function StaffProfilesBoard({ clinicianRole = "FACILITY_ADMIN" }:
   };
 
   const save = async (prof: StaffProfile) => {
+    const isEdit = !!profiles[prof.userId];
+    const who = edit ? `${edit.name} (${roleLabel(edit.role)})` : "staff member";
     const next = { ...profiles, [prof.userId]: { ...prof, updatedAt: new Date().toISOString(), updatedBy: me } };
     await upsertRecord("app-settings", STAFF_PROFILES_KEY, { key: STAFF_PROFILES_KEY, value: JSON.stringify(next) });
     await refetch();
     setEdit(null);
+    recordAudit({
+      action: isEdit ? "UPDATE" : "CREATE",
+      entityType: "staff-profiles",
+      entityId: prof.userId,
+      reason: `${isEdit ? "Updated" : "Added"} staff profile for ${who}`,
+    });
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Profile saved", showConfirmButton: false, timer: 1500 });
   };
 
