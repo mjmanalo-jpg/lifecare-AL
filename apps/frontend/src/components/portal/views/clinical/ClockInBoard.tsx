@@ -138,6 +138,9 @@ function VerifyModal({ type, enrolledPhoto, geofence, geoRequired, userId, onClo
   const [geo, setGeo] = useState<GeoState>({ status: geoRequired ? "checking" : "skip", distanceM: Infinity });
   const [busy, setBusy] = useState(false);
   const [faceErr, setFaceErr] = useState("");
+  // Remount key — a failed match resets the camera so liveness (blink) re-runs
+  // for the next attempt, keeping the live check tied to each captured frame.
+  const [attempt, setAttempt] = useState(0);
 
   // Kick off model warm-up + location check as soon as the modal opens.
   const runGeo = async () => {
@@ -171,7 +174,7 @@ function VerifyModal({ type, enrolledPhoto, geofence, geoRequired, userId, onClo
     setBusy(true); setFaceErr("");
     try {
       const face = await verifyDataUrls(enrolledPhoto, dataUrl);
-      if (!face.ok) { setFaceErr(face.error || `Face didn't match (distance ${face.distance.toFixed(2)}). Center your face in good light and try again.`); return; }
+      if (!face.ok) { setFaceErr(face.error || `Face didn't match (distance ${face.distance.toFixed(2)}). Center your face in good light and try again.`); setAttempt((a) => a + 1); return; }
       await onVerified(type, face, geo.status !== "fail", geo.distanceM, geo.lat, geo.lng);
     } finally { setBusy(false); }
   };
@@ -198,7 +201,7 @@ function VerifyModal({ type, enrolledPhoto, geofence, geoRequired, userId, onClo
         {geoPass ? (
           <div>
             <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-[var(--clinical-ink)]"><ScanFace className="h-4 w-4 text-[var(--clinical-panel)]" /> Face verification</p>
-            <CameraCapture onCapture={onCapture} busy={busy} captureLabel={busy ? "Verifying…" : `Capture & clock ${type === "IN" ? "in" : "out"}`} />
+            <CameraCapture key={attempt} requireLiveness onCapture={onCapture} busy={busy} captureLabel={busy ? "Verifying…" : `Capture & clock ${type === "IN" ? "in" : "out"}`} />
             {faceErr && <p className="mt-2 flex items-start gap-1.5 text-xs text-[var(--clinical-coral)]"><XCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" /> {faceErr}</p>}
           </div>
         ) : (

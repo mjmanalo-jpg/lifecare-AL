@@ -84,8 +84,14 @@ export async function descriptorFromDataUrl(dataUrl: string): Promise<Float32Arr
   return describe(faceapi, await loadImage(dataUrl));
 }
 
-/** tinyFaceDetector alignment → keep the threshold a touch lenient to avoid false rejects. */
-export const FACE_MATCH_THRESHOLD = 0.55;
+/**
+ * Match threshold (euclidean distance between 128-d descriptors). This is a
+ * SECURITY gate for clock-in, so it's tuned to reject a different person rather
+ * than to avoid the occasional legitimate re-take: same person is typically
+ * ≤0.45, different people cluster ~0.5–0.7. 0.45 keeps strangers out; the
+ * enrolled staff member just re-captures in good light if a frame lands high.
+ */
+export const FACE_MATCH_THRESHOLD = 0.45;
 
 export interface FaceVerifyResult { ok: boolean; distance: number; error?: string }
 
