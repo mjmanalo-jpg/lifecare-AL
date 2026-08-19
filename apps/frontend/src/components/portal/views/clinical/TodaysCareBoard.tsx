@@ -22,6 +22,7 @@ import {
 import { buildCareEventRecord, type Outcome } from "@/lib/lifecare/careEvents.ts";
 import { MODEL_VERSION } from "@/lib/lifecare/dataset.ts";
 import { domainCodeFromLabel, domainInPackage, DOMAIN_LABEL, recordOutOfPackageService } from "@/lib/lifecare/carePackage";
+import { CAREGIVER_SCHEDULE_KEY, parseSchedules, activeResidentIdsFor } from "@/lib/caregiverSchedule";
 
 /**
  * Phase 3 — Today's Care shift board (standalone; the parent wires the tab).
@@ -122,6 +123,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
   // ---- Current user identity (session → name + role) ------------------------
   const [me, setMe] = useState("");
   const [sessionRole, setSessionRole] = useState<string | null>(null);
+  const [userId, setUserId] = useState("");
   useEffect(() => {
     fetch("/api/auth/session")
       .then((r) => r.json())
@@ -129,6 +131,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
         if (!d?.authenticated) return;
         setMe(d.session?.name ?? "");
         setSessionRole(d.session?.role ?? null);
+        setUserId(String(d.session?.userId ?? ""));
       })
       .catch(() => { /* non-fatal */ });
   }, []);
@@ -170,13 +173,27 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
     return out.sort((x, y) => x.residentName.localeCompare(y.residentName));
   }, [settingRows, realResidents]);
 
+  // ---- Schedule routing: a CAREGIVER sees only the residents routed to them
+  // today (caregiver_schedules); nurses / care managers keep the full oversight
+  // view. Unresolved role/user → unscoped until the session lands. ------------
+  const isCaregiverView = effectiveRole === "CAREGIVER";
+  const myResidentIds = useMemo(() => {
+    if (!isCaregiverView || !userId) return null; // null = unscoped
+    const schedules = parseSchedules(settingRows.find((r) => (r.key || r.id) === CAREGIVER_SCHEDULE_KEY)?.value);
+    return new Set(activeResidentIdsFor(userId, schedules, new Date(), "Asia/Manila"));
+  }, [isCaregiverView, userId, settingRows]);
+  const visibleResidents = useMemo(
+    () => (myResidentIds ? residents.filter((r) => r.linked && myResidentIds.has(r.residentId)) : residents),
+    [residents, myResidentIds],
+  );
+
   // ---- Selection + search ---------------------------------------------------
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return q ? residents.filter((r) => r.residentName.toLowerCase().includes(q)) : residents;
-  }, [residents, search]);
+    return q ? visibleResidents.filter((r) => r.residentName.toLowerCase().includes(q)) : visibleResidents;
+  }, [visibleResidents, search]);
 
   // Default to the first resident once data lands / narrows. Done during render
   // (React's "derive state from props" pattern) rather than in an effect, to
@@ -191,10 +208,30 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
     [residents, selectedId]
   );
 
-  // ---- Local charted state (this session) -----------------------------------
-  // key -> outcome, so a charted card shows its result immediately without a
-  // full round-trip (the care-events feed also refreshes in the background).
+  // ---- Charted state --------------------------------------------------------
+  // Derived from the PERSISTED care events (today) so a card stays "charted"
+  // across refreshes, merged with an optimistic session map for instant feedback
+  // after a tap. Keyed `${residentId}::${bundle}` to match encKey().
   const [charted, setCharted] = useState<Map<string, Outcome>>(new Map());
+  const chartedFromEvents = useMemo(() => {
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const startMs = start.getTime();
+    const m = new Map<string, Outcome>();
+    for (const e of (eventRows || [])) {
+      const rid = String(e.residentId || ""); const bundle = String(e.bundle || "");
+      if (!rid || !bundle) continue;
+      const t = new Date(String(e.createdAt || e.occurredAt || "")).getTime();
+      if (isNaN(t) || t < startMs) continue;
+      m.set(`${rid}::${bundle}`, (String(e.outcome || "Completed")) as Outcome);
+    }
+    return m;
+  }, [eventRows]);
+  // Session (optimistic) entries win over the persisted snapshot.
+  const chartedAll = useMemo(() => {
+    const m = new Map(chartedFromEvents);
+    for (const [k, v] of charted) m.set(k, v);
+    return m;
+  }, [chartedFromEvents, charted]);
 
   // ---- Exception modal ------------------------------------------------------
   const [exceptionFor, setExceptionFor] = useState<ShiftEncounter | null>(null);
@@ -310,7 +347,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
       />
 
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Residents on shift" value={residents.length} accent="teal" />
+        <StatCard label={isCaregiverView ? "My residents today" : "Residents on shift"} value={visibleResidents.length} accent="teal" />
         <StatCard label="Encounters (selected)" value={selected?.total ?? 0} accent="ink" />
         <StatCard label="Charted today" value={chartedToday.length} accent="green" />
         <StatCard label="Model" value={MODEL_VERSION_STRING} accent="amber" />
@@ -328,8 +365,10 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
               loading={loading && residents.length === 0}
               error={error}
               empty={!loading && filtered.length === 0}
-              emptyTitle="No validated plans"
-              emptyHint="A resident appears here once their v4.2 assessment is validated with a final level of care."
+              emptyTitle={myResidentIds && !search ? "No residents assigned today" : "No validated plans"}
+              emptyHint={myResidentIds && !search
+                ? "You're not scheduled for any residents today. Residents appear here once a nurse assigns them to your shift."
+                : "A resident appears here once their v4.2 assessment is validated with a final level of care."}
               onRetry={refetch}
               skeletonRows={4}
             >
@@ -385,7 +424,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
                 encounters={selected.queues.Caregiver}
                 residentId={selected.residentId}
                 level={levelFromFinal(selected.finalLevel)}
-                charted={charted}
+                charted={chartedAll}
                 busy={busy}
                 onComplete={(enc) => chartEvent(enc, "Completed", "")}
                 onException={openException}
@@ -399,7 +438,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
                   encounters={selected.queues.Nurse}
                   residentId={selected.residentId}
                   level={levelFromFinal(selected.finalLevel)}
-                  charted={charted}
+                  charted={chartedAll}
                   busy={busy}
                   onComplete={(enc) => chartEvent(enc, "Completed", "")}
                   onException={openException}
