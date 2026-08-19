@@ -13,7 +13,8 @@ import { ClipboardList, ListChecks, Loader2 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
-import { generateCarePlanForResident } from "@/lib/carePlanGen";
+import { generateCarePlanForResident, releaseCarePlan, levelPlan, levelCareTasks, parseAssistanceOptions, type PlanIntervention } from "@/lib/carePlanGen";
+import { levelMeta } from "@/lib/lifecare/levelModel";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { levelOf } from "./CareLogsBoard";
@@ -30,6 +31,8 @@ const fmt = (isoStr: string) => (isoStr ? new Date(isoStr + (isoStr.length <= 10
 const periodOf = (d: Date) => `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`;
 
 const DECISIONS = ["Continue Current Plan", "Update Care Plan", "Escalate Level of Care", "De-escalate Level of Care", "Refer to Physician", "Schedule Family Conference"];
+// Decisions that DON'T release a held plan — the plan stays held for follow-up.
+const HOLD_DECISIONS = new Set(["Refer to Physician", "Schedule Family Conference"]);
 const PLAN_STATUS = ["No Change", "Updated", "Under Review", "Escalated", "De-escalated"];
 
 interface Review {
@@ -50,6 +53,12 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
   const reviews = useMemo(() => parseReviews(settingRows.find((r) => (r.key || r.id) === REVIEW_KEY)?.value), [settingRows]);
   const residentsWithPlan = useMemo(() => new Set((cpQ.data || []).filter((p) => s(p.status) !== "DISCONTINUED").map((p) => s(p.residentId))), [cpQ.data]);
+  // Held (DRAFT) plans awaiting review approval, keyed by resident.
+  const draftPlansByResident = useMemo(() => {
+    const m = new Map<string, Row[]>();
+    (cpQ.data || []).filter((p) => s(p.status) === "DRAFT").forEach((p) => { const rid = s(p.residentId); const g = m.get(rid) || []; g.push(p); m.set(rid, g); });
+    return m;
+  }, [cpQ.data]);
 
   const [tab, setTab] = useState<"new" | "due" | "history">("new");
   const [resId, setResId] = useState("");
@@ -72,22 +81,25 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
   // Manual fallback for the Stage 8/9 handoff — build a care plan + caregiver tasks
   // from the resident's current Level of Care (for residents approved before the
   // auto-generation, or missing a plan).
-  const genPlan = async () => {
+  // Generate a care plan + caregiver tasks. `plan` (from the ICP editor) makes it
+  // richer — the nurse's individualized interventions/frequency/notes replace the
+  // baseline template. Omitted → the Level-N baseline package is used as before.
+  const genPlan = async (plan?: { title?: string; goals: string[]; interventions: PlanIntervention[] }) => {
     if (!resident || genBusy) return;
     const n = levelOf(resident).n;
     const already = residentsWithPlan.has(s(resident.id));
     const c = await Swal.fire({
-      title: "Generate care plan & tasks?",
-      html: `Create a <b>Level ${n}</b> care plan for <b>${s(resident.name)}</b> and generate caregiver tasks from its interventions.${already ? "<br/><br/><span style='color:#b45309'>This resident already has a care plan — this creates another.</span>" : ""}`,
-      icon: "question", showCancelButton: true, confirmButtonColor: "#4F46E5", confirmButtonText: "Generate",
+      title: plan ? "Generate individualized care plan?" : "Generate care plan & tasks?",
+      html: `Create a <b>Level ${n}</b> care plan for <b>${s(resident.name)}</b>${plan ? ` from the <b>${plan.interventions.length} individualized intervention${plan.interventions.length === 1 ? "" : "s"}</b>` : " from the baseline package"}.<br/><br/><span style='color:#4F46E5'>The plan is <b>held as a draft</b> — its tasks are NOT sent to caregivers until you submit &amp; approve the care plan review below.</span>${already ? "<br/><br/><span style='color:#b45309'>This resident already has a care plan — this creates another.</span>" : ""}`,
+      icon: "question", showCancelButton: true, confirmButtonColor: "#4F46E5", confirmButtonText: "Generate draft",
     });
     if (!c.isConfirmed) return;
     setGenBusy(true);
     try {
       const raw = (resident.raw || {}) as Row;
-      const { taskCount, assignedTo } = await generateCarePlanForResident({ residentId: s(resident.id), level: n, communityId: s(raw.communityId) || undefined, createdByName: clinicianName });
+      const { taskCount } = await generateCarePlanForResident({ residentId: s(resident.id), level: n, communityId: s(raw.communityId) || undefined, createdByName: clinicianName, plan, hold: true });
       await cpQ.refetch?.();
-      Swal.fire({ icon: "success", title: "Care plan created", text: `${taskCount} Level ${n}-package task${taskCount === 1 ? "" : "s"} generated${assignedTo ? ` and sent to ${assignedTo}` : " (no caregiver scheduled today — left unassigned)"}.`, timer: 2800, showConfirmButton: false });
+      Swal.fire({ icon: "success", title: "Draft care plan created", html: `${taskCount} Level ${n} task${taskCount === 1 ? "" : "s"} prepared and <b>held</b>. Submit the care plan review below to release them to caregivers.`, timer: 3200, showConfirmButton: false });
     } catch (e) { Swal.fire("Couldn't generate", e instanceof Error ? e.message : "Please try again.", "error"); }
     finally { setGenBusy(false); }
   };
@@ -122,9 +134,9 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
                 {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)} (Level {levelOf(r).n})</option>)}
               </select>
               {resident && (
-                <ClinicalButton variant="secondary" onClick={genPlan} disabled={genBusy} className="shrink-0">
+                <ClinicalButton variant="secondary" onClick={() => genPlan()} disabled={genBusy} className="shrink-0">
                   {genBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />}
-                  {residentsWithPlan.has(resId) ? "Regenerate care plan & tasks" : "Generate care plan & tasks"}
+                  {residentsWithPlan.has(resId) ? "Regenerate baseline plan" : "Generate baseline plan"}
                 </ClinicalButton>
               )}
             </div>
@@ -154,7 +166,30 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
             </div>
           )}
 
-          {resident && <ReviewForm resident={resident} recentInc={recentInc} last={latestReview(resId)} reviewedBy={clinicianName} onSubmit={async (rec) => { await persist([{ ...rec, id: newId(), createdAt: new Date().toISOString() }, ...reviews]); setResId(""); setTab("history"); Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Care plan review submitted", showConfirmButton: false, timer: 1800 }); }} />}
+          {resident && <CarePlanBuilder key={resId} level={levelOf(resident).n} genBusy={genBusy} onGenerate={genPlan} />}
+
+          {resident && <ReviewForm resident={resident} recentInc={recentInc} last={latestReview(resId)} reviewedBy={clinicianName} heldPlanCount={(draftPlansByResident.get(resId) || []).length}
+            onSubmit={async (rec) => {
+              await persist([{ ...rec, id: newId(), createdAt: new Date().toISOString() }, ...reviews]);
+              // Release any held (DRAFT) plans for this resident — unless the decision
+              // parks the plan for follow-up. This is the dispatch gate.
+              const drafts = draftPlansByResident.get(rec.residentId) || [];
+              let released = 0; let assignedTo: string | undefined;
+              if (drafts.length && !HOLD_DECISIONS.has(rec.decision)) {
+                for (const p of drafts) {
+                  try { const r = await releaseCarePlan({ planId: s(p.id), residentId: rec.residentId }); released += r.released; assignedTo = assignedTo || r.assignedTo; } catch { /* best-effort */ }
+                }
+                await cpQ.refetch?.();
+              }
+              setResId(""); setTab("history");
+              if (released > 0) {
+                Swal.fire({ icon: "success", title: "Review approved · plan released", html: `${released} task${released === 1 ? "" : "s"} dispatched to caregivers${assignedTo ? ` (${assignedTo})` : " (no caregiver scheduled today — left unassigned)"}.`, timer: 3200, showConfirmButton: false });
+              } else if (drafts.length && HOLD_DECISIONS.has(rec.decision)) {
+                Swal.fire({ toast: true, position: "top-end", icon: "info", title: "Review submitted · plan kept on hold", showConfirmButton: false, timer: 2400 });
+              } else {
+                Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Care plan review submitted", showConfirmButton: false, timer: 1800 });
+              }
+            }} />}
         </div>
       )}
 
@@ -253,8 +288,134 @@ function TriggerLine({ label, trig }: { label: string; trig: string }) {
   );
 }
 
-function ReviewForm({ resident, recentInc, last, reviewedBy, onSubmit }: {
-  resident: Row; recentInc: Row[]; last?: Review; reviewedBy: string;
+// ── Individualized Care Plan editor — the resident's Level-of-Care package ─────
+// Interventions are the governed care_task_master tasks for THIS level only
+// (levelCareTasks) — a Level-N resident's plan covers Level-N package tasks and
+// nothing above/below. Each task is individualized (assistance / frequency / note).
+const FREQ_OPTIONS = ["Every shift", "Daily", "Twice daily (BID)", "Three times daily (TID)", "Weekly", "PRN / as needed", "Per care plan"];
+
+interface TaskItem {
+  taskId: string; domain: string; name: string; intervention: string; goal: string;
+  assistanceChoices: string[]; freqHint: string; prompt: string; responsibleRole: string;
+  included: boolean; assistance: string; freq: string; note: string;
+}
+
+function CarePlanBuilder({ level, genBusy, onGenerate }: {
+  level: number; genBusy: boolean;
+  onGenerate: (plan: { title?: string; goals: string[]; interventions: PlanIntervention[] }) => void;
+}) {
+  const meta = levelMeta(level);
+  const base = useMemo(() => levelPlan(level), [level]);
+  const [goals, setGoals] = useState(() => base.goals.join("\n"));
+  const [items, setItems] = useState<TaskItem[]>(() => levelCareTasks(level).map((t) => ({
+    taskId: t.id, domain: t.domain, name: t.name, intervention: t.approvedIntervention || t.definition || "",
+    goal: t.approvedGoal || "", assistanceChoices: parseAssistanceOptions(t.assistanceOptions), freqHint: t.frequencyOptions || "",
+    prompt: t.residentGoalPrompt || "", responsibleRole: t.responsibleRole || t.primaryRole || "Caregiver",
+    included: true, assistance: "", freq: "Daily", note: "",
+  })));
+
+  const patch = (id: string, p: Partial<TaskItem>) => setItems((arr) => arr.map((x) => (x.taskId === id ? { ...x, ...p } : x)));
+  const setDomain = (domain: string, on: boolean) => setItems((arr) => arr.map((x) => (x.domain === domain ? { ...x, included: on } : x)));
+  const chosen = items.filter((x) => x.included);
+
+  // Group tasks by domain for a navigable, level-scoped plan.
+  const byDomain = useMemo(() => {
+    const m = new Map<string, TaskItem[]>();
+    for (const it of items) { const g = m.get(it.domain) || []; g.push(it); m.set(it.domain, g); }
+    return Array.from(m.entries());
+  }, [items]);
+
+  const submit = () => {
+    onGenerate({
+      goals: goals.split("\n").map((g) => g.trim()).filter(Boolean),
+      interventions: chosen.map((it) => ({
+        domain: it.domain,
+        title: it.name,
+        freq: it.freq,
+        note: [it.assistance && `Assistance: ${it.assistance}`, it.note.trim(), it.responsibleRole && `Role: ${it.responsibleRole}`].filter(Boolean).join(" · ") || undefined,
+      })),
+    });
+  };
+
+  return (
+    <Section title="Individualized Care Plan">
+      {/* Level-of-Care rationale — why this package applies */}
+      {meta && (
+        <div className="-mt-1 mb-4 rounded-xl border p-3.5" style={{ borderColor: "var(--clinical-line-strong)", backgroundColor: "var(--clinical-surface-2)" }}>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-md px-2 py-0.5 text-xs font-bold text-white" style={{ backgroundColor: "var(--clinical-panel)" }}>Level {meta.n}</span>
+            <span className="font-bold text-[var(--clinical-ink)]">{meta.name}</span>
+            <span className="text-xs text-[var(--clinical-muted)]">· {meta.intensity} intensity</span>
+          </div>
+          {meta.needPattern && <p className="mt-1.5 text-xs text-[var(--clinical-ink-soft)]"><span className="font-semibold">Rationale:</span> {meta.needPattern}</p>}
+          {meta.packageSummary && <p className="mt-1 text-xs text-[var(--clinical-muted)]">{meta.packageSummary}</p>}
+          <p className="mt-1.5 text-[11px] text-[var(--clinical-muted)]">This plan draws only from the <b>Level {meta.n} package</b> ({items.length} governed tasks) — tailor each, then generate.</p>
+        </div>
+      )}
+
+      <div className="mb-4">
+        <FieldLabel htmlFor="cpb-goals">Care Goals</FieldLabel>
+        <textarea id="cpb-goals" rows={3} value={goals} onChange={(e) => setGoals(e.target.value)} placeholder="One goal per line…" className={controlClass} />
+      </div>
+
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">Package interventions ({chosen.length}/{items.length} included)</p>
+      <div className="space-y-3">
+        {byDomain.map(([domain, group]) => {
+          const on = group.filter((g) => g.included).length;
+          return (
+            <details key={domain} open className="rounded-xl border" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-2.5">
+                <span className="text-sm font-bold text-[var(--clinical-ink)]">{domain} <span className="text-xs font-normal text-[var(--clinical-muted)]">· {on}/{group.length}</span></span>
+                <span className="flex gap-2 text-[11px] font-semibold">
+                  <button type="button" onClick={(e) => { e.preventDefault(); setDomain(domain, true); }} className="text-[var(--clinical-panel)] hover:underline">All</button>
+                  <button type="button" onClick={(e) => { e.preventDefault(); setDomain(domain, false); }} className="text-[var(--clinical-muted)] hover:underline">None</button>
+                </span>
+              </summary>
+              <div className="space-y-2 border-t px-3 py-3" style={{ borderColor: "var(--clinical-line)" }}>
+                {group.map((it) => (
+                  <div key={it.taskId} className={`rounded-lg border p-3 transition ${it.included ? "" : "opacity-55"}`} style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: it.included ? "var(--clinical-line-strong)" : "var(--clinical-line)" }}>
+                    <div className="flex items-start gap-3">
+                      <input type="checkbox" checked={it.included} onChange={(e) => patch(it.taskId, { included: e.target.checked })} aria-label={`Include ${it.name}`} className="mt-1 h-4 w-4 shrink-0 accent-[var(--clinical-panel)]" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-[var(--clinical-ink)]">{it.name} <span className="text-[10px] font-normal text-[var(--clinical-muted)]">{it.taskId}</span></p>
+                        {it.intervention && <p className="mt-0.5 text-xs text-[var(--clinical-ink-soft)]">{it.intervention}</p>}
+                        {it.included && (
+                          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                            {it.assistanceChoices.length > 0 && (
+                              <select value={it.assistance} onChange={(e) => patch(it.taskId, { assistance: e.target.value })} aria-label="Assistance level" className={controlClass}>
+                                <option value="">Assistance…</option>
+                                {it.assistanceChoices.map((a) => <option key={a} value={a}>{a}</option>)}
+                              </select>
+                            )}
+                            <select value={it.freq} onChange={(e) => patch(it.taskId, { freq: e.target.value })} aria-label="Frequency" title={it.freqHint} className={controlClass}>
+                              {FREQ_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                            <input value={it.note} onChange={(e) => patch(it.taskId, { note: e.target.value })} placeholder={it.prompt ? it.prompt.slice(0, 60) : "Individualization…"} title={it.prompt} className={`${controlClass} ${it.assistanceChoices.length > 0 ? "" : "sm:col-span-2"}`} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <ClinicalButton variant="primary" onClick={submit} disabled={genBusy || chosen.length === 0}>
+          {genBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />}
+          Generate individualized plan &amp; tasks
+        </ClinicalButton>
+        <span className="text-xs text-[var(--clinical-muted)]">{chosen.length} Level {level} task{chosen.length === 1 ? "" : "s"} → {chosen.length} caregiver task{chosen.length === 1 ? "" : "s"}</span>
+      </div>
+    </Section>
+  );
+}
+
+function ReviewForm({ resident, recentInc, last, reviewedBy, heldPlanCount = 0, onSubmit }: {
+  resident: Row; recentInc: Row[]; last?: Review; reviewedBy: string; heldPlanCount?: number;
   onSubmit: (rec: Omit<Review, "id" | "createdAt">) => Promise<void>;
 }) {
   const today = new Date();
@@ -319,6 +480,12 @@ function ReviewForm({ resident, recentInc, last, reviewedBy, onSubmit }: {
 
       <Section title="Nurse/Admin Decision">
         <div className="space-y-4">
+          {heldPlanCount > 0 && (
+            <div className="flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm" style={{ borderColor: "#4F46E5", backgroundColor: "color-mix(in srgb, #4F46E5 8%, transparent)" }}>
+              <ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-[#4F46E5]" />
+              <span className="text-[var(--clinical-ink)]"><b>{heldPlanCount} draft care plan{heldPlanCount === 1 ? "" : "s"} held.</b> Submitting this review releases the plan and dispatches its tasks to caregivers — unless you choose <i>Refer to Physician</i> or <i>Schedule Family Conference</i>, which keep it on hold.</span>
+            </div>
+          )}
           <div><FieldLabel required htmlFor="cpr-decision">Decision</FieldLabel><select id="cpr-decision" value={decision} onChange={(e) => setDecision(e.target.value)} className={`${controlClass} max-w-xs`}><option value="">Select a decision…</option>{DECISIONS.map((d) => <option key={d} value={d}>{d}</option>)}</select></div>
           <div><FieldLabel htmlFor="cpr-reason">Reason for Decision / Notes</FieldLabel><textarea id="cpr-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Explain the rationale…" className={controlClass} /></div>
           <div><FieldLabel htmlFor="cpr-action">Action Plan</FieldLabel><textarea id="cpr-action" rows={2} value={actionPlan} onChange={(e) => setActionPlan(e.target.value)} placeholder="Steps to be taken…" className={controlClass} /></div>
@@ -326,7 +493,7 @@ function ReviewForm({ resident, recentInc, last, reviewedBy, onSubmit }: {
             <div><FieldLabel htmlFor="cpr-resp">Responsible Person</FieldLabel><input id="cpr-resp" value={responsible} onChange={(e) => setResponsible(e.target.value)} placeholder="Name or role" className={controlClass} /></div>
             <div><FieldLabel htmlFor="cpr-target">Target Completion Date</FieldLabel><input id="cpr-target" type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className={controlClass} /></div>
           </div>
-          <button onClick={submit} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] disabled:opacity-60"><ClipboardList className="h-4 w-4" /> {saving ? "Submitting…" : "Submit Care Plan Review"}</button>
+          <button onClick={submit} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] disabled:opacity-60"><ClipboardList className="h-4 w-4" /> {saving ? "Submitting…" : heldPlanCount > 0 ? "Submit review & release plan" : "Submit Care Plan Review"}</button>
         </div>
       </Section>
     </>

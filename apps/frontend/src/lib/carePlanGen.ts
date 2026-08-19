@@ -1,6 +1,8 @@
-import { createRecord } from "@/lib/api";
+import { createRecord, updateRecord } from "@/lib/api";
 import careLevelModel from "@/lib/lifecare/data/care_level_model.json";
 import { domainInPackage, domainCodeFromLabel } from "@/lib/lifecare/carePackage";
+import { CARE_TASK_MASTER } from "@/lib/lifecare/dataset";
+import type { CareTask } from "@/lib/lifecare/types";
 import { parseSchedules, assigneeForResidentToday } from "@/lib/caregiverSchedule";
 
 /** Read the caregiver roster (migration-free app-setting) to route tasks. */
@@ -48,8 +50,11 @@ const LEVEL_DOMAINS: Record<number, string[]> = {
 const levelCol = (b: BaselineRow, level: number): string =>
   level >= 4 ? b.L4 : level === 3 ? b.L3 : level === 2 ? b.L2 : b.L1;
 
+export interface PlanIntervention { title: string; freq: string; note?: string; domain?: string }
+export interface LevelPlanTemplate { title: string; goals: string[]; interventions: PlanIntervention[] }
+
 /** Build the per-level plan template (title, goals, interventions) from rule-data. */
-export function levelPlan(level: number): { title: string; goals: string[]; interventions: { title: string; freq: string }[] } {
+export function levelPlan(level: number): LevelPlanTemplate {
   const n = Math.min(5, Math.max(1, level));
   const lm = MODEL.levels.find((l) => l.level === `L${n}`) ?? MODEL.levels[1];
   const domains = LEVEL_DOMAINS[n] ?? LEVEL_DOMAINS[2];
@@ -58,10 +63,11 @@ export function levelPlan(level: number): { title: string; goals: string[]; inte
     "Maintain the highest practicable independence, dignity, comfort and safety.",
     "Recognise, document and escalate any significant change in condition.",
   ].filter(Boolean);
-  const interventions = domains
+  const interventions: PlanIntervention[] = domains
     .map((d) => MODEL.baselineByDomain.find((b) => b.domain === d))
     .filter((b): b is BaselineRow => !!b)
     .map((b) => ({
+      domain: b.domain,
       title: `${b.domain}: ${n >= 5 ? "comfort-focused support" : levelCol(b, n)}`,
       freq: "Per care plan — individualise",
     }));
@@ -70,6 +76,23 @@ export function levelPlan(level: number): { title: string; goals: string[]; inte
     goals,
     interventions,
   };
+}
+
+/**
+ * The governed care-task PACKAGE for a Level of Care — the tasks whose
+ * `careLevel` equals this level (auto-generate set) in the care_task_master
+ * decision-rules. This is what an Individualized Care Plan draws from: a Level-N
+ * resident's plan may only include Level-N package tasks (nothing above/below).
+ */
+export function levelCareTasks(level: number): CareTask[] {
+  const n = Math.min(5, Math.max(1, Math.round(level) || 1));
+  return CARE_TASK_MASTER.filter((t) => t.careLevel === `L${n}` && /AUTO-GENERATE/i.test(t.generationStatus));
+}
+
+/** Parse a CareTask.assistanceOptions blob (e.g. "C/S; SBA; CGA; Min … — select …") into levels. */
+export function parseAssistanceOptions(raw: string): string[] {
+  const head = String(raw || "").split("—")[0];
+  return head.split(/[;,]/).map((x) => x.trim()).filter((x) => x && x.length <= 12);
 }
 
 // CarePlanReviewFrequency enum: WEEKLY | BIWEEKLY | MONTHLY | QUARTERLY | ANNUAL.
@@ -89,23 +112,42 @@ export async function generateCarePlanForResident(opts: {
   createdByName?: string;
   /** Route generated tasks to the caregiver scheduled for this resident today. Default true. */
   assignToScheduledCaregivers?: boolean;
+  /**
+   * Hold for care-plan-review approval: create the plan as DRAFT and leave every
+   * task UNASSIGNED, so nothing reaches caregivers until the review is submitted
+   * and the plan is released (see {@link releaseCarePlan}).
+   */
+  hold?: boolean;
+  /**
+   * Nurse-individualized plan (from the Care Plan sheet ICP editor). When present
+   * it REPLACES the baseline template — the nurse has already curated which
+   * interventions apply, their frequency and resident-specific notes — so we use
+   * it verbatim (no package filter) for a richer, personalized plan + tasks.
+   */
+  plan?: { title?: string; goals: string[]; interventions: PlanIntervention[] };
 }): Promise<{ planId: string; taskCount: number; assignedTo?: string }> {
   const level = Math.min(5, Math.max(1, Math.round(opts.level) || 2));
-  const tpl = levelPlan(level);
+  const base = levelPlan(level);
+  const tpl: LevelPlanTemplate = opts.plan
+    ? { title: opts.plan.title || base.title, goals: opts.plan.goals, interventions: opts.plan.interventions }
+    : base;
   const now = new Date().toISOString();
   const community = opts.communityId || undefined;
 
-  // Package filter — only keep interventions whose domain is INCLUDED in this
-  // resident's Level-of-Care package (out-of-package care is a DT-014 service, not
-  // a routine task). Unmappable interventions are kept.
-  const interventions = tpl.interventions.filter((iv) => {
-    const code = domainCodeFromLabel(iv.title);
-    return !code || domainInPackage(level, code);
-  });
+  // For a nurse-individualized plan, use the curated interventions as-is. Otherwise
+  // package-filter the baseline — only keep interventions whose domain is INCLUDED
+  // in this resident's Level-of-Care package (out-of-package care is a DT-014
+  // service, not a routine task). Unmappable interventions are kept.
+  const interventions = opts.plan
+    ? tpl.interventions
+    : tpl.interventions.filter((iv) => {
+        const code = domainCodeFromLabel(iv.title);
+        return !code || domainInPackage(level, code);
+      });
 
   // Route to the caregiver covering this resident today (so the task lands on
-  // their Task Assignment dashboard). Null → leave unassigned.
-  const assignee = opts.assignToScheduledCaregivers === false
+  // their Task Assignment dashboard). Held plans stay UNASSIGNED until released.
+  const assignee = (opts.hold || opts.assignToScheduledCaregivers === false)
     ? null
     : assigneeForResidentToday(await fetchSchedules(), opts.residentId);
 
@@ -113,12 +155,14 @@ export async function generateCarePlanForResident(opts: {
     residentId: opts.residentId,
     communityId: community,
     title: tpl.title,
-    status: "ACTIVE",
+    status: opts.hold ? "DRAFT" : "ACTIVE",
     startDate: now,
     reviewFrequency: REVIEW_FREQ[level] || "MONTHLY",
     careGoals: tpl.goals.join("\n"),
     interventions: interventions.map((i) => `${i.title} (${i.freq})`).join("\n"),
-    notes: `Auto-generated from approved Level of Care ${level} (v3.9 baseline package). Review & personalize.`,
+    notes: opts.hold
+      ? `Level ${level} care plan — HELD pending care-plan-review approval. Tasks are not dispatched until released.`
+      : `Auto-generated from approved Level of Care ${level} (v3.9 baseline package). Review & personalize.`,
     createdByName: opts.createdByName || "System",
   });
   const planId = recId(planRes);
@@ -130,7 +174,7 @@ export async function generateCarePlanForResident(opts: {
     await createRecord("care-plan-items", { carePlanId: planId, communityId: community, category: "GOAL", title: g, status: "ACTIVE", sortOrder: order++ }).catch(() => null);
   }
   for (const iv of interventions) {
-    await createRecord("care-plan-items", { carePlanId: planId, communityId: community, category: "INTERVENTION", title: iv.title, description: `Frequency: ${iv.freq}`, status: "ACTIVE", sortOrder: order++ }).catch(() => null);
+    await createRecord("care-plan-items", { carePlanId: planId, communityId: community, category: "INTERVENTION", title: iv.title, description: [`Frequency: ${iv.freq}`, iv.note?.trim() ? `Individualized: ${iv.note.trim()}` : ""].filter(Boolean).join(" · "), status: "ACTIVE", sortOrder: order++ }).catch(() => null);
   }
 
   // Interventions → caregiver tasks (due within a day), tagged back to the plan
@@ -141,8 +185,8 @@ export async function generateCarePlanForResident(opts: {
     try {
       await createRecord("tasks", {
         residentId: opts.residentId, communityId: community,
-        title: iv.title, description: `From care plan · ${iv.freq}`,
-        category: iv.title.split(":")[0].trim() || "Personal Care",
+        title: iv.title, description: [`From care plan · ${iv.freq}`, iv.note?.trim() || ""].filter(Boolean).join(" · "),
+        category: (iv.domain || iv.title.split(":")[0]).trim() || "Personal Care",
         status: "PENDING", priority: "MEDIUM",
         dueDate: due, generatedFrom: planId,
         assignedToId: assignee?.caregiverStaffId || undefined,
@@ -151,4 +195,40 @@ export async function generateCarePlanForResident(opts: {
     } catch { /* best-effort per task */ }
   }
   return { planId, taskCount, assignedTo: assignee?.caregiverName };
+}
+
+/**
+ * Release a HELD (DRAFT) care plan after a care-plan review is approved: flip the
+ * plan to ACTIVE and dispatch its held (unassigned) tasks to the caregiver
+ * scheduled for the resident today. This is the gate — tasks only reach caregivers
+ * once the nurse/CM has submitted and approved the review.
+ */
+export async function releaseCarePlan(opts: {
+  planId: string;
+  residentId: string;
+}): Promise<{ released: number; assignedTo?: string }> {
+  await updateRecord("care-plans", opts.planId, { status: "ACTIVE" }).catch(() => null);
+
+  // Load the plan's generated tasks and dispatch the still-held (unassigned) ones.
+  let tasks: Array<{ id?: unknown; assignedToId?: unknown; status?: unknown; generatedFrom?: unknown }> = [];
+  try {
+    const r = await fetch(`/api/db/tasks?f_generatedFrom=${encodeURIComponent(opts.planId)}&take=300`, { credentials: "same-origin", cache: "no-store" });
+    const j = await r.json();
+    tasks = (j?.data as typeof tasks) || [];
+  } catch { tasks = []; }
+
+  const assignee = assigneeForResidentToday(await fetchSchedules(), opts.residentId);
+  let released = 0;
+  for (const t of tasks) {
+    const id = s(t.id);
+    if (!id) continue;
+    if (s(t.generatedFrom) !== opts.planId) continue;   // guard: only THIS plan's tasks
+    if (s(t.assignedToId)) continue;                    // already dispatched
+    if (["COMPLETED", "CANCELLED"].includes(s(t.status))) continue;
+    try {
+      await updateRecord("tasks", id, { assignedToId: assignee?.caregiverStaffId || undefined, status: "PENDING" });
+      released++;
+    } catch { /* best-effort per task */ }
+  }
+  return { released, assignedTo: assignee?.caregiverName };
 }
