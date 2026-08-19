@@ -125,7 +125,7 @@ export async function generateCarePlanForResident(opts: {
    * it verbatim (no package filter) for a richer, personalized plan + tasks.
    */
   plan?: { title?: string; goals: string[]; interventions: PlanIntervention[] };
-}): Promise<{ planId: string; taskCount: number; assignedTo?: string }> {
+}): Promise<{ planId: string; taskCount: number; interventionCount: number; assignedTo?: string }> {
   const level = Math.min(5, Math.max(1, Math.round(opts.level) || 2));
   const base = levelPlan(level);
   const tpl: LevelPlanTemplate = opts.plan
@@ -177,58 +177,49 @@ export async function generateCarePlanForResident(opts: {
     await createRecord("care-plan-items", { carePlanId: planId, communityId: community, category: "INTERVENTION", title: iv.title, description: [`Frequency: ${iv.freq}`, iv.note?.trim() ? `Individualized: ${iv.note.trim()}` : ""].filter(Boolean).join(" · "), status: "ACTIVE", sortOrder: order++ }).catch(() => null);
   }
 
-  // Interventions → caregiver tasks (due within a day), tagged back to the plan
-  // and assigned to today's scheduled caregiver so they appear on that dashboard.
-  const due = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  // Held plans are TEMPLATES only — no tasks are created here. The daily
+  // materializer (/api/cron/care-plan-tasks) spins the interventions into that
+  // day's caregiver tasks once the plan is released (ACTIVE) and a caregiver is
+  // scheduled. Non-held plans keep the legacy immediate one-shot generation.
   let taskCount = 0;
-  for (const iv of interventions) {
-    try {
-      await createRecord("tasks", {
-        residentId: opts.residentId, communityId: community,
-        title: iv.title, description: [`From care plan · ${iv.freq}`, iv.note?.trim() || ""].filter(Boolean).join(" · "),
-        category: (iv.domain || iv.title.split(":")[0]).trim() || "Personal Care",
-        status: "PENDING", priority: "MEDIUM",
-        dueDate: due, generatedFrom: planId,
-        assignedToId: assignee?.caregiverStaffId || undefined,
-      });
-      taskCount++;
-    } catch { /* best-effort per task */ }
+  if (!opts.hold) {
+    const due = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    for (const iv of interventions) {
+      try {
+        await createRecord("tasks", {
+          residentId: opts.residentId, communityId: community,
+          title: iv.title, description: [`From care plan · ${iv.freq}`, iv.note?.trim() || ""].filter(Boolean).join(" · "),
+          category: (iv.domain || iv.title.split(":")[0]).trim() || "Personal Care",
+          status: "PENDING", priority: "MEDIUM",
+          dueDate: due, generatedFrom: planId,
+          assignedToId: assignee?.caregiverStaffId || undefined,
+        });
+        taskCount++;
+      } catch { /* best-effort per task */ }
+    }
   }
-  return { planId, taskCount, assignedTo: assignee?.caregiverName };
+  return { planId, taskCount, interventionCount: interventions.length, assignedTo: assignee?.caregiverName };
 }
 
 /**
  * Release a HELD (DRAFT) care plan after a care-plan review is approved: flip the
- * plan to ACTIVE and dispatch its held (unassigned) tasks to the caregiver
- * scheduled for the resident today. This is the gate — tasks only reach caregivers
- * once the nurse/CM has submitted and approved the review.
+ * plan to ACTIVE. This is the gate — an ACTIVE plan is what the daily materializer
+ * turns into caregiver tasks; a DRAFT plan never dispatches. Call {@link
+ * materializeTodayTasks} after releasing to spin up today's tasks immediately.
  */
-export async function releaseCarePlan(opts: {
-  planId: string;
-  residentId: string;
-}): Promise<{ released: number; assignedTo?: string }> {
-  await updateRecord("care-plans", opts.planId, { status: "ACTIVE" }).catch(() => null);
+export async function releaseCarePlan(planId: string): Promise<void> {
+  await updateRecord("care-plans", planId, { status: "ACTIVE" }).catch(() => null);
+}
 
-  // Load the plan's generated tasks and dispatch the still-held (unassigned) ones.
-  let tasks: Array<{ id?: unknown; assignedToId?: unknown; status?: unknown; generatedFrom?: unknown }> = [];
+/**
+ * Trigger the materializer for the current user's community so today's tasks
+ * appear immediately (rather than waiting for the hourly cron). Idempotent —
+ * safe to call after releasing plans. Returns how many tasks were created.
+ */
+export async function materializeTodayTasks(): Promise<number> {
   try {
-    const r = await fetch(`/api/db/tasks?f_generatedFrom=${encodeURIComponent(opts.planId)}&take=300`, { credentials: "same-origin", cache: "no-store" });
+    const r = await fetch("/api/cron/care-plan-tasks", { method: "POST", credentials: "same-origin", cache: "no-store" });
     const j = await r.json();
-    tasks = (j?.data as typeof tasks) || [];
-  } catch { tasks = []; }
-
-  const assignee = assigneeForResidentToday(await fetchSchedules(), opts.residentId);
-  let released = 0;
-  for (const t of tasks) {
-    const id = s(t.id);
-    if (!id) continue;
-    if (s(t.generatedFrom) !== opts.planId) continue;   // guard: only THIS plan's tasks
-    if (s(t.assignedToId)) continue;                    // already dispatched
-    if (["COMPLETED", "CANCELLED"].includes(s(t.status))) continue;
-    try {
-      await updateRecord("tasks", id, { assignedToId: assignee?.caregiverStaffId || undefined, status: "PENDING" });
-      released++;
-    } catch { /* best-effort per task */ }
-  }
-  return { released, assignedTo: assignee?.caregiverName };
+    return Number(j?.created) || 0;
+  } catch { return 0; }
 }

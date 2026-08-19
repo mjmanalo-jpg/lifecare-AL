@@ -13,7 +13,7 @@ import { ClipboardList, ListChecks, Loader2 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
-import { generateCarePlanForResident, releaseCarePlan, levelPlan, levelCareTasks, parseAssistanceOptions, type PlanIntervention } from "@/lib/carePlanGen";
+import { generateCarePlanForResident, releaseCarePlan, materializeTodayTasks, levelPlan, levelCareTasks, parseAssistanceOptions, type PlanIntervention } from "@/lib/carePlanGen";
 import { levelMeta } from "@/lib/lifecare/levelModel";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
@@ -97,9 +97,9 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
     setGenBusy(true);
     try {
       const raw = (resident.raw || {}) as Row;
-      const { taskCount } = await generateCarePlanForResident({ residentId: s(resident.id), level: n, communityId: s(raw.communityId) || undefined, createdByName: clinicianName, plan, hold: true });
+      const { interventionCount } = await generateCarePlanForResident({ residentId: s(resident.id), level: n, communityId: s(raw.communityId) || undefined, createdByName: clinicianName, plan, hold: true });
       await cpQ.refetch?.();
-      Swal.fire({ icon: "success", title: "Draft care plan created", html: `${taskCount} Level ${n} task${taskCount === 1 ? "" : "s"} prepared and <b>held</b>. Submit the care plan review below to release them to caregivers.`, timer: 3200, showConfirmButton: false });
+      Swal.fire({ icon: "success", title: "Draft care plan created", html: `Level ${n} plan with <b>${interventionCount} intervention${interventionCount === 1 ? "" : "s"}</b> prepared and <b>held</b>. Submit the care plan review below — once approved, tasks are generated daily for the resident's scheduled caregiver.`, timer: 3600, showConfirmButton: false });
     } catch (e) { Swal.fire("Couldn't generate", e instanceof Error ? e.message : "Please try again.", "error"); }
     finally { setGenBusy(false); }
   };
@@ -172,18 +172,21 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
             onSubmit={async (rec) => {
               await persist([{ ...rec, id: newId(), createdAt: new Date().toISOString() }, ...reviews]);
               // Release any held (DRAFT) plans for this resident — unless the decision
-              // parks the plan for follow-up. This is the dispatch gate.
+              // parks the plan for follow-up. Releasing = flip to ACTIVE; the
+              // materializer then spins today's tasks for the scheduled caregiver.
               const drafts = draftPlansByResident.get(rec.residentId) || [];
-              let released = 0; let assignedTo: string | undefined;
-              if (drafts.length && !HOLD_DECISIONS.has(rec.decision)) {
-                for (const p of drafts) {
-                  try { const r = await releaseCarePlan({ planId: s(p.id), residentId: rec.residentId }); released += r.released; assignedTo = assignedTo || r.assignedTo; } catch { /* best-effort */ }
-                }
+              const willRelease = drafts.length > 0 && !HOLD_DECISIONS.has(rec.decision);
+              let dispatched = 0;
+              if (willRelease) {
+                for (const p of drafts) { try { await releaseCarePlan(s(p.id)); } catch { /* best-effort */ } }
+                dispatched = await materializeTodayTasks();
                 await cpQ.refetch?.();
               }
               setResId(""); setTab("history");
-              if (released > 0) {
-                Swal.fire({ icon: "success", title: "Review approved · plan released", html: `${released} task${released === 1 ? "" : "s"} dispatched to caregivers${assignedTo ? ` (${assignedTo})` : " (no caregiver scheduled today — left unassigned)"}.`, timer: 3200, showConfirmButton: false });
+              if (willRelease) {
+                Swal.fire({ icon: "success", title: "Review approved · plan released", html: dispatched > 0
+                  ? `${dispatched} task${dispatched === 1 ? "" : "s"} dispatched to today's scheduled caregiver${dispatched === 1 ? "" : "s"}. The plan will keep generating tasks daily for whoever covers the resident.`
+                  : `Plan is now active. Tasks will appear for the resident's caregiver on days one is scheduled (none scheduled today).`, timer: 3600, showConfirmButton: false });
               } else if (drafts.length && HOLD_DECISIONS.has(rec.decision)) {
                 Swal.fire({ toast: true, position: "top-end", icon: "info", title: "Review submitted · plan kept on hold", showConfirmButton: false, timer: 2400 });
               } else {
