@@ -8,13 +8,14 @@ import { createRecord } from "@/lib/api";
 
 export const LOC_HISTORY_KEY = "loc_history";
 
-export type LocSource = "PRE_ADMISSION" | "REASSESSMENT" | "ACUITY_APPROVAL" | "CLINICAL_OVERRIDE";
+export type LocSource = "PRE_ADMISSION" | "REASSESSMENT" | "ACUITY_APPROVAL" | "CLINICAL_OVERRIDE" | "PRIVATE_CAREGIVER";
 
 export const LOC_SOURCE_LABEL: Record<LocSource, string> = {
   PRE_ADMISSION: "Pre-Admission",
   REASSESSMENT: "Reassessment",
   ACUITY_APPROVAL: "Acuity Approval",
   CLINICAL_OVERRIDE: "Clinical Override",
+  PRIVATE_CAREGIVER: "Private Caregiver Request",
 };
 
 export interface LocHistoryEntry {
@@ -44,15 +45,26 @@ export function parseLocHistory(raw?: string | null): LocHistoryEntry[] {
   try { const v = JSON.parse(raw); return Array.isArray(v) ? (v as LocHistoryEntry[]) : []; } catch { return []; }
 }
 
-/** A resident's history (newest first), matched by residentId or linked admission. */
-export function historyForResident(items: LocHistoryEntry[], residentId: string, admissionIds: string[] = []): LocHistoryEntry[] {
+const nameKey = (v: unknown) => String(v ?? "").trim().toLowerCase();
+
+/**
+ * A resident's history (newest first), matched by residentId, linked admission,
+ * OR resident name. The name fallback is what surfaces PRE-ADMISSION entries:
+ * those are captured before a Resident record exists (keyed by admission/name),
+ * so once the resident is admitted they'd otherwise be orphaned from their id.
+ */
+export function historyForResident(items: LocHistoryEntry[], residentId: string, admissionIds: string[] = [], residentName = ""): LocHistoryEntry[] {
+  const nk = nameKey(residentName);
   return items
-    .filter((e) => (e.residentId && e.residentId === residentId) || (e.admissionId && admissionIds.includes(e.admissionId)))
+    .filter((e) =>
+      (e.residentId && e.residentId === residentId) ||
+      (e.admissionId && admissionIds.includes(e.admissionId)) ||
+      (nk !== "" && nameKey(e.residentName) === nk))
     .sort((a, b) => (b.at || "").localeCompare(a.at || ""));
 }
 
-export function latestEntry(items: LocHistoryEntry[], residentId: string, admissionIds: string[] = []): LocHistoryEntry | null {
-  return historyForResident(items, residentId, admissionIds)[0] ?? null;
+export function latestEntry(items: LocHistoryEntry[], residentId: string, admissionIds: string[] = [], residentName = ""): LocHistoryEntry | null {
+  return historyForResident(items, residentId, admissionIds, residentName)[0] ?? null;
 }
 
 let seq = 0;
@@ -84,7 +96,9 @@ export async function recordLocChange(opts: {
   try {
     const level = normalizeLevel(opts.level);
     if (!level) return false;
-    const key = opts.residentId || opts.admissionId;
+    // Key by resident id, else linked admission, else name — so a pre-admission
+    // assessment (no resident/admission link yet) still records its Final LOC.
+    const key = opts.residentId || opts.admissionId || String(opts.residentName ?? "").trim();
     if (!key) return false;
 
     const res = await fetch(`/api/db/app-settings?f_key=${LOC_HISTORY_KEY}&take=1`, { credentials: "include" });
@@ -93,7 +107,7 @@ export async function recordLocChange(opts: {
     const items = parseLocHistory(row?.value);
 
     const admissionIds = opts.admissionId ? [opts.admissionId] : [];
-    const prior = latestEntry(items, opts.residentId ?? "", admissionIds);
+    const prior = latestEntry(items, opts.residentId ?? "", admissionIds, opts.residentName ?? "");
     // No change → don't duplicate the record.
     if (prior && normalizeLevel(prior.level) === level && prior.source === opts.source) return false;
 

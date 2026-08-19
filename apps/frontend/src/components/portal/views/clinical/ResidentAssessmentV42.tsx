@@ -8,6 +8,7 @@
 // the suggested Level of Care (GAP-001: banding not yet calibrated).
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import {
   Plus, X, Trash2, Pencil, CheckCircle2, Gauge, AlertTriangle,
   ShieldCheck, RefreshCw, Info, Layers, ArrowLeftRight, LayoutGrid, Table2,
@@ -203,7 +204,7 @@ function parseAssessments(raw?: string): AssessmentV42[] {
 // Draft working state = the full assessment sans list metadata; we edit it in place.
 type Draft = AssessmentV42;
 
-export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedded = false, deepLinkResident = null, origin = "PREADMISSION" }: { clinicianRole?: string; embedded?: boolean; deepLinkResident?: { id: string; name: string } | null; origin?: AssessmentOrigin }) {
+export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedded = false, deepLinkResident = null, deepLinkReason = "", origin = "PREADMISSION", newSignal }: { clinicianRole?: string; embedded?: boolean; deepLinkResident?: { id: string; name: string } | null; deepLinkReason?: string; origin?: AssessmentOrigin; newSignal?: number }) {
   const roleLabel = clinicianRole === "CARE_MANAGER" || clinicianRole === "FACILITY_ADMIN" ? "Care Manager" : "Nurse";
 
   const { data: settingRows, loading, error, refetch } = useLiveQuery<SettingRow>("app-settings", { tables: ["AppSetting"] });
@@ -225,8 +226,11 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   // Converted CRM leads land here as in-progress admissions — offer them for the picker.
   const { data: admissionRows } = useLiveQuery<{ id: string; firstName?: string; lastName?: string; dateOfBirth?: string; gender?: string; phone?: string; sponsorName?: string; status?: string }>("admissions", { query: "take=500", tables: ["Admission"] });
   const admissionOpts = useMemo<AdmissionOpt[]>(
+    // "In progress" by exclusion — mirror the Admissions card, which shows any
+    // admission that isn't COMPLETED/CANCELLED as In Progress (status may be
+    // null/empty/DRAFT). An exact "IN_PROGRESS" match dropped those admissions.
     () => admissionRows
-      .filter((r) => String(r.status || "").toUpperCase() === "IN_PROGRESS")
+      .filter((r) => { const st = String(r.status || "").toUpperCase(); return st !== "COMPLETED" && st !== "CANCELLED"; })
       .map((r) => ({
         id: String(r.id),
         name: `${r.firstName ?? ""} ${r.lastName ?? ""}`.replace(/\s*—\s*$/, "").trim(),
@@ -251,6 +255,12 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [showPin, setShowPin] = useState(false);
   const [linkedAdmissionId, setLinkedAdmissionId] = useState("");
+  // True while the open modal was launched from a private-caregiver request. Held
+  // in state (not read live from the URL) so it survives the URL being cleared and
+  // still drives the banner + the LOC-history source on validation.
+  const [pcgOpen, setPcgOpen] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
 
   // ── draft mutation helpers ──────────────────────────────────────────────────
   const patchLayer1 = (p: Partial<AssessmentLayer1>) => setDraft((d) => (d ? { ...d, layer1: { ...d.layer1, ...p } } : d));
@@ -273,12 +283,21 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   const openNew = () => {
     const a = newAssessment(newId(), me || undefined, new Date().toISOString());
     a.origin = origin;
-    setEditingId(null); setLinkedAdmissionId(""); setDraft(a); setLayer(1); setOpen(true);
+    setEditingId(null); setLinkedAdmissionId(""); setDraft(a); setLayer(1); setPcgOpen(false); setOpen(true);
   };
   const openEdit = (a: AssessmentV42, initialLayer: 1 | 2 | 3 = 1) => {
     setEditingId(a.id); setLinkedAdmissionId(a.layer1?.convertedAdmissionId ?? "");
-    setDraft(JSON.parse(JSON.stringify(a))); setLayer(initialLayer); setOpen(true);
+    setDraft(JSON.parse(JSON.stringify(a))); setLayer(initialLayer); setPcgOpen(false); setOpen(true);
   };
+  // When embedded, the host board (Care Acuity) owns the "New Assessment" button in
+  // its header and triggers us via an incrementing `newSignal` — skip the first run.
+  const newSignalRef = useRef(newSignal);
+  useEffect(() => {
+    if (newSignal === undefined || newSignal === newSignalRef.current) return;
+    newSignalRef.current = newSignal;
+    openNew();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newSignal]);
   // Deep-link target: open the resident's latest assessment, or start a new one
   // pre-filled with the resident (the "why a private caregiver is needed" is
   // documented here). Called once when arrived via ?resident=<id>.
@@ -298,7 +317,13 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     if (!dl?.id || !dl.name) return; // wait until the resident name resolves
     if (loading) return; // wait until assessments have loaded (edit-vs-new)
     deepRef.current = true;
-    void (async () => { openForResident(dl.id, dl.name || ""); })();
+    void (async () => {
+      openForResident(dl.id, dl.name || "");
+      setPcgOpen(deepLinkReason === "pcg"); // remember WHY, since we clear the URL next
+      // Consume the one-shot deep-link: drop ?resident/?reason so switching Care
+      // Acuity tabs (which remounts this board) never re-pops the modal.
+      if (pathname) router.replace(pathname, { scroll: false });
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLinkResident, loading]);
 
@@ -413,18 +438,21 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
       }
       // Append to the resident's Level of Care history — captured from pre-admission
       // onward (keyed by residentId when admitted, else the linked admission), and
-      // again on each reassessment, so the full LOC trail is preserved.
+      // again on each reassessment, so the full LOC trail is preserved. When the
+      // form was opened FROM a private-caregiver request, tag the entry as such so
+      // the Care Level History shows why the reassessment happened.
+      const openedForPcg = pcgOpen;
       void recordLocChange({
         residentId: draft.layer1.residentId,
         admissionId: draft.layer1.convertedAdmissionId,
         residentName: draft.layer1.residentName,
         level: draft.layer3.finalLevel,
-        source: draft.layer3.priorAssessmentId ? "REASSESSMENT" : "PRE_ADMISSION",
+        source: openedForPcg ? "PRIVATE_CAREGIVER" : (draft.layer3.priorAssessmentId ? "REASSESSMENT" : "PRE_ADMISSION"),
         assessmentId: draft.id,
         rawScore: assessmentRawScore(draft),
         by: me || "Clinician",
         role: roleLabel,
-        notes: draft.layer3.finalLevelJustification,
+        notes: openedForPcg ? `Reassessed for a private caregiver request. ${draft.layer3.finalLevelJustification ?? ""}`.trim() : draft.layer3.finalLevelJustification,
       });
     }
   };
@@ -471,12 +499,9 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   // of the full ClinicalPage + ClinicalHeader.
   const body = (
     <>
-      {embedded ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-[var(--clinical-muted)]">Three-layer v4.2 assessment · 14 scored domains (raw /56, advisory) · nurse-confirmed Final Level of Care.</p>
-          <ClinicalButton variant="accent" onClick={openNew}><Plus className="w-4 h-4" /> New Assessment</ClinicalButton>
-        </div>
-      ) : (
+      {/* When embedded (Care Acuity), the host board renders the header, stats and
+          the New-Assessment button; we only render the search + list here. */}
+      {!embedded && (
         <ClinicalHeader
           title="Resident Assessment (v4.2)"
           subtitle="LifeCare Resident Assessment v4.2 — three-layer assessment. 14 scored domains (raw /56, advisory), deterministic MLR-floor engine, and a nurse-confirmed Final Level of Care. Replaces the legacy 50-point pre-admission form."
@@ -484,11 +509,13 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
         />
       )}
 
-      {/* Level distribution */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard label="Total" value={assessments.length} accent="ink" />
-        {LEVELS.map((l) => <StatCard key={l} label={LEVEL_LABEL[l]} value={stat(l)} accent={LEVEL_ACCENT[l]} />)}
-      </div>
+      {/* Level distribution — hidden when embedded (Care Acuity shows its own stats). */}
+      {!embedded && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <StatCard label="Total" value={assessments.length} accent="ink" />
+          {LEVELS.map((l) => <StatCard key={l} label={LEVEL_LABEL[l]} value={stat(l)} accent={LEVEL_ACCENT[l]} />)}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SearchInput value={search} onChange={setSearch} placeholder="Search by resident name…" className="max-w-sm flex-1" />
@@ -629,6 +656,19 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
 
             {/* Body */}
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 scrollbar-thin sm:p-5">
+              {/* Provenance banner — opened from a private-caregiver request (DT-013). */}
+              {pcgOpen && (() => {
+                const eff = draft.layer3?.finalLevel ?? liveResult?.suggestedLevel ?? null;
+                return (
+                  <div className="flex items-start gap-2 rounded-xl border px-4 py-3" style={{ borderColor: "var(--clinical-panel)", backgroundColor: "color-mix(in srgb, var(--clinical-panel) 8%, var(--clinical-surface))" }}>
+                    <Info className="mt-0.5 h-4 w-4 shrink-0 text-[var(--clinical-panel)]" />
+                    <div className="text-xs">
+                      <p className="font-bold text-[var(--clinical-panel)]">Reassessment for a Private Caregiver request</p>
+                      <p className="mt-0.5 text-[var(--clinical-ink-soft)]">Opened from <b>Assign Private Caregiver</b>. {eff ? <>Current Level of Care: <b>{LEVEL_LABEL[eff]}</b>. </> : null}Document why shared 1:6 staffing is insufficient (DT-013) and confirm the Final Level of Care.</p>
+                    </div>
+                  </div>
+                );
+              })()}
               {/* ── LAYER 1 ── */}
               {layer === 1 && (
                 <>

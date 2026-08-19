@@ -7,10 +7,11 @@ import {
   Users, HeartPulse, Check, ChevronLeft, ChevronRight, X, Plus, Search,
   CheckCircle2, Loader2, CircleDot, Ban, AlertTriangle, Download, Printer, Pencil,
   Brain, Activity, Apple, Pill, Droplets, MessageSquare, Siren, Sparkles,
-  Camera, Trash2, Image as ImageIcon, Eye,
+  Camera, Trash2, Image as ImageIcon, Eye, Moon,
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFacilityConfig } from "@/lib/useFacilityConfig";
+import { ASSESSMENTS_V42_KEY, originOf, classifyAssessment, assessmentRawScore, type AssessmentV42 } from "@/lib/lifecare/assessment";
 import { createRecord, updateRecord, upsertRecord, deleteRecord } from "@/lib/api";
 import { insuranceProvider } from "@/lib/integrations/insurance";
 import { qrDataUrl } from "@/lib/qr";
@@ -48,7 +49,11 @@ const CLINICAL_DOMAINS = [
   { key: "skin",          label: "Skin / Wound",         icon: ShieldCheck,   hint: "Braden risk, existing wounds",           options: ["Intact", "At Risk", "Wound Present", "Pressure Injury"] },
   { key: "communication", label: "Communication",        icon: MessageSquare, hint: "Sensory & language barriers",            options: ["No Barrier", "Hearing", "Vision", "Speech / Language"] },
   { key: "emergency",     label: "Emergency Risk",       icon: Siren,         hint: "Elopement, code status, allergy alerts", options: ["Low", "Moderate", "High", "Critical"] },
+  { key: "sleep",         label: "Sleep / Daily Routine", icon: Moon,         hint: "Sleep quality, day-night pattern",       options: ["Normal", "Occasional Disturbance", "Frequent Disturbance", "Severe Disruption"] },
+  { key: "therapy",       label: "Reablement / Therapy",  icon: HeartPulse,   hint: "PT / OT needs, rehab potential",         options: ["None", "Maintenance", "Active Therapy", "Intensive Rehab"] },
 ] as const;
+// Tag kept as "clinical-12" for backward-compatible parsing of existing records;
+// the instrument now captures 14 domains (aligned with the v4.2 AS-01..AS-14 set).
 const CLINICAL_TAG = "clinical-12";
 type DomainState = { level: string; notes: string };
 type ClinicalState = Record<string, DomainState>;
@@ -282,7 +287,7 @@ function SkinWoundSection({ wounds, onChange }: { wounds: WoundEntry[]; onChange
 // ── Prefill an admission from a completed Pre-Admission Assessment (Stage 2 → 3)
 // The pre-admission form (app-setting `preadmission_assessments`) already captured
 // demographics, medical history and 6 scored domains — pull them in so the
-// registrar doesn't re-key everything, and map the scores onto the 12 domains.
+// registrar doesn't re-key everything, and map the scores onto the 14 domains.
 const PREADMIT_KEY = "preadmission_assessments";
 const PA_DOMAIN_MAP: { pa: string; max: number; dom: string }[] = [
   { pa: "adl", max: 12, dom: "adl" },
@@ -291,6 +296,15 @@ const PA_DOMAIN_MAP: { pa: string; max: number; dom: string }[] = [
   { pa: "cognition", max: 8, dom: "cognitive" },
   { pa: "nursing", max: 8, dom: "clinical" },
   { pa: "risk", max: 12, dom: "emergency" },
+];
+// Map the v4.2 assessment's 14 scored domains (AS-01..AS-14, each 0-4) onto the
+// wizard's clinical-domain keys. AS-02 + AS-03 both feed "mobility" (kept: higher).
+const V42_DOMAIN_MAP: { as: string; dom: string }[] = [
+  { as: "AS-01", dom: "adl" }, { as: "AS-02", dom: "mobility" }, { as: "AS-03", dom: "mobility" },
+  { as: "AS-04", dom: "cognitive" }, { as: "AS-05", dom: "behavioral" }, { as: "AS-06", dom: "clinical" },
+  { as: "AS-07", dom: "medication" }, { as: "AS-08", dom: "nutrition" }, { as: "AS-09", dom: "communication" },
+  { as: "AS-10", dom: "continence" }, { as: "AS-11", dom: "skin" }, { as: "AS-12", dom: "sleep" },
+  { as: "AS-13", dom: "emergency" }, { as: "AS-14", dom: "therapy" },
 ];
 // Normalize a domain sub-score (0..max) into the 4-level acuity index (0..3).
 const scoreIdx = (score: unknown, max: number) => (max ? Math.max(0, Math.min(3, Math.round(((Number(score) || 0) / max) * 3))) : 0);
@@ -353,6 +367,16 @@ export default function AdmissionsContent() {
       .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))),
     [settingRows]
   );
+  // v4.2 pre-admission assessments (the current instrument). Only PREADMISSION-origin
+  // records that are completed/validated are offered as a prefill source.
+  const preadmitsV42 = useMemo<AssessmentV42[]>(
+    () => (parseArr(settingRows.find((r) => (r.key ?? r.id) === ASSESSMENTS_V42_KEY)?.value) as unknown as AssessmentV42[])
+      .filter((a) => originOf(a) !== "ACUITY")
+      .filter((a) => a.status === "COMPLETED" || a.status === "VALIDATED")
+      .filter((a) => String(a.layer1?.residentName ?? "").trim())
+      .sort((a, b) => String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? ""))),
+    [settingRows]
+  );
 
   const staffOptions = useMemo<TeamMember[]>(
     () => staffRows.map((r) => {
@@ -387,8 +411,67 @@ export default function AdmissionsContent() {
   const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
 
   // Stage 2 → Stage 3 handoff: pull a completed pre-admission assessment into the
-  // wizard (demographics, medical history, care level + the 12 domains).
+  // wizard (demographics, medical history, care level + the 14 domains).
+  // v4.2 pre-admission → wizard prefill (demographics, medical history, care level
+  // and the 14 clinical domains derived from the AS-01..AS-14 scores).
+  const prefillFromV42 = async (id: string) => {
+    const a = preadmitsV42.find((x) => s(x.id) === id);
+    if (!a) return;
+    const name = s(a.layer1?.residentName);
+    const c = await Swal.fire({
+      title: "Prefill from pre-admission?",
+      text: `Populate this admission with ${name || "the assessment"}'s v4.2 pre-admission data? Matching fields already entered will be overwritten.`,
+      icon: "question", showCancelButton: true, confirmButtonColor: "#d97706", confirmButtonText: "Prefill",
+    });
+    if (!c.isConfirmed) return;
+
+    const parts = name.trim().split(/\s+/);
+    const firstName = parts.shift() || "";
+    const lastName = parts.join(" ");
+    const lvlStr = s(a.layer3?.finalLevel) || s(classifyAssessment({ domains: a.domains ?? {}, context: a.context ?? {} }).suggestedLevel);
+    const lvl = Number(lvlStr.match(/([1-5])/)?.[1] || 0);
+    const careLevel = lvl === 1 ? "INDEPENDENT" : lvl === 4 ? "MEMORY" : lvl === 5 ? "SKILLED" : lvl ? "ASSISTED" : "";
+    setPrefillTotal(assessmentRawScore({ domains: a.domains ?? {} }) || null);
+
+    const scores = (a.domains ?? {}) as Record<string, { score?: number } | undefined>;
+    const nextClinical: ClinicalState = {};
+    for (const mp of V42_DOMAIN_MAP) {
+      const raw = scores[mp.as]?.score;
+      if (raw == null) continue;
+      const dom = CLINICAL_DOMAINS.find((d) => d.key === mp.dom); if (!dom) continue;
+      const idx = scoreIdx(raw, 4);
+      const cur = nextClinical[mp.dom];
+      const curIdx = cur ? (dom.options as readonly string[]).indexOf(cur.level) : -1;
+      if (idx > curIdx) nextClinical[mp.dom] = { level: dom.options[idx], notes: "" }; // AS-02+AS-03 → mobility: keep higher
+    }
+    setClinical(nextClinical);
+
+    const meds = s(a.layer1?.medications);
+    const medRows: MedRow[] = meds
+      ? meds.split(/[\n;,]+/).map((x) => x.trim()).filter(Boolean).map((nm) => ({ id: newId(), name: nm, dose: "", frequency: "" }))
+      : [];
+    setMedList(medRows);
+
+    set({
+      firstName: firstName || form.firstName,
+      lastName: lastName || form.lastName,
+      dateOfBirth: normDOB(a.layer1?.dateOfBirth) || form.dateOfBirth,
+      gender: s(a.layer1?.sex) || form.gender,
+      phone: s(a.layer1?.contactNo) || form.phone,
+      emergencyContact: s(a.layer1?.primaryContact) || form.emergencyContact,
+      allergies: s(a.layer1?.allergies) || form.allergies,
+      medicalHistory: s(a.layer1?.diagnoses) || form.medicalHistory,
+      medicalAssessment: s(a.layer1?.reasonForAdmission) || form.medicalAssessment,
+      surgeries: s(a.layer1?.surgeries) || form.surgeries,
+      hospitalizations: [a.layer1?.hospitalEd12mo ? "ED / hospital in last 12 months" : "", s(a.layer1?.hospitalEdReason)].filter(Boolean).join(" — ") || form.hospitalizations,
+      careAssessment: s(a.layer1?.reasonForAdmission) || form.careAssessment,
+      careLevel: careLevel || form.careLevel,
+    });
+    Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Prefilled from pre-admission", showConfirmButton: false, timer: 1600 });
+  };
+
   const prefillFromPreadmission = async (paId: string) => {
+    if (paId.startsWith("v42:")) { await prefillFromV42(paId.slice(4)); return; }
     const pa = preadmits.find((p) => s(p.id) === paId);
     if (!pa) return;
     const c = await Swal.fire({
@@ -974,41 +1057,64 @@ export default function AdmissionsContent() {
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="bg-gradient-to-r from-amber-500 to-yellow-600 text-white px-6 py-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-bold">{form.firstName || form.lastName ? `${form.firstName} ${form.lastName}`.trim() : "New Admission"}</h2>
-                <p className="text-white/80 text-xs">Step {step} of {STEP_COUNT} — {STEPS[step - 1].label}</p>
+            <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white px-6 pt-4 pb-5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20 text-base font-bold ring-2 ring-white/40">
+                    {`${form.firstName?.[0] ?? ""}${form.lastName?.[0] ?? ""}`.toUpperCase() || <UserPlus className="h-5 w-5" />}
+                  </span>
+                  <div className="min-w-0">
+                    <h2 className="truncate text-xl font-bold">{form.firstName || form.lastName ? `${form.firstName} ${form.lastName}`.trim() : "New Admission"}</h2>
+                    <p className="mt-0.5 flex items-center gap-2 text-xs text-white">
+                      <span className="inline-flex items-center rounded-full bg-white/25 px-2 py-0.5 text-[11px] font-bold tabular-nums">Step {step} / {STEP_COUNT}</span>
+                      <span className="font-medium">{STEPS[step - 1].label}</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  {form.id && form.status !== "COMPLETED" && (
+                    <button onClick={() => cancelAdmission(form.id!)} title="Cancel admission" className="rounded-lg p-2 text-white/90 transition hover:bg-white/15 hover:text-white"><Ban className="h-5 w-5" /></button>
+                  )}
+                  <button onClick={() => setWizardOpen(false)} title="Close" className="rounded-lg p-2 text-white/90 transition hover:bg-white/15 hover:text-white"><X className="h-5 w-5" /></button>
+                </div>
               </div>
-              <div className="flex items-center gap-1">
-                {form.id && form.status !== "COMPLETED" && (
-                  <button onClick={() => cancelAdmission(form.id!)} title="Cancel admission" className="p-2 hover:bg-white/10 rounded-lg"><Ban className="w-5 h-5" /></button>
-                )}
-                <button onClick={() => setWizardOpen(false)} className="p-2 hover:bg-white/10 rounded-lg"><X className="w-5 h-5" /></button>
+              {/* overall completion */}
+              <div className="mt-3.5 flex items-center gap-3">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/25">
+                  <div className="h-full rounded-full bg-white transition-all duration-300" style={{ width: `${(doneSet.size / STEP_COUNT) * 100}%` }} />
+                </div>
+                <span className="text-[11px] font-semibold tabular-nums text-white">{doneSet.size}/{STEP_COUNT} complete</span>
               </div>
             </div>
 
             {/* Stepper */}
-            <div className="flex items-center gap-1 px-4 py-3 border-b border-gray-100 overflow-x-auto">
-              {STEPS.map((st) => {
+            <div className="flex items-start border-b border-gray-100 bg-gray-50/60 px-4 py-4 overflow-x-auto">
+              {STEPS.map((st, idx) => {
                 const isDone = doneSet.has(st.n);
                 const active = st.n === step;
                 const reachable = canNavigateTo(st.n);
                 const Icon = st.icon;
+                const leftFilled = idx > 0 && doneSet.has(STEPS[idx - 1].n);
+                const rightFilled = isDone;
                 return (
-                  <button
-                    key={st.n}
-                    onClick={() => reachable && setStep(st.n)}
-                    disabled={!reachable}
-                    title={reachable ? "" : "Fill in the required fields on the earlier steps first."}
-                    className={`flex flex-col items-center gap-1 px-2 min-w-[64px] group ${reachable ? "" : "opacity-40 cursor-not-allowed"}`}
-                  >
-                    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition ${active ? "border-amber-500 bg-amber-500 text-white" : isDone ? "border-green-500 bg-green-500 text-white" : "border-gray-300 text-gray-400 group-hover:border-amber-300"}`}>
-                      {isDone && !active ? <Check className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
-                    </span>
-                    <span className={`text-[10px] text-center leading-tight truncate max-w-full ${active ? "text-amber-600 font-semibold" : "text-gray-500"}`}>
-                      {st.label}{st.required && <span className="text-red-400">*</span>}
-                    </span>
-                  </button>
+                  <div key={st.n} className="relative flex min-w-[72px] flex-1 flex-col items-center">
+                    {/* connectors between nodes (centered on the 8×8 node → top-4) */}
+                    {idx > 0 && <span className="absolute right-1/2 top-4 h-0.5 w-full" style={{ backgroundColor: leftFilled ? "#22c55e" : "#e5e7eb" }} />}
+                    {idx < STEPS.length - 1 && <span className="absolute left-1/2 top-4 h-0.5 w-full" style={{ backgroundColor: rightFilled ? "#22c55e" : "#e5e7eb" }} />}
+                    <button
+                      onClick={() => reachable && setStep(st.n)}
+                      disabled={!reachable}
+                      title={reachable ? st.label : "Fill in the required fields on the earlier steps first."}
+                      className={`group relative z-10 flex w-full flex-col items-center gap-1.5 px-1 ${reachable ? "" : "cursor-not-allowed"}`}
+                    >
+                      <span className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold shadow-sm transition ${active ? "scale-110 border-amber-500 bg-amber-500 text-white ring-4 ring-amber-500/20" : isDone ? "border-green-500 bg-green-500 text-white" : reachable ? "border-gray-300 bg-white text-gray-600 group-hover:border-amber-400 group-hover:text-amber-500" : "border-gray-200 bg-white text-gray-400"}`}>
+                        {isDone && !active ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                      </span>
+                      <span className={`text-center text-[10px] leading-tight ${active ? "font-bold text-amber-600" : isDone ? "font-medium text-gray-600" : "text-gray-400"}`}>
+                        {st.label}{st.required && <span className="text-red-500">*</span>}
+                      </span>
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -1017,7 +1123,7 @@ export default function AdmissionsContent() {
             <div className="p-6 overflow-y-auto flex-1">
               {step === 1 && (
                 <div className="space-y-4">
-                  {preadmits.length > 0 && (
+                  {(preadmits.length > 0 || preadmitsV42.length > 0) && (
                     <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <Sparkles className="w-4 h-4 text-indigo-500" />
@@ -1025,11 +1131,22 @@ export default function AdmissionsContent() {
                       </div>
                       <select value="" onChange={(e) => { const v = e.target.value; if (v) prefillFromPreadmission(v); }} className={`${inputCls} mt-2`}>
                         <option value="">Select a completed pre-admission assessment…</option>
-                        {preadmits.map((p) => { const lvl = paLevel(p); return (
-                          <option key={s(p.id)} value={s(p.id)}>{s(p.residentName)}{lvl ? ` — Level ${lvl}` : ""}{p.dateOfAssessment ? ` · ${s(p.dateOfAssessment)}` : ""}</option>
-                        ); })}
+                        {preadmitsV42.length > 0 && (
+                          <optgroup label="Resident Assessment (v4.2)">
+                            {preadmitsV42.map((a) => { const lvl = s(a.layer3?.finalLevel); const dt = s(a.layer1?.assessmentDate) || s(a.updatedAt).slice(0, 10); return (
+                              <option key={`v42:${s(a.id)}`} value={`v42:${s(a.id)}`}>{s(a.layer1?.residentName)}{lvl ? ` — ${lvl}` : ""}{dt ? ` · ${dt}` : ""}</option>
+                            ); })}
+                          </optgroup>
+                        )}
+                        {preadmits.length > 0 && (
+                          <optgroup label="Legacy Pre-Admission">
+                            {preadmits.map((p) => { const lvl = paLevel(p); return (
+                              <option key={s(p.id)} value={s(p.id)}>{s(p.residentName)}{lvl ? ` — Level ${lvl}` : ""}{p.dateOfAssessment ? ` · ${s(p.dateOfAssessment)}` : ""}</option>
+                            ); })}
+                          </optgroup>
+                        )}
                       </select>
-                      <p className="text-[11px] text-indigo-600/80 mt-1.5">Pulls name, DOB, contact, diagnoses, allergies, care level, the 12-domain assessment &amp; the care plan. Review before completing.</p>
+                      <p className="text-[11px] text-indigo-600/80 mt-1.5">Pulls name, DOB, contact, diagnoses, allergies, care level, the 14-domain assessment &amp; the care plan. Review before completing.</p>
                     </div>
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1098,8 +1215,8 @@ export default function AdmissionsContent() {
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2 text-sm">
                       <ClipboardList className="w-4 h-4 text-amber-600" />
-                      <span className="font-semibold text-gray-800">12-Domain Clinical Assessment</span>
-                      <span className="text-gray-500">· {sum.filled}/12 assessed</span>
+                      <span className="font-semibold text-gray-800">{CLINICAL_DOMAINS.length}-Domain Clinical Assessment</span>
+                      <span className="text-gray-500">· {sum.filled}/{CLINICAL_DOMAINS.length} assessed</span>
                       {sum.flags > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700"><AlertTriangle className="w-3 h-3" />{sum.flags} elevated</span>}
                     </div>
                     {suggestion && (
@@ -1414,7 +1531,7 @@ export default function AdmissionsContent() {
                           <span className="text-gray-900">{s(row.mobility) || "—"}</span>
                         </div>
                         <div className="sm:col-span-2">
-                          <span className="block text-xs font-semibold text-gray-500">Clinical Assessment (12 domains)</span>
+                          <span className="block text-xs font-semibold text-gray-500">Clinical Assessment ({CLINICAL_DOMAINS.length} domains)</span>
                           {(() => {
                             const { note, domains, wounds } = parseClinical(s(row.careAssessment));
                             const entries = CLINICAL_DOMAINS.filter((d) => domains[d.key]?.level || (domains[d.key]?.notes || "").trim());

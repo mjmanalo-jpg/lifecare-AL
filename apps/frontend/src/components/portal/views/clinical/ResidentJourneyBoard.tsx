@@ -21,6 +21,7 @@ import {
   UserPlus, ClipboardList, Gauge, Layers, Pill, AlertTriangle, Bandage,
   Stethoscope, FolderOpen, FileText, Scale, HeartHandshake, StickyNote, ClipboardCheck,
   RefreshCw, ShieldCheck, ShieldAlert, CalendarClock,
+  TrendingUp, TrendingDown, Minus, ArrowRight, GitCompareArrows,
   type LucideIcon,
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -317,6 +318,45 @@ const FORM_STATUS_TONE: Record<string, string> = {
   DRAFT: "var(--clinical-amber)", SUPERSEDED: "var(--clinical-muted)",
 };
 
+const levelNumOf = (lvl: string) => { const m = /([1-5])/.exec(lvl || ""); return m ? Number(m[1]) : 0; };
+
+interface DomainDelta { code: string; name: string; before: number; after: number; delta: number }
+interface FormChanges {
+  levelBefore: string; levelAfter: string; levelDelta: number;
+  scoreBefore: number; scoreAfter: number; scoreDelta: number;
+  domains: DomainDelta[];
+}
+
+// Delta between a form and the chronologically previous one — the backtrack view.
+function computeChanges(f: FormRecord, prev?: FormRecord): FormChanges | null {
+  if (!prev) return null;
+  const effCur = f.level || f.suggestedLevel;
+  const effPrev = prev.level || prev.suggestedLevel;
+  const domains: DomainDelta[] = f.domains
+    .map((d) => {
+      const before = prev.domains.find((x) => x.code === d.code)?.score ?? 0;
+      return { code: d.code, name: d.name, before, after: d.score, delta: d.score - before };
+    })
+    .filter((d) => d.delta !== 0)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  return {
+    levelBefore: effPrev, levelAfter: effCur, levelDelta: levelNumOf(effCur) - levelNumOf(effPrev),
+    scoreBefore: prev.score, scoreAfter: f.score, scoreDelta: f.score - prev.score,
+    domains,
+  };
+}
+
+// Higher acuity/score = more care needed (coral, up); lower = improvement (green, down).
+function TrendPill({ delta, suffix = "" }: { delta: number; suffix?: string }) {
+  const color = delta === 0 ? "var(--clinical-muted)" : delta > 0 ? "var(--clinical-coral)" : "var(--clinical-green)";
+  const Icon = delta === 0 ? Minus : delta > 0 ? TrendingUp : TrendingDown;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums" style={{ backgroundColor: `color-mix(in srgb, ${color} 14%, transparent)`, color }}>
+      <Icon className="h-3 w-3" />{delta > 0 ? `+${delta}` : delta}{suffix}
+    </span>
+  );
+}
+
 function FormsPanel({ forms }: { forms: FormRecord[] }) {
   const [openId, setOpenId] = useState<string | null>(forms[0]?.id ?? null);
   if (forms.length === 0) {
@@ -334,6 +374,8 @@ function FormsPanel({ forms }: { forms: FormRecord[] }) {
           const Icon = f.icon;
           const tone = FORM_STATUS_TONE[f.status] || "var(--clinical-ink-soft)";
           const isOpen = openId === f.id;
+          const prev = forms[i + 1]; // chronologically earlier form (list is newest-first)
+          const chg = computeChanges(f, prev);
           return (
             <li key={f.id} className="relative">
               <span className="absolute -left-[31px] top-5 flex h-4 w-4 items-center justify-center rounded-full ring-4" style={{ backgroundColor: tone, ["--tw-ring-color" as string]: "var(--clinical-ground)" }} />
@@ -352,6 +394,8 @@ function FormsPanel({ forms }: { forms: FormRecord[] }) {
                       <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white" style={{ backgroundColor: tone }}>{f.status}</span>
                       {f.level && <span className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-bold text-white" style={{ backgroundColor: "var(--clinical-coral)" }}>{f.level}</span>}
                       <span className="text-[11px] text-[var(--clinical-muted)]">Acuity <span className="font-bold tabular-nums text-[var(--clinical-ink-soft)]">{f.score}</span> / 56</span>
+                      {chg && chg.scoreDelta !== 0 && <TrendPill delta={chg.scoreDelta} suffix=" pts" />}
+                      {chg && chg.levelDelta !== 0 && <span className="inline-flex items-center gap-1 text-[10px] font-bold" style={{ color: chg.levelDelta > 0 ? "var(--clinical-coral)" : "var(--clinical-green)" }}>{chg.levelBefore}<ArrowRight className="h-3 w-3" />{chg.levelAfter}</span>}
                       {f.by && <span className="text-[11px] text-[var(--clinical-muted)]">· by {f.by}</span>}
                     </div>
                   </div>
@@ -359,7 +403,7 @@ function FormsPanel({ forms }: { forms: FormRecord[] }) {
                 </button>
 
                 {/* read-only result */}
-                {isOpen && <FormResult f={f} tone={tone} />}
+                {isOpen && <FormResult f={f} tone={tone} prev={prev} chg={chg} />}
               </div>
             </li>
           );
@@ -370,8 +414,9 @@ function FormsPanel({ forms }: { forms: FormRecord[] }) {
 }
 
 // The read-only outcome of a single assessment form.
-function FormResult({ f, tone }: { f: FormRecord; tone: string }) {
+function FormResult({ f, tone, prev, chg }: { f: FormRecord; tone: string; prev?: FormRecord; chg: FormChanges | null }) {
   const scored = f.domains.filter((d) => d.score > 0);
+  const deltaByCode = new Map((chg?.domains ?? []).map((d) => [d.code, d.delta]));
   return (
     <div className="border-t p-4 space-y-4" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
       {/* outcome stat grid */}
@@ -388,6 +433,56 @@ function FormResult({ f, tone }: { f: FormRecord; tone: string }) {
           <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.round((f.score / 56) * 100))}%`, background: tone }} />
         </div>
       </div>
+
+      {/* changes since the previous form — the backtrack view */}
+      {chg ? (
+        <div className="rounded-lg border p-3" style={{ borderColor: "var(--clinical-panel)", backgroundColor: "color-mix(in srgb, var(--clinical-panel) 6%, var(--clinical-surface))" }}>
+          <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-[var(--clinical-panel)]">
+            <GitCompareArrows className="h-3.5 w-3.5" /> Changes since {prev?.kind}{prev?.date ? ` · ${fmtDate(prev.date)}` : ""}
+          </p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+            <span className="flex items-center gap-2">
+              <span className="text-xs text-[var(--clinical-muted)]">Level of Care</span>
+              <span className="inline-flex items-center gap-1 font-bold text-[var(--clinical-ink)]">
+                {chg.levelBefore || "—"}<ArrowRight className="h-3.5 w-3.5 text-[var(--clinical-muted)]" />{chg.levelAfter || "—"}
+              </span>
+              {chg.levelDelta !== 0
+                ? <span className="text-[11px] font-bold" style={{ color: chg.levelDelta > 0 ? "var(--clinical-coral)" : "var(--clinical-green)" }}>{chg.levelDelta > 0 ? "higher need" : "improved"}</span>
+                : <span className="text-[11px] text-[var(--clinical-muted)]">unchanged</span>}
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="text-xs text-[var(--clinical-muted)]">Raw acuity</span>
+              <span className="inline-flex items-center gap-1 font-bold tabular-nums text-[var(--clinical-ink)]">
+                {chg.scoreBefore}<ArrowRight className="h-3.5 w-3.5 text-[var(--clinical-muted)]" />{chg.scoreAfter}
+              </span>
+              <TrendPill delta={chg.scoreDelta} suffix=" pts" />
+            </span>
+          </div>
+          {chg.domains.length > 0 ? (
+            <div className="mt-3">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--clinical-muted)]">{chg.domains.length} domain{chg.domains.length === 1 ? "" : "s"} changed</p>
+              <div className="flex flex-wrap gap-1.5">
+                {chg.domains.map((d) => {
+                  const color = d.delta > 0 ? "var(--clinical-coral)" : "var(--clinical-green)";
+                  return (
+                    <span key={d.code} className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px]" style={{ borderColor: `color-mix(in srgb, ${color} 40%, var(--clinical-line))`, backgroundColor: "var(--clinical-surface)" }} title={`${d.name}: ${d.before} → ${d.after}`}>
+                      <span className="max-w-[9rem] truncate font-medium text-[var(--clinical-ink-soft)]">{d.name}</span>
+                      <span className="tabular-nums font-bold" style={{ color }}>{d.before}→{d.after}</span>
+                      {d.delta > 0 ? <TrendingUp className="h-3 w-3" style={{ color }} /> : <TrendingDown className="h-3 w-3" style={{ color }} />}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2.5 text-xs text-[var(--clinical-muted)]">No domain score changes since the previous assessment.</p>
+          )}
+        </div>
+      ) : (
+        <p className="rounded-lg border border-dashed px-3 py-2 text-xs text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line)" }}>
+          Baseline assessment — the first on file for this resident, so there is nothing earlier to compare against.
+        </p>
+      )}
 
       {/* flags */}
       {f.capabilityGate && (
@@ -436,7 +531,10 @@ function FormResult({ f, tone }: { f: FormRecord; tone: string }) {
       <div>
         <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--clinical-muted)]">Domain scores {scored.length > 0 ? `(${scored.length}/14 scored)` : ""}</p>
         <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
-          {f.domains.map((d) => (
+          {f.domains.map((d) => {
+            const dlt = deltaByCode.get(d.code) ?? 0;
+            const dltColor = dlt > 0 ? "var(--clinical-coral)" : "var(--clinical-green)";
+            return (
             <div key={d.code} className="flex items-center gap-2 text-xs">
               <span className="w-32 shrink-0 truncate text-[var(--clinical-ink-soft)]" title={d.name}>{d.name}</span>
               <span className="flex flex-1 gap-0.5">
@@ -444,9 +542,11 @@ function FormResult({ f, tone }: { f: FormRecord; tone: string }) {
                   <span key={n} className="h-1.5 flex-1 rounded-full" style={{ backgroundColor: n < d.score ? tone : "var(--clinical-line)" }} />
                 ))}
               </span>
+              {dlt !== 0 && <span className="shrink-0 text-[10px] font-bold tabular-nums" style={{ color: dltColor }}>{dlt > 0 ? `+${dlt}` : dlt}</span>}
               <span className="w-6 shrink-0 text-right font-bold tabular-nums text-[var(--clinical-ink)]">{d.score}</span>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

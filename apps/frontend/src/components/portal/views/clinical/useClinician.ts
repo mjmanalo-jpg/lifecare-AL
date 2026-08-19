@@ -26,6 +26,13 @@ export interface Clinician {
   /** The current user's Staff id (Task.assignedToId FK), when they have a Staff record. */
   staffId: string;
   role: ClinicianRole;
+  /**
+   * True once the /api/auth/session lookup has settled (resolved or failed), so
+   * `userId` reflects the real signed-in user rather than the transient role
+   * fallback. Callers that gate on identity (e.g. the clock-in guard) must wait
+   * for this before acting, or they'll act on the wrong id mid-load.
+   */
+  ready: boolean;
 }
 
 const matchesRole = (position: string, role: ClinicianRole) => {
@@ -60,6 +67,7 @@ export function useClinician(role: ClinicianRole): Clinician {
   // is attributed to the person who logged it — e.g. "Grace Villanueva" — instead
   // of a role-matched placeholder account like "…Organization Admin".
   const [sessionUser, setSessionUser] = useState<{ name: string; userId: string } | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
   useEffect(() => {
     let alive = true;
     fetch("/api/auth/session")
@@ -70,7 +78,8 @@ export function useClinician(role: ClinicianRole): Clinician {
         const userId = String(d.session?.userId ?? "");
         if (name || userId) setSessionUser({ name, userId });
       })
-      .catch(() => { /* non-fatal: fall back to role-based resolution */ });
+      .catch(() => { /* non-fatal: fall back to role-based resolution */ })
+      .finally(() => { if (alive) setSessionChecked(true); });
     return () => { alive = false; };
   }, []);
 
@@ -108,6 +117,7 @@ export function useClinician(role: ClinicianRole): Clinician {
       userId: sessionUser?.userId || resolvedUserId,
       staffId,
       role,
+      ready: sessionChecked,
     };
-  }, [staffRows, userRows, role, sessionUser]);
+  }, [staffRows, userRows, role, sessionUser, sessionChecked]);
 }

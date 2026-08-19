@@ -25,9 +25,10 @@ import {
   monthlyEquivalent, pcgAntiDoubleCharge, pcgReviewOverdue,
   PCG_INTENSITY_META, PCG_INTENSITY_ORDER, PCG_RULE_REFS,
   PCG_COVERAGE_OPTIONS, PCG_SHIFT_OPTIONS, composeSchedule, coverageToIntensity, suggestPcgFromTriggers,
-  type PrivateCareAssignment, type RateUnit, type PcgIntensity, type PcgCoverage, type PcgShift, type PcgSuggestion, type PcgAssessmentSnapshot,
+  type PrivateCareAssignment, type PrivateCareStatus, type RateUnit, type PcgIntensity, type PcgCoverage, type PcgShift, type PcgSuggestion, type PcgAssessmentSnapshot,
 } from "@/lib/privateCaregiver";
 import { ASSESSMENTS_V42_KEY, classifyAssessment, finalLevel, type AssessmentV42 } from "@/lib/lifecare/assessment";
+import { recordLocChange } from "@/lib/lifecare/locHistory";
 import assessmentDomains from "@/lib/lifecare/data/assessment_domains.json";
 
 // AS-code → human domain name, for the assessment snapshot shown to the family.
@@ -81,9 +82,18 @@ export default function PrivateCaregiverBoard({ clinicianRole = "NURSE" }: { cli
   // fresh here. Keyed by residentId.
   const recoByResident = useMemo(() => {
     const v42 = parseV42(settingRows.find((r) => (r.key || r.id) === ASSESSMENTS_V42_KEY)?.value);
+    // Pre-admission assessments are captured before a Resident record exists, so
+    // they carry no residentId — only a name. Match them to the now-admitted
+    // resident by name so their Level of Care surfaces here.
+    const idByName = new Map<string, string>();
+    for (const raw of (resQ.data || [])) {
+      const ra = adaptResident(raw);
+      const nk = String(ra.name || "").trim().toLowerCase();
+      if (nk && !idByName.has(nk)) idByName.set(nk, String(ra.id));
+    }
     const latest = new Map<string, AssessmentV42>();
     for (const a of v42) {
-      const rid = a.layer1?.residentId;
+      const rid = a.layer1?.residentId || idByName.get(String(a.layer1?.residentName || "").trim().toLowerCase()) || "";
       if (!rid) continue;
       const prev = latest.get(rid);
       if (!prev || (a.updatedAt || "") > (prev.updatedAt || "")) latest.set(rid, a);
@@ -119,16 +129,21 @@ export default function PrivateCaregiverBoard({ clinicianRole = "NURSE" }: { cli
       });
     }
     return m;
-  }, [settingRows]);
+  }, [settingRows, resQ.data]);
 
   // Route to the resident assessment form (Acuity & Level of Care → Assessments)
   // where the DT-013 justification for a private caregiver is documented.
-  const openAssessment = (residentId?: string) => {
+  const openAssessment = (residentId?: string, reason?: string) => {
     // Care Manager portal passes clinicianRole="FACILITY_ADMIN", so derive the
     // portal segment from the live URL instead of the role. Carry the resident so
-    // the assessment form opens straight to them.
+    // the assessment form opens straight to them, plus a `reason` so the form can
+    // show it was opened from a private-caregiver request.
     const seg = (pathname || "").split("/").filter(Boolean)[0] || clinicianRole.toLowerCase();
-    router.push(`/${seg}/careacuity${residentId ? `?resident=${encodeURIComponent(residentId)}` : ""}`);
+    const params = new URLSearchParams();
+    if (residentId) params.set("resident", residentId);
+    if (reason) params.set("reason", reason);
+    const qs = params.toString();
+    router.push(`/${seg}/careacuity${qs ? `?${qs}` : ""}`);
   };
   const residents = useMemo<ResOpt[]>(() => (resQ.data || []).map((raw) => {
     const a = adaptResident(raw);
@@ -149,6 +164,20 @@ export default function PrivateCaregiverBoard({ clinicianRole = "NURSE" }: { cli
     const rec: PrivateCareAssignment = { ...a, id: newId(), status: "PENDING_FAMILY", requestedBy: clinicianName, requestedAt: nowIso, authorisedBy: clinicianName, authorisedAt: nowIso };
     await save([rec, ...assignments]);
     setAssignOpen(false);
+    // Log the request in the resident's Care Level History (best-effort) so the
+    // PCG request — and the level it was made at — is part of the LOC trail.
+    if (rec.assessment?.level) {
+      void recordLocChange({
+        residentId: rec.residentId,
+        residentName: rec.residentName,
+        level: rec.assessment.level,
+        source: "PRIVATE_CAREGIVER",
+        by: clinicianName,
+        role: clinicianRole === "FACILITY_ADMIN" ? "Care Manager" : "Nurse",
+        notes: `Private caregiver requested — ${rec.caregiverName} · ${rec.schedule}${rec.rationale ? ` · ${rec.rationale}` : ""}`,
+        nowISO: nowIso,
+      });
+    }
     // Notify the assigned caregiver that they've been assigned this resident.
     const cgUserId = caregivers.find((c) => c.id === rec.caregiverId)?.userId;
     if (cgUserId) {
@@ -187,8 +216,20 @@ export default function PrivateCaregiverBoard({ clinicianRole = "NURSE" }: { cli
     active: assignments.filter((a) => a.status === "ACTIVE").length,
     pending: assignments.filter((a) => a.status === "PENDING_FAMILY").length,
     ended: assignments.filter((a) => a.status === "ENDED").length,
+    declined: assignments.filter((a) => a.status === "DECLINED").length,
     monthly: assignments.filter((a) => a.status === "ACTIVE").reduce((sum, a) => sum + monthlyEquivalent(a), 0),
   };
+
+  // Status filter — keeps ended/declined assignments off the active view.
+  const [statusFilter, setStatusFilter] = useState<PrivateCareStatus | "ALL">("ALL");
+  const FILTERS: { key: PrivateCareStatus | "ALL"; label: string; count: number }[] = [
+    { key: "ALL", label: "All", count: assignments.length },
+    { key: "ACTIVE", label: "Active", count: stats.active },
+    { key: "PENDING_FAMILY", label: "Pending family", count: stats.pending },
+    { key: "ENDED", label: "Ended", count: stats.ended },
+    { key: "DECLINED", label: "Declined", count: stats.declined },
+  ];
+  const visibleAssignments = statusFilter === "ALL" ? assignments : assignments.filter((a) => a.status === statusFilter);
 
   return (
     <ClinicalPage>
@@ -205,10 +246,25 @@ export default function PrivateCaregiverBoard({ clinicianRole = "NURSE" }: { cli
         <StatCard value={peso(stats.monthly)} label="Active billing / mo" accent="ink" />
       </div>
 
-      <div className="mt-5">
-        <DataState loading={loading && assignments.length === 0} error={null} empty={assignments.length === 0} emptyTitle="No private caregivers yet" emptyHint="Assign a dedicated caregiver to a resident — the request goes to their family for approval.">
+      {/* Status filter */}
+      <div className="mt-5 flex flex-wrap gap-2">
+        {FILTERS.map((f) => {
+          const on = statusFilter === f.key;
+          return (
+            <button key={f.key} type="button" onClick={() => setStatusFilter(f.key)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${on ? "bg-[var(--clinical-panel)] text-white border-[var(--clinical-panel)]" : "text-[var(--clinical-ink-soft)] hover:text-[var(--clinical-ink)]"}`}
+              style={on ? undefined : { backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line-strong)" }}>
+              {f.label}
+              <span className="rounded-full px-1.5 text-[10px] tabular-nums" style={{ backgroundColor: on ? "rgba(255,255,255,0.25)" : "var(--clinical-surface-2)" }}>{f.count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-4">
+        <DataState loading={loading && assignments.length === 0} error={null} empty={visibleAssignments.length === 0} emptyTitle={assignments.length === 0 ? "No private caregivers yet" : "No matching assignments"} emptyHint={assignments.length === 0 ? "Assign a dedicated caregiver to a resident — the request goes to their family for approval." : "Try a different status filter."}>
           <div className="space-y-3">
-            {assignments.map((a) => {
+            {visibleAssignments.map((a) => {
               const meta = PRIVATE_CARE_STATUS_META[a.status];
               const intensity = (a.intensity ?? "none") as PcgIntensity;
               const im = PCG_INTENSITY_META[intensity];
@@ -252,7 +308,7 @@ function AssignModal({ residents, caregivers, recoByResident, onOpenAssessment, 
   residents: ResOpt[];
   caregivers: { id: string; name: string }[];
   recoByResident: Map<string, PcgReco>;
-  onOpenAssessment: (residentId?: string) => void;
+  onOpenAssessment: (residentId?: string, reason?: string) => void;
   onClose: () => void;
   onCreate: (a: Omit<PrivateCareAssignment, "id" | "status" | "requestedBy" | "requestedAt">) => Promise<void>;
 }) {
@@ -280,6 +336,12 @@ function AssignModal({ residents, caregivers, recoByResident, onOpenAssessment, 
   // Strict rule: a completed (COMPLETED/VALIDATED) reassessment is required before
   // a private-caregiver request can be sent.
   const assessmentReady = !!reco?.ready;
+  // Acuity gate: a private caregiver is justified at Level 3–5. At Level 1–2 the
+  // acuity alone doesn't warrant 1:1 staffing, so a reassessment must be opened to
+  // document the clinical need (DT-013) before a request can be sent.
+  const levelNum = (() => { const m = /([1-5])/.exec(reco?.level || ""); return m ? Number(m[1]) : 0; })();
+  const levelQualifies = levelNum >= 3;
+  const needsReassessment = !!residentId && (!assessmentReady || !levelQualifies);
   // Residents the assessment flags for a private caregiver float to the top.
   const sortedResidents = useMemo(() => [...residents].sort((a, b) => {
     const ra = recoByResident.get(a.id)?.recommend ? 1 : 0;
@@ -318,8 +380,11 @@ function AssignModal({ residents, caregivers, recoByResident, onOpenAssessment, 
 
   const submit = async () => {
     if (!residentId) { Swal.fire({ title: "Select a resident", icon: "warning" }); return; }
-    if (!assessmentReady) {
-      Swal.fire({ title: "Reassessment required", text: reco?.hasAssessment ? "This resident's assessment isn't finished yet. Complete (and validate) it before requesting a private caregiver." : "You can't request a private caregiver without a completed resident assessment. Open the assessment form and finish it first.", icon: "warning" });
+    if (needsReassessment) {
+      const text = !assessmentReady
+        ? (reco?.hasAssessment ? "This resident's assessment isn't finished yet. Complete (and validate) it before requesting a private caregiver." : "You can't request a private caregiver without a completed resident assessment. Open the assessment form and finish it first.")
+        : `${resident?.name || "This resident"} is at Level ${levelNum} of care. A private caregiver is justified at Level 3–5 — open a reassessment to document the clinical need (DT-013) before requesting.`;
+      Swal.fire({ title: "Reassessment required", text, icon: "warning" });
       return;
     }
     if (!caregiverId) { Swal.fire({ title: "Select a caregiver", icon: "warning" }); return; }
@@ -354,7 +419,9 @@ function AssignModal({ residents, caregivers, recoByResident, onOpenAssessment, 
       size="lg"
       footer={<>
         <ClinicalButton variant="ghost" onClick={onClose}>Cancel</ClinicalButton>
-        <ClinicalButton onClick={submit} disabled={busy || !residentId || !assessmentReady} title={!assessmentReady && residentId ? "Complete the resident assessment first" : undefined}><HeartHandshake className="h-4 w-4" /> {busy ? "Sending…" : "Send for family approval"}</ClinicalButton>
+        {needsReassessment
+          ? <ClinicalButton onClick={() => onOpenAssessment(residentId, "pcg")} disabled={!residentId}><ClipboardList className="h-4 w-4" /> New assessment · request for private caregiver</ClinicalButton>
+          : <ClinicalButton onClick={submit} disabled={busy || !residentId}><HeartHandshake className="h-4 w-4" /> {busy ? "Sending…" : "Send for family approval"}</ClinicalButton>}
       </>}
     >
       <div className="space-y-4">
@@ -382,7 +449,7 @@ function AssignModal({ residents, caregivers, recoByResident, onOpenAssessment, 
                   {reco!.recommend ? <Sparkles className="h-4 w-4 text-[var(--clinical-panel)]" /> : <ClipboardList className="h-4 w-4 text-[var(--clinical-muted)]" />}
                   {reco!.recommend ? "Assessment recommends a private caregiver" : "Assessment complete"}
                 </p>
-                <button type="button" onClick={() => onOpenAssessment(residentId)} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[var(--clinical-panel)] hover:underline">Open assessment <ExternalLink className="h-3 w-3" /></button>
+                <button type="button" onClick={() => onOpenAssessment(residentId, "pcg")} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[var(--clinical-panel)] hover:underline">Open assessment <ExternalLink className="h-3 w-3" /></button>
               </div>
               <p className="mt-1 text-xs text-[var(--clinical-ink-soft)]">
                 {reco!.level ? <>Level of care <b>{reco!.level}</b> · </> : null}{reco!.status.toLowerCase()} assessment
@@ -394,6 +461,13 @@ function AssignModal({ residents, caregivers, recoByResident, onOpenAssessment, 
               ) : (
                 <p className="mt-1 text-xs text-[var(--clinical-muted)]">No dedicated-staffing indicators from the assessment — document the reason in the assessment (DT-013) if a private caregiver is still needed.</p>
               )}
+              {!levelQualifies && (
+                <div className="mt-3 rounded-lg border px-3 py-2" style={{ borderColor: "var(--clinical-amber)", backgroundColor: "color-mix(in srgb, var(--clinical-amber) 10%, transparent)" }}>
+                  <p className="flex items-center gap-1.5 text-xs font-bold text-[var(--clinical-amber)]"><AlertTriangle className="h-3.5 w-3.5" /> Level {levelNum} — reassessment needed</p>
+                  <p className="mt-1 text-xs text-[var(--clinical-ink-soft)]">A private caregiver is justified at Level 3–5. At Level {levelNum}, open a reassessment to document why 1:1 staffing is needed (DT-013) before requesting.</p>
+                  <button type="button" onClick={() => onOpenAssessment(residentId, "pcg")} className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-[var(--clinical-panel)] hover:underline">New assessment · request for private caregiver <ExternalLink className="h-3 w-3" /></button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="rounded-xl border px-4 py-3" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: "var(--clinical-amber)" }}>
@@ -401,7 +475,7 @@ function AssignModal({ residents, caregivers, recoByResident, onOpenAssessment, 
               <p className="mt-1 text-xs text-[var(--clinical-ink-soft)]">{reco?.hasAssessment
                 ? `This resident's assessment is still ${reco.status.toLowerCase()}. Finish and validate it before requesting a private caregiver.`
                 : "A completed resident assessment (DT-013) is required to request a private caregiver. Reassess the resident first — that's where the clinical justification is documented."}</p>
-              <button type="button" onClick={() => onOpenAssessment(residentId)} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--clinical-panel)] hover:underline">Open assessment form <ExternalLink className="h-3 w-3" /></button>
+              <button type="button" onClick={() => onOpenAssessment(residentId, "pcg")} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--clinical-panel)] hover:underline">New assessment · request for private caregiver <ExternalLink className="h-3 w-3" /></button>
             </div>
           )
         )}

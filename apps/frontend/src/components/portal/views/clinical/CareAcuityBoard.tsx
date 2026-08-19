@@ -13,7 +13,7 @@
 
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Plus } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { parseLocHistory, historyForResident, LOC_HISTORY_KEY, LOC_SOURCE_LABEL, type LocHistoryEntry, type LocSource } from "@/lib/lifecare/locHistory";
 import { ASSESSMENTS_V42_KEY, originOf, type AssessmentV42, type AssessmentStatus } from "@/lib/lifecare/assessment";
@@ -25,7 +25,7 @@ import { adaptResident } from "@/lib/adapters";
 import type { ClinicianRole } from "./useClinician";
 import ResidentAssessmentV42 from "./ResidentAssessmentV42";
 import {
-  ClinicalPage, ClinicalHeader, ClinicalCard, ClinicalModal,
+  ClinicalPage, ClinicalHeader, ClinicalCard, ClinicalModal, ClinicalButton,
   StatCard, controlClass, SERIF,
 } from "./clinical-ui";
 
@@ -121,6 +121,9 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
     const r = residents.find((x: Row) => s(x.id) === rid);
     return { id: rid, name: r ? s(r.name) : "" };
   }, [searchParams, residents]);
+  // Why the form was opened (e.g. "pcg" = a private-caregiver request), so the
+  // assessment can show its provenance.
+  const deepLinkReason = searchParams?.get("reason") || "";
   const careLevelById = useMemo(() => {
     const m = new Map<string, string>();
     (resQ.data || []).forEach((r) => m.set(s(r.id), s(r.careLevel)));
@@ -141,6 +144,9 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
   const locHistory = useMemo(() => parseLocHistory(settingRows.find((r) => (r.key || r.id) === LOC_HISTORY_KEY)?.value), [settingRows]);
 
   const [tab, setTab] = useState<"queue" | "packages" | "activities" | "history">("queue");
+  // Bumping this signals the embedded assessment board to open a new assessment —
+  // lets the "New Assessment" action live in this board's header, not inside it.
+  const [newSignal, setNewSignal] = useState(0);
 
   // v4.2 workflow states → header stats. Scoped to this board's own (ACUITY)
   // records so Pre-Admission assessments don't leak into the Care Acuity queue.
@@ -178,6 +184,7 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
       <ClinicalHeader
         title="Care Acuity & Level of Care"
         subtitle="Assessment scoring, level assignment, and care planning"
+        right={tab === "queue" ? <ClinicalButton variant="accent" onClick={() => setNewSignal((n) => n + 1)}><Plus className="h-4 w-4" /> New Assessment</ClinicalButton> : undefined}
       />
 
       {/* Stats */}
@@ -200,7 +207,7 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
 
       {/* Assessments — the single v4.2 3-layer instrument, embedded. New → complete
           → nurse-validate → care plan; stores to assessments_v42. */}
-      {tab === "queue" && <ResidentAssessmentV42 clinicianRole={roleForV42} embedded origin="ACUITY" deepLinkResident={deepLinkResident} />}
+      {tab === "queue" && <ResidentAssessmentV42 clinicianRole={roleForV42} embedded origin="ACUITY" deepLinkResident={deepLinkResident} deepLinkReason={deepLinkReason} newSignal={newSignal} />}
 
       {tab === "packages" && (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -270,11 +277,14 @@ function LevelHistoryView({ residents, approved, locHistory, v42ById, acuityById
   const [sel, setSel] = useState("");
   const [detail, setDetail] = useState<LocTimelineItem | null>(null);
   const resId = sel || (residents[0] ? s(residents[0].id) : "");
+  // Resident name → lets pre-admission LOC entries (captured before a Resident id
+  // existed, keyed by admission/name) surface on the now-admitted resident.
+  const resName = s((residents.find((r) => s(r.id) === resId) || {}).name);
 
   // Merge the durable loc_history with any legacy approved-acuity records not yet
   // represented there (matched by assessmentId), into one chronological timeline.
   const timeline = useMemo<LocTimelineItem[]>(() => {
-    const mine = historyForResident(locHistory, resId);
+    const mine = historyForResident(locHistory, resId, [], resName);
     const seenAssessment = new Set(mine.map((e) => e.assessmentId).filter(Boolean) as string[]);
     const fromHistory: LocTimelineItem[] = mine.map((e, i) => {
       // For acuity approvals, derive the scale from the linked record (56 for
@@ -292,7 +302,7 @@ function LevelHistoryView({ residents, approved, locHistory, v42ById, acuityById
       .filter((a) => a.residentId === resId && !seenAssessment.has(a.id))
       .map((a) => ({ key: `a-${a.id}`, at: s(a.decidedAt || a.createdAt), level: a.level, source: "Acuity Approval", sourceKey: "ACUITY_APPROVAL", kind: "acuity", assessmentId: a.id, by: a.decidedBy || a.createdBy, rawScore: a.total, scoreMax: scaleMaxOf(a), notes: a.trigger ? `Trigger: ${a.trigger}` : undefined }));
     return [...fromHistory, ...fromAcuity].sort((x, y) => (y.at || "").localeCompare(x.at || ""));
-  }, [locHistory, approved, resId, acuityById]);
+  }, [locHistory, approved, resId, resName, acuityById]);
 
   return (
     <ClinicalCard className="p-5">

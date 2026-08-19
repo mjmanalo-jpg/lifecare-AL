@@ -33,7 +33,7 @@ export default function ClockInGate({ role, tab, children }: { role: GatedRole; 
 }
 
 function Guard({ role, children }: { role: GatedRole; children: ReactNode }) {
-  const { userId } = useClinician(role as ClinicianRole);
+  const { userId, ready } = useClinician(role as ClinicianRole);
   const { data: settingRows, loading } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
   const router = useRouter();
   const pathname = usePathname();
@@ -43,8 +43,11 @@ function Guard({ role, children }: { role: GatedRole; children: ReactNode }) {
     return isOnDuty(parseClockEvents(raw), userId);
   }, [settingRows, userId]);
 
-  // Still resolving settings → show a light loader rather than flashing the block.
-  if (loading && settingRows.length === 0) {
+  // Hold the decision until BOTH the clock events AND the signed-in identity have
+  // settled. Deciding early lets `userId` fall back to a role-matched placeholder
+  // (who is never clocked in), which flashes the block at an already-clocked-in
+  // nurse on every tab switch. A brief loader beats a wrong block.
+  if (!ready || (loading && settingRows.length === 0)) {
     return <div className="flex min-h-[60vh] items-center justify-center text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>;
   }
   // Fail-open if we genuinely can't resolve the signed-in identity (avoid lockout).
