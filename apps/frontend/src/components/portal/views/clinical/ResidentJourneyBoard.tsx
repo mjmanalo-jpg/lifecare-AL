@@ -60,6 +60,7 @@ const ACCENT_VAR: Record<JourneyAccent, string> = {
 };
 const CATEGORY_ICON: Record<JourneyCategory, LucideIcon> = {
   ADMISSION: UserPlus, ASSESSMENT: ClipboardList, LOC: Gauge, CARE_PLAN: ClipboardCheck,
+  CARE_EVENT: ClipboardCheck,
   ACUITY: Layers, MEDICATION: Pill, INCIDENT: AlertTriangle, WOUND: Bandage,
   REFERRAL: Stethoscope, CLINICAL_RECORD: FolderOpen, ENDORSEMENT: FileText,
   WEIGHT: Scale, PRIVATE_CARE: HeartHandshake, DOCUMENT: FileText, NOTE: StickyNote,
@@ -82,6 +83,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
   const refQ = useLiveQuery<Row>("hospital-referrals", { query: "take=1000", tables: ["HospitalReferral"] });
   const docQ = useLiveQuery<Row>("resident-documents", { query: "take=1000", tables: ["ResidentDocument"] });
   const noteQ = useLiveQuery<Row>("resident-notes", { query: "take=2000", tables: ["ResidentNote"] });
+  const ceQ = useLiveQuery<Row>("care-events", { query: "take=2000", tables: ["CareEvent"] });
 
   const residents = useMemo(() => (resQ.data || []).map((raw) => {
     const a = adaptResident(raw);
@@ -157,8 +159,9 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       referrals: refQ.data || [],
       documents: docQ.data || [],
       notes: noteQ.data || [],
+      careEvents: ceQ.data || [],
     });
-  }, [resident, settingRows, medQ.data, incQ.data, refQ.data, docQ.data, noteQ.data]);
+  }, [resident, settingRows, medQ.data, incQ.data, refQ.data, docQ.data, noteQ.data, ceQ.data]);
 
   // Counts per category (for the filter chips) + the filtered feed.
   const counts = useMemo(() => {

@@ -19,7 +19,7 @@ const pickDate = (r: Row, ...keys: string[]): string => {
 };
 
 export type JourneyCategory =
-  | "ADMISSION" | "ASSESSMENT" | "LOC" | "CARE_PLAN" | "ACUITY"
+  | "ADMISSION" | "ASSESSMENT" | "LOC" | "CARE_PLAN" | "ACUITY" | "CARE_EVENT"
   | "MEDICATION" | "INCIDENT" | "WOUND" | "REFERRAL" | "CLINICAL_RECORD"
   | "ENDORSEMENT" | "WEIGHT" | "PRIVATE_CARE" | "DOCUMENT" | "NOTE";
 
@@ -38,6 +38,7 @@ export const JOURNEY_CATEGORY_META: Record<JourneyCategory, JourneyCategoryMeta>
   LOC: { label: "Level of Care", accent: "teal", tab: "careacuity" },
   CARE_PLAN: { label: "Care Plan Review", accent: "green", tab: "careplans" },
   ACUITY: { label: "Care Acuity", accent: "teal", tab: "careacuity" },
+  CARE_EVENT: { label: "Care Event", accent: "green", tab: "caredelivery" },
   MEDICATION: { label: "Medication", accent: "ink", tab: "mar" },
   INCIDENT: { label: "Incident", accent: "coral", tab: "incidents" },
   WOUND: { label: "Wound Care", accent: "coral", tab: "woundcare" },
@@ -51,7 +52,7 @@ export const JOURNEY_CATEGORY_META: Record<JourneyCategory, JourneyCategoryMeta>
 };
 
 export const JOURNEY_CATEGORY_ORDER: JourneyCategory[] = [
-  "ADMISSION", "ASSESSMENT", "LOC", "ACUITY", "CARE_PLAN", "MEDICATION",
+  "ADMISSION", "ASSESSMENT", "LOC", "ACUITY", "CARE_PLAN", "CARE_EVENT", "MEDICATION",
   "INCIDENT", "WOUND", "REFERRAL", "CLINICAL_RECORD", "ENDORSEMENT",
   "WEIGHT", "PRIVATE_CARE", "DOCUMENT", "NOTE",
 ];
@@ -75,6 +76,7 @@ export interface JourneySources {
   admittedAt?: string;             // resident.moveInDate / admissionDate / createdAt
   admissionSummary?: string;       // e.g. "Room 302 · Level 3"
   locHistory?: Row[];
+  careEvents?: Row[];
   assessmentsV42?: Row[];
   carePlanReviews?: Row[];
   acuity?: Row[];
@@ -127,6 +129,18 @@ export function buildJourney(src: JourneySources): JourneyEvent[] {
       status: titleCase(s(a.status)), by: s(a.createdBy) || undefined,
       date: pickDate(a, "updatedAt", "createdAt"),
       tab: isAcuity ? "careacuity" : "prescreen",
+    });
+  }
+
+  // Care events — governed task-completion outcomes (exceptions surface first).
+  for (const c of forRes(src.careEvents, rid)) {
+    const exception = !!c.isException;
+    push({
+      id: `careevent:${s(c.id)}`, category: "CARE_EVENT",
+      title: `${s(c.eventName) || s(c.outcome) || "Care event"}${c.domain ? ` — ${s(c.domain)}` : ""}`,
+      summary: [s(c.observation), s(c.exceptionDetail)].filter(Boolean).join(" · ") || undefined,
+      status: exception ? `Exception · ${s(c.outcome)}` : s(c.outcome), by: s(c.actorName) || undefined,
+      date: pickDate(c, "occurredAt", "createdAt"),
     });
   }
 

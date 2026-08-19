@@ -62,8 +62,9 @@ const NURSE_ROLES = new Set(["NURSE", "CARE_MANAGER", "FACILITY_ADMIN", "SUPERAD
 
 interface MaterialisedResident {
   assessmentId: string;
-  residentId: string;      // real resident link if present, else the assessment id
+  residentId: string;      // real Resident id when resolved, else the assessment id
   residentName: string;
+  linked: boolean;         // residentId points at a real Resident row (charting needs this)
   finalLevel: string;
   queues: Record<ShiftRole, ShiftEncounter[]>;
   total: number;
@@ -102,6 +103,22 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
     "care-events", { query: "take=200", tables: ["CareEvent"] }
   );
 
+  // Real Resident rows — a CareEvent needs a valid resident FK. An assessment that
+  // isn't linked to an admitted resident (or is a pre-admission lead) has no real
+  // id, so we resolve by id first, then by name; unresolved → charting is blocked.
+  const { data: residentRows } = useLiveQuery<Record<string, unknown>>("residents", { tables: ["Resident"] });
+  const realResidents = useMemo(() => {
+    const byId = new Set<string>();
+    const byName = new Map<string, string>();
+    for (const r of (residentRows || [])) {
+      const id = String(r.id || ""); if (!id) continue;
+      byId.add(id);
+      const nm = `${r.firstName ?? ""} ${r.lastName ?? ""}`.trim().toLowerCase();
+      if (nm && !byName.has(nm)) byName.set(nm, id);
+    }
+    return { byId, byName };
+  }, [residentRows]);
+
   // ---- Current user identity (session → name + role) ------------------------
   const [me, setMe] = useState("");
   const [sessionRole, setSessionRole] = useState<string | null>(null);
@@ -135,10 +152,15 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
         const view = materialiseShiftView({ ...draft, status: "APPROVED" });
         if (!view.length) continue;
         const queues = splitByRole(view);
+        const name = a.layer1?.residentName || "Resident";
+        const linkedId = (a.layer1?.residentId && realResidents.byId.has(a.layer1.residentId))
+          ? a.layer1.residentId
+          : realResidents.byName.get(name.trim().toLowerCase()) || "";
         out.push({
           assessmentId: a.id,
-          residentId: a.layer1?.residentId || a.id,
-          residentName: a.layer1?.residentName || "Resident",
+          residentId: linkedId || a.id,
+          residentName: name,
+          linked: !!linkedId,
           finalLevel: String(finalLevel),
           queues,
           total: view.length,
@@ -146,7 +168,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
       } catch { /* a bad line shouldn't sink the whole board */ }
     }
     return out.sort((x, y) => x.residentName.localeCompare(y.residentName));
-  }, [settingRows]);
+  }, [settingRows, realResidents]);
 
   // ---- Selection + search ---------------------------------------------------
   const [search, setSearch] = useState("");
@@ -186,6 +208,16 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
     observation: string,
   ) => {
     if (!selected) return;
+    // A care event needs a real resident FK. If this assessment isn't linked to an
+    // admitted resident yet, charting would fail with a FK error — block clearly.
+    if (!selected.linked) {
+      Swal.fire({
+        title: "Not linked to a resident",
+        text: `${selected.residentName}'s assessment isn't linked to an admitted resident record yet, so care can't be charted. Complete their admission / link the resident first.`,
+        icon: "warning",
+      });
+      return;
+    }
     // LOC package gate — charting care outside the resident's Level package is an
     // Additional Clinical Service (DT-014): warn (never block), flag on proceed.
     const level = levelFromFinal(selected.finalLevel);
@@ -315,7 +347,10 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
                             : "border-[var(--clinical-line)] bg-[var(--clinical-surface)] hover:bg-[var(--clinical-surface-2)]"
                         }`}
                       >
-                        <span className="block truncate text-sm font-semibold text-[var(--clinical-ink)]">{r.residentName}</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="block truncate text-sm font-semibold text-[var(--clinical-ink)]">{r.residentName}</span>
+                          {!r.linked && <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-amber) 18%, transparent)", color: "var(--clinical-amber)" }} title="Assessment not linked to an admitted resident — charting is disabled">Unlinked</span>}
+                        </span>
                         <span className="mt-0.5 flex items-center gap-2 text-[11px] text-[var(--clinical-muted)]">
                           <span>Level {r.finalLevel}</span>
                           <span aria-hidden>·</span>

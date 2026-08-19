@@ -30,7 +30,8 @@ export const dynamic = "force-dynamic";
 // ─────────────────────────────────────────────────────────────
 
 const TZ = "Asia/Manila"; // facility-local calendar day (matches the rest of the app)
-const freqOf = (desc: string | null): string => (/Frequency:\s*([^·]+)/.exec(desc || "")?.[1] || "Daily").trim();
+const freqOf = (desc: string | null): string => (/Frequency:\s*([^·[]+)/.exec(desc || "")?.[1] || "Daily").trim();
+const careTaskIdOf = (desc: string | null): string | null => /\[task:([^\]]+)\]/.exec(desc || "")?.[1]?.trim() || null;
 const weekdayOf = (dateStr: string) => new Date(dateStr + "T00:00:00Z").getUTCDay();
 const localDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(d);
 
@@ -77,6 +78,7 @@ async function materializeCommunity(communityId: string, organizationId: string 
       const key = `${plan.id}|${item.title}`;
       if (seen.has(key)) continue;
       seen.add(key);
+      const careTaskId = careTaskIdOf(item.description);
       try {
         await prisma.task.create({
           data: {
@@ -87,6 +89,9 @@ async function materializeCommunity(communityId: string, organizationId: string 
             status: "PENDING", priority: "MEDIUM",
             dueDate: dayEnd, generatedFrom: plan.id,
             assignedToId: assignee.caregiverStaffId,
+            // Governed care-event linkage — lets task completion resolve the routine's
+            // Care Task Master archetype (doc template + escalation/reassessment).
+            recurringPattern: careTaskId ? { careTaskId } : undefined,
           },
         });
         created++;

@@ -9,6 +9,7 @@
 // the generic /api/db/care-events route.
 
 import type { CareLevel } from "./types.ts";
+import { taskById } from "./dataset.ts";
 
 /** Outcomes a care event can carry (universal payload). */
 export const OUTCOMES = [
@@ -157,4 +158,16 @@ export function buildCareEventRecord(input: CareEventInput, modelVersion: string
     reporterRole: input.reporterRole,
     occurredAt: input.occurredAt ?? new Date().toISOString(),
   };
+}
+
+/**
+ * Governed documentation prompt + reassessment note for a routine, from the Care
+ * Task Master (TASK-*). Lets task completion surface the task's own care-event
+ * documentation template and escalation/reassessment guidance.
+ */
+export function careTaskDoc(careTaskId?: string | null): { id: string; template: string; reassessment: string; domain: string } | null {
+  if (!careTaskId) return null;
+  const t = taskById(careTaskId);
+  if (!t) return null;
+  return { id: t.id, template: t.careEventDocTemplate || "", reassessment: t.escalationReassessment || "", domain: t.domain || "" };
 }

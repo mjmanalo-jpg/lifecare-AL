@@ -47,6 +47,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
   const { name: clinicianName } = useClinician(clinicianRole);
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const incQ = useLiveQuery<Row>("incidents", { query: "take=400", tables: ["Incident"] });
+  const ceQ = useLiveQuery<Row>("care-events", { query: "take=1000", tables: ["CareEvent"] });
   const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
 
   const cpQ = useLiveQuery<Row>("care-plans", { query: "take=300", tables: ["CarePlan"] });
@@ -75,6 +76,13 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
     const cutoff = addMonths(today, 0); cutoff.setDate(cutoff.getDate() - 30);
     return (incQ.data || []).filter((i) => s(i.residentId) === resId && new Date(s(i.incidentDate || i.createdAt)) >= cutoff);
   }, [incQ.data, resId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Recent care-event variances (last 30 days) — the ICP triggers from delivery.
+  const recentVariances = useMemo(() => {
+    if (!resId) return [];
+    const cutoff = addMonths(today, 0); cutoff.setDate(cutoff.getDate() - 30);
+    return (ceQ.data || []).filter((c) => s(c.residentId) === resId && (c.isException || c.isVariance) && new Date(s(c.createdAt || c.occurredAt)) >= cutoff);
+  }, [ceQ.data, resId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const persist = async (next: Review[]) => { await upsertRecord("app-settings", REVIEW_KEY, { key: REVIEW_KEY, value: JSON.stringify(next) }); await refetch(); };
 
@@ -168,7 +176,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
 
           {resident && <CarePlanBuilder key={resId} level={levelOf(resident).n} genBusy={genBusy} onGenerate={genPlan} />}
 
-          {resident && <ReviewForm resident={resident} recentInc={recentInc} last={latestReview(resId)} reviewedBy={clinicianName} heldPlanCount={(draftPlansByResident.get(resId) || []).length}
+          {resident && <ReviewForm resident={resident} recentInc={recentInc} recentVariances={recentVariances} last={latestReview(resId)} reviewedBy={clinicianName} heldPlanCount={(draftPlansByResident.get(resId) || []).length}
             onSubmit={async (rec) => {
               await persist([{ ...rec, id: newId(), createdAt: new Date().toISOString() }, ...reviews]);
               // Release any held (DRAFT) plans for this resident — unless the decision
@@ -335,6 +343,7 @@ function CarePlanBuilder({ level, genBusy, onGenerate }: {
         domain: it.domain,
         title: it.name,
         freq: it.freq,
+        taskId: it.taskId,
         note: [it.assistance && `Assistance: ${it.assistance}`, it.note.trim(), it.responsibleRole && `Role: ${it.responsibleRole}`].filter(Boolean).join(" · ") || undefined,
       })),
     });
@@ -417,8 +426,8 @@ function CarePlanBuilder({ level, genBusy, onGenerate }: {
   );
 }
 
-function ReviewForm({ resident, recentInc, last, reviewedBy, heldPlanCount = 0, onSubmit }: {
-  resident: Row; recentInc: Row[]; last?: Review; reviewedBy: string; heldPlanCount?: number;
+function ReviewForm({ resident, recentInc, recentVariances = [], last, reviewedBy, heldPlanCount = 0, onSubmit }: {
+  resident: Row; recentInc: Row[]; recentVariances?: Row[]; last?: Review; reviewedBy: string; heldPlanCount?: number;
   onSubmit: (rec: Omit<Review, "id" | "createdAt">) => Promise<void>;
 }) {
   const today = new Date();
@@ -434,11 +443,15 @@ function ReviewForm({ resident, recentInc, last, reviewedBy, heldPlanCount = 0, 
   const [targetDate, setTargetDate] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Derive triggers from recent incidents.
+  // Derive triggers from recent incidents + care-event variances.
   const has = (types: string[]) => recentInc.filter((i) => types.includes(s(i.incidentType).toUpperCase()));
-  const icp = has(["BEHAVIORAL"]).length ? "Behavioral event in last 30 days — update the individual care plan." : "";
+  const varianceCount = recentVariances.length;
+  const reassessFlagged = recentVariances.some((c) => c.reviewAlertRaised);
+  const icp = has(["BEHAVIORAL"]).length ? "Behavioral event in last 30 days — update the individual care plan."
+    : varianceCount ? `${varianceCount} care-delivery variance${varianceCount === 1 ? "" : "s"} in last 30 days — update the individual care plan.` : "";
   const isp = has(["MED_ERROR", "MEDICATION"]).length ? "Medication event in last 30 days — review the service plan." : "";
-  const loc = recentInc.filter((i) => ["FALL", "CRITICAL"].includes(s(i.incidentType).toUpperCase()) || s(i.severity).toUpperCase() === "CRITICAL").length ? "Fall or critical event in last 30 days — evaluate level of care." : "";
+  const loc = recentInc.filter((i) => ["FALL", "CRITICAL"].includes(s(i.incidentType).toUpperCase()) || s(i.severity).toUpperCase() === "CRITICAL").length ? "Fall or critical event in last 30 days — evaluate level of care."
+    : reassessFlagged ? "Repeat care variances flagged for reassessment — evaluate level of care." : "";
 
   const submit = async () => {
     if (!decision) { Swal.fire({ title: "Select a decision", text: "Choose a decision before submitting the review.", icon: "warning" }); return; }
@@ -469,8 +482,12 @@ function ReviewForm({ resident, recentInc, last, reviewedBy, heldPlanCount = 0, 
       </Section>
 
       <Section title="Recent Indicators (Last 30 Days)">
-        {recentInc.length === 0 ? <p className="text-[var(--clinical-muted)]">No indicator data available.</p>
-          : <div className="space-y-1.5">{recentInc.map((i) => <div key={s(i.id)} className="flex items-center gap-2 text-sm"><StatusPill status={s(i.incidentType).replace(/_/g, " ")}>{s(i.incidentType).replace(/_/g, " ")}</StatusPill><span className="text-[var(--clinical-ink-soft)]">{s(i.title) || s(i.description).slice(0, 80)}</span><span className="ml-auto text-xs text-[var(--clinical-muted)]">{fmt(s(i.incidentDate || i.createdAt).slice(0, 10))}</span></div>)}</div>}
+        {recentInc.length === 0 && recentVariances.length === 0 ? <p className="text-[var(--clinical-muted)]">No indicator data available.</p> : (
+          <div className="space-y-1.5">
+            {recentInc.map((i) => <div key={s(i.id)} className="flex items-center gap-2 text-sm"><StatusPill status={s(i.incidentType).replace(/_/g, " ")}>{s(i.incidentType).replace(/_/g, " ")}</StatusPill><span className="text-[var(--clinical-ink-soft)]">{s(i.title) || s(i.description).slice(0, 80)}</span><span className="ml-auto text-xs text-[var(--clinical-muted)]">{fmt(s(i.incidentDate || i.createdAt).slice(0, 10))}</span></div>)}
+            {recentVariances.map((c) => <div key={s(c.id)} className="flex items-center gap-2 text-sm"><StatusPill status={c.immediateEscalation ? "CRITICAL" : "WARNING"}>Care variance</StatusPill><span className="text-[var(--clinical-ink-soft)]">{s(c.outcome)}{c.domain ? ` · ${s(c.domain)}` : ""}{c.observation ? ` — ${s(c.observation).slice(0, 60)}` : ""}</span><span className="ml-auto text-xs text-[var(--clinical-muted)]">{fmt(s(c.createdAt || c.occurredAt).slice(0, 10))}</span></div>)}
+          </div>
+        )}
       </Section>
 
       <Section title="Trigger Evaluation">

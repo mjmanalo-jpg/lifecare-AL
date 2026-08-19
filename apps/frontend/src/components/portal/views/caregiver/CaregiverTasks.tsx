@@ -8,6 +8,7 @@ import { adaptTask } from "@/lib/adapters";
 import { updateRecord, deleteRecord } from "@/lib/api";
 import { TASK_NOTES_FIELD, taskNotesOf, withAppendedNote, withoutNote } from "@/lib/taskNotes";
 import AddTaskModal, { SUPERVISOR_ROLES } from "./AddTaskModal";
+import CareEventModal, { type CareEventTaskRef } from "./CareEventModal";
 import { StatusPill, MicroLabel, ClinicalHeader, ClinicalCard, ClinicalModal, ClinicalButton, FieldLabel, controlClass } from "../clinical/clinical-ui";
 
 type CaregiverTask = ReturnType<typeof adaptTask>;
@@ -73,14 +74,17 @@ export default function CaregiverTasks() {
   const [noteFor, setNoteFor] = useState<CaregiverTask | null>(null);
   const [noteText, setNoteText] = useState("");
   const [noteBusy, setNoteBusy] = useState(false);
+  // Governed care-event capture on completing a care-plan task.
+  const [careEventTask, setCareEventTask] = useState<CareEventTaskRef | null>(null);
 
   // Only the head nurse / supervisors may assign tasks — caregivers cannot.
   const [sessionRole, setSessionRole] = useState<string | null>(null);
+  const [sessionName, setSessionName] = useState<string>("Caregiver");
   useEffect(() => {
     fetch("/api/auth/session")
       .then((res) => res.json())
       .then((data) => {
-        if (data?.authenticated) setSessionRole(data.session?.role ?? null);
+        if (data?.authenticated) { setSessionRole(data.session?.role ?? null); setSessionName(data.session?.name || "Caregiver"); }
       })
       .catch(() => { /* Non-fatal: hides the assign button. */ });
   }, []);
@@ -178,7 +182,21 @@ export default function CaregiverTasks() {
   // Advance a task through its lifecycle: Start → IN_PROGRESS, Complete →
   // COMPLETED, or revert/reopen → PENDING. completedAt is stamped only on
   // completion and cleared otherwise, so a reopened task looks fresh.
-  const handleSetStatus = async (id: string, status: "PENDING" | "IN_PROGRESS" | "COMPLETED") => {
+  const handleSetStatus = async (id: string, status: "PENDING" | "IN_PROGRESS" | "COMPLETED", task?: CaregiverTask) => {
+    // Completing a CARE-PLAN task requires a governed care event first — open the
+    // capture modal (which logs the event, fires signals, then completes the task)
+    // instead of silently marking it done. Ad-hoc tasks complete directly.
+    if (status === "COMPLETED" && task) {
+      const raw = (task.raw ?? {}) as { residentId?: unknown; generatedFrom?: unknown; recurringPattern?: unknown };
+      if (raw.generatedFrom) {
+        const rp = (raw.recurringPattern ?? {}) as { careTaskId?: unknown };
+        setCareEventTask({
+          id: task.id, title: task.title, residentId: String(raw.residentId ?? ""), residentName: task.resident,
+          careTaskId: rp.careTaskId ? String(rp.careTaskId) : null, carePlanId: String(raw.generatedFrom),
+        });
+        return;
+      }
+    }
     try {
       await updateRecord("tasks", id, {
         status,
@@ -336,7 +354,7 @@ export default function CaregiverTasks() {
                   </button>
                 )}
                 <button
-                  onClick={() => handleSetStatus(task.id, "COMPLETED")}
+                  onClick={() => handleSetStatus(task.id, "COMPLETED", task)}
                   title="Mark complete"
                   className="p-1.5 rounded transition text-[#7E9B6F] hover:bg-[#7E9B6F]/12"
                 >
@@ -511,6 +529,15 @@ export default function CaregiverTasks() {
             setShowAddTask(false);
             refetchTasks();
           }}
+        />
+      )}
+
+      {careEventTask && (
+        <CareEventModal
+          task={careEventTask}
+          actorName={sessionName}
+          onClose={() => setCareEventTask(null)}
+          onDone={() => { setCareEventTask(null); refetchTasks(); }}
         />
       )}
 

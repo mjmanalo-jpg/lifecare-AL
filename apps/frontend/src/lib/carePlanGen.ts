@@ -50,7 +50,7 @@ const LEVEL_DOMAINS: Record<number, string[]> = {
 const levelCol = (b: BaselineRow, level: number): string =>
   level >= 4 ? b.L4 : level === 3 ? b.L3 : level === 2 ? b.L2 : b.L1;
 
-export interface PlanIntervention { title: string; freq: string; note?: string; domain?: string }
+export interface PlanIntervention { title: string; freq: string; note?: string; domain?: string; taskId?: string }
 export interface LevelPlanTemplate { title: string; goals: string[]; interventions: PlanIntervention[] }
 
 /** Build the per-level plan template (title, goals, interventions) from rule-data. */
@@ -174,7 +174,10 @@ export async function generateCarePlanForResident(opts: {
     await createRecord("care-plan-items", { carePlanId: planId, communityId: community, category: "GOAL", title: g, status: "ACTIVE", sortOrder: order++ }).catch(() => null);
   }
   for (const iv of interventions) {
-    await createRecord("care-plan-items", { carePlanId: planId, communityId: community, category: "INTERVENTION", title: iv.title, description: [`Frequency: ${iv.freq}`, iv.note?.trim() ? `Individualized: ${iv.note.trim()}` : ""].filter(Boolean).join(" · "), status: "ACTIVE", sortOrder: order++ }).catch(() => null);
+    // The [task:TASK-###] marker links the item to its Care Task Master routine so
+    // the materialized task can resolve its governed care-event archetype.
+    const marker = iv.taskId ? ` [task:${iv.taskId}]` : "";
+    await createRecord("care-plan-items", { carePlanId: planId, communityId: community, category: "INTERVENTION", title: iv.title, description: `${[`Frequency: ${iv.freq}`, iv.note?.trim() ? `Individualized: ${iv.note.trim()}` : ""].filter(Boolean).join(" · ")}${marker}`, status: "ACTIVE", sortOrder: order++ }).catch(() => null);
   }
 
   // Held plans are TEMPLATES only — no tasks are created here. The daily
