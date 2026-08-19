@@ -21,11 +21,26 @@ export const LOC_MARKER_PREFIX = "[loc:";
 
 /** One row per acuity Level 1–5. */
 export interface LocPrice {
-  level: number;    // 1..5
-  label: string;    // invoice line, e.g. "Level 3 — Enhanced Assisted Care Fee"
-  amount: number;   // monthly PHP
-  category: string; // ServiceCharge category
-  active: boolean;  // false → no charge posted for this level
+  level: number;      // 1..5
+  label: string;      // invoice line, e.g. "Level 3 — Enhanced Assisted Care Fee"
+  amount: number;     // gross monthly PHP (before discount)
+  discountPct?: number; // 0–100 % discount off the monthly fee (0 = none)
+  category: string;   // ServiceCharge category
+  active: boolean;    // false → no charge posted for this level
+}
+
+/** Clamp a percentage to 0–100 (2-dp). */
+export function clampPct(n: unknown): number {
+  const v = Number(n);
+  if (!isFinite(v)) return 0;
+  return Math.max(0, Math.min(100, Math.round(v * 100) / 100));
+}
+
+/** The net monthly fee after the level's percentage discount (2-dp). */
+export function locNetAmount(p: Pick<LocPrice, "amount" | "discountPct">): number {
+  const pct = clampPct(p.discountPct ?? 0);
+  const net = (Number(p.amount) || 0) * (1 - pct / 100);
+  return Math.round(net * 100) / 100;
 }
 
 // Level names come from the canonical care-level model (care_level_model.json)
@@ -36,6 +51,7 @@ export const DEFAULT_LOC_PRICING: LocPrice[] = LOC_LEVEL_META.map((m) => ({
   level: m.level,
   label: `Level ${m.level} — ${m.name} Care Fee`,
   amount: 0,
+  discountPct: 0,
   category: "Care Services",
   active: false,
 }));
@@ -53,6 +69,7 @@ export function parseLocPricing(raw: string | null | undefined): LocPrice[] {
       level: m.level,
       label: (found?.label && String(found.label)) || def.label,
       amount: Number(found?.amount) || 0,
+      discountPct: clampPct(found?.discountPct ?? 0),
       category: (found?.category && String(found.category)) || def.category,
       active: found?.active != null ? Boolean(found.active) : def.active,
     };

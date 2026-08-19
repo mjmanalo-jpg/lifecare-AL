@@ -16,7 +16,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
 import { CHARGE_CATEGORIES } from "@/lib/billingLibrary";
-import { LOC_PRICING_KEY, parseLocPricing, type LocPrice } from "@/lib/locBilling";
+import { LOC_PRICING_KEY, parseLocPricing, locNetAmount, clampPct, type LocPrice } from "@/lib/locBilling";
 
 const peso = (n: number) => `₱${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -77,18 +77,20 @@ export default function LocPricingBoard() {
 
       <div className="rounded-xl bg-teal-50 border border-teal-100 px-4 py-3 mb-5 flex items-start gap-2 text-sm text-teal-800">
         <Info className="w-4 h-4 mt-0.5 shrink-0" />
-        <p>Set a price and toggle <b>Active</b> for each level you bill. Inactive levels (or ₱0) post no charge. This fee is a <b>separate line item</b> from your Charge Library Room &amp; Board templates — price it as a care surcharge to avoid overlap. Currently active: <b>{activeCount}/5</b>.</p>
+        <p>Set a price and toggle <b>Active</b> for each level you bill. Add an optional <b>% discount</b> — the <b>net</b> fee is what posts to the resident (e.g. ₱10,000 at 20% bills ₱8,000). Inactive levels, ₱0, or a 100% discount post no charge. This fee is a <b>separate line item</b> from your Charge Library Room &amp; Board templates. Currently active: <b>{activeCount}/5</b>.</p>
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-sm">
+          <table className="w-full min-w-[1000px] text-sm">
             <thead>
               <tr className="text-left text-white" style={{ backgroundColor: "#2E4A48" }}>
                 <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider">Level</th>
                 <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider">Invoice Label</th>
                 <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider">Category</th>
                 <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider">Monthly Fee</th>
+                <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider">Discount</th>
+                <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider">Net / mo</th>
                 <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider text-center">Active</th>
               </tr>
             </thead>
@@ -107,11 +109,27 @@ export default function LocPricingBoard() {
                     </select>
                   </td>
                   <td className="px-6 py-3.5 align-middle">
-                    <div className="relative w-40">
+                    <div className="relative w-36">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₱</span>
                       <input inputMode="decimal" value={r.amount ? String(r.amount) : ""} onChange={(e) => setRow(r.level, { amount: Number(e.target.value.replace(/[^0-9.]/g, "")) || 0 })} placeholder="0.00" className="w-full pl-7 pr-3 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-teal-400/40 tabular-nums" />
-                      <p className="text-[11px] text-slate-400 mt-1">{peso(r.amount)}/mo</p>
                     </div>
+                  </td>
+                  <td className="px-6 py-3.5 align-middle">
+                    <div className="relative w-28">
+                      <input inputMode="decimal" value={r.discountPct ? String(r.discountPct) : ""} onChange={(e) => setRow(r.level, { discountPct: clampPct(e.target.value.replace(/[^0-9.]/g, "")) })} placeholder="0" className="w-full pl-3 pr-7 py-2 rounded-lg border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-teal-400/40 tabular-nums" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">%</span>
+                    </div>
+                    <div className="mt-1 flex gap-1">
+                      {[0, 10, 20, 30].map((p) => (
+                        <button key={p} type="button" onClick={() => setRow(r.level, { discountPct: p })} className={`rounded px-1.5 py-0.5 text-[10px] font-semibold transition ${(r.discountPct ?? 0) === p ? "bg-teal-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800"}`}>{p}%</button>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-6 py-3.5 align-middle">
+                    <p className="font-semibold text-slate-800 tabular-nums">{peso(locNetAmount(r))}</p>
+                    {(r.discountPct ?? 0) > 0 && r.amount > 0 && (
+                      <p className="text-[11px] text-slate-400 line-through tabular-nums">{peso(r.amount)}</p>
+                    )}
                   </td>
                   <td className="px-6 py-3.5 align-middle text-center">
                     <button type="button" onClick={() => setRow(r.level, { active: !r.active })} aria-pressed={r.active} className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${r.active ? "bg-teal-600" : "bg-slate-300"}`}>

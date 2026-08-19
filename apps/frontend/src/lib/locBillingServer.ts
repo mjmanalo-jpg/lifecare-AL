@@ -4,7 +4,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { LOC_PRICING_KEY, LOC_MARKER_PREFIX, parseLocPricing, locMarker, periodTag } from "./locBilling";
+import { LOC_PRICING_KEY, LOC_MARKER_PREFIX, parseLocPricing, locMarker, locNetAmount, clampPct, periodTag } from "./locBilling";
 
 /**
  * Apply a resident's Level-of-Care monthly fee for the current period:
@@ -53,16 +53,24 @@ export async function applyResidentLocCharge(opts: {
 
   if (!price) return { created: false, voided, skipped: true };
 
-  const description = `${price.label} ${wantMarker}`;
-  if (existing.some((c) => c.description === description)) return { created: false, voided, skipped: true };
+  // Net fee after the level's percentage discount. A 100% discount (or ₱0 net)
+  // posts no charge, same as an inactive level.
+  const pct = clampPct(price.discountPct ?? 0);
+  const net = locNetAmount(price);
+  if (net <= 0) return { created: false, voided, skipped: true };
 
+  // Marker-based idempotency (per resident/level/month) — robust even if the
+  // label or discount changed after the fee was already posted this month.
+  if (existing.some((c) => c.description.includes(wantMarker))) return { created: false, voided, skipped: true };
+
+  const description = `${price.label}${pct > 0 ? ` (−${pct}% discount)` : ""} ${wantMarker}`;
   await prisma.serviceCharge.create({
     data: {
       organizationId: organizationId ?? undefined,
       communityId,
       residentId,
       description,
-      amount: price.amount,
+      amount: net,
       category: price.category,
       serviceDate: now,
     },
