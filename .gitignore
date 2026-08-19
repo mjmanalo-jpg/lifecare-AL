@@ -64,3 +64,18 @@ venv/
 *.egg-info/
 .vercel
 .env*
+
+# graphify knowledge-graph output
+graphify-out/
+apps/graphify-out/
+
+# Agent/tool scratch dirs
+.codex/
+.impeccable/
+
+# Generated shift reports
+SHIFT_REPORT_*.md
+
+# LifeCare design source documents (large binaries)
+LifeCare_*.pdf
+03_LifeCare_Decision_Rules_Care_Model_v3.9_Todays_Care_Shift_Workflow.xlsx

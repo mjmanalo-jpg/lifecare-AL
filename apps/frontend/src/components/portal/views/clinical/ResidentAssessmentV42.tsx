@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus, X, Trash2, Pencil, CheckCircle2, Gauge, AlertTriangle,
-  ShieldCheck, RefreshCw, Info, Layers,
+  ShieldCheck, RefreshCw, Info, Layers, ArrowLeftRight, LayoutGrid, Table2,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -24,9 +24,10 @@ import {
 } from "./clinical-ui";
 import SignatureModal from "@/components/portal/SignatureModal";
 import {
-  ASSESSMENTS_V42_KEY, newAssessment, cloneForReassessment,
+  ASSESSMENTS_V42_KEY, newAssessment, cloneForReassessment, originOf,
   classifyAssessment, assessmentRawScore,
   type AssessmentV42, type AssessmentLayer1, type DomainEntry, type AssessmentStatus,
+  type AssessmentOrigin,
 } from "@/lib/lifecare/assessment.ts";
 import {
   SCORED_DOMAINS, ASSESSMENT_DOMAINS, CLINICAL_MODIFIERS, modifierById,
@@ -36,6 +37,11 @@ import type { CareLevel, DomainCode, ClinicalContext } from "@/lib/lifecare/type
 type SettingRow = { key?: string; id?: string; value?: string };
 
 const RAW_MAX = 56;
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
+const ORIGIN_LABEL: Record<AssessmentOrigin, string> = {
+  PREADMISSION: "Pre-Admission Assessment",
+  ACUITY: "Care Acuity & Level of Care",
+};
 const LEVELS: CareLevel[] = ["L1", "L2", "L3", "L4", "L5"];
 const LEVEL_LABEL: Record<CareLevel, string> = {
   L1: "Level 1", L2: "Level 2", L3: "Level 3", L4: "Level 4", L5: "Level 5 (Pathway)",
@@ -197,15 +203,24 @@ function parseAssessments(raw?: string): AssessmentV42[] {
 // Draft working state = the full assessment sans list metadata; we edit it in place.
 type Draft = AssessmentV42;
 
-export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedded = false, deepLinkResident = null }: { clinicianRole?: string; embedded?: boolean; deepLinkResident?: { id: string; name: string } | null }) {
+export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedded = false, deepLinkResident = null, origin = "PREADMISSION" }: { clinicianRole?: string; embedded?: boolean; deepLinkResident?: { id: string; name: string } | null; origin?: AssessmentOrigin }) {
   const roleLabel = clinicianRole === "CARE_MANAGER" || clinicianRole === "FACILITY_ADMIN" ? "Care Manager" : "Nurse";
 
   const { data: settingRows, loading, error, refetch } = useLiveQuery<SettingRow>("app-settings", { tables: ["AppSetting"] });
-  const assessments = useMemo(
-    () => parseAssessments(settingRows.find((r) => (r.key || r.id) === ASSESSMENTS_V42_KEY)?.value)
-      .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "")),
+  // Scope to this board's own records. Pre-Admission and Care Acuity share the
+  // same instrument + store but keep separate lists (see AssessmentOrigin).
+  const allStored = useMemo(
+    () => parseAssessments(settingRows.find((r) => (r.key || r.id) === ASSESSMENTS_V42_KEY)?.value),
     [settingRows]
   );
+  const assessments = useMemo(
+    () => allStored.filter((a) => originOf(a) === origin)
+      .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "")),
+    [allStored, origin]
+  );
+  // Records owned by the *other* board — never shown here, but must survive every
+  // write (persist rewrites the whole store, so we re-append these each time).
+  const foreignRecords = useMemo(() => allStored.filter((a) => originOf(a) !== origin), [allStored, origin]);
 
   // Converted CRM leads land here as in-progress admissions — offer them for the picker.
   const { data: admissionRows } = useLiveQuery<{ id: string; firstName?: string; lastName?: string; dateOfBirth?: string; gender?: string; phone?: string; sponsorName?: string; status?: string }>("admissions", { query: "take=500", tables: ["Admission"] });
@@ -233,6 +248,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   const [layer, setLayer] = useState<1 | 2 | 3>(1);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [showPin, setShowPin] = useState(false);
   const [linkedAdmissionId, setLinkedAdmissionId] = useState("");
 
@@ -256,11 +272,12 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
 
   const openNew = () => {
     const a = newAssessment(newId(), me || undefined, new Date().toISOString());
+    a.origin = origin;
     setEditingId(null); setLinkedAdmissionId(""); setDraft(a); setLayer(1); setOpen(true);
   };
-  const openEdit = (a: AssessmentV42) => {
+  const openEdit = (a: AssessmentV42, initialLayer: 1 | 2 | 3 = 1) => {
     setEditingId(a.id); setLinkedAdmissionId(a.layer1?.convertedAdmissionId ?? "");
-    setDraft(JSON.parse(JSON.stringify(a))); setLayer(1); setOpen(true);
+    setDraft(JSON.parse(JSON.stringify(a))); setLayer(initialLayer); setOpen(true);
   };
   // Deep-link target: open the resident's latest assessment, or start a new one
   // pre-filled with the resident (the "why a private caregiver is needed" is
@@ -269,6 +286,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     const existing = assessments.find((a) => a.layer1?.residentId === rid);
     if (existing) { openEdit(existing); return; }
     const a = newAssessment(newId(), me || undefined, new Date().toISOString());
+    a.origin = origin;
     a.layer1.residentId = rid;
     a.layer1.residentName = rname;
     setEditingId(null); setLinkedAdmissionId(""); setDraft(a); setLayer(1); setOpen(true);
@@ -302,7 +320,8 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   const liveRaw = useMemo(() => (draft ? assessmentRawScore(draft) : 0), [draft]);
 
   const persist = async (next: AssessmentV42[]) => {
-    await upsertRecord("app-settings", ASSESSMENTS_V42_KEY, { key: ASSESSMENTS_V42_KEY, value: JSON.stringify(next) });
+    // `next` is this board's scoped list; keep the other board's records intact.
+    await upsertRecord("app-settings", ASSESSMENTS_V42_KEY, { key: ASSESSMENTS_V42_KEY, value: JSON.stringify([...next, ...foreignRecords]) });
     await refetch();
   };
 
@@ -416,10 +435,27 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     await persist(assessments.filter((x) => x.id !== a.id));
   };
 
+  // Reassign a record to the other board (fixes legacy/untagged records that
+  // landed on the wrong list, and any genuine misfile). Rewrites the full store.
+  const otherOrigin: AssessmentOrigin = origin === "ACUITY" ? "PREADMISSION" : "ACUITY";
+  const moveTo = async (a: AssessmentV42, target: AssessmentOrigin) => {
+    const c = await Swal.fire({
+      title: `Move to ${ORIGIN_LABEL[target]}?`,
+      text: `This assessment will leave ${ORIGIN_LABEL[origin]} and appear only in ${ORIGIN_LABEL[target]}.`,
+      icon: "question", showCancelButton: true, confirmButtonColor: "#2E4A48", confirmButtonText: "Move",
+    });
+    if (!c.isConfirmed) return;
+    const now = new Date().toISOString();
+    const updated = allStored.map((x) => (x.id === a.id ? { ...x, origin: target, updatedAt: now } : x));
+    await upsertRecord("app-settings", ASSESSMENTS_V42_KEY, { key: ASSESSMENTS_V42_KEY, value: JSON.stringify(updated) });
+    await refetch();
+  };
+
   const startReassessment = async (prior: AssessmentV42) => {
     const c = await Swal.fire({ title: "Start reassessment?", text: "Creates a new draft carrying this clinical picture forward.", icon: "question", showCancelButton: true, confirmButtonColor: "#2E4A48", confirmButtonText: "Start" });
     if (!c.isConfirmed) return;
     const clone = cloneForReassessment(prior, newId(), new Date().toISOString());
+    clone.origin = origin;
     await persist([clone, ...assessments]);
     openEdit(clone);
   };
@@ -454,7 +490,17 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
         {LEVELS.map((l) => <StatCard key={l} label={LEVEL_LABEL[l]} value={stat(l)} accent={LEVEL_ACCENT[l]} />)}
       </div>
 
-      <SearchInput value={search} onChange={setSearch} placeholder="Search by resident name…" className="max-w-sm" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search by resident name…" className="max-w-sm flex-1" />
+        <div className="inline-flex items-center rounded-lg border p-0.5" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }} role="group" aria-label="View mode">
+          {([["grid", LayoutGrid, "Grid"], ["table", Table2, "Table"]] as const).map(([mode, Icon, label]) => (
+            <button key={mode} type="button" onClick={() => setViewMode(mode)} aria-pressed={viewMode === mode} title={`${label} view`}
+              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${viewMode === mode ? "bg-[var(--clinical-panel)] text-white shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>
+              <Icon className="h-4 w-4" /> {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* List */}
       <DataState
@@ -467,6 +513,9 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
         onRetry={() => void refetch()}
         skeletonRows={3}
       >
+        {viewMode === "table" ? (
+          <AssessmentTable rows={filtered} onEdit={openEdit} onMove={(a) => moveTo(a, otherOrigin)} onRemove={remove} moveLabel={ORIGIN_LABEL[otherOrigin]} />
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map((a) => {
             const res = a.status !== "DRAFT" ? classifyAssessment(a) : null;
@@ -475,41 +524,70 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
             const overridden = a.layer3?.finalLevel && res && a.layer3.finalLevel !== res.suggestedLevel;
             const top = a.status === "VALIDATED" ? "teal" : a.status === "COMPLETED" ? "green" : "amber";
             return (
-              <ClinicalCard key={a.id} top={top} className="p-4 sm:p-5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h3 className="font-bold text-[var(--clinical-ink)] truncate">{a.layer1?.residentName || "Unnamed resident"}</h3>
-                    <p className="text-xs text-[var(--clinical-muted)] mt-0.5">{a.layer1?.assessmentDate || (a.updatedAt || "").slice(0, 10)} · {a.modelVersion}</p>
+              <ClinicalCard key={a.id} top={top} className="flex flex-col gap-3.5 p-4 sm:p-5">
+                {/* header — avatar · identity · status · action cluster */}
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold" style={{ background: eff ? `color-mix(in srgb, ${LEVEL_COLOR[eff]} 16%, var(--clinical-surface))` : "var(--clinical-surface-2)", color: eff ? LEVEL_COLOR[eff] : "var(--clinical-ink-soft)" }}>
+                    {initials(a.layer1?.residentName || "")}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate font-bold text-[var(--clinical-ink)]">{a.layer1?.residentName || "Unnamed resident"}</h3>
+                    <p className="mt-0.5 text-xs text-[var(--clinical-muted)]">{a.layer1?.assessmentDate || (a.updatedAt || "").slice(0, 10)} · {a.modelVersion}</p>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex shrink-0 items-center gap-2">
                     {a.status === "VALIDATED" ? <StatusPill status="APPROVED">Validated</StatusPill> : <StatusPill status={a.status} />}
-                    <button onClick={() => openEdit(a)} aria-label="Edit assessment" className="p-2 rounded-lg text-[var(--clinical-ink-soft)] hover:bg-[var(--clinical-surface-2)]"><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => remove(a)} aria-label="Delete" className="p-2 rounded-lg text-[var(--clinical-coral)] hover:bg-[var(--clinical-surface-2)]"><Trash2 className="w-4 h-4" /></button>
+                    <div className="flex items-center overflow-hidden rounded-lg border" style={{ borderColor: "var(--clinical-line)" }}>
+                      <button onClick={() => moveTo(a, otherOrigin)} aria-label={`Move to ${ORIGIN_LABEL[otherOrigin]}`} title={`Move to ${ORIGIN_LABEL[otherOrigin]}`} className="p-1.5 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]"><ArrowLeftRight className="h-4 w-4" /></button>
+                      <button onClick={() => openEdit(a)} aria-label="Edit assessment" title="Edit assessment" className="border-l p-1.5 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]" style={{ borderColor: "var(--clinical-line)" }}><Pencil className="h-4 w-4" /></button>
+                      <button onClick={() => remove(a)} aria-label="Delete" title="Delete assessment" className="border-l p-1.5 text-[var(--clinical-coral)] transition hover:bg-[color-mix(in_srgb,var(--clinical-coral)_10%,transparent)]" style={{ borderColor: "var(--clinical-line)" }}><Trash2 className="h-4 w-4" /></button>
+                    </div>
                   </div>
                 </div>
 
                 {/* badges */}
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {res && res.capabilityGate && <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-[var(--clinical-coral)] text-white"><AlertTriangle className="w-3 h-3" /> Capability gate</span>}
-                  {a.layer3?.priorAssessmentId && <span className="text-[10px] font-semibold px-2 py-0.5 rounded text-[var(--clinical-muted)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}>Reassessment</span>}
-                  {a.layer1?.convertedAdmissionId && <span className="text-[10px] font-semibold px-2 py-0.5 rounded text-[var(--clinical-panel)]" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)" }}>From CRM</span>}
-                </div>
-
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-2xl font-bold text-[var(--clinical-ink)] tabular-nums">{raw}</span>
-                    <span className="text-sm text-[var(--clinical-muted)]">/ {RAW_MAX}</span>
+                {(a.status === "COMPLETED" || (res && res.capabilityGate) || a.layer3?.priorAssessmentId || a.layer1?.convertedAdmissionId) && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {a.status === "COMPLETED" && (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(a, 3)}
+                        title="Sign off the Final Level of Care in Layer 3 · Evaluation"
+                        className="inline-flex items-center gap-1 rounded-full bg-[var(--clinical-amber)] px-2.5 py-1 text-[10px] font-bold text-white shadow-sm transition hover:brightness-95"
+                      >
+                        <ShieldCheck className="h-3 w-3" /> Awaiting Validation · Layer 3
+                      </button>
+                    )}
+                    {res && res.capabilityGate && <span className="inline-flex items-center gap-1 rounded-full bg-[var(--clinical-coral)] px-2.5 py-1 text-[10px] font-bold text-white"><AlertTriangle className="h-3 w-3" /> Capability gate</span>}
+                    {a.layer3?.priorAssessmentId && <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}><RefreshCw className="h-3 w-3" /> Reassessment</span>}
+                    {a.layer1?.convertedAdmissionId && <span className="rounded-full px-2.5 py-1 text-[10px] font-semibold text-[var(--clinical-panel)]" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)" }}>From CRM</span>}
                   </div>
-                  {eff && (
-                    <span className="text-xs font-bold text-white px-2.5 py-1 rounded" style={{ background: LEVEL_COLOR[eff] }}>
-                      {LEVEL_LABEL[eff]}{overridden ? " ·override" : ""}
-                    </span>
-                  )}
+                )}
+
+                {/* acuity gauge */}
+                <div className="rounded-xl border p-3.5" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: "var(--clinical-line)" }}>
+                  <div className="flex items-end justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">Raw acuity</p>
+                      <p className="mt-0.5 flex items-baseline gap-1">
+                        <span className="text-2xl font-bold tabular-nums text-[var(--clinical-ink)]">{raw}</span>
+                        <span className="text-sm text-[var(--clinical-muted)]">/ {RAW_MAX}</span>
+                      </p>
+                    </div>
+                    {eff && (
+                      <span className="inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-bold text-white shadow-sm" style={{ background: LEVEL_COLOR[eff] }}>
+                        {LEVEL_LABEL[eff]}{overridden ? " · override" : ""}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: "var(--clinical-line)" }}>
+                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.round((raw / RAW_MAX) * 100))}%`, background: eff ? LEVEL_COLOR[eff] : "var(--clinical-panel)" }} />
+                  </div>
                 </div>
               </ClinicalCard>
             );
           })}
         </div>
+        )}
       </DataState>
 
       {/* Three-layer form modal */}
@@ -849,6 +927,84 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   );
 
   return embedded ? <div className="space-y-6">{body}</div> : <ClinicalPage className="space-y-6">{body}</ClinicalPage>;
+}
+
+// ── Table view — the same records as the card grid, in a dense sortable-feel table ──
+function AssessmentTable({ rows, onEdit, onMove, onRemove, moveLabel }: {
+  rows: AssessmentV42[];
+  onEdit: (a: AssessmentV42, layer?: 1 | 2 | 3) => void;
+  onMove: (a: AssessmentV42) => void;
+  onRemove: (a: AssessmentV42) => void;
+  moveLabel: string;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-xl border" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+      <table className="w-full min-w-[760px] text-sm">
+        <thead>
+          <tr className="border-b text-left text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line)" }}>
+            <th className="px-4 py-2.5 font-semibold">Resident</th>
+            <th className="px-4 py-2.5 font-semibold">Status</th>
+            <th className="px-4 py-2.5 font-semibold">Flags</th>
+            <th className="px-4 py-2.5 font-semibold">Raw acuity</th>
+            <th className="px-4 py-2.5 font-semibold">Level</th>
+            <th className="px-4 py-2.5 text-right font-semibold">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((a) => {
+            const res = a.status !== "DRAFT" ? classifyAssessment(a) : null;
+            const raw = assessmentRawScore(a);
+            const eff = a.layer3?.finalLevel ?? res?.suggestedLevel ?? null;
+            const overridden = a.layer3?.finalLevel && res && a.layer3.finalLevel !== res.suggestedLevel;
+            return (
+              <tr key={a.id} className="border-b last:border-0 align-middle transition hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: "var(--clinical-line)" }}>
+                <td className="px-4 py-3.5">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold" style={{ background: eff ? `color-mix(in srgb, ${LEVEL_COLOR[eff]} 16%, var(--clinical-surface))` : "var(--clinical-surface-2)", color: eff ? LEVEL_COLOR[eff] : "var(--clinical-ink-soft)" }}>{initials(a.layer1?.residentName || "")}</span>
+                    <button onClick={() => onEdit(a)} className="min-w-0 text-left">
+                      <span className="block truncate font-semibold text-[var(--clinical-ink)] hover:underline">{a.layer1?.residentName || "Unnamed resident"}</span>
+                      <span className="block text-xs text-[var(--clinical-muted)]">{a.layer1?.assessmentDate || (a.updatedAt || "").slice(0, 10)} · {a.modelVersion}</span>
+                    </button>
+                  </div>
+                </td>
+                <td className="px-4 py-3.5">{a.status === "VALIDATED" ? <StatusPill status="APPROVED">Validated</StatusPill> : <StatusPill status={a.status} />}</td>
+                <td className="px-4 py-3.5">
+                  {(a.status === "COMPLETED" || (res && res.capabilityGate) || a.layer3?.priorAssessmentId) ? (
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                      {a.status === "COMPLETED" && <button onClick={() => onEdit(a, 3)} title="Sign off in Layer 3 · Evaluation" className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-[var(--clinical-amber)] px-2.5 py-1 text-[10px] font-bold text-white shadow-sm transition hover:brightness-95"><ShieldCheck className="h-3 w-3" /> Layer 3</button>}
+                      {res && res.capabilityGate && <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-[var(--clinical-coral)] px-2.5 py-1 text-[10px] font-bold text-white"><AlertTriangle className="h-3 w-3" /> Gate</span>}
+                      {a.layer3?.priorAssessmentId && <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-semibold text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}><RefreshCw className="h-3 w-3" /> Reassess</span>}
+                    </div>
+                  ) : <span className="text-[var(--clinical-muted)]">—</span>}
+                </td>
+                <td className="px-4 py-3.5">
+                  <div className="flex items-center gap-2">
+                    <span className="tabular-nums font-bold text-[var(--clinical-ink)]">{raw}</span>
+                    <span className="text-xs text-[var(--clinical-muted)]">/ {RAW_MAX}</span>
+                    <span className="hidden h-1.5 w-16 overflow-hidden rounded-full sm:block" style={{ backgroundColor: "var(--clinical-line)" }}>
+                      <span className="block h-full rounded-full" style={{ width: `${Math.min(100, Math.round((raw / RAW_MAX) * 100))}%`, background: eff ? LEVEL_COLOR[eff] : "var(--clinical-panel)" }} />
+                    </span>
+                  </div>
+                </td>
+                <td className="px-4 py-3.5">
+                  {eff ? <span className="inline-flex items-center rounded px-2 py-1 text-xs font-bold text-white" style={{ background: LEVEL_COLOR[eff] }}>{LEVEL_LABEL[eff]}{overridden ? " ·ovr" : ""}</span> : <span className="text-[var(--clinical-muted)]">—</span>}
+                </td>
+                <td className="px-4 py-3.5">
+                  <div className="flex justify-end">
+                   <div className="inline-flex items-center overflow-hidden rounded-lg border" style={{ borderColor: "var(--clinical-line)" }}>
+                    <button onClick={() => onMove(a)} aria-label={`Move to ${moveLabel}`} title={`Move to ${moveLabel}`} className="p-1.5 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]"><ArrowLeftRight className="h-4 w-4" /></button>
+                    <button onClick={() => onEdit(a)} aria-label="Edit" title="Edit assessment" className="border-l p-1.5 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]" style={{ borderColor: "var(--clinical-line)" }}><Pencil className="h-4 w-4" /></button>
+                    <button onClick={() => onRemove(a)} aria-label="Delete" title="Delete assessment" className="border-l p-1.5 text-[var(--clinical-coral)] transition hover:bg-[color-mix(in_srgb,var(--clinical-coral)_10%,transparent)]" style={{ borderColor: "var(--clinical-line)" }}><Trash2 className="h-4 w-4" /></button>
+                   </div>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 // ── Validation block (nurse → admin approval), mirrors LevelOfCareReview ──────

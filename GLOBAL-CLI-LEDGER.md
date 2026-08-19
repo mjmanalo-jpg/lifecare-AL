@@ -153,3 +153,12 @@ Replaced the fuzzy keyword routing in `PortalShell.tsx` with an explicit notific
 - `NOTIF_ROUTE_QUERY` — preserved deep-links, e.g. diningReservation → `/facility_admin/community?subtab=dining`.
 - Examples that now land correctly: platform-admin "Supabase Connection Healthy"/system alerts → System Health; org "New organization registered" → Customer Workspaces; org-admin subscription reminders → Usage & Subscription; platform subscription payments → Usage & Capacity; camera offline → Camera Registry; trips → Trip Board; family invoice → Family Billing.
 - Build: `npx next build` clean (exit 0). `PortalShell.tsx` only, not yet committed.
+
+## Shift Report Convention (2026-08-18)
+All shift reports follow a standardized format defined in `SHIFT_REPORT_TEMPLATE.md`:
+- **No engineer names** — keep it impersonal and professional
+- **Paragraph-based** — bold section headers followed by descriptive paragraphs, not dense tables
+- **Bullet points** for metrics and risks, not grid tables
+- **Structure:** Overview → Workstream 1 (bold per phase/module) → Workstream 2 → Deployment Summary → Risks & Follow-Up
+- **File naming:** `SHIFT_REPORT_YYYY-MM-DD.md` (local only, never committed)
+- **Example:** `SHIFT_REPORT_2026-08-18.md`

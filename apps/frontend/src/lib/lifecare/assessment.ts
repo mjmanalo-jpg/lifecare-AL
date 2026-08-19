@@ -14,6 +14,21 @@ export const ASSESSMENTS_V42_KEY = "assessments_v42";
 
 export type AssessmentStatus = "DRAFT" | "COMPLETED" | "VALIDATED" | "SUPERSEDED";
 
+/**
+ * Which board an assessment belongs to. The same v4.2 instrument is used in two
+ * separate places that must NOT share their lists:
+ *  - PREADMISSION — the Pre-Admission Assessment board (intake).
+ *  - ACUITY       — the Care Acuity & Level of Care board (ongoing reassessments).
+ * Legacy records written before this tag existed default to PREADMISSION (the
+ * instrument's original home), via {@link originOf}.
+ */
+export type AssessmentOrigin = "PREADMISSION" | "ACUITY";
+
+/** The board an assessment belongs to; untagged legacy records → PREADMISSION. */
+export function originOf(a: Pick<AssessmentV42, "origin">): AssessmentOrigin {
+  return a.origin ?? "PREADMISSION";
+}
+
 export type YesNoVerify = "YES" | "NO" | "NEEDS_VERIFICATION";
 export type ParticipationLevel = "INDEPENDENTLY" | "WITH_SUPPORT" | "LIMITED_NO";
 export type AdvanceDirectiveStatus = "AVAILABLE" | "REQUESTED" | "NOT_AVAILABLE" | "NOT_APPLICABLE";
@@ -89,6 +104,7 @@ export interface AssessmentLayer3 {
 export interface AssessmentV42 {
   id: string;
   status: AssessmentStatus;
+  origin?: AssessmentOrigin;    // which board owns this record (default PREADMISSION)
   modelVersion: string;
   createdAt: string;
   updatedAt: string;

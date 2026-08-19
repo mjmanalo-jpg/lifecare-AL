@@ -16,7 +16,7 @@ import { useSearchParams } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { parseLocHistory, historyForResident, LOC_HISTORY_KEY, LOC_SOURCE_LABEL, type LocHistoryEntry, type LocSource } from "@/lib/lifecare/locHistory";
-import { ASSESSMENTS_V42_KEY, type AssessmentV42, type AssessmentStatus } from "@/lib/lifecare/assessment";
+import { ASSESSMENTS_V42_KEY, originOf, type AssessmentV42, type AssessmentStatus } from "@/lib/lifecare/assessment";
 import { careLevelEnumToLevel } from "@/lib/lifecare/carePackage";
 import { LEVEL_MODEL, DOMAIN_BASELINE } from "@/lib/lifecare/levelModel";
 import type { CareLevel } from "@/lib/lifecare/types";
@@ -142,8 +142,9 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
 
   const [tab, setTab] = useState<"queue" | "packages" | "activities" | "history">("queue");
 
-  // v4.2 workflow states → header stats.
-  const countByStatus = (st: AssessmentStatus) => v42List.filter((a) => a.status === st).length;
+  // v4.2 workflow states → header stats. Scoped to this board's own (ACUITY)
+  // records so Pre-Admission assessments don't leak into the Care Acuity queue.
+  const countByStatus = (st: AssessmentStatus) => v42List.filter((a) => a.status === st && originOf(a) === "ACUITY").length;
   const awaitingValidation = countByStatus("COMPLETED"); // completed, awaiting nurse validation
   const inProgress = countByStatus("DRAFT");             // still being assessed
 
@@ -199,7 +200,7 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
 
       {/* Assessments — the single v4.2 3-layer instrument, embedded. New → complete
           → nurse-validate → care plan; stores to assessments_v42. */}
-      {tab === "queue" && <ResidentAssessmentV42 clinicianRole={roleForV42} embedded deepLinkResident={deepLinkResident} />}
+      {tab === "queue" && <ResidentAssessmentV42 clinicianRole={roleForV42} embedded origin="ACUITY" deepLinkResident={deepLinkResident} />}
 
       {tab === "packages" && (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">

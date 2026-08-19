@@ -102,9 +102,9 @@ const titleCase = (v: string) => (v ? v.charAt(0).toUpperCase() + v.slice(1).toL
 export function buildJourney(src: JourneySources): JourneyEvent[] {
   const rid = src.residentId;
   const out: JourneyEvent[] = [];
-  const push = (e: Omit<JourneyEvent, "residentId" | "tab">) => {
+  const push = (e: Omit<JourneyEvent, "residentId" | "tab"> & { tab?: string }) => {
     if (!e.date) return;
-    out.push({ ...e, residentId: rid, tab: meta(e.category).tab });
+    out.push({ ...e, residentId: rid, tab: e.tab ?? meta(e.category).tab });
   };
 
   // Admission / intake (synthesised from the resident record).
@@ -112,16 +112,21 @@ export function buildJourney(src: JourneySources): JourneyEvent[] {
     push({ id: `admission:${rid}`, category: "ADMISSION", title: "Admitted to community", summary: src.admissionSummary, date: src.admittedAt });
   }
 
-  // Assessments (v4.2).
+  // Assessments (v4.2). The same instrument serves two boards (Pre-Admission and
+  // Care Acuity); origin + reassessment lineage decide the label and deep-link.
   for (const a of (src.assessmentsV42 || [])) {
     if (s(a?.layer1?.residentId) !== rid) continue;
     const lvl = s(a?.layer3?.finalLevel);
+    const isAcuity = s(a?.origin) === "ACUITY";
+    const isReassess = !!s(a?.layer3?.priorAssessmentId);
+    const kind = isReassess ? "Reassessment" : isAcuity ? "Care acuity assessment" : "Pre-admission assessment";
     push({
       id: `assessment:${s(a.id)}`, category: "ASSESSMENT",
-      title: `Resident assessment${lvl ? ` — ${lvl}` : ""}`,
+      title: `${kind}${lvl ? ` — ${lvl}` : ""}`,
       summary: s(a?.layer1?.reasonForAdmission) || undefined,
       status: titleCase(s(a.status)), by: s(a.createdBy) || undefined,
       date: pickDate(a, "updatedAt", "createdAt"),
+      tab: isAcuity ? "careacuity" : "prescreen",
     });
   }
 

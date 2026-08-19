@@ -17,13 +17,17 @@
 import { useMemo, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
-  Search, ChevronRight, ExternalLink, Printer,
+  Search, ChevronRight, ChevronDown, ExternalLink, Printer,
   UserPlus, ClipboardList, Gauge, Layers, Pill, AlertTriangle, Bandage,
   Stethoscope, FolderOpen, FileText, Scale, HeartHandshake, StickyNote, ClipboardCheck,
+  RefreshCw, ShieldCheck, ShieldAlert, CalendarClock,
   type LucideIcon,
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
+import { originOf, assessmentRawScore, classifyAssessment } from "@/lib/lifecare/assessment";
+import { ASSESSMENT_DOMAINS } from "@/lib/lifecare/dataset";
+import { DOMAIN_CODES } from "@/lib/lifecare/types";
 import { type ClinicianRole } from "./useClinician";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, StatCard, DataState, SERIF } from "./clinical-ui";
 import {
@@ -32,6 +36,17 @@ import {
 } from "@/lib/residentJourney";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+const DOMAIN_NAME: Record<string, string> = Object.fromEntries(ASSESSMENT_DOMAINS.map((d) => [d.code, d.name]));
+interface DomainRow { code: string; name: string; score: number; note: string }
+interface FormValidation { by: string; role: string; at: string; decision: string; notes: string }
+interface FormRecord {
+  id: string; kind: string; originLabel: string; icon: LucideIcon;
+  status: string; level: string; score: number; date: string; by: string; reason: string;
+  isReassessment: boolean; suggestedLevel: string; capabilityGate: boolean;
+  justification: string; interval: string; nextReview: string;
+  validation: FormValidation | null; completedBy: string; completedAt: string;
+  domains: DomainRow[];
+}
 const s = (v: unknown) => (v == null ? "" : String(v));
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 const pick = (r: Row, ...keys: string[]) => { for (const k of keys) { const v = r?.[k]; if (v != null && v !== "") return s(v); } return ""; };
@@ -80,8 +95,46 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
   const [resId, setResId] = useState("");
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState<JourneyCategory | "ALL">("ALL");
+  const [view, setView] = useState<"journey" | "forms">("journey");
 
   const resident = useMemo(() => residents.find((r) => r.id === resId) || null, [residents, resId]);
+
+  // Assessment-form history (Pre-Admission → reassessment) for the Forms tab.
+  // Live off `assessments_v42`, so every new reassessment shows up automatically.
+  const forms = useMemo<FormRecord[]>(() => {
+    if (!resident) return [];
+    return parseArr(settingVal(settingRows, "assessments_v42"))
+      .filter((a) => s(a?.layer1?.residentId) === resident.id)
+      .map((a) => {
+        const isAcuity = originOf(a) === "ACUITY";
+        const isReassess = !!s(a?.layer3?.priorAssessmentId);
+        const cls = classifyAssessment({ domains: a?.domains ?? {}, context: a?.context ?? {} });
+        const v = a?.validation;
+        return {
+          id: s(a.id),
+          kind: isReassess ? "Reassessment" : isAcuity ? "Care Acuity Assessment" : "Pre-Admission Assessment",
+          originLabel: isAcuity ? "Care Acuity" : "Pre-Admission",
+          icon: isReassess ? RefreshCw : isAcuity ? Layers : UserPlus,
+          status: s(a.status).toUpperCase(),
+          level: s(a?.layer3?.finalLevel),
+          score: assessmentRawScore({ domains: a?.domains ?? {} }),
+          date: pick(a, "updatedAt", "createdAt"),
+          by: s(a.createdBy),
+          reason: s(a?.layer1?.reasonForAdmission),
+          isReassessment: isReassess,
+          suggestedLevel: s(cls.suggestedLevel),
+          capabilityGate: !!cls.capabilityGate,
+          justification: s(a?.layer3?.finalLevelJustification),
+          interval: s(a?.layer3?.reassessmentInterval),
+          nextReview: s(a?.layer3?.nextReviewDate),
+          validation: v ? { by: s(v.by), role: s(v.role), at: s(v.at), decision: s(v.decision).replace(/_/g, " "), notes: s(v.notes) } : null,
+          completedBy: s(a?.completedBy),
+          completedAt: s(a?.completedAt),
+          domains: DOMAIN_CODES.map((code) => ({ code, name: DOMAIN_NAME[code] || code, score: Number(a?.domains?.[code]?.score ?? 0), note: s(a?.domains?.[code]?.goalNote) })),
+        };
+      })
+      .sort((x, y) => (y.date || "").localeCompare(x.date || ""));
+  }, [resident, settingRows]);
 
   const journey = useMemo<JourneyEvent[]>(() => {
     if (!resident) return [];
@@ -183,6 +236,21 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
         <ClinicalButton variant="secondary" size="sm" onClick={() => window.print()}><Printer className="h-4 w-4" /> Print</ClinicalButton>
       </div>
 
+      {/* View tabs — full journey vs. the assessment-form history */}
+      <div className="mb-5 inline-flex flex-wrap gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
+        {([["journey", "Journey", journey.length], ["forms", "Forms", forms.length]] as const).map(([v, label, n]) => (
+          <button key={v} onClick={() => setView(v)}
+            className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors ${view === v ? "bg-[var(--clinical-surface)] shadow-sm text-[var(--clinical-ink)]" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>
+            {label}
+            <span className="rounded-full px-1.5 text-[10px] tabular-nums" style={{ backgroundColor: view === v ? "var(--clinical-surface-2)" : "var(--clinical-surface)" }}>{n}</span>
+          </button>
+        ))}
+      </div>
+
+      {view === "forms" ? (
+        <FormsPanel forms={forms} />
+      ) : (
+      <>
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard value={journey.length} label="Journey entries" accent="ink" />
         <StatCard value={counts.size} label="Record types" accent="ink" />
@@ -237,7 +305,160 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
           ))}
         </div>
       )}
+      </>
+      )}
     </ClinicalPage>
+  );
+}
+
+// ── Forms tab — the resident's assessment-form history (Pre-Admission → reassessment) ──
+const FORM_STATUS_TONE: Record<string, string> = {
+  VALIDATED: "var(--clinical-panel)", COMPLETED: "var(--clinical-green)",
+  DRAFT: "var(--clinical-amber)", SUPERSEDED: "var(--clinical-muted)",
+};
+
+function FormsPanel({ forms }: { forms: FormRecord[] }) {
+  const [openId, setOpenId] = useState<string | null>(forms[0]?.id ?? null);
+  if (forms.length === 0) {
+    return (
+      <div className="rounded-2xl border p-10 text-center text-sm text-[var(--clinical-muted)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+        No assessment forms recorded for this resident yet. Pre-admission assessments and reassessments appear here as they are created.
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-[var(--clinical-muted)]">Complete record trail of every assessment form for this resident — from pre-admission intake through each reassessment. Click a form to view its result. {forms.length} form{forms.length === 1 ? "" : "s"} on file.</p>
+      <ol className="relative space-y-3 border-l-2 pl-6" style={{ borderColor: "var(--clinical-line)" }}>
+        {forms.map((f, i) => {
+          const Icon = f.icon;
+          const tone = FORM_STATUS_TONE[f.status] || "var(--clinical-ink-soft)";
+          const isOpen = openId === f.id;
+          return (
+            <li key={f.id} className="relative">
+              <span className="absolute -left-[31px] top-5 flex h-4 w-4 items-center justify-center rounded-full ring-4" style={{ backgroundColor: tone, ["--tw-ring-color" as string]: "var(--clinical-ground)" }} />
+              <div className="overflow-hidden rounded-xl border transition" style={{ backgroundColor: "var(--clinical-surface)", borderColor: isOpen ? tone : "var(--clinical-line)", boxShadow: isOpen ? `0 0 0 1px ${tone}` : undefined }}>
+                {/* clickable summary row */}
+                <button onClick={() => setOpenId(isOpen ? null : f.id)} aria-expanded={isOpen} className="flex w-full items-start gap-3 p-4 text-left transition hover:bg-[var(--clinical-surface-2)]">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `color-mix(in srgb, ${tone} 14%, var(--clinical-surface))`, color: tone }}><Icon className="h-5 w-5" /></span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-[var(--clinical-ink)]">{f.kind}</span>
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ backgroundColor: "var(--clinical-surface-2)", color: "var(--clinical-ink-soft)" }}>{f.originLabel}</span>
+                      {i === 0 && <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)", color: "var(--clinical-panel)" }}>Latest</span>}
+                      <span className="ml-auto text-[11px] tabular-nums text-[var(--clinical-muted)]">{fmtDate(f.date)}</span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white" style={{ backgroundColor: tone }}>{f.status}</span>
+                      {f.level && <span className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-bold text-white" style={{ backgroundColor: "var(--clinical-coral)" }}>{f.level}</span>}
+                      <span className="text-[11px] text-[var(--clinical-muted)]">Acuity <span className="font-bold tabular-nums text-[var(--clinical-ink-soft)]">{f.score}</span> / 56</span>
+                      {f.by && <span className="text-[11px] text-[var(--clinical-muted)]">· by {f.by}</span>}
+                    </div>
+                  </div>
+                  <ChevronDown className={`mt-1 h-4 w-4 shrink-0 text-[var(--clinical-muted)] transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {/* read-only result */}
+                {isOpen && <FormResult f={f} tone={tone} />}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
+// The read-only outcome of a single assessment form.
+function FormResult({ f, tone }: { f: FormRecord; tone: string }) {
+  const scored = f.domains.filter((d) => d.score > 0);
+  return (
+    <div className="border-t p-4 space-y-4" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
+      {/* outcome stat grid */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <ResultStat label="Final Level of Care" value={f.level || "—"} strong tone={f.level ? "var(--clinical-coral)" : undefined} />
+        <ResultStat label="Engine suggested" value={f.suggestedLevel || "—"} />
+        <ResultStat label="Raw acuity" value={`${f.score} / 56`} />
+        <ResultStat label="Status" value={f.status.charAt(0) + f.status.slice(1).toLowerCase()} tone={tone} />
+      </div>
+
+      {/* acuity bar */}
+      <div>
+        <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: "var(--clinical-line)" }}>
+          <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.round((f.score / 56) * 100))}%`, background: tone }} />
+        </div>
+      </div>
+
+      {/* flags */}
+      {f.capabilityGate && (
+        <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-coral) 12%, transparent)", color: "var(--clinical-coral)" }}>
+          <ShieldAlert className="h-4 w-4 shrink-0" /> Capability review required before the care plan goes live.
+        </div>
+      )}
+
+      {/* validation / sign-off */}
+      {f.validation ? (
+        <div className="rounded-lg border p-3 text-sm" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>
+          <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-[var(--clinical-panel)]"><ShieldCheck className="h-3.5 w-3.5" /> Clinical validation</p>
+          <p className="mt-1.5 text-[var(--clinical-ink)]"><span className="font-semibold capitalize">{f.validation.decision.toLowerCase()}</span> — by {f.validation.by}{f.validation.role ? ` (${f.validation.role})` : ""}{f.validation.at ? ` on ${fmtDate(f.validation.at)}` : ""}.</p>
+          {f.validation.notes && <p className="mt-1 text-[var(--clinical-ink-soft)]">{f.validation.notes}</p>}
+        </div>
+      ) : f.status === "COMPLETED" ? (
+        <p className="text-xs text-[var(--clinical-muted)]">Completed{f.completedBy ? ` by ${f.completedBy}` : ""} — awaiting clinical validation.</p>
+      ) : null}
+
+      {/* justification */}
+      {f.justification && (
+        <div className="text-sm">
+          <p className="text-xs font-bold uppercase tracking-wide text-[var(--clinical-muted)]">Final LOC justification</p>
+          <p className="mt-1 text-[var(--clinical-ink-soft)]">{f.justification}</p>
+        </div>
+      )}
+
+      {/* reassessment schedule */}
+      {(f.interval || f.nextReview) && (
+        <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--clinical-muted)]">
+          <CalendarClock className="h-3.5 w-3.5" />
+          {f.interval && <span>Reassess: <span className="font-semibold text-[var(--clinical-ink-soft)]">{f.interval}</span></span>}
+          {f.nextReview && <span>Next review: <span className="font-semibold text-[var(--clinical-ink-soft)]">{fmtDate(f.nextReview)}</span></span>}
+        </p>
+      )}
+
+      {/* reason */}
+      {f.reason && (
+        <div className="text-sm">
+          <p className="text-xs font-bold uppercase tracking-wide text-[var(--clinical-muted)]">Reason for admission</p>
+          <p className="mt-1 text-[var(--clinical-ink-soft)]">{f.reason}</p>
+        </div>
+      )}
+
+      {/* domain breakdown */}
+      <div>
+        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--clinical-muted)]">Domain scores {scored.length > 0 ? `(${scored.length}/14 scored)` : ""}</p>
+        <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
+          {f.domains.map((d) => (
+            <div key={d.code} className="flex items-center gap-2 text-xs">
+              <span className="w-32 shrink-0 truncate text-[var(--clinical-ink-soft)]" title={d.name}>{d.name}</span>
+              <span className="flex flex-1 gap-0.5">
+                {[0, 1, 2, 3].map((n) => (
+                  <span key={n} className="h-1.5 flex-1 rounded-full" style={{ backgroundColor: n < d.score ? tone : "var(--clinical-line)" }} />
+                ))}
+              </span>
+              <span className="w-6 shrink-0 text-right font-bold tabular-nums text-[var(--clinical-ink)]">{d.score}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResultStat({ label, value, tone, strong }: { label: string; value: string; tone?: string; strong?: boolean }) {
+  return (
+    <div className="rounded-lg border p-2.5" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[var(--clinical-muted)]">{label}</p>
+      <p className={`mt-0.5 tabular-nums ${strong ? "text-lg font-bold" : "text-sm font-semibold"}`} style={{ color: tone || "var(--clinical-ink)" }}>{value}</p>
+    </div>
   );
 }
 

@@ -60,3 +60,10 @@ npx prisma studio    # visual DB browser
 - `apps/frontend/.env` — DATABASE_URL, Supabase keys, Gemini API key
 - `apps/backend/.env` — DB URLs, camera config, Supabase keys
 - `.env.example` — template with all required variables documented
+
+## Shift Reports
+
+- Template: `SHIFT_REPORT_TEMPLATE.md`
+- Format: paragraph-based, bold section headers, no engineer names, bullet points for metrics/risks
+- Naming: `SHIFT_REPORT_YYYY-MM-DD.md` (local only, never committed)
+- Structure: Overview → Workstream 1 → Workstream 2 → Deployment Summary → Risks & Follow-Up
