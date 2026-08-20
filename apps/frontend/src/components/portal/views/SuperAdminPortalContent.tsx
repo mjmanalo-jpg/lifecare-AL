@@ -292,31 +292,45 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
       setCreateForm({ name: "", email: "", phone: "", employeeCode: "", role: "CAREGIVER", position: "", department: "", active: "Active", approved: "Approved", experience: "" });
       if (data.password) {
         const pw = String(data.password);
-        const roleName = ({ CAREGIVER: "Caregiver", NURSE: "Nurse", CARE_MANAGER: "Care Manager" } as Record<string, string>)[createdRole] ?? "Staff";
         const esc = (s: string) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
-        const rowCss = "display:flex;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid #f1f5f4;font-size:14px";
+        const roleName = ({ CAREGIVER: "Caregiver", NURSE: "Nurse", CARE_MANAGER: "Care Manager" } as Record<string, string>)[createdRole] ?? "Staff";
+        const firstName = esc(createdName.split(/\s+/)[0] || "they");
+        // Single committed accent: clinical success green (#047857). Everything
+        // else is quiet slate; the password is the one hero.
+        const row = "display:flex;justify-content:space-between;align-items:center;gap:16px;padding:11px 15px;border-bottom:1px solid #eef1f7;font-size:13.5px";
+        const lbl = "color:#5b6577;flex:none";
+        const val = "color:#0f172a;font-weight:600;text-align:right;word-break:break-word";
         const mono = "font-family:ui-monospace,SFMono-Regular,Menlo,monospace";
+        const check = `<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#047857" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+        const warn = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>`;
         await Swal.fire({
-          title: "Staff account created",
-          icon: "success",
-          confirmButtonText: "Done",
-          confirmButtonColor: "#0e7c6b",
+          showConfirmButton: false,
+          width: 460,
+          padding: "0",
           html:
-            `<div style="text-align:left;color:#334155">
-              <p style="margin:0 0 14px;font-size:14px"><b>${esc(createdName)}</b> can now sign in. Share these credentials securely — the password <b>won't be shown again</b>.</p>
-              <div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
-                <div style="${rowCss}"><span style="color:#64748b">Role</span><span style="font-weight:600">${esc(roleName)}</span></div>
-                ${createdCode ? `<div style="${rowCss}"><span style="color:#64748b">Employee code</span><span style="font-weight:600;${mono}">${esc(createdCode)}</span></div>` : ""}
-                <div style="${rowCss}"><span style="color:#64748b">Email</span><span style="font-weight:600;${mono}">${esc(createdEmail)}</span></div>
-                <div style="padding:12px 14px;background:#effdf7">
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                    <span style="color:#64748b;font-size:14px">First-time password</span>
-                    <button id="sw-cp-pw" type="button" style="border:1px solid #0e7c6b;color:#0a594e;background:#fff;border-radius:6px;padding:3px 12px;font-size:12px;font-weight:600;cursor:pointer">Copy</button>
-                  </div>
-                  <div style="${mono};font-size:22px;font-weight:700;letter-spacing:1px;color:#0a594e">${esc(pw)}</div>
-                </div>
+            `<div style="text-align:left;color:#334155;padding:28px 26px 24px">
+              <div style="display:flex;align-items:center;gap:13px;margin-bottom:14px">
+                <span style="width:38px;height:38px;border-radius:50%;background:#ecfdf5;display:flex;align-items:center;justify-content:center;flex:none">${check}</span>
+                <h2 style="margin:0;font-size:19px;font-weight:700;color:#0f172a;letter-spacing:-0.01em">Staff account created</h2>
               </div>
-              <button id="sw-cp-all" type="button" style="margin-top:12px;width:100%;border:none;background:#0f172a;color:#fff;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer">Copy email &amp; password</button>
+              <p style="margin:0 0 18px;font-size:13.5px;line-height:1.55;color:#475569"><b style="color:#0f172a">${esc(createdName)}</b> can sign in now — share the credentials below.</p>
+              <div style="border:1px solid #e6e9f0;border-radius:12px;overflow:hidden">
+                <div style="${row}"><span style="${lbl}">Role</span><span style="${val}">${esc(roleName)}</span></div>
+                ${createdCode ? `<div style="${row}"><span style="${lbl}">Employee code</span><span style="${val};${mono}">${esc(createdCode)}</span></div>` : ""}
+                <div style="${row};border-bottom:none"><span style="${lbl}">Email</span><span style="${val};${mono}">${esc(createdEmail)}</span></div>
+              </div>
+              <div style="margin-top:12px;border:1px solid #a7f3d0;background:#f0fdf9;border-radius:12px;padding:13px 16px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+                  <span style="font-size:11px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:#047857">First-time password</span>
+                  <button id="sw-cp-pw" type="button" style="border:1px solid #10b981;color:#047857;background:#fff;border-radius:7px;padding:4px 13px;font-size:12px;font-weight:600;cursor:pointer">Copy</button>
+                </div>
+                <div style="${mono};font-size:23px;font-weight:700;letter-spacing:2px;color:#065f46;word-break:break-all">${esc(pw)}</div>
+              </div>
+              <div style="display:flex;gap:7px;align-items:flex-start;margin:12px 2px 0;font-size:12px;line-height:1.45;color:#b45309">${warn}<span>Shown once — copy it before closing. Ask ${firstName} to change it after first sign-in.</span></div>
+              <div style="display:flex;gap:10px;margin-top:20px">
+                <button id="sw-cp-all" type="button" style="flex:1;border:1px solid #cfd5e2;background:#fff;color:#334155;border-radius:9px;padding:11px 14px;font-size:14px;font-weight:600;cursor:pointer">Copy email &amp; password</button>
+                <button id="sw-done" type="button" style="flex:1;border:none;background:#047857;color:#fff;border-radius:9px;padding:11px 14px;font-size:14px;font-weight:600;cursor:pointer">Done</button>
+              </div>
             </div>`,
           didOpen: (popup: HTMLElement) => {
             const flash = (el: EventTarget | null, done: string) => {
@@ -326,8 +340,17 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
               window.setTimeout(() => { el.textContent = orig; }, 1300);
             };
             const write = (text: string) => { try { void navigator.clipboard?.writeText(text); } catch { /* clipboard blocked */ } };
+            const hover = (id: string, over: string, out: string) => {
+              const b = popup.querySelector<HTMLElement>(id);
+              if (!b) return;
+              b.addEventListener("mouseenter", () => { b.style.background = over; });
+              b.addEventListener("mouseleave", () => { b.style.background = out; });
+            };
             popup.querySelector("#sw-cp-pw")?.addEventListener("click", (e) => { write(pw); flash(e.currentTarget, "Copied!"); });
             popup.querySelector("#sw-cp-all")?.addEventListener("click", (e) => { write(`Email: ${createdEmail}\nPassword: ${pw}`); flash(e.currentTarget, "Copied!"); });
+            popup.querySelector("#sw-done")?.addEventListener("click", () => Swal.close());
+            hover("#sw-done", "#065f46", "#047857");
+            hover("#sw-cp-all", "#f8fafc", "#fff");
           },
         });
       } else {
