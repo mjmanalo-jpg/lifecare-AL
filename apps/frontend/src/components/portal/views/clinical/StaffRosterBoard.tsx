@@ -9,7 +9,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { ClipboardPaste, Users, Moon, Sun, Sunset, Clock, Bed, Plane, HelpCircle, Link2 } from "lucide-react";
+import { ClipboardPaste, Users, Moon, Sun, Sunset, Clock, Bed, Plane, HelpCircle, Link2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
@@ -22,7 +22,7 @@ import {
   STAFF_ROSTER_KEY, parseRoster, parseRosterGrid, parseShiftCode,
   type StaffRoster, type RosterBaseRole, type ParsedCode,
 } from "@/lib/caregiverRoster";
-import { bridgeRoster, ROSTER_MAPPING_KEY, type RosterMapping } from "@/lib/rosterBridge";
+import { bridgeRoster, rosterReadiness, ROSTER_MAPPING_KEY, type RosterMapping } from "@/lib/rosterBridge";
 import {
   CAREGIVER_SCHEDULE_KEY, parseSchedules, newScheduleId, type CaregiverSchedule,
 } from "@/lib/caregiverSchedule";
@@ -120,6 +120,26 @@ export default function StaffRosterBoard({ clinicianRole = "NURSE" }: { clinicia
     setImportOpen(false); setPreview(null); setPasteText("");
   };
 
+  // Pre-sync readiness — which rostered staff / residents aren't set up yet.
+  const readiness = useMemo(
+    () => (roster ? rosterReadiness(roster, { staff: caregivers, residents, mapping }) : null),
+    [roster, caregivers, residents, mapping],
+  );
+  const [readyOpen, setReadyOpen] = useState(false);
+
+  const saveMapping = async (next: RosterMapping) => {
+    try {
+      await upsertRecord("app-settings", ROSTER_MAPPING_KEY, { key: ROSTER_MAPPING_KEY, value: JSON.stringify(next) });
+      await refetch();
+    } catch {
+      Swal.fire({ title: "Couldn't save mapping", text: "Try again.", icon: "error" });
+    }
+  };
+  const mapStaff = (code: string, staffId: string) =>
+    saveMapping({ ...mapping, staffByCode: { ...mapping.staffByCode, ...(staffId ? { [code]: staffId } : {}) } });
+  const mapResidentCode = (code: string, residentId: string) =>
+    saveMapping({ ...mapping, residentByCode: { ...mapping.residentByCode, ...(residentId ? { [code]: residentId } : {}) } });
+
   // Phase 2 — push the roster's working caregiver cells into caregiver_schedules
   // (the store that drives task routing + the shift access lock). Roster-sourced
   // entries in this period are replaced; hand-made assignments are preserved.
@@ -189,6 +209,12 @@ export default function StaffRosterBoard({ clinicianRole = "NURSE" }: { clinicia
         subtitle={roster ? `${roster.periodStart} – ${roster.periodEnd} · ${roster.rows.length} staff` : "Fortnightly staffing schedule & assignments"}
         right={canManage ? (
           <div className="flex gap-2">
+            {roster && (
+              <ClinicalButton variant="secondary" onClick={() => setReadyOpen(true)}>
+                {readiness?.ready ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                Readiness{readiness && !readiness.ready ? ` (${readiness.missingStaff.length + readiness.missingResidentCodes.length + readiness.unmappedStations.length})` : ""}
+              </ClinicalButton>
+            )}
             {roster && (
               <ClinicalButton variant="secondary" onClick={syncToSchedule} disabled={syncing}>
                 <Link2 className="h-4 w-4" /> {syncing ? "Syncing…" : "Sync to Caregiver Schedule"}
@@ -280,6 +306,76 @@ export default function StaffRosterBoard({ clinicianRole = "NURSE" }: { clinicia
           </div>
         )}
       </DataState>
+
+      {readyOpen && readiness && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setReadyOpen(false)}>
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-[var(--clinical-surface)] p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 flex items-center gap-2">
+              {readiness.ready
+                ? <CheckCircle2 className="h-5 w-5 text-[var(--clinical-green)]" />
+                : <AlertTriangle className="h-5 w-5 text-[var(--clinical-amber)]" />}
+              <h3 className="text-lg font-semibold text-[var(--clinical-ink)]">Roster readiness</h3>
+            </div>
+            <p className="mb-4 text-sm text-[var(--clinical-ink-soft)]">
+              {readiness.matchedStaff}/{readiness.caregiverRows} caregivers matched · {readiness.resolvableAssignments} assignments ready to sync.
+              {readiness.ready ? " Everything on this roster is registered — you can sync." : " Fix the gaps below (or sync now and resolve them later)."}
+            </p>
+
+            {readiness.missingStaff.length > 0 && (
+              <section className="mb-4">
+                <MicroLabel>Unregistered / unmatched staff ({readiness.missingStaff.length})</MicroLabel>
+                <p className="mb-2 text-xs text-[var(--clinical-muted)]">Register them in Staff Profiles, or link the roster code to an existing caregiver here.</p>
+                <div className="space-y-1.5">
+                  {readiness.missingStaff.map((m) => (
+                    <div key={m.code} className="flex items-center gap-2 text-sm">
+                      <span className="w-40 shrink-0 truncate"><b className="font-mono text-xs">{m.code}</b> {m.name}</span>
+                      <select className={controlClass} style={{ maxWidth: 260 }} defaultValue="" onChange={(e) => e.target.value && mapStaff(m.code, e.target.value)}>
+                        <option value="">Link to caregiver…</option>
+                        {caregivers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {readiness.missingResidentCodes.length > 0 && (
+              <section className="mb-4">
+                <MicroLabel>Residents not admitted / mapped ({readiness.missingResidentCodes.length})</MicroLabel>
+                <p className="mb-2 text-xs text-[var(--clinical-muted)]">Admit the resident with the matching room number, or link the PCG code to an admitted resident.</p>
+                <div className="space-y-1.5">
+                  {readiness.missingResidentCodes.map((code) => (
+                    <div key={code} className="flex items-center gap-2 text-sm">
+                      <span className="w-40 shrink-0"><b className="font-mono text-xs">PCG{code}</b></span>
+                      <select className={controlClass} style={{ maxWidth: 260 }} defaultValue="" onChange={(e) => e.target.value && mapResidentCode(code, e.target.value)}>
+                        <option value="">Link to resident…</option>
+                        {residents.map((r) => <option key={r.id} value={r.id}>{r.name}{r.room ? ` · Rm ${r.room}` : ""}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {readiness.unmappedStations.length > 0 && (
+              <section className="mb-4">
+                <MicroLabel>Stations without a resident mapping ({readiness.unmappedStations.length})</MicroLabel>
+                <p className="mb-1 text-xs text-[var(--clinical-muted)]">Each shared station (CG#) needs the set of residents it covers. Stations pending: {readiness.unmappedStations.map((s) => `CG${s}`).join(", ")}.</p>
+              </section>
+            )}
+
+            {readiness.ready && (
+              <div className="rounded-lg border p-4 text-sm text-[var(--clinical-ink-soft)]" style={{ borderColor: "var(--clinical-line)" }}>
+                All rostered staff and residents are set up. Use “Sync to Caregiver Schedule” to push assignments.
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-end">
+              <ClinicalButton variant="primary" onClick={() => setReadyOpen(false)}>Done</ClinicalButton>
+            </div>
+          </div>
+        </div>
+      )}
 
       {importOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setImportOpen(false)}>

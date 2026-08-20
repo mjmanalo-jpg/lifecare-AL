@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { bridgeRoster } from "../src/lib/rosterBridge.ts";
+import { bridgeRoster, rosterReadiness } from "../src/lib/rosterBridge.ts";
 import { parseRosterGrid } from "../src/lib/caregiverRoster.ts";
 
 const roster = parseRosterGrid([
@@ -58,5 +58,37 @@ test("unresolved codes are reported, not dropped", () => {
 
 test("a private code with no matching room is reported", () => {
   const noRoom = bridgeRoster(roster, { staff, residents: [{ id: "rX", name: "X", room: "999" }] });
-  assert.ok(noRoom.unresolved.some((u) => /code 107 not mapped/.test(u.reason)));
+  assert.ok(noRoom.unresolved.some((u) => /code 107 not admitted/.test(u.reason)));
+});
+
+test("staffByCode mapping matches even when the name doesn't", () => {
+  // Staff name deliberately unlike the roster name; only the code map links them.
+  const st = [{ id: "s9", userId: "u9", name: "Totally Different Person" }];
+  const { assignments, unresolved } = bridgeRoster(roster, {
+    staff: st, residents,
+    mapping: { staffByCode: { CG1: "s9" }, stationResidents: { "2": ["r201"] } },
+  });
+  assert.ok(assignments.length >= 1);
+  assert.ok(assignments.every((a) => a.caregiverStaffId === "s9"));
+  assert.ok(!unresolved.some((u) => /No matching staff/.test(u.reason)));
+});
+
+test("rosterReadiness lists missing staff, resident codes, and unmapped stations", () => {
+  const rd = rosterReadiness(roster, { staff: [], residents: [] }); // nothing registered
+  assert.equal(rd.ready, false);
+  assert.equal(rd.caregiverRows, 1);
+  assert.equal(rd.matchedStaff, 0);
+  assert.ok(rd.missingStaff.some((m) => m.code === "CG1"));
+  assert.ok(rd.missingResidentCodes.includes("107"));
+  assert.ok(rd.unmappedStations.includes("2"));
+});
+
+test("rosterReadiness is ready once staff + residents + mapping exist", () => {
+  const rd = rosterReadiness(roster, {
+    staff, residents,
+    mapping: { stationResidents: { "2": ["r201"] } },
+  });
+  assert.equal(rd.ready, true);
+  assert.equal(rd.matchedStaff, 1);
+  assert.ok(rd.resolvableAssignments >= 2);
 });
