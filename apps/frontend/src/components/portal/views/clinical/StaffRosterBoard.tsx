@@ -9,10 +9,11 @@
  */
 
 import { useMemo, useState } from "react";
-import { ClipboardPaste, Users, Moon, Sun, Sunset, Clock, Bed, Plane, HelpCircle } from "lucide-react";
+import { ClipboardPaste, Users, Moon, Sun, Sunset, Clock, Bed, Plane, HelpCircle, Link2 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
+import { adaptResident } from "@/lib/adapters";
 import {
   ClinicalPage, ClinicalHeader, ClinicalButton, StatCard,
   DataState, MicroLabel, controlClass,
@@ -21,9 +22,14 @@ import {
   STAFF_ROSTER_KEY, parseRoster, parseRosterGrid, parseShiftCode,
   type StaffRoster, type RosterBaseRole, type ParsedCode,
 } from "@/lib/caregiverRoster";
+import { bridgeRoster, ROSTER_MAPPING_KEY, type RosterMapping } from "@/lib/rosterBridge";
+import {
+  CAREGIVER_SCHEDULE_KEY, parseSchedules, newScheduleId, type CaregiverSchedule,
+} from "@/lib/caregiverSchedule";
 import type { ClinicianRole } from "./useClinician";
 
 type SettingRow = { key?: string; id?: string; value?: string };
+type StaffRow = { id: string; userId?: string; user?: { name?: string; role?: string } };
 
 const MANAGER_ROLES = new Set(["NURSE", "CARE_MANAGER", "FACILITY_ADMIN", "SUPERADMIN"]);
 
@@ -60,7 +66,25 @@ export default function StaffRosterBoard({ clinicianRole = "NURSE" }: { clinicia
     () => parseRoster(settingRows.find((r) => (r.key || r.id) === STAFF_ROSTER_KEY)?.value),
     [settingRows],
   );
+  const mapping = useMemo<RosterMapping>(
+    () => { try { return JSON.parse(settingRows.find((r) => (r.key || r.id) === ROSTER_MAPPING_KEY)?.value || "{}"); } catch { return {}; } },
+    [settingRows],
+  );
   const canManage = MANAGER_ROLES.has(String(clinicianRole).toUpperCase());
+
+  // Staff + residents power the roster → caregiver-schedule bridge (Phase 2).
+  const { data: staffRows } = useLiveQuery<StaffRow>("staff", { query: "include=user&take=400", tables: ["Staff"] });
+  const caregivers = useMemo(
+    () => staffRows
+      .filter((s) => String(s.user?.role ?? "").toUpperCase() === "CAREGIVER")
+      .map((s) => ({ id: s.id, userId: s.userId, name: s.user?.name ?? "" })),
+    [staffRows],
+  );
+  const { data: residentRows } = useLiveQuery<Record<string, unknown>>("residents", { query: "take=400", tables: ["Resident"] });
+  const residents = useMemo(
+    () => residentRows.map(adaptResident).map((r) => ({ id: String(r.id), name: r.name ?? "", room: String(r.room ?? "").trim() })),
+    [residentRows],
+  );
 
   const [importOpen, setImportOpen] = useState(false);
   const [periodStart, setPeriodStart] = useState(todayISO());
@@ -96,6 +120,43 @@ export default function StaffRosterBoard({ clinicianRole = "NURSE" }: { clinicia
     setImportOpen(false); setPreview(null); setPasteText("");
   };
 
+  // Phase 2 — push the roster's working caregiver cells into caregiver_schedules
+  // (the store that drives task routing + the shift access lock). Roster-sourced
+  // entries in this period are replaced; hand-made assignments are preserved.
+  const [syncing, setSyncing] = useState(false);
+  const syncToSchedule = async () => {
+    if (!roster) return;
+    setSyncing(true);
+    try {
+      const { assignments, unresolved } = bridgeRoster(roster, { staff: caregivers, residents, mapping });
+      const now = new Date().toISOString();
+      const generated: CaregiverSchedule[] = assignments.map((a) => ({
+        id: newScheduleId(), date: a.date, shift: a.shift,
+        caregiverStaffId: a.caregiverStaffId, caregiverUserId: a.caregiverUserId, caregiverName: a.caregiverName,
+        residentIds: a.residentIds, residents: a.residents,
+        note: a.private ? `Private 1:1 (${a.code})` : `Roster ${a.code}`,
+        source: "roster", createdBy: "Staff Roster", createdAt: now,
+      }));
+      const periodDates = new Set(roster.dates);
+      const existing = parseSchedules(settingRows.find((r) => (r.key || r.id) === CAREGIVER_SCHEDULE_KEY)?.value);
+      // Keep hand-made entries + any roster entries outside this period.
+      const kept = existing.filter((s) => s.source !== "roster" || !periodDates.has(s.date));
+      await upsertRecord("app-settings", CAREGIVER_SCHEDULE_KEY, { key: CAREGIVER_SCHEDULE_KEY, value: JSON.stringify([...kept, ...generated]) });
+      await refetch();
+
+      const reasons = [...new Set(unresolved.map((u) => u.reason))].slice(0, 4);
+      await Swal.fire({
+        icon: unresolved.length ? "warning" : "success",
+        title: `Synced ${generated.length} assignment${generated.length === 1 ? "" : "s"}`,
+        html: unresolved.length
+          ? `Pushed to the caregiver schedule.<br/><b>${unresolved.length}</b> cell(s) couldn't be mapped:<br/><span style="font-size:12px">${reasons.map((r) => `• ${r}`).join("<br/>")}</span>`
+          : "The roster now drives the caregiver schedule for this period.",
+      });
+    } catch {
+      Swal.fire({ title: "Sync failed", text: "Couldn't push the roster to the caregiver schedule — try again.", icon: "error" });
+    } finally { setSyncing(false); }
+  };
+
   const commitEdit = async (rowIdx: number, date: string, value: string) => {
     if (!roster) return;
     setEdit(null);
@@ -127,9 +188,16 @@ export default function StaffRosterBoard({ clinicianRole = "NURSE" }: { clinicia
         title="Staff Roster"
         subtitle={roster ? `${roster.periodStart} – ${roster.periodEnd} · ${roster.rows.length} staff` : "Fortnightly staffing schedule & assignments"}
         right={canManage ? (
-          <ClinicalButton variant="primary" onClick={() => { setImportOpen(true); setPreview(null); }}>
-            <ClipboardPaste className="h-4 w-4" /> Import from Excel
-          </ClinicalButton>
+          <div className="flex gap-2">
+            {roster && (
+              <ClinicalButton variant="secondary" onClick={syncToSchedule} disabled={syncing}>
+                <Link2 className="h-4 w-4" /> {syncing ? "Syncing…" : "Sync to Caregiver Schedule"}
+              </ClinicalButton>
+            )}
+            <ClinicalButton variant="primary" onClick={() => { setImportOpen(true); setPreview(null); }}>
+              <ClipboardPaste className="h-4 w-4" /> Import from Excel
+            </ClinicalButton>
+          </div>
         ) : undefined}
       />
 
