@@ -34,7 +34,8 @@ import { useState, useMemo } from "react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptStaff } from "@/lib/adapters";
-import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
+import { createRecord, updateRecord, deleteRecord, upsertRecord } from "@/lib/api";
+import { ROSTER_MAPPING_KEY, type RosterMapping } from "@/lib/rosterBridge";
 
 interface SuperAdminPortalContentProps {
   tab: string;
@@ -49,12 +50,35 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   });
   const staff = useMemo(() => staffRows.map(adaptStaff), [staffRows]);
 
+  // Roster employee-code mapping (migration-free) — code entered at registration
+  // links to the staff id so the Staff Roster auto-matches this person.
+  const { data: settingRows, refetch: refetchSettings } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
+  const rosterMapping = useMemo<RosterMapping>(() => {
+    try { return JSON.parse(settingRows.find((r) => (r.key || r.id) === ROSTER_MAPPING_KEY)?.value || "{}"); } catch { return {}; }
+  }, [settingRows]);
+  const codeByStaffId = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const [code, sid] of Object.entries(rosterMapping.staffByCode ?? {})) m[sid] = code;
+    return m;
+  }, [rosterMapping]);
+  /** Set (or clear) the employee code for a staff id in the roster mapping. */
+  const setStaffCode = async (staffId: string, code: string) => {
+    const byCode = { ...(rosterMapping.staffByCode ?? {}) };
+    // Drop any existing code pointing at this staff, then set the new one.
+    for (const [c, sid] of Object.entries(byCode)) if (sid === staffId) delete byCode[c];
+    const trimmed = code.trim();
+    if (trimmed) byCode[trimmed] = staffId;
+    await upsertRecord("app-settings", ROSTER_MAPPING_KEY, { key: ROSTER_MAPPING_KEY, value: JSON.stringify({ ...rosterMapping, staffByCode: byCode }) });
+    await refetchSettings();
+  };
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStaff, setSelectedStaff] = useState<Set<string>>(new Set());
   const [viewingStaff, setViewingStaff] = useState<StaffMember | null>(null);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [editForm, setEditForm] = useState({
     name: "",
+    employeeCode: "",
     position: "",
     department: "",
     email: "",
@@ -73,6 +97,8 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     name: "",
     email: "",
     phone: "",
+    employeeCode: "",
+    role: "CAREGIVER" as "CAREGIVER" | "NURSE" | "CARE_MANAGER",
     position: "",
     department: "",
     active: "Active" as "Active" | "Inactive",
@@ -150,6 +176,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     setEditingStaff(member);
     setEditForm({
       name: member.name,
+      employeeCode: codeByStaffId[member.id] ?? "",
       position: member.position,
       department: member.department,
       email: member.email,
@@ -194,6 +221,10 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
             phone: editForm.phone,
           });
         }
+        // Keep the roster employee-code mapping in sync (migration-free).
+        if ((codeByStaffId[editingStaff.id] ?? "") !== editForm.employeeCode.trim()) {
+          await setStaffCode(editingStaff.id, editForm.employeeCode);
+        }
         await refetch();
         setEditingStaff(null);
         setViewingStaff(null);
@@ -236,10 +267,10 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
         name: createForm.name,
         email: createForm.email,
         phone: createForm.phone,
-        role: "CAREGIVER",
+        role: createForm.role,
       });
       // Then create the staff record linked to the user
-      await createRecord("staff", {
+      const newStaff = await createRecord("staff", {
         userId: newUser.id,
         position: createForm.position,
         department: createForm.department,
@@ -247,9 +278,13 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
         isApproved: createForm.approved === "Approved",
         experience: createForm.experience || null,
       });
+      // Employee code (client's roster scheme, e.g. CG1 / NOD1) → roster mapping,
+      // so the Staff Roster auto-matches this person with no manual linking.
+      const newStaffId = String(newStaff?.id ?? newStaff?.data?.id ?? "");
+      if (createForm.employeeCode.trim() && newStaffId) await setStaffCode(newStaffId, createForm.employeeCode);
       await refetch();
       setCreatingStaff(false);
-      setCreateForm({ name: "", email: "", phone: "", position: "", department: "", active: "Active", approved: "Approved", experience: "" });
+      setCreateForm({ name: "", email: "", phone: "", employeeCode: "", role: "CAREGIVER", position: "", department: "", active: "Active", approved: "Approved", experience: "" });
       Swal.fire({
         title: "Staff Created",
         text: `${createForm.name} has been added to the registry.`,
@@ -758,6 +793,16 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                     />
                   </div>
                   <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Employee Code</label>
+                    <input
+                      type="text"
+                      value={editForm.employeeCode}
+                      onChange={(e) => setEditForm({ ...editForm, employeeCode: e.target.value })}
+                      placeholder="e.g. CG1 / NOD1 (matches the roster)"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
+                    />
+                  </div>
+                  <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Position</label>
                     <input
                       type="text"
@@ -990,6 +1035,29 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                       placeholder="e.g. (555) 123-4567"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Role</label>
+                    <select
+                      value={createForm.role}
+                      onChange={(e) => setCreateForm({ ...createForm, role: e.target.value as typeof createForm.role })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
+                    >
+                      <option value="CAREGIVER">Caregiver</option>
+                      <option value="NURSE">Nurse</option>
+                      <option value="CARE_MANAGER">Care Manager</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Employee Code</label>
+                    <input
+                      type="text"
+                      value={createForm.employeeCode}
+                      onChange={(e) => setCreateForm({ ...createForm, employeeCode: e.target.value })}
+                      placeholder="e.g. CG1 / NOD1 (matches the roster)"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">The code used on the staffing roster, so their schedule auto-matches.</p>
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Position</label>
