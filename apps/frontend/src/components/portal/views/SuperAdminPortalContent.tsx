@@ -286,17 +286,52 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
       await refetch();
       const createdName = createForm.name;
       const createdEmail = createForm.email;
+      const createdRole = createForm.role;
+      const createdCode = createForm.employeeCode.trim();
       setCreatingStaff(false);
       setCreateForm({ name: "", email: "", phone: "", employeeCode: "", role: "CAREGIVER", position: "", department: "", active: "Active", approved: "Approved", experience: "" });
       if (data.password) {
+        const pw = String(data.password);
+        const roleName = ({ CAREGIVER: "Caregiver", NURSE: "Nurse", CARE_MANAGER: "Care Manager" } as Record<string, string>)[createdRole] ?? "Staff";
+        const esc = (s: string) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
+        const rowCss = "display:flex;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid #f1f5f4;font-size:14px";
+        const mono = "font-family:ui-monospace,SFMono-Regular,Menlo,monospace";
         await Swal.fire({
           title: "Staff account created",
           icon: "success",
-          html: `<div style="text-align:left">${createdName} can now sign in.<br/><br/><b>Email:</b> ${createdEmail}<br/><b>First-time password:</b> <code style="font-size:16px">${data.password}</code><br/><br/><span style="font-size:12px;color:#6b7280">Share this with them — they should change it after first login. It won't be shown again.</span></div>`,
-          confirmButtonText: "Got it",
+          confirmButtonText: "Done",
+          confirmButtonColor: "#0e7c6b",
+          html:
+            `<div style="text-align:left;color:#334155">
+              <p style="margin:0 0 14px;font-size:14px"><b>${esc(createdName)}</b> can now sign in. Share these credentials securely — the password <b>won't be shown again</b>.</p>
+              <div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
+                <div style="${rowCss}"><span style="color:#64748b">Role</span><span style="font-weight:600">${esc(roleName)}</span></div>
+                ${createdCode ? `<div style="${rowCss}"><span style="color:#64748b">Employee code</span><span style="font-weight:600;${mono}">${esc(createdCode)}</span></div>` : ""}
+                <div style="${rowCss}"><span style="color:#64748b">Email</span><span style="font-weight:600;${mono}">${esc(createdEmail)}</span></div>
+                <div style="padding:12px 14px;background:#effdf7">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <span style="color:#64748b;font-size:14px">First-time password</span>
+                    <button id="sw-cp-pw" type="button" style="border:1px solid #0e7c6b;color:#0a594e;background:#fff;border-radius:6px;padding:3px 12px;font-size:12px;font-weight:600;cursor:pointer">Copy</button>
+                  </div>
+                  <div style="${mono};font-size:22px;font-weight:700;letter-spacing:1px;color:#0a594e">${esc(pw)}</div>
+                </div>
+              </div>
+              <button id="sw-cp-all" type="button" style="margin-top:12px;width:100%;border:none;background:#0f172a;color:#fff;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer">Copy email &amp; password</button>
+            </div>`,
+          didOpen: (popup: HTMLElement) => {
+            const flash = (el: EventTarget | null, done: string) => {
+              if (!(el instanceof HTMLElement)) return;
+              const orig = el.textContent;
+              el.textContent = done;
+              window.setTimeout(() => { el.textContent = orig; }, 1300);
+            };
+            const write = (text: string) => { try { void navigator.clipboard?.writeText(text); } catch { /* clipboard blocked */ } };
+            popup.querySelector("#sw-cp-pw")?.addEventListener("click", (e) => { write(pw); flash(e.currentTarget, "Copied!"); });
+            popup.querySelector("#sw-cp-all")?.addEventListener("click", (e) => { write(`Email: ${createdEmail}\nPassword: ${pw}`); flash(e.currentTarget, "Copied!"); });
+          },
         });
       } else {
-        Swal.fire({ title: "Staff added", text: `${createdName} already had a login; membership and record updated.`, icon: "success", timer: 2000, showConfirmButton: false });
+        Swal.fire({ title: "Staff added", text: `${createdName} already had a login; their membership and record were updated (no new password — the email already had an account).`, icon: "success", confirmButtonColor: "#0e7c6b" });
       }
     } catch (err) {
       Swal.fire({
