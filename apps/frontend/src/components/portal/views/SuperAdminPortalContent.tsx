@@ -34,7 +34,7 @@ import { useState, useMemo } from "react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptStaff } from "@/lib/adapters";
-import { createRecord, updateRecord, deleteRecord, upsertRecord } from "@/lib/api";
+import { updateRecord, deleteRecord, upsertRecord } from "@/lib/api";
 import { ROSTER_MAPPING_KEY, type RosterMapping } from "@/lib/rosterBridge";
 
 interface SuperAdminPortalContentProps {
@@ -262,36 +262,42 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     });
     if (!result.isConfirmed) return;
     try {
-      // Create the user first
-      const newUser = await createRecord("users", {
-        name: createForm.name,
-        email: createForm.email,
-        phone: createForm.phone,
-        role: createForm.role,
+      // Provision a real login (Supabase auth + first-time password + membership +
+      // Staff record) — not just a DB row — so the new staff can actually sign in.
+      const res = await fetch("/api/accounts/provision-staff", {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
+        body: JSON.stringify({
+          name: createForm.name,
+          email: createForm.email,
+          phone: createForm.phone,
+          role: createForm.role,
+          position: createForm.position,
+          department: createForm.department,
+          experience: createForm.experience,
+          isActive: createForm.active === "Active",
+          isApproved: createForm.approved === "Approved",
+        }),
       });
-      // Then create the staff record linked to the user
-      const newStaff = await createRecord("staff", {
-        userId: newUser.id,
-        position: createForm.position,
-        department: createForm.department,
-        isActive: createForm.active === "Active",
-        isApproved: createForm.approved === "Approved",
-        experience: createForm.experience || null,
-      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Could not create the staff login.");
       // Employee code (client's roster scheme, e.g. CG1 / NOD1) → roster mapping,
       // so the Staff Roster auto-matches this person with no manual linking.
-      const newStaffId = String(newStaff?.id ?? newStaff?.data?.id ?? "");
-      if (createForm.employeeCode.trim() && newStaffId) await setStaffCode(newStaffId, createForm.employeeCode);
+      if (createForm.employeeCode.trim() && data.staffId) await setStaffCode(String(data.staffId), createForm.employeeCode);
       await refetch();
+      const createdName = createForm.name;
+      const createdEmail = createForm.email;
       setCreatingStaff(false);
       setCreateForm({ name: "", email: "", phone: "", employeeCode: "", role: "CAREGIVER", position: "", department: "", active: "Active", approved: "Approved", experience: "" });
-      Swal.fire({
-        title: "Staff Created",
-        text: `${createForm.name} has been added to the registry.`,
-        icon: "success",
-        timer: 1500,
-        showConfirmButton: false,
-      });
+      if (data.password) {
+        await Swal.fire({
+          title: "Staff account created",
+          icon: "success",
+          html: `<div style="text-align:left">${createdName} can now sign in.<br/><br/><b>Email:</b> ${createdEmail}<br/><b>First-time password:</b> <code style="font-size:16px">${data.password}</code><br/><br/><span style="font-size:12px;color:#6b7280">Share this with them — they should change it after first login. It won't be shown again.</span></div>`,
+          confirmButtonText: "Got it",
+        });
+      } else {
+        Swal.fire({ title: "Staff added", text: `${createdName} already had a login; membership and record updated.`, icon: "success", timer: 2000, showConfirmButton: false });
+      }
     } catch (err) {
       Swal.fire({
         title: "Create Failed",
