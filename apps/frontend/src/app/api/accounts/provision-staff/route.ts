@@ -26,8 +26,12 @@ const STAFF_ROLES: Role[] = ["NURSE", "CAREGIVER", "CARE_MANAGER"] as Role[];
 const roleLabel = (r: Role) => ({ NURSE: "Nurse", CAREGIVER: "Caregiver", CARE_MANAGER: "Care Manager" } as Record<string, string>)[r] ?? "Staff";
 
 export async function POST(request: NextRequest) {
-  const context = await requireTenantContext({ requireCommunity: true });
-  if (!context?.organizationId || !context.communityId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // allowPlatform: the "System / Full System Access" Super Admin is a PLATFORM
+  // account — without this it resolves to null and every create 401s.
+  const context = await requireTenantContext({ allowPlatform: true, requireCommunity: true });
+  if (!context?.organizationId || !context.communityId) {
+    return NextResponse.json({ error: "No active community — pick a community (top bar) before adding staff." }, { status: 400 });
+  }
   if (!canManageOrganization(context) && !["SUPERADMIN", "FACILITY_ADMIN", "CARE_MANAGER"].includes(context.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
