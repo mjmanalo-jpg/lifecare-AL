@@ -4,6 +4,8 @@ import { requireTenantContext } from "@/lib/tenant";
 import { slaMinutes } from "@/lib/alertAccess";
 import { scanCameraHealth } from "@/lib/cameraHealth";
 import { isAbnormalVital, vitalSeverity } from "@/lib/vitalThresholds";
+import { reassessmentStatus } from "@/lib/lifecare/reassessment";
+import type { CareLevel } from "@/lib/lifecare/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -75,10 +77,11 @@ interface Scan {
   sbarEscalations: number;
   missedElimination: number;
   apptAutoApproved: number;
+  reassessmentDue: number;
 }
 
 async function scanCommunity(communityId: string, organizationId: string | null): Promise<Scan> {
-  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0 };
+  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0, reassessmentDue: 0 };
 
   // Recipient sets by care tier. General alerts go to the on-floor + admin team
   // (nurse + facility admin). SBAR SLA escalations follow the clinical chain of
@@ -595,6 +598,37 @@ async function scanCommunity(communityId: string, organizationId: string | null)
     }
   });
 
+  // LOC reassessment due (DT-012 cadence). A resident whose Level-of-Care review
+  // has come due — the interval tightens with acuity — is flagged to the Nurse /
+  // Care Manager to reopen the assessment. Reads the migration-free loc_history
+  // app-setting; keyed by resident + due-month so it re-fires on cadence, not daily.
+  // NOTE: REASSESSMENT_INTERVAL_DAYS are provisional pending the Master SOP.
+  await runSource("loc-reassessment", async () => {
+    const setting = await prisma.appSetting.findFirst({ where: { communityId, key: "loc_history" }, select: { value: true } });
+    let hist: Array<{ residentId?: string; level?: string; at?: string }> = [];
+    try { const v = JSON.parse(setting?.value || "[]"); if (Array.isArray(v)) hist = v; } catch { /* ignore malformed */ }
+    const latest = new Map<string, { level: string; at: string }>();
+    for (const e of hist) {
+      const rid = e?.residentId; const at = String(e?.at ?? "");
+      if (!rid || !at) continue;
+      const cur = latest.get(rid);
+      if (!cur || at.localeCompare(cur.at) > 0) latest.set(rid, { level: String(e?.level ?? ""), at });
+    }
+    if (!latest.size) return;
+    const residents = await prisma.resident.findMany({ where: { communityId, id: { in: [...latest.keys()] } }, select: { id: true, firstName: true, lastName: true, roomNumber: true } });
+    const rmap = new Map(residents.map((r) => [r.id, r]));
+    const reassessTeam = idsForRoles(["NURSE", "CARE_MANAGER"]);
+    for (const [rid, { level, at }] of latest) {
+      const r = rmap.get(rid);
+      const lv = /^L[1-5]$/.test(level) ? (level as CareLevel) : null;
+      if (!r || !lv) continue;
+      const st = reassessmentStatus({ level: lv, lastAssessedISO: at, nowISO: now.toISOString() });
+      if (!st || !st.overdue) continue;
+      const key = `locdue:${rid}:${st.dueISO.slice(0, 7)}`;
+      if (await notify("SYSTEM_ALERT", "assessment", key, "LOC reassessment due", `${rname(r)} (Room ${room(r)}) is ${st.daysOverdue} day(s) overdue for a ${lv} Level-of-Care reassessment (last assessed ${fmtDate(at)}). Reopen the assessment to re-confirm the level (DT-012).`, "WARNING", reassessTeam)) counts.reassessmentDue++;
+    }
+  });
+
   return counts;
 }
 
@@ -614,7 +648,7 @@ async function runScan(request: NextRequest) {
     communities = [{ id: ctx.communityId, organizationId: ctx.organizationId ?? null }];
   }
 
-  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0 };
+  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0, reassessmentDue: 0 };
   for (const c of communities) {
     try {
       const s = await scanCommunity(c.id, c.organizationId);
