@@ -328,8 +328,8 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
               </div>
               <div style="display:flex;gap:7px;align-items:flex-start;margin:12px 2px 0;font-size:12px;line-height:1.45;color:#b45309">${warn}<span>Shown once — copy it before closing. Ask ${firstName} to change it after first sign-in.</span></div>
               <div style="display:flex;gap:10px;margin-top:20px">
-                <button id="sw-cp-all" type="button" style="flex:1;border:1px solid #cfd5e2;background:#fff;color:#334155;border-radius:9px;padding:11px 14px;font-size:14px;font-weight:600;cursor:pointer">Copy email &amp; password</button>
-                <button id="sw-done" type="button" style="flex:1;border:none;background:#047857;color:#fff;border-radius:9px;padding:11px 14px;font-size:14px;font-weight:600;cursor:pointer">Done</button>
+                <button id="sw-cp-all" type="button" style="flex:1;min-width:0;white-space:nowrap;border:1px solid #cfd5e2;background:#fff;color:#334155;border-radius:9px;padding:10px 12px;font-size:13px;font-weight:600;line-height:1.2;cursor:pointer">Copy login details</button>
+                <button id="sw-done" type="button" style="flex:1;white-space:nowrap;border:none;background:#047857;color:#fff;border-radius:9px;padding:10px 12px;font-size:13px;font-weight:600;line-height:1.2;cursor:pointer">Done</button>
               </div>
             </div>`,
           didOpen: (popup: HTMLElement) => {
