@@ -224,6 +224,7 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   taskboard: "Task Assignment",
   taskassignment: "Task Assignment",
   caregiverschedule: "Caregiver Schedule",
+  staffroster: "Staff Roster",
   securitylog: "Security & Incident Log",
   cameralogs: "Camera Activity Log",
   cameras: "Camera Registry",
@@ -416,6 +417,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Physician Comms", icon: PhoneCall, route: "/nurse/physiciancomms", group: "Coordination & Comms" },
       // Administration
       { name: "Caregiver Schedule", icon: CalendarCheck, route: "/nurse/caregiverschedule", group: "Administration" },
+      { name: "Staff Roster", icon: CalendarCheck, route: "/nurse/staffroster", group: "Administration" },
       { name: "Additional Clinical Services", icon: Cross, route: "/nurse/additionalservices", group: "Administration" },
       { name: "Safeguarding", icon: ShieldCheck, route: "/nurse/safeguarding", group: "Administration" },
       { name: "Infection Control", icon: Activity, route: "/nurse/infectioncontrol", group: "Administration" },
@@ -554,6 +556,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       // Administration
       { name: "Staff Profiles & Records", icon: BadgeCheck, route: "/care_manager/staffprofiles", group: "Administration" },
       { name: "Caregiver Schedule", icon: CalendarCheck, route: "/care_manager/caregiverschedule", group: "Administration" },
+      { name: "Staff Roster", icon: CalendarCheck, route: "/care_manager/staffroster", group: "Administration" },
       { name: "Additional Clinical Services", icon: Cross, route: "/care_manager/additionalservices", group: "Administration" },
       { name: "Safeguarding", icon: ShieldCheck, route: "/care_manager/safeguarding", group: "Administration" },
       { name: "Infection Control", icon: Activity, route: "/care_manager/infectioncontrol", group: "Administration" },

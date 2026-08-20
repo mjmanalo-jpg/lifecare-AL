@@ -1,0 +1,284 @@
+"use client";
+
+/**
+ * Staff Roster — the fortnightly staffing schedule (the client's Excel grid):
+ * staff rows × date columns, each cell a coded shift/assignment. Managers import
+ * the grid (paste from Excel), view it colour-coded, and edit cells (e.g. to
+ * cover an absence). Phase 2 will bridge working cells into caregiver_schedules /
+ * the DT-013 private-caregiver assignments.
+ */
+
+import { useMemo, useState } from "react";
+import { ClipboardPaste, Users, Moon, Sun, Sunset, Clock, Bed, Plane, HelpCircle } from "lucide-react";
+import Swal from "@/lib/swal";
+import { useLiveQuery } from "@/lib/useLiveQuery";
+import { upsertRecord } from "@/lib/api";
+import {
+  ClinicalPage, ClinicalHeader, ClinicalButton, StatCard,
+  DataState, MicroLabel, controlClass,
+} from "./clinical-ui";
+import {
+  STAFF_ROSTER_KEY, parseRoster, parseRosterGrid, parseShiftCode,
+  type StaffRoster, type RosterBaseRole, type ParsedCode,
+} from "@/lib/caregiverRoster";
+import type { ClinicianRole } from "./useClinician";
+
+type SettingRow = { key?: string; id?: string; value?: string };
+
+const MANAGER_ROLES = new Set(["NURSE", "CARE_MANAGER", "FACILITY_ADMIN", "SUPERADMIN"]);
+
+const ROLE_ORDER: { role: RosterBaseRole; label: string }[] = [
+  { role: "CARE_MANAGER", label: "Care Management" },
+  { role: "NURSE", label: "Nurses" },
+  { role: "CAREGIVER", label: "Caregivers" },
+];
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const dayNum = (iso: string) => iso.slice(8, 10);
+const weekday = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { weekday: "short" });
+const isWeekend = (iso: string) => [0, 6].includes(new Date(`${iso}T00:00:00`).getDay());
+
+/** Colour a cell by its parsed code. */
+function cellStyle(c: ParsedCode): React.CSSProperties {
+  if (c.kind === "REST") return { background: "var(--clinical-surface-2)", color: "var(--clinical-muted)" };
+  if (c.kind === "LEAVE") return { background: "color-mix(in srgb, var(--clinical-panel) 14%, transparent)", color: "var(--clinical-panel)" };
+  if (c.kind === "OFF") return { background: "transparent", color: "var(--clinical-muted)" };
+  if (c.kind === "UNKNOWN") return { background: "color-mix(in srgb, var(--clinical-coral) 12%, transparent)", color: "var(--clinical-coral)" };
+  const byShift: Record<string, string> = { AM: "var(--clinical-amber)", PM: "var(--clinical-coral)", NIGHT: "var(--clinical-panel)", MID: "var(--clinical-teal)" };
+  const accent = byShift[c.shift ?? "MID"] ?? "var(--clinical-teal)";
+  return {
+    background: `color-mix(in srgb, ${accent} 15%, transparent)`,
+    color: `color-mix(in srgb, ${accent} 70%, var(--clinical-ink))`,
+    boxShadow: c.private ? `inset 0 0 0 1.5px ${accent}` : undefined,
+    fontWeight: c.private ? 700 : 500,
+  };
+}
+
+export default function StaffRosterBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
+  const { data: settingRows, loading, error, refetch } = useLiveQuery<SettingRow>("app-settings", { tables: ["AppSetting"] });
+  const roster = useMemo(
+    () => parseRoster(settingRows.find((r) => (r.key || r.id) === STAFF_ROSTER_KEY)?.value),
+    [settingRows],
+  );
+  const canManage = MANAGER_ROLES.has(String(clinicianRole).toUpperCase());
+
+  const [importOpen, setImportOpen] = useState(false);
+  const [periodStart, setPeriodStart] = useState(todayISO());
+  const [pasteText, setPasteText] = useState("");
+  const [preview, setPreview] = useState<StaffRoster | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [edit, setEdit] = useState<{ row: number; date: string } | null>(null);
+
+  const today = todayISO();
+
+  const persist = async (next: StaffRoster) => {
+    setSaving(true);
+    try {
+      await upsertRecord("app-settings", STAFF_ROSTER_KEY, { key: STAFF_ROSTER_KEY, value: JSON.stringify(next) });
+      await refetch();
+    } catch {
+      Swal.fire({ title: "Couldn't save", text: "The roster change didn't save — try again.", icon: "error" });
+    } finally { setSaving(false); }
+  };
+
+  const doPreview = () => {
+    const parsed = parseRosterGrid(pasteText, { periodStartISO: periodStart });
+    if (!parsed.rows.length || !parsed.dates.length) {
+      Swal.fire({ title: "Nothing parsed", text: "Couldn't find a schedule grid in the paste. Include the row of day numbers and set the correct period start date.", icon: "warning" });
+      return;
+    }
+    setPreview(parsed);
+  };
+
+  const saveImport = async () => {
+    if (!preview) return;
+    await persist({ ...preview, importedAt: new Date().toISOString() });
+    setImportOpen(false); setPreview(null); setPasteText("");
+  };
+
+  const commitEdit = async (rowIdx: number, date: string, value: string) => {
+    if (!roster) return;
+    setEdit(null);
+    const rows = roster.rows.map((r, i) => {
+      if (i !== rowIdx) return r;
+      const cells = { ...r.cells };
+      const v = value.trim();
+      if (v) cells[date] = v; else delete cells[date];
+      return { ...r, cells };
+    });
+    await persist({ ...roster, rows });
+  };
+
+  // Today's snapshot.
+  const stats = useMemo(() => {
+    if (!roster) return { staff: 0, onDuty: 0, privateCg: 0, offToday: 0 };
+    let onDuty = 0, privateCg = 0, offToday = 0;
+    for (const r of roster.rows) {
+      const c = parseShiftCode(r.cells[today] ?? "");
+      if (c.kind === "WORK") { onDuty++; if (c.private) privateCg++; }
+      else if (c.kind === "REST" || c.kind === "LEAVE" || c.kind === "OFF") offToday++;
+    }
+    return { staff: roster.rows.length, onDuty, privateCg, offToday };
+  }, [roster, today]);
+
+  return (
+    <ClinicalPage>
+      <ClinicalHeader
+        title="Staff Roster"
+        subtitle={roster ? `${roster.periodStart} – ${roster.periodEnd} · ${roster.rows.length} staff` : "Fortnightly staffing schedule & assignments"}
+        right={canManage ? (
+          <ClinicalButton variant="primary" onClick={() => { setImportOpen(true); setPreview(null); }}>
+            <ClipboardPaste className="h-4 w-4" /> Import from Excel
+          </ClinicalButton>
+        ) : undefined}
+      />
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard label="Staff on roster" value={stats.staff} accent="teal" />
+        <StatCard label="On duty today" value={stats.onDuty} accent="green" />
+        <StatCard label="Private (1:1) today" value={stats.privateCg} accent="amber" />
+        <StatCard label="Off / leave today" value={stats.offToday} accent="coral" />
+      </div>
+
+      <DataState loading={loading} error={error} empty={!roster} emptyTitle="No roster imported yet" emptyHint="Use “Import from Excel” to paste the fortnightly schedule." emptyAction={canManage ? <ClinicalButton variant="primary" onClick={() => setImportOpen(true)}><ClipboardPaste className="h-4 w-4" /> Import from Excel</ClinicalButton> : undefined}>
+        {roster && (
+          <div className="overflow-hidden rounded-xl border" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-xs" style={{ minWidth: 720 }}>
+                <thead>
+                  <tr>
+                    <th className="sticky left-0 z-10 bg-[var(--clinical-surface)] px-3 py-2 text-left" style={{ minWidth: 190 }}>
+                      <MicroLabel>Staff</MicroLabel>
+                    </th>
+                    {roster.dates.map((d) => (
+                      <th key={d} className="px-1.5 py-2 text-center" style={{ background: d === today ? "var(--clinical-teal-wash, color-mix(in srgb, var(--clinical-teal) 12%, transparent))" : undefined, color: isWeekend(d) ? "var(--clinical-muted)" : "var(--clinical-ink-soft)" }}>
+                        <div className="font-mono text-[13px] leading-none">{dayNum(d)}</div>
+                        <div className="text-[9px] uppercase tracking-wide">{weekday(d)}</div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ROLE_ORDER.map(({ role, label }) => {
+                    const group = roster.rows.map((r, i) => ({ r, i })).filter((x) => x.r.baseRole === role);
+                    if (!group.length) return null;
+                    return (
+                      <RoleGroup key={role} label={label} span={roster.dates.length + 1}>
+                        {group.map(({ r, i }) => (
+                          <tr key={`${r.employeeCode}-${i}`} className="border-t" style={{ borderColor: "var(--clinical-line)" }}>
+                            <td className="sticky left-0 z-10 bg-[var(--clinical-surface)] px-3 py-1.5">
+                              <div className="font-medium text-[var(--clinical-ink)]">{r.name || r.employeeCode || "—"}</div>
+                              <div className="text-[10px] text-[var(--clinical-muted)]">{r.employeeCode}{r.designation ? ` · ${r.designation}` : ""}{r.status ? ` · ${r.status}` : ""}</div>
+                            </td>
+                            {roster.dates.map((d) => {
+                              const raw = r.cells[d] ?? "";
+                              const c = parseShiftCode(raw);
+                              const editing = edit?.row === i && edit?.date === d;
+                              return (
+                                <td key={d} className="p-0.5 text-center">
+                                  {editing ? (
+                                    <input
+                                      autoFocus
+                                      defaultValue={raw}
+                                      className={controlClass}
+                                      style={{ width: 74, padding: "2px 4px", fontSize: 11, textAlign: "center" }}
+                                      onBlur={(e) => commitEdit(i, d, e.target.value)}
+                                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEdit(null); }}
+                                    />
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      title={c.label}
+                                      disabled={!canManage}
+                                      onClick={() => canManage && setEdit({ row: i, date: d })}
+                                      className="mx-auto block w-full rounded px-1 py-1 font-mono text-[10px] leading-tight"
+                                      style={{ ...cellStyle(c), cursor: canManage ? "pointer" : "default", minWidth: 58 }}
+                                    >
+                                      {raw || "·"}
+                                    </button>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </RoleGroup>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <Legend />
+          </div>
+        )}
+      </DataState>
+
+      {importOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setImportOpen(false)}>
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-[var(--clinical-surface)] p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-1 text-lg font-semibold text-[var(--clinical-ink)]">Import roster from Excel</h3>
+            <p className="mb-3 text-sm text-[var(--clinical-ink-soft)]">Copy the schedule grid from Excel (including the row of day numbers) and paste it below. Set the period’s first date so columns map correctly.</p>
+            <div className="mb-3 flex items-center gap-2">
+              <MicroLabel>Period start</MicroLabel>
+              <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className={controlClass} style={{ maxWidth: 180 }} />
+            </div>
+            <textarea
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+              rows={8}
+              placeholder="Paste the tab-separated grid here…"
+              className={controlClass}
+              style={{ fontFamily: "var(--mono, monospace)", fontSize: 11 }}
+            />
+            {preview && (
+              <div className="mt-3 rounded-lg border p-3 text-sm" style={{ borderColor: "var(--clinical-line)" }}>
+                Parsed <b>{preview.rows.length}</b> staff across <b>{preview.dates.length}</b> days ({preview.periodStart} – {preview.periodEnd}).
+              </div>
+            )}
+            <div className="mt-4 flex justify-end gap-2">
+              <ClinicalButton variant="ghost" onClick={() => setImportOpen(false)}>Cancel</ClinicalButton>
+              {!preview
+                ? <ClinicalButton variant="primary" onClick={doPreview}>Preview</ClinicalButton>
+                : <ClinicalButton variant="primary" onClick={saveImport} disabled={saving}>{saving ? "Saving…" : "Save roster"}</ClinicalButton>}
+            </div>
+          </div>
+        </div>
+      )}
+    </ClinicalPage>
+  );
+}
+
+function RoleGroup({ label, span, children }: { label: string; span: number; children: React.ReactNode }) {
+  return (
+    <>
+      <tr>
+        <td colSpan={span} className="bg-[var(--clinical-surface-2)] px-3 py-1">
+          <span className="font-mono text-[10px] uppercase tracking-widest text-[var(--clinical-muted)]">{label}</span>
+        </td>
+      </tr>
+      {children}
+    </>
+  );
+}
+
+function Legend() {
+  const items: { icon: typeof Sun; label: string; hint: string }[] = [
+    { icon: Sun, label: "A · AM", hint: "AM shift" },
+    { icon: Sunset, label: "P · PM", hint: "PM shift" },
+    { icon: Moon, label: "N · Night", hint: "Night shift" },
+    { icon: Clock, label: "MID / …12", hint: "Mid / flex · 12-hour" },
+    { icon: Users, label: "PCG### = private 1:1", hint: "boxed = private caregiver → DT-013" },
+    { icon: Bed, label: "RD", hint: "Rest day" },
+    { icon: Plane, label: "VL", hint: "Vacation leave" },
+    { icon: HelpCircle, label: "x", hint: "Off / unfilled" },
+  ];
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1.5 border-t px-3 py-2.5 text-[11px] text-[var(--clinical-ink-soft)]" style={{ borderColor: "var(--clinical-line)" }}>
+      {items.map((it) => (
+        <span key={it.label} className="inline-flex items-center gap-1.5" title={it.hint}>
+          <it.icon className="h-3 w-3 text-[var(--clinical-muted)]" /> {it.label}
+        </span>
+      ))}
+    </div>
+  );
+}
