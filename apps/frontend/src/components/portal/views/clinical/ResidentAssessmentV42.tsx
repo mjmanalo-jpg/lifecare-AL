@@ -18,8 +18,8 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, updateRecord } from "@/lib/api";
 import { recordAudit } from "@/lib/auditClient";
 import { generateCarePlanFromV42 } from "@/lib/carePlanV42Gen";
-import { downstreamForAssessment } from "@/lib/lifecare/downstream.ts";
-import { recordLocChange } from "@/lib/lifecare/locHistory";
+import { decideLocApplication } from "@/lib/lifecare/downstream.ts";
+import { recordLocChange, parseLocHistory, latestEntry, normalizeLevel, LOC_HISTORY_KEY } from "@/lib/lifecare/locHistory";
 import {
   ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalCard, StatCard,
   SearchInput, DataState, StatusPill, MicroLabel, controlClass, DISPLAY,
@@ -422,12 +422,38 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     // resident. Governance: no auto-fee change without this authorised approval;
     // the generated plan is a DRAFT the nurse individualises before activation.
     if (decision === "APPROVED") {
-      const ds = downstreamForAssessment({
+      // Prior recorded level (for the downgrade guard) — from the resident's
+      // Level-of-Care history, matched by resident id / admission / name.
+      let priorLevel: CareLevel | null = null;
+      try {
+        const r = await fetch(`/api/db/app-settings?f_key=${LOC_HISTORY_KEY}&take=1`, { credentials: "include", cache: "no-store" });
+        const j = r.ok ? await r.json() : null;
+        const raw = (j?.data as Array<{ value?: string }> | undefined)?.[0]?.value;
+        const prior = latestEntry(
+          parseLocHistory(raw),
+          draft.layer1.residentId ?? "",
+          draft.layer1.convertedAdmissionId ? [draft.layer1.convertedAdmissionId] : [],
+          draft.layer1.residentName ?? "",
+        );
+        const lv = prior ? normalizeLevel(prior.level) : "";
+        priorLevel = /^L[1-5]$/.test(lv) ? (lv as CareLevel) : null;
+      } catch { /* best-effort: no prior history → treated as a first assessment */ }
+
+      // Governed application: a validated assessment is an authorised reassessment
+      // by this clinician. No auto-fee (needs the authoriser) and a downgrade is
+      // only applied through this authorised reassessment (CL-19 / CL-21).
+      const ds = decideLocApplication({
         residentId: draft.layer1.residentId,
         finalLevel: draft.layer3.finalLevel,
+        priorLevel,
         validated: true,
+        reassessed: true,
+        authorisedBy: me || undefined,
       });
-      if (ds) {
+      if (ds && !ds.apply && ds.blockedReason) {
+        Swal.fire({ title: "Level of Care not applied", text: ds.blockedReason, icon: "warning" });
+      }
+      if (ds && ds.apply) {
         try {
           await updateRecord("residents", ds.residentId, { careLevel: ds.careLevelEnum });
           if (ds.postLocCharge) {

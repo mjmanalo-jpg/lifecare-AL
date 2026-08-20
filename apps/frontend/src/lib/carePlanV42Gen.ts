@@ -2,24 +2,22 @@ import { createRecord } from "@/lib/api";
 import { generateDraftPlan, suggestTaskIds, type CarePlanLineInput } from "@/lib/lifecare/carePlan";
 import { domainScores, type AssessmentV42 } from "@/lib/lifecare/assessment";
 import { levelRank } from "@/lib/lifecare/downstream";
-import { parseSchedules, assigneeForResidentToday } from "@/lib/caregiverSchedule";
-
-async function fetchSchedules() {
-  try {
-    const r = await fetch("/api/db/app-settings?f_key=caregiver_schedules&take=1", { credentials: "same-origin", cache: "no-store" });
-    const j = await r.json();
-    return parseSchedules((j?.data as Array<{ value?: string }> | undefined)?.[0]?.value);
-  } catch { return []; }
-}
 
 /**
  * Assessment-driven Care Plan generator (Phase 2 in production form).
  *
  * Unlike the level-only baseline generator (carePlanGen.ts), this builds the
- * plan from the resident's ACTIVE assessment needs: it selects Care Task IDs
- * from the active Layer-2 domains and pulls the approved Need / Goal /
- * Intervention LOCKED from the Care Task Master, then persists a DRAFT-style
- * CarePlan + CarePlanItem + Task set. The nurse individualises before use.
+ * plan from the resident's assessment needs: it selects Care Task IDs from the
+ * active Layer-2 domains and pulls the approved Need / Goal / Intervention
+ * LOCKED from the Care Task Master, then persists a DRAFT CarePlan + goal /
+ * intervention CarePlanItems.
+ *
+ * GOVERNANCE (B5): the plan is created as a DRAFT and NO caregiver tasks are
+ * dispatched here — nothing reaches caregivers until the nurse individualises
+ * and the plan is released to ACTIVE (releaseCarePlan → the daily materializer
+ * spins the interventions into that day's tasks). Each INTERVENTION item carries
+ * a [task:TASK-###] marker so the materializer can resolve the governed
+ * care-event archetype for its task.
  */
 
 type Row = Record<string, unknown>;
@@ -59,12 +57,14 @@ export async function generateCarePlanFromV42(opts: {
     residentId: opts.residentId,
     communityId: community,
     title: `Resident Care Plan — Level ${finalLevel ?? "?"} (v4.2 assessment)`,
-    status: "ACTIVE",
+    // DRAFT until the nurse individualises + releases (B5). Tasks are NOT
+    // dispatched from here — the materializer runs once the plan is ACTIVE.
+    status: "DRAFT",
     startDate: now,
     reviewFrequency: REVIEW_FREQ[levelNum] || "MONTHLY",
     careGoals: draft.lines.map((l) => l.approvedGoal).filter((v, i, a) => a.indexOf(v) === i).join("\n"),
     interventions: draft.lines.map((l) => l.approvedIntervention).join("\n"),
-    notes: `Auto-generated from v4.2 assessment ${assessment.id} (${draft.modelVersion}). DRAFT — nurse must individualise and approve before routine activation.`,
+    notes: `Auto-generated from v4.2 assessment ${assessment.id} (${draft.modelVersion}). DRAFT — nurse must individualise and release before routine activation; no tasks are dispatched until release.`,
     createdByName: opts.createdByName || "System",
   });
   const planId = recId(planRes);
@@ -72,7 +72,9 @@ export async function generateCarePlanFromV42(opts: {
 
   let order = 0;
   for (const line of draft.lines) {
-    // Need/goal as GOAL items; the intervention as an INTERVENTION item + task.
+    // Need/goal as GOAL items; the intervention as an INTERVENTION item. The
+    // [task:TASK-###] marker links the item to its Care Task Master routine so
+    // the materializer (on release) can resolve its governed care-event archetype.
     await createRecord("care-plan-items", {
       carePlanId: planId, communityId: community, category: "GOAL",
       title: line.approvedGoal, description: line.approvedNeed, status: "ACTIVE", sortOrder: order++,
@@ -80,27 +82,12 @@ export async function generateCarePlanFromV42(opts: {
     await createRecord("care-plan-items", {
       carePlanId: planId, communityId: community, category: "INTERVENTION",
       title: line.approvedIntervention,
-      description: [line.assistanceLevel, line.frequency, line.precautions].filter(Boolean).join(" · ") || `Task ${line.taskId}`,
+      description: `${[line.assistanceLevel, line.frequency, line.precautions].filter(Boolean).join(" · ") || `Task ${line.taskId}`}${line.taskId ? ` [task:${line.taskId}]` : ""}`,
       status: "ACTIVE", sortOrder: order++,
     }).catch(() => null);
   }
 
-  const due = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-  const assignee = assigneeForResidentToday(await fetchSchedules(), opts.residentId);
-  let taskCount = 0;
-  for (const line of draft.lines) {
-    try {
-      await createRecord("tasks", {
-        residentId: opts.residentId, communityId: community,
-        title: line.approvedIntervention,
-        description: `From v4.2 care plan · ${line.taskId}${line.frequency ? ` · ${line.frequency}` : ""}`,
-        category: line.domain, status: "PENDING", priority: "MEDIUM",
-        dueDate: due, generatedFrom: planId,
-        assignedToId: assignee?.caregiverStaffId || undefined,
-      });
-      taskCount++;
-    } catch { /* best-effort per task */ }
-  }
-
-  return { planId, taskCount, lineCount: draft.lines.length };
+  // No inline task creation — held DRAFT plans dispatch nothing. Tasks are
+  // materialised from the interventions once the plan is released (ACTIVE).
+  return { planId, taskCount: 0, lineCount: draft.lines.length };
 }

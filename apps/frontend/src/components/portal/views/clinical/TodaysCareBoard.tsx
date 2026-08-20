@@ -7,7 +7,6 @@ import {
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { createRecord } from "@/lib/api";
 import {
   ClinicalPage, ClinicalHeader, ClinicalCard, ClinicalButton, StatusPill,
   DataState, StatCard, MicroLabel, SearchInput, ClinicalModal,
@@ -19,7 +18,7 @@ import {
   materialiseShiftView, splitByRole,
   type ShiftEncounter, type ShiftRole,
 } from "@/lib/lifecare/todaysCare.ts";
-import { buildCareEventRecord, type Outcome } from "@/lib/lifecare/careEvents.ts";
+import { type Outcome } from "@/lib/lifecare/careEvents.ts";
 import { MODEL_VERSION } from "@/lib/lifecare/dataset.ts";
 import { domainCodeFromLabel, domainInPackage, DOMAIN_LABEL, recordOutOfPackageService } from "@/lib/lifecare/carePackage";
 import { CAREGIVER_SCHEDULE_KEY, parseSchedules, activeResidentIdsFor } from "@/lib/caregiverSchedule";
@@ -271,31 +270,37 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
     }
     setBusy(true);
     try {
-      const record = buildCareEventRecord(
-        {
+      // Chart through the GOVERNED care-events route (not the generic /api/db
+      // route) so exceptions fire their escalation / nurse-notification /
+      // repeat-variance review server-side. careTaskId scopes the variance count.
+      const res = await fetch("/api/care-events", {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
+        body: JSON.stringify({
           residentId: selected.residentId,
-          residentName: selected.residentName,
-          taskId: enc.taskIds.join(","),
-          bundle: enc.bundle,
+          careTaskId: enc.taskIds[0] || undefined,
           domain: enc.label,
-          eventName: enc.label,
           outcome,
           observation: observation.trim() || undefined,
           exceptionDetail: outcome === "Completed" ? undefined : observation.trim() || undefined,
-          precautions: enc.precautions.join("; ") || undefined,
           shift: shiftLabel(),
           actorName: me || undefined,
-          reporterRole: effectiveRole || undefined,
-        },
-        MODEL_VERSION_STRING,
-      );
-      await createRecord("care-events", record);
+        }),
+      });
+      const json = await res.json().catch(() => ({} as Record<string, unknown>));
+      if (!res.ok) throw new Error((json as { error?: string })?.error || "Could not chart the care event.");
       if (gated && code) await recordOutOfPackageService({ residentId: selected.residentId, residentName: selected.residentName, domainCode: code, domainLabel: DOMAIN_LABEL[code] ?? enc.label, level, by: me || undefined, notes: observation.trim() || undefined });
       setCharted((prev) => new Map(prev).set(encKey(selected.residentId, enc), outcome));
+      const escalated = !!(json as { escalated?: boolean }).escalated;
+      const reviewFlagged = !!(json as { reviewAlertRaised?: boolean }).reviewAlertRaised;
+      const notified = !!(json as { notified?: boolean }).notified;
       Swal.fire({
-        toast: true, position: "top-end", icon: outcome === "Completed" ? "success" : "info",
-        title: outcome === "Completed" ? "Charted complete" : `Charted: ${outcome}`,
-        showConfirmButton: false, timer: 1400,
+        toast: true, position: "top-end", icon: outcome === "Completed" ? "success" : escalated ? "warning" : "info",
+        title: outcome === "Completed"
+          ? "Charted complete"
+          : escalated ? `Charted: ${outcome} · nurse alerted + escalation raised`
+          : reviewFlagged ? `Charted: ${outcome} · reassessment flagged`
+          : notified ? `Charted: ${outcome} · nurse notified` : `Charted: ${outcome}`,
+        showConfirmButton: false, timer: escalated || reviewFlagged ? 2400 : 1400,
       });
     } catch (err) {
       Swal.fire({ title: "Could not chart", text: err instanceof Error ? err.message : "Please try again.", icon: "error" });
