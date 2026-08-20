@@ -110,6 +110,7 @@ export async function POST(request: NextRequest) {
       status: passwordSet ? "created" : "existing_unchanged",
     }, { status: 200 });
   } catch (error) {
+    console.error("[provision-staff] failed:", error);
     const message = error instanceof Error ? error.message : "Staff provisioning failed";
     return NextResponse.json({ error: message }, { status: 400 });
   }
