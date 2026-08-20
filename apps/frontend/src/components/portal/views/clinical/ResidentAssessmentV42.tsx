@@ -469,7 +469,15 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
               createdByName: me || "Clinician",
             });
           }
-        } catch { /* best-effort: validation already saved; downstream is idempotent */ }
+        } catch {
+          // Validation is already saved; a downstream step (care level / billing /
+          // draft plan) failed. Surface it so it isn't silently inconsistent.
+          Swal.fire({
+            toast: true, position: "top-end", icon: "warning",
+            title: "Level validated, but a downstream step failed — verify care level, billing and the draft plan.",
+            showConfirmButton: false, timer: 3200,
+          });
+        }
       }
       // Append to the resident's Level of Care history — captured from pre-admission
       // onward (keyed by residentId when admitted, else the linked admission), and

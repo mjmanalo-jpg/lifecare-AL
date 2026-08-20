@@ -8,6 +8,15 @@
  * ACTIVE (recurring flat fee posts + accrues monthly) → ENDED (billing stops).
  */
 
+import type { PcgRule } from "./lifecare/types";
+// Direct JSON import (not via ./lifecare/dataset) so this stays bundle-light —
+// pulling dataset would drag the 220-task / 93-event masters into the client.
+import pcgRulesData from "./lifecare/data/pcg_rules.json" with { type: "json" };
+
+/** DT-013 Private Caregiver rules (PCG-001..012) — the single source of truth. */
+export const PCG_RULES = pcgRulesData as PcgRule[];
+export const pcgRuleById = (id: string): PcgRule | undefined => PCG_RULES.find((r) => r.id === id);
+
 export const PRIVATE_CARE_KEY = "private_caregiver_assignments";
 
 export type PrivateCareStatus = "PENDING_FAMILY" | "ACTIVE" | "DECLINED" | "ENDED";
@@ -160,15 +169,16 @@ export interface PrivateCareAssignment {
   assessment?: PcgAssessmentSnapshot;
 }
 
-/** Human-readable PCG rule references surfaced in the UI. */
-export const PCG_RULE_REFS: { id: string; label: string }[] = [
-  { id: "PCG-002", label: "Dedicated line-of-sight supervision" },
-  { id: "PCG-003", label: "Prolonged 1:1 hands-on assistance" },
-  { id: "PCG-004", label: "Night-specific safety need" },
-  { id: "PCG-006", label: "Behavioral / cognitive safety" },
-  { id: "PCG-007", label: "Family-requested (elective) companion" },
-  { id: "PCG-011", label: "Mandatory PCG-fee justification" },
-];
+/**
+ * PCG rule references surfaced in the UI — the ids the assign flow reasons about,
+ * with labels sourced from pcg_rules.json (decisionFactor) so the rule data is the
+ * single source of truth and can't drift from the board copy.
+ */
+export const PCG_RULE_REF_IDS = ["PCG-002", "PCG-003", "PCG-004", "PCG-006", "PCG-007", "PCG-011"] as const;
+export const PCG_RULE_REFS: { id: string; label: string }[] = PCG_RULE_REF_IDS.map((id) => ({
+  id,
+  label: pcgRuleById(id)?.decisionFactor ?? id,
+}));
 
 export function parsePrivateCare(raw: string | null | undefined): PrivateCareAssignment[] {
   if (!raw) return [];

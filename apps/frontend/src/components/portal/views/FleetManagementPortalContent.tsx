@@ -6,7 +6,6 @@ import FleetDrivers from "@/components/portal/views/fleet/FleetDrivers";
 import FleetHub from "@/components/portal/views/fleet/FleetHub";
 import AmbulanceBooking from "@/components/portal/views/fleet/AmbulanceBooking";
 import FacilityResidents from "@/components/portal/views/FacilityResidents";
-import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import PhysicianCarePlans from "@/components/portal/views/physician/PhysicianCarePlans";
 import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
 import FacilityUnifiedView from "@/components/portal/views/FacilityUnifiedView";
@@ -47,8 +46,6 @@ export default function FleetManagementPortalContent({
     // Core SLMS Modules Aligned
     case "records":
       return <FacilityResidents />;
-    case "rounds":
-      return <AssessmentAcuityBoard clinicianRole="FACILITY_ADMIN" />;
     case "careplans":
       return <PhysicianCarePlans />;
     case "tasks":

@@ -5,6 +5,9 @@ import assert from "node:assert/strict";
 import {
   classifyOutcome, evaluateVariance, buildCareEventRecord, OUTCOMES,
 } from "../src/lib/lifecare/careEvents.ts";
+import engineRules from "../src/lib/lifecare/data/care_event_engine_rules.json" with { type: "json" };
+import careEventMaster from "../src/lib/lifecare/data/care_event_master.json" with { type: "json" };
+import decisionTreesData from "../src/lib/lifecare/data/decision_trees.json" with { type: "json" };
 
 test("expected outcomes do not escalate", () => {
   for (const o of ["Completed", "Not Required"] as const) {
@@ -65,4 +68,46 @@ test("repeated variance in the window flags the record's review alert", () => {
 
 test("all documented outcomes are classifiable", () => {
   for (const o of OUTCOMES) assert.ok(classifyOutcome(o));
+});
+
+// ── H4: acute events reach the emergency pathway (never revenue-gated) ──
+
+test("acute safety/deterioration outcomes route to the emergency pathway (DT-010)", () => {
+  for (const o of ["Unsafe", "Clinical Change"] as const) {
+    const c = classifyOutcome(o);
+    assert.equal(c.emergencyPathway, true, `${o} should reach the emergency pathway`);
+    assert.equal(c.emergencyProtocol, "DT-010");
+    assert.equal(c.immediateEscalation, true);
+  }
+  // Routine / variance outcomes never trigger the emergency pathway.
+  for (const o of ["Completed", "Not Required", "Refused", "Unable", "Increased Assist", "Frequency Variance"] as const) {
+    assert.equal(classifyOutcome(o).emergencyPathway, false, `${o} should NOT be an emergency`);
+  }
+});
+
+// ── M1: the classifier is traceable to the rule data (code↔data agreement) ──
+
+test("every classification id exists in the decision-rule data", () => {
+  const cegIds = new Set((engineRules as Array<{ id: string }>).map((r) => r.id));
+  const archetypes = new Set((careEventMaster as Array<{ archetype?: string }>).map((e) => e.archetype).filter(Boolean) as string[]);
+  const dtIds = new Set((decisionTreesData as Array<{ id: string }>).map((d) => d.id));
+
+  for (const o of OUTCOMES) {
+    const c = classifyOutcome(o);
+    if (c.engineRuleId) assert.ok(cegIds.has(c.engineRuleId), `${o}: engineRuleId ${c.engineRuleId} not in care_event_engine_rules.json`);
+    if (c.archetype) assert.ok(archetypes.has(c.archetype), `${o}: archetype ${c.archetype} not in care_event_master.json`);
+    if (c.linkedDecisionTree) assert.ok(dtIds.has(c.linkedDecisionTree), `${o}: DT ${c.linkedDecisionTree} not in decision_trees.json`);
+    if (c.emergencyProtocol) assert.ok(dtIds.has(c.emergencyProtocol), `${o}: emergencyProtocol ${c.emergencyProtocol} not in decision_trees.json`);
+  }
+});
+
+test("variance outcomes carry an engine rule and no misassigned generic archetype", () => {
+  // Increased Assist / Frequency Variance are traced by CEG (not the CE-04
+  // 'abnormal observation' archetype they used to be mislabelled with).
+  const ia = classifyOutcome("Increased Assist");
+  assert.equal(ia.engineRuleId, "CEG-02");
+  assert.equal(ia.archetype, undefined);
+  const fv = classifyOutcome("Frequency Variance");
+  assert.equal(fv.engineRuleId, "CEG-03");
+  assert.equal(fv.archetype, undefined);
 });

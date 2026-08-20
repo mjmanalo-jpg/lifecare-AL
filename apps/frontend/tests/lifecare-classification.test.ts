@@ -10,8 +10,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { classify, rawScore, advisoryBand, evaluateMlr } from "../src/lib/lifecare/classification.ts";
+import { BASIC_ADL } from "../src/lib/lifecare/types.ts";
 import type { CareLevel, DomainCode, DomainScores, ClinicalContext } from "../src/lib/lifecare/types.ts";
 import LOC_CASES from "../src/lib/lifecare/data/loc_validation_cases.json" with { type: "json" };
+import ASSESSMENT_DOMAINS from "../src/lib/lifecare/data/assessment_domains.json" with { type: "json" };
 
 // Per-case clinical context the score cannot infer (pathway / acute / modifiers).
 // Sourced from each case's documented Override/Modifier columns.
@@ -117,5 +119,38 @@ test("every triggered MLR carries a valid minimum level or is modifier-only", ()
     for (const a of applied) {
       assert.ok(a.minimumLevel === null || /^L[1-5]$/.test(a.minimumLevel), `${c.id} ${a.id}`);
     }
+  }
+});
+
+// ── BASIC_ADL is auditable against the rule data (not a silent magic array) ──
+test("BASIC_ADL matches the basicAdl flags in assessment_domains.json", () => {
+  const fromData = (ASSESSMENT_DOMAINS as Array<{ code: string; basicAdl?: boolean }>)
+    .filter((d) => d.basicAdl).map((d) => d.code).sort();
+  assert.deepEqual([...BASIC_ADL].sort(), fromData);
+});
+
+// ── Production default is banding OFF: a no-floor case reaches its level only via
+//    the advisory fallback the nurse confirms (not an auto-applied band). ──
+test("no-floor L2 case (LOC-012) is band-fallback in production mode (banding OFF)", () => {
+  const c = (LOC_CASES as Array<Record<string, unknown>>).find((x) => x.id === "LOC-012")!;
+  const r = classify(scoresOf(c), {}, { bandingEnabled: false });
+  assert.equal(r.mlrFloor, null, "LOC-012 has no MLR floor");
+  assert.equal(r.suggestedLevel, "L2", "reaches L2 via the advisory band");
+  assert.ok(r.trace.some((t) => /nurse confirmation/i.test(t)), "surfaces the band for nurse confirmation, not auto-applied");
+});
+
+// ── Documented appliedMLR ⊆ engine's fired MLRs — pins code↔documentation so a
+//    rule silently dropped from the engine is caught. Two cases are documented
+//    exceptions where the engine intentionally remodels a post-hospital elevation
+//    as temporary (MOD-CLN-01): LOC-006 (MLR-015) and LOC-007 (MLR-014 suppressed
+//    while recentHospitalization). ──
+test("each case's documented appliedMLR is reproduced by the engine (with documented exceptions)", () => {
+  const EXCEPTIONS = new Set(["LOC-006", "LOC-007"]);
+  for (const c of LOC_CASES as Array<Record<string, unknown>>) {
+    const id = c.id as string;
+    if (EXCEPTIONS.has(id)) continue;
+    const fired = new Set(evaluateMlr(scoresOf(c), CASE_CONTEXT[id] ?? {}).map((a) => a.id));
+    const documented = (String(c.appliedMLR ?? "").match(/MLR-\d+/g)) ?? [];
+    for (const d of documented) assert.ok(fired.has(d), `${id}: documented ${d} not fired by the engine`);
   }
 });

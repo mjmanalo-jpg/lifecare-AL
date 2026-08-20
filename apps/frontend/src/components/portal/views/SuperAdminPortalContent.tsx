@@ -27,7 +27,7 @@ import CaregiverScheduleBoard from "@/components/portal/views/clinical/Caregiver
 import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
 import CameraRegistryBoard from "@/components/portal/views/CameraRegistryBoard";
 import GeofenceSettingsBoard from "@/components/portal/views/clinical/GeofenceSettingsBoard";
-import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
+import CareAcuityBoard from "@/components/portal/views/clinical/CareAcuityBoard";
 import FeatureMatrixDashboard from "@/components/portal/views/superadmin/FeatureMatrixDashboard";
 import { Trash2, Search, Eye, Edit, X, UserPlus } from "lucide-react";
 import { useState, useMemo } from "react";
@@ -323,7 +323,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     return <FacilityResidents canManageProfile />;
   }
   if (tab === "rounds") {
-    return <AssessmentAcuityBoard clinicianRole="FACILITY_ADMIN" />;
+    return <CareAcuityBoard clinicianRole="FACILITY_ADMIN" />;
   }
   if (tab === "careplans") {
     return <CarePlanBoard />;

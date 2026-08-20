@@ -38,7 +38,7 @@ import CameraActivityLog from "@/components/portal/views/clinical/CameraActivity
 import CameraRegistryBoard from "@/components/portal/views/CameraRegistryBoard";
 import DietOrdersBoard from "@/components/portal/views/services/DietOrdersBoard";
 import KitchenCookList from "@/components/portal/views/services/KitchenCookList";
-import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
+import CareAcuityBoard from "@/components/portal/views/clinical/CareAcuityBoard";
 
 interface FacilityAdminPortalContentProps {
   tab: string;
@@ -254,7 +254,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
   if (tab === "assistant") return <AIAssistantContent />;
   if (tab === "residents") return <FacilityResidents />;
   if (tab === "incidents") return <FacilityIncidents />;
-  if (tab === "rounds") return <AssessmentAcuityBoard clinicianRole="FACILITY_ADMIN" />;
+  if (tab === "rounds") return <CareAcuityBoard clinicianRole="FACILITY_ADMIN" />;
   if (tab === "dailyrounds") return <DailyRoundsBoard clinicianRole="FACILITY_ADMIN" />;
   if (tab === "careplans") return <CarePlanBoard />;
   if (tab === "tasks") return <DailyDocumentation clinicianRole="FACILITY_ADMIN" />;

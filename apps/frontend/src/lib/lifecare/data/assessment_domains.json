@@ -1,6 +1,7 @@
 [
   {
     "code": "AS-01",
+    "basicAdl": true,
     "name": "ADLs / Personal Care",
     "scored": true,
     "anchors": [
@@ -17,6 +18,7 @@
   },
   {
     "code": "AS-02",
+    "basicAdl": true,
     "name": "Mobility / Transfers",
     "scored": true,
     "anchors": [
@@ -113,6 +115,7 @@
   },
   {
     "code": "AS-08",
+    "basicAdl": true,
     "name": "Nutrition / Hydration",
     "scored": true,
     "anchors": [
@@ -145,6 +148,7 @@
   },
   {
     "code": "AS-10",
+    "basicAdl": true,
     "name": "Continence / Toileting",
     "scored": true,
     "anchors": [

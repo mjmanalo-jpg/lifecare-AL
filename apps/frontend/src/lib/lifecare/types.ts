@@ -13,7 +13,12 @@ export const DOMAIN_CODES: DomainCode[] = [
   "AS-08", "AS-09", "AS-10", "AS-11", "AS-12", "AS-13", "AS-14",
 ];
 
-/** Basic ADL domains used by the ADL minimum-level rules (MLR-001/003/016). */
+/**
+ * Basic ADL domains used by the ADL minimum-level rules (MLR-001/003/016).
+ * The authoritative set is the `basicAdl: true` flag in assessment_domains.json;
+ * this array mirrors it and is asserted to match in tests/lifecare-classification
+ * (so the set is auditable against the rule data, not a silent magic array).
+ */
 export const BASIC_ADL: DomainCode[] = ["AS-01", "AS-02", "AS-08", "AS-10"];
 
 /** Care level (L1..L4 recurring-complexity + L5 palliative pathway). */
@@ -23,6 +28,8 @@ export interface DomainDef {
   code: string;
   name: string;
   scored: boolean;
+  /** True for the basic-ADL domains that feed the ADL minimum-level rules. */
+  basicAdl?: boolean;
   anchors: string[]; // [0,1,2,3,4]
   evidenceRequired: string;
   calibrationNote: string;

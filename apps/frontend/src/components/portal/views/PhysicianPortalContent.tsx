@@ -10,7 +10,7 @@ import ClinicalMessages from "@/components/portal/views/clinical/ClinicalMessage
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
 import PhysicianCommsLog from "@/components/portal/views/clinical/PhysicianCommsLog";
 import ReferralsBoard from "@/components/portal/views/clinical/ReferralsBoard";
-import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
+import CareAcuityBoard from "@/components/portal/views/clinical/CareAcuityBoard";
 import NurseRecords from "@/components/portal/views/NurseRecords";
 import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
 import LabsAllergiesBoard from "@/components/portal/views/clinical/LabsAllergiesBoard";
@@ -122,7 +122,7 @@ export default function PhysicianPortalContent({ tab }: PhysicianPortalContentPr
 
     // ── Legacy / removed-from-sidebar routes still resolve so deep links work ──
     case "rounds":
-      return <AssessmentAcuityBoard clinicianRole="PHYSICIAN" />;
+      return <CareAcuityBoard clinicianRole="PHYSICIAN" />;
     case "tasks":
       return <DailyDocumentation clinicianRole="PHYSICIAN" />;
     case "reports":

@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
   }
 
   const escalate = c.immediateEscalation;
+  const emergency = c.emergencyPathway;
   const notifyNurse = c.escalationAction !== "none" || reviewAlertRaised;
 
   // 1) Persist the governed care event.
@@ -98,14 +99,18 @@ export async function POST(request: NextRequest) {
     select: { id: true },
   });
 
-  // 2) Safety escalation (SBAR) — unsafe/critical events enter the chain of command.
+  // 2) Safety escalation (SBAR) — unsafe/critical events enter the chain of
+  //    command. Acute events flagged for the emergency pathway direct the nurse
+  //    to the emergency protocol (DT-010) — never delayed or gated by revenue.
   if (escalate) {
     try {
       await prisma.escalation.create({
         data: {
           organizationId, communityId, residentId,
-          situation: `${residentName || "Resident"} (Room ${room}) — care task outcome "${outcome}"${c.linkedDecisionTree ? ` (${c.linkedDecisionTree})` : ""}.${observation ? ` ${observation}` : ""}`,
-          recommendation: "Assess the resident and intervene per protocol; review the care plan.",
+          situation: `${emergency ? "EMERGENCY PATHWAY — " : ""}${residentName || "Resident"} (Room ${room}) — care task outcome "${outcome}"${c.linkedDecisionTree ? ` (${c.linkedDecisionTree})` : ""}.${observation ? ` ${observation}` : ""}`,
+          recommendation: emergency
+            ? `Assess the resident immediately. Initiate the emergency protocol (${c.emergencyProtocol ?? "DT-010"}) and call emergency services if clinically indicated; then review the care plan.`
+            : "Assess the resident and intervene per protocol; review the care plan.",
           priority: "URGENT", status: "OPEN",
           raisedBy: actorName, raisedByRole: "CAREGIVER", assignedToRole: "NURSE",
         },
@@ -146,5 +151,5 @@ export async function POST(request: NextRequest) {
     reason: `Care delivered${residentName ? ` for ${residentName}` : ""} — "${outcome}"${c.isVariance ? " (variance)" : ""}${observation ? `: ${observation}` : ""}`,
   });
 
-  return NextResponse.json({ ok: true, eventId: created.id, escalated: escalate, notified: notifyNurse && nurseIds.length > 0, reviewAlertRaised });
+  return NextResponse.json({ ok: true, eventId: created.id, escalated: escalate, emergency, notified: notifyNurse && nurseIds.length > 0, reviewAlertRaised });
 }

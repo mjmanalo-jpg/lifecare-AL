@@ -8,7 +8,6 @@
 // (governance feeOrLevelChangeAllowed). Persistence uses the CareEvent table via
 // the generic /api/db/care-events route.
 
-import type { CareLevel } from "./types.ts";
 import { taskById } from "./dataset.ts";
 
 /** Outcomes a care event can carry (universal payload). */
@@ -27,34 +26,66 @@ export interface OutcomeClassification {
   isException: boolean;
   isVariance: boolean;
   immediateEscalation: boolean;
+  /**
+   * Acute/safety event that must reach the EMERGENCY pathway (DT-010): the nurse
+   * is directed to initiate the emergency protocol / call emergency services.
+   * Emergency is never delayed or gated by revenue/capability.
+   */
+  emergencyPathway: boolean;
   escalationAction: EscalationAction;
-  /** Care Event archetype (CE-01..07) where applicable. */
+  /**
+   * Care Event archetype (CE-01..CE-07) — set ONLY when the outcome maps to a
+   * generic Care Event Master archetype. The generic archetypes are anchored to
+   * events EV-002..EV-008: CE-01 Task refused, CE-02 Task unable, CE-03 Task
+   * unsafe, CE-04 Abnormal observation, CE-05 Change from baseline, CE-06 Near
+   * fall, CE-07 Fall. Pure assistance/frequency variances have no generic
+   * archetype — they are traced by {@link engineRuleId} instead.
+   */
   archetype?: string;
+  /**
+   * Care Event engine rule (CEG-01..CEG-07) from care_event_engine_rules.json —
+   * the escalation-matrix trigger this outcome fires (the traceable key).
+   */
+  engineRuleId?: string;
   /** Which decision tree the exception routes to, if any. */
   linkedDecisionTree?: string;
+  /** Emergency protocol reference for an acute event (DT-010). */
+  emergencyProtocol?: string;
 }
 
 /**
- * Escalation matrix per exception (notify nurse? incident? plan review? DT?).
- * Derived from the Care Event Master + the R05 Today's Care escalation flags.
+ * Escalation matrix per outcome — traced to the Care Event Master generic
+ * archetypes (EV-001..EV-008) and the engine rules (CEG-01..CEG-07). Verified
+ * against those datasets by tests/lifecare-careevents.test.ts (code↔data).
  */
 export function classifyOutcome(outcome: Outcome): OutcomeClassification {
+  const base = { outcome, emergencyPathway: false };
   switch (outcome) {
     case "Completed":
     case "Not Required":
-      return { outcome, isExpected: true, isException: false, isVariance: false, immediateEscalation: false, escalationAction: "none" };
+      // EV-001 Task completed (Rule) · CEG-01 routine completion.
+      return { ...base, isExpected: true, isException: false, isVariance: false, immediateEscalation: false, escalationAction: "none", engineRuleId: "CEG-01" };
     case "Refused":
-      return { outcome, isExpected: false, isException: true, isVariance: false, immediateEscalation: false, escalationAction: "notify_nurse", archetype: "CE-01", linkedDecisionTree: "DT-011" };
+      // EV-002 Task refused → CE-01 · care-task exception (DT-011).
+      return { ...base, isExpected: false, isException: true, isVariance: false, immediateEscalation: false, escalationAction: "notify_nurse", archetype: "CE-01", linkedDecisionTree: "DT-011" };
     case "Unable":
-      return { outcome, isExpected: false, isException: true, isVariance: false, immediateEscalation: false, escalationAction: "plan_review", archetype: "CE-02", linkedDecisionTree: "DT-003" };
+      // EV-003 Task unable → CE-02 · change-in-condition review (DT-003).
+      return { ...base, isExpected: false, isException: true, isVariance: false, immediateEscalation: false, escalationAction: "plan_review", archetype: "CE-02", linkedDecisionTree: "DT-003" };
     case "Unsafe":
-      return { outcome, isExpected: false, isException: true, isVariance: false, immediateEscalation: true, escalationAction: "incident", archetype: "CE-03", linkedDecisionTree: "DT-004" };
+      // EV-004 Task unsafe → CE-03 · safety/incident (CEG-05) → fall protocol
+      // (DT-004) + emergency pathway (DT-010).
+      return { ...base, isExpected: false, isException: true, isVariance: false, immediateEscalation: true, emergencyPathway: true, escalationAction: "incident", archetype: "CE-03", linkedDecisionTree: "DT-004", engineRuleId: "CEG-05", emergencyProtocol: "DT-010" };
     case "Increased Assist":
-      return { outcome, isExpected: false, isException: true, isVariance: true, immediateEscalation: false, escalationAction: "plan_review", archetype: "CE-04", linkedDecisionTree: "DT-012" };
+      // Assistance variance (CEG-02) → care-level-change review (DT-012). No
+      // generic CE archetype — it is not an "abnormal observation" (CE-04).
+      return { ...base, isExpected: false, isException: true, isVariance: true, immediateEscalation: false, escalationAction: "plan_review", linkedDecisionTree: "DT-012", engineRuleId: "CEG-02" };
     case "Frequency Variance":
-      return { outcome, isExpected: false, isException: true, isVariance: true, immediateEscalation: false, escalationAction: "plan_review", archetype: "CE-05", linkedDecisionTree: "DT-012" };
+      // Frequency variance (CEG-03) → care-level-change review (DT-012).
+      return { ...base, isExpected: false, isException: true, isVariance: true, immediateEscalation: false, escalationAction: "plan_review", linkedDecisionTree: "DT-012", engineRuleId: "CEG-03" };
     case "Clinical Change":
-      return { outcome, isExpected: false, isException: true, isVariance: false, immediateEscalation: true, escalationAction: "notify_nurse", archetype: "CE-06", linkedDecisionTree: "DT-003" };
+      // EV-006 Change from baseline → CE-05 · acute deterioration is safety
+      // (CEG-05) → change-in-condition (DT-003) + emergency pathway (DT-010).
+      return { ...base, isExpected: false, isException: true, isVariance: false, immediateEscalation: true, emergencyPathway: true, escalationAction: "notify_nurse", archetype: "CE-05", linkedDecisionTree: "DT-003", engineRuleId: "CEG-05", emergencyProtocol: "DT-010" };
   }
 }
 
@@ -149,6 +180,9 @@ export function buildCareEventRecord(input: CareEventInput, modelVersion: string
     isVariance: c.isVariance,
     varianceType: c.isVariance ? input.outcome : undefined,
     immediateEscalation: c.immediateEscalation,
+    emergencyPathway: c.emergencyPathway,
+    emergencyProtocol: c.emergencyProtocol,
+    engineRuleId: c.engineRuleId,
     linkedDecisionTree: c.linkedDecisionTree,
     escalationAction: c.escalationAction,
     reviewAlertRaised: !!review?.raiseReviewAlert,

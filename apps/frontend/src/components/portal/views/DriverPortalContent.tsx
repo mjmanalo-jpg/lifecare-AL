@@ -2,7 +2,6 @@
 
 import DriverHub from "@/components/portal/views/driver/DriverHub";
 import CaregiverResidents from "@/components/portal/views/caregiver/CaregiverResidents";
-import AssessmentAcuityBoard from "@/components/portal/views/clinical/AssessmentAcuityBoard";
 import PhysicianCarePlans from "@/components/portal/views/physician/PhysicianCarePlans";
 import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
 import CaregiverReports from "@/components/portal/views/caregiver/CaregiverReports";
@@ -31,8 +30,6 @@ export default function DriverPortalContent({
     // Core SLMS Modules Aligned
     case "records":
       return <CaregiverResidents />;
-    case "rounds":
-      return <AssessmentAcuityBoard clinicianRole="CAREGIVER" />;
     case "careplans":
       return <PhysicianCarePlans />;
     case "tasks":
