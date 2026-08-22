@@ -7,9 +7,12 @@ import {
   Activity,
   Mic,
   ArrowLeft,
+  ArrowRight,
   Moon,
   Sun,
   Loader,
+  Building2,
+  Phone,
   Mail,
   Lock,
   Eye,
@@ -43,9 +46,18 @@ export default function LoginPage() {
   const loginBg = loginConfig.background;
 
   // ── Email/password state ──
+  // "employee" = staff/family via company + mobile; "client" = org owner via email.
+  const [mode, setMode] = useState<"employee" | "client">("employee");
   const [email, setEmail] = useState("");
+  const [company, setCompany] = useState("");
+  const [mobile, setMobile] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  // Employee flow: Continue resolves the account, then a pop-up collects the
+  // password ("password") or, first-time, sets one ("firstTime").
+  const [pwPrompt, setPwPrompt] = useState<null | "password" | "firstTime">(null);
 
   // ── Shared state ──
   const [theme, setTheme] = useState<"dark" | "light">(loginConfig.baseTheme);
@@ -81,29 +93,80 @@ export default function LoginPage() {
   };
 
   // ── Email/password login ──
+  useEffect(() => {
+    const as = new URLSearchParams(window.location.search).get("as");
+    if (as === "client" || as === "employee") setMode(as);
+  }, []);
+
+  // Client = email + password. Employee = Continue resolves the account by
+  // company + mobile, then a pop-up collects (or sets) the password.
   const handleCredentialsLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
-
     try {
-      const response = await fetch("/api/auth/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Login failed");
+      if (mode === "client") {
+        const response = await fetch("/api/auth/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Login failed");
+        router.push(data.redirectUrl);
+        return;
       }
 
-      router.push(data.redirectUrl);
+      const response = await fetch("/api/auth/mobile-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company, mobile }),
+      });
+      const data = await response.json();
+      if (data.needsFirstPassword) { setNewPassword(""); setConfirmPassword(""); setPwPrompt("firstTime"); setIsLoading(false); return; }
+      if (data.needsPassword) { setPassword(""); setPwPrompt("password"); setIsLoading(false); return; }
+      if (!response.ok) throw new Error(data.error || "We couldn't find that account.");
+      if (data.redirectUrl) { router.push(data.redirectUrl); return; }
+      setIsLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
       setIsLoading(false);
     }
+  };
+
+  const submitEmployeePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pwPrompt === "firstTime" && newPassword !== confirmPassword) {
+      setError("Those passwords don't match.");
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/auth/mobile-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company,
+          mobile,
+          password: pwPrompt === "password" ? password : "",
+          newPassword: pwPrompt === "firstTime" ? newPassword : "",
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Sign-in failed");
+      router.push(data.redirectUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign-in failed");
+      setIsLoading(false);
+    }
+  };
+
+  const closePwPrompt = () => {
+    setPwPrompt(null);
+    setError(null);
+    setPassword(""); setNewPassword(""); setConfirmPassword("");
+    setIsLoading(false);
   };
 
   const bgPaintStyle = useMemo(() => backgroundStyle(loginBg), [loginBg]);
@@ -237,9 +300,9 @@ export default function LoginPage() {
         <div className="flex flex-col justify-center p-6 md:p-12 relative">
           <div className="max-w-md w-full mx-auto text-left">
             <div className="mb-6">
-              <h2 className="text-3xl font-bold tracking-tight mb-2">Gate Entry</h2>
+              <h2 className="text-3xl font-bold tracking-tight mb-2">{mode === "client" ? "Organization sign-in" : "Employee & family sign-in"}</h2>
               <p className="text-muted-foreground text-sm font-light">
-                Sign in to access your care portal.
+                {mode === "client" ? "Sign in to your organization dashboard." : "Sign in with your company name and registered mobile number."}
               </p>
             </div>
 
@@ -258,90 +321,243 @@ export default function LoginPage() {
             </AnimatePresence>
 
             <form onSubmit={handleCredentialsLogin} className="space-y-4">
-              {/* Email */}
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@lifecare.com"
-                    required
-                    className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors"
-                    autoComplete="email"
-                  />
+              {/* Client (organization owner) — email */}
+              {mode === "client" && (
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Email address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@yourcompany.com"
+                      required
+                      className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors"
+                      autoComplete="email"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Password */}
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    required
-                    className="w-full pl-11 pr-12 py-3.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors"
-                    autoComplete="current-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+              {/* Employee/family — company name */}
+              {mode === "employee" && (
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Company name</label>
+                  <div className="relative">
+                    <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={company}
+                      onChange={(e) => setCompany(e.target.value)}
+                      placeholder="Your company"
+                      required
+                      className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors"
+                      autoComplete="organization"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Employee/family — mobile number */}
+              {mode === "employee" && (
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Mobile number</label>
+                  <div className="relative">
+                    <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      type="tel"
+                      value={mobile}
+                      onChange={(e) => setMobile(e.target.value)}
+                      placeholder="0917 123 4567"
+                      required
+                      className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors"
+                      autoComplete="tel"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Client enters the password inline; employees enter it in the pop-up. */}
+              {mode === "client" && (
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      required
+                      className="w-full pl-11 pr-12 py-3.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors"
+                      autoComplete="current-password"
+                    />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer" tabIndex={-1}>
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Submit */}
               <button
                 type="submit"
-                disabled={isLoading || !email || !password}
+                disabled={isLoading || (mode === "client" ? (!email || !password) : (!company || !mobile))}
                 className="w-full py-4 rounded-xl font-bold bg-foreground text-background hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <>
                     <Loader className="w-4 h-4 animate-spin" />
-                    Signing in...
+                    Please wait…
+                  </>
+                ) : mode === "client" ? (
+                  <>
+                    Sign In <LogIn className="w-4 h-4" />
                   </>
                 ) : (
                   <>
-                    Sign In <LogIn className="w-4 h-4" />
+                    Continue <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
 
-              {/* Resident self-registration */}
-              <p className="text-center text-sm text-muted-foreground pt-1">
-                New resident?{" "}
-                <Link href="/register" className="font-semibold hover:underline" style={{ color: accent }}>
-                  Create an account
-                </Link>
-              </p>
-
-              {/* Organization self-signup */}
-              <p className="text-center text-sm text-muted-foreground">
-                Setting up a new company?{" "}
-                <Link href="/?from=login#plans" className="font-semibold hover:underline" style={{ color: accent }}>
-                  Register your organization
-                </Link>
-              </p>
+              {mode === "client" ? (
+                <>
+                  <p className="text-center text-sm text-muted-foreground pt-1">
+                    Don&apos;t have an account?{" "}
+                    <Link href="/signup" className="font-semibold hover:underline" style={{ color: accent }}>
+                      Register your organization
+                    </Link>
+                  </p>
+                  <p className="text-center text-sm text-muted-foreground">
+                    Staff or family?{" "}
+                    <button type="button" onClick={() => { setMode("employee"); setError(null); }} className="font-semibold hover:underline cursor-pointer" style={{ color: accent }}>
+                      Employee login
+                    </button>
+                  </p>
+                </>
+              ) : (
+                <p className="text-center text-sm text-muted-foreground pt-1">
+                  Organization owner?{" "}
+                  <button type="button" onClick={() => { setMode("client"); setError(null); }} className="font-semibold hover:underline cursor-pointer" style={{ color: accent }}>
+                    Client login
+                  </button>
+                </p>
+              )}
             </form>
           </div>
         </div>
 
       </div>
+
+      {/* Employee/family password pop-up (after Continue) */}
+      <AnimatePresence>
+        {pwPrompt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onClick={closePwPrompt}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ type: "spring", stiffness: 320, damping: 26 }}
+              className="w-full max-w-sm rounded-2xl bg-background border border-border p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-bold tracking-tight mb-1">{pwPrompt === "firstTime" ? "Set up your first-time password" : "Enter your password"}</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                {pwPrompt === "firstTime"
+                  ? `You don't have a password yet — create one to finish signing in to ${company || "your company"}. You'll use it every time from now on.`
+                  : `Signing in to ${company || "your company"} as ${mobile || "your number"}.`}
+              </p>
+
+              {error && (
+                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm mb-4">{error}</div>
+              )}
+
+              <form onSubmit={submitEmployeePassword} className="space-y-3">
+                {pwPrompt === "password" ? (
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Password</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Enter your password"
+                        required
+                        autoFocus
+                        className="w-full pl-11 pr-12 py-3.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors"
+                        autoComplete="current-password"
+                      />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer" tabIndex={-1}>
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">First-time password</label>
+                      <div className="relative">
+                        <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="At least 8 characters"
+                          minLength={8}
+                          required
+                          autoFocus
+                          className="w-full pl-11 pr-12 py-3.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors"
+                          autoComplete="new-password"
+                        />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer" tabIndex={-1}>
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Confirm password</label>
+                      <div className="relative">
+                        <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="Re-enter your password"
+                          required
+                          className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-border text-sm focus:outline-none focus:ring-2 focus:ring-offset-0 transition-colors"
+                          autoComplete="new-password"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <button type="button" onClick={closePwPrompt} className="flex-1 py-3 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-foreground/5 transition-colors cursor-pointer">
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isLoading || (pwPrompt === "password" ? !password : (newPassword.length < 8 || !confirmPassword))}
+                    className="flex-1 py-3 rounded-xl bg-foreground text-background text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {isLoading ? <Loader className="w-4 h-4 animate-spin" /> : pwPrompt === "firstTime" ? "Set & sign in" : "Sign in"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }

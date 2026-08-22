@@ -29,13 +29,23 @@ import CameraRegistryBoard from "@/components/portal/views/CameraRegistryBoard";
 import GeofenceSettingsBoard from "@/components/portal/views/clinical/GeofenceSettingsBoard";
 import CareAcuityBoard from "@/components/portal/views/clinical/CareAcuityBoard";
 import FeatureMatrixDashboard from "@/components/portal/views/superadmin/FeatureMatrixDashboard";
-import { Trash2, Search, Eye, Edit, X, UserPlus } from "lucide-react";
+import { Trash2, Search, Eye, Edit, X, XCircle, UserPlus } from "lucide-react";
 import { useState, useMemo } from "react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptStaff } from "@/lib/adapters";
 import { updateRecord, deleteRecord, upsertRecord } from "@/lib/api";
 import { ROSTER_MAPPING_KEY, type RosterMapping } from "@/lib/rosterBridge";
+
+// Every staff role a Super Admin can provision (mirrors the org-admin Add-Staff list).
+const STAFF_ROLE_OPTIONS: [string, string][] = [
+  ["CARE_MANAGER", "Care Manager"], ["NURSE", "Nurse"], ["CAREGIVER", "Caregiver"],
+  ["PHYSICIAN", "Physician"], ["FACILITY_ADMIN", "Facility Admin"], ["BILLING_ADMIN", "Billing Admin"],
+  ["NUTRITIONIST", "Nutritionist"], ["KITCHEN", "Kitchen"], ["HOUSEKEEPING", "Housekeeping"],
+  ["MAINTENANCE", "Maintenance"], ["SECURITY", "Security"], ["FLEET_MANAGEMENT", "Fleet Manager"],
+  ["DRIVER", "Driver"], ["SUPERADMIN", "Super Admin"],
+];
+const staffRoleLabel = (value: string) => STAFF_ROLE_OPTIONS.find(([key]) => key === value)?.[1] ?? "Staff";
 
 interface SuperAdminPortalContentProps {
   tab: string;
@@ -98,7 +108,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     email: "",
     phone: "",
     employeeCode: "",
-    role: "CAREGIVER" as "CAREGIVER" | "NURSE" | "CARE_MANAGER",
+    role: "CAREGIVER" as string,
     position: "",
     department: "",
     active: "Active" as "Active" | "Inactive",
@@ -293,7 +303,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
       if (data.password) {
         const pw = String(data.password);
         const esc = (s: string) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
-        const roleName = ({ CAREGIVER: "Caregiver", NURSE: "Nurse", CARE_MANAGER: "Care Manager" } as Record<string, string>)[createdRole] ?? "Staff";
+        const roleName = staffRoleLabel(createdRole);
         const firstName = esc(createdName.split(/\s+/)[0] || "they");
         // Single committed accent: clinical success green (#047857). Everything
         // else is quiet slate; the password is the one hero.
@@ -1054,144 +1064,121 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
 
         {/* Add Staff Modal */}
         {creatingStaff && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              {/* Modal Header */}
-              <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-6 flex items-center justify-between border-b border-yellow-600">
-                <h2 className="text-2xl font-bold">Add Staff Member</h2>
-                <button
-                  onClick={() => setCreatingStaff(false)}
-                  className="p-2 hover:bg-yellow-600/20 rounded-lg transition"
-                >
-                  <X className="w-6 h-6" />
-                </button>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setCreatingStaff(false)}>
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <div className="mb-1 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-slate-900">Add staff member</h3>
+                <button onClick={() => setCreatingStaff(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><XCircle className="h-5 w-5" /></button>
               </div>
-
-              {/* Form */}
-              <div className="p-8 space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name *</label>
-                    <input
-                      type="text"
-                      value={createForm.name}
-                      onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                      placeholder="e.g. Jane Smith"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Email *</label>
-                    <input
-                      type="email"
-                      value={createForm.email}
-                      onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-                      placeholder="e.g. jane@example.com"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Phone</label>
-                    <input
-                      type="tel"
-                      value={createForm.phone}
-                      onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
-                      placeholder="e.g. (555) 123-4567"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Role</label>
-                    <select
-                      value={createForm.role}
-                      onChange={(e) => setCreateForm({ ...createForm, role: e.target.value as typeof createForm.role })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
-                    >
-                      <option value="CAREGIVER">Caregiver</option>
-                      <option value="NURSE">Nurse</option>
-                      <option value="CARE_MANAGER">Care Manager</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Employee Code</label>
-                    <input
-                      type="text"
-                      value={createForm.employeeCode}
-                      onChange={(e) => setCreateForm({ ...createForm, employeeCode: e.target.value })}
-                      placeholder="e.g. CG1 / NOD1 (matches the roster)"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">The code used on the staffing roster, so their schedule auto-matches.</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Position</label>
-                    <input
-                      type="text"
-                      value={createForm.position}
-                      onChange={(e) => setCreateForm({ ...createForm, position: e.target.value })}
-                      placeholder="e.g. Registered Nurse"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Department</label>
-                    <input
-                      type="text"
-                      value={createForm.department}
-                      onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })}
-                      placeholder="e.g. Nursing"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Employment Status</label>
-                    <select
-                      value={createForm.active}
-                      onChange={(e) => setCreateForm({ ...createForm, active: e.target.value as "Active" | "Inactive" })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
-                    >
-                      <option value="Active">Active</option>
-                      <option value="Inactive">Inactive</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Approval Status</label>
-                    <select
-                      value={createForm.approved}
-                      onChange={(e) => setCreateForm({ ...createForm, approved: e.target.value as "Approved" | "Disapproved" })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none"
-                    >
-                      <option value="Approved">Approved</option>
-                      <option value="Disapproved">Disapproved</option>
-                    </select>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Experience (optional)</label>
-                    <textarea
-                      value={createForm.experience}
-                      onChange={(e) => setCreateForm({ ...createForm, experience: e.target.value })}
-                      rows={3}
-                      placeholder="e.g. 10 years as registered nurse, specialized in geriatric care..."
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none resize-none"
-                    />
-                  </div>
+              <p className="mb-4 text-sm text-slate-500">Enter the staff member&apos;s details. A first-time password is generated automatically and shown once after you create the account.</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Full name</label>
+                  <input
+                    type="text"
+                    value={createForm.name}
+                    onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                    placeholder="e.g. Maria Santos"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
                 </div>
-              </div>
-
-              {/* Modal Footer */}
-              <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex flex-wrap items-center justify-between gap-3">
-                <button
-                  onClick={() => setCreatingStaff(false)}
-                  className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreateStaff}
-                  className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
-                >
-                  Create Staff
-                </button>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Email</label>
+                  <input
+                    type="email"
+                    value={createForm.email}
+                    onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                    placeholder="name@company.com"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Mobile number <span className="font-normal text-slate-400">(optional)</span></label>
+                  <input
+                    type="tel"
+                    value={createForm.phone}
+                    onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                    placeholder="0917 123 4567"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Role</label>
+                  <select
+                    value={createForm.role}
+                    onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {STAFF_ROLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Employee ID <span className="text-blue-600">*used in the staff roster</span></label>
+                  <input
+                    type="text"
+                    value={createForm.employeeCode}
+                    onChange={(e) => setCreateForm({ ...createForm, employeeCode: e.target.value })}
+                    placeholder="e.g. CG1 / NOD1 / CM1 (matches your roster)"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Position / title</label>
+                  <input
+                    type="text"
+                    value={createForm.position}
+                    onChange={(e) => setCreateForm({ ...createForm, position: e.target.value })}
+                    placeholder="e.g. Registered Nurse"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Department <span className="font-normal text-slate-400">(optional)</span></label>
+                  <input
+                    type="text"
+                    value={createForm.department}
+                    onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })}
+                    placeholder="e.g. Nursing"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Employment status</label>
+                  <select
+                    value={createForm.active}
+                    onChange={(e) => setCreateForm({ ...createForm, active: e.target.value as "Active" | "Inactive" })}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Approval status</label>
+                  <select
+                    value={createForm.approved}
+                    onChange={(e) => setCreateForm({ ...createForm, approved: e.target.value as "Approved" | "Disapproved" })}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Approved">Approved</option>
+                    <option value="Disapproved">Disapproved</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Experience <span className="font-normal text-slate-400">(optional)</span></label>
+                  <textarea
+                    value={createForm.experience}
+                    onChange={(e) => setCreateForm({ ...createForm, experience: e.target.value })}
+                    rows={3}
+                    placeholder="e.g. 10 years as registered nurse, specialized in geriatric care..."
+                    className="w-full resize-none rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="sm:col-span-2 rounded-xl bg-blue-50 px-3.5 py-2.5 text-xs text-blue-700">A first-time password is generated automatically and shown once when you create the account — copy it and share it with the staff member.</div>
+                <div className="sm:col-span-2 flex gap-2 pt-1">
+                  <button type="button" onClick={() => setCreatingStaff(false)} className="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+                  <button type="button" onClick={handleCreateStaff} className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700">Add staff member</button>
+                </div>
               </div>
             </div>
           </div>

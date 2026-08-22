@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sun, Moon, Menu, X, User } from "lucide-react";
+import { Sun, Moon, Menu, X, User, Building2 } from "lucide-react";
 import Link from "next/link";
 import LcmsLogo from "@/components/LcmsLogo";
 
@@ -106,17 +106,17 @@ export default function Navbar() {
           )}
         </button>
 
-        <Link 
-          href="/login" 
-          className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground transition-all flex items-center gap-1.5 glass-panel hover:bg-foreground/5"
+        <Link
+          href="/login?as=employee"
+          className="px-4 py-2 rounded-xl text-sm font-semibold text-background bg-foreground hover:scale-105 transition-all shadow-[0_0_20px_rgba(255,255,255,0.15)] flex items-center gap-1.5"
         >
-          <User className="w-4 h-4 text-[var(--lp-accent,#f59e0b)]" /> Log In
+          <User className="w-4 h-4" /> Employee Login
         </Link>
-        <Link 
-          href="/login" 
-          className="px-4 py-2 rounded-xl text-sm font-semibold text-background bg-foreground hover:scale-105 transition-all shadow-[0_0_20px_rgba(255,255,255,0.15)] dark:shadow-[0_0_20px_rgba(255,255,255,0.15)] light:shadow-[0_0_20px_rgba(0,0,0,0.1)]"
+        <Link
+          href="/login?as=client"
+          className="px-4 py-2 rounded-xl text-sm font-semibold text-foreground glass-panel border border-border hover:bg-foreground/5 transition-all flex items-center gap-1.5"
         >
-          Get Started
+          <Building2 className="w-4 h-4 text-[var(--lp-accent,#f59e0b)]" /> Client Login
         </Link>
       </div>
 
@@ -169,19 +169,19 @@ export default function Navbar() {
             </div>
 
             <div className="w-full border-t border-border pt-4 flex flex-col gap-3">
-              <Link 
-                href="/login" 
+              <Link
+                href="/login?as=employee"
                 onClick={() => setIsOpen(false)}
-                className="w-full py-3 rounded-xl text-center text-sm font-medium text-muted-foreground hover:text-foreground flex items-center justify-center gap-1.5 glass-panel hover:bg-foreground/5"
+                className="w-full py-3 rounded-xl text-center text-sm font-semibold text-background bg-foreground shadow-lg flex items-center justify-center gap-1.5"
               >
-                <User className="w-4 h-4 text-[var(--lp-accent,#f59e0b)]" /> Log In
+                <User className="w-4 h-4" /> Employee Login
               </Link>
-              <Link 
-                href="/login" 
+              <Link
+                href="/login?as=client"
                 onClick={() => setIsOpen(false)}
-                className="w-full py-3 rounded-xl text-center text-sm font-semibold text-background bg-foreground shadow-lg"
+                className="w-full py-3 rounded-xl text-center text-sm font-semibold text-foreground glass-panel border border-border hover:bg-foreground/5 flex items-center justify-center gap-1.5"
               >
-                Get Started
+                <Building2 className="w-4 h-4 text-[var(--lp-accent,#f59e0b)]" /> Client Login
               </Link>
             </div>
           </motion.div>
