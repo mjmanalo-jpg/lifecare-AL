@@ -156,6 +156,11 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
         residents: form.residentIds.map((id) => { const r = resById.get(id); return { id, name: r?.name ?? "Resident", room: r?.room ?? "" }; }),
         note: form.note.trim() || undefined,
         createdBy: me, createdAt: now, updatedAt: now,
+        // Any manager edit creates a new assignment version that the caregiver
+        // must explicitly acknowledge from My Shift.
+        acknowledgedAt: undefined,
+        acknowledgedByUserId: undefined,
+        changeVersion: (schedules.find((s) => s.id === targetId)?.changeVersion ?? 0) + 1,
       };
       const next = targetId
         ? schedules.map((s) => (s.id === targetId ? { ...s, ...base, createdAt: s.createdAt } : s))

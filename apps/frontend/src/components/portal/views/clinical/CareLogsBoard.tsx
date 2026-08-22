@@ -9,7 +9,7 @@
  *     logged entries with "+ Log" and expand.
  * Both open the shared quick-log modal keyed to the 14 LifeCare v4.2 assessment
  * domains (AS-01 … AS-14) plus a standalone Pain symptom log:
- *   • Model-backed domains reuse the existing rich Daily Rounds forms
+ *   • Model-backed domains reuse the existing rich care-log forms
  *     (Clinical Monitoring→vital-signs, Nutrition→meal-records, Continence→
  *     bowel+urine, Skin→edema, Behavior→mood, Sleep→round-sleep-records,
  *     Safety→concern-records, Mobility→mobility-records, Pain→pain-records).
@@ -49,7 +49,7 @@ type DomainKey =
   | "AS-08" | "AS-09" | "AS-10" | "AS-11" | "AS-12" | "AS-13" | "AS-14" | "pain";
 
 // Which underlying quick-log form a domain renders. Model-backed forms reuse the
-// existing rich Daily Rounds inputs (unchanged); "generic" is the 0–4 status +
+// existing rich care-log inputs (unchanged); "generic" is the 0–4 status +
 // note store; "continence" shows bowel+urine; "skin" shows edema + a skin note.
 type FormKind =
   | "vitals" | "meals" | "continence" | "skin" | "mood" | "sleep" | "concerns"

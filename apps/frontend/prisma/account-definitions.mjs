@@ -17,6 +17,7 @@ export const ACCOUNT_DEFINITIONS = [
   // Care Manager → the clinical-oversight portal (approvals, incidents, alerts,
   // rounds, MAR, consent forms). Community-scoped clinical role, no org role.
   { email: "caremanager@lifecare.com", name: "LifeCare Care Manager", role: "CARE_MANAGER", phone: "09171000005", firstName: "Care", lastName: "Manager" },
+  { email: "residentcoordinator@lifecare.com", name: "LifeCare Resident Coordinator", role: "RESIDENT_COORDINATOR", phone: "09171000033", firstName: "Resident", lastName: "Coordinator" },
   { email: "physician@lifecare.com", name: "Dr. Alan Reyes", role: "PHYSICIAN", phone: "09171000006", firstName: "Alan", lastName: "Reyes" },
   { email: "nurse@lifecare.com", name: "Sarah Jenkins", role: "NURSE", phone: "09171000007", firstName: "Sarah", lastName: "Jenkins" },
   { email: "nurse2@lifecare.com", name: "Rebecca Wilson", role: "NURSE", phone: "09171000008", firstName: "Rebecca", lastName: "Wilson" },

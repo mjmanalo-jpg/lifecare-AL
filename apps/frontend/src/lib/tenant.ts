@@ -290,6 +290,11 @@ export function tenantWhere(modelKey: string, context: TenantContext): Record<st
   if (context.isPlatform) return null;
   if (!context.organizationId) return DENY;
 
+  // Resident Coordinators use dedicated, least-privilege dashboard selectors.
+  // Keep the generic model gateway closed so coordination users cannot pivot
+  // from their dashboard into clinical records or facility-wide datasets.
+  if (context.role === "RESIDENT_COORDINATOR") return DENY;
+
   if (modelKey === "organizations") return { id: context.organizationId };
   if (modelKey === "communities") return { organizationId: context.organizationId };
   if (modelKey === "app-settings") {

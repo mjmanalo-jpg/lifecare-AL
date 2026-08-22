@@ -7,7 +7,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptStaff } from "@/lib/adapters";
 import { updateRecord, deleteRecord } from "@/lib/api";
-import FacilityDashboard from "@/components/portal/views/FacilityDashboard";
+import FacilityCareOversight from "@/components/portal/dashboards/facility-admin/FacilityCareOversight";
 import FacilityResidents from "@/components/portal/views/FacilityResidents";
 import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
 import FacilityVitals from "@/components/portal/views/FacilityVitals";
@@ -33,7 +33,7 @@ import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker"
 import AuditLogViewer from "@/components/portal/views/clinical/AuditLogViewer";
 import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
 import InventoryAlertsPanel from "@/components/portal/views/clinical/InventoryAlertsPanel";
-import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
+import { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
 import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
 import CameraRegistryBoard from "@/components/portal/views/CameraRegistryBoard";
 import DietOrdersBoard from "@/components/portal/views/services/DietOrdersBoard";
@@ -255,7 +255,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
   if (tab === "residents") return <FacilityResidents />;
   if (tab === "incidents") return <FacilityIncidents />;
   if (tab === "rounds") return <CareAcuityBoard clinicianRole="FACILITY_ADMIN" />;
-  if (tab === "dailyrounds") return <DailyRoundsBoard clinicianRole="FACILITY_ADMIN" />;
+  if (tab === "carelogs") return <CareLogsTimeline clinicianRole="FACILITY_ADMIN" />;
   if (tab === "careplans") return <CarePlanBoard />;
   if (tab === "tasks") return <DailyDocumentation clinicianRole="FACILITY_ADMIN" />;
   if (tab === "vaccinations") return <VaccinationTracker />;
@@ -655,7 +655,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
   }
 
   // Default: Facility Dashboard tab
-  return <FacilityDashboard />;
+  return <FacilityCareOversight />;
 }
 
 /* ── Monitoring View (Dedicated Per-Resident Camera + Vitals) ──────── */

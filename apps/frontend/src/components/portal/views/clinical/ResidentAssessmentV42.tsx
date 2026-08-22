@@ -27,9 +27,9 @@ import {
 import SignatureModal from "@/components/portal/SignatureModal";
 import {
   ASSESSMENTS_V42_KEY, newAssessment, cloneForReassessment, originOf,
-  classifyAssessment, assessmentRawScore,
+  classifyAssessment, assessmentRawScore, requiredModifierIds, assessmentValidationIssues,
   type AssessmentV42, type AssessmentLayer1, type DomainEntry, type AssessmentStatus,
-  type AssessmentOrigin,
+  type AssessmentOrigin, type ModifierReconciliationDecision,
 } from "@/lib/lifecare/assessment.ts";
 import {
   SCORED_DOMAINS, ASSESSMENT_DOMAINS, CLINICAL_MODIFIERS, modifierById,
@@ -61,6 +61,11 @@ const LEVEL_COLOR: Record<CareLevel, string> = {
 const NS01 = ASSESSMENT_DOMAINS.find((d) => d.code === "NS-01");
 
 const REASSESSMENT_OPTIONS = ["30 days", "90 days", "6 months", "Annually", "On change of condition"];
+const CAPABILITY_OUTCOMES = [
+  { value: "WITHIN_CAPABILITY", label: "Within capability" },
+  { value: "ESCALATE_TRANSFER", label: "Escalate / transfer" },
+  { value: "EMERGENCY_PATHWAY", label: "Emergency pathway" },
+] as const;
 
 const input = controlClass;
 const chipOn = "bg-[var(--clinical-panel)] text-white border-[var(--clinical-panel)]";
@@ -280,6 +285,13 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
       const prev = d.domains[code] ?? { score: 0 };
       return { ...d, domains: { ...d.domains, [code]: { ...prev, ...p } } };
     });
+  const reconcileModifier = (id: string, decision: ModifierReconciliationDecision, rationale?: string) =>
+    setDraft((d) => {
+      if (!d) return d;
+      const reviews = { ...(d.layer3.modifierReconciliations ?? {}), [id]: { decision, rationale } };
+      const applied = Object.entries(reviews).filter(([, review]) => review.decision === "APPLIED").map(([modifierId]) => modifierId).sort();
+      return { ...d, layer3: { ...d.layer3, modifierReconciliations: reviews, reconciledModifiers: applied } };
+    });
 
   const openNew = () => {
     const a = newAssessment(newId(), me || undefined, new Date().toISOString());
@@ -344,6 +356,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   // Live classification of the working draft (Layer 3 read-out + list scoring).
   const liveResult = useMemo(() => (draft ? classifyAssessment(draft) : null), [draft]);
   const liveRaw = useMemo(() => (draft ? assessmentRawScore(draft) : 0), [draft]);
+  const modifierReviewIds = useMemo(() => (draft ? requiredModifierIds(draft) : []), [draft]);
 
   const persist = async (next: AssessmentV42[]) => {
     // `next` is this board's scoped list; keep the other board's records intact.
@@ -405,13 +418,22 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   // Nurse → admin validation block (like LevelOfCareReview).
   const validate = async (decision: NonNullable<AssessmentV42["validation"]>["decision"], notes: string) => {
     if (!draft) return;
-    if (!draft.layer3.finalLevel) {
-      Swal.fire({ title: "Final LOC required", text: "Select a Final Level of Care in Layer 3 before validating.", icon: "warning" });
-      setLayer(3); return;
-    }
-    if (!draft.layer3.finalLevelJustification?.trim()) {
-      Swal.fire({ title: "Justification required", text: "Enter a justification for the Final LOC before validating.", icon: "warning" });
-      setLayer(3); return;
+    if (decision === "NEEDS_REASSESSMENT") {
+      if (!notes.trim()) {
+        Swal.fire({ title: "Reassessment reason required", text: "Document what must be reassessed before returning this assessment.", icon: "warning" });
+        return;
+      }
+    } else {
+      const issues = assessmentValidationIssues(draft);
+      if (issues.length) {
+        Swal.fire({
+          title: "Decision gates incomplete",
+          text: issues.map((issue) => `${issue.gate}: ${issue.message}`).join("\n"),
+          icon: "warning",
+        });
+        setLayer(issues[0].layer);
+        return;
+      }
     }
     const now = new Date().toISOString();
     await save("VALIDATED", { validation: { by: me || "Clinician", role: roleLabel, at: now, decision, notes: notes || undefined } }, "Level of Care validated");
@@ -421,7 +443,15 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     // Only fires for an APPROVED decision on an assessment linked to an existing
     // resident. Governance: no auto-fee change without this authorised approval;
     // the generated plan is a DRAFT the nurse individualises before activation.
-    if (decision === "APPROVED") {
+    const capabilityReady = !liveResult?.capabilityGate || draft.layer3.capabilityReview?.outcome === "WITHIN_CAPABILITY";
+    if (decision === "APPROVED" && !capabilityReady) {
+      Swal.fire({
+        title: "LOC recorded — downstream activation withheld",
+        text: "The capability review routes this resident to escalation/transfer or the emergency pathway. The LOC fee and draft care plan were not activated.",
+        icon: "warning",
+      });
+    }
+    if (decision === "APPROVED" && capabilityReady) {
       // Prior recorded level (for the downgrade guard) — from the resident's
       // Level-of-Care history, matched by resident id / admission / name.
       let priorLevel: CareLevel | null = null;
@@ -822,8 +852,9 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                             );
                           })}
                         </div>
-                        <div className="mt-3">
-                          <Area label="Goal / Preference / Evidence Note" value={entry.goalNote} onChange={(v) => patchDomain(code, { goalNote: v })} placeholder={dom.evidenceRequired} />
+                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <Area label="Supporting Evidence *" value={entry.evidence} onChange={(v) => patchDomain(code, { evidence: v })} placeholder={dom.evidenceRequired} />
+                          <Area label="Goal / Preference Note" value={entry.goalNote} onChange={(v) => patchDomain(code, { goalNote: v })} placeholder="Resident-specific goal, routine or preference…" />
                         </div>
                         {relatedMods.length > 0 && (
                           <div className="mt-3">
@@ -900,6 +931,39 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                     )}
                   </Section>
 
+                  <Section title="Modifier Reconciliation" subtitle="Every suggested or in-flow modifier needs an explicit clinical disposition before Final LOC approval.">
+                    {modifierReviewIds.length === 0 ? (
+                      <p className="text-xs text-[var(--clinical-muted)]">No modifiers require reconciliation. Record as none through the validation trace.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {modifierReviewIds.map((id) => {
+                          const legacyApplied = draft.layer3.reconciledModifiers?.includes(id);
+                          const review = draft.layer3.modifierReconciliations?.[id] ?? (legacyApplied ? { decision: "APPLIED" as const, rationale: "" } : undefined);
+                          const modifier = modifierById(id);
+                          return (
+                            <div key={id} className="rounded-xl border p-3" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
+                              <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-[var(--clinical-ink)]">{id}{modifier ? ` · ${modifier.name}` : ""}</p>
+                                  {modifier?.taskPlanEffect && <p className="mt-0.5 text-xs text-[var(--clinical-muted)]">{modifier.taskPlanEffect}</p>}
+                                </div>
+                                <div className="flex shrink-0 flex-wrap gap-1.5" role="group" aria-label={`${id} reconciliation`}>
+                                  <button type="button" onClick={() => reconcileModifier(id, "APPLIED", review?.rationale)} className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${review?.decision === "APPLIED" ? chipOn : chipOff}`}>Apply</button>
+                                  <button type="button" onClick={() => reconcileModifier(id, "NOT_APPLICABLE", review?.rationale)} className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${review?.decision === "NOT_APPLICABLE" ? chipOn : chipOff}`}>Not applicable</button>
+                                </div>
+                              </div>
+                              {review?.decision === "NOT_APPLICABLE" && (
+                                <div className="mt-3">
+                                  <Text label="Not-applicable rationale *" value={review.rationale} onChange={(v) => reconcileModifier(id, "NOT_APPLICABLE", v)} placeholder="Why this modifier does not apply to the resident…" />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </Section>
+
                   <Section title="Clinical Context" subtitle="Flags the score cannot infer — feed the engine live.">
                     <div className="flex flex-wrap gap-2">
                       <Bool label="L5 palliative pathway authorized" value={draft.context.l5PathwayAuthorized} onChange={(v) => patchContext({ l5PathwayAuthorized: v })} />
@@ -923,6 +987,23 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                       )}
                     </div>
                   </Section>
+
+                  {liveResult.capabilityGate && (
+                    <Section title="Capability Review" subtitle="Required before downstream LOC, fee or care-plan activation.">
+                      <div className="flex flex-wrap gap-2" role="group" aria-label="Capability review outcome">
+                        {CAPABILITY_OUTCOMES.map((option) => (
+                          <button key={option.value} type="button"
+                            onClick={() => patchLayer3({ capabilityReview: { outcome: option.value, rationale: draft.layer3.capabilityReview?.rationale ?? "" } })}
+                            className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${draft.layer3.capabilityReview?.outcome === option.value ? chipOn : chipOff}`}>
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                      <Area label="Capability review rationale *" rows={3} value={draft.layer3.capabilityReview?.rationale}
+                        onChange={(v) => patchLayer3({ capabilityReview: { outcome: draft.layer3.capabilityReview?.outcome ?? "WITHIN_CAPABILITY", rationale: v } })}
+                        placeholder="Document approved scope, staffing/equipment capability, and the safe disposition…" />
+                    </Section>
+                  )}
 
                   <Section title="Final Level of Care" subtitle="Nurse-confirmed. Never auto-applies the advisory band.">
                     <div>

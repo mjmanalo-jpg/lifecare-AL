@@ -18,7 +18,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
  *      "No linked account".
  */
 
-export type ClinicianRole = "PHYSICIAN" | "NURSE" | "CAREGIVER" | "FACILITY_ADMIN";
+export type ClinicianRole = "PHYSICIAN" | "NURSE" | "CAREGIVER" | "CARE_MANAGER" | "FACILITY_ADMIN";
 
 export interface Clinician {
   name: string;
@@ -40,11 +40,12 @@ const matchesRole = (position: string, role: ClinicianRole) => {
   if (role === "PHYSICIAN") return pos.includes("PHYSICIAN") || pos.includes("DOCTOR");
   if (role === "NURSE") return pos.includes("NURSE");
   if (role === "CAREGIVER") return pos.includes("CAREGIVER") || pos.includes("AIDE");
+  if (role === "CARE_MANAGER") return pos.includes("CARE MANAGER") || pos.includes("CLINICAL MANAGER");
   return pos.includes("ADMIN") || pos.includes("FACILITY"); // FACILITY_ADMIN
 };
 
 const FALLBACK: Record<ClinicianRole, string> = {
-  PHYSICIAN: "Physician", NURSE: "Head Nurse", CAREGIVER: "Caregiver", FACILITY_ADMIN: "Facility Admin",
+  PHYSICIAN: "Physician", NURSE: "Head Nurse", CAREGIVER: "Caregiver", CARE_MANAGER: "Care Manager", FACILITY_ADMIN: "Facility Admin",
 };
 
 const displayName = (u: Record<string, unknown>, fallback: string) => {

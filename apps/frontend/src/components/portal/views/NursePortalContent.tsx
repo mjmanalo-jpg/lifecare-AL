@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import VitalsPanel, { VitalReading } from "@/components/portal/widgets/VitalsPanel";
 import CameraVisionFeed from "@/components/CameraVisionFeed";
-import NurseDashboard from "@/components/portal/views/NurseDashboard";
+import NurseShiftCommand from "@/components/portal/dashboards/nurse/NurseShiftCommand";
 import NurseRecords from "@/components/portal/views/NurseRecords";
 import NurseRecordsWithCallBells from "@/components/portal/views/NurseRecordsWithCallBells";
 import NurseMedications from "@/components/portal/views/NurseMedications";
@@ -21,7 +21,6 @@ import AlertCenter from "@/components/portal/views/clinical/AlertCenter";
 import PhysicianCommsLog from "@/components/portal/views/clinical/PhysicianCommsLog";
 import ReferralsBoard from "@/components/portal/views/clinical/ReferralsBoard";
 import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
-import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
 import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
 import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAssessmentV42";
 import TodaysCareBoard from "@/components/portal/views/clinical/TodaysCareBoard";
@@ -829,9 +828,6 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   if (tab === "tasks") {
     return <DailyDocumentation clinicianRole="NURSE" />;
   }
-  if (tab === "dailyrounds") {
-    return <DailyRoundsBoard clinicianRole="NURSE" />;
-  }
   if (tab === "taskboard") {
     return <CaregiverTasks />;
   }
@@ -907,7 +903,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   }
 
   // Default: Dashboard tab
-  return <NurseDashboard />;
+  return <NurseShiftCommand />;
 }
 
 /* ── Monitoring View (Dedicated Per-Resident Camera + Vitals) ──────── */

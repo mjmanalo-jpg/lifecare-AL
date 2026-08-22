@@ -28,10 +28,10 @@ interface RoleAccess {
 
 const ROLES: RoleAccess[] = [
   { role: "SUPERADMIN", label: "Super Admin", icon: ShieldCheck, color: "text-purple-600 bg-purple-50", features: ["System Settings","Feature Matrix","User Management","Community Management","All Portals Access","Audit Logs","KPI Dashboards","Staff Registry","Admissions","Rooms","Inventory","Billing","Clinical Reports"] },
-  { role: "FACILITY_ADMIN", label: "Facility Admin", icon: Settings, color: "text-blue-600 bg-blue-50", features: ["Staff Management","Admissions","Rooms","Occupancy","Inventory","Billing","Incidents","Audit Logs","Vaccinations","Documents","Clinical Reports","Inventory Alerts","Daily Rounds"] },
-  { role: "NURSE", label: "Head Nurse", icon: Stethoscope, color: "text-emerald-600 bg-emerald-50", features: ["Tasks","Care Plans","Medications","MAR","Vitals","Incidents","Escalations","Daily Rounds","Vaccinations","Documents","Care Team","Shift Reports","Follow-ups","Clinical Notes"] },
-  { role: "PHYSICIAN", label: "Physician", icon: Stethoscope, color: "text-indigo-600 bg-indigo-50", features: ["Care Plans","Orders","Rounds","Notes","Messages","Medications","Vitals","Incidents","Escalations","Daily Rounds","Documents","Follow-ups","Consults"] },
-  { role: "CAREGIVER", label: "Caregiver", icon: Heart, color: "text-rose-600 bg-rose-50", features: ["Daily Rounds","Tasks","Care Plans","Medications","MAR","Residents","Call Bells","Time Clock","Vaccinations","Documents","Follow-ups","Care Team","Escalations"] },
+  { role: "FACILITY_ADMIN", label: "Facility Admin", icon: Settings, color: "text-blue-600 bg-blue-50", features: ["Staff Management","Admissions","Rooms","Occupancy","Inventory","Billing","Incidents","Audit Logs","Vaccinations","Documents","Clinical Reports","Inventory Alerts","Daily Care Logs"] },
+  { role: "NURSE", label: "Head Nurse", icon: Stethoscope, color: "text-emerald-600 bg-emerald-50", features: ["Tasks","Care Plans","Medications","MAR","Vitals","Incidents","Escalations","Daily Care Logs","Vaccinations","Documents","Care Team","Shift Reports","Follow-ups","Clinical Notes"] },
+  { role: "PHYSICIAN", label: "Physician", icon: Stethoscope, color: "text-indigo-600 bg-indigo-50", features: ["Care Plans","Orders","Rounds","Notes","Messages","Medications","Vitals","Incidents","Escalations","Daily Care Logs","Documents","Follow-ups","Consults"] },
+  { role: "CAREGIVER", label: "Caregiver", icon: Heart, color: "text-rose-600 bg-rose-50", features: ["Daily Care Logs","Tasks","Care Plans","Medications","MAR","Residents","Call Bells","Time Clock","Vaccinations","Documents","Follow-ups","Care Team","Escalations"] },
   { role: "FAMILY", label: "Family Member", icon: Users, color: "text-amber-600 bg-amber-50", features: ["Resident Profile","Care Plans","Documents","Vitals","Medications","Incidents","Messages","Appointments","Billing","Care Timeline"] },
   { role: "RESIDENT", label: "Resident", icon: Heart, color: "text-teal-600 bg-teal-50", features: ["Vitals","Medications","Documents","Care Plans","Vaccinations","Messages","Billing"] },
   { role: "DRIVER", label: "Driver", icon: Bus, color: "text-orange-600 bg-orange-50", features: ["Transport Requests","Trip Board","Vehicles","Fuel Logs","Maintenance"] },
@@ -83,17 +83,17 @@ const CATEGORIES = [
   {
     name: "Daily Documentation (10 Areas)",
     features: [
-      { name: "Bowel Tracking (Bristol 1-7)", icon: Droplets, modelKey: "bowel-records", implemented: true, route: "dailyrounds" },
-      { name: "Urine Output & Color", icon: Droplets, modelKey: "urine-records", implemented: true, route: "dailyrounds" },
-      { name: "Edema Assessment", icon: Activity, modelKey: "edema-records", implemented: true, route: "dailyrounds" },
-      { name: "Concerns & Escalation", icon: AlertTriangle, modelKey: "concern-records", implemented: true, route: "dailyrounds" },
-      { name: "Pain Assessment (0-10)", icon: Activity, modelKey: "pain-records", implemented: true, route: "dailyrounds" },
-      { name: "Mood & Behavior", icon: Activity, modelKey: "mood-records", implemented: true, route: "dailyrounds" },
-      { name: "Sleep Quality & Duration", icon: Activity, modelKey: "round-sleep-records", implemented: true, route: "dailyrounds" },
-      { name: "Mobility & Transfers", icon: Activity, modelKey: "mobility-records", implemented: true, route: "dailyrounds" },
-      { name: "Meals & Nutrition", icon: Utensils, modelKey: "meal-records", implemented: true, route: "dailyrounds" },
-      { name: "Vital Signs (Composite)", icon: Activity, modelKey: "vital-signs", implemented: true, route: "dailyrounds" },
-      { name: "Daily Round Master", icon: ClipboardList, modelKey: "daily-rounds", implemented: true },
+      { name: "Bowel Tracking (Bristol 1-7)", icon: Droplets, modelKey: "bowel-records", implemented: true, route: "carelogs" },
+      { name: "Urine Output & Color", icon: Droplets, modelKey: "urine-records", implemented: true, route: "carelogs" },
+      { name: "Edema Assessment", icon: Activity, modelKey: "edema-records", implemented: true, route: "carelogs" },
+      { name: "Concerns & Escalation", icon: AlertTriangle, modelKey: "concern-records", implemented: true, route: "carelogs" },
+      { name: "Pain Assessment (0-10)", icon: Activity, modelKey: "pain-records", implemented: true, route: "carelogs" },
+      { name: "Mood & Behavior", icon: Activity, modelKey: "mood-records", implemented: true, route: "carelogs" },
+      { name: "Sleep Quality & Duration", icon: Activity, modelKey: "round-sleep-records", implemented: true, route: "carelogs" },
+      { name: "Mobility & Transfers", icon: Activity, modelKey: "mobility-records", implemented: true, route: "carelogs" },
+      { name: "Meals & Nutrition", icon: Utensils, modelKey: "meal-records", implemented: true, route: "carelogs" },
+      { name: "Vital Signs (Composite)", icon: Activity, modelKey: "vital-signs", implemented: true, route: "carelogs" },
+      { name: "Daily Care Log Records", icon: ClipboardList, modelKey: "daily-rounds", implemented: true },
       { name: "Shift-Based (Day/Eve/Night)", icon: Clock, implemented: true },
     ],
   },
@@ -247,7 +247,7 @@ export default function FeatureMatrixDashboard({ initialTab = "overview" }: { in
     { label: "Medications", value: medQ.data?.length ?? 0, icon: Pill, color: "text-red-600" },
     { label: "Incidents", value: incQ.data?.length ?? 0, icon: AlertTriangle, color: "text-red-700" },
     { label: "Escalations", value: escQ.data?.length ?? 0, icon: Bell, color: "text-rose-600" },
-    { label: "Daily Rounds", value: roundQ.data?.length ?? 0, icon: ClipboardList, color: "text-emerald-700" },
+    { label: "Daily Care Logs", value: roundQ.data?.length ?? 0, icon: ClipboardList, color: "text-emerald-700" },
   ], [orgQ.data, commQ.data, resQ.data, staffQ.data, userQ.data, roomQ.data, planQ.data, taskQ.data, medQ.data, incQ.data, escQ.data, roundQ.data]);
 
   const [view, setView] = useState<"overview" | "matrix">(initialTab);

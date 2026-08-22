@@ -19,7 +19,7 @@ type GatedRole = "NURSE" | "CAREGIVER";
 
 // Tabs that count as "performing daily tasks" — blocked until clocked in.
 const DUTY_REQUIRED = new Set<string>([
-  "carelogs", "dailyrounds", "mar", "adlmonitoring", "weightmonitoring", "woundcare",
+  "carelogs", "mar", "adlmonitoring", "weightmonitoring", "woundcare",
   "tasks", "taskboard", "taskassignment", "shiftendorsements", "endorsementdashboard",
   "todayscare", "careacuity", "rounds", "careplans", "prescreen", "documentation",
   "medications", "additionalservices", "shiftsummary",

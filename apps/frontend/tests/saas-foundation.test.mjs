@@ -61,19 +61,25 @@ test("platform customer provisioning is separated from legacy super admin", () =
   assert.match(read("src/app\/[role\]\/layout.tsx"), /urlRole === "PLATFORM_ADMIN"/);
 });
 
-test("facility administrators can invite staff only within their active community", () => {
+test("facility administrators can add staff only within their active community", () => {
+  // Facility admins now provision staff directly; the invitation route keeps the
+  // same scoping for emailed invites.
   const invitations = read("src/app/api/organizations/[id]/invitations/route.ts");
   assert.match(invitations, /context\?\.role === "FACILITY_ADMIN"/);
-  assert.match(invitations, /communityId !== context\.communityId/);
-  assert.match(invitations, /communityRole === "FACILITY_ADMIN"/);
   assert.match(invitations, /Facility administrators cannot assign organization roles/);
+  const staffRoute = read("src/app/api/organizations/[id]/staff/route.ts");
+  assert.match(staffRoute, /context\?\.role === "FACILITY_ADMIN"/);
+  assert.match(staffRoute, /communityId !== context\.communityId/);
+  assert.match(staffRoute, /communityRole === "FACILITY_ADMIN"/);
   const facilityPortal = read("src/components/portal/views/FacilityAdminPortalContent.tsx");
-  assert.match(facilityPortal, /\/api\/organizations\/\$\{organizationId\}\/invitations/);
+  assert.match(facilityPortal, /\/api\/organizations\/\$\{organizationId\}\/staff/);
+  assert.match(facilityPortal, /activeCommunityId/);
   assert.doesNotMatch(facilityPortal, /createRecord\("users"/);
 });
 
 test("the sample platform administrator is distinct and keeps its password out of source", () => {
-  const seed = read("prisma/seed-auth.mjs");
+  // Account definitions were extracted from seed-auth.mjs into a shared module.
+  const seed = [read("prisma/seed-auth.mjs"), read("prisma/account-definitions.mjs")].join("\n");
   assert.match(seed, /platform\.admin@lifecarecms\.test/);
   assert.match(seed, /platformRole: "PLATFORM_ADMIN"/);
   assert.match(seed, /SAMPLE_PLATFORM_ADMIN_PASSWORD/);

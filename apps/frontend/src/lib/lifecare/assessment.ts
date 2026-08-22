@@ -6,6 +6,7 @@
 
 import { classify, rawScore } from "./classification.ts";
 import { traceStamp } from "./governance.ts";
+import { DOMAIN_CODES } from "./types.ts";
 import type {
   CareLevel, DomainCode, DomainScores, ClinicalContext, ClassificationResult,
 } from "./types.ts";
@@ -90,11 +91,29 @@ export interface DomainEntry {
   modifierFlags?: string[];   // MOD-* the assessor flagged in-flow (CL-02)
 }
 
+export type ModifierReconciliationDecision = "APPLIED" | "NOT_APPLICABLE";
+export interface ModifierReconciliation {
+  decision: ModifierReconciliationDecision;
+  /** Required when a flagged/suggested modifier is cleared as not applicable. */
+  rationale?: string;
+}
+
+export type CapabilityReviewOutcome = "WITHIN_CAPABILITY" | "ESCALATE_TRANSFER" | "EMERGENCY_PATHWAY";
+export interface CapabilityReview {
+  outcome: CapabilityReviewOutcome;
+  rationale: string;
+}
+
 /** Layer 3 — final evaluation (calibration-safe). */
 export interface AssessmentLayer3 {
   finalLevel?: CareLevel;        // nurse-selected Final LOC
   finalLevelJustification?: string;
+  /** Final applied modifier set retained for existing downstream consumers. */
   reconciledModifiers?: string[];
+  /** Per-flag disposition proves every suggested/in-flow modifier was reviewed. */
+  modifierReconciliations?: Record<string, ModifierReconciliation>;
+  /** Required when an MLR/care pathway invokes the capability gate. */
+  capabilityReview?: CapabilityReview;
   // reassessment (Section H)
   reassessmentInterval?: string;
   nextReviewDate?: string;
@@ -141,6 +160,76 @@ export function classifyAssessment(a: Pick<AssessmentV42, "domains" | "context">
 
 export function assessmentRawScore(a: Pick<AssessmentV42, "domains">): number {
   return rawScore(domainScores(a));
+}
+
+/** All modifiers that require an explicit Layer-3 disposition (G2 / CL-02). */
+export function requiredModifierIds(a: Pick<AssessmentV42, "domains" | "context">): string[] {
+  const ids = new Set(classifyAssessment(a).modifiers);
+  for (const entry of Object.values(a.domains)) {
+    for (const id of entry?.modifierFlags ?? []) if (id) ids.add(id);
+  }
+  return [...ids].sort();
+}
+
+export type AssessmentValidationGate = "G1" | "G2" | "G3" | "G4" | "G5";
+export interface AssessmentValidationIssue {
+  gate: AssessmentValidationGate;
+  message: string;
+  layer: 2 | 3;
+}
+
+const LEVEL_RANK: Record<CareLevel, number> = { L1: 1, L2: 2, L3: 3, L4: 4, L5: 5 };
+
+/**
+ * Finalized assessment → Final LOC sign-off gates. This keeps the workbook's
+ * G1–G5 controls executable instead of relying on the reviewer to notice a
+ * missing field in the UI.
+ */
+export function assessmentValidationIssues(a: Pick<AssessmentV42, "domains" | "context" | "layer3">): AssessmentValidationIssue[] {
+  const issues: AssessmentValidationIssue[] = [];
+  const result = classifyAssessment(a);
+
+  const unsupported = DOMAIN_CODES.filter((code) => {
+    const entry = a.domains[code];
+    const scoreValid = !!entry && Number.isInteger(entry.score) && entry.score >= 0 && entry.score <= 4;
+    // goalNote is accepted for legacy drafts written before evidence had its own field.
+    const evidence = entry?.evidence?.trim() || entry?.goalNote?.trim();
+    return !scoreValid || !evidence;
+  });
+  if (unsupported.length) {
+    issues.push({ gate: "G1", layer: 2, message: `Document a 0–4 score and supporting evidence for ${unsupported.join(", ")}.` });
+  }
+
+  const modifierIssues: string[] = [];
+  for (const id of requiredModifierIds(a)) {
+    const review = a.layer3.modifierReconciliations?.[id];
+    // Backward-compatible: an id in reconciledModifiers is an APPLIED disposition.
+    if (!review && !a.layer3.reconciledModifiers?.includes(id)) modifierIssues.push(`${id} needs a disposition`);
+    else if (review?.decision === "NOT_APPLICABLE" && !review.rationale?.trim()) modifierIssues.push(`${id} needs a not-applicable rationale`);
+  }
+  if (modifierIssues.length) {
+    issues.push({ gate: "G2", layer: 3, message: `Reconcile every flagged modifier: ${modifierIssues.join("; ")}.` });
+  }
+
+  if (result.mlrFloor && a.layer3.finalLevel && LEVEL_RANK[a.layer3.finalLevel] < LEVEL_RANK[result.mlrFloor]) {
+    issues.push({ gate: "G3", layer: 3, message: `Final LOC ${a.layer3.finalLevel} cannot be below the triggered ${result.mlrFloor} minimum-level floor.` });
+  }
+
+  if (a.context.overrideLevel && !a.context.overrideReason?.trim()) {
+    issues.push({ gate: "G4", layer: 3, message: "Document the clinical override rationale." });
+  }
+  if (result.capabilityGate) {
+    const review = a.layer3.capabilityReview;
+    if (!review?.outcome || !review.rationale?.trim()) {
+      issues.push({ gate: "G4", layer: 3, message: "Complete the capability review outcome and rationale." });
+    }
+  }
+
+  if (!a.layer3.finalLevel) issues.push({ gate: "G5", layer: 3, message: "Select the nurse-confirmed Final Level of Care." });
+  if (!a.layer3.finalLevelJustification?.trim()) {
+    issues.push({ gate: "G5", layer: 3, message: "Document why the Final LOC reflects the resident's intrinsic need." });
+  }
+  return issues;
 }
 
 /**

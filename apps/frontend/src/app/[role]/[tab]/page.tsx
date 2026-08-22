@@ -1,6 +1,7 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { PATH_TO_ROLE, Role } from "@/constants/roleConfig";
 import NursePortalContent from "@/components/portal/views/NursePortalContent";
 import ClockInGate from "@/components/portal/ClockInGate";
@@ -13,6 +14,7 @@ import PlatformAdminPortalContent from "@/components/portal/views/PlatformAdminP
 import OrganizationAdminPortalContent from "@/components/portal/views/OrganizationAdminPortalContent";
 import FacilityAdminPortalContent from "@/components/portal/views/FacilityAdminPortalContent";
 import CareManagerPortalContent from "@/components/portal/views/CareManagerPortalContent";
+import ResidentCoordinatorPortalContent from "@/components/portal/views/ResidentCoordinatorPortalContent";
 import BillingFinancePortalContent from "@/components/portal/views/BillingFinancePortalContent";
 import FleetManagementPortalContent from "@/components/portal/views/FleetManagementPortalContent";
 import DriverPortalContent from "@/components/portal/views/DriverPortalContent";
@@ -27,10 +29,22 @@ import MaintenancePortalContent from "@/components/portal/views/MaintenancePorta
 // active tab — which is what the loading skeleton replaces.
 export default function RolePortalPage() {
   const params = useParams();
+  const router = useRouter();
   const roleParam = params?.role as string;
   const tab = (params?.tab as string) || "dashboard";
 
   const userRole: Role = roleParam ? (PATH_TO_ROLE[roleParam.toLowerCase()] || "FAMILY") : "FAMILY";
+
+  useEffect(() => {
+    if (tab !== "dailyrounds") return;
+    const careLogRoles = new Set(["nurse", "caregiver", "care_manager", "physician", "facility_admin", "superadmin"]);
+    const destination = careLogRoles.has(roleParam?.toLowerCase())
+      ? `/${roleParam}/carelogs`
+      : `/${roleParam}/dashboard`;
+    router.replace(destination);
+  }, [roleParam, router, tab]);
+
+  if (tab === "dailyrounds") return null;
 
   return (
     <>
@@ -48,6 +62,7 @@ export default function RolePortalPage() {
       {userRole === "FACILITY_ADMIN" && <FacilityAdminPortalContent tab={tab} />}
       {/* Care Manager — clinical oversight split out of Facility Operations. */}
       {userRole === "CARE_MANAGER" && <CareManagerPortalContent tab={tab} />}
+      {userRole === "RESIDENT_COORDINATOR" && <ResidentCoordinatorPortalContent tab={tab} />}
       {/* Billing & Finance sees the dedicated billing portal. */}
       {userRole === "BILLING_ADMIN" && <BillingFinancePortalContent tab={tab} />}
       {/* Fleet Manager sees the fleet & transport dispatch portal. */}

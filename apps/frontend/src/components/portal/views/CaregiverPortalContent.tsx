@@ -1,6 +1,6 @@
 "use client";
 
-import CaregiverDashboard from "@/components/portal/views/caregiver/CaregiverDashboard";
+import CaregiverMyShift from "@/components/portal/dashboards/caregiver/CaregiverMyShift";
 import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
 import TaskAssignmentBoard from "@/components/portal/views/clinical/TaskAssignmentBoard";
 import TodaysCareBoard from "@/components/portal/views/clinical/TodaysCareBoard";
@@ -23,7 +23,6 @@ import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTr
 import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
 import MARDailyBoard from "@/components/portal/views/clinical/MARDailyBoard";
 import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker";
-import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
 import { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
 import ADLMonitoringBoard from "@/components/portal/views/clinical/ADLMonitoringBoard";
 import ShiftEndorsementBoard from "@/components/portal/views/clinical/ShiftEndorsementBoard";
@@ -60,8 +59,6 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
       return <VitalsTrendBoard clinicianRole="CAREGIVER" />;
     case "cameralogs":
       return <CameraActivityLog />;
-    case "dailyrounds":
-      return <DailyRoundsBoard clinicianRole="CAREGIVER" />;
     case "carelogs":
       return <CareLogsTimeline clinicianRole="CAREGIVER" />;
     case "adlmonitoring":
@@ -107,6 +104,6 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
     case "incidents":
       return <FacilityIncidents readOnly />;
     default:
-      return <CaregiverDashboard />;
+      return <CaregiverMyShift />;
   }
 }

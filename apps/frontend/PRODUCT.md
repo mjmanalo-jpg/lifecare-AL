@@ -34,7 +34,7 @@ Bridges **world-class clinical operations (German-standard clinical rigor)** wit
 **Confirmed capability domains (built and live):**
 - Resident profile & unified care record; admissions/registration (multi-step wizard with facial enrollment) and CRM lead pipeline.
 - Assessment & acuity / level-of-care; care planning and care-plan reviews; pre-admission (LifeCare Stage-2) scored assessment.
-- Daily care documentation & monitoring: care logs, ADL monitoring, weight monitoring, vitals trends, wound care, shift summaries, daily rounds.
+- Daily care documentation & monitoring: Daily Care Logs, ADL monitoring, weight monitoring, vitals trends, wound care, and shift summaries.
 - Shift endorsement & continuity; task assignment (workers see only their own current-shift tasks).
 - Medication management: MAR, medication compliance, medication & supply inventory (FEFO, barcode scanning, purchase requests).
 - Clinical coordination: SBAR escalation, physician comms log, referrals & appointments, clinical records hub, resident progress reports, appointment calendar (with ICS/Google export).

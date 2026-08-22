@@ -61,9 +61,28 @@ interface PortalShellProps {
 }
 
 const DEFAULT_COLLAPSED_GROUPS: Record<string, boolean> = {
+  Operations: true,
+  Residents: true,
+  "My Residents": true,
+  Staff: true,
+  "Assess & LOC": true,
+  "Care Plans": true,
+  "Care Tasks": true,
+  Reviews: true,
+  Team: true,
+  "Clinical Review": true,
+  Quality: true,
+  Schedule: true,
+  Coordination: true,
+  "Family Contacts": true,
+  Endorsement: true,
+  "Request Help": true,
+  "Shift Close": true,
+  Services: true,
+  Reports: true,
+  Settings: true,
   "Clinical Monitoring": true,
   "Coordination & Comms": true,
-  Operations: true,
   Administration: true,
   Inventory: true,
   "Billing & Finance": true,
@@ -122,7 +141,7 @@ const NOTIF_TARGET_ROUTES: Record<string, string[]> = {
   assessment: ["rounds", "casereview", "dashboard"],
   task: ["taskboard", "tasks", "taskassignment", "documentation", "dashboard"],
   handover: ["taskassignment", "shiftendorsements", "endorsementdashboard", "dashboard"],
-  dailyDoc: ["dailyrounds", "documentation", "tasks", "reports", "dashboard"],
+  dailyDoc: ["carelogs", "documentation", "tasks", "reports", "dashboard"],
   callbell: ["callbells", "alertcenter", "monitoring", "dashboard"],
   // Facility operations
   inventoryItem: ["inventory-alerts", "inventory", "dashboard"],
@@ -446,8 +465,8 @@ export default function PortalShell({
   }, [filteredLinks, navQuery]);
 
   const groupedLinks = useMemo(
-    () => groupSidebarLinks(visibleNavLinks),
-    [visibleNavLinks]
+    () => groupSidebarLinks(visibleNavLinks, roleDetails.sidebarGroupOrder),
+    [roleDetails.sidebarGroupOrder, visibleNavLinks]
   );
 
   // Keep the two highest-frequency clinical groups open. Lower-frequency
@@ -480,7 +499,7 @@ export default function PortalShell({
     "Overview";
 
   const currentGroup =
-    groupSidebarLinks(filteredLinks).find(({ links }) => links.some(isLinkActive))?.group ||
+    groupSidebarLinks(filteredLinks, roleDetails.sidebarGroupOrder).find(({ links }) => links.some(isLinkActive))?.group ||
     "Overview";
 
   // Role-agnostic "top tasks": the active page, the role's dashboard, then the
@@ -489,10 +508,10 @@ export default function PortalShell({
   const priorityLinks = useMemo(() => {
     const active = filteredLinks.find((link) => link.route.endsWith(`/${activeSegment}`));
     const dashboard = filteredLinks.find((link) => link.route.endsWith("/dashboard"));
-    const firstOfEachGroup = groupSidebarLinks(filteredLinks).map((g) => g.links[0]).filter(Boolean) as SidebarLink[];
+    const firstOfEachGroup = groupSidebarLinks(filteredLinks, roleDetails.sidebarGroupOrder).map((g) => g.links[0]).filter(Boolean) as SidebarLink[];
     const combined = [active, dashboard, ...firstOfEachGroup].filter(Boolean) as SidebarLink[];
     return combined.filter((link, index, all) => all.findIndex((item) => item.route === link.route) === index).slice(0, 5);
-  }, [activeSegment, filteredLinks]);
+  }, [activeSegment, filteredLinks, roleDetails.sidebarGroupOrder]);
 
   // ── ⌘K command palette — jump to any page by typing (all roles) ──────────
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -807,12 +826,19 @@ export default function PortalShell({
               ) : paletteResults.map((link, i) => {
                 const Icon = link.icon;
                 const activeRow = i === paletteIndex;
+                const rowTone = activeRow
+                  ? theme === "dark"
+                    ? "bg-blue-500/15 text-blue-100"
+                    : "bg-blue-50 text-blue-800"
+                  : theme === "dark"
+                    ? "text-slate-300 hover:bg-slate-800"
+                    : "text-slate-700 hover:bg-slate-50";
                 return (
                   <button
                     key={`${link.name}-${link.route}`}
                     onMouseEnter={() => setPaletteIndex(i)}
                     onClick={() => { router.push(link.route); setPaletteOpen(false); }}
-                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition ${activeRow ? (theme === "dark" ? "bg-blue-500/15 text-blue-100" : "bg-blue-50 text-blue-800") : (theme === "dark" ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-50")}`}
+                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition ${rowTone}`}
                   >
                     <Icon className="h-4 w-4 shrink-0 opacity-70" />
                     <span className="flex-1 truncate font-medium">{link.name}</span>
@@ -1201,7 +1227,7 @@ export default function PortalShell({
 
         {/* Main Content Area */}
         <main className="min-h-0 flex-1 overflow-y-auto p-3 pb-24 sm:p-5 sm:pb-24 lg:p-7 lg:pb-7" style={{ height: 0 }}>
-          <div className={["CARE_MANAGER", "NURSE", "CAREGIVER"].includes(userRole) ? "clinical-portal-content" : undefined}>
+          <div className={["CARE_MANAGER", "RESIDENT_COORDINATOR", "NURSE", "CAREGIVER"].includes(userRole) ? "clinical-portal-content" : undefined}>
             {contentPending ? <PortalContentSkeleton variant={activeSegment === "dashboard" ? "dashboard" : "list"} /> : children}
           </div>
         </main>
@@ -1238,17 +1264,39 @@ export default function PortalShell({
             <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain p-4 scrollbar-thin sm:p-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <section className={`rounded-2xl border p-4 sm:p-5 md:col-span-2 ${theme === "dark" ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
-                  <div className="mb-4 flex items-center gap-3"><span className="rounded-xl bg-blue-100 p-2.5 text-blue-600"><UserIcon className="h-5 w-5" /></span><div><h2 className="font-bold">Profile</h2><p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Your name is shared across authorized SLMS workspaces.</p></div></div>
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="rounded-xl bg-blue-100 p-2.5 text-blue-600"><UserIcon className="h-5 w-5" /></span>
+                    <div>
+                      <h2 className="font-bold">Profile</h2>
+                      <p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Your name is shared across authorized SLMS workspaces.</p>
+                    </div>
+                  </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="text-sm font-medium">Full name<input value={profileName} onChange={(event) => setProfileName(event.target.value)} maxLength={100} className={`mt-2 w-full rounded-xl border px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${theme === "dark" ? "border-slate-700 bg-slate-950" : "border-slate-300 bg-white"}`} /></label>
                     <label className="text-sm font-medium">Email address<input value={profileEmail} disabled className={`mt-2 w-full rounded-xl border px-3 py-2.5 ${theme === "dark" ? "border-slate-700 bg-slate-800 text-slate-400" : "border-slate-200 bg-slate-100 text-slate-500"}`} /></label>
                     <label className="text-sm font-medium">Effective portal role<input value={roleDetails.name} disabled className={`mt-2 w-full rounded-xl border px-3 py-2.5 ${theme === "dark" ? "border-slate-700 bg-slate-800 text-slate-400" : "border-slate-200 bg-slate-100 text-slate-500"}`} /></label>
-                    <div className="flex items-end"><p className={`rounded-xl p-3 text-xs ${theme === "dark" ? "bg-slate-950 text-slate-400" : "bg-blue-50 text-blue-700"}`}>Roles and workspace access are managed by an authorized administrator and cannot be changed here.</p></div>
+                    <div className="flex items-end">
+                      <p
+                        className={`rounded-xl p-3 text-xs ${
+                          theme === "dark"
+                            ? "bg-slate-950 text-slate-300"
+                            : "bg-blue-50 text-blue-700"
+                        }`}
+                      >
+                        Roles and workspace access are managed by an authorized administrator and cannot be changed here.
+                      </p>
+                    </div>
                   </div>
                 </section>
 
                 <section className={`rounded-2xl border p-4 sm:p-5 ${theme === "dark" ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
-                  <div className="mb-4 flex items-center gap-3"><span className="rounded-xl bg-blue-100 p-2.5 text-blue-600"><Bell className="h-5 w-5" /></span><div><h2 className="font-bold">Notifications</h2><p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Choose how this device alerts you.</p></div></div>
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="rounded-xl bg-blue-100 p-2.5 text-blue-600"><Bell className="h-5 w-5" /></span>
+                    <div>
+                      <h2 className="font-bold">Notifications</h2>
+                      <p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Choose how this device alerts you.</p>
+                    </div>
+                  </div>
                   <div className="space-y-3">
                     <label className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 ${theme === "dark" ? "border-slate-700" : "border-slate-200"}`}><span><b className="block text-sm">Push notifications</b><span className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Browser alerts on this device</span></span><input type="checkbox" checked={notifications} onChange={(event) => setNotifications(event.target.checked)} className="h-5 w-5 accent-blue-600" /></label>
                     <label className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 ${theme === "dark" ? "border-slate-700" : "border-slate-200"}`}><span><b className="block text-sm">Critical email alerts</b><span className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>High-priority account events</span></span><input type="checkbox" checked={emailAlerts} onChange={(event) => setEmailAlerts(event.target.checked)} className="h-5 w-5 accent-blue-600" /></label>
@@ -1256,13 +1304,25 @@ export default function PortalShell({
                 </section>
 
                 <section className={`rounded-2xl border p-4 sm:p-5 ${theme === "dark" ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
-                  <div className="mb-4 flex items-center gap-3"><span className="rounded-xl bg-emerald-100 p-2.5 text-emerald-600"><Globe className="h-5 w-5" /></span><div><h2 className="font-bold">Language</h2><p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Set your interface preference.</p></div></div>
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="rounded-xl bg-emerald-100 p-2.5 text-emerald-600"><Globe className="h-5 w-5" /></span>
+                    <div>
+                      <h2 className="font-bold">Language</h2>
+                      <p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Set your interface preference.</p>
+                    </div>
+                  </div>
                   <label className="text-sm font-medium">Preferred language<select value={language} onChange={(event) => setLanguage(event.target.value)} className={`mt-2 w-full rounded-xl border px-3 py-2.5 outline-none focus:border-blue-500 ${theme === "dark" ? "border-slate-700 bg-slate-950" : "border-slate-300 bg-white"}`}><option value="en">English</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option></select></label>
                   <p className={`mt-3 text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>This records your preference; translated application content will be introduced progressively.</p>
                 </section>
 
                 <section className={`rounded-2xl border p-4 sm:p-5 md:col-span-2 ${theme === "dark" ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
-                  <div className="mb-4 flex items-center gap-3"><span className="rounded-xl bg-rose-100 p-2.5 text-rose-600"><Lock className="h-5 w-5" /></span><div><h2 className="font-bold">Security</h2><p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Manage credentials for your own account.</p></div></div>
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="rounded-xl bg-rose-100 p-2.5 text-rose-600"><Lock className="h-5 w-5" /></span>
+                    <div>
+                      <h2 className="font-bold">Security</h2>
+                      <p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Manage credentials for your own account.</p>
+                    </div>
+                  </div>
                   <div className="grid gap-3 sm:grid-cols-2"><button onClick={() => void handleChangePassword()} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>Change password</button><button onClick={() => setShowPinSetup(true)} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>4-digit signing PIN</button></div>
                 </section>
               </div>

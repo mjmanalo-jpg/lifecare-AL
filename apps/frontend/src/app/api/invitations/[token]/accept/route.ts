@@ -3,9 +3,11 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hashInvitationToken } from "@/lib/invitations";
 
-const STAFF_COMMUNITY_ROLES = new Set(["FACILITY_ADMIN", "BILLING_ADMIN", "PHYSICIAN", "NURSE", "CAREGIVER", "FLEET_MANAGEMENT", "DRIVER"]);
+const STAFF_COMMUNITY_ROLES = new Set(["FACILITY_ADMIN", "CARE_MANAGER", "RESIDENT_COORDINATOR", "BILLING_ADMIN", "PHYSICIAN", "NURSE", "CAREGIVER", "FLEET_MANAGEMENT", "DRIVER"]);
 const POSITION_BY_ROLE: Record<string, string> = {
   FACILITY_ADMIN: "Facility Admin",
+  CARE_MANAGER: "Care Manager",
+  RESIDENT_COORDINATOR: "Resident Coordinator",
   BILLING_ADMIN: "Billing Admin",
   PHYSICIAN: "Physician",
   NURSE: "Registered Nurse",

@@ -19,7 +19,7 @@ const actionColors: Record<string, string> = {
 const PER_PAGE = 25;
 
 // Care/clinical activity the Care Manager is accountable for: task completions,
-// MAR, daily rounds and every round sub-record, assessments, care plans,
+// MAR, daily care logs and every backing care-log sub-record, assessments, care plans,
 // escalations, incidents, referrals, follow-ups, vitals, wound care, etc.
 const CLINICAL_ENTITIES = new Set<string>([
   "tasks", "medication-administrations", "medication-logs", "medications",
@@ -156,7 +156,7 @@ export default function AuditLogViewer({ focus = "all" }: { focus?: "all" | "cli
           </h2>
           <p className="text-sm text-gray-500">
             {isClinical
-              ? "Task completions, MAR, daily rounds, assessments, incidents and other clinical activity"
+              ? "Task completions, MAR, daily care logs, assessments, incidents and other clinical activity"
               : "Track all system activity for compliance and governance"}
           </p>
         </div>

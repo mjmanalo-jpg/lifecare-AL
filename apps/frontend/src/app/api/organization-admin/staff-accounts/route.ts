@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 // invitation. The account is provisioned already-confirmed and usable with the
 // initial password set by the administrator. Restricted to the leadership roles
 // an organization administrator is allowed to appoint.
-const ALLOWED_ROLES = new Set(["FACILITY_ADMIN", "CARE_MANAGER", "SUPERADMIN", "NURSE", "CAREGIVER", "PHYSICIAN", "BILLING_ADMIN", "NUTRITIONIST", "KITCHEN", "HOUSEKEEPING", "MAINTENANCE", "SECURITY", "FLEET_MANAGEMENT", "DRIVER"]);
+const ALLOWED_ROLES = new Set(["FACILITY_ADMIN", "CARE_MANAGER", "RESIDENT_COORDINATOR", "SUPERADMIN", "NURSE", "CAREGIVER", "PHYSICIAN", "BILLING_ADMIN", "NUTRITIONIST", "KITCHEN", "HOUSEKEEPING", "MAINTENANCE", "SECURITY", "FLEET_MANAGEMENT", "DRIVER"]);
 
 export async function POST(request: NextRequest) {
   const context = await requireTenantContext();

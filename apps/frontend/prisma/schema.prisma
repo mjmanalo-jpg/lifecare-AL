@@ -21,6 +21,7 @@ enum Role {
   SUPERADMIN
   FACILITY_ADMIN
   CARE_MANAGER
+  RESIDENT_COORDINATOR
   BILLING_ADMIN
   PHYSICIAN
   NURSE
@@ -4387,4 +4388,259 @@ model CareEvent {
   @@index([occurredAt])
   @@index([isException])
   @@index([taskId])
+}
+
+// Care360 governed shift and dashboard foundation. Existing schedule and
+// endorsement AppSetting records remain readable during the dual-read period.
+enum ServiceContext {
+  FACILITY
+  HOME_CARE
+}
+
+enum CareShiftType {
+  AM
+  PM
+  NOC
+  CUSTOM
+}
+
+enum CareShiftStatus {
+  PLANNED
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+enum AssignmentAckStatus {
+  PENDING
+  ACKNOWLEDGED
+}
+
+enum DashboardWorkStatus {
+  OPEN
+  ACKNOWLEDGED
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
+}
+
+enum HelpRequestKind {
+  NEED_NURSE
+  NEED_HELP
+}
+
+enum ShiftHandoverStatus {
+  DRAFT
+  SIGNED
+  ACCEPTED
+  AMENDED
+}
+
+model CareShift {
+  id             String          @id @default(uuid())
+  organizationId String
+  communityId    String
+  serviceContext ServiceContext  @default(FACILITY)
+  shiftType      CareShiftType
+  label          String?
+  startsAt       DateTime
+  endsAt         DateTime
+  status         CareShiftStatus @default(PLANNED)
+  leadStaffId    String?
+  openedAt       DateTime?
+  closedAt       DateTime?
+  createdById    String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([communityId, serviceContext, shiftType, startsAt])
+  @@index([organizationId, communityId, startsAt])
+  @@index([communityId, status, startsAt])
+}
+
+model ShiftStaffAssignment {
+  id                 String              @id @default(uuid())
+  organizationId     String
+  communityId        String
+  shiftId            String
+  staffId            String
+  roleOnShift        String
+  zone                String?
+  assignedById       String?
+  acknowledgement    AssignmentAckStatus @default(PENDING)
+  acknowledgedAt     DateTime?
+  activeFrom         DateTime
+  activeUntil        DateTime?
+  sourceLegacyId     String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@unique([shiftId, staffId, activeFrom])
+  @@index([organizationId, communityId, shiftId])
+  @@index([staffId, activeFrom, activeUntil])
+}
+
+model ShiftResidentAssignment {
+  id                       String              @id @default(uuid())
+  organizationId           String
+  communityId              String
+  shiftId                  String
+  residentId               String
+  primaryCaregiverStaffId  String?
+  coveringNurseStaffId     String?
+  assistanceLevelSnapshot String?
+  assignedById             String?
+  acknowledgement          AssignmentAckStatus @default(PENDING)
+  acknowledgedAt           DateTime?
+  activeFrom               DateTime
+  activeUntil              DateTime?
+  sourceLegacyId           String?
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+
+  @@unique([shiftId, residentId, activeFrom])
+  @@index([organizationId, communityId, shiftId])
+  @@index([residentId, activeFrom, activeUntil])
+  @@index([primaryCaregiverStaffId, activeFrom, activeUntil])
+}
+
+model AssignmentHistory {
+  id             String   @id @default(uuid())
+  organizationId String
+  communityId    String
+  shiftId        String?
+  assignmentType String
+  assignmentId   String
+  previousValue  Json?
+  nextValue      Json
+  reason         String?
+  actorId        String?
+  occurredAt     DateTime @default(now())
+
+  @@index([organizationId, communityId, occurredAt])
+  @@index([assignmentType, assignmentId, occurredAt])
+  @@index([shiftId, occurredAt])
+}
+
+model ClinicalWorkItem {
+  id             String              @id @default(uuid())
+  organizationId String
+  communityId    String
+  shiftId        String?
+  residentId     String?
+  sourceType     String
+  sourceId       String
+  queueClass     String
+  priority       String
+  clinicalState  String
+  ownerRole      String?
+  ownerUserId    String?
+  dueAt          DateTime?
+  status         DashboardWorkStatus @default(OPEN)
+  disposition    String?
+  resolvedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@unique([sourceType, sourceId, queueClass])
+  @@index([organizationId, communityId, status, priority])
+  @@index([shiftId, status])
+  @@index([residentId, status])
+}
+
+model StaffHelpRequest {
+  id             String              @id @default(uuid())
+  organizationId String
+  communityId    String
+  shiftId        String?
+  residentId     String
+  taskId         String?
+  kind           HelpRequestKind
+  category       String
+  detail         String              @db.Text
+  observation    String?             @db.Text
+  priority       String
+  requestedById  String
+  recipientRole  String
+  ownerUserId    String?
+  status         DashboardWorkStatus @default(OPEN)
+  acceptedAt     DateTime?
+  resolvedAt     DateTime?
+  escalationId   String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([organizationId, communityId, status, createdAt])
+  @@index([shiftId, status])
+  @@index([residentId, createdAt])
+  @@index([requestedById, createdAt])
+}
+
+model ShiftHandover {
+  id                    String              @id @default(uuid())
+  organizationId        String
+  communityId           String
+  outgoingShiftId       String?
+  incomingShiftId       String?
+  status                ShiftHandoverStatus @default(DRAFT)
+  summary               String?             @db.Text
+  outgoingSignedById    String?
+  outgoingSignedAt      DateTime?
+  incomingAcceptedById  String?
+  incomingAcceptedAt    DateTime?
+  amendmentReason       String?             @db.Text
+  sourceLegacyId        String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@index([organizationId, communityId, createdAt])
+  @@index([outgoingShiftId, status])
+  @@index([incomingShiftId, status])
+}
+
+model ShiftHandoverItem {
+  id                String   @id @default(uuid())
+  organizationId    String
+  communityId       String
+  handoverId        String
+  residentId        String?
+  situation         String   @db.Text
+  background        String?  @db.Text
+  assessment        String?  @db.Text
+  recommendation    String?  @db.Text
+  changeSummary     String?  @db.Text
+  openRisk          String?  @db.Text
+  medicationConcern String?  @db.Text
+  appointmentConcern String? @db.Text
+  followUpOwnerRole String?
+  followUpOwnerId   String?
+  dueAt             DateTime?
+  sourceLinks       Json?
+  resolvedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([organizationId, communityId, handoverId])
+  @@index([residentId, dueAt])
+  @@index([followUpOwnerId, dueAt])
+}
+
+model MetricSnapshot {
+  id                String         @id @default(uuid())
+  organizationId    String
+  communityId       String
+  serviceContext    ServiceContext @default(FACILITY)
+  metricKey         String
+  definitionVersion String
+  windowStart       DateTime
+  windowEnd         DateTime
+  numerator         Float
+  denominator       Float
+  value              Float?
+  exclusions         Json?
+  dimensions         Json?
+  recordedAt         DateTime       @default(now())
+
+  @@unique([communityId, serviceContext, metricKey, definitionVersion, windowStart, windowEnd])
+  @@index([organizationId, communityId, metricKey, recordedAt])
 }

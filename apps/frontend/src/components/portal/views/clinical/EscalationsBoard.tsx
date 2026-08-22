@@ -40,7 +40,7 @@ const asStr = (v: unknown): string => (v == null ? "" : String(v));
 const rel = (v: unknown): Row => (v && typeof v === "object" ? (v as Row) : {});
 
 const PER_PAGE = 12;
-const RESPONDER_ROLES: ClinicianRole[] = ["PHYSICIAN", "FACILITY_ADMIN", "NURSE"];
+const RESPONDER_ROLES: ClinicianRole[] = ["PHYSICIAN", "FACILITY_ADMIN", "CARE_MANAGER", "NURSE"];
 
 type EscVM = {
   id: string; residentId: string; residentName: string; room: string;

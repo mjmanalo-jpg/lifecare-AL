@@ -48,12 +48,12 @@ export default function MARBoard() {
 
   const router = useRouter();
   const pathname = usePathname();
-  // Send the clinician to Daily Rounds → Vitals for this resident so they can
+  // Send the clinician to Daily Care Logs → Vitals for this resident so they can
   // record the reading; the MAR block clears automatically once it's saved (the
   // vitals live-query picks up the new VitalsLog row).
   const goRecordVitals = (residentId: string) => {
     const role = pathname?.split("/")[1] || "nurse";
-    router.push(`/${role}/dailyrounds?resident=${encodeURIComponent(String(residentId))}&focus=vitals`);
+    router.push(`/${role}/carelogs?resident=${encodeURIComponent(String(residentId))}&focus=vitals`);
   };
 
   const rowTime = (m: any) => m.actualTime || m.scheduledTime || null;
@@ -143,7 +143,7 @@ export default function MARBoard() {
         // High-risk cardio/glycemic meds: vitals are mandatory — hard block, no override.
         await Swal.fire({
           title: "Vitals required",
-          html: `<b>${med?.name}</b> is a high-risk medication and cannot be given until vitals are recorded today for <b>${resName}</b>.<br/><br/>You'll be taken to Daily Rounds to record vitals now.`,
+          html: `<b>${med?.name}</b> is a high-risk medication and cannot be given until vitals are recorded today for <b>${resName}</b>.<br/><br/>You'll be taken to Daily Care Logs to record vitals now.`,
           icon: "error", confirmButtonColor: "#C0573F", confirmButtonText: "Record vitals first",
         });
         goRecordVitals(mar.residentId);
@@ -415,7 +415,7 @@ function MARModal({ residents, me, vitalsTodayByResident, onRecordVitals, onClos
         // High-risk cardio/glycemic meds: vitals are mandatory — hard block, no override.
         await Swal.fire({
           title: "Vitals required",
-          html: `<b>${selectedMed?.name}</b> is a high-risk medication and cannot be recorded as given until vitals are recorded today for <b>${resName}</b>.<br/><br/>You'll be taken to Daily Rounds to record vitals now.`,
+          html: `<b>${selectedMed?.name}</b> is a high-risk medication and cannot be recorded as given until vitals are recorded today for <b>${resName}</b>.<br/><br/>You'll be taken to Daily Care Logs to record vitals now.`,
           icon: "error", confirmButtonColor: "#C0573F", confirmButtonText: "Record vitals first",
         });
         onRecordVitals(form.residentId);

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import PhysicianCommandCenter from "@/components/portal/views/physician/PhysicianCommandCenter";
+import ProfessionalReviewDashboard from "@/components/portal/dashboards/professional/ProfessionalReviewDashboard";
 import PhysicianCaseReview from "@/components/portal/views/physician/PhysicianCaseReview";
 import PhysicianOrders from "@/components/portal/views/physician/PhysicianOrders";
 import PhysicianConsults from "@/components/portal/views/physician/PhysicianConsults";
@@ -20,7 +20,6 @@ import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker"
 import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
 import AuditLogViewer from "@/components/portal/views/clinical/AuditLogViewer";
 import { NurseMonitoringView } from "@/components/portal/views/NursePortalContent";
-import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
 // Newer clinical boards transferred from the Care Manager portal — the physician
 // reviews the whole care record, so these render the same up-to-date boards.
 import CareLogsBoard, { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
@@ -53,7 +52,7 @@ export default function PhysicianPortalContent({ tab }: PhysicianPortalContentPr
   const [monitoringFallAlert, setMonitoringFallAlert] = useState(false);
   switch (tab) {
     case "dashboard":
-      return <PhysicianCommandCenter />;
+      return <ProfessionalReviewDashboard />;
 
     // ── Resident Care ──
     case "residents":
@@ -62,8 +61,6 @@ export default function PhysicianPortalContent({ tab }: PhysicianPortalContentPr
       return <NurseRecords />;
     case "clinicalrecords":
       return <ClinicalRecordsBoard clinicianRole="PHYSICIAN" />;
-    case "dailyrounds":
-      return <DailyRoundsBoard clinicianRole="PHYSICIAN" />;
     case "carelogs":
       return <CareLogsTimeline clinicianRole="PHYSICIAN" />;
     case "carehistory":
@@ -142,6 +139,6 @@ export default function PhysicianPortalContent({ tab }: PhysicianPortalContentPr
         />
       );
     default:
-      return <PhysicianCommandCenter />;
+      return <ProfessionalReviewDashboard />;
   }
 }

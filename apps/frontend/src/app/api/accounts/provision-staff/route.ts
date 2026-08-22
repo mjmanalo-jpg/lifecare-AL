@@ -25,8 +25,8 @@ function genPassword(): string {
 // Every staff role a Super Admin / org admin can appoint (mirrors the org-admin
 // staff-accounts allow-list). Mobile/clinical/facility/support roles all provision
 // the same way — a real login + membership + Staff record.
-const STAFF_ROLES: Role[] = ["CARE_MANAGER", "NURSE", "CAREGIVER", "PHYSICIAN", "FACILITY_ADMIN", "BILLING_ADMIN", "NUTRITIONIST", "KITCHEN", "HOUSEKEEPING", "MAINTENANCE", "SECURITY", "FLEET_MANAGEMENT", "DRIVER", "SUPERADMIN"] as Role[];
-const roleLabel = (r: Role) => ({ CARE_MANAGER: "Care Manager", NURSE: "Nurse", CAREGIVER: "Caregiver", PHYSICIAN: "Physician", FACILITY_ADMIN: "Facility Admin", BILLING_ADMIN: "Billing Admin", NUTRITIONIST: "Nutritionist", KITCHEN: "Kitchen", HOUSEKEEPING: "Housekeeping", MAINTENANCE: "Maintenance", SECURITY: "Security", FLEET_MANAGEMENT: "Fleet Manager", DRIVER: "Driver", SUPERADMIN: "Super Admin" } as Record<string, string>)[r] ?? "Staff";
+const STAFF_ROLES: Role[] = ["CARE_MANAGER", "RESIDENT_COORDINATOR", "NURSE", "CAREGIVER", "PHYSICIAN", "FACILITY_ADMIN", "BILLING_ADMIN", "NUTRITIONIST", "KITCHEN", "HOUSEKEEPING", "MAINTENANCE", "SECURITY", "FLEET_MANAGEMENT", "DRIVER", "SUPERADMIN"] as Role[];
+const roleLabel = (r: Role) => ({ CARE_MANAGER: "Care Manager", RESIDENT_COORDINATOR: "Resident Coordinator", NURSE: "Nurse", CAREGIVER: "Caregiver", PHYSICIAN: "Physician", FACILITY_ADMIN: "Facility Admin", BILLING_ADMIN: "Billing Admin", NUTRITIONIST: "Nutritionist", KITCHEN: "Kitchen", HOUSEKEEPING: "Housekeeping", MAINTENANCE: "Maintenance", SECURITY: "Security", FLEET_MANAGEMENT: "Fleet Manager", DRIVER: "Driver", SUPERADMIN: "Super Admin" } as Record<string, string>)[r] ?? "Staff";
 
 export async function POST(request: NextRequest) {
   // allowPlatform: the "System / Full System Access" Super Admin is a PLATFORM

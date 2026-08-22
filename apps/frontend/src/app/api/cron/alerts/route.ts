@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 // AUTOMATIC ALERT SOURCES (severity: CRITICAL / WARNING / INFO):
 //   • Vital Signs — abnormal BP, SpO₂, HR, temp, RR (CRITICAL when dangerous).
 //   • MAR         — missed dose windows + refused meds.
-//   • Care Logs   — missing daily rounds + no shift report submitted (INFO).
+//   • Care Logs   — missing daily care logs + no shift report submitted (INFO).
 //   • Elimination — no bowel movement in 3+ days / no urine output in 12+ hours.
 //   • Incidents   — severe & critical incident reports (CRITICAL when critical).
 // Plus operational guards: overdue follow-ups/tasks, low/expiring stock, weight loss.

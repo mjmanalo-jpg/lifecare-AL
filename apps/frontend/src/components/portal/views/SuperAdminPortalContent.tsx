@@ -22,7 +22,7 @@ import AuditLogViewer from "@/components/portal/views/clinical/AuditLogViewer";
 import ApprovalWorkflows from "@/components/portal/views/clinical/ApprovalWorkflows";
 import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
 import InventoryAlertsPanel from "@/components/portal/views/clinical/InventoryAlertsPanel";
-import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
+import { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
 import CaregiverScheduleBoard from "@/components/portal/views/clinical/CaregiverScheduleBoard";
 import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
 import CameraRegistryBoard from "@/components/portal/views/CameraRegistryBoard";
@@ -39,7 +39,7 @@ import { ROSTER_MAPPING_KEY, type RosterMapping } from "@/lib/rosterBridge";
 
 // Every staff role a Super Admin can provision (mirrors the org-admin Add-Staff list).
 const STAFF_ROLE_OPTIONS: [string, string][] = [
-  ["CARE_MANAGER", "Care Manager"], ["NURSE", "Nurse"], ["CAREGIVER", "Caregiver"],
+  ["CARE_MANAGER", "Care Manager"], ["RESIDENT_COORDINATOR", "Resident Coordinator"], ["NURSE", "Nurse"], ["CAREGIVER", "Caregiver"],
   ["PHYSICIAN", "Physician"], ["FACILITY_ADMIN", "Facility Admin"], ["BILLING_ADMIN", "Billing Admin"],
   ["NUTRITIONIST", "Nutritionist"], ["KITCHEN", "Kitchen"], ["HOUSEKEEPING", "Housekeeping"],
   ["MAINTENANCE", "Maintenance"], ["SECURITY", "Security"], ["FLEET_MANAGEMENT", "Fleet Manager"],
@@ -413,8 +413,8 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     return <FeatureMatrixDashboard initialTab="overview" />;
   }
 
-  if (tab === "dailyrounds") {
-    return <DailyRoundsBoard clinicianRole="FACILITY_ADMIN" />;
+  if (tab === "carelogs") {
+    return <CareLogsTimeline clinicianRole="FACILITY_ADMIN" />;
   }
   if (tab === "cameralogs") {
     return <CameraActivityLog />;

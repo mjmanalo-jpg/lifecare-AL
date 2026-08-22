@@ -182,13 +182,27 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
               // Release any held (DRAFT) plans for this resident — unless the decision
               // parks the plan for follow-up. Releasing = flip to ACTIVE; the
               // materializer then spins today's tasks for the scheduled caregiver.
-              const drafts = draftPlansByResident.get(rec.residentId) || [];
+              const drafts = [...(draftPlansByResident.get(rec.residentId) || [])]
+                .sort((a, b) => s(b.createdAt || b.startDate).localeCompare(s(a.createdAt || a.startDate)));
               const willRelease = drafts.length > 0 && !HOLD_DECISIONS.has(rec.decision);
               let dispatched = 0;
               if (willRelease) {
-                for (const p of drafts) { try { await releaseCarePlan(s(p.id)); } catch { /* best-effort */ } }
-                dispatched = await materializeTodayTasks();
-                await cpQ.refetch?.();
+                try {
+                  await releaseCarePlan(s(drafts[0].id), {
+                    approvedByName: rec.reviewedBy || clinicianName,
+                    effectiveDate: rec.reviewDate,
+                    nextReviewDate: rec.nextReviewDate || "",
+                  });
+                  dispatched = await materializeTodayTasks();
+                  await cpQ.refetch?.();
+                } catch (error) {
+                  Swal.fire({
+                    icon: "warning",
+                    title: "Review saved · plan still held",
+                    text: error instanceof Error ? error.message : "Complete the plan's individualization and approval fields, then release it again.",
+                  });
+                  return;
+                }
               }
               setResId(""); setTab("history");
               if (willRelease) {
@@ -337,6 +351,15 @@ function CarePlanBuilder({ level, genBusy, onGenerate }: {
   }, [items]);
 
   const submit = () => {
+    const incomplete = chosen.filter((it) => !it.freq || !it.note.trim() || (it.assistanceChoices.length > 0 && !it.assistance));
+    if (incomplete.length) {
+      Swal.fire({
+        title: "Individualization incomplete",
+        text: `Set assistance where applicable and add a resident-specific technique/preference note for: ${incomplete.slice(0, 6).map((it) => it.name).join(", ")}${incomplete.length > 6 ? ` and ${incomplete.length - 6} more` : ""}.`,
+        icon: "warning",
+      });
+      return;
+    }
     onGenerate({
       goals: goals.split("\n").map((g) => g.trim()).filter(Boolean),
       interventions: chosen.map((it) => ({
@@ -418,9 +441,9 @@ function CarePlanBuilder({ level, genBusy, onGenerate }: {
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <ClinicalButton variant="primary" onClick={submit} disabled={genBusy || chosen.length === 0}>
           {genBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />}
-          Generate individualized plan &amp; tasks
+          Generate individualized draft
         </ClinicalButton>
-        <span className="text-xs text-[var(--clinical-muted)]">{chosen.length} Level {level} task{chosen.length === 1 ? "" : "s"} → {chosen.length} caregiver task{chosen.length === 1 ? "" : "s"}</span>
+        <span className="text-xs text-[var(--clinical-muted)]">{chosen.length} governed intervention{chosen.length === 1 ? "" : "s"} · held until nursing approval</span>
       </div>
     </Section>
   );
@@ -455,6 +478,8 @@ function ReviewForm({ resident, recentInc, recentVariances = [], last, reviewedB
 
   const submit = async () => {
     if (!decision) { Swal.fire({ title: "Select a decision", text: "Choose a decision before submitting the review.", icon: "warning" }); return; }
+    if (!nextReviewDate) { Swal.fire({ title: "Next review date required", text: "Set the next review date before approving the care plan.", icon: "warning" }); return; }
+    if (!reason.trim()) { Swal.fire({ title: "Decision rationale required", text: "Document the nursing rationale before submitting the review.", icon: "warning" }); return; }
     setSaving(true);
     try {
       await onSubmit({ residentId: s(resident.id), reviewDate: isoDate(today), reviewPeriod: periodOf(today), levelAtReview: lvl, nextReviewDate, carePlanStatus, familyUpdate, physicianFollowup, decision, reason: reason || undefined, actionPlan: actionPlan || undefined, responsible: responsible || undefined, targetDate: targetDate || undefined, reviewedBy });
@@ -507,7 +532,7 @@ function ReviewForm({ resident, recentInc, recentVariances = [], last, reviewedB
             </div>
           )}
           <div><FieldLabel required htmlFor="cpr-decision">Decision</FieldLabel><select id="cpr-decision" value={decision} onChange={(e) => setDecision(e.target.value)} className={`${controlClass} max-w-xs`}><option value="">Select a decision…</option>{DECISIONS.map((d) => <option key={d} value={d}>{d}</option>)}</select></div>
-          <div><FieldLabel htmlFor="cpr-reason">Reason for Decision / Notes</FieldLabel><textarea id="cpr-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Explain the rationale…" className={controlClass} /></div>
+          <div><FieldLabel required htmlFor="cpr-reason">Reason for Decision / Notes</FieldLabel><textarea id="cpr-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Explain the nursing rationale…" className={controlClass} /></div>
           <div><FieldLabel htmlFor="cpr-action">Action Plan</FieldLabel><textarea id="cpr-action" rows={2} value={actionPlan} onChange={(e) => setActionPlan(e.target.value)} placeholder="Steps to be taken…" className={controlClass} /></div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div><FieldLabel htmlFor="cpr-resp">Responsible Person</FieldLabel><input id="cpr-resp" value={responsible} onChange={(e) => setResponsible(e.target.value)} placeholder="Name or role" className={controlClass} /></div>

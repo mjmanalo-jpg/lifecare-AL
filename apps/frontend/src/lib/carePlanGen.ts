@@ -1,4 +1,4 @@
-import { createRecord, updateRecord } from "@/lib/api";
+import { createRecord } from "@/lib/api";
 import careLevelModel from "@/lib/lifecare/data/care_level_model.json";
 import { domainInPackage, domainCodeFromLabel } from "@/lib/lifecare/carePackage";
 import { CARE_TASK_MASTER } from "@/lib/lifecare/dataset";
@@ -210,8 +210,23 @@ export async function generateCarePlanForResident(opts: {
  * turns into caregiver tasks; a DRAFT plan never dispatches. Call {@link
  * materializeTodayTasks} after releasing to spin up today's tasks immediately.
  */
-export async function releaseCarePlan(planId: string): Promise<void> {
-  await updateRecord("care-plans", planId, { status: "ACTIVE" }).catch(() => null);
+export async function releaseCarePlan(planId: string, input: {
+  approvedByName: string;
+  effectiveDate: string;
+  nextReviewDate: string;
+}): Promise<{ superseded: number }> {
+  const response = await fetch(`/api/care-plans/${encodeURIComponent(planId)}/release`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const details = Array.isArray(payload?.issues) ? payload.issues.join(" ") : payload?.error;
+    throw new Error(details || "Could not approve the care plan.");
+  }
+  return { superseded: Number(payload?.superseded) || 0 };
 }
 
 /**

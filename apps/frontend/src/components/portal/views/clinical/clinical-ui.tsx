@@ -31,6 +31,7 @@ const PILL: Record<string, string> = {
   // green — completed / done / closed / resolved / follow_up
   COMPLETED: "bg-[#7E9B6F] text-white", DONE: "bg-[#7E9B6F] text-white", CLOSED: "bg-[#7E9B6F] text-white",
   RESOLVED: "bg-[#7E9B6F] text-white", FOLLOW_UP: "bg-[#7E9B6F] text-white",
+  STABLE: "bg-[#7E9B6F] text-white",
   // coral — refused / critical / overdue / expired / emergency / escalated / rejected / cancelled / in_person
   REFUSED: "bg-[#C0573F] text-white", CRITICAL: "bg-[#C0573F] text-white", OVERDUE: "bg-[#C0573F] text-white",
   EXPIRED: "bg-[#C0573F] text-white", EMERGENCY: "bg-[#C0573F] text-white", REJECTED: "bg-[#C0573F] text-white",
@@ -42,6 +43,7 @@ const PILL: Record<string, string> = {
   REQUESTED: "bg-[#C39A3E] text-white", LOW: "bg-[#C39A3E] text-white", URGENT: "bg-[#C39A3E] text-white",
   WARNING: "bg-[#C39A3E] text-white", EXPIRING: "bg-[#C39A3E] text-white", OPEN: "bg-[#C39A3E] text-white",
   WRITTEN: "bg-[#C39A3E] text-white",
+  WATCH: "bg-[#C39A3E] text-white",
   // muted teal — held / telemedicine
   HELD: "bg-[#5B7A70] text-white", TELEMEDICINE: "bg-[#5B7A70] text-white",
   // grey — missed / routine / info / draft
@@ -89,14 +91,14 @@ export function ClinicalHeader({ title, subtitle, right }: { eyebrow?: string; t
 }
 
 /** Card with an optional coloured top rule (teal / coral / amber / green). Token-backed so it themes light/dark. */
-export function ClinicalCard({ top, className = "", children }: { top?: "teal" | "coral" | "amber" | "green" | "none"; className?: string; children: React.ReactNode }) {
+export function ClinicalCard({ id, top, className = "", children }: { id?: string; top?: "teal" | "coral" | "amber" | "green" | "none"; className?: string; children: React.ReactNode }) {
   const rule = { teal: "var(--clinical-panel)", coral: "var(--clinical-coral)", amber: "var(--clinical-amber)", green: "var(--clinical-green)", none: "transparent" }[top ?? "none"];
   const hasTop = Boolean(top && top !== "none");
   // Longhand only — mixing `border` shorthand with `borderTop` warns in React.
   const style: React.CSSProperties = { borderStyle: "solid", borderColor: "var(--clinical-line)", borderWidth: 1, backgroundColor: "var(--clinical-surface)" };
   if (hasTop) { style.borderTopWidth = 2; style.borderTopColor = rule; }
   return (
-    <div className={`clinical-card rounded-xl ${className}`} style={{ ...style, boxShadow: "var(--clinical-shadow, 0 10px 28px -24px rgba(15, 23, 42, 0.45))" }}>
+    <div id={id} className={`clinical-card rounded-xl ${className}`} style={{ ...style, boxShadow: "var(--clinical-shadow, 0 10px 28px -24px rgba(15, 23, 42, 0.45))" }}>
       {children}
     </div>
   );

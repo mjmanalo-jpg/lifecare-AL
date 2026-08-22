@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 // Lenis smooth-scroll is skipped on these routes because the portal scrolls
 // inside PortalShell's inner <main>, not the window — running Lenis there
 // hijacks the wheel and blocks native scrolling.
-const PORTAL_PATH_RE = /^\/(platform_admin|organization_admin|nurse|physician|caregiver|family|resident|superadmin|facility_admin|care_manager|billing_admin|fleet_management|driver|security|nutritionist|kitchen|housekeeping|maintenance)(\/|$)/i;
+const PORTAL_PATH_RE = /^\/(platform_admin|organization_admin|nurse|physician|caregiver|family|resident|superadmin|facility_admin|care_manager|resident_coordinator|billing_admin|fleet_management|driver|security|nutritionist|kitchen|housekeeping|maintenance)(\/|$)/i;
 
 export default function SmoothScroll({ children }: { children: ReactNode }) {
   const pathname = usePathname();

@@ -1,10 +1,9 @@
 "use client";
 
-import CareManagerDashboard from "@/components/portal/views/CareManagerDashboard";
+import CareManagerGovernance from "@/components/portal/dashboards/care-manager/CareManagerGovernance";
 import AlertCenter from "@/components/portal/views/clinical/AlertCenter";
 import ApprovalWorkflows from "@/components/portal/views/clinical/ApprovalWorkflows";
 import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
-import DailyRoundsBoard from "@/components/portal/views/clinical/DailyRoundsBoard";
 import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAssessmentV42";
 import TodaysCareBoard from "@/components/portal/views/clinical/TodaysCareBoard";
 import AdditionalServicesBoard from "@/components/portal/views/clinical/AdditionalServicesBoard";
@@ -57,8 +56,8 @@ import OnboardingHub from "@/components/portal/views/OnboardingHub";
  * approvals, incidents, alerts, rounds, assessments, care planning, MAR,
  * referrals, and physician coordination. The Care Manager acts with facility-
  * admin clinical authority (permission checks key off the CARE_MANAGER session
- * role); the clinical boards take `clinicianRole="FACILITY_ADMIN"` since that
- * enum is what those components model.
+ * role); shared clinical boards receive the real CARE_MANAGER identity so
+ * authorship, ownership, and permissions remain attributable to that role.
  */
 export default function CareManagerPortalContent({ tab }: { tab: string }) {
   switch (tab) {
@@ -70,65 +69,63 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
     case "admissions":
       return <OnboardingHub initialTab="admissions" />;
     case "residents":
-      return <CareLogsBoard clinicianRole="FACILITY_ADMIN" />;
+      return <CareLogsBoard clinicianRole="CARE_MANAGER" />;
     case "records":
       return <FacilityResidents canManageProfile />;
     case "alertcenter":
       return <AlertCenter />;
     case "incidents":
       return <FacilityIncidents />;
-    case "dailyrounds":
-      return <DailyRoundsBoard clinicianRole="FACILITY_ADMIN" />;
     case "carelogs":
-      return <CareLogsTimeline clinicianRole="FACILITY_ADMIN" />;
+      return <CareLogsTimeline clinicianRole="CARE_MANAGER" />;
     case "adlmonitoring":
-      return <ADLMonitoringBoard clinicianRole="FACILITY_ADMIN" />;
+      return <ADLMonitoringBoard clinicianRole="CARE_MANAGER" />;
     case "weightmonitoring":
-      return <WeightMonitoringBoard clinicianRole="FACILITY_ADMIN" />;
+      return <WeightMonitoringBoard clinicianRole="CARE_MANAGER" />;
     case "shiftsummary":
-      return <ShiftSummaryBoard clinicianRole="FACILITY_ADMIN" />;
+      return <ShiftSummaryBoard clinicianRole="CARE_MANAGER" />;
     case "careacuity":
-      return <CareAcuityBoard clinicianRole="FACILITY_ADMIN" />;
+      return <CareAcuityBoard clinicianRole="CARE_MANAGER" />;
     case "woundcare":
-      return <WoundCareBoard clinicianRole="FACILITY_ADMIN" />;
+      return <WoundCareBoard clinicianRole="CARE_MANAGER" />;
     case "shiftendorsements":
-      return <ShiftEndorsementBoard clinicianRole="FACILITY_ADMIN" />;
+      return <ShiftEndorsementBoard clinicianRole="CARE_MANAGER" />;
     case "endorsementdashboard":
-      return <ShiftEndorsementDashboard clinicianRole="FACILITY_ADMIN" />;
+      return <ShiftEndorsementDashboard clinicianRole="CARE_MANAGER" />;
     case "escalations":
-      return <EscalationsBoard role="FACILITY_ADMIN" />;
+      return <EscalationsBoard role="CARE_MANAGER" />;
     case "approvalworkflows":
       return <ApprovalWorkflows />;
     case "mar":
-      return <MARDailyBoard clinicianRole="FACILITY_ADMIN" />;
+      return <MARDailyBoard clinicianRole="CARE_MANAGER" />;
     case "medsafety":
       return <MedSafetyDashboard />;
     case "medcompliance":
       return <MedicationComplianceBoard />;
     case "progressreport":
-      return <ResidentProgressReport clinicianRole="FACILITY_ADMIN" />;
+      return <ResidentProgressReport clinicianRole="CARE_MANAGER" />;
     case "appointmentcalendar":
       return <AppointmentCalendar title="Appointments Calendar" canSchedule={false} />;
     case "taskassignment":
-      return <TaskAssignmentBoard clinicianRole="FACILITY_ADMIN" />;
+      return <TaskAssignmentBoard clinicianRole="CARE_MANAGER" />;
     case "caregiverschedule":
-      return <CaregiverScheduleBoard clinicianRole="FACILITY_ADMIN" />;
+      return <CaregiverScheduleBoard clinicianRole="CARE_MANAGER" />;
     case "staffroster":
-      return <StaffRosterBoard clinicianRole="FACILITY_ADMIN" />;
+      return <StaffRosterBoard clinicianRole="CARE_MANAGER" />;
     case "carehistory":
-      return <ResidentCareHistory clinicianRole="FACILITY_ADMIN" />;
+      return <ResidentCareHistory clinicianRole="CARE_MANAGER" />;
     case "clinicalrecords":
-      return <ClinicalRecordsBoard clinicianRole="FACILITY_ADMIN" />;
+      return <ClinicalRecordsBoard clinicianRole="CARE_MANAGER" />;
     case "residentjourney":
-      return <ResidentJourneyBoard clinicianRole="FACILITY_ADMIN" />;
+      return <ResidentJourneyBoard clinicianRole="CARE_MANAGER" />;
     case "staffprofiles":
-      return <StaffProfilesBoard clinicianRole="FACILITY_ADMIN" />;
+      return <StaffProfilesBoard clinicianRole="CARE_MANAGER" />;
     case "vitalstrend":
-      return <VitalsTrendBoard clinicianRole="FACILITY_ADMIN" />;
+      return <VitalsTrendBoard clinicianRole="CARE_MANAGER" />;
     case "medinventory":
-      return <MedicationInventoryBoard clinicianRole="FACILITY_ADMIN" />;
+      return <MedicationInventoryBoard clinicianRole="CARE_MANAGER" />;
     case "minipharmacy":
-      return <MiniPharmacyBoard clinicianRole="FACILITY_ADMIN" />;
+      return <MiniPharmacyBoard clinicianRole="CARE_MANAGER" />;
     case "monitoring":
       return <MonitoringView />;
     case "prescreen":
@@ -137,26 +134,26 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
     case "assessmentv42":
       return <ResidentAssessmentV42 clinicianRole="CARE_MANAGER" />;
     case "todayscare":
-      return <TodaysCareBoard role="FACILITY_ADMIN" />;
+      return <TodaysCareBoard role="CARE_MANAGER" />;
     case "additionalservices":
-      return <AdditionalServicesBoard clinicianRole="FACILITY_ADMIN" />;
+      return <AdditionalServicesBoard clinicianRole="CARE_MANAGER" />;
     case "safeguarding":
-      return <SafeguardingBoard role="FACILITY_ADMIN" />;
+      return <SafeguardingBoard role="CARE_MANAGER" />;
     case "infectioncontrol":
-      return <InfectionControlBoard role="FACILITY_ADMIN" />;
+      return <InfectionControlBoard role="CARE_MANAGER" />;
     case "emergencyprotocol":
-      return <EmergencyProtocolBoard role="FACILITY_ADMIN" />;
+      return <EmergencyProtocolBoard role="CARE_MANAGER" />;
     case "clinicalprotocols":
-      return <ClinicalProtocolsBoard role="FACILITY_ADMIN" />;
+      return <ClinicalProtocolsBoard role="CARE_MANAGER" />;
     case "rounds":
       // Retired legacy acuity board → governed v4.2 Care Acuity board.
-      return <CareAcuityBoard clinicianRole="FACILITY_ADMIN" />;
+      return <CareAcuityBoard clinicianRole="CARE_MANAGER" />;
     case "careplans":
-      return <CarePlanReviewsBoard clinicianRole="FACILITY_ADMIN" />;
+      return <CarePlanReviewsBoard clinicianRole="CARE_MANAGER" />;
     case "caredelivery":
-      return <CareDeliveryBoard clinicianRole="FACILITY_ADMIN" />;
+      return <CareDeliveryBoard clinicianRole="CARE_MANAGER" />;
     case "privatecare":
-      return <PrivateCaregiverBoard clinicianRole="FACILITY_ADMIN" />;
+      return <PrivateCaregiverBoard clinicianRole="CARE_MANAGER" />;
     case "labs":
       return <LabsAllergiesBoard />;
     case "referrals":
@@ -174,6 +171,6 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
     case "consentforms":
       return <ConsentFormsManager />;
     default:
-      return <CareManagerDashboard />;
+      return <CareManagerGovernance />;
   }
 }

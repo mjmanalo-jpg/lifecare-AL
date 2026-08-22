@@ -26,6 +26,7 @@ const ROLE_CONTENT: Record<Role, TabContent> = {
   SUPERADMIN: lazyContent(() => import("@/components/portal/views/SuperAdminPortalContent")),
   FACILITY_ADMIN: lazyContent(() => import("@/components/portal/views/FacilityAdminPortalContent")),
   CARE_MANAGER: lazyContent(() => import("@/components/portal/views/CareManagerPortalContent")),
+  RESIDENT_COORDINATOR: lazyContent(() => import("@/components/portal/views/ResidentCoordinatorPortalContent")),
   BILLING_ADMIN: lazyContent(() => import("@/components/portal/views/BillingFinancePortalContent")),
   PHYSICIAN: lazyContent(() => import("@/components/portal/views/PhysicianPortalContent")),
   NURSE: lazyContent(() => import("@/components/portal/views/NursePortalContent")),
