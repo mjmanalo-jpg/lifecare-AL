@@ -763,6 +763,7 @@ model Staff {
   incidentsReported Incident[]        @relation("StaffReporter")
   shiftReports      ShiftReport[]
   staffCompetencies StaffCompetency[]
+  staffEquipment    StaffEquipment[]
 
   @@index([userId])
   @@index([position])
@@ -1397,6 +1398,8 @@ model Community {
   tasks                Task[]
   rooms                Room[]
   staffCompetencies    StaffCompetency[]
+  equipment            Equipment[]
+  staffEquipment       StaffEquipment[]
   residentQualityScores ResidentQualityScore[]
   memberships           CommunityMembership[]
   invitations           Invitation[]
@@ -1823,6 +1826,7 @@ model CommunitySop {
   checklistItems    Json?
   escalationPathway Json?
   competencyRequired Json?
+  equipmentRequired  Json?
   effectiveDate     DateTime?
   reviewDate        DateTime?
   approvedById      String?
@@ -1881,6 +1885,52 @@ model StaffCompetency {
   @@index([competencyId])
   @@index([expiryDate])
   @@unique([staffId, competencyId])
+
+  @@index([organizationId])
+  @@index([communityId])
+}
+
+/// Guardrail §1 (assignment safety): community equipment catalog + per-staff
+/// holdings. A task whose SOP requires equipment may only be assigned to staff
+/// holding that item verified and unexpired (mirrors Competency/StaffCompetency).
+model Equipment {
+  id             String    @id @default(uuid())
+  organizationId String?
+  communityId    String
+  community      Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  name           String
+  category       String?
+  description    String?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  staffEquipment StaffEquipment[]
+
+  @@index([communityId])
+  @@index([organizationId])
+}
+
+model StaffEquipment {
+  id             String    @id @default(uuid())
+  organizationId String?
+  staffId        String
+  staff          Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  equipmentId    String
+  equipment      Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  communityId    String
+  community      Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  verified       Boolean   @default(false)
+  verifiedById   String?
+  verifiedAt     DateTime?
+  expiryDate     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([staffId])
+  @@index([equipmentId])
+  @@index([expiryDate])
+  @@unique([staffId, equipmentId])
 
   @@index([organizationId])
   @@index([communityId])

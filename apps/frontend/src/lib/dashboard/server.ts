@@ -23,16 +23,29 @@ import {
   NURSE_DASHBOARD_SUBTITLE, NURSE_DASHBOARD_TITLE,
   nurseDashboardZone, type NurseDashboardZoneKey,
 } from "./nurseZones";
-import type { ClinicalState, DashboardMetric, DashboardPayload, DashboardPriority, DashboardQueueItem, DashboardRole, DashboardSection } from "./types";
+import {
+  ADMIN_DASHBOARD_SUBTITLE, ADMIN_DASHBOARD_TITLE,
+  adminZone,
+} from "./administratorZones";
+import {
+  COORDINATOR_DASHBOARD_SUBTITLE, COORDINATOR_DASHBOARD_TITLE,
+  coordinatorZone, type CoordinatorDashboardZoneKey,
+} from "./coordinatorZones";
+import type { ClinicalState, DashboardHuddle, DashboardMetric, DashboardPayload, DashboardPriority, DashboardQueueItem, DashboardRole, DashboardSection, DashboardSummary, DashboardWindowKey } from "./types";
 
 const ENDORSEMENT_KEY = "shift_endorsements";
 const OPEN_ESCALATIONS: EscalationStatus[] = ["OPEN", "ACKNOWLEDGED", "IN_PROGRESS", "ESCALATED"];
+/** §10 — aggregate KPI windows. Shift-first screens ignore the selector; care-manager/administrator honor it. */
+const WINDOW_LABELS: Record<DashboardWindowKey, string> = {
+  shift: "Current shift", "24h": "Last 24 hours", "7d": "Last 7 days", "30d": "Last 30 days",
+};
+const WINDOW_DAYS: Record<Exclude<DashboardWindowKey, "shift">, number> = { "24h": 1, "7d": 7, "30d": 30 };
 const TITLES: Record<DashboardRole, { title: string; subtitle: string }> = {
   nurse: { title: NURSE_DASHBOARD_TITLE, subtitle: NURSE_DASHBOARD_SUBTITLE },
   caregiver: { title: CAREGIVER_DASHBOARD_TITLE, subtitle: CAREGIVER_DASHBOARD_SUBTITLE },
   "care-manager": { title: CARE_MANAGER_DASHBOARD_TITLE, subtitle: CARE_MANAGER_DASHBOARD_SUBTITLE },
-  "facility-admin": { title: "Facility Care Oversight", subtitle: "Aggregate care quality, safety, staffing, responsiveness, and continuity with accountable drill-downs." },
-  "resident-coordinator": { title: "Resident Coordination", subtitle: "Appointments, transport, admissions, requests, activities, and non-clinical follow-up." },
+  "facility-admin": { title: ADMIN_DASHBOARD_TITLE, subtitle: ADMIN_DASHBOARD_SUBTITLE },
+  "resident-coordinator": { title: COORDINATOR_DASHBOARD_TITLE, subtitle: COORDINATOR_DASHBOARD_SUBTITLE },
   professional: { title: "Professional Review", subtitle: "Discipline-appropriate resident review and follow-up from the governed care record." },
 };
 
@@ -89,12 +102,34 @@ function section(key: string, title: string, description: string, items: Dashboa
   return { key, title, description, items: [...items].sort(compareQueueItems), emptyTitle, emptyHint };
 }
 
+type AssessmentSignal = {
+  assessment: AssessmentV42;
+  classification: ReturnType<typeof classifyAssessment> | null;
+  issues: ReturnType<typeof assessmentValidationIssues>;
+};
+
+/** Classify + validate each saved v4.2 assessment once; shared by the Care Manager and Administrator dashboards. */
+function buildAssessmentSignals(records: AssessmentV42[]): AssessmentSignal[] {
+  return records.map((assessment) => {
+    try {
+      return {
+        assessment,
+        classification: classifyAssessment(assessment),
+        issues: assessmentValidationIssues({ ...assessment, layer3: assessment.layer3 || {} }),
+      };
+    } catch {
+      return { assessment, classification: null, issues: [] };
+    }
+  });
+}
+
 async function buildCoordinatorDashboard(
   now: Date,
   timeZone: string,
   tenant: { organizationId: string; communityId: string },
+  userId: string,
 ): Promise<DashboardPayload> {
-  const [transports, serviceRequests, communityEvents, admissions, residents, conciergeBookings] = await Promise.all([
+  const [transports, serviceRequests, communityEvents, admissions, residents, conciergeBookings, routedEscalations, notifications] = await Promise.all([
     prisma.transportRequest.findMany({
       where: { ...tenant, status: { notIn: ["COMPLETED", "CANCELLED", "DECLINED"] } },
       take: 300, orderBy: { requestedDate: "asc" },
@@ -137,6 +172,16 @@ async function buildCoordinatorDashboard(
       take: 100,
       orderBy: { scheduledAt: "asc" },
       include: { resident: { select: { firstName: true, lastName: true, roomNumber: true } } },
+    }),
+    // Alerts for Action — only items explicitly routed to coordination (non-clinical).
+    prisma.escalation.findMany({
+      where: { ...tenant, assignedToRole: "RESIDENT_COORDINATOR", status: { in: OPEN_ESCALATIONS } },
+      take: 100, orderBy: { createdAt: "desc" },
+      include: { resident: { select: { firstName: true, lastName: true, roomNumber: true } } },
+    }),
+    prisma.notification.findMany({
+      where: { ...tenant, userId, isRead: false, OR: [{ snoozedUntil: null }, { snoozedUntil: { lt: now } }] },
+      take: 50, orderBy: { createdAt: "desc" },
     }),
   ]);
 
@@ -236,15 +281,42 @@ async function buildCoordinatorDashboard(
   const endorsementItems = items
     .filter((item) => item.state !== "STABLE" || item.ownerLabel === "Unassigned")
     .map((item) => ({ ...item, id: "endorsement:" + item.id, kind: "Coordination carry-forward" }));
+  const alertItems: DashboardQueueItem[] = [
+    ...routedEscalations.map((item) => ({
+      id: "alert-escalation:" + item.id, kind: "Routed alert",
+      priority: item.priority === "EMERGENCY" ? "P1" as const : item.priority === "URGENT" ? "P2" as const : "P3" as const,
+      state: "WATCH" as const,
+      title: item.situation, detail: item.recommendation || undefined,
+      residentId: item.residentId, residentLabel: residentLabel(item.resident), roomLabel: item.resident?.roomNumber || undefined,
+      occurredAt: item.createdAt.toISOString(),
+      reason: "Routed to coordination by the clinical team for a non-clinical action.",
+      sourceType: "Escalation", sourceId: item.id, sourceHref: "/resident_coordinator/alerts",
+    })),
+    ...notifications.map((item) => ({
+      id: "alert-notification:" + item.id, kind: "Notification",
+      priority: item.severity === "CRITICAL" ? "P2" as const : "P3" as const, state: "WATCH" as const,
+      title: item.title, detail: item.message || undefined,
+      occurredAt: item.createdAt.toISOString(),
+      reason: "Alert routed to your coordination queue.",
+      sourceType: "Notification", sourceId: item.id, sourceHref: "/resident_coordinator/alerts",
+    })),
+  ];
+  const scheduleItems = items.filter((item) => ["Community activity", "Resident appointment", "Transport"].includes(item.kind)
+    || (item.dueAt && new Date(item.dueAt) < startOfTomorrow));
+  const openCoordinationItems = items.filter((item) =>
+    item.sourceType === "ServiceRequest" || item.sourceType === "TransportRequest" || item.ownerLabel === "Unassigned" || ["P1", "P2"].includes(item.priority));
+  const zone = (key: CoordinatorDashboardZoneKey, sectionItems: DashboardQueueItem[]) => {
+    const copy = coordinatorZone(key);
+    return section(copy.key, copy.title, copy.description, sectionItems, copy.emptyTitle, copy.emptyHint);
+  };
   const sections = [
-    section("urgent", "Urgent Coordination", "Non-clinical items requiring immediate coordination; clinical changes route to the nurse.", items.filter((item) => ["P1", "P2"].includes(item.priority)), "No urgent coordination items"),
-    section("residents", "Resident Snapshot", "Room, coordination status, and non-clinical preferences for active residents.", residentItems, "No active resident coordination profiles"),
-    section("today", "Today", "Transport, requests, admissions, and activities due today.", items.filter((item) => { const at = new Date(item.dueAt || item.occurredAt || 0); return item.priority === "P3" && at < startOfTomorrow; }), "No coordination items due today"),
-    section("upcoming", "Upcoming", "Future appointments, transport, and community activity.", items.filter((item) => item.priority === "P4" || Boolean(item.dueAt && new Date(item.dueAt) >= startOfTomorrow)), "No upcoming coordination items"),
-    section("awaiting", "Awaiting Another Owner", "Open requests with no responsible owner or an external dependency.", items.filter((item) => item.ownerLabel === "Unassigned"), "No unowned coordination items"),
-    section("admissions", "Admissions & Returns", "Move-in and return coordination in progress.", items.filter((item) => item.sourceType === "Admission"), "No admissions in progress"),
-    section("family-contacts", "Family Contacts & Update Preferences", "Authorized representatives and recorded non-clinical communication preferences.", familyContactItems, "No resident contact profiles"),
-    section("endorsement", "Coordination Endorsement", "Unresolved non-clinical items that need an owner or carry-forward note.", endorsementItems, "No coordination items to carry forward"),
+    zone("resident-snapshot", residentItems),
+    zone("today-schedule", scheduleItems),
+    zone("admissions-returns", items.filter((item) => item.sourceType === "Admission")),
+    zone("open-coordination", openCoordinationItems),
+    zone("family-preferences", familyContactItems),
+    zone("alerts-for-action", alertItems),
+    zone("endorsement-notes", endorsementItems),
   ];
   const metrics = [
     metric({ key: "coordination_owned", label: "Requests with an owner", numerator: serviceRequests.filter((item) => item.assignedTo || item.assignedTeam).length, denominator: serviceRequests.length, numeratorLabel: "open requests with an owner", denominatorLabel: "open resident requests", definition: "Open resident service requests assigned to a team or named owner.", window: "Current open queue", baseline: "Baseline starts with the first saved queue snapshot", sourceModels: ["ServiceRequest"], href: "/resident_coordinator/coordination" }),
@@ -342,14 +414,18 @@ function watchItems(residents: any[], incidents: any[], escalations: any[], even
   });
 }
 
-export async function buildDashboard(context: TenantContext, role: DashboardRole): Promise<DashboardPayload> {
+export async function buildDashboard(
+  context: TenantContext,
+  role: DashboardRole,
+  opts: { window?: DashboardWindowKey } = {},
+): Promise<DashboardPayload> {
   const now = new Date();
   const timeZone = process.env.FACILITY_TZ || "Asia/Manila";
   const today = localDateStr(now, timeZone);
   const currentShift = currentShiftKey(now);
   if (!context.organizationId || !context.communityId) throw new Error("Dashboard requires an active organization and community");
   const tenant = { organizationId: context.organizationId, communityId: context.communityId };
-  if (role === "resident-coordinator") return buildCoordinatorDashboard(now, timeZone, tenant);
+  if (role === "resident-coordinator") return buildCoordinatorDashboard(now, timeZone, tenant, context.userId);
   const residentScope = role === "caregiver" ? (context.caregiverResidentIds ?? []) : undefined;
 
   const settings = await prisma.appSetting.findMany({
@@ -366,6 +442,10 @@ export async function buildDashboard(context: TenantContext, role: DashboardRole
   const shiftSchedules = schedules.filter((item) => item.date === today && item.shift === currentShift);
   const previousShiftStart = new Date(shiftStart.getTime() - (shiftEnd.getTime() - shiftStart.getTime()));
   const path = rolePath(role);
+  const windowKey: DashboardWindowKey =
+    opts.window && opts.window in WINDOW_DAYS ? opts.window : "shift";
+  const periodStart =
+    windowKey === "shift" ? shiftStart : new Date(now.getTime() - WINDOW_DAYS[windowKey] * 86400_000);
 
   const staffRecord = role === "caregiver"
     ? await prisma.staff.findFirst({ where: { ...tenant, userId: context.userId }, select: { id: true } })
@@ -404,7 +484,7 @@ export async function buildDashboard(context: TenantContext, role: DashboardRole
       orderBy: [{ followUpDeadline: "asc" }, { occurredAt: "desc" }],
       include: { resident: { select: { firstName: true, lastName: true, roomNumber: true } } },
     }),
-    role === "nurse"
+    role === "nurse" || role === "facility-admin"
       ? prisma.admission.findMany({
           where: { ...tenant, status: "IN_PROGRESS" },
           take: 200,
@@ -477,6 +557,8 @@ export async function buildDashboard(context: TenantContext, role: DashboardRole
 
   let sections: DashboardSection[] = [];
   let metrics = commonMetrics;
+  let summaryExtra: Partial<DashboardSummary> = {};
+  let huddle: DashboardHuddle | undefined;
 
   if (role === "nurse") {
     const nurseSection = (key: NurseDashboardZoneKey, items: DashboardQueueItem[]) => {
@@ -574,6 +656,35 @@ export async function buildDashboard(context: TenantContext, role: DashboardRole
       ...clinicalTriage.filter((item) => ["P1", "P2"].includes(item.priority)),
       ...deploymentItems.filter((item) => item.priority === "P2"),
     ];
+    // §11 step 4 — shift huddle: a concise generated briefing of what the
+    // incoming shift must know, derived from the same governed data as the
+    // zones (never invented): watch residents, care changes, safety risks,
+    // staffing notes.
+    const priorityTriage = clinicalTriage.filter((item) => ["P1", "P2"].includes(item.priority));
+    const unacknowledgedCritical = escalationItems.filter((item) => ["P1", "P2"].includes(item.priority) && !item.action);
+    huddle = {
+      headline: `${residents.length} residents · ${priorityTriage.length} priority item${priorityTriage.length === 1 ? "" : "s"} · ${uncoveredResidents.length} uncovered`,
+      generatedAt: now.toISOString(),
+      residentsToWatch: residentWatch.slice(0, 3).map((item) =>
+        `${item.title}${item.roomLabel ? ` · Rm ${item.roomLabel}` : ""} — ${item.reason}`),
+      careChanges: [
+        ...nurseVarianceItems.slice(0, 3).map((item) => `${item.title}${item.residentLabel ? ` (${item.residentLabel})` : ""} — ${item.kind.toLowerCase()}`),
+        ...(activeAdmissions.length ? [`${activeAdmissions.length} new admission/return workflow${activeAdmissions.length === 1 ? "" : "s"} in progress`] : []),
+        ...carryOverItems.slice(0, 2).map((item) => `Carry-over from previous shift: ${item.title}`),
+      ],
+      safetyRisks: [
+        ...(incidentItems.length ? [`${incidentItems.length} unresolved incident${incidentItems.length === 1 ? "" : "s"} on file`] : []),
+        ...(bellItems.length ? [`${bellItems.length} active call bell${bellItems.length === 1 ? "" : "s"}`] : []),
+        ...(unacknowledgedCritical.length ? [`${unacknowledgedCritical.length} P1/P2 escalation${unacknowledgedCritical.length === 1 ? "" : "s"} awaiting acknowledgement`] : []),
+        ...(overdueTasks.length ? [`${overdueTasks.length} overdue care task${overdueTasks.length === 1 ? "" : "s"}`] : []),
+      ],
+      staffingNotes: [
+        `${summary.caregiversPresent ?? 0} caregiver(s) present · ${shiftSchedules.length} assignment${shiftSchedules.length === 1 ? "" : "s"} published this shift`,
+        ...deploymentAssignments.filter((item) => item.state === "WATCH").slice(0, 3).map((item) => `${item.ownerLabel}: ${item.reason}`),
+        ...(uncoveredResidents.length ? [`${uncoveredResidents.length} resident${uncoveredResidents.length === 1 ? "" : "s"} without a current-shift caregiver`] : []),
+        ...(unassigned.length ? [`${unassigned.length} open task${unassigned.length === 1 ? "" : "s"} still unassigned`] : []),
+      ],
+    };
     sections = [
       nurseSection("clinical-triage", clinicalTriage),
       nurseSection("caregiver-deployment", deploymentItems),
@@ -655,17 +766,7 @@ export async function buildDashboard(context: TenantContext, role: DashboardRole
       const copy = careManagerZone(key);
       return section(copy.key, copy.title, copy.description, items, copy.emptyTitle, copy.emptyHint);
     };
-    const assessmentSignals = assessmentRecords.map((assessment) => {
-      try {
-        return {
-          assessment,
-          classification: classifyAssessment(assessment),
-          issues: assessmentValidationIssues({ ...assessment, layer3: assessment.layer3 || {} }),
-        };
-      } catch {
-        return { assessment, classification: null, issues: [] };
-      }
-    });
+    const assessmentSignals = buildAssessmentSignals(assessmentRecords);
     const assessmentGovernance = assessmentSignals.filter(({ assessment, issues }) => {
       const nextReview = assessment.layer3?.nextReviewDate ? new Date(assessment.layer3.nextReviewDate) : null;
       const dueSoon = nextReview && !Number.isNaN(nextReview.getTime()) && nextReview <= new Date(now.getTime() + 7 * 86400_000);
@@ -803,21 +904,356 @@ export async function buildDashboard(context: TenantContext, role: DashboardRole
       governanceSection("staffing-team-quality", staffingItems),
       governanceSection("open-decisions", openDecisionItems),
     ];
-    metrics = [commonMetrics[0], commonMetrics[1], commonMetrics[2], metric({
-      key: "reviews_current", label: "Care plans current",
-      numerator: Math.max(0, carePlans.length - planReviews.length), denominator: carePlans.length,
-      numeratorLabel: "active plans not due for review", denominatorLabel: "active/draft plans in scope",
-      definition: "Care plans that are active and not due for review within seven days.",
-      window: "Current + next 7 days", sourceModels: ["CarePlan"], href: "/care_manager/careplans",
-    })];
-  } else if (role === "facility-admin") {
-    sections = [
-      section("facility-status", "Facility Status", "Highest-priority resident care and coverage exceptions.", [...bellItems, ...incidentItems, ...escalationItems].filter((item) => ["P1", "P2"].includes(item.priority)), "No critical facility exceptions"),
-      section("care-quality", "Care Quality", "Delivery variances and overdue governed care.", [...varianceItems, ...taskItems.filter((item) => ["P1", "P2"].includes(item.priority))], "No care-quality exceptions"),
-      section("safety", "Safety", "Open incidents and escalations by severity.", [...incidentItems, ...escalationItems], "No open safety events"),
-      section("workforce", "Workforce Operations", "Unassigned work and coverage exceptions.", unassigned, "All active work has an owner"),
-      section("continuity", "Handover & Continuity", "Carry-over and acceptance state across shifts.", carryOverItems, "No carried work in the latest handover"),
+    const validatedResidentIds = new Set(
+      assessmentSignals
+        .filter(({ assessment }) => assessment.status === "VALIDATED" && assessment.layer1?.residentId)
+        .map(({ assessment }) => assessment.layer1!.residentId as string),
+    );
+    const dueReassessments = assessmentSignals.filter(({ assessment }) => {
+      const date = assessment.layer3?.nextReviewDate ? new Date(assessment.layer3.nextReviewDate) : null;
+      return date && !Number.isNaN(date.getTime());
+    });
+    const onTimeReassessments = dueReassessments.filter(({ assessment }) => new Date(assessment.layer3!.nextReviewDate as string) >= now);
+    const planBacklog = carePlans.filter((plan) => plan.status === "DRAFT" || plan.status === "UNDER_REVIEW");
+    // §6.1 KPIs — repeated-variance, hospital/ED count, DT-013/014 review load,
+    // escalation acknowledgement turnaround, and competency currency.
+    const varianceBuckets = new Map<string, number>();
+    const residentsWithVariance = new Set<string>();
+    for (const item of events) {
+      if (!item.isVariance && !item.reviewAlertRaised && !item.immediateEscalation) continue;
+      if (!item.residentId) continue;
+      residentsWithVariance.add(item.residentId);
+      const bucket = `${item.residentId}:${item.taskId || item.bundle || item.domain || "unattributed"}`;
+      varianceBuckets.set(bucket, (varianceBuckets.get(bucket) ?? 0) + 1);
+    }
+    const residentsWithRepeatVariance = new Set(
+      [...varianceBuckets].filter(([, count]) => count >= 2).map(([bucket]) => bucket.split(":")[0]),
+    );
+    const cmHospitalSignals = assessmentSignals.filter(({ assessment }) => assessment.context?.recentHospitalization);
+    const cmDt013Signals = assessmentSignals.filter(({ classification }) => classification?.dt013?.recommendReview);
+    const cmDt014Signals = assessmentSignals.filter(({ classification }) => classification?.dt014?.recommendReview);
+    const acknowledgementHours = escalations
+      .filter((item) => item.acknowledgedAt)
+      .map((item) => (new Date(item.acknowledgedAt as Date).getTime() - new Date(item.createdAt).getTime()) / 3600_000)
+      .sort((a, b) => a - b);
+    const medianAcknowledgementHours = acknowledgementHours.length
+      ? Math.round(acknowledgementHours[Math.floor(acknowledgementHours.length / 2)])
+      : null;
+    const [competencyTotal, competencyExceptions] = await Promise.all([
+      prisma.staffCompetency.count({ where: { staff: tenant } }),
+      prisma.staffCompetency.count({ where: { staff: tenant, OR: [{ verified: false }, { expiryDate: { lt: now } }] } }),
+    ]);
+    // §6.1 — Active COC: residents flagged with acute instability on their v4.2
+    // assessment, indicating temporary change-of-condition monitoring.
+    const activeCocCount = assessmentSignals.filter(
+      ({ assessment }) => assessment.context?.acuteInstability,
+    ).length;
+    // §6.1 — Care Delivery Reliability: expected care events completed within the
+    // allowed window ÷ expected care events (task-based approximation; full
+    // CareEvent query available for deeper drill-down).
+    const deliveryExpected = dueShift.length;
+    const deliveryCompleted = completedShift.length;
+    // §6.1 — Observed vs Planned Burden Variance: difference between approved care
+    // plan count (proxy for planned burden) and observed variance events (proxy for
+    // actual delivery deviation). A positive variance signals under- or over-delivery.
+    const plannedBurden = carePlans.filter((plan) => plan.status === "ACTIVE").length;
+    const observedVariance = varianceItems.length;
+    const burdenVariance = observedVariance - plannedBurden;
+    // §6.1 — Safety Incident Trend: open/unresolved safety incidents in the selected
+    // period (falls, unsafe events, medication safety).
+    const periodIncidents = windowKey === "shift"
+      ? incidentItems.length
+      : incidents.filter((item) => item.incidentDate >= periodStart).length;
+    metrics = [
+      // §6.1 — Clinical Delivery (shared nurse / care-manager KPIs)
+      commonMetrics[0], commonMetrics[1], commonMetrics[2],
+      // §6.1 — Care Delivery Reliability %
+      metric({
+        key: "care_delivery_reliability", label: "Care delivery reliability",
+        numerator: deliveryCompleted, denominator: deliveryExpected,
+        numeratorLabel: "completed care events within allowed window",
+        denominatorLabel: "expected care events",
+        definition: "Care events completed within the governed time window as a share of all expected care events — excludes only events marked Not Required per approved plan.",
+        window: shift.label, sourceModels: ["Task", "CareEvent"], href: "/care_manager/caredelivery",
+      }),
+      // §6.1 — Assessment & LOC
+      metric({
+        key: "assessment_current", label: "Assessment current",
+        numerator: residents.filter((resident) => validatedResidentIds.has(resident.id)).length, denominator: residents.length,
+        numeratorLabel: "residents with a current finalized assessment",
+        denominatorLabel: "active residents",
+        definition: "Active residents with a current validated v4.2 assessment on file.",
+        window: "Current", sourceModels: ["AppSetting", "Resident"], href: "/care_manager/prescreen",
+      }),
+      metric({
+        key: "reassessment_on_time", label: "Reassessment on-time",
+        numerator: onTimeReassessments.length, denominator: dueReassessments.length,
+        numeratorLabel: "reassessments not past review date",
+        denominatorLabel: "assessments with a scheduled review date",
+        definition: "Assessments whose next scheduled reassessment date has not yet passed.",
+        window: "Current", sourceModels: ["AppSetting"], href: "/care_manager/prescreen",
+      }),
+      // §6.1 — Care Plan Governance
+      metric({
+        key: "care_plan_current", label: "Care plans current",
+        numerator: carePlans.filter((plan) => plan.status === "ACTIVE" && (!plan.nextReviewDate || plan.nextReviewDate > now)).length,
+        denominator: residents.length,
+        numeratorLabel: "residents with active nursing-approved care plans",
+        denominatorLabel: "active residents",
+        definition: "Residents with a current active, nursing-approved care plan whose review date has not yet passed, as a share of all active residents.",
+        window: "Current", sourceModels: ["CarePlan", "Resident"], href: "/care_manager/careplans",
+      }),
+      metric({
+        key: "care_plan_backlog", label: "Care-plan approval backlog",
+        numerator: planBacklog.length, denominator: planBacklog.length,
+        numeratorLabel: "plans awaiting nursing approval",
+        denominatorLabel: "plans awaiting nursing approval",
+        definition: "Individualized care-plan drafts awaiting nursing approval.",
+        window: "Current", format: "COUNT", sourceModels: ["CarePlan"], href: "/care_manager/careplans",
+        state: planBacklog.length ? "WATCH" : "GOOD",
+      }),
+      // §6.1 — Open Clinical Escalations
+      metric({
+        key: "open_clinical_escalations", label: "Open clinical escalations",
+        numerator: escalations.length, denominator: escalations.length,
+        numeratorLabel: "unresolved clinical escalations",
+        denominatorLabel: "unresolved clinical escalations",
+        definition: "Unresolved clinical review and escalation items.",
+        window: "Current open queue", format: "COUNT", sourceModels: ["Escalation"], href: "/care_manager/escalations",
+        state: escalations.length ? "WATCH" : "GOOD",
+      }),
+      // §6.1 — Active Change-of-Condition
+      metric({
+        key: "active_coc", label: "Active change-of-condition",
+        numerator: activeCocCount, denominator: activeCocCount,
+        numeratorLabel: "residents under temporary COC monitoring",
+        denominatorLabel: "residents under temporary COC monitoring",
+        definition: "Residents with an active temporary change-of-condition flag on their v4.2 assessment, requiring clinical monitoring with review/stop date.",
+        window: "Current", format: "COUNT", sourceModels: ["AppSetting"], href: "/care_manager/caredelivery",
+        state: activeCocCount ? "WATCH" : "GOOD",
+      }),
+      // §6.1 — Repeated Variance Rate
+      metric({
+        key: "repeated_variance_rate", label: "Repeated-variance residents",
+        numerator: residentsWithRepeatVariance.size, denominator: residentsWithVariance.size,
+        numeratorLabel: "residents with ≥2 variances on the same care task",
+        denominatorLabel: "residents with any variance event",
+        definition: "Residents whose care variances repeat on the same care task — a systemic delivery signal rather than a one-off.",
+        window: "Last 7 days", sourceModels: ["CareEvent"], href: "/care_manager/caredelivery",
+        state: residentsWithRepeatVariance.size ? "ACTION" : residentsWithVariance.size ? "WATCH" : "GOOD",
+      }),
+      // §6.1 — Observed vs Planned Burden Variance
+      metric({
+        key: "burden_variance", label: "Observed vs planned burden",
+        numerator: burdenVariance, denominator: Math.max(Math.abs(burdenVariance), 1),
+        numeratorLabel: "observed variance events minus active care plans",
+        denominatorLabel: "absolute variance delta",
+        definition: "Difference between observed care-event variance count and active approved care plans — a positive value signals delivery deviation beyond the approved plan scope.",
+        window: shift.label, format: "COUNT", sourceModels: ["CarePlan", "CareEvent"], href: "/care_manager/caredelivery",
+        state: burdenVariance > 0 ? "WATCH" : "GOOD",
+      }),
+      // §6.1 — Safety / Transitions
+      metric({
+        key: "hospital_ed_count", label: "Hospital / ED transfers",
+        numerator: cmHospitalSignals.length, denominator: cmHospitalSignals.length,
+        numeratorLabel: "residents under post-hospital monitoring",
+        denominatorLabel: "residents under post-hospital monitoring",
+        definition: "Residents flagged with a recent hospitalization on their v4.2 assessment, requiring transition monitoring.",
+        window: "Current", format: "COUNT", sourceModels: ["AppSetting"], href: "/care_manager/residentjourney",
+        state: cmHospitalSignals.length ? "WATCH" : "GOOD",
+      }),
+      metric({
+        key: "safety_incidents", label: "Safety incident trend",
+        numerator: periodIncidents, denominator: periodIncidents,
+        numeratorLabel: "safety incidents in period",
+        denominatorLabel: "safety incidents in period",
+        definition: "Open or unresolved safety incidents (falls, unsafe events, medication safety) in the selected time window.",
+        window: WINDOW_LABELS[windowKey], format: "COUNT", sourceModels: ["Incident"], href: "/care_manager/incidents",
+        state: periodIncidents ? "WATCH" : "GOOD",
+      }),
+      // §6.1 — Staffing / Team Quality
+      metric({
+        key: "dt013_review_load", label: "DT-013 review load",
+        numerator: cmDt013Signals.length, denominator: cmDt013Signals.length,
+        numeratorLabel: "residents with an indicated dedicated-support review",
+        denominatorLabel: "residents with an indicated dedicated-support review",
+        definition: "Assessment-indicated DT-013 dedicated-support / PCG reviews awaiting decision; separate from Final LOC.",
+        window: "Current", format: "COUNT", sourceModels: ["AppSetting"], href: "/care_manager/privatecare",
+        state: "GOOD",
+      }),
+      metric({
+        key: "dt014_review_load", label: "DT-014 review load",
+        numerator: cmDt014Signals.length, denominator: cmDt014Signals.length,
+        numeratorLabel: "residents with an indicated additional-service review",
+        denominatorLabel: "residents with an indicated additional-service review",
+        definition: "Assessment-indicated DT-014 additional-clinical-services reviews or stop-dates due; separate from LOC / package.",
+        window: "Current", format: "COUNT", sourceModels: ["AppSetting"], href: "/care_manager/additionalservices",
+        state: "GOOD",
+      }),
+      metric({
+        key: "competency_currency", label: "Competency currency exceptions",
+        numerator: competencyExceptions, denominator: Math.max(competencyTotal, competencyExceptions),
+        numeratorLabel: "expired or unverified staff competencies",
+        denominatorLabel: "tracked staff competencies",
+        definition: "Staff competency records that are unverified or past expiry — assignments gated by these must be resolved before scheduling.",
+        window: "Current", format: "COUNT", sourceModels: ["StaffCompetency"], href: "/care_manager/staffprofiles",
+        state: competencyExceptions ? "WATCH" : "GOOD",
+      }),
+      // §6.1 — Open Decisions (Nursing Review Turnaround)
+      metric({
+        key: "review_turnaround", label: "Nursing review turnaround",
+        numerator: medianAcknowledgementHours ?? 0, denominator: medianAcknowledgementHours === null ? 0 : medianAcknowledgementHours,
+        numeratorLabel: "median hours from trigger to documented disposition",
+        denominatorLabel: "median hours from trigger to documented disposition",
+        definition: "Median elapsed hours from the routed review trigger (escalation or variance alert) to documented nurse acknowledgement — pilot metric, target to be calibrated.",
+        window: "Current", format: "COUNT", sourceModels: ["Escalation"], href: "/care_manager/escalations",
+        state: medianAcknowledgementHours === null || medianAcknowledgementHours <= 1 ? "GOOD" : medianAcknowledgementHours <= 4 ? "WATCH" : "ACTION",
+      }),
     ];
+  } else if (role === "facility-admin") {
+    // Administrator (§7) — aggregate-first community oversight. Reuses the shared
+    // governed items; adds capacity + admissions + assessment-governance rollups.
+    const [rooms, dischargesRecent] = await Promise.all([
+      prisma.room.findMany({ where: tenant, select: { capacity: true } }),
+      prisma.resident.count({
+        where: { ...tenant, status: { in: ["DISCHARGED", "ON_LEAVE"] }, updatedAt: { gte: new Date(now.getTime() - 30 * 86400_000) } },
+      }),
+    ]);
+    const capacity = rooms.reduce((sum, room) => sum + (room.capacity || 0), 0);
+    const census = residents.length;
+    const occupancyPct = capacity > 0 ? Math.round((census / capacity) * 100) : 0;
+
+    const signals = buildAssessmentSignals(assessmentRecords);
+    const validatedResidentIds = new Set(
+      signals.filter(({ assessment }) => assessment.status === "VALIDATED" && assessment.layer1?.residentId)
+        .map(({ assessment }) => assessment.layer1!.residentId as string),
+    );
+    const dueReassessments = signals.filter(({ assessment }) => {
+      const date = assessment.layer3?.nextReviewDate ? new Date(assessment.layer3.nextReviewDate) : null;
+      return date && !Number.isNaN(date.getTime());
+    });
+    const onTimeReassessments = dueReassessments.filter(({ assessment }) => new Date(assessment.layer3!.nextReviewDate as string) >= now);
+    const residentsWithLoc = signals.filter(({ assessment }) => assessment.layer3?.finalLevel).length;
+    const dt013Signals = signals.filter(({ classification }) => classification?.dt013?.recommendReview);
+    const dt014Signals = signals.filter(({ classification }) => classification?.dt014?.recommendReview);
+    const hospitalSignals = signals.filter(({ assessment }) => assessment.context?.recentHospitalization);
+    // ponytail: audit/governance exceptions derived from existing governed gates
+    // (validation issues + awaiting Final-LOC authorization + unacknowledged
+    // escalations). Upgrade path: a dedicated audit-exception source.
+    const governanceExceptionSignals = signals.filter(({ assessment, issues }) => issues.length > 0 || assessment.status === "COMPLETED");
+    const auditExceptionCount = governanceExceptionSignals.length + escalations.filter((item) => !item.acknowledgedAt).length;
+
+    const activePlans = carePlans.filter((plan) => plan.status === "ACTIVE");
+    const currentPlans = activePlans.filter((plan) => !plan.nextReviewDate || plan.nextReviewDate >= now);
+
+    // Zone item builders (reuse shared governed items where possible).
+    const uncoveredResidents: DashboardQueueItem[] = residents
+      .filter((resident) => !coveredIds.has(resident.id))
+      .map((resident) => ({
+        id: `admin-coverage:${resident.id}`, kind: "Coverage gap", priority: "P2", state: "WATCH",
+        title: residentLabel(resident), residentId: resident.id, residentLabel: residentLabel(resident),
+        roomLabel: resident.roomNumber || undefined,
+        reason: "No caregiver assignment covers this resident in the current shift roster.",
+        sourceType: "CaregiverSchedule", sourceId: CAREGIVER_SCHEDULE_KEY, sourceHref: "/facility_admin/staff",
+      }));
+    const sharedCaseloadConcerns: DashboardQueueItem[] = shiftSchedules
+      .filter((assignment) => assignment.residentIds.length > 6)
+      .map((assignment) => ({
+        id: `admin-caseload:${assignment.id}`, kind: "Shared staffing capability exception", priority: "P2", state: "WATCH",
+        title: `${assignment.caregiverName || "Caregiver"} · ${assignment.residentIds.length} residents`,
+        ownerLabel: assignment.caregiverName || "Assigned caregiver",
+        reason: "The shared assignment exceeds the 1:6 reference; approved care may not be reliably delivered under shared staffing.",
+        sourceType: "CaregiverSchedule", sourceId: assignment.id, sourceHref: "/facility_admin/staff",
+      }));
+    const admissionItems: DashboardQueueItem[] = activeAdmissions.map((admission) => ({
+      id: `admin-admission:${admission.id}`, kind: "Admission / return", priority: "P3", state: "WATCH",
+      title: [admission.firstName, admission.lastName].filter(Boolean).join(" ") || "Admission in progress",
+      detail: `Move-in workflow step ${admission.currentStep} of 8`, occurredAt: admission.updatedAt.toISOString(),
+      reason: "A new admission or return is in progress and requires operational awareness.",
+      sourceType: "Admission", sourceId: admission.id, sourceHref: "/facility_admin/residents",
+    }));
+    const transitionItems: DashboardQueueItem[] = hospitalSignals.map(({ assessment }) => ({
+      id: `admin-transition:${assessment.id}`, kind: "Post-hospital monitoring", priority: "P2", state: "WATCH",
+      title: assessment.layer1?.residentName || "Resident return", residentId: assessment.layer1?.residentId,
+      residentLabel: assessment.layer1?.residentName, occurredAt: assessment.updatedAt || assessment.createdAt,
+      reason: "Recent hospitalization requires active change-of-condition and post-hospital monitoring.",
+      sourceType: "AssessmentV42", sourceId: assessment.id,
+      sourceHref: `/facility_admin/rounds${assessment.layer1?.residentId ? `?resident=${encodeURIComponent(assessment.layer1.residentId)}` : ""}`,
+    }));
+    const governanceItems: DashboardQueueItem[] = governanceExceptionSignals.slice(0, 100).map(({ assessment, issues }) => ({
+      id: `admin-governance:${assessment.id}`, kind: "Governance exception",
+      priority: assessment.status === "COMPLETED" ? "P2" : "P3", state: "WATCH",
+      title: assessment.layer1?.residentName || "Resident assessment", residentId: assessment.layer1?.residentId,
+      residentLabel: assessment.layer1?.residentName, occurredAt: assessment.updatedAt || assessment.createdAt,
+      detail: [
+        assessment.status === "COMPLETED" ? "Final LOC awaiting authorized sign-off" : "",
+        issues.length ? `${issues.length} validation gate${issues.length === 1 ? "" : "s"} open` : "",
+      ].filter(Boolean).join(" · "),
+      reason: "Missing required evidence, approval, or authorized sign-off on a governed workflow.",
+      sourceType: "AssessmentV42", sourceId: assessment.id,
+      sourceHref: `/facility_admin/rounds${assessment.layer1?.residentId ? `?resident=${encodeURIComponent(assessment.layer1.residentId)}` : ""}`,
+    }));
+    const dt013Items: DashboardQueueItem[] = dt013Signals.map(({ assessment }) => ({
+      id: `admin-dt013:${assessment.id}`, kind: "DT-013 dedicated support", priority: "P3", state: "WATCH",
+      title: assessment.layer1?.residentName || "Resident", residentId: assessment.layer1?.residentId,
+      residentLabel: assessment.layer1?.residentName, occurredAt: assessment.updatedAt || assessment.createdAt,
+      reason: "Dedicated staffing (DT-013 / PCG) review is indicated; keep separate from Final LOC.",
+      sourceType: "AssessmentV42", sourceId: assessment.id, sourceHref: "/facility_admin/careplans",
+    }));
+    const dt014Items: DashboardQueueItem[] = dt014Signals.map(({ assessment }) => ({
+      id: `admin-dt014:${assessment.id}`, kind: "DT-014 additional services", priority: "P3", state: "WATCH",
+      title: assessment.layer1?.residentName || "Resident", residentId: assessment.layer1?.residentId,
+      residentLabel: assessment.layer1?.residentName, occurredAt: assessment.updatedAt || assessment.createdAt,
+      reason: "Additional clinical services (DT-014) review or stop-date is due; keep separate from LOC / package.",
+      sourceType: "AssessmentV42", sourceId: assessment.id, sourceHref: "/facility_admin/careplans",
+    }));
+    const agedEscalations = escalationItems.filter((item) => {
+      const at = item.occurredAt ? new Date(item.occurredAt) : null;
+      return item.priority === "P1" || item.priority === "P2" || Boolean(at && at < new Date(now.getTime() - 24 * 3600_000));
+    });
+    const overdueReviewItems = planReviews
+      .filter((plan) => plan.nextReviewDate && plan.nextReviewDate < now)
+      .map((plan) => ({
+        id: `admin-review:${plan.id}`, kind: "Overdue review", priority: "P2" as const, state: "WATCH" as const,
+        title: `${residentLabel(plan.resident)} · ${plan.title}`, residentId: plan.residentId,
+        residentLabel: residentLabel(plan.resident), roomLabel: plan.resident?.roomNumber,
+        dueAt: plan.nextReviewDate?.toISOString(), reason: "The governed care-plan review date has passed.",
+        sourceType: "CarePlan", sourceId: plan.id, sourceHref: "/facility_admin/careplans",
+      }));
+
+    sections = [
+      section(adminZone("community-snapshot").key, adminZone("community-snapshot").title, adminZone("community-snapshot").description, [...residentWatch, ...admissionItems], adminZone("community-snapshot").emptyTitle, adminZone("community-snapshot").emptyHint),
+      section(adminZone("staffing-coverage").key, adminZone("staffing-coverage").title, adminZone("staffing-coverage").description, [...uncoveredResidents, ...sharedCaseloadConcerns, ...unassigned], adminZone("staffing-coverage").emptyTitle, adminZone("staffing-coverage").emptyHint),
+      section(adminZone("care-delivery-reliability").key, adminZone("care-delivery-reliability").title, adminZone("care-delivery-reliability").description, [...taskItems.filter((item) => item.dueAt && new Date(item.dueAt) < now), ...varianceItems], adminZone("care-delivery-reliability").emptyTitle, adminZone("care-delivery-reliability").emptyHint),
+      section(adminZone("clinical-quality-safety").key, adminZone("clinical-quality-safety").title, adminZone("clinical-quality-safety").description, [...bellItems, ...incidentItems, ...escalationItems.filter((item) => ["P1", "P2"].includes(item.priority)), ...transitionItems], adminZone("clinical-quality-safety").emptyTitle, adminZone("clinical-quality-safety").emptyHint),
+      section(adminZone("care-governance-compliance").key, adminZone("care-governance-compliance").title, adminZone("care-governance-compliance").description, [...governanceItems, ...overdueReviewItems], adminZone("care-governance-compliance").emptyTitle, adminZone("care-governance-compliance").emptyHint),
+      section(adminZone("service-utilization").key, adminZone("service-utilization").title, adminZone("service-utilization").description, [...dt013Items, ...dt014Items], adminZone("service-utilization").emptyTitle, adminZone("service-utilization").emptyHint),
+      section(adminZone("management-action-queue").key, adminZone("management-action-queue").title, adminZone("management-action-queue").description, [...agedEscalations, ...overdueReviewItems, ...sharedCaseloadConcerns, ...carryOverItems], adminZone("management-action-queue").emptyTitle, adminZone("management-action-queue").emptyHint),
+    ];
+    metrics = [
+      metric({ key: "census_occupancy", label: "Census / occupancy", numerator: census, denominator: capacity, numeratorLabel: "active residents", denominatorLabel: "approved room capacity", definition: "Active residents divided by approved capacity when capacity is stored.", window: "Current", baseline: `Census ${census}${capacity ? ` of ${capacity}` : " · capacity not stored"}`, sourceModels: ["Resident", "Room"], href: "/facility_admin/occupancy", state: "GOOD" }),
+      metric({ key: "loc_mix", label: "LOC mix (Final LOC on file)", numerator: residentsWithLoc, denominator: census, numeratorLabel: "residents with a Final LOC", denominatorLabel: "active residents", definition: "Residents with a nurse-confirmed Final Level of Care recorded; drill to the per-level breakdown.", window: "Current", format: "COUNT", sourceModels: ["AppSetting", "Resident"], href: "/facility_admin/rounds", state: "GOOD" }),
+      { ...commonMetrics[2], label: "Staffing coverage %" },
+      { ...commonMetrics[0], label: "Care delivery reliability %" },
+      metric({ key: "overdue_care_rate", label: "Overdue care rate", numerator: overdueTasks.length, denominator: openTasks.length, numeratorLabel: "overdue governed tasks", denominatorLabel: "open governed tasks", definition: "Open governed care tasks past their documented due time.", window: "Current open work", sourceModels: ["Task"], href: "/facility_admin/tasks", state: overdueTasks.length ? "ACTION" : "GOOD" }),
+      metric({ key: "exception_event_rate", label: "Exception event rate", numerator: varianceEvents.length, denominator: shiftEvents.length, numeratorLabel: "exception / variance events", denominatorLabel: "documented care events this shift", definition: "Standard exception events over documented care events for the active shift.", window: shift.label, sourceModels: ["CareEvent"], href: "/facility_admin/tasks", state: varianceEvents.length ? "WATCH" : "GOOD" }),
+      metric({ key: "assessment_current", label: "Assessment current", numerator: residents.filter((resident) => validatedResidentIds.has(resident.id)).length, denominator: census, numeratorLabel: "residents with a current finalized assessment", denominatorLabel: "active residents", definition: "Active residents with a current validated v4.2 assessment on file.", window: "Current", sourceModels: ["AppSetting", "Resident"], href: "/facility_admin/rounds" }),
+      metric({ key: "reassessment_on_time", label: "Reassessment on-time", numerator: onTimeReassessments.length, denominator: dueReassessments.length, numeratorLabel: "reassessments not past review date", denominatorLabel: "assessments with a scheduled review date", definition: "Assessments whose next scheduled reassessment date has not yet passed.", window: "Current", sourceModels: ["AppSetting"], href: "/facility_admin/rounds" }),
+      metric({ key: "care_plan_current", label: "Care plan current", numerator: currentPlans.length, denominator: census, numeratorLabel: "residents with an active plan within review date", denominatorLabel: "active residents", definition: "Residents with an active, approved care plan within its review date.", window: "Current", sourceModels: ["CarePlan", "Resident"], href: "/facility_admin/careplans" }),
+      metric({ key: "open_aged_escalations", label: "Open / aged escalations", numerator: escalations.length, denominator: escalations.length, numeratorLabel: "unresolved escalations", denominatorLabel: "unresolved escalations", definition: "Unresolved safety, clinical, or operational escalations; prioritize aging and high-risk items.", window: "Current open queue", format: "COUNT", sourceModels: ["Escalation"], href: "/facility_admin/alertcenter", state: escalations.length ? "WATCH" : "GOOD" }),
+      metric({ key: "safety_incidents", label: "Safety incidents", numerator: incidents.length, denominator: incidents.length, numeratorLabel: "open governed incidents", denominatorLabel: "open governed incidents", definition: "Governed incident and safety events awaiting resolution.", window: "Current open queue", format: "COUNT", sourceModels: ["Incident"], href: "/facility_admin/incidents", state: incidents.length ? "WATCH" : "GOOD" }),
+      metric({ key: "hospital_ed", label: "Hospital / ED transfers", numerator: hospitalSignals.length, denominator: hospitalSignals.length, numeratorLabel: "residents under post-hospital monitoring", denominatorLabel: "residents under post-hospital monitoring", definition: "Residents flagged with a recent hospitalization requiring post-return monitoring.", window: "Current", format: "COUNT", sourceModels: ["AppSetting"], href: "/facility_admin/rounds", state: hospitalSignals.length ? "WATCH" : "GOOD" }),
+      metric({ key: "dt013_utilization", label: "DT-013 utilization", numerator: dt013Signals.length, denominator: dt013Signals.length, numeratorLabel: "residents with dedicated-support review", denominatorLabel: "residents with dedicated-support review", definition: "Residents with an indicated DT-013 dedicated-support review; separate from Final LOC.", window: "Current", format: "COUNT", sourceModels: ["AppSetting"], href: "/facility_admin/careplans", state: "GOOD" }),
+      metric({ key: "dt014_utilization", label: "DT-014 utilization", numerator: dt014Signals.length, denominator: dt014Signals.length, numeratorLabel: "residents with additional-service review", denominatorLabel: "residents with additional-service review", definition: "Residents with an indicated DT-014 additional-service review; separate from LOC / package.", window: "Current", format: "COUNT", sourceModels: ["AppSetting"], href: "/facility_admin/careplans", state: "GOOD" }),
+      metric({ key: "unassigned_care", label: "Unassigned care", numerator: unassigned.length, denominator: unassigned.length, numeratorLabel: "active tasks without an owner", denominatorLabel: "active tasks without an owner", definition: "Active governed tasks without a valid responsible role or assignment when due.", window: "Current", format: "COUNT", sourceModels: ["Task"], href: "/facility_admin/tasks", state: unassigned.length ? "ACTION" : "GOOD" }),
+      metric({ key: "shared_staffing_exceptions", label: "Shared staffing exceptions", numerator: sharedCaseloadConcerns.length, denominator: sharedCaseloadConcerns.length, numeratorLabel: "assignments over the 1:6 reference", denominatorLabel: "assignments over the 1:6 reference", definition: "Shifts where approved care could not be reliably delivered under shared staffing and a DT-013 review is indicated.", window: shift.label, format: "COUNT", sourceModels: ["AppSetting"], href: "/facility_admin/staff", state: sharedCaseloadConcerns.length ? "WATCH" : "GOOD" }),
+      metric({ key: "audit_exceptions", label: "Audit / governance exceptions", numerator: auditExceptionCount, denominator: auditExceptionCount, numeratorLabel: "records missing required evidence or sign-off", denominatorLabel: "records missing required evidence or sign-off", definition: "Missing required evidence, approval, effective/review date, or authorized sign-off on governed workflows.", window: "Current", format: "COUNT", sourceModels: ["AppSetting", "CarePlan", "Escalation"], href: "/facility_admin/auditlog", state: auditExceptionCount ? "WATCH" : "GOOD" }),
+    ];
+    // Enrich the summary bar with Administrator snapshot fields.
+    summaryExtra = {
+      capacity, occupancyPct, admissionsInProgress: activeAdmissions.length,
+      dischargesRecent, watchEscalated: residentWatch.length,
+    };
   } else if (role === "professional") {
     sections = [
       section("professional-review", "Items for Professional Review", "Escalations, incidents, and care-plan changes requiring discipline review.", [...escalationItems, ...incidentItems, ...varianceItems], "No professional review items"),
@@ -831,10 +1267,47 @@ export async function buildDashboard(context: TenantContext, role: DashboardRole
     ];
   }
 
+  // §10 — when a reporting window is selected on an aggregate dashboard, re-derive
+  // the period-based KPIs from the database instead of the shift snapshot. State /
+  // display are recomputed through metric() so the tile stays internally consistent.
+  let payloadMetrics = metrics;
+  if ((role === "care-manager" || role === "facility-admin") && windowKey !== "shift") {
+    const [dueTotal, dueDone, eventTotal, eventExceptions, incidentCount] = await Promise.all([
+      prisma.task.count({ where: { ...tenant, dueDate: { gte: periodStart, lt: now }, status: { not: TaskStatus.CANCELLED } } }),
+      prisma.task.count({ where: { ...tenant, dueDate: { gte: periodStart, lt: now }, status: TaskStatus.COMPLETED } }),
+      prisma.careEvent.count({ where: { ...tenant, occurredAt: { gte: periodStart, lt: now } } }),
+      prisma.careEvent.count({
+        where: { ...tenant, occurredAt: { gte: periodStart, lt: now }, OR: [{ isVariance: true }, { reviewAlertRaised: true }, { immediateEscalation: true }] },
+      }),
+      prisma.incident.count({ where: { ...tenant, incidentDate: { gte: periodStart } } }),
+    ]);
+    const label = WINDOW_LABELS[windowKey];
+    payloadMetrics = metrics.map((item) => {
+      switch (item.key) {
+        case "care_delivery_on_time":
+          return metric({ ...item, numerator: dueDone, denominator: dueTotal, window: label, state: undefined });
+        case "care_delivery_reliability":
+          return metric({ ...item, numerator: dueDone, denominator: dueTotal, window: label, state: undefined });
+        case "variance_free_delivery":
+          return metric({ ...item, numerator: Math.max(0, eventTotal - eventExceptions), denominator: eventTotal, window: label, state: undefined });
+        case "burden_variance":
+          return metric({ ...item, numerator: eventExceptions - eventTotal, denominator: Math.max(Math.abs(eventExceptions - eventTotal), 1), window: label, state: eventExceptions > eventTotal ? "WATCH" : "GOOD" });
+        case "exception_event_rate":
+          return metric({ ...item, numerator: eventExceptions, denominator: eventTotal, window: label, state: eventExceptions > 0 ? "WATCH" : "GOOD" });
+        case "safety_incidents":
+          return metric({ ...item, numerator: incidentCount, denominator: Math.max(incidentCount, 1), window: label, state: incidentCount > 0 ? "WATCH" : "GOOD" });
+        default:
+          return item;
+      }
+    });
+  }
+
   return {
     role, ...TITLES[role], asOf: now.toISOString(), freshnessSeconds: 30, serviceContext: "FACILITY",
-    shift, summary, metrics, sections,
+    shift, summary: { ...summary, ...summaryExtra }, metrics: payloadMetrics, sections,
     residentChoices: role === "caregiver" ? residents.map((resident) => ({ id: resident.id, label: residentLabel(resident), room: resident.roomNumber })) : undefined,
+    huddle,
+    window: { key: windowKey, label: WINDOW_LABELS[windowKey] },
     warnings,
   };
 }

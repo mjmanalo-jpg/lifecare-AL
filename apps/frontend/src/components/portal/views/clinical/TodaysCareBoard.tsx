@@ -12,8 +12,8 @@ import {
   DataState, StatCard, MicroLabel, SearchInput, ClinicalModal,
 } from "./clinical-ui";
 
-import { ASSESSMENTS_V42_KEY, domainScores, type AssessmentV42 } from "@/lib/lifecare/assessment.ts";
-import { generateDraftPlan, suggestTaskIds } from "@/lib/lifecare/carePlan.ts";
+import { ASSESSMENTS_V42_KEY, type AssessmentV42 } from "@/lib/lifecare/assessment.ts";
+import { generateDraftPlan } from "@/lib/lifecare/carePlan.ts";
 import {
   materialiseShiftView, splitByRole,
   type ShiftEncounter, type ShiftRole,
@@ -26,17 +26,19 @@ import { CAREGIVER_SCHEDULE_KEY, parseSchedules, activeResidentIdsFor } from "@/
 /**
  * Phase 3 — Today's Care shift board (standalone; the parent wires the tab).
  *
- * Turns each VALIDATED v4.2 assessment (whose plan we treat as the resident's
- * APPROVED routine source) into a per-shift operational view via the LifeCare
- * engine, split into a Caregiver queue and a Nurse queue. Charting is
+ * Turns each VALIDATED v4.2 assessment into a resident entry and materialises a
+ * per-shift operational view via the LifeCare engine — but ONLY when the linked
+ * resident has a RELEASED (ACTIVE) care plan (CL-13 / B5: routines activate from
+ * an approved plan version alone; a validated assessment by itself never does).
+ * The view is split into a Caregiver queue and a Nurse queue. Charting is
  * exception-first: one tap Completes an encounter, or an Exception modal captures
  * a structured outcome (Refused / Unable / Unsafe / Increased Assist / Frequency
  * Variance / Clinical Change) with a short observation. Every action writes a
- * CareEvent via the generic /api/db/care-events route.
+ * CareEvent via the governed /api/care-events route.
  *
  * DATA SOURCE (self-contained, migration-free): reads the `assessments_v42`
- * app-setting, keeps VALIDATED rows with a Layer-3 finalLevel, and materialises
- * the plan client-side. No new store is introduced.
+ * app-setting plus the `care-plans` table for release state. Residents without
+ * an ACTIVE plan stay listed but LOCKED — zero encounters, no charting.
  */
 
 const MODEL_VERSION_STRING = `${MODEL_VERSION.assessmentVersion}/${MODEL_VERSION.careModelVersion}`;
@@ -68,6 +70,7 @@ interface MaterialisedResident {
   finalLevel: string;
   queues: Record<ShiftRole, ShiftEncounter[]>;
   total: number;
+  locked?: boolean;        // no released (ACTIVE) care plan → routines stay locked
 }
 
 function parseAssessments(value: string | undefined): AssessmentV42[] {
@@ -107,6 +110,45 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
   // isn't linked to an admitted resident (or is a pre-admission lead) has no real
   // id, so we resolve by id first, then by name; unresolved → charting is blocked.
   const { data: residentRows } = useLiveQuery<Record<string, unknown>>("residents", { tables: ["Resident"] });
+
+  // Governed release state (CL-13 / B5): a resident's routines materialise ONLY
+  // from a released care plan (status ACTIVE). A validated assessment alone is
+  // never treated as approval.
+  const { data: planRows } = useLiveQuery<Record<string, unknown>>(
+    "care-plans", { query: "take=500", tables: ["CarePlan"] }
+  );
+  // First ACTIVE plan per resident (newest wins via orderBy startDate desc).
+  const activePlanIdByResident = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of (planRows || [])) {
+      const rid = String(p.residentId || "");
+      if (!rid || String(p.status || "") !== "ACTIVE") continue;
+      const pid = String(p.id || "");
+      if (pid && !m.has(rid)) m.set(rid, pid);
+    }
+    return m;
+  }, [planRows]);
+
+  // Released task lines: each INTERVENTION item of a released plan carries a
+  // [task:TASK-###] marker written at generation time. Encounters are built from
+  // THIS selection — never from a fresh suggestion — so the shift view matches
+  // exactly what was individualised and approved.
+  const { data: planItemRows } = useLiveQuery<Record<string, unknown>>(
+    "care-plan-items", { query: "take=1000", tables: ["CarePlanItem"] }
+  );
+  const taskIdsByPlan = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const it of (planItemRows || [])) {
+      if (String(it.category || "") !== "INTERVENTION" || String(it.status || "") !== "ACTIVE") continue;
+      const pid = String(it.carePlanId || "");
+      const marker = /\[task:([A-Za-z0-9-]+)\]/.exec(String(it.description || ""));
+      if (!pid || !marker) continue;
+      const list = m.get(pid) ?? [];
+      if (!list.includes(marker[1])) list.push(marker[1]);
+      m.set(pid, list);
+    }
+    return m;
+  }, [planItemRows]);
   const realResidents = useMemo(() => {
     const byId = new Set<string>();
     const byName = new Map<string, string>();
@@ -138,7 +180,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
   const effectiveRole = (sessionRole ?? role ?? "").toUpperCase();
   const showNurseQueue = effectiveRole ? NURSE_ROLES.has(effectiveRole) : true;
 
-  // ---- Materialise every validated assessment into a shift view -------------
+  // ---- Materialise shift views — gated on a RELEASED care plan ---------------
   const residents = useMemo<MaterialisedResident[]>(() => {
     const raw = parseAssessments(settingRows.find((r) => (r.key || r.id) === ASSESSMENTS_V42_KEY)?.value);
     const out: MaterialisedResident[] = [];
@@ -146,23 +188,42 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
       if (a.status !== "VALIDATED") continue;
       const finalLevel = a.layer3?.finalLevel;
       if (!finalLevel) continue;
-      try {
-        const draft = generateDraftPlan({
-          finalLevel,
-          lines: suggestTaskIds(domainScores(a)).map((taskId) => ({ taskId })),
-        });
-        const view = materialiseShiftView({ ...draft, status: "APPROVED" });
-        if (!view.length) continue;
-        const queues = splitByRole(view);
-        const name = a.layer1?.residentName || "Resident";
-        const linkedId = (a.layer1?.residentId && realResidents.byId.has(a.layer1.residentId))
-          ? a.layer1.residentId
-          : realResidents.byName.get(name.trim().toLowerCase()) || "";
+      const name = a.layer1?.residentName || "Resident";
+      const linkedId = (a.layer1?.residentId && realResidents.byId.has(a.layer1.residentId))
+        ? a.layer1.residentId
+        : realResidents.byName.get(name.trim().toLowerCase()) || "";
+      // Governance gate: no released plan → list the resident but lock routines
+      // (zero encounters, charting disabled). Fail closed on unresolved links.
+      const releasedPlanId = linkedId ? activePlanIdByResident.get(linkedId) : undefined;
+      const releasedTaskIds = releasedPlanId ? taskIdsByPlan.get(releasedPlanId) : undefined;
+      if (!linkedId || !releasedPlanId || !releasedTaskIds?.length) {
         out.push({
           assessmentId: a.id,
           residentId: linkedId || a.id,
           residentName: name,
           linked: !!linkedId,
+          finalLevel: String(finalLevel),
+          queues: splitByRole([]),
+          total: 0,
+          locked: true,
+        });
+        continue;
+      }
+      try {
+        // Release verified above — the engine view is built from the released
+        // plan's own task selection.
+        const draft = generateDraftPlan({
+          finalLevel,
+          lines: releasedTaskIds.map((taskId) => ({ taskId })),
+        });
+        const view = materialiseShiftView({ ...draft, status: "APPROVED" });
+        if (!view.length) continue;
+        const queues = splitByRole(view);
+        out.push({
+          assessmentId: a.id,
+          residentId: linkedId,
+          residentName: name,
+          linked: true,
           finalLevel: String(finalLevel),
           queues,
           total: view.length,
@@ -170,7 +231,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
       } catch { /* a bad line shouldn't sink the whole board */ }
     }
     return out.sort((x, y) => x.residentName.localeCompare(y.residentName));
-  }, [settingRows, realResidents]);
+  }, [settingRows, realResidents, activePlanIdByResident, taskIdsByPlan]);
 
   // ---- Schedule routing: a CAREGIVER sees only the residents routed to them
   // today (caregiver_schedules); nurses / care managers keep the full oversight
@@ -244,6 +305,17 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
     observation: string,
   ) => {
     if (!selected) return;
+    // Governance gate (CL-13 / B5): charting is only possible against routines
+    // that came from a RELEASED care plan. Locked residents have no encounters,
+    // but guard anyway so a stale client can never chart around the gate.
+    if (selected.locked) {
+      Swal.fire({
+        title: "Care plan not released",
+        text: `${selected.residentName} has no released (ACTIVE) care plan yet, so shift care can't be charted. A nurse must individualise and release the plan first.`,
+        icon: "warning",
+      });
+      return;
+    }
     // A care event needs a real resident FK. If this assessment isn't linked to an
     // admitted resident yet, charting would fail with a FK error — block clearly.
     if (!selected.linked) {
@@ -373,7 +445,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
               emptyTitle={myResidentIds && !search ? "No residents assigned today" : "No validated plans"}
               emptyHint={myResidentIds && !search
                 ? "You're not scheduled for any residents today. Residents appear here once a nurse assigns them to your shift."
-                : "A resident appears here once their v4.2 assessment is validated with a final level of care."}
+                : "A resident's shift care appears once their v4.2 assessment is validated AND their care plan is individualised and released (ACTIVE). Residents awaiting release show as locked."}
               onRetry={refetch}
               skeletonRows={4}
             >
@@ -394,6 +466,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
                         <span className="flex items-center gap-1.5">
                           <span className="block truncate text-sm font-semibold text-[var(--clinical-ink)]">{r.residentName}</span>
                           {!r.linked && <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-amber) 18%, transparent)", color: "var(--clinical-amber)" }} title="Assessment not linked to an admitted resident — charting is disabled">Unlinked</span>}
+                          {r.linked && r.locked && <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-amber) 18%, transparent)", color: "var(--clinical-amber)" }} title="No released care plan — routines stay locked until the plan is approved">Awaiting release</span>}
                         </span>
                         <span className="mt-0.5 flex items-center gap-2 text-[11px] text-[var(--clinical-muted)]">
                           <span>Level {r.finalLevel}</span>
@@ -422,6 +495,22 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
                 <StatusPill status="APPROVED">Level {selected.finalLevel}</StatusPill>
               </div>
 
+              {selected.locked ? (
+                <ClinicalCard className="p-6">
+                  <div className="flex items-start gap-3">
+                    <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-[var(--clinical-amber)]" />
+                    <div>
+                      <p className="text-sm font-semibold text-[var(--clinical-ink)]">Routines locked — no released care plan</p>
+                      <p className="mt-1 text-sm text-[var(--clinical-muted)]">
+                        {selected.linked
+                          ? "Shift care activates only from a released (ACTIVE) care plan. Once the nurse individualises and releases the plan in Care Plan Review, today's encounters appear here."
+                          : "This assessment isn't linked to an admitted resident yet. Complete admission / linking first — then release a care plan to activate routines."}
+                      </p>
+                    </div>
+                  </div>
+                </ClinicalCard>
+              ) : (
+                <>
               {/* Caregiver queue */}
               <QueueSection
                 title="Caregiver queue"
@@ -448,6 +537,8 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
                   onComplete={(enc) => chartEvent(enc, "Completed", "")}
                   onException={openException}
                 />
+              )}
+                </>
               )}
             </>
           )}

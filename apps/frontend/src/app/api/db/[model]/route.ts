@@ -11,6 +11,7 @@ import { invalidatePortalDataPrefix } from "@/lib/dataCache";
 import { createMedTaskForSchedule } from "@/lib/medTaskSync";
 import { canEditResidentProfile } from "@/lib/residentAccess";
 import { CAREGIVER_SCHEDULE_KEY, CAREGIVER_BREAKGLASS_KEY } from "@/lib/caregiverSchedule";
+import { assignmentCompetencyIssues, assignmentEquipmentIssues, assignmentGateMessage } from "@/lib/assignmentGate";
 
 // Roles allowed to set the caregiver roster (mirrors the scheduler roles that
 // get the Caregiver Schedule board). Everyone else is read-only on it.
@@ -266,6 +267,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const residentDefinition = getModel("residents")!;
     const resident = await withTenantDb(context, async (tx) => transactionDelegate(residentDefinition, tx).findFirst({ where: { AND: [{ id: residentId }, residentScope] }, select: { id: true } }));
     if (!resident) return NextResponse.json({ error: "Related resident not found" }, { status: 422 });
+  }
+  // Assignment safety gate (§4.2): a task may not be created pre-assigned to
+  // someone who doesn't hold the SOP's required competencies (verified, unexpired).
+  if (model === "tasks" && typeof data.assignedToId === "string" && data.assignedToId && !context.isPlatform) {
+    const gateInput = {
+      communityId: context.communityId ?? (typeof data.communityId === "string" ? data.communityId : ""),
+      staffId: data.assignedToId,
+      sopIds: typeof data.sopId === "string" ? [data.sopId] : [],
+    };
+    const [competencyIssues, equipmentIssues] = await Promise.all([
+      assignmentCompetencyIssues(prisma, gateInput),
+      assignmentEquipmentIssues(prisma, gateInput),
+    ]);
+    const issues = [...competencyIssues, ...equipmentIssues];
+    if (issues.length) {
+      return NextResponse.json({
+        error: `Assignment blocked by the safety gate — required competency ${assignmentGateMessage(issues)}.`,
+        code: "ASSIGNMENT_SAFETY_GATE",
+        issues,
+      }, { status: 422 });
+    }
   }
   if (!isDbConfigured()) return NextResponse.json({ data: { id: `demo-${Date.now()}`, ...data }, demo: true }, { status: 201 });
 

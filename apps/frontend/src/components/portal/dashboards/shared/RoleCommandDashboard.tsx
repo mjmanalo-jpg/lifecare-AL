@@ -2,23 +2,31 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Activity, AlertTriangle, ArrowUpRight, BellRing, CalendarClock, CheckCircle2,
-  ChevronRight, CircleHelp, ClipboardCheck, Clock3, Info, Loader2, RefreshCw,
-  ShieldAlert, Stethoscope, UserRoundCheck, UsersRound,
+  ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, Clock3, Info, Loader2, RefreshCw,
+  ShieldAlert, Stethoscope, UserRoundCheck, UsersRound, Timer, Clock, CalendarDays, CalendarRange,
 } from "lucide-react";
 import {
   ClinicalButton, ClinicalCard, ClinicalHeader, ClinicalModal, ClinicalPage,
   DataState, FieldLabel, StatusPill, controlClass,
 } from "@/components/portal/views/clinical/clinical-ui";
 import type {
-  DashboardAction, DashboardMetric, DashboardPayload, DashboardQueueItem, DashboardRole,
+  DashboardAction, DashboardHuddle, DashboardMetric, DashboardPayload, DashboardQueueItem, DashboardRole, DashboardWindowKey,
 } from "@/lib/dashboard/types";
 import { NURSE_COMMAND_SHORTCUTS } from "@/lib/dashboard/nurseZones";
 
 type DrilldownData = {
   metricKey: string; asOf: string; numerator: number; denominator: number; truncated: boolean;
   records: Array<{ id: string; label: string; detail?: string; occurredAt?: string; href: string; inNumerator: boolean }>;
+};
+
+const DASHBOARD_WINDOW_OPTIONS: Record<DashboardWindowKey, { label: string; icon: typeof Timer; hint: string }> = {
+  shift: { label: "Shift", icon: Timer, hint: "Current shift" },
+  "24h": { label: "24 h", icon: Clock, hint: "Rolling 24 hours" },
+  "7d": { label: "7 days", icon: CalendarDays, hint: "Rolling 7 days" },
+  "30d": { label: "30 days", icon: CalendarRange, hint: "Rolling 30 days" },
 };
 
 const SECTION_ICONS: Record<string, typeof Activity> = {
@@ -40,6 +48,14 @@ const SECTION_ICONS: Record<string, typeof Activity> = {
   upcoming: Clock3, awaiting: CircleHelp, admissions: UserRoundCheck,
   residents: UserRoundCheck, "family-contacts": UsersRound, endorsement: ClipboardCheck,
   "professional-review": Stethoscope, "care-plan-review": ClipboardCheck,
+  // Administrator (§7) zones.
+  "community-snapshot": UsersRound, "staffing-coverage": UsersRound,
+  "clinical-quality-safety": ShieldAlert, "care-governance-compliance": ClipboardCheck,
+  "service-utilization": Stethoscope, "management-action-queue": ShieldAlert,
+  // Resident Coordinator (§8) zones.
+  "resident-snapshot": UserRoundCheck, "today-schedule": CalendarClock,
+  "admissions-returns": UserRoundCheck, "open-coordination": ClipboardCheck,
+  "family-preferences": UsersRound, "alerts-for-action": BellRing, "endorsement-notes": ClipboardCheck,
 };
 
 const PRIORITY_CLASS = {
@@ -96,11 +112,12 @@ export default function RoleCommandDashboard({
   const [drilldownLoading, setDrilldownLoading] = useState(false);
   const [drilldownError, setDrilldownError] = useState("");
   const [drilldown, setDrilldown] = useState<DrilldownData | null>(null);
+  const [windowKey, setWindowKey] = useState<DashboardWindowKey>("shift");
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
-      const response = await fetch(`/api/dashboards/${role}`, { cache: "no-store", credentials: "include" });
+      const response = await fetch(`/api/dashboards/${role}?window=${encodeURIComponent(windowKey)}`, { cache: "no-store", credentials: "include" });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "Dashboard unavailable.");
       setData(body);
@@ -110,7 +127,7 @@ export default function RoleCommandDashboard({
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [role]);
+  }, [role, windowKey]);
 
   useEffect(() => {
     // Initial synchronization with the server-owned dashboard read model.
@@ -160,7 +177,7 @@ export default function RoleCommandDashboard({
     return sections.filter((section) => allowed.has(section.key));
   }, [data, sectionKeys]);
   const primarySections = useMemo(() => visibleSections.filter((item) =>
-    ["act-now", "now", "my-residents", "my-care-now", "clinical-triage", "clinical-state", "clinical-risk", "facility-status", "urgent", "professional-review"].includes(item.key)), [visibleSections]);
+    ["act-now", "now", "my-residents", "my-care-now", "clinical-triage", "clinical-state", "clinical-risk", "facility-status", "urgent", "professional-review", "community-snapshot", "management-action-queue", "alerts-for-action", "resident-snapshot"].includes(item.key)), [visibleSections]);
   const otherSections = useMemo(() => visibleSections.filter((item) =>
     !primarySections.some((primary) => primary.key === item.key)), [primarySections, visibleSections]);
 
@@ -188,9 +205,31 @@ export default function RoleCommandDashboard({
           <>
             {showShiftSummary && <ShiftBar data={data} />}
             {role === "nurse" && <NurseCommandBar data={data} />}
+            {data.huddle && <HuddlePanel huddle={data.huddle} />}
             {error && <InlineNotice tone="danger" text={error} />}
             {data.warnings.map((warning) => <InlineNotice key={warning} tone="warning" text={warning} />)}
 
+            {showMetrics && (role === "care-manager" || role === "facility-admin") && (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--clinical-muted)]">
+                  <Clock3 className="h-3.5 w-3.5" /> Time window
+                </span>
+                <div className="flex flex-wrap items-center gap-1 rounded-xl border border-[var(--clinical-line)] bg-[var(--clinical-surface)] p-1 shadow-sm">
+                  {(Object.entries(DASHBOARD_WINDOW_OPTIONS) as Array<[DashboardWindowKey, { label: string; icon: typeof Timer; hint: string }]>).map(([key, { label, icon: Icon, hint }]) => {
+                    const active = windowKey === key;
+                    return (
+                      <button key={key} type="button" onClick={() => setWindowKey(key)} title={hint}
+                        className={`group relative flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all duration-200 ${active
+                          ? "bg-[var(--clinical-panel)] text-white shadow-[0_2px_8px_-2px_var(--clinical-panel)]"
+                          : "text-[var(--clinical-ink-soft)] hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-ink)]"}`}>
+                        <Icon className={`h-3.5 w-3.5 transition-colors ${active ? "text-white/80" : "text-[var(--clinical-muted)] group-hover:text-[var(--clinical-ink-soft)]"}`} />
+                        <span>{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {showMetrics && (
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                 {data.metrics.map((item) => (
@@ -222,12 +261,19 @@ export default function RoleCommandDashboard({
 }
 
 function ShiftBar({ data }: { data: DashboardPayload }) {
+  const sectionCount = (key: string) => data.sections.find((item) => item.key === key)?.items.length || 0;
   const summaries = data.role === "resident-coordinator" ? [
-    { label: "Urgent", value: data.sections.find((item) => item.key === "urgent")?.items.length || 0 },
-    { label: "Due today", value: data.sections.find((item) => item.key === "today")?.items.length || 0 },
-    { label: "Upcoming", value: data.sections.find((item) => item.key === "upcoming")?.items.length || 0 },
-    { label: "Unowned", value: data.sections.find((item) => item.key === "awaiting")?.items.length || 0 },
-    { label: "Admissions", value: data.sections.find((item) => item.key === "admissions")?.items.length || 0 },
+    { label: "Residents", value: data.summary.activeResidents },
+    { label: "Today", value: sectionCount("today-schedule") },
+    { label: "Open coordination", value: sectionCount("open-coordination") },
+    { label: "Admissions", value: sectionCount("admissions-returns") },
+    { label: "Alerts", value: sectionCount("alerts-for-action") },
+  ] : data.role === "facility-admin" ? [
+    { label: "Census", value: data.summary.activeResidents },
+    { label: "Occupancy", value: data.summary.capacity ? `${data.summary.occupancyPct ?? 0}%` : "—" },
+    { label: "Admissions", value: data.summary.admissionsInProgress ?? 0 },
+    { label: "Watch / Escalated", value: data.summary.watchEscalated ?? 0 },
+    { label: "Open escalations", value: data.summary.openEscalations },
   ] : data.role === "nurse" ? [
     { label: "Census", value: data.summary.activeResidents },
     { label: "CG present", value: data.summary.caregiversPresent ?? data.summary.staffedNow },
@@ -303,6 +349,44 @@ function NurseCommandBar({ data }: { data: DashboardPayload }) {
         })}
       </div>
     </nav>
+  );
+}
+
+/** §11 step 4 — generated shift huddle briefing (nurse). */
+function HuddlePanel({ huddle }: { huddle: DashboardHuddle }) {
+  const groups: Array<{ label: string; icon: typeof UsersRound; lines: string[]; accent: string }> = [
+    { label: "Residents to watch", icon: UsersRound, lines: huddle.residentsToWatch, accent: "text-[var(--clinical-panel)]" },
+    { label: "Care changes", icon: Activity, lines: huddle.careChanges, accent: "text-[var(--clinical-amber)]" },
+    { label: "Safety risks", icon: ShieldAlert, lines: huddle.safetyRisks, accent: "text-[var(--clinical-danger, #dc2626)]" },
+    { label: "Staffing notes", icon: ClipboardList, lines: huddle.staffingNotes, accent: "text-[var(--clinical-muted)]" },
+  ];
+  return (
+    <section aria-label="Shift huddle briefing" className="rounded-xl border border-[var(--clinical-line)] bg-[var(--clinical-surface)] p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.06em] text-[var(--clinical-ink)]">
+          <Stethoscope className="h-4 w-4 text-[var(--clinical-panel)]" /> Shift huddle
+        </h2>
+        <span className="text-xs font-semibold text-[var(--clinical-muted)]">{huddle.headline}</span>
+      </div>
+      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {groups.map((group) => (
+          <div key={group.label} className="min-w-0 rounded-lg border border-[var(--clinical-line)] bg-[var(--clinical-surface)] p-3">
+            <p className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.07em] ${group.accent}`}>
+              <group.icon className="h-3.5 w-3.5" /> {group.label}
+            </p>
+            {group.lines.length === 0 ? (
+              <p className="mt-1.5 text-xs text-[var(--clinical-muted)]">Nothing flagged.</p>
+            ) : (
+              <ul className="mt-1.5 space-y-1">
+                {group.lines.map((line, index) => (
+                  <li key={index} className="text-xs leading-snug text-[var(--clinical-ink-soft)]">{line}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -439,7 +523,7 @@ function QueueRow({ item, acting, onAction }: { item: DashboardQueueItem; acting
     <article className="group px-4 py-3.5 hover:bg-[var(--clinical-surface-2)]">
       <div className="flex items-start gap-3">
         <span className={`mt-0.5 inline-flex min-w-8 items-center justify-center rounded-md px-1.5 py-1 text-[11px] font-bold ${PRIORITY_CLASS[item.priority]}`}>{item.priority}</span>
-        {item.photoUrl && <img src={item.photoUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />}
+        {item.photoUrl && <Image src={item.photoUrl} alt="" width={40} height={40} unoptimized className="h-10 w-10 shrink-0 rounded-lg object-cover" />}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h3 className="font-semibold text-[var(--clinical-ink)]">{item.title}</h3>

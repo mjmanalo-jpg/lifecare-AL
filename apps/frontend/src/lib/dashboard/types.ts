@@ -9,6 +9,8 @@ export type DashboardRole =
 export type DashboardPriority = "P1" | "P2" | "P3" | "P4";
 export type ClinicalState = "STABLE" | "WATCH" | "ESCALATED";
 export type MetricState = "GOOD" | "WATCH" | "ACTION";
+/** §10 — selectable reporting window for aggregate KPIs (shift-first screens ignore it). */
+export type DashboardWindowKey = "shift" | "24h" | "7d" | "30d";
 
 export interface DashboardAction {
   type: "ACKNOWLEDGE_ASSIGNMENT" | "ACKNOWLEDGE_ESCALATION";
@@ -91,6 +93,22 @@ export interface DashboardSummary {
   handoverStatus: "NOT_STARTED" | "PENDING" | "SIGNED_OFF" | "ACKNOWLEDGED";
   handoverId?: string;
   handoverLabel?: string;
+  // Administrator (§7) aggregate snapshot fields.
+  capacity?: number;
+  occupancyPct?: number;
+  admissionsInProgress?: number;
+  dischargesRecent?: number;
+  watchEscalated?: number;
+}
+
+/** §11 step 4 — auto-generated shift-start briefing: concise, role-scoped priorities. */
+export interface DashboardHuddle {
+  headline: string;
+  generatedAt: string;
+  residentsToWatch: string[];
+  careChanges: string[];
+  safetyRisks: string[];
+  staffingNotes: string[];
 }
 
 export interface DashboardPayload {
@@ -105,5 +123,7 @@ export interface DashboardPayload {
   metrics: DashboardMetric[];
   sections: DashboardSection[];
   residentChoices?: Array<{ id: string; label: string; room?: string }>;
+  huddle?: DashboardHuddle;
+  window?: { key: DashboardWindowKey; label: string };
   warnings: string[];
 }

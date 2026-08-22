@@ -70,9 +70,35 @@ const CHECKLIST = [
 ];
 const PRIORITIES = ["Routine", "Important", "Urgent"];
 const ROLES = ["Nurse", "Caregiver", "Care Manager", "Physician"];
+// Per-item current condition (§12): where the resident stands right now.
+const ITEM_STATUSES = ["Stable", "Watch", "Escalated"] as const;
+type ItemStatus = typeof ITEM_STATUSES[number];
+// How an incoming shift disposes of a carry-over item (§12 close states).
+const CLOSE_STATES = ["Resolved", "Continue Monitoring", "Action Next Shift", "Awaiting External Response"] as const;
+type CloseState = typeof CLOSE_STATES[number];
 const CONCERN_SECTIONS = ["skinWound", "behaviorCognitive", "medicationIssues", "incidentsEscalations"];
 
-interface CarryOver { id: string; residentId: string; concern: string; priority: string; role: string; dueTime?: string; action?: string; autoTask?: boolean; autoAlert?: boolean; }
+interface CarryOver {
+  id: string; residentId: string; concern: string; priority: string; role: string; dueTime?: string; action?: string; autoTask?: boolean; autoAlert?: boolean;
+  status?: ItemStatus;      // current condition: Stable / Watch / Escalated
+  whatChanged?: string;     // what changed this shift vs prior baseline
+  pending?: string;         // what remains outstanding
+  watchNext?: string;       // what the next shift must watch for
+  coverageNote?: string;    // caregiver / coverage constraint note
+  closeState?: CloseState;  // disposition once handled by the incoming shift
+  closedAt?: string; closedBy?: string;
+}
+const STATUS_CLS: Record<ItemStatus, string> = {
+  Stable: "bg-green-100 text-green-700",
+  Watch: "bg-amber-100 text-amber-700",
+  Escalated: "bg-red-100 text-red-700",
+};
+const CLOSE_CLS: Record<CloseState, string> = {
+  Resolved: "bg-emerald-50 border-emerald-200 text-emerald-700",
+  "Continue Monitoring": "bg-blue-50 border-blue-200 text-blue-700",
+  "Action Next Shift": "bg-amber-50 border-amber-200 text-amber-700",
+  "Awaiting External Response": "bg-purple-50 border-purple-200 text-purple-700",
+};
 interface EndResident { residentId: string; sections: Record<string, string>; }
 interface HTask { id: string; title: string; resident: string; room: string; priority: string; due: string }
 interface HIncident { id: string; type: string; resident: string; room: string; severity: string }
@@ -572,6 +598,12 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
   const doSignOff = async () => { await update(e.id, (en) => ({ ...en, status: "SIGNED_OFF", signedAt: nowTime(), outgoingBy: by, handover: buildHandover() })); setSignOpen(false); Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Signed off", showConfirmButton: false, timer: 1500 }); };
   // Acknowledge stamps acceptance AND puts the carry-overs on the incoming user's account.
   const doAcknowledge = async () => { await update(e.id, (en) => ({ ...en, status: "ACKNOWLEDGED", incomingBy: by, acceptedBy: by, acceptedById: byId, acceptedAt: new Date().toISOString() })); await acceptHandover(e); setAckOpen(false); Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Acknowledged — carry-overs added to your tasks", showConfirmButton: false, timer: 1800 }); };
+  // Close-state disposition (§12): once the endorsement is signed, either party
+  // records how each carry-over ended — Resolved / Continue Monitoring /
+  // Action Next Shift / Awaiting External Response.
+  const setCloseState = async (cid: string, closeState: CloseState | "") => {
+    await update(e.id, (en) => ({ ...en, carryOvers: en.carryOvers.map((c) => (c.id === cid ? { ...c, closeState: closeState || undefined, closedAt: closeState ? new Date().toISOString() : undefined, closedBy: closeState ? by : undefined } : c)) }));
+  };
   const toggle = (k: string) => { const next = { ...checklist, [k]: !checklist[k] }; setChecklist(next); void update(e.id, (en) => ({ ...en, checklist: next })); };
 
   return (
@@ -589,9 +621,28 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
           <p className="text-sm text-slate-400 mt-1">Add concerns that need to continue into the next shift.</p>
         </div>
       ) : <div className="space-y-2 mb-6">{e.carryOvers.map((c) => { const rn = resName(c.residentId); return (
-            <div key={c.id} className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="flex flex-wrap items-center gap-2"><span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${c.priority === "Urgent" ? "bg-red-100 text-red-700" : c.priority === "Important" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"}`}>{c.priority}</span><span className="font-bold text-slate-900">{rn.name}</span><span className="text-xs text-slate-400">Rm {rn.room} · {c.role}{c.dueTime ? ` · due ${c.dueTime}` : ""}</span>{canEdit && <button onClick={() => update(e.id, (en) => ({ ...en, carryOvers: en.carryOvers.filter((x) => x.id !== c.id) }))} className="ml-auto p-1 rounded hover:bg-red-50 text-red-500"><Trash2 className="w-4 h-4" /></button>}</div>
-              <p className="text-sm text-slate-700 mt-1.5">{c.concern}</p>{c.action && <p className="text-xs text-slate-500 mt-0.5">Action: {c.action}</p>}
+            <div key={c.id} className={`rounded-xl border bg-white p-4 ${c.closeState ? "border-slate-200 opacity-80" : "border-slate-200"}`}>
+              <div className="flex flex-wrap items-center gap-2"><span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${c.priority === "Urgent" ? "bg-red-100 text-red-700" : c.priority === "Important" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"}`}>{c.priority}</span>{c.status && <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${STATUS_CLS[c.status] ?? "bg-slate-100 text-slate-600"}`}>{c.status}</span>}<span className="font-bold text-slate-900">{rn.name}</span><span className="text-xs text-slate-400">Rm {rn.room} · {c.role}{c.dueTime ? ` · due ${c.dueTime}` : ""}</span>{canEdit && <button onClick={() => update(e.id, (en) => ({ ...en, carryOvers: en.carryOvers.filter((x) => x.id !== c.id) }))} className="ml-auto p-1 rounded hover:bg-red-50 text-red-500"><Trash2 className="w-4 h-4" /></button>}</div>
+              <p className={`text-sm mt-1.5 ${c.closeState === "Resolved" ? "text-slate-400 line-through" : "text-slate-700"}`}>{c.concern}</p>
+              {c.whatChanged && <p className="text-xs text-slate-500 mt-0.5">What changed: {c.whatChanged}</p>}
+              {c.action && <p className="text-xs text-slate-500 mt-0.5">Action: {c.action}</p>}
+              {c.pending && <p className="text-xs text-slate-500 mt-0.5">Pending: {c.pending}</p>}
+              {c.watchNext && <p className="text-xs text-blue-600/90 mt-0.5">Watch next shift: {c.watchNext}</p>}
+              {c.coverageNote && <p className="text-xs text-slate-500 mt-0.5 italic">Coverage: {c.coverageNote}</p>}
+              {(e.status !== "PENDING") && (
+                <div className="flex flex-wrap items-center gap-2 mt-3 pt-2.5 border-t border-slate-100">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Close state</span>
+                  <select
+                    value={c.closeState || ""}
+                    onChange={(ev) => setCloseState(c.id, ev.target.value as CloseState | "")}
+                    className={`text-xs font-semibold rounded-lg border px-2 py-1 outline-none focus:ring-2 focus:ring-blue-400/40 ${c.closeState ? CLOSE_CLS[c.closeState] : "border-slate-200 text-slate-500"}`}
+                  >
+                    <option value="">Open — not closed yet</option>
+                    {CLOSE_STATES.map((cs) => <option key={cs} value={cs}>{cs}</option>)}
+                  </select>
+                  {c.closeState && c.closedBy && <span className="text-[11px] text-slate-400">by {c.closedBy}</span>}
+                </div>
+              )}
             </div>
           ); })}</div>}
 
@@ -648,10 +699,15 @@ function AddCarryOverModal({ residents, onClose, onAdd }: { residents: Row[]; on
   const [role, setRole] = useState("Nurse");
   const [dueTime, setDueTime] = useState("");
   const [action, setAction] = useState("");
+  const [status, setStatus] = useState<ItemStatus>("Watch");
+  const [whatChanged, setWhatChanged] = useState("");
+  const [pending, setPending] = useState("");
+  const [watchNext, setWatchNext] = useState("");
+  const [coverageNote, setCoverageNote] = useState("");
   const [autoTask, setAutoTask] = useState(false);
   const [autoAlert, setAutoAlert] = useState(false);
   const [saving, setSaving] = useState(false);
-  const submit = async () => { if (!residentId || !concern.trim()) { Swal.fire({ title: "Resident and concern are required", icon: "warning" }); return; } setSaving(true); try { await onAdd({ residentId, concern: concern.trim(), priority, role, dueTime: dueTime || undefined, action: action || undefined, autoTask, autoAlert }); } finally { setSaving(false); } };
+  const submit = async () => { if (!residentId || !concern.trim()) { Swal.fire({ title: "Resident and concern are required", icon: "warning" }); return; } setSaving(true); try { await onAdd({ residentId, concern: concern.trim(), priority, role, dueTime: dueTime || undefined, action: action || undefined, status, whatChanged: whatChanged.trim() || undefined, pending: pending.trim() || undefined, watchNext: watchNext.trim() || undefined, coverageNote: coverageNote.trim() || undefined, autoTask, autoAlert }); } finally { setSaving(false); } };
   const inp = "w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
   const lbl = "text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block";
   return (
@@ -663,10 +719,15 @@ function AddCarryOverModal({ residents, onClose, onAdd }: { residents: Row[]; on
           <div><span className={lbl}>Concern / Task to Carry Over</span><textarea rows={2} value={concern} onChange={(e) => setConcern(e.target.value)} placeholder="Describe what needs to continue into the next shift…" className={inp} /></div>
           <div className="grid grid-cols-2 gap-3">
             <div><span className={lbl}>Priority</span><select value={priority} onChange={(e) => setPriority(e.target.value)} className={inp}>{PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
-            <div><span className={lbl}>Responsible Role</span><select value={role} onChange={(e) => setRole(e.target.value)} className={inp}>{ROLES.map((r) => <option key={r} value={r}>{r}</option>)}</select></div>
+            <div><span className={lbl}>Current Status</span><select value={status} onChange={(e) => setStatus(e.target.value as ItemStatus)} className={inp}>{ITEM_STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}</select></div>
           </div>
+          <div><span className={lbl}>Responsible Role</span><select value={role} onChange={(e) => setRole(e.target.value)} className={inp}>{ROLES.map((r) => <option key={r} value={r}>{r}</option>)}</select></div>
           <div><span className={lbl}>Due Time (Optional)</span><input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} className={inp} /></div>
           <div><span className={lbl}>Required Action</span><textarea rows={2} value={action} onChange={(e) => setAction(e.target.value)} placeholder="What specifically needs to be done…" className={inp} /></div>
+          <div><span className={lbl}>What Changed This Shift (Optional)</span><textarea rows={2} value={whatChanged} onChange={(e) => setWhatChanged(e.target.value)} placeholder="How this differs from the resident's prior baseline…" className={inp} /></div>
+          <div><span className={lbl}>Still Pending (Optional)</span><textarea rows={2} value={pending} onChange={(e) => setPending(e.target.value)} placeholder="What remains outstanding…" className={inp} /></div>
+          <div><span className={lbl}>Watch Next Shift (Optional)</span><textarea rows={2} value={watchNext} onChange={(e) => setWatchNext(e.target.value)} placeholder="What the incoming shift should keep an eye on…" className={inp} /></div>
+          <div><span className={lbl}>Caregiver / Coverage Note (Optional)</span><textarea rows={2} value={coverageNote} onChange={(e) => setCoverageNote(e.target.value)} placeholder="Staffing constraints, who covered this before, special competencies…" className={inp} /></div>
           <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 space-y-2">
             <button onClick={() => setAutoTask((v) => !v)} className="flex items-center gap-2.5 text-sm text-slate-700"><span className={`w-5 h-5 rounded border flex items-center justify-center ${autoTask ? "bg-blue-600 border-blue-600 text-white" : "border-slate-300"}`}>{autoTask && <Check className="w-3.5 h-3.5" />}</span>Auto-create clinical task</button>
             <button onClick={() => setAutoAlert((v) => !v)} className="flex items-center gap-2.5 text-sm text-slate-700"><span className={`w-5 h-5 rounded border flex items-center justify-center ${autoAlert ? "bg-blue-600 border-blue-600 text-white" : "border-slate-300"}`}>{autoAlert && <Check className="w-3.5 h-3.5" />}</span>Auto-create alert</button>

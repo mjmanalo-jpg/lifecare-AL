@@ -96,6 +96,10 @@ export const MODELS: Record<string, ModelDef> = {
   competencies: { delegate: prisma.competency, table: "Competency", orderBy: { name: "asc" } },
   "staff-competencies": { delegate: prisma.staffCompetency, table: "StaffCompetency", orderBy: { createdAt: "desc" } },
 
+  // Guardrail §1 (assignment safety) — equipment catalog + per-staff holdings
+  equipment: { delegate: prisma.equipment, table: "Equipment", orderBy: { name: "asc" } },
+  "staff-equipment": { delegate: prisma.staffEquipment, table: "StaffEquipment", orderBy: { createdAt: "desc" } },
+
   // V2.1 — Quality scorecards & KPIs
   "resident-quality-scores": { delegate: prisma.residentQualityScore, table: "ResidentQualityScore", orderBy: { periodStart: "desc" } },
   "community-quality-dashboards": { delegate: prisma.communityQualityDashboard, table: "CommunityQualityDashboard", orderBy: { snapshotDate: "desc" } },

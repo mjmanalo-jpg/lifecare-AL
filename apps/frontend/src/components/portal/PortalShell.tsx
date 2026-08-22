@@ -572,15 +572,15 @@ export default function PortalShell({
         <div key={group} className="space-y-1">
           <button
             onClick={() => toggleGroup(group)}
-            className={`group flex min-h-10 w-full items-center justify-between rounded-lg px-3 pt-3 pb-1 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+            className={`group flex min-h-10 w-full items-center justify-between rounded-lg px-3 pt-3 pb-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
               theme === "dark" ? "text-slate-400 hover:text-slate-200" : "text-slate-500 hover:text-slate-800"
             }`}
             aria-expanded={!collapsed}
           >
-            <span className="text-[11px] font-bold uppercase tracking-[0.12em]">{group}</span>
-            <span className="ml-auto mr-2 text-[10px] tabular-nums opacity-70">{links.length}</span>
+            <span className="min-w-0 flex-1 text-left text-[11px] font-bold uppercase tracking-[0.12em] leading-snug">{group}</span>
+            <span className="ml-2 mr-2 shrink-0 text-[10px] tabular-nums opacity-70">{links.length}</span>
             <ChevronDown
-              className={`w-3.5 h-3.5 transition-transform duration-200 ${
+              className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
                 collapsed ? "-rotate-90" : ""
               }`}
             />
@@ -647,8 +647,6 @@ export default function PortalShell({
       document.body.style.inset = "";
     };
   }, [mobileMenuOpen]);
-
-
 
   // Initialize theme from localStorage
   useEffect(() => {

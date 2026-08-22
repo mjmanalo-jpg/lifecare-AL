@@ -6,28 +6,38 @@ import RoleCommandDashboard from "@/components/portal/dashboards/shared/RoleComm
 const COORDINATOR_PAGES = {
   residents: {
     title: "Resident Snapshot",
-    subtitle: "Assigned-community residents, rooms, status summaries, and coordination preferences.",
-    sections: ["residents"],
+    subtitle: "Assigned residents, room/location, status summaries, coordination preferences, and authorized contact.",
+    sections: ["resident-snapshot"],
   },
   schedule: {
-    title: "Appointments & Activities",
-    subtitle: "Resident appointments, transport, activities, and other non-clinical schedule commitments.",
-    sections: ["today", "upcoming"],
+    title: "Today & Schedule",
+    subtitle: "Appointments, activities/engagement, planned family visits, and non-clinical service appointments.",
+    sections: ["today-schedule"],
+  },
+  admissions: {
+    title: "Admissions & Returns",
+    subtitle: "Upcoming/new admissions, hospital returns, and onboarding or transition coordination items.",
+    sections: ["admissions-returns"],
   },
   coordination: {
     title: "Open Coordination",
-    subtitle: "Admissions, returns, transport, resident requests, follow-ups, and items awaiting another owner.",
-    sections: ["urgent", "today", "admissions", "awaiting"],
+    subtitle: "Transport, external appointment/provider coordination, family follow-up, and documents routed for completion.",
+    sections: ["open-coordination"],
+  },
+  alerts: {
+    title: "Alerts for Action",
+    subtitle: "Coordination-relevant alerts routed by the nurse, care manager, or administrator. No raw clinical triage.",
+    sections: ["alerts-for-action"],
   },
   familycontacts: {
-    title: "Contacts & Update Preferences",
+    title: "Family Update Preferences",
     subtitle: "Authorized representatives and recorded preferences for routine non-clinical updates.",
-    sections: ["family-contacts"],
+    sections: ["family-preferences"],
   },
   endorsement: {
-    title: "Coordination Endorsement",
-    subtitle: "Unresolved coordination items to carry forward with a clear owner and next action.",
-    sections: ["endorsement"],
+    title: "Endorsement / Notes",
+    subtitle: "Unresolved non-clinical coordination items to carry forward with a clear owner and next action.",
+    sections: ["endorsement-notes"],
   },
 } as const;
 

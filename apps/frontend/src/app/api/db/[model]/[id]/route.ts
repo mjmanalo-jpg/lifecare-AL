@@ -11,6 +11,7 @@ import { canAlertAction } from "@/lib/alertAccess";
 import { residentProfileEditDenied } from "@/lib/residentAccess";
 import { invalidatePortalDataPrefix } from "@/lib/dataCache";
 import { syncMarFromCompletedTask, deleteMedTaskForSchedule } from "@/lib/medTaskSync";
+import { assignmentCompetencyIssues, assignmentEquipmentIssues, assignmentGateMessage } from "@/lib/assignmentGate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,6 +101,30 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   // updates (acuity, assessment schedule, care package) still pass through.
   if (model === "residents" && residentProfileEditDenied(context.role, context.isPlatform, Object.keys(data))) {
     return NextResponse.json({ error: "Only a Care Manager or Administrator can edit a resident's profile." }, { status: 403 });
+  }
+  // Assignment safety gate (§4.2): before a task is assigned/reassigned, the
+  // assignee must hold every competency the task's SOP requires — verified and
+  // unexpired. Blocked attempts return the reason codes; platform admins bypass.
+  if (model === "tasks" && typeof data.assignedToId === "string" && data.assignedToId && !context.isPlatform) {
+    const existingRecord = existing as Record<string, unknown>;
+    const sopId = typeof data.sopId === "string" ? data.sopId : typeof existingRecord.sopId === "string" ? existingRecord.sopId : "";
+    const gateInput = {
+      communityId: context.communityId ?? (typeof existingRecord.communityId === "string" ? existingRecord.communityId : ""),
+      staffId: data.assignedToId,
+      sopIds: sopId ? [sopId] : [],
+    };
+    const [competencyIssues, equipmentIssues] = await Promise.all([
+      assignmentCompetencyIssues(prisma, gateInput),
+      assignmentEquipmentIssues(prisma, gateInput),
+    ]);
+    const issues = [...competencyIssues, ...equipmentIssues];
+    if (issues.length) {
+      return NextResponse.json({
+        error: `Assignment blocked by the safety gate — required competency ${assignmentGateMessage(issues)}.`,
+        code: "ASSIGNMENT_SAFETY_GATE",
+        issues,
+      }, { status: 422 });
+    }
   }
   if (!Object.keys(data).length) return NextResponse.json({ error: "No permitted fields" }, { status: 422 });
   if (!isDbConfigured()) return NextResponse.json({ data: { id, ...data }, demo: true });

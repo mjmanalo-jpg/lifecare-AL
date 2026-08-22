@@ -2,6 +2,7 @@
 
 import LandingCustomizerContent from "@/components/portal/views/LandingCustomizerContent";
 import SuperAdminDashboard from "@/components/portal/views/SuperAdminDashboard";
+import FacilityCareOversight from "@/components/portal/dashboards/facility-admin/FacilityCareOversight";
 import AIAssistantContent from "@/components/portal/ai/AIAssistantContent";
 import OnboardingHub from "@/components/portal/views/OnboardingHub";
 import LeadPipelineBoard from "@/components/portal/views/LeadPipelineBoard";
@@ -374,6 +375,12 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
       });
     }
   };
+
+  // Platform governance (staff approvals, portal/feature matrix, telemetry) —
+  // relocated from the default dashboard, which now shows the §7 Administrator view.
+  if (tab === "governance") {
+    return <SuperAdminDashboard />;
+  }
 
   // Combined onboarding hub: Admissions + Resident Registration as tabs.
   if (tab === "alertcenter") {
@@ -1188,6 +1195,8 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   }
 
 
-  // Default: Admin Dashboard tab â€” platform governance view unique to this role.
-  return <SuperAdminDashboard />;
+  // Default: the §7 Administrator dashboard — aggregate community oversight
+  // (safe / staffed / compliant / stable / risk). Platform governance moved to
+  // the "Platform Governance" tab above.
+  return <FacilityCareOversight />;
 }
