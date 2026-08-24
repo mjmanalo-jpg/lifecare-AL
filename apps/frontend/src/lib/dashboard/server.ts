@@ -380,10 +380,18 @@ function bellItem(bell: any, path: string, shiftStart: Date): DashboardQueueItem
   };
 }
 
+// §4 Care Delivery Status — governed care-event exception vocabulary from
+// lib/lifecare/careEvents.ts. Surfaced as the queue item kind so the nurse can
+// scan Refused / Unable / Unsafe / Increased Assist / Frequency Variance /
+// Clinical Change without opening each record.
+const GOVERNED_EXCEPTION_OUTCOMES = ["Refused", "Unable", "Unsafe", "Increased Assist", "Frequency Variance", "Clinical Change"];
+
 function careEventItem(event: any, path: string, shiftStart: Date): DashboardQueueItem {
   const priority: DashboardPriority = event.immediateEscalation ? "P1" : event.reviewAlertRaised ? "P2" : "P3";
+  const outcome = typeof event.outcome === "string" ? event.outcome : "";
+  const isGovernedException = GOVERNED_EXCEPTION_OUTCOMES.includes(outcome);
   return {
-    id: `care-event:${event.id}`, kind: "Care variance", priority, state: stateForPriority(priority),
+    id: `care-event:${event.id}`, kind: isGovernedException ? outcome : "Care variance", priority, state: stateForPriority(priority),
     title: event.eventName || event.taskId || "Care event review", detail: event.exceptionDetail || event.observation || undefined,
     residentId: event.residentId, residentLabel: event.residentName || "Resident", occurredAt: event.occurredAt.toISOString(),
     reason: event.immediateEscalation ? "Immediate escalation required." : event.reviewAlertRaised ? "Nurse review was raised." : "Observed delivery varied from the approved plan.",
@@ -512,6 +520,9 @@ export async function buildDashboard(
   const previousSchedules = schedules.filter((item) => item.date === localDateStr(previousMoment, timeZone) && item.shift === currentShiftKey(previousMoment));
   const previousCovered = new Set(previousSchedules.flatMap((item) => item.residentIds));
   const assessmentRecords = parseJsonArray<AssessmentV42>(settings.find((item) => item.key === ASSESSMENTS_V42_KEY)?.value);
+  // Governed v4.2 assessment signals (LOC, DT-013/014, hospitalization, acuity).
+  // Computed once so both the nurse watchlist and Care Manager governance reuse them.
+  const assessmentSignals = buildAssessmentSignals(assessmentRecords);
   const planReviews = carePlans.filter((item) => item.status !== "ACTIVE" || (item.nextReviewDate && item.nextReviewDate <= new Date(now.getTime() + 7 * 86400_000)));
 
   const taskItems = openTasks.map((item) => taskItem(item, now, path, item.createdAt >= shiftStart));
@@ -607,6 +618,35 @@ export async function buildDashboard(
       .map((item) => item.id));
     const helpRequests = escalationItems.filter((item) => caregiverHelpIds.has(item.sourceId));
     const deploymentItems = [...helpRequests, ...uncoveredResidents, ...unassigned, ...deploymentAssignments];
+    // §4 Shift Watchlist categories derived from governed v4.2 signals that the
+    // incident/escalation/variance watch does not cover: post-hospital monitoring
+    // and DT-013 / DT-014 review. Scoped to currently active residents.
+    const activeResidentIds = new Set(residents.map((resident) => resident.id));
+    const postHospitalWatch: DashboardQueueItem[] = assessmentSignals
+      .filter(({ assessment }) => assessment.context?.recentHospitalization && assessment.layer1?.residentId && activeResidentIds.has(assessment.layer1.residentId as string))
+      .map(({ assessment }) => ({
+        id: `watch-posthospital:${assessment.layer1!.residentId}`, kind: "Post-hospital monitoring", priority: "P3", state: "WATCH",
+        title: assessment.layer1?.residentName || "Resident", residentId: assessment.layer1!.residentId as string,
+        residentLabel: assessment.layer1?.residentName || "Resident",
+        detail: "Recent hospitalization — post-return monitoring required",
+        reason: "Resident returned from hospital/ED and remains under post-return monitoring.",
+        sourceType: "Assessment", sourceId: assessment.id, sourceHref: moduleHref(path, "residentjourney"),
+      }));
+    const dedicatedSupportWatch: DashboardQueueItem[] = assessmentSignals
+      .filter(({ classification, assessment }) => (classification?.dt013?.recommendReview || classification?.dt014?.recommendReview) && assessment.layer1?.residentId && activeResidentIds.has(assessment.layer1.residentId as string))
+      .map(({ classification, assessment }) => {
+        const kinds = [classification?.dt013?.recommendReview ? "DT-013" : "", classification?.dt014?.recommendReview ? "DT-014" : ""].filter(Boolean).join(" / ");
+        return {
+          id: `watch-dedicated:${assessment.layer1!.residentId}`, kind: `${kinds} review`, priority: "P3" as const, state: "WATCH" as const,
+          title: assessment.layer1?.residentName || "Resident", residentId: assessment.layer1!.residentId as string,
+          residentLabel: assessment.layer1?.residentName || "Resident",
+          detail: classification?.dt013?.recommendReview && classification?.dt014?.recommendReview
+            ? "Dedicated-support and additional-service review indicated"
+            : classification?.dt013?.recommendReview ? "Dedicated-support review indicated (DT-013)" : "Additional-service review indicated (DT-014)",
+          reason: "A governed dedicated-staffing or additional-service review is indicated for this resident.",
+          sourceType: "Assessment", sourceId: assessment.id, sourceHref: moduleHref(path, "residentjourney"),
+        };
+      });
     const admissionWatchItems: DashboardQueueItem[] = activeAdmissions.map((admission) => ({
       id: `admission-watch:${admission.id}`, kind: "New admission / return", priority: "P3", state: "WATCH",
       title: [admission.firstName, admission.lastName].filter(Boolean).join(" ") || "Admission in progress",
@@ -688,7 +728,7 @@ export async function buildDashboard(
     sections = [
       nurseSection("clinical-triage", clinicalTriage),
       nurseSection("caregiver-deployment", deploymentItems),
-      nurseSection("shift-watchlist", [...residentWatch, ...admissionWatchItems]),
+      nurseSection("shift-watchlist", [...residentWatch, ...postHospitalWatch, ...dedicatedSupportWatch, ...admissionWatchItems]),
       nurseSection("care-delivery-status", careDeliveryItems),
       nurseSection("next-two-hours", nextTwoHours),
       nurseSection("new-since-shift", newSinceShift),
@@ -766,7 +806,6 @@ export async function buildDashboard(
       const copy = careManagerZone(key);
       return section(copy.key, copy.title, copy.description, items, copy.emptyTitle, copy.emptyHint);
     };
-    const assessmentSignals = buildAssessmentSignals(assessmentRecords);
     const assessmentGovernance = assessmentSignals.filter(({ assessment, issues }) => {
       const nextReview = assessment.layer3?.nextReviewDate ? new Date(assessment.layer3.nextReviewDate) : null;
       const dueSoon = nextReview && !Number.isNaN(nextReview.getTime()) && nextReview <= new Date(now.getTime() + 7 * 86400_000);

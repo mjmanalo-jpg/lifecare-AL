@@ -368,7 +368,10 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
 }
 
 // ── Residents tab — quick-log list (Image 15) ────────────────────────────────
-export default function CareLogsBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
+// `canManage` gates the mutating row actions (Edit / Deactivate). Defaults true
+// so nurse / care-manager / admin keep the full directory; the caregiver view
+// passes false to stay read-only (View + QR) per the role visibility matrix.
+export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = true }: { clinicianRole?: ClinicianRole; canManage?: boolean }) {
   const { residents, domainsByRes, ensureRound, saveNote, refetchAll, refetchResidents, bowelRef, saveBowelRef, loading } = useCareLogData(clinicianRole);
 
   const [search, setSearch] = useState("");
@@ -457,10 +460,10 @@ export default function CareLogsBoard({ clinicianRole = "NURSE" }: { clinicianRo
                     <p className="text-xs text-[var(--clinical-muted)] mt-0.5">{genderLabel(r.raw?.gender)} · {diet}</p>
                   </div>
                   </div>
-                  <div className="grid w-full grid-cols-4 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:gap-1.5">
+                  <div className={`grid w-full ${canManage ? "grid-cols-4" : "grid-cols-2"} gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:gap-1.5`}>
                     <button onClick={() => setViewFor(r)} aria-label={`View ${s(r.name)}'s profile`} title="View profile" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-ink-soft)] hover:brightness-95 sm:w-11"><Eye className="w-4 h-4" /></button>
-                    <button onClick={() => setEditFor(r)} aria-label={`Edit ${s(r.name)}`} title="Edit resident" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-panel)] hover:brightness-95 sm:w-11"><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => deactivate(r)} aria-label={`Deactivate ${s(r.name)}`} title="Deactivate resident" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-coral)] hover:brightness-95 sm:w-11"><UserX className="w-4 h-4" /></button>
+                    {canManage && <button onClick={() => setEditFor(r)} aria-label={`Edit ${s(r.name)}`} title="Edit resident" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-panel)] hover:brightness-95 sm:w-11"><Pencil className="w-4 h-4" /></button>}
+                    {canManage && <button onClick={() => deactivate(r)} aria-label={`Deactivate ${s(r.name)}`} title="Deactivate resident" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-coral)] hover:brightness-95 sm:w-11"><UserX className="w-4 h-4" /></button>}
                     <button onClick={() => setQrFor(r)} aria-label={`Show QR for ${s(r.name)}`} title="Resident QR" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-ink-soft)] hover:brightness-95 sm:w-11"><QrCode className="w-4 h-4" /></button>
                   </div>
                 </div>

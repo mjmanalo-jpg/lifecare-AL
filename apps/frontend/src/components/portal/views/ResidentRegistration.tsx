@@ -226,14 +226,15 @@ export default function ResidentRegistration({ variant = "admin", accent = "#f59
     }
     setSaving(true);
     try {
-      // Upload the 4 poses; fall back to the inline data URL if upload fails.
+      // Upload the 4 poses in parallel (was sequential — 4× the wait); fall back
+      // to the inline data URL per pose if that upload fails.
       const faceUrls: Partial<Record<Dir, string>> = {};
-      for (const d of DIRECTIONS) {
+      await Promise.all(DIRECTIONS.map(async (d) => {
         const preview = faces[d.key];
-        if (!preview) continue;
+        if (!preview) return;
         try { faceUrls[d.key] = await uploadDataUrl(preview, `face-${d.key}.jpg`); }
         catch { faceUrls[d.key] = preview; }
-      }
+      }));
       const res = await fetch("/api/register/resident", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

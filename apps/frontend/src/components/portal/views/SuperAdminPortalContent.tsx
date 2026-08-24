@@ -7,7 +7,6 @@ import AIAssistantContent from "@/components/portal/ai/AIAssistantContent";
 import OnboardingHub from "@/components/portal/views/OnboardingHub";
 import LeadPipelineBoard from "@/components/portal/views/LeadPipelineBoard";
 import ConsentFormsManager from "@/components/portal/views/ConsentFormsManager";
-import FacilityResidents from "@/components/portal/views/FacilityResidents";
 import PhysicianCarePlans from "@/components/portal/views/physician/PhysicianCarePlans";
 import CaregiverTasks from "@/components/portal/views/caregiver/CaregiverTasks";
 import FacilityUnifiedView from "@/components/portal/views/FacilityUnifiedView";
@@ -23,7 +22,7 @@ import AuditLogViewer from "@/components/portal/views/clinical/AuditLogViewer";
 import ApprovalWorkflows from "@/components/portal/views/clinical/ApprovalWorkflows";
 import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
 import InventoryAlertsPanel from "@/components/portal/views/clinical/InventoryAlertsPanel";
-import { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
+import CareLogsBoard, { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
 import CaregiverScheduleBoard from "@/components/portal/views/clinical/CaregiverScheduleBoard";
 import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
 import CameraRegistryBoard from "@/components/portal/views/CameraRegistryBoard";
@@ -436,7 +435,8 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
 
   // Core SLMS Modules Aligned
   if (tab === "records") {
-    return <FacilityResidents canManageProfile />;
+    // Resident Directory — same room/LOC list used by the Care Manager portal.
+    return <CareLogsBoard clinicianRole="FACILITY_ADMIN" />;
   }
   if (tab === "rounds") {
     return <CareAcuityBoard clinicianRole="FACILITY_ADMIN" />;

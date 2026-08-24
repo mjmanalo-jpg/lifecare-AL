@@ -85,7 +85,7 @@ export async function buildMetricDrilldown(
   const residentScope = role === "caregiver" ? (context.caregiverResidentIds ?? []) : undefined;
   let records: DrilldownRecord[] = [];
 
-  if (metricKey === "care_delivery_on_time") {
+  if (metricKey === "care_delivery_on_time" || metricKey === "care_delivery_reliability") {
     const staff = role === "caregiver"
       ? await prisma.staff.findFirst({ where: { ...tenant, userId: context.userId }, select: { id: true } })
       : null;
@@ -263,24 +263,30 @@ export async function buildMetricDrilldown(
       detail: incident.description || undefined, occurredAt: incident.incidentDate.toISOString(),
       href: sourceBoard(path, "incidents"), inNumerator: true,
     }));
-  } else if (metricKey === "hospital_ed" || metricKey === "dt013_utilization" || metricKey === "dt014_utilization") {
+  } else if (["hospital_ed", "hospital_ed_count", "dt013_utilization", "dt014_utilization", "dt013_review_load", "dt014_review_load"].includes(metricKey)) {
     const setting = await prisma.appSetting.findFirst({ where: { ...tenant, key: ASSESSMENTS_V42_KEY }, select: { value: true } });
     const signals = buildSignals(parseAssessments(setting?.value));
     const board = path === "facility_admin" ? "/facility_admin/rounds" : sourceBoard(path, "prescreen");
-    const flagged = ({ classification }: AssessmentSignalMeta) =>
-      metricKey === "dt013_utilization" ? classification?.dt013?.recommendReview : classification?.dt014?.recommendReview;
-    if (metricKey === "hospital_ed") {
+    if (metricKey === "hospital_ed" || metricKey === "hospital_ed_count") {
+      // Care-manager hospital/ED tile links to the resident journey; facility to rounds.
+      const href = metricKey === "hospital_ed_count" ? `/${path}/residentjourney` : board;
       records = signals.filter(({ assessment }) => Boolean(assessment.context?.recentHospitalization)).map(({ assessment }) => ({
         id: assessment.id, label: assessment.layer1?.residentName || "Resident",
         detail: "Recent hospitalization · post-return monitoring required", occurredAt: assessment.updatedAt || assessment.createdAt,
-        href: board, inNumerator: true,
+        href, inNumerator: true,
       }));
     } else {
-      records = signals.filter(flagged).map(({ assessment }) => ({
-        id: assessment.id, label: assessment.layer1?.residentName || "Resident",
-        detail: metricKey === "dt013_utilization" ? "Dedicated-support review indicated (DT-013)" : "Additional-service review indicated (DT-014)",
-        occurredAt: assessment.updatedAt || assessment.createdAt, href: sourceBoard(path, "careplans"), inNumerator: true,
-      }));
+      const isDt013 = metricKey === "dt013_utilization" || metricKey === "dt013_review_load";
+      const href = metricKey === "dt013_review_load" ? `/${path}/privatecare`
+        : metricKey === "dt014_review_load" ? `/${path}/additionalservices`
+        : sourceBoard(path, "careplans");
+      records = signals
+        .filter(({ classification }: AssessmentSignalMeta) => (isDt013 ? classification?.dt013?.recommendReview : classification?.dt014?.recommendReview))
+        .map(({ assessment }) => ({
+          id: assessment.id, label: assessment.layer1?.residentName || "Resident",
+          detail: isDt013 ? "Dedicated-support review indicated (DT-013)" : "Additional-service review indicated (DT-014)",
+          occurredAt: assessment.updatedAt || assessment.createdAt, href, inNumerator: true,
+        }));
     }
   } else if (metricKey === "shared_staffing_exceptions") {
     const setting = await prisma.appSetting.findFirst({ where: { ...tenant, key: CAREGIVER_SCHEDULE_KEY }, select: { value: true } });
@@ -359,6 +365,86 @@ export async function buildMetricDrilldown(
       detail: "Approved capacity not filled", href: board, inNumerator: false,
     }));
     records = [...occupied, ...vacancies];
+  } else if (metricKey === "active_coc") {
+    // §6.1 — residents flagged with acute instability (temporary COC monitoring).
+    const setting = await prisma.appSetting.findFirst({ where: { ...tenant, key: ASSESSMENTS_V42_KEY }, select: { value: true } });
+    records = buildSignals(parseAssessments(setting?.value))
+      .filter(({ assessment }) => Boolean(assessment.context?.acuteInstability))
+      .map(({ assessment }) => ({
+        id: assessment.id, label: assessment.layer1?.residentName || "Resident",
+        detail: "Acute instability · temporary change-of-condition monitoring",
+        occurredAt: assessment.updatedAt || assessment.createdAt,
+        href: path === "facility_admin" ? "/facility_admin/rounds" : `/${path}/caredelivery`, inNumerator: true,
+      }));
+  } else if (metricKey === "repeated_variance_rate") {
+    // §6.1 — residents with ≥2 variances on the same care task ÷ residents with any variance.
+    const events = await prisma.careEvent.findMany({
+      where: { ...tenant, OR: [{ isVariance: true }, { isException: true }, { reviewAlertRaised: true }, { immediateEscalation: true }] },
+      take: 2000, orderBy: { occurredAt: "desc" },
+      select: { id: true, residentId: true, residentName: true, taskId: true, bundle: true, domain: true },
+    });
+    const buckets = new Map<string, number>();
+    const byResident = new Map<string, { name: string; total: number }>();
+    for (const ev of events) {
+      if (!ev.residentId) continue;
+      const info = byResident.get(ev.residentId) || { name: ev.residentName || "Resident", total: 0 };
+      info.total += 1; byResident.set(ev.residentId, info);
+      const key = `${ev.residentId}:${ev.taskId || ev.bundle || ev.domain || "unattributed"}`;
+      buckets.set(key, (buckets.get(key) ?? 0) + 1);
+    }
+    const repeatResidents = new Set([...buckets].filter(([, count]) => count >= 2).map(([key]) => key.split(":")[0]));
+    records = [...byResident].map(([residentId, info]) => ({
+      id: residentId, label: info.name,
+      detail: `${info.total} variance event${info.total === 1 ? "" : "s"}${repeatResidents.has(residentId) ? " · repeats on the same care task" : ""}`,
+      href: `/${path}/caredelivery`, inNumerator: repeatResidents.has(residentId),
+    }));
+  } else if (metricKey === "burden_variance") {
+    // §6.1 — observed care-event variance (numerator) against active approved plans
+    // (denominator context). Review alert only; never auto-changes LOC/fees.
+    const [plans, events] = await Promise.all([
+      prisma.carePlan.findMany({ where: { ...tenant, status: "ACTIVE" }, take: 1000, orderBy: { updatedAt: "desc" }, include: { resident: { select: { firstName: true, lastName: true } } } }),
+      prisma.careEvent.findMany({ where: { ...tenant, occurredAt: { gte: window.start, lt: window.end }, OR: [{ isVariance: true }, { isException: true }] }, take: 1000, orderBy: { occurredAt: "desc" } }),
+    ]);
+    const observed: DrilldownRecord[] = events.map((ev) => ({
+      id: `event-${ev.id}`, label: `${ev.residentName || "Resident"} · ${ev.eventName || ev.taskId || "Care event"}`,
+      detail: `Observed delivery variance${ev.outcome ? ` · ${ev.outcome}` : ""}`, occurredAt: ev.occurredAt.toISOString(),
+      href: `/${path}/caredelivery`, inNumerator: true,
+    }));
+    const planned: DrilldownRecord[] = plans.map((plan) => ({
+      id: `plan-${plan.id}`, label: `${residentName(plan.resident)} · ${plan.title}`,
+      detail: "Active approved plan (planned burden)", occurredAt: plan.updatedAt.toISOString(),
+      href: `/${path}/careplans`, inNumerator: false,
+    }));
+    records = [...observed, ...planned];
+  } else if (metricKey === "competency_currency") {
+    // §6.1 — staff competencies that are unverified or past expiry (assignment-gating).
+    const comps = await prisma.staffCompetency.findMany({
+      where: { staff: tenant }, take: 2000, orderBy: { expiryDate: "asc" },
+      include: { staff: { include: { user: { select: { name: true } } } }, competency: { select: { name: true } } },
+    });
+    records = comps.map((comp) => {
+      const expired = comp.expiryDate ? comp.expiryDate < now : false;
+      return {
+        id: comp.id, label: `${comp.staff?.user?.name || "Staff"} · ${comp.competency?.name || "Competency"}`,
+        detail: [!comp.verified ? "Unverified" : "", expired ? `Expired ${comp.expiryDate!.toISOString().slice(0, 10)}` : comp.expiryDate ? `Valid to ${comp.expiryDate.toISOString().slice(0, 10)}` : "No expiry recorded"].filter(Boolean).join(" · "),
+        href: `/${path}/staffprofiles`, inNumerator: !comp.verified || expired,
+      };
+    });
+  } else if (metricKey === "review_turnaround") {
+    // §6.1 — routed review triggers with elapsed time to nurse acknowledgement.
+    const escalations = await prisma.escalation.findMany({
+      where: { ...tenant, status: { in: ["OPEN", "ACKNOWLEDGED", "IN_PROGRESS", "ESCALATED"] } },
+      take: 1000, orderBy: { createdAt: "desc" }, include: { resident: { select: { firstName: true, lastName: true } } },
+    });
+    records = escalations.map((item) => {
+      const acknowledged = Boolean(item.acknowledgedAt);
+      const hours = acknowledged ? Math.round((new Date(item.acknowledgedAt as Date).getTime() - new Date(item.createdAt).getTime()) / 3600_000) : null;
+      return {
+        id: item.id, label: `${residentName(item.resident)} · ${item.situation}`,
+        detail: acknowledged ? `${hours}h from trigger to acknowledgement` : "Awaiting nurse acknowledgement",
+        occurredAt: item.createdAt.toISOString(), href: `/${path}/escalations`, inNumerator: acknowledged,
+      };
+    });
   } else {
     return null;
   }

@@ -8,7 +8,6 @@ import CaregiverScheduleBoard from "@/components/portal/views/clinical/Caregiver
 import ResidentCareHistory from "@/components/portal/views/clinical/ResidentCareHistory";
 import VitalsTrendBoard from "@/components/portal/views/clinical/VitalsTrendBoard";
 import CaregiverCallBells from "@/components/portal/views/caregiver/CaregiverCallBells";
-import CaregiverResidents from "@/components/portal/views/caregiver/CaregiverResidents";
 import ClockInBoard from "@/components/portal/views/clinical/ClockInBoard";
 import CaregiverReports from "@/components/portal/views/caregiver/CaregiverReports";
 import CaregiverCareTeam from "@/components/portal/views/caregiver/CaregiverCareTeam";
@@ -23,7 +22,7 @@ import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTr
 import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
 import MARDailyBoard from "@/components/portal/views/clinical/MARDailyBoard";
 import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker";
-import { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
+import CareLogsBoard, { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
 import ADLMonitoringBoard from "@/components/portal/views/clinical/ADLMonitoringBoard";
 import ShiftEndorsementBoard from "@/components/portal/views/clinical/ShiftEndorsementBoard";
 import ShiftEndorsementDashboard from "@/components/portal/views/clinical/ShiftEndorsementDashboard";
@@ -74,7 +73,11 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
     case "callbells":
       return <CaregiverCallBells />;
     case "residents":
-      return <CaregiverResidents />;
+      // Resident Directory — same layout as the Care Manager directory, but
+      // read-only (canManage=false → View + QR, no Edit/Deactivate). The generic
+      // residents API scopes a caregiver to their active-shift assignments via
+      // tenantWhere, so only assigned residents appear.
+      return <CareLogsBoard clinicianRole="CAREGIVER" canManage={false} />;
     case "clockin":
       return <ClockInBoard clinicianRole="CAREGIVER" />;
     case "reports":
