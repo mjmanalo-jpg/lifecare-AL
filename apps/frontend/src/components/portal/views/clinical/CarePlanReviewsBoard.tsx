@@ -9,16 +9,17 @@
  */
 
 import { useMemo, useState } from "react";
-import { ClipboardList, ListChecks, Loader2 } from "lucide-react";
+import { ClipboardList, ListChecks, Loader2, AlertTriangle } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { upsertRecord } from "@/lib/api";
+import { upsertRecord, updateRecord } from "@/lib/api";
 import { generateCarePlanForResident, releaseCarePlan, materializeTodayTasks, levelPlan, levelCareTasks, parseAssistanceOptions, type PlanIntervention } from "@/lib/carePlanGen";
+import { duplicateReview, requiresSecondApproval, reviewOutcome, type CarePlanReviewApprovalStatus } from "@/lib/lifecare/carePlanReviewGuards";
 import { levelMeta } from "@/lib/lifecare/levelModel";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { levelOf } from "./CareLogsBoard";
-import { ClinicalButton, ClinicalCard, StatCard, DataState, FieldLabel, controlClass, StatusPill, SERIF } from "./clinical-ui";
+import { ClinicalButton, ClinicalCard, ClinicalModal, StatCard, DataState, FieldLabel, controlClass, StatusPill, SERIF } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const REVIEW_KEY = "care_plan_reviews";
@@ -40,11 +41,20 @@ interface Review {
   nextReviewDate?: string; carePlanStatus: string; familyUpdate: boolean; physicianFollowup: boolean;
   decision: string; reason?: string; actionPlan?: string; responsible?: string; targetDate?: string;
   reviewedBy?: string; createdAt: string;
+  // Governance workflow (migration-free): a review can release the plan directly (single
+  // nursing approval) or wait in the Pending Approval queue for a second authorized approver
+  // (LOC-change decisions) or for incomplete activation gates.
+  approvalStatus?: CarePlanReviewApprovalStatus; // APPROVED (released/recorded) | PENDING | REJECTED
+  planId?: string;                                // the draft this review targets
+  submittedById?: string;                         // reviewer's User id (segregation of duties)
+  approvedById?: string; approvedByName?: string; approvedAt?: string;
+  rejectionReason?: string;                       // set on REJECTED
+  pendingReason?: string;                         // why it's awaiting approval (missing gates / LOC change)
 }
 const parseReviews = (raw: string | null | undefined): Review[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((r) => r && typeof r.id === "string") : []; } catch { return []; } };
 
 export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
-  const { name: clinicianName } = useClinician(clinicianRole);
+  const { name: clinicianName, userId: clinicianId } = useClinician(clinicianRole);
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const incQ = useLiveQuery<Row>("incidents", { query: "take=400", tables: ["Incident"] });
   const ceQ = useLiveQuery<Row>("care-events", { query: "take=1000", tables: ["CareEvent"] });
@@ -61,9 +71,15 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
     return m;
   }, [cpQ.data]);
 
-  const [tab, setTab] = useState<"new" | "due" | "history">("new");
+  const [tab, setTab] = useState<"new" | "due" | "history" | "pending">("new");
   const [resId, setResId] = useState("");
   const [genBusy, setGenBusy] = useState(false);
+  const [actingId, setActingId] = useState("");
+  // Pending "generate care plan" confirmation (bespoke modal replaces the generic Swal confirm).
+  const [genConfirm, setGenConfirm] = useState<{ plan?: { title?: string; goals: string[]; interventions: PlanIntervention[] }; already: boolean } | null>(null);
+
+  // Reviews awaiting approval (LOC-change second sign-off, or incomplete activation gates).
+  const pendingReviews = useMemo(() => reviews.filter((r) => r.approvalStatus === "PENDING"), [reviews]);
 
   const today = new Date();
   const resident = residents.find((r: Row) => s(r.id) === resId) || null;
@@ -92,16 +108,16 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
   // Generate a care plan + caregiver tasks. `plan` (from the ICP editor) makes it
   // richer — the nurse's individualized interventions/frequency/notes replace the
   // baseline template. Omitted → the Level-N baseline package is used as before.
-  const genPlan = async (plan?: { title?: string; goals: string[]; interventions: PlanIntervention[] }) => {
+  // Open the confirmation modal; the actual generation runs on confirm (runGenerate).
+  const genPlan = (plan?: { title?: string; goals: string[]; interventions: PlanIntervention[] }) => {
+    if (!resident || genBusy) return;
+    setGenConfirm({ plan, already: residentsWithPlan.has(s(resident.id)) });
+  };
+
+  const runGenerate = async (plan?: { title?: string; goals: string[]; interventions: PlanIntervention[] }) => {
     if (!resident || genBusy) return;
     const n = levelOf(resident).n;
-    const already = residentsWithPlan.has(s(resident.id));
-    const c = await Swal.fire({
-      title: plan ? "Generate individualized care plan?" : "Generate care plan & tasks?",
-      html: `Create a <b>Level ${n}</b> care plan for <b>${s(resident.name)}</b>${plan ? ` from the <b>${plan.interventions.length} individualized intervention${plan.interventions.length === 1 ? "" : "s"}</b>` : " from the baseline package"}.<br/><br/><span style='color:#4F46E5'>The plan is <b>held as a draft</b> — its tasks are NOT sent to caregivers until you submit &amp; approve the care plan review below.</span>${already ? "<br/><br/><span style='color:#b45309'>This resident already has a care plan — this creates another.</span>" : ""}`,
-      icon: "question", showCancelButton: true, confirmButtonColor: "#4F46E5", confirmButtonText: "Generate draft",
-    });
-    if (!c.isConfirmed) return;
+    setGenConfirm(null);
     setGenBusy(true);
     try {
       const raw = (resident.raw || {}) as Row;
@@ -110,6 +126,43 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
       Swal.fire({ icon: "success", title: "Draft care plan created", html: `Level ${n} plan with <b>${interventionCount} intervention${interventionCount === 1 ? "" : "s"}</b> prepared and <b>held</b>. Submit the care plan review below — once approved, tasks are generated daily for the resident's scheduled caregiver.`, timer: 3600, showConfirmButton: false });
     } catch (e) { Swal.fire("Couldn't generate", e instanceof Error ? e.message : "Please try again.", "error"); }
     finally { setGenBusy(false); }
+  };
+
+  // Approve a pending review (second authorized sign-off / gate completion): release the
+  // held plan and mark the review approved. Segregation of duties — the reviewer who
+  // submitted a LOC change cannot self-approve it.
+  const approvePending = async (rv: Review) => {
+    if (!rv.planId) { Swal.fire("No linked plan", "This review has no draft plan to release.", "error"); return; }
+    if (rv.submittedById && rv.submittedById === clinicianId) {
+      Swal.fire({ icon: "warning", title: "Second approver required", text: "A level-of-care change must be approved by someone other than the reviewer who submitted it." });
+      return;
+    }
+    const c = await Swal.fire({ title: "Approve & release plan?", text: `Approve "${rv.decision}" and release this resident's care plan?`, icon: "question", showCancelButton: true, confirmButtonColor: "#4F46E5", confirmButtonText: "Approve & release" });
+    if (!c.isConfirmed) return;
+    setActingId(rv.id);
+    try {
+      await releaseCarePlan(s(rv.planId), { approvedByName: clinicianName, effectiveDate: rv.reviewDate, nextReviewDate: rv.nextReviewDate || "" });
+      const dispatched = await materializeTodayTasks();
+      await persist(reviews.map((r) => (r.id === rv.id ? { ...r, approvalStatus: "APPROVED" as const, approvedById: clinicianId, approvedByName: clinicianName, approvedAt: new Date().toISOString(), pendingReason: undefined } : r)));
+      await cpQ.refetch?.();
+      Swal.fire({ icon: "success", title: "Approved · plan released", html: dispatched > 0 ? `${dispatched} task${dispatched === 1 ? "" : "s"} dispatched to today's scheduled caregiver.` : "Plan is now active.", timer: 3200, showConfirmButton: false });
+    } catch (e) { Swal.fire("Couldn't release", e instanceof Error ? e.message : "The plan's activation gates are still incomplete.", "error"); }
+    finally { setActingId(""); }
+  };
+
+  // Reject a pending review: record the reason, revert the held draft to DRAFT so it can be
+  // revised and re-reviewed.
+  const rejectPending = async (rv: Review) => {
+    const c = await Swal.fire({ title: "Reject review?", input: "textarea", inputLabel: "Reason for rejection", inputPlaceholder: "Explain what must change before this plan can be approved…", showCancelButton: true, confirmButtonColor: "#dc2626", confirmButtonText: "Reject", inputValidator: (v: string) => (!v || v.trim().length < 4 ? "A reason is required." : undefined) });
+    if (!c.isConfirmed) return;
+    setActingId(rv.id);
+    try {
+      if (rv.planId) { try { await updateRecord("care-plans", s(rv.planId), { status: "DRAFT" }); } catch { /* best-effort */ } }
+      await persist(reviews.map((r) => (r.id === rv.id ? { ...r, approvalStatus: "REJECTED" as const, rejectionReason: String(c.value || "").trim(), pendingReason: undefined } : r)));
+      await cpQ.refetch?.();
+      Swal.fire({ toast: true, position: "top-end", icon: "info", title: "Review rejected · plan returned to draft", showConfirmButton: false, timer: 2200 });
+    } catch (e) { Swal.fire("Couldn't reject", e instanceof Error ? e.message : "Please try again.", "error"); }
+    finally { setActingId(""); }
   };
 
   // Reviews Due: residents whose next review has passed, or who've never been reviewed.
@@ -127,8 +180,8 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
       </div>
 
       <div className="flex items-center gap-2" role="tablist" aria-label="Care plan reviews view">
-        {([["new", "New Review"], ["due", "Reviews Due"], ["history", "History"]] as const).map(([v, label]) => (
-          <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${tab === v ? "bg-[#4F46E5] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}{v === "due" && dueList.length ? ` (${dueList.length})` : ""}</button>
+        {([["new", "New Review"], ["pending", "Pending Approval"], ["due", "Reviews Due"], ["history", "History"]] as const).map(([v, label]) => (
+          <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${tab === v ? "bg-[#4F46E5] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}{v === "due" && dueList.length ? ` (${dueList.length})` : ""}{v === "pending" && pendingReviews.length ? ` (${pendingReviews.length})` : ""}</button>
         ))}
       </div>
 
@@ -178,38 +231,61 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
 
           {resident && <ReviewForm resident={resident} recentInc={recentInc} recentVariances={recentVariances} last={latestReview(resId)} reviewedBy={clinicianName} heldPlanCount={(draftPlansByResident.get(resId) || []).length}
             onSubmit={async (rec) => {
-              await persist([{ ...rec, id: newId(), createdAt: new Date().toISOString() }, ...reviews]);
-              // Release any held (DRAFT) plans for this resident — unless the decision
-              // parks the plan for follow-up. Releasing = flip to ACTIVE; the
-              // materializer then spins today's tasks for the scheduled caregiver.
+              // Idempotency (governance): block a duplicate review for the same resident in
+              // the same review period. LOC-change decisions are exempt (reassessment-driven).
+              const dup = duplicateReview(reviews, rec.residentId, rec.reviewPeriod, rec.decision);
+              if (dup) {
+                Swal.fire({ icon: "warning", title: "Review already submitted",
+                  text: `A care plan review for this resident already exists for ${rec.reviewPeriod} (submitted ${fmt(dup.reviewDate || (dup.createdAt || "").slice(0, 10))}${dup.approvalStatus === "PENDING" ? " · awaiting approval" : ""}). Open History, or wait for the next review period.` });
+                return;
+              }
+
               const drafts = [...(draftPlansByResident.get(rec.residentId) || [])]
                 .sort((a, b) => s(b.createdAt || b.startDate).localeCompare(s(a.createdAt || a.startDate)));
-              const willRelease = drafts.length > 0 && !HOLD_DECISIONS.has(rec.decision);
+              const targetPlan = drafts[0];
+              const now = new Date().toISOString();
+              const base = { ...rec, id: newId(), createdAt: now, submittedById: clinicianId, planId: targetPlan ? s(targetPlan.id) : undefined };
+
+              // LOC-change decisions need a SECOND authorized approver (Step 6): route to the
+              // Pending Approval queue and hold the draft — do NOT release now.
+              if (requiresSecondApproval(rec.decision) && targetPlan) {
+                try { await updateRecord("care-plans", s(targetPlan.id), { status: "UNDER_REVIEW" }); } catch { /* status flip is best-effort */ }
+                await persist([{ ...base, approvalStatus: "PENDING", pendingReason: `${rec.decision} — requires a second authorized approver.` }, ...reviews]);
+                await cpQ.refetch?.();
+                setResId(""); setTab("pending");
+                Swal.fire({ icon: "info", title: "Sent for authorized approval", text: "This level-of-care change needs a second authorized approver before the plan is released. It is now in Pending Approval." });
+                return;
+              }
+
+              // Single nursing approval (Step 9): releasing = flip the held draft to ACTIVE; the
+              // materializer then spins today's tasks for the scheduled caregiver.
+              const isHold = HOLD_DECISIONS.has(rec.decision);
+              const willRelease = !!targetPlan && !isHold;
               let dispatched = 0;
               if (willRelease) {
                 try {
-                  await releaseCarePlan(s(drafts[0].id), {
-                    approvedByName: rec.reviewedBy || clinicianName,
-                    effectiveDate: rec.reviewDate,
-                    nextReviewDate: rec.nextReviewDate || "",
-                  });
+                  await releaseCarePlan(s(targetPlan.id), { approvedByName: rec.reviewedBy || clinicianName, effectiveDate: rec.reviewDate, nextReviewDate: rec.nextReviewDate || "" });
                   dispatched = await materializeTodayTasks();
                   await cpQ.refetch?.();
                 } catch (error) {
-                  Swal.fire({
-                    icon: "warning",
-                    title: "Review saved · plan still held",
-                    text: error instanceof Error ? error.message : "Complete the plan's individualization and approval fields, then release it again.",
-                  });
+                  // Activation gates incomplete → durable Awaiting-approval state (visible in the
+                  // Pending Approval queue with the missing gates), not a fleeting toast.
+                  const why = error instanceof Error ? error.message : "Activation gates incomplete.";
+                  try { await updateRecord("care-plans", s(targetPlan.id), { status: "UNDER_REVIEW" }); } catch { /* best-effort */ }
+                  await persist([{ ...base, approvalStatus: "PENDING", pendingReason: why }, ...reviews]);
+                  await cpQ.refetch?.();
+                  setResId(""); setTab("pending");
+                  Swal.fire({ icon: "warning", title: "Plan held — activation gates incomplete", text: `${why} Complete the plan, then approve it from Pending Approval.` });
                   return;
                 }
               }
+              await persist([{ ...base, approvalStatus: "APPROVED", approvedByName: willRelease ? (rec.reviewedBy || clinicianName) : undefined, approvedById: willRelease ? clinicianId : undefined, approvedAt: willRelease ? now : undefined }, ...reviews]);
               setResId(""); setTab("history");
               if (willRelease) {
                 Swal.fire({ icon: "success", title: "Review approved · plan released", html: dispatched > 0
                   ? `${dispatched} task${dispatched === 1 ? "" : "s"} dispatched to today's scheduled caregiver${dispatched === 1 ? "" : "s"}. The plan will keep generating tasks daily for whoever covers the resident.`
                   : `Plan is now active. Tasks will appear for the resident's caregiver on days one is scheduled (none scheduled today).`, timer: 3600, showConfirmButton: false });
-              } else if (drafts.length && HOLD_DECISIONS.has(rec.decision)) {
+              } else if (isHold && targetPlan) {
                 Swal.fire({ toast: true, position: "top-end", icon: "info", title: "Review submitted · plan kept on hold", showConfirmButton: false, timer: 2400 });
               } else {
                 Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Care plan review submitted", showConfirmButton: false, timer: 1800 });
@@ -261,6 +337,49 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
         </>
       )}
 
+      {tab === "pending" && (
+        <DataState
+          loading={loading && reviews.length === 0}
+          error={error}
+          empty={pendingReviews.length === 0}
+          emptyTitle="Nothing awaiting approval"
+          emptyHint="Level-of-care changes and plans with incomplete activation gates appear here for authorized approval."
+          onRetry={() => void refetch()}
+          skeletonRows={3}
+        >
+          <div className="space-y-3">
+            {pendingReviews.map((rv) => {
+              const r = residents.find((x: Row) => s(x.id) === rv.residentId);
+              const mine = !!rv.submittedById && rv.submittedById === clinicianId;
+              const acting = actingId === rv.id;
+              return (
+                <ClinicalCard key={rv.id} className="p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-bold text-[var(--clinical-ink)]">{s(r?.name) || "Resident"} <span className="text-xs font-normal text-[var(--clinical-muted)]">Rm {s(r?.room)}</span></p>
+                        <StatusPill status={requiresSecondApproval(rv.decision) ? "AWAITING APPROVAL" : "GATES INCOMPLETE"} />
+                      </div>
+                      <p className="mt-1 text-sm text-[var(--clinical-ink-soft)]"><b>{rv.decision}</b> · Level {rv.levelAtReview} · {rv.reviewPeriod}</p>
+                      {rv.pendingReason && <p className="mt-1 text-xs" style={{ color: "var(--clinical-coral)" }}>{rv.pendingReason}</p>}
+                      {rv.reason && <p className="mt-1 text-xs text-[var(--clinical-muted)]">Rationale: {rv.reason}</p>}
+                      <p className="mt-1 text-xs text-[var(--clinical-muted)]">Submitted {fmt((rv.createdAt || "").slice(0, 10))}{rv.reviewedBy ? ` by ${rv.reviewedBy}` : ""}</p>
+                      {mine && <p className="mt-1.5 text-xs" style={{ color: "var(--clinical-coral)" }}>You submitted this review — a different authorized approver must release it.</p>}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <ClinicalButton variant="secondary" size="sm" disabled={acting} onClick={() => void rejectPending(rv)}>Reject</ClinicalButton>
+                      <ClinicalButton variant="primary" size="sm" disabled={acting || mine} onClick={() => void approvePending(rv)} title={mine ? "A second authorized approver is required" : undefined}>
+                        {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />} Approve &amp; release
+                      </ClinicalButton>
+                    </div>
+                  </div>
+                </ClinicalCard>
+              );
+            })}
+          </div>
+        </DataState>
+      )}
+
       {tab === "history" && (
         <DataState
           loading={loading && reviews.length === 0}
@@ -281,7 +400,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
                     <td className="px-4 py-2.5 text-[var(--clinical-ink-soft)]">{fmt(rv.reviewDate)} <span className="text-[var(--clinical-muted)]">· {rv.reviewPeriod}</span></td>
                     <td className="px-4 py-2.5 font-semibold text-[var(--clinical-ink-soft)]">Level {rv.levelAtReview}</td>
                     <td className="px-4 py-2.5 text-[var(--clinical-ink-soft)]">{rv.decision}</td>
-                    <td className="px-4 py-2.5"><StatusPill status={rv.carePlanStatus} /></td>
+                    <td className="px-4 py-2.5 text-[var(--clinical-ink-soft)]">{reviewOutcome({ decision: rv.decision, approvalStatus: rv.approvalStatus, released: !!rv.approvedAt, approvedByName: rv.approvedByName })}</td>
                     <td className="px-4 py-2.5 text-[var(--clinical-ink-soft)]">{rv.reviewedBy || "—"}</td>
                   </tr>
                 ); })}
@@ -289,6 +408,47 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
             </table>
           </div>
         </DataState>
+      )}
+      {genConfirm && resident && (
+        <ClinicalModal open onClose={() => setGenConfirm(null)} size="md"
+          title="Generate care plan &amp; tasks?"
+          description={`A Level ${levelOf(resident).n} plan for ${s(resident.name)} · ${genConfirm.plan ? `${genConfirm.plan.interventions.length} individualized intervention${genConfirm.plan.interventions.length === 1 ? "" : "s"}` : "baseline package"}`}
+          footer={
+            <>
+              <ClinicalButton variant="secondary" onClick={() => setGenConfirm(null)} disabled={genBusy}>Cancel</ClinicalButton>
+              <ClinicalButton variant="primary" onClick={() => void runGenerate(genConfirm.plan)} disabled={genBusy}>
+                {genBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />} Generate draft
+              </ClinicalButton>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 rounded-xl border p-3" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold" style={{ backgroundColor: "var(--clinical-surface)", color: "var(--clinical-panel)" }}>{initials(s(resident.name))}</span>
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-[var(--clinical-ink)]">{s(resident.name)}</p>
+                <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[var(--clinical-muted)]">
+                  <span className="rounded-md px-1.5 py-0.5 font-bold text-white" style={{ backgroundColor: "var(--clinical-panel)" }}>Level {levelOf(resident).n}</span>
+                  <span>Room {s(resident.room)}</span>
+                  <span aria-hidden>·</span>
+                  <span>{genConfirm.plan ? `${genConfirm.plan.interventions.length} individualized intervention${genConfirm.plan.interventions.length === 1 ? "" : "s"}` : "Baseline package"}</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2.5 rounded-xl border p-3 text-sm" style={{ borderColor: "color-mix(in srgb, #4F46E5 35%, transparent)", backgroundColor: "color-mix(in srgb, #4F46E5 8%, transparent)", color: "var(--clinical-ink-soft)" }}>
+              <ListChecks className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "#4F46E5" }} />
+              <p>The plan is <b className="text-[var(--clinical-ink)]">held as a draft</b> — its tasks are not sent to caregivers until you submit and approve the care plan review below.</p>
+            </div>
+
+            {genConfirm.already && (
+              <div className="flex items-start gap-2.5 rounded-xl border p-3 text-sm" style={{ borderColor: "color-mix(in srgb, #b45309 40%, transparent)", backgroundColor: "color-mix(in srgb, #b45309 10%, transparent)", color: "var(--clinical-ink-soft)" }}>
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "#b45309" }} />
+                <p>This resident <b className="text-[var(--clinical-ink)]">already has a care plan</b> — generating creates another draft alongside it.</p>
+              </div>
+            )}
+          </div>
+        </ClinicalModal>
       )}
     </div>
   );
@@ -341,6 +501,10 @@ function CarePlanBuilder({ level, genBusy, onGenerate }: {
 
   const patch = (id: string, p: Partial<TaskItem>) => setItems((arr) => arr.map((x) => (x.taskId === id ? { ...x, ...p } : x)));
   const setDomain = (domain: string, on: boolean) => setItems((arr) => arr.map((x) => (x.domain === domain ? { ...x, included: on } : x)));
+  // Bulk-apply across a domain's INCLUDED tasks — set once, tweak exceptions. Frequency is
+  // universal; assistance only lands on tasks that actually offer that governed option.
+  const bulkFreq = (domain: string, freq: string) => setItems((arr) => arr.map((x) => (x.domain === domain && x.included ? { ...x, freq } : x)));
+  const bulkAssist = (domain: string, assistance: string) => setItems((arr) => arr.map((x) => (x.domain === domain && x.included && x.assistanceChoices.includes(assistance) ? { ...x, assistance } : x)));
   const chosen = items.filter((x) => x.included);
 
   // Group tasks by domain for a navigable, level-scoped plan.
@@ -397,6 +561,7 @@ function CarePlanBuilder({ level, genBusy, onGenerate }: {
       <div className="space-y-3">
         {byDomain.map(([domain, group]) => {
           const on = group.filter((g) => g.included).length;
+          const assistUnion = Array.from(new Set(group.flatMap((g) => g.assistanceChoices)));
           return (
             <details key={domain} open className="rounded-xl border" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
               <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-2.5">
@@ -407,6 +572,23 @@ function CarePlanBuilder({ level, genBusy, onGenerate }: {
                 </span>
               </summary>
               <div className="space-y-2 border-t px-3 py-3" style={{ borderColor: "var(--clinical-line)" }}>
+                {on > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg px-2.5 py-2" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--clinical-muted)]">Apply to all {on} included:</span>
+                    {assistUnion.length > 0 && (
+                      <select value="" onChange={(e) => e.target.value && bulkAssist(domain, e.target.value)} aria-label={`Set assistance for all included ${domain} tasks`}
+                        className="rounded-md border bg-[var(--clinical-surface)] px-2 py-1 text-[11px] text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>
+                        <option value="">Assistance…</option>
+                        {assistUnion.map((a) => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                    )}
+                    <select value="" onChange={(e) => e.target.value && bulkFreq(domain, e.target.value)} aria-label={`Set frequency for all included ${domain} tasks`}
+                      className="rounded-md border bg-[var(--clinical-surface)] px-2 py-1 text-[11px] text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>
+                      <option value="">Frequency…</option>
+                      {FREQ_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                  </div>
+                )}
                 {group.map((it) => (
                   <div key={it.taskId} className={`rounded-lg border p-3 transition ${it.included ? "" : "opacity-55"}`} style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: it.included ? "var(--clinical-line-strong)" : "var(--clinical-line)" }}>
                     <div className="flex items-start gap-3">

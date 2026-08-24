@@ -5,6 +5,8 @@ import { Check, X, Clock, Pill, CalendarClock, TestTube, ClipboardList, Plus, Lo
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, upsertRecord } from "@/lib/api";
+import { releaseCarePlan, materializeTodayTasks } from "@/lib/carePlanGen";
+import { requiresSecondApproval, type CarePlanReviewApprovalStatus } from "@/lib/lifecare/carePlanReviewGuards";
 
 type Row = Record<string, unknown>;
 const s = (v: unknown) => (v == null ? "" : String(v));
@@ -18,13 +20,24 @@ const pickApptDate = (m: Row) => m.appointmentDate || m.scheduledDate || m.sched
 const LAB_DECISIONS_KEY = "lab_order_decisions";
 type LabDecision = { decision: "APPROVED" | "REJECTED"; by: string; at: string; reason?: string };
 
-type Kind = "appointment" | "med" | "lab";
+// Care-plan LOC-change reviews awaiting a second authorized approver live in the same
+// migration-free app-setting the Care Plan Governance board writes.
+const CARE_PLAN_REVIEWS_KEY = "care_plan_reviews";
+interface CarePlanReview {
+  id: string; residentId: string; reviewDate: string; nextReviewDate?: string; levelAtReview?: number;
+  decision: string; reason?: string; reviewedBy?: string; createdAt?: string;
+  approvalStatus?: CarePlanReviewApprovalStatus; planId?: string; submittedById?: string; pendingReason?: string; rejectionReason?: string;
+  approvedByName?: string; approvedById?: string; approvedAt?: string;
+}
+
+type Kind = "appointment" | "med" | "lab" | "care-plan";
 type Item = { kind: Kind; id: string; row: Row; state: "PENDING" | "APPROVED" | "REJECTED"; when: number };
 
 const KIND_META: Record<Kind, { label: string; Icon: typeof Pill; tint: string; ring: string }> = {
   appointment: { label: "Medical Appointment", Icon: CalendarClock, tint: "bg-blue-50 text-blue-600", ring: "border-blue-200" },
   med: { label: "Medication", Icon: Pill, tint: "bg-purple-50 text-purple-600", ring: "border-purple-200" },
   lab: { label: "Lab Order", Icon: TestTube, tint: "bg-amber-50 text-amber-600", ring: "border-amber-200" },
+  "care-plan": { label: "Care Plan · LOC Change", Icon: ClipboardList, tint: "bg-emerald-50 text-emerald-600", ring: "border-emerald-200" },
 };
 
 /**
@@ -56,6 +69,17 @@ export default function ApprovalWorkflows() {
     const row = (settingsQ.data || []).find((r) => s(r.key || r.id) === LAB_DECISIONS_KEY);
     try { return row ? (JSON.parse(s(row.value)) as Record<string, LabDecision>) : {}; } catch { return {}; }
   }, [settingsQ.data]);
+
+  // Care-plan LOC-change reviews (migration-free, same app-setting the governance board writes).
+  const carePlanReviews = useMemo<CarePlanReview[]>(() => {
+    const row = (settingsQ.data || []).find((r) => s(r.key || r.id) === CARE_PLAN_REVIEWS_KEY);
+    try { const v = row ? JSON.parse(s(row.value)) : []; return Array.isArray(v) ? (v as CarePlanReview[]) : []; } catch { return []; }
+  }, [settingsQ.data]);
+  const patchCarePlanReview = async (id: string, patch: Partial<CarePlanReview>) => {
+    const next = carePlanReviews.map((r) => (r.id === id ? { ...r, ...patch } : r));
+    await upsertRecord("app-settings", CARE_PLAN_REVIEWS_KEY, { key: CARE_PLAN_REVIEWS_KEY, value: JSON.stringify(next) });
+    await settingsQ.refetch();
+  };
 
   // Residents for the "Request Meds" submission form (non-deciders).
   const { data: residentRows } = useLiveQuery<Row>("residents", { query: "take=300", tables: ["Resident"] });
@@ -103,8 +127,16 @@ export default function ApprovalWorkflows() {
       const state = dec ? (dec.decision === "APPROVED" ? "APPROVED" : "REJECTED") : "PENDING";
       out.push({ kind: "lab", id: s(row.id), row, state, when: dec ? new Date(dec.at).getTime() || 0 : new Date(s(row.createdAt)).getTime() || 0 });
     }
+    for (const rv of carePlanReviews) {
+      // Only LOC-change reviews awaiting a SECOND authorized approver surface here; gate-
+      // completion reviews stay in the Care Plan Governance board for the reviewer to finish.
+      if (rv.approvalStatus !== "PENDING" || !requiresSecondApproval(rv.decision) || !rv.planId) continue;
+      const res = residents.find((r) => r.id === rv.residentId);
+      const row: Row = { ...rv, resident: { firstName: res?.name || "Resident", lastName: "", roomNumber: res?.room || "" } };
+      out.push({ kind: "care-plan", id: rv.id, row, state: "PENDING", when: new Date(s(rv.createdAt)).getTime() || 0 });
+    }
     return out.sort((a, b) => b.when - a.when);
-  }, [referrals, meds, labs, labDecisions]);
+  }, [referrals, meds, labs, labDecisions, carePlanReviews, residents]);
 
   const pending = useMemo(() => items.filter((i) => i.state === "PENDING"), [items]);
   const counts = useMemo(() => ({
@@ -112,6 +144,7 @@ export default function ApprovalWorkflows() {
     appointment: pending.filter((i) => i.kind === "appointment").length,
     med: pending.filter((i) => i.kind === "med").length,
     lab: pending.filter((i) => i.kind === "lab").length,
+    carePlan: pending.filter((i) => i.kind === "care-plan").length,
   }), [pending]);
 
   const notifySubmitter = async (userId: string, title: string, message: string, relatedId: string, relatedType: string) => {
@@ -128,7 +161,12 @@ export default function ApprovalWorkflows() {
   // ── Decisions ─────────────────────────────────────────────────────────────
   const approve = async (it: Item) => {
     const m = it.row;
-    const label = it.kind === "med" ? `${s(m.name)} ${s(m.dosage)}` : it.kind === "lab" ? s(m.testName) : "this appointment";
+    // Segregation of duties: a LOC change can't be released by the reviewer who submitted it.
+    if (it.kind === "care-plan" && s(m.submittedById) && s(m.submittedById) === s(session.id)) {
+      Swal.fire({ icon: "warning", title: "Second approver required", text: "A level-of-care change must be approved by someone other than the reviewer who submitted it." });
+      return;
+    }
+    const label = it.kind === "med" ? `${s(m.name)} ${s(m.dosage)}` : it.kind === "lab" ? s(m.testName) : it.kind === "care-plan" ? s(m.decision) : "this appointment";
     const res = await Swal.fire({ title: "Approve request?", text: `Approve ${label} for ${rname(m)}?`, icon: "question", showCancelButton: true, confirmButtonColor: "#2563eb", confirmButtonText: "Approve" });
     if (!res.isConfirmed) return;
     try {
@@ -140,6 +178,11 @@ export default function ApprovalWorkflows() {
         await updateRecord("hospital-referrals", it.id, { status: "APPROVED", approvedByName: session.name, approvedAt: new Date().toISOString(), rejectionReason: null });
         await notifySubmitter(s(m.referredById), "Appointment approved", `The appointment for ${rname(m)} was approved and can now be scheduled.`, it.id, "hospitalReferral");
         await refetchRefs();
+      } else if (it.kind === "care-plan") {
+        await releaseCarePlan(s(m.planId), { approvedByName: session.name || "Approver", effectiveDate: s(m.reviewDate), nextReviewDate: s(m.nextReviewDate) });
+        await materializeTodayTasks();
+        await patchCarePlanReview(it.id, { approvalStatus: "APPROVED", approvedByName: session.name || undefined, approvedById: session.id || undefined, approvedAt: new Date().toISOString(), pendingReason: undefined });
+        await notifySubmitter(s(m.submittedById), "Care plan approved", `The ${s(m.decision)} for ${rname(m)} was approved and the plan released.`, it.id, "carePlan");
       } else {
         await saveLabDecision(it.id, { decision: "APPROVED", by: session.name || "Reviewer", at: new Date().toISOString() });
       }
@@ -162,6 +205,11 @@ export default function ApprovalWorkflows() {
         await updateRecord("hospital-referrals", it.id, { status: "CANCELLED", rejectionReason: reason });
         await notifySubmitter(s(m.referredById), "Appointment rejected", `The appointment for ${rname(m)} was rejected: ${reason}`, it.id, "hospitalReferral");
         await refetchRefs();
+      } else if (it.kind === "care-plan") {
+        // Return the held draft to DRAFT so it can be revised and re-reviewed.
+        if (s(m.planId)) { try { await updateRecord("care-plans", s(m.planId), { status: "DRAFT" }); } catch { /* best-effort */ } }
+        await patchCarePlanReview(it.id, { approvalStatus: "REJECTED", rejectionReason: reason, pendingReason: undefined });
+        await notifySubmitter(s(m.submittedById), "Care plan change rejected", `The ${s(m.decision)} for ${rname(m)} was rejected: ${reason}`, it.id, "carePlan");
       } else {
         await saveLabDecision(it.id, { decision: "REJECTED", by: session.name || "Reviewer", at: new Date().toISOString(), reason });
       }
@@ -190,11 +238,12 @@ export default function ApprovalWorkflows() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
         <ApprovalStat value={counts.total} label="Total Pending" tone="#d97706" ring="border-amber-200" />
         <ApprovalStat value={counts.appointment} label="Appointments" tone="#2563eb" ring="border-blue-200" />
         <ApprovalStat value={counts.med} label="Medications" tone="#7c3aed" ring="border-purple-200" />
         <ApprovalStat value={counts.lab} label="Lab Orders" tone="#d97706" ring="border-amber-200" />
+        <ApprovalStat value={counts.carePlan} label="Care Plans" tone="#059669" ring="border-emerald-200" />
       </div>
 
       {/* Tabs */}
@@ -214,9 +263,11 @@ export default function ApprovalWorkflows() {
             ? `${s(m.dosage)} · ${s(m.route) || "PO"} · ${s(m.frequency)}`
             : it.kind === "lab"
               ? [s(m.category), s(m.specimen)].filter(Boolean).join(" · ")
-              : [s(m.notes).replace(/^Specialist:\s*/, ""), s(m.facilityName), fmt(pickApptDate(m))].filter(Boolean).join(" · ");
-          const subtitle = it.kind === "med" ? s(m.name) : it.kind === "lab" ? s(m.testName) : (s(m.reason) || "Referral");
-          const requester = it.kind === "med" ? s(m.submittedByName) : it.kind === "appointment" ? s(m.referredByName) : s(m.orderingProvider);
+              : it.kind === "care-plan"
+                ? [`Level ${s(m.levelAtReview)}`, s(m.pendingReason)].filter(Boolean).join(" · ")
+                : [s(m.notes).replace(/^Specialist:\s*/, ""), s(m.facilityName), fmt(pickApptDate(m))].filter(Boolean).join(" · ");
+          const subtitle = it.kind === "med" ? s(m.name) : it.kind === "lab" ? s(m.testName) : it.kind === "care-plan" ? s(m.decision) : (s(m.reason) || "Referral");
+          const requester = it.kind === "med" ? s(m.submittedByName) : it.kind === "appointment" ? s(m.referredByName) : it.kind === "care-plan" ? s(m.reviewedBy) : s(m.orderingProvider);
           const requestedAt = fmt(m.createdAt);
           return (
             <div key={`${it.kind}:${it.id}`} className={`rounded-2xl border bg-white p-4 ${it.state === "PENDING" ? meta.ring : "border-slate-200"}`}>
