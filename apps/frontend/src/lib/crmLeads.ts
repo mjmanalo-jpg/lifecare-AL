@@ -45,6 +45,8 @@ export interface Lead {
   tourDate?: string;              // ISO datetime
   createdAt: string;
   convertedAdmissionId?: string;
+  /** External source key for idempotent ingestion (e.g. SLMS Home care_recipient id). */
+  externalId?: string;
   activity: LeadActivity[];
 }
 
