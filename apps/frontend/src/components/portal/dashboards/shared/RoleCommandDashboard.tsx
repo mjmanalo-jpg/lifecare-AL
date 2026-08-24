@@ -5,8 +5,9 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   Activity, AlertTriangle, ArrowUpRight, BellRing, CalendarClock, CheckCircle2,
-  ChevronRight, CircleHelp, ClipboardCheck, ClipboardList, Clock3, Info, Loader2, RefreshCw,
+  ChevronRight, ChevronDown, CircleHelp, ClipboardCheck, ClipboardList, Clock3, Info, Loader2, RefreshCw,
   ShieldAlert, Stethoscope, UserRoundCheck, UsersRound, Timer, Clock, CalendarDays, CalendarRange,
+  TrendingUp, TrendingDown,
 } from "lucide-react";
 import {
   ClinicalButton, ClinicalCard, ClinicalHeader, ClinicalModal, ClinicalPage,
@@ -70,6 +71,43 @@ const METRIC_TONE = {
   ACTION: "text-[var(--clinical-coral)]",
 };
 
+// Attention band ordering: act first, then watch. GOOD never reaches the band.
+const ATTENTION_RANK: Record<string, number> = { ACTION: 0, WATCH: 1, GOOD: 2 };
+
+const METRIC_STATE_LABEL: Record<string, string> = { ACTION: "Act now", WATCH: "Watch", GOOD: "Steady" };
+const METRIC_TOP: Record<string, "coral" | "amber" | "green" | "none"> = { ACTION: "coral", WATCH: "amber", GOOD: "none" };
+
+// Governed §6/§7 zone a KPI belongs to, keyed by metric key. Role-agnostic labels so
+// one map serves care-manager and administrator alike; unmapped keys fall to "Other measures".
+const METRIC_GROUP: Record<string, string> = {
+  open_clinical_escalations: "Clinical Risk", change_of_condition: "Clinical Risk", repeated_variance_rate: "Clinical Risk",
+  assessment_current: "Assessment & LOC", reassessment_on_time: "Assessment & LOC",
+  care_plan_current: "Care Plan", care_plan_backlog: "Care Plan",
+  care_delivered_this_shift: "Care Delivery", care_delivery: "Care Delivery", variance_free_delivery: "Care Delivery",
+  care_delivery_reliability: "Care Delivery", observed_vs_planned_burden: "Care Delivery",
+  overdue_care_rate: "Care Delivery", exception_event_rate: "Care Delivery",
+  safety_incidents: "Safety & Transitions", hospital_ed: "Safety & Transitions", hospital_ed_count: "Safety & Transitions",
+  assignment_coverage: "Staffing & Coverage", unassigned_care: "Staffing & Coverage",
+  competency_currency: "Staffing & Coverage", census_occupancy: "Staffing & Coverage",
+  dt013_review_load: "Service & Decisions", dt013_utilization: "Service & Decisions",
+  dt014_review_load: "Service & Decisions", dt014_utilization: "Service & Decisions",
+  nursing_review_turnaround: "Service & Decisions", audit_exceptions: "Governance",
+};
+function metricGroup(key: string) { return METRIC_GROUP[key] ?? "Other measures"; }
+
+/** Movement vs the metric's own baseline, only when both sides are comparable percentages.
+ *  Direction is shown neutrally — the metric's state already carries good/bad, so an arrow
+ *  never implies "up is good" (escalations rising is bad). */
+function metricDelta(metric: DashboardMetric): number | null {
+  if (!metric.baseline || !metric.display.includes("%")) return null;
+  const current = Number(metric.display.replace(/[^0-9.-]/g, ""));
+  const baseMatch = metric.baseline.match(/(-?\d+(?:\.\d+)?)\s*%/);
+  if (!baseMatch || Number.isNaN(current)) return null;
+  const base = Number(baseMatch[1]);
+  if (Number.isNaN(base)) return null;
+  return Math.round((current - base) * 10) / 10;
+}
+
 function formatTime(value?: string) {
   if (!value) return "";
   const date = new Date(value);
@@ -113,6 +151,7 @@ export default function RoleCommandDashboard({
   const [drilldownError, setDrilldownError] = useState("");
   const [drilldown, setDrilldown] = useState<DrilldownData | null>(null);
   const [windowKey, setWindowKey] = useState<DashboardWindowKey>("shift");
+  const [measuresOpen, setMeasuresOpen] = useState(false);
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -188,6 +227,9 @@ export default function RoleCommandDashboard({
         subtitle={pageSubtitle || data?.subtitle || "Loading the governed care record…"}
         right={
           <div className="flex flex-wrap items-center gap-2">
+            {showMetrics && (role === "care-manager" || role === "facility-admin") && (
+              <WindowSelector value={windowKey} onChange={setWindowKey} />
+            )}
             {role === "caregiver" && (
               <ClinicalButton variant="danger" onClick={() => setHelpOpen(true)}>
                 <ShieldAlert className="h-4 w-4" /> Need Nurse / Help
@@ -209,34 +251,14 @@ export default function RoleCommandDashboard({
             {error && <InlineNotice tone="danger" text={error} />}
             {data.warnings.map((warning) => <InlineNotice key={warning} tone="warning" text={warning} />)}
 
-            {showMetrics && (role === "care-manager" || role === "facility-admin") && (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--clinical-muted)]">
-                  <Clock3 className="h-3.5 w-3.5" /> Time window
-                </span>
-                <div className="flex flex-wrap items-center gap-1 rounded-xl border border-[var(--clinical-line)] bg-[var(--clinical-surface)] p-1 shadow-sm">
-                  {(Object.entries(DASHBOARD_WINDOW_OPTIONS) as Array<[DashboardWindowKey, { label: string; icon: typeof Timer; hint: string }]>).map(([key, { label, icon: Icon, hint }]) => {
-                    const active = windowKey === key;
-                    return (
-                      <button key={key} type="button" onClick={() => setWindowKey(key)} title={hint}
-                        className={`group relative flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all duration-200 ${active
-                          ? "bg-[var(--clinical-panel)] text-white shadow-[0_2px_8px_-2px_var(--clinical-panel)]"
-                          : "text-[var(--clinical-ink-soft)] hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-ink)]"}`}>
-                        <Icon className={`h-3.5 w-3.5 transition-colors ${active ? "text-white/80" : "text-[var(--clinical-muted)] group-hover:text-[var(--clinical-ink-soft)]"}`} />
-                        <span>{label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            {showMetrics && (
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                {data.metrics.map((item) => (
-                  <MetricButton key={item.key} metric={item} active={selectedMetric?.key === item.key}
-                    onClick={() => setSelectedMetric((current) => current?.key === item.key ? null : item)} />
-                ))}
-              </div>
+            {showMetrics && data.metrics.length > 0 && (
+              <MetricsBoard
+                metrics={data.metrics}
+                selectedKey={selectedMetric?.key ?? null}
+                onSelect={(item) => setSelectedMetric((current) => current?.key === item.key ? null : item)}
+                open={measuresOpen}
+                onToggle={() => setMeasuresOpen((value) => !value)}
+              />
             )}
             {showMetrics && selectedMetric && <MetricDefinition metric={selectedMetric} onDrilldown={() => void openDrilldown(selectedMetric)} />}
 
@@ -390,17 +412,166 @@ function HuddlePanel({ huddle }: { huddle: DashboardHuddle }) {
   );
 }
 
-function MetricButton({ metric, active, onClick }: { metric: DashboardMetric; active: boolean; onClick: () => void }) {
+/** §10 aggregate window control — lives in the header's action region for care-manager and
+ *  administrator. The clock icons make it self-describing, so the group label is aria-only. */
+function WindowSelector({ value, onChange }: { value: DashboardWindowKey; onChange: (key: DashboardWindowKey) => void }) {
   return (
-    <button type="button" onClick={onClick} aria-expanded={active}
-      className={`min-h-28 rounded-xl border p-3 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clinical-panel)] sm:p-4 ${active ? "border-[var(--clinical-panel)] bg-[var(--clinical-surface-2)]" : "border-[var(--clinical-line)] bg-[var(--clinical-surface)] hover:border-[var(--clinical-line-strong)]"}`}>
-      <span className="flex items-start justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--clinical-muted)]">{metric.label}</span>
-        <Info className="h-3.5 w-3.5 shrink-0 text-[var(--clinical-muted)]" />
-      </span>
-      <span className={`mt-3 block text-3xl font-bold tracking-[-0.03em] tabular-nums ${METRIC_TONE[metric.state]}`}>{metric.display}</span>
-      <span className="mt-1 block truncate text-xs text-[var(--clinical-muted)]">{metric.window}</span>
-    </button>
+    <div role="group" aria-label="Time window" className="flex flex-wrap items-center gap-1 rounded-xl border border-[var(--clinical-line)] bg-[var(--clinical-surface)] p-1 shadow-sm">
+      {(Object.entries(DASHBOARD_WINDOW_OPTIONS) as Array<[DashboardWindowKey, { label: string; icon: typeof Timer; hint: string }]>).map(([key, { label, icon: Icon, hint }]) => {
+        const active = value === key;
+        return (
+          <button key={key} type="button" onClick={() => onChange(key)} title={hint} aria-pressed={active}
+            className={`group relative flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clinical-panel)] ${active
+              ? "bg-[var(--clinical-panel)] text-white shadow-[0_2px_8px_-2px_var(--clinical-panel)]"
+              : "text-[var(--clinical-ink-soft)] hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-ink)]"}`}>
+            <Icon className={`h-3.5 w-3.5 transition-colors ${active ? "text-white/80" : "text-[var(--clinical-muted)] group-hover:text-[var(--clinical-ink-soft)]"}`} aria-hidden />
+            <span>{label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Attention-first metric board: metrics in an action or watch state rise into a prominent
+ *  band; steady (GOOD) metrics collapse into a zone-grouped disclosure so the eye lands on
+ *  what needs a decision, not a wall of zeros. Every card still opens the same definition +
+ *  drill-down via onSelect. */
+function MetricsBoard({
+  metrics, selectedKey, onSelect, open, onToggle,
+}: {
+  metrics: DashboardMetric[];
+  selectedKey: string | null;
+  onSelect: (metric: DashboardMetric) => void;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const attention = useMemo(
+    () => metrics.filter((item) => item.state !== "GOOD").sort((a, b) => ATTENTION_RANK[a.state] - ATTENTION_RANK[b.state]),
+    [metrics],
+  );
+  const steady = useMemo(() => metrics.filter((item) => item.state === "GOOD"), [metrics]);
+
+  return (
+    <section aria-label="Governed measures" className="space-y-3">
+      {attention.length > 0 ? (
+        <>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-bold uppercase tracking-[0.06em] text-[var(--clinical-ink)]">Needs attention</h2>
+            <span className="rounded-md bg-[var(--clinical-coral)] px-2 py-0.5 text-xs font-bold tabular-nums text-white">{attention.length}</span>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {attention.map((item) => (
+              <AttentionMetricCard key={item.key} metric={item} active={selectedKey === item.key} onClick={() => onSelect(item)} />
+            ))}
+          </div>
+        </>
+      ) : (
+        <ClinicalCard top="green" className="flex items-center gap-3 px-4 py-3.5">
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+          <div className="min-w-0">
+            <p className="font-semibold text-[var(--clinical-ink)]">All measures are steady this window</p>
+            <p className="mt-0.5 text-xs text-[var(--clinical-muted)]">No governed measure is in an action or watch state right now.</p>
+          </div>
+        </ClinicalCard>
+      )}
+      {steady.length > 0 && (
+        <SteadyMeasures metrics={steady} selectedKey={selectedKey} onSelect={onSelect} open={open} onToggle={onToggle} />
+      )}
+    </section>
+  );
+}
+
+function DeltaChip({ delta }: { delta: number | null }) {
+  if (delta === null || delta === 0) return null;
+  // Neutral tone on purpose: the state color already carries good/bad, so the arrow only shows movement.
+  const Icon = delta > 0 ? TrendingUp : TrendingDown;
+  return (
+    <span className="inline-flex items-center gap-0.5 text-xs font-semibold tabular-nums text-[var(--clinical-muted)]" title="Change versus baseline">
+      <Icon className="h-3.5 w-3.5" aria-hidden />
+      {Math.abs(delta)} pt{Math.abs(delta) === 1 ? "" : "s"}
+    </span>
+  );
+}
+
+function AttentionMetricCard({ metric, active, onClick }: { metric: DashboardMetric; active: boolean; onClick: () => void }) {
+  const StateIcon = metric.state === "ACTION" ? ShieldAlert : AlertTriangle;
+  const delta = metricDelta(metric);
+  return (
+    <ClinicalCard top={METRIC_TOP[metric.state]} className={active ? "ring-2 ring-[var(--clinical-panel)]" : ""}>
+      <button type="button" onClick={onClick} aria-expanded={active}
+        className="flex min-h-32 w-full flex-col p-4 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--clinical-panel)]">
+        <span className="flex items-center justify-between gap-2">
+          <span className={`inline-flex items-center gap-1 rounded-md bg-[var(--clinical-surface-2)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] ${METRIC_TONE[metric.state]}`}>
+            <StateIcon className="h-3 w-3" aria-hidden /> {METRIC_STATE_LABEL[metric.state]}
+          </span>
+          <Info className="h-3.5 w-3.5 shrink-0 text-[var(--clinical-muted)]" />
+        </span>
+        <span className="mt-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--clinical-muted)]">{metric.label}</span>
+        <span className="mt-1 flex items-baseline gap-2">
+          <span className={`text-3xl font-bold tracking-[-0.03em] tabular-nums ${METRIC_TONE[metric.state]}`}>{metric.display}</span>
+          <DeltaChip delta={delta} />
+        </span>
+        <span className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-0.5 pt-2 text-xs text-[var(--clinical-muted)]">
+          <span>{metric.window}</span>
+          {metric.baseline && <><span aria-hidden>·</span><span className="truncate">{metric.baseline}</span></>}
+        </span>
+      </button>
+    </ClinicalCard>
+  );
+}
+
+function SteadyMeasures({
+  metrics, selectedKey, onSelect, open, onToggle,
+}: {
+  metrics: DashboardMetric[];
+  selectedKey: string | null;
+  onSelect: (metric: DashboardMetric) => void;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const groups = useMemo(() => {
+    const map = new Map<string, DashboardMetric[]>();
+    for (const metric of metrics) {
+      const label = metricGroup(metric.key);
+      (map.get(label) ?? map.set(label, []).get(label)!).push(metric);
+    }
+    return Array.from(map.entries());
+  }, [metrics]);
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-[var(--clinical-line)] bg-[var(--clinical-surface)]">
+      <button type="button" onClick={onToggle} aria-expanded={open}
+        className="flex w-full min-h-11 items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--clinical-surface-2)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--clinical-panel)]">
+        <span className="flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden />
+          <span className="text-sm font-bold uppercase tracking-[0.06em] text-[var(--clinical-ink)]">Steady measures</span>
+          <span className="rounded-md bg-[var(--clinical-surface-2)] px-2 py-0.5 text-xs font-bold tabular-nums text-[var(--clinical-ink-soft)]">{metrics.length}</span>
+        </span>
+        <ChevronDown className={`h-4 w-4 text-[var(--clinical-muted)] transition-transform duration-200 ${open ? "rotate-180" : ""}`} aria-hidden />
+      </button>
+      {open && (
+        <div className="space-y-4 border-t border-[var(--clinical-line)] px-4 py-4">
+          {groups.map(([label, items]) => (
+            <div key={label}>
+              <p className="text-[11px] font-bold uppercase tracking-[0.07em] text-[var(--clinical-muted)]">{label}</p>
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                {items.map((metric) => (
+                  <button key={metric.key} type="button" onClick={() => onSelect(metric)} aria-expanded={selectedKey === metric.key}
+                    className={`flex min-h-14 items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clinical-panel)] ${selectedKey === metric.key ? "border-[var(--clinical-panel)] bg-[var(--clinical-surface-2)]" : "border-[var(--clinical-line)] bg-[var(--clinical-surface)] hover:border-[var(--clinical-line-strong)]"}`}>
+                    <span className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--clinical-muted)]">{metric.label}</span>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                      <span className="text-sm font-bold tabular-nums text-[var(--clinical-ink)]">{metric.display}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
