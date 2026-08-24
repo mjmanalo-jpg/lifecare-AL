@@ -6,14 +6,14 @@ import {
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import SecurityLogBoard from "@/components/portal/views/security/SecurityLogBoard";
-import CaregiverTimeClock from "@/components/portal/views/caregiver/CaregiverTimeClock";
+import ClockInBoard from "@/components/portal/views/clinical/ClockInBoard";
 import CameraActivityLog from "@/components/portal/views/clinical/CameraActivityLog";
 
 /**
  * Guard/Security portal content — dispatches by `tab`:
  *   dashboard   → Security Command overview (stat cards + recent logs)
  *   securitylog → full SecurityLogBoard
- *   timeclock   → shared CaregiverTimeClock (same clock-in workflow)
+ *   timeclock   → ClockInBoard with facial + geofence verification
  *   cameralogs  → placeholder (wired by another process)
  */
 
@@ -41,7 +41,7 @@ const STATUS_PILL: Record<string, string> = {
 
 export default function SecurityPortalContent({ tab }: { tab: string }) {
   if (tab === "securitylog") return <SecurityLogBoard />;
-  if (tab === "timeclock") return <CaregiverTimeClock />;
+  if (tab === "timeclock") return <ClockInBoard clinicianRole="FACILITY_ADMIN" />;
   if (tab === "cameralogs") return <CameraActivityLog />;
   return <SecurityDashboard />;
 }

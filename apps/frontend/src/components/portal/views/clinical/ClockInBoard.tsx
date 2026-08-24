@@ -14,7 +14,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MapPin, ScanFace, LogIn, LogOut, CheckCircle2, XCircle, Loader2, Clock, ShieldAlert } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { upsertRecord } from "@/lib/api";
+import { upsertRecord, createRecord, updateRecord } from "@/lib/api";
 import { recordAudit } from "@/lib/auditClient";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, StatCard, SERIF } from "./clinical-ui";
@@ -23,14 +23,18 @@ import { verifyDataUrls, warmUpFaceModels, prepareEnrolled, type FaceVerifyResul
 import { STAFF_PROFILES_KEY, parseStaffProfiles, hasFaceEnrollment } from "@/lib/staffProfiles";
 import { GEOFENCE_KEY, parseGeofence, checkAgainstLocations, getCurrentPosition, geofenceRequired } from "@/lib/geofence";
 import { STAFF_CLOCK_KEY, parseClockEvents, isOnDuty, lastEventFor, eventsOnDay, localDay, type ClockEvent, type ClockType } from "@/lib/staffClock";
+import { currentShiftKey } from "@/lib/caregiverSchedule";
 
 const s = (v: unknown) => (v == null ? "" : String(v));
 const newId = () => globalThis.crypto?.randomUUID?.() ?? `clk-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 const fmtTime = (iso: string) => { const d = new Date(iso); return isNaN(d.getTime()) ? "—" : d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); };
 const sinceLabel = (iso: string) => { const ms = Date.now() - new Date(iso).getTime(); if (!isFinite(ms) || ms < 0) return ""; const h = Math.floor(ms / 3.6e6); const m = Math.floor((ms % 3.6e6) / 6e4); return h ? `${h}h ${m}m` : `${m}m`; };
 
+type ShiftType = "MORNING" | "AFTERNOON" | "NIGHT" | "OVERNIGHT";
+const SHIFT_KEY_TO_TYPE: Record<string, ShiftType> = { AM: "MORNING", PM: "AFTERNOON", NOC: "NIGHT" };
+
 export default function ClockInBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
-  const { userId, name, role } = useClinician(clinicianRole);
+  const { userId, name, role, staffId } = useClinician(clinicianRole);
   const { data: settingRows, refetch, loading } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
 
   const profile = useMemo(() => parseStaffProfiles(settingRows.find((r) => s(r.key || r.id) === STAFF_PROFILES_KEY)?.value)[userId], [settingRows, userId]);
@@ -63,6 +67,35 @@ export default function ClockInBoard({ clinicianRole = "NURSE" }: { clinicianRol
         + `${face.ok ? " · face verified" : " · face unverified"}`
         + `${geoOk ? (Number.isFinite(geoDistanceM) ? ` · on-site (${Math.round(geoDistanceM)}m)` : " · on-site") : " · location not confirmed"}`,
     });
+    // Also persist a TimeTracking record so the nurse/shift-command dashboard
+    // can count this staff member as "present" (CG PRESENT metric).
+    // The dashboard server reads TimeTracking — without this the clock-in only
+    // lives in the staff_clock_events JSON and is invisible to the dashboard.
+    if (staffId) {
+      try {
+        const shiftType = SHIFT_KEY_TO_TYPE[currentShiftKey()] || "MORNING";
+        if (type === "IN") {
+          await createRecord("time-tracking", {
+            staffId,
+            shiftType,
+            startTime: new Date().toISOString(),
+            status: "PRESENT",
+          });
+        } else {
+          // Clock out — close the open TimeTracking record for this staff member.
+          const openRes = await fetch(`/api/db/time-tracking?f_staffId=${staffId}&f_endTime=null&take=1`);
+          if (openRes.ok) {
+            const openData = await openRes.json();
+            const openRow = openData?.data?.[0];
+            if (openRow?.id) {
+              await updateRecord("time-tracking", openRow.id, { endTime: new Date().toISOString() });
+            }
+          }
+        }
+      } catch {
+        // Non-fatal — the staff_clock_events record is the primary attendance log.
+      }
+    }
     await refetch();
     setVerifying(null);
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: `Clocked ${type === "IN" ? "in" : "out"} · ${fmtTime(ev.at)}`, showConfirmButton: false, timer: 2000 });
