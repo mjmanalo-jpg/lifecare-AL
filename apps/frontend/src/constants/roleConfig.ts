@@ -507,12 +507,11 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "LOC Decision Review", icon: Gauge, route: "/care_manager/careacuity", group: "Assessment & LOC Governance" },
       { name: "Care Plan Governance", icon: Target, route: "/care_manager/careplans", group: "Care Plan Governance" },
       { name: "Clinical Approvals", icon: BadgeCheck, route: "/care_manager/approvalworkflows", group: "Care Plan Governance" },
-      { name: "Today's Approved Care", icon: CalendarCheck, route: "/care_manager/todayscare", group: "Care Delivery Reliability" },
+      // Zone D is governance-only per spec (the CM dashboard is not a nurse shift screen):
+      // the aggregate reliability KPI + drill-down, plus the med-compliance report. Bedside
+      // execution (Today's Approved Care, Daily Care Logs, ADL, Weight, MAR) lives in the
+      // Nurse/Caregiver portals and is reached from here via dashboard drill-down.
       { name: "Care Delivery Reliability", icon: Activity, route: "/care_manager/caredelivery", group: "Care Delivery Reliability" },
-      { name: "Daily Care Logs", icon: NotebookPen, route: "/care_manager/carelogs", group: "Care Delivery Reliability" },
-      { name: "Daily Living (ADL)", icon: Accessibility, route: "/care_manager/adlmonitoring", group: "Care Delivery Reliability" },
-      { name: "Weight Tracking", icon: Scale, route: "/care_manager/weightmonitoring", group: "Care Delivery Reliability" },
-      { name: "Medication Administration (MAR)", icon: Pill, route: "/care_manager/mar", group: "Care Delivery Reliability" },
       { name: "Medication Compliance", icon: PieChart, route: "/care_manager/medcompliance", group: "Care Delivery Reliability" },
       { name: "Safety / Transitions", icon: ShieldCheck, route: "/care_manager/safeguarding", group: "Safety / Transitions" },
       { name: "Incident Reports", icon: AlertTriangle, route: "/care_manager/incidents", group: "Safety / Transitions" },

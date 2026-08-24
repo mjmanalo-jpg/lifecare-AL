@@ -7,7 +7,7 @@ const EXPECTED_GROUPS: Partial<Record<Role, string[]>> = {
   CARE_MANAGER: ["Clinical Risk Overview", "Assessment & LOC Governance", "Care Plan Governance", "Care Delivery Reliability", "Safety / Transitions", "Staffing / Team Quality", "Open Decisions"],
   NURSE: ["Shift Command", "Clinical Triage Queue", "Caregiver Deployment", "Shift Watchlist", "Care Delivery Status", "Assessment & LOC", "Care Plan Governance", "Shift Endorsement"],
   CAREGIVER: ["Facility My Shift", "My Residents", "My Care Now", "Document Care", "Need Nurse / Help", "Assignment Update", "Shift Close"],
-  RESIDENT_COORDINATOR: ["Today", "Residents", "Schedule", "Coordination", "Family Contacts", "Endorsement"],
+  RESIDENT_COORDINATOR: ["Today", "Residents", "Schedule", "Coordination", "Alerts", "Family Contacts", "Endorsement"],
 };
 
 test("Care360 roles follow the PDF primary navigation order", () => {
@@ -18,14 +18,16 @@ test("Care360 roles follow the PDF primary navigation order", () => {
   }
 });
 
-test("resident coordinator navigation exposes all six non-clinical work areas", () => {
+test("resident coordinator navigation exposes its non-clinical work areas", () => {
   assert.deepEqual(
     ROLES.RESIDENT_COORDINATOR.sidebarLinks.map(({ route }) => route),
     [
       "/resident_coordinator/dashboard",
       "/resident_coordinator/residents",
       "/resident_coordinator/schedule",
+      "/resident_coordinator/admissions",
       "/resident_coordinator/coordination",
+      "/resident_coordinator/alerts",
       "/resident_coordinator/familycontacts",
       "/resident_coordinator/endorsement",
     ],
@@ -50,10 +52,12 @@ test("clinical role sidebars use the role-based dashboard language", () => {
 });
 
 test("Daily Rounds is retired and Daily Care Logs is available across clinical users", () => {
+  // Care Manager is intentionally excluded: per Care360 v1.1 the CM sidebar is
+  // governance-only (not a nurse shift screen), so bedside Daily Care Logs is
+  // reached via dashboard drill-down, not a standing sidebar link.
   const careLogRoles: Role[] = [
     "SUPERADMIN",
     "FACILITY_ADMIN",
-    "CARE_MANAGER",
     "PHYSICIAN",
     "NURSE",
     "CAREGIVER",
