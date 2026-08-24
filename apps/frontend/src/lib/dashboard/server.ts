@@ -478,7 +478,7 @@ export async function buildDashboard(
     prisma.timeTracking.findMany({
       where: { staff: tenant, startTime: { lt: shiftEnd }, OR: [{ endTime: null }, { endTime: { gte: shiftStart } }] },
       take: 500,
-      select: { staffId: true, status: true, endTime: true, staff: { select: { position: true, user: { select: { name: true } } } } },
+      select: { staffId: true, status: true, endTime: true, staff: { select: { position: true, user: { select: { name: true, role: true } } } } },
     }),
     prisma.carePlan.findMany({ where: { ...tenant, ...(residentScope ? { residentId: { in: residentScope } } : {}), status: { in: ["ACTIVE", "DRAFT", "UNDER_REVIEW"] } }, take: 500, orderBy: { updatedAt: "desc" }, include: { resident: { select: { firstName: true, lastName: true, roomNumber: true } } } }),
     prisma.physicianCommunication.findMany({
@@ -553,14 +553,20 @@ export async function buildDashboard(
   const warnings: string[] = [];
   if (!settings.find((item) => item.key === CAREGIVER_SCHEDULE_KEY)) warnings.push("No caregiver roster has been published for this community.");
   if (!latestHandover) warnings.push("No shift handover has been started.");
+  // Identify a clocked-in staffer's discipline by their authoritative User.role
+  // first, falling back to the free-text position title. Matching position alone
+  // undercounted caregivers whose title isn't literally "Caregiver" (e.g. "Daily
+  // Assistance"), so a clocked-in caregiver showed as CG Present = 0.
+  const isCaregiverAtt = (item: (typeof activeAttendance)[number]) =>
+    item.staff.user?.role === "CAREGIVER" || /caregiver|care aide|care assistant/i.test(item.staff.position || "");
+  const isNurseAtt = (item: (typeof activeAttendance)[number]) =>
+    item.staff.user?.role === "NURSE" || /nurse|clinical/i.test(item.staff.position || "");
   const summary = {
     activeResidents: residents.length, staffedNow: new Set(activeAttendance.map((item) => item.staffId)).size,
-    caregiversPresent: new Set(activeAttendance
-      .filter((item) => /caregiver|care aide|care assistant/i.test(item.staff.position))
-      .map((item) => item.staffId)).size,
+    caregiversPresent: new Set(activeAttendance.filter(isCaregiverAtt).map((item) => item.staffId)).size,
     pcgAssignments: shiftSchedules.filter((item) => item.private).length,
     newOrReturningResidents: activeAdmissions.length,
-    nurseOnDuty: activeAttendance.find((item) => /nurse|clinical/i.test(item.staff.position))?.staff.user?.name,
+    nurseOnDuty: activeAttendance.find(isNurseAtt)?.staff.user?.name,
     residentsCovered: Math.min(coveredIds.size, residents.length), residentsUncovered: Math.max(0, residents.length - coveredIds.size),
     openEscalations: escalations.length, overdueWork: overdueTasks.length,
     handoverStatus: latestHandover?.status || "NOT_STARTED", handoverId: latestHandover?.id, handoverLabel: latestHandover?.number,
