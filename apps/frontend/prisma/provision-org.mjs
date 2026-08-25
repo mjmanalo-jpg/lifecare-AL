@@ -13,7 +13,7 @@ import bcrypt from "bcryptjs";
 
 nextEnv.loadEnvConfig(process.cwd());
 
-const ORG = { name: "Life Care 360", slug: "life-care-360" };
+const ORG = { name: "LifeCare Living Solutions Inc.", slug: "life-care-360" };
 const COMMUNITY = { name: "Care360", code: "CARE360", city: "Pasig City", state: "Metro Manila", communityType: "ASSISTED_LIVING", bedsTotal: 60, bedsAvailable: 60 };
 // Sample credential for the Organization Admin portal. orgRole ADMIN is what
 // routes /api/auth/session to role ORGANIZATION_ADMIN → /organization_admin.
