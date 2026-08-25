@@ -210,7 +210,7 @@ function parseAssessments(raw?: string): AssessmentV42[] {
 // Draft working state = the full assessment sans list metadata; we edit it in place.
 type Draft = AssessmentV42;
 
-export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedded = false, deepLinkResident = null, deepLinkReason = "", origin = "PREADMISSION", newSignal }: { clinicianRole?: string; embedded?: boolean; deepLinkResident?: { id: string; name: string } | null; deepLinkReason?: string; origin?: AssessmentOrigin; newSignal?: number }) {
+export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedded = false, modalOnly = false, deepLinkResident = null, deepLinkReason = "", origin = "PREADMISSION", newSignal, openSignal }: { clinicianRole?: string; embedded?: boolean; modalOnly?: boolean; deepLinkResident?: { id: string; name: string } | null; deepLinkReason?: string; origin?: AssessmentOrigin; newSignal?: number; openSignal?: { residentId: string; residentName: string; reason?: string; nonce: number } }) {
   const roleLabel = clinicianRole === "CARE_MANAGER" || clinicianRole === "FACILITY_ADMIN" ? "Care Manager" : "Nurse";
 
   const { data: settingRows, loading, error, refetch } = useLiveQuery<SettingRow>("app-settings", { tables: ["AppSetting"] });
@@ -316,8 +316,8 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   // "undergoes all the questions again", and the prior assessment stays saved as
   // history. Only a plain identity deep-link (no reason) resumes the latest.
   // Called once when arrived via ?resident=<id>.
-  const openForResident = (rid: string, rname: string) => {
-    if (!deepLinkReason) {
+  const openForResident = (rid: string, rname: string, reason?: string) => {
+    if (!reason) {
       const existing = assessments.find((a) => a.layer1?.residentId === rid);
       if (existing) { openEdit(existing); return; }
     }
@@ -325,7 +325,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     a.origin = origin;
     a.layer1.residentId = rid;
     a.layer1.residentName = rname;
-    setEditingId(null); setLinkedAdmissionId(""); setDraft(a); setLayer(1); setOpen(true);
+    setEditingId(null); setLinkedAdmissionId(""); setDraft(a); setLayer(1); setPcgOpen(reason === "pcg"); setOpen(true);
   };
   const deepRef = useRef(false);
   useEffect(() => {
@@ -335,14 +335,24 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     if (loading) return; // wait until assessments have loaded (edit-vs-new)
     deepRef.current = true;
     void (async () => {
-      openForResident(dl.id, dl.name || "");
-      setPcgOpen(deepLinkReason === "pcg"); // remember WHY, since we clear the URL next
+      openForResident(dl.id, dl.name || "", deepLinkReason);
       // Consume the one-shot deep-link: drop ?resident/?reason so switching Care
       // Acuity tabs (which remounts this board) never re-pops the modal.
       if (pathname) router.replace(pathname, { scroll: false });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLinkResident, loading]);
+
+  // Imperative open — pops the assessment modal IN PLACE from another board (no
+  // navigation). The host bumps `nonce` each time; blank/edit + PCG banner follow
+  // the same rules as the deep-link (reason set ⇒ fresh empty form).
+  const openSigRef = useRef(openSignal?.nonce);
+  useEffect(() => {
+    if (!openSignal || openSignal.nonce === openSigRef.current || loading) return;
+    openSigRef.current = openSignal.nonce;
+    openForResident(openSignal.residentId, openSignal.residentName, openSignal.reason);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSignal, loading]);
 
   const pickAdmission = (a: AdmissionOpt) => {
     patchLayer1({
@@ -594,6 +604,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
         </div>
       )}
 
+      {!modalOnly && (<>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SearchInput value={search} onChange={setSearch} placeholder="Search by resident name…" className="max-w-sm flex-1" />
         <div className="inline-flex items-center rounded-lg border p-0.5" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }} role="group" aria-label="View mode">
@@ -693,6 +704,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
         </div>
         )}
       </DataState>
+      </>)}
 
       {/* Three-layer form modal */}
       {open && draft && (
@@ -1094,7 +1106,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     </>
   );
 
-  return embedded ? <div className="space-y-6">{body}</div> : <ClinicalPage className="space-y-6">{body}</ClinicalPage>;
+  return (embedded || modalOnly) ? <div className="space-y-6">{body}</div> : <ClinicalPage className="space-y-6">{body}</ClinicalPage>;
 }
 
 // ── Table view — the same records as the card grid, in a dense sortable-feel table ──

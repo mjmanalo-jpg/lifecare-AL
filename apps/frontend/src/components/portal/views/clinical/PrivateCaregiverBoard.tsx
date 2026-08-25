@@ -9,13 +9,13 @@
  */
 
 import { useMemo, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
 import { HeartHandshake, Plus, UserRound, CalendarClock, Ban, AlertTriangle, ShieldCheck, ClipboardList, Sparkles, ExternalLink } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { upsertRecord, createRecord } from "@/lib/api";
 import { useClinician, type ClinicianRole } from "./useClinician";
+import ResidentAssessmentV42 from "./ResidentAssessmentV42";
 import {
   ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, StatCard, DataState,
   FieldLabel, controlClass, SERIF,
@@ -77,8 +77,8 @@ const parseV42 = (raw: string | null | undefined): AssessmentV42[] => {
 
 export default function PrivateCaregiverBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   const { name: clinicianName } = useClinician(clinicianRole);
-  const router = useRouter();
-  const pathname = usePathname();
+  // In-place assessment modal (no navigation) — bumping nonce pops it open.
+  const [assess, setAssess] = useState<{ residentId: string; residentName: string; reason: string; nonce: number } | null>(null);
   const { data: settingRows, refetch, loading } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
   const resQ = useLiveQuery<Row>("residents", { query: "include=sponsor", tables: ["Resident", "User"] });
   const staffQ = useLiveQuery<StaffRow>("staff", { query: "include=user&take=300", tables: ["Staff"] });
@@ -140,32 +140,25 @@ export default function PrivateCaregiverBoard({ clinicianRole = "NURSE" }: { cli
     return m;
   }, [settingRows, resQ.data]);
 
-  // Route to the resident assessment form (Acuity & Level of Care → Assessments)
-  // where the DT-013 justification for a private caregiver is documented.
-  const openAssessment = (residentId?: string, reason?: string) => {
-    // A PCG request must always be backed by a fresh re-assessment (DT-013) — even
-    // when a completed assessment already exists. Stamp the request time so the
-    // modal only unlocks "Send" once a newer assessment is completed for THIS request.
-    if (residentId && reason === "pcg") {
-      try { localStorage.setItem(pcgReassessKey(residentId), new Date().toISOString()); } catch { /* ignore */ }
-    }
-    // Care Manager portal passes clinicianRole="FACILITY_ADMIN", so derive the
-    // portal segment from the live URL instead of the role. Carry the resident so
-    // the assessment form opens straight to them, plus a `reason` so the form can
-    // show it was opened from a private-caregiver request.
-    const seg = (pathname || "").split("/").filter(Boolean)[0] || clinicianRole.toLowerCase();
-    const params = new URLSearchParams();
-    if (residentId) params.set("resident", residentId);
-    if (reason) params.set("reason", reason);
-    const qs = params.toString();
-    router.push(`/${seg}/careacuity${qs ? `?${qs}` : ""}`);
-  };
   const residents = useMemo<ResOpt[]>(() => (resQ.data || []).map((raw) => {
     const a = adaptResident(raw);
     const sp = (raw.sponsor ?? null) as { id?: unknown; name?: unknown } | null;
     return { id: String(a.id), name: String(a.name), room: String(a.room ?? ""), sponsorId: sp?.id ? String(sp.id) : "", sponsorName: sp?.name ? String(sp.name) : "" };
   }), [resQ.data]);
   const caregivers = useMemo(() => (staffQ.data || []).filter((st) => st.user?.role === "CAREGIVER").map((st) => ({ id: s(st.id), userId: s(st.userId), name: s(st.user?.name) || "Caregiver" })), [staffQ.data]);
+
+  // Open the resident assessment form IN PLACE (no navigation). A PCG request must
+  // be backed by a fresh re-assessment (DT-013) — stamp the request time so "Send"
+  // only unlocks once a newer assessment is completed for THIS request; the finished
+  // assessment flows to the LOC decision review on its own.
+  const openAssessment = (residentId?: string, reason?: string) => {
+    if (residentId && reason === "pcg") {
+      try { localStorage.setItem(pcgReassessKey(residentId), new Date().toISOString()); } catch { /* ignore */ }
+    }
+    if (!residentId) return;
+    setAssignOpen(false);
+    setAssess((p) => ({ residentId, residentName: residents.find((r) => r.id === residentId)?.name || "", reason: reason || "pcg", nonce: (p?.nonce ?? 0) + 1 }));
+  };
 
   const [assignOpen, setAssignOpen] = useState(false);
 
@@ -317,6 +310,9 @@ export default function PrivateCaregiverBoard({ clinicianRole = "NURSE" }: { cli
       </div>
 
       {assignOpen && <AssignModal residents={residents} caregivers={caregivers} recoByResident={recoByResident} onOpenAssessment={openAssessment} onClose={() => setAssignOpen(false)} onCreate={createAssignment} />}
+
+      {/* Assessment form opens here in place — no navigation to the LOC review page. */}
+      <ResidentAssessmentV42 modalOnly embedded origin="ACUITY" clinicianRole={clinicianRole} openSignal={assess ?? undefined} />
     </ClinicalPage>
   );
 }

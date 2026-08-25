@@ -10,11 +10,11 @@
  */
 
 import { useMemo, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
 import { AlertTriangle, ExternalLink, ShieldCheck, ClipboardList, TrendingUp } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
+import ResidentAssessmentV42 from "./ResidentAssessmentV42";
 import { ClinicalPage, ClinicalHeader, StatCard, DataState, SERIF } from "./clinical-ui";
 import { DOMAIN_CODES } from "@/lib/lifecare/types";
 import type { DomainCode } from "@/lib/lifecare/types";
@@ -45,9 +45,9 @@ interface ResidentSummary { id: string; name: string; room: string; rows: Domain
 
 export default function DomainMonitoringBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   void useClinician(clinicianRole); // read-only; kept for parity with sibling boards
-  const router = useRouter();
-  const pathname = usePathname();
   const [todayStr] = useState(() => today());
+  // In-place assessment modal (no navigation) — bumping nonce pops it open.
+  const [assess, setAssess] = useState<{ residentId: string; residentName: string; reason: string; nonce: number } | null>(null);
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const { data: settingRows, loading } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
   // Care-log record models — for counting today's deliveries per domain (usage overage).
@@ -103,9 +103,10 @@ export default function DomainMonitoringBoard({ clinicianRole = "NURSE" }: { cli
   const scoredToday = useMemo(() => new Set(notes.filter((n) => typeof n.status === "number" && String(n.at || "").slice(0, 10) === todayStr && DOMAIN_CODES.includes(n.domain as DomainCode)).map((n) => n.residentId)).size, [notes, todayStr]);
   const needingReview = summaries.filter((x) => x.needsReassessment).length;
 
+  // Open the assessment form right here as a modal — the finished assessment flows
+  // to the LOC decision review on its own (shared assessments_v42 store).
   const openLocReview = (residentId: string) => {
-    const seg = (pathname || "").split("/").filter(Boolean)[0] || clinicianRole.toLowerCase();
-    router.push(`/${seg}/careacuity?resident=${encodeURIComponent(residentId)}&reason=locreview`);
+    setAssess((p) => ({ residentId, residentName: resNameById.get(residentId) || "", reason: "locreview", nonce: (p?.nonce ?? 0) + 1 }));
   };
 
   return (
@@ -222,6 +223,9 @@ export default function DomainMonitoringBoard({ clinicianRole = "NURSE" }: { cli
           <p className="mt-2 text-[11px] text-[var(--clinical-muted)]">A durable record for each day a resident drew a domain beyond their Level package allowance — the paper trail for review, reassessment, and (later) Additional Clinical Service charges.</p>
         </div>
       )}
+
+      {/* Assessment form opens here in place — no navigation to the LOC review page. */}
+      <ResidentAssessmentV42 modalOnly embedded origin="ACUITY" clinicianRole={clinicianRole} openSignal={assess ?? undefined} />
     </ClinicalPage>
   );
 }
