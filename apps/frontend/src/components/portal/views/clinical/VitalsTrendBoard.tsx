@@ -44,6 +44,12 @@ const DOMAIN_NAME: Record<string, string> = Object.fromEntries(
   (assessmentDomains as { code: string; name: string }[]).map((d) => [d.code, d.name]),
 );
 const SHIFT_HOUR: Record<string, number> = { AM: 8, PM: 16, NOC: 23 };
+// The assessment domains WITHOUT a vitals/measure card above — the only ones this
+// page was missing. The other 7 (AS-02 mobility, AS-05 mood/behavior, AS-06
+// vitals/pain, AS-08 nutrition/weight, AS-10 continence, AS-11 skin/edema,
+// AS-12 sleep) are already covered by the physiological cards, so we don't
+// duplicate them here. (All 14 are still scored + flagged in the capture tab.)
+const DOMAIN_TREND_CODES: DomainCode[] = ["AS-01", "AS-03", "AS-04", "AS-07", "AS-09", "AS-13", "AS-14"];
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (v: unknown) => (v == null ? "" : String(v));
@@ -695,17 +701,17 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE" }: { clinicia
                 <OtherTrendCard title="Concerns" icon={AlertTriangle} tint="text-red-500" color="#ef4444" unit="" points={domain.concern} digits={0} band={[0, 1]} fmt={fmtConcern} caption="Severity: Low → Critical" idBase="ot-concern" />
               </div>
 
-              {/* Domain Monitoring — the 14 assessment domains scored per shift */}
+              {/* Additional care domains — the assessment domains with no vitals/measure card above */}
               <div>
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div>
-                    <h2 className="flex items-center gap-2 font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}><Gauge className="h-5 w-5 text-[var(--clinical-panel)]" /> Domain Monitoring (14)</h2>
-                    <p className="text-xs text-[var(--clinical-muted)]">Per-shift 0–4 scores vs. assessment baseline. A flag opens a monitoring case that escalates to a Level of Care review if it persists.</p>
+                    <h2 className="flex items-center gap-2 font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}><Gauge className="h-5 w-5 text-[var(--clinical-panel)]" /> Additional Care Domains</h2>
+                    <p className="text-xs text-[var(--clinical-muted)]">Assessment domains without a vitals/measure card above — scored 0–4 per shift vs. baseline. A flag opens a monitoring case that escalates to a Level of Care review if it persists.</p>
                   </div>
-                  {domainTriggers.length > 0 && <span className="shrink-0 rounded-full px-2 py-0.5 text-xs font-bold text-white" style={{ backgroundColor: "var(--clinical-amber)" }}>{domainTriggers.length} flagged</span>}
+                  {DOMAIN_TREND_CODES.filter((c) => triggerByCode.has(c)).length > 0 && <span className="shrink-0 rounded-full px-2 py-0.5 text-xs font-bold text-white" style={{ backgroundColor: "var(--clinical-amber)" }}>{DOMAIN_TREND_CODES.filter((c) => triggerByCode.has(c)).length} flagged</span>}
                 </div>
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  {DOMAIN_CODES.map((code) => (
+                  {DOMAIN_TREND_CODES.map((code) => (
                     <DomainTrendCard key={code} code={code} name={DOMAIN_NAME[code] || code} points={domainSeries[code]} baseline={domainBaseline[code]} trigger={triggerByCode.get(code)} caseStatus={caseByCode.get(code)?.status} onLocReview={openLocReview} />
                   ))}
                 </div>
