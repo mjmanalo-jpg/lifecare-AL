@@ -1,24 +1,28 @@
 "use client";
 
 /**
- * Care Plan Reviews — review resident indicators, evaluate triggers (ICP / ISP /
- * LOC), and record a Nurse/Admin care-plan decision. Tabs: New Review, Reviews
- * Due, History. Recent indicators + triggers derive from the resident's incidents
- * (last 30 days). Migration-free: reviews are a JSON array in the app-setting
- * `care_plan_reviews`.
+ * Care Plan Reviews — create/finalize/view a resident's care plan, review
+ * indicators, evaluate triggers (ICP / ISP / LOC), and record a Nurse/Admin
+ * care-plan decision. Tabs: Care Plans (roster: create plan / finalize draft /
+ * view current), New Review, Pending Approval, Reviews Due, History. On
+ * activation the reviewer picks a flat 30/60-day next-review interval, so the
+ * resident surfaces under Reviews Due after that window. Recent indicators +
+ * triggers derive from the resident's incidents (last 30 days). Migration-free:
+ * reviews are a JSON array in the app-setting `care_plan_reviews`.
  */
 
-import { useMemo, useState } from "react";
-import { ClipboardList, ListChecks, Loader2, AlertTriangle } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { ClipboardList, ListChecks, Loader2, AlertTriangle, Users, ClipboardCheck, FileClock, FilePlus2, CalendarClock, Target } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { upsertRecord, updateRecord } from "@/lib/api";
+import { upsertRecord, updateRecord, createRecord } from "@/lib/api";
 import { generateCarePlanForResident, releaseCarePlan, materializeTodayTasks, levelPlan, levelCareTasks, parseAssistanceOptions, type PlanIntervention } from "@/lib/carePlanGen";
-import { duplicateReview, requiresSecondApproval, reviewOutcome, type CarePlanReviewApprovalStatus } from "@/lib/lifecare/carePlanReviewGuards";
+import { duplicateReview, requiresSecondApproval, reviewOutcome, canFinalizeCarePlan, type CarePlanReviewApprovalStatus } from "@/lib/lifecare/carePlanReviewGuards";
 import { levelMeta } from "@/lib/lifecare/levelModel";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
-import { levelOf } from "./CareLogsBoard";
+import { activeLevel } from "@/lib/lifecare/activeLevel";
+import { parseLocHistory, LOC_HISTORY_KEY } from "@/lib/lifecare/locHistory";
 import { ClinicalButton, ClinicalCard, ClinicalModal, StatCard, DataState, FieldLabel, controlClass, StatusPill, SERIF } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -28,6 +32,7 @@ const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2)
 const newId = () => globalThis.crypto?.randomUUID?.() ?? `rev-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 const isoDate = (d: Date) => d.toISOString().split("T")[0];
 const addMonths = (d: Date, n: number) => { const x = new Date(d); x.setMonth(x.getMonth() + n); return x; };
+const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const fmt = (isoStr: string) => (isoStr ? new Date(isoStr + (isoStr.length <= 10 ? "T00:00:00" : "")).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—");
 const periodOf = (d: Date) => `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`;
 
@@ -50,8 +55,24 @@ interface Review {
   approvedById?: string; approvedByName?: string; approvedAt?: string;
   rejectionReason?: string;                       // set on REJECTED
   pendingReason?: string;                         // why it's awaiting approval (missing gates / LOC change)
+  // Family sign-off gate: a plan-releasing review is held for the resident's family to
+  // approve/reject before a Care Manager finalizes it.
+  sponsorId?: string;                             // family sponsor user id (scopes the family portal)
+  residentName?: string; room?: string;           // snapshot for the family portal + notifications
+  familyDecision?: "APPROVED" | "REJECTED";
+  familyDecidedByName?: string; familyDecidedAt?: string; familyRejectReason?: string;
 }
 const parseReviews = (raw: string | null | undefined): Review[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((r) => r && typeof r.id === "string") : []; } catch { return []; } };
+
+// A stored intervention line ("Title: detail… (Daily)") → title · detail · frequency,
+// so the plan view can show the frequency as a pill instead of trailing text.
+const parseIntervention = (line: string): { title: string; desc: string; freq: string } => {
+  const m = line.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  const freq = m ? m[2].trim() : "";
+  const body = (m ? m[1] : line).trim();
+  const ci = body.indexOf(":");
+  return { title: ci > -1 ? body.slice(0, ci).trim() : body, desc: ci > -1 ? body.slice(ci + 1).trim() : "", freq };
+};
 
 export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   const { name: clinicianName, userId: clinicianId } = useClinician(clinicianRole);
@@ -63,6 +84,14 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
   const cpQ = useLiveQuery<Row>("care-plans", { query: "take=300", tables: ["CarePlan"] });
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
   const reviews = useMemo(() => parseReviews(settingRows.find((r) => (r.key || r.id) === REVIEW_KEY)?.value), [settingRows]);
+  // Authoritative ACTIVE level of care, resolved from loc_history (the true L1..L5)
+  // rather than the coarse careLevel enum (which can't tell L2 from L3). Returns a
+  // levelOf-shaped { n, label } so existing call sites work unchanged.
+  const locHistory = useMemo(() => parseLocHistory(settingRows.find((r) => (r.key || r.id) === LOC_HISTORY_KEY)?.value), [settingRows]);
+  const resLevel = useCallback((r: Row) => {
+    const n = activeLevel({ residentId: s(r.id), careLevel: s(r.careLevel), locHistory, residentName: s(r.name) });
+    return { n, label: levelMeta(n).name };
+  }, [locHistory]);
   const residentsWithPlan = useMemo(() => new Set((cpQ.data || []).filter((p) => s(p.status) !== "DISCONTINUED").map((p) => s(p.residentId))), [cpQ.data]);
   // Held (DRAFT) plans awaiting review approval, keyed by resident.
   const draftPlansByResident = useMemo(() => {
@@ -70,8 +99,15 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
     (cpQ.data || []).filter((p) => s(p.status) === "DRAFT").forEach((p) => { const rid = s(p.residentId); const g = m.get(rid) || []; g.push(p); m.set(rid, g); });
     return m;
   }, [cpQ.data]);
+  // Active (released) plan per resident — the current care plan of record.
+  const activePlanByResident = useMemo(() => {
+    const m = new Map<string, Row>();
+    (cpQ.data || []).filter((p) => s(p.status) === "ACTIVE").forEach((p) => { const rid = s(p.residentId); if (!m.has(rid)) m.set(rid, p); });
+    return m;
+  }, [cpQ.data]);
 
-  const [tab, setTab] = useState<"new" | "due" | "history" | "pending">("new");
+  const [tab, setTab] = useState<"plans" | "new" | "due" | "history" | "pending">("plans");
+  const [viewPlan, setViewPlan] = useState<{ resident: Row; plan: Row } | null>(null);
   const [resId, setResId] = useState("");
   const [genBusy, setGenBusy] = useState(false);
   const [actingId, setActingId] = useState("");
@@ -79,7 +115,12 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
   const [genConfirm, setGenConfirm] = useState<{ plan?: { title?: string; goals: string[]; interventions: PlanIntervention[] }; already: boolean } | null>(null);
 
   // Reviews awaiting approval (LOC-change second sign-off, or incomplete activation gates).
-  const pendingReviews = useMemo(() => reviews.filter((r) => r.approvalStatus === "PENDING"), [reviews]);
+  // Family sign-off gate queues: family-approved (ready for a Care Manager to finalize),
+  // awaiting the family, and any legacy clinician-pending reviews.
+  const readyToFinalize = useMemo(() => reviews.filter((r) => r.approvalStatus === "FAMILY_APPROVED"), [reviews]);
+  const awaitingFamily = useMemo(() => reviews.filter((r) => r.approvalStatus === "PENDING_FAMILY"), [reviews]);
+  const legacyPending = useMemo(() => reviews.filter((r) => r.approvalStatus === "PENDING"), [reviews]);
+  const pendingQueue = useMemo(() => [...readyToFinalize, ...awaitingFamily, ...legacyPending], [readyToFinalize, awaitingFamily, legacyPending]);
 
   const today = new Date();
   const resident = residents.find((r: Row) => s(r.id) === resId) || null;
@@ -116,7 +157,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
 
   const runGenerate = async (plan?: { title?: string; goals: string[]; interventions: PlanIntervention[] }) => {
     if (!resident || genBusy) return;
-    const n = levelOf(resident).n;
+    const n = resLevel(resident).n;
     setGenConfirm(null);
     setGenBusy(true);
     try {
@@ -126,6 +167,27 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
       Swal.fire({ icon: "success", title: "Draft care plan created", html: `Level ${n} plan with <b>${interventionCount} intervention${interventionCount === 1 ? "" : "s"}</b> prepared and <b>held</b>. Submit the care plan review below — once approved, tasks are generated daily for the resident's scheduled caregiver.`, timer: 3600, showConfirmButton: false });
     } catch (e) { Swal.fire("Couldn't generate", e instanceof Error ? e.message : "Please try again.", "error"); }
     finally { setGenBusy(false); }
+  };
+
+  // Finalize a FAMILY-APPROVED review (Care Manager / Superadmin only): release the held
+  // plan and dispatch caregiver tasks. Records the finalizer's name + timestamp.
+  const finalizeReview = async (rv: Review) => {
+    if (!canFinalizeCarePlan(clinicianRole)) {
+      Swal.fire({ icon: "warning", title: "Finalize not permitted", text: "Only a Care Manager or Superadmin can finalize a care plan after family sign-off." });
+      return;
+    }
+    if (!rv.planId) { Swal.fire("No linked plan", "This review has no draft plan to release.", "error"); return; }
+    const c = await Swal.fire({ title: "Finalize & release plan?", text: "The family has signed off. Releasing activates the plan and dispatches tasks to the assigned caregiver.", icon: "question", showCancelButton: true, confirmButtonColor: "#4F46E5", confirmButtonText: "Finalize & release" });
+    if (!c.isConfirmed) return;
+    setActingId(rv.id);
+    try {
+      await releaseCarePlan(s(rv.planId), { approvedByName: clinicianName, effectiveDate: rv.reviewDate, nextReviewDate: rv.nextReviewDate || "" });
+      const dispatched = await materializeTodayTasks();
+      await persist(reviews.map((r) => (r.id === rv.id ? { ...r, approvalStatus: "APPROVED" as const, approvedById: clinicianId, approvedByName: clinicianName, approvedAt: new Date().toISOString(), pendingReason: undefined } : r)));
+      await cpQ.refetch?.();
+      Swal.fire({ icon: "success", title: "Care plan finalized · released", html: dispatched > 0 ? `${dispatched} task${dispatched === 1 ? "" : "s"} dispatched to today's scheduled caregiver.` : "Plan is now active. Tasks appear for the resident's caregiver on days one is scheduled.", timer: 3200, showConfirmButton: false });
+    } catch (e) { Swal.fire("Couldn't finalize", e instanceof Error ? e.message : "The plan's activation gates are still incomplete.", "error"); }
+    finally { setActingId(""); }
   };
 
   // Approve a pending review (second authorized sign-off / gate completion): release the
@@ -180,10 +242,64 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
       </div>
 
       <div className="flex items-center gap-2" role="tablist" aria-label="Care plan reviews view">
-        {([["new", "New Review"], ["pending", "Pending Approval"], ["due", "Reviews Due"], ["history", "History"]] as const).map(([v, label]) => (
-          <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${tab === v ? "bg-[#4F46E5] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}{v === "due" && dueList.length ? ` (${dueList.length})` : ""}{v === "pending" && pendingReviews.length ? ` (${pendingReviews.length})` : ""}</button>
+        {([["plans", "Care Plans"], ["new", "New Review"], ["pending", "Pending Approval"], ["due", "Reviews Due"], ["history", "History"]] as const).map(([v, label]) => (
+          <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${tab === v ? "bg-[#4F46E5] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}{v === "due" && dueList.length ? ` (${dueList.length})` : ""}{v === "pending" && pendingQueue.length ? ` (${pendingQueue.length})` : ""}</button>
         ))}
       </div>
+
+      {tab === "plans" && (
+        <>
+          <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatCard value={residents.length} label="Residents" accent="ink" icon={Users} />
+            <StatCard value={activePlanByResident.size} label="Active Plans" accent="teal" icon={ClipboardCheck} hint="Released & generating tasks" />
+            <StatCard value={residents.filter((r: Row) => draftPlansByResident.has(s(r.id)) && !activePlanByResident.has(s(r.id))).length} label="Drafts" accent="amber" icon={FileClock} hint="Awaiting review" />
+            <StatCard value={residents.filter((r: Row) => !residentsWithPlan.has(s(r.id))).length} label="No Plan Yet" accent="coral" icon={FilePlus2} hint="Needs a care plan" />
+          </div>
+          <ClinicalCard className="p-5">
+            <p className="mb-1 font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>Resident Care Plans</p>
+            <p className="mb-3 text-xs text-[var(--clinical-muted)]">Create a care plan for a resident, finalize a held draft, or view the current plan of record. Once activated, the resident&apos;s review appears under Reviews Due after the chosen interval.</p>
+            <DataState loading={loading && (cpQ.data || []).length === 0} error={error} empty={residents.length === 0} emptyTitle="No residents" emptyHint="No residents found for this community." onRetry={() => void refetch()} skeletonRows={4}>
+              <div className="space-y-2.5">
+                {residents.map((r: Row) => {
+                  const rid = s(r.id);
+                  const active = activePlanByResident.get(rid);
+                  const drafts = draftPlansByResident.get(rid) || [];
+                  const last = latestReview(rid);
+                  const lvl = resLevel(r).n;
+                  const st = active ? { label: "Active", color: "var(--clinical-green)" }
+                    : drafts.length ? { label: "Draft", color: "var(--clinical-amber)" }
+                    : { label: "No plan", color: "var(--clinical-muted)" };
+                  return (
+                    <div key={rid} className="group flex flex-col gap-3 rounded-xl border px-4 py-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_-22px_rgba(15,23,42,0.55)] sm:flex-row sm:items-center sm:gap-3.5" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+                      <div className="flex min-w-0 flex-1 items-center gap-3.5">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold" style={{ backgroundColor: `color-mix(in srgb, ${st.color} 15%, transparent)`, color: st.color, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${st.color} 32%, transparent)` }}>{initials(s(r.name))}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <p className="font-bold text-[var(--clinical-ink)]">{s(r.name)}</p>
+                            <span className="text-xs font-medium text-[var(--clinical-muted)]">Rm {s(r.room)}</span>
+                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em]" style={{ backgroundColor: `color-mix(in srgb, ${st.color} 16%, transparent)`, color: st.color }}>{st.label}</span>
+                          </div>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--clinical-muted)]">
+                            <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)", color: "var(--clinical-panel)" }}>Level {lvl}</span>
+                            {active && <span>Active since {fmt(s(active.startDate).slice(0, 10))}</span>}
+                            {last?.nextReviewDate && <span className="inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" /> Next review {fmt(last.nextReviewDate)}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
+                        {active && <ClinicalButton variant="secondary" size="sm" className="max-sm:flex-1" onClick={() => setViewPlan({ resident: r, plan: active })}>View</ClinicalButton>}
+                        {drafts.length > 0
+                          ? <ClinicalButton variant="primary" size="sm" className="max-sm:flex-1" onClick={() => { setResId(rid); setTab("new"); }}>Finalize draft</ClinicalButton>
+                          : !active && <ClinicalButton variant="primary" size="sm" className="max-sm:flex-1" onClick={() => { setResId(rid); setTab("new"); }}>Create care plan</ClinicalButton>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </DataState>
+          </ClinicalCard>
+        </>
+      )}
 
       {tab === "new" && (
         <div className="space-y-4">
@@ -192,7 +308,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <select id="cpr-res" value={resId} onChange={(e) => setResId(e.target.value)} className={`${controlClass} max-w-md`}>
                 <option value="">Choose a resident…</option>
-                {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)} (Level {levelOf(r).n})</option>)}
+                {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)} (Level {resLevel(r).n})</option>)}
               </select>
               {resident && (
                 <ClinicalButton variant="secondary" onClick={() => genPlan()} disabled={genBusy} className="shrink-0">
@@ -201,7 +317,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
                 </ClinicalButton>
               )}
             </div>
-            {resident && <p className="mt-2 text-xs text-[var(--clinical-muted)]">Builds a Level {levelOf(resident).n} plan from the approved level of care and spins the interventions <b>included in that level&apos;s package</b> into caregiver tasks — routed straight to the caregiver scheduled for this resident today. Auto-runs on Care Acuity approval — use this for residents approved earlier.</p>}
+            {resident && <p className="mt-2 text-xs text-[var(--clinical-muted)]">Builds a Level {resLevel(resident).n} plan from the approved level of care and spins the interventions <b>included in that level&apos;s package</b> into caregiver tasks — routed straight to the caregiver scheduled for this resident today. Auto-runs on Care Acuity approval — use this for residents approved earlier.</p>}
           </ClinicalCard>
 
           {!resident && (
@@ -211,7 +327,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
                 <p className="text-sm text-[var(--clinical-muted)]">No residents found.</p>
               ) : (
                 <div className="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4 @5xl:grid-cols-5">
-                  {residents.map((r: Row, i: number) => { const lv = levelOf(r); return (
+                  {residents.map((r: Row, i: number) => { const lv = resLevel(r); return (
                     <button key={s(r.id)} onClick={() => setResId(s(r.id))}
                       className="group flex flex-col items-center gap-2.5 rounded-xl border p-4 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300"
                       style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)", animationDelay: `${i * 40}ms`, animationFillMode: "backwards" }}>
@@ -227,9 +343,9 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
             </div>
           )}
 
-          {resident && <CarePlanBuilder key={resId} level={levelOf(resident).n} genBusy={genBusy} onGenerate={genPlan} />}
+          {resident && <CarePlanBuilder key={resId} level={resLevel(resident).n} genBusy={genBusy} onGenerate={genPlan} />}
 
-          {resident && <ReviewForm resident={resident} recentInc={recentInc} recentVariances={recentVariances} last={latestReview(resId)} reviewedBy={clinicianName} heldPlanCount={(draftPlansByResident.get(resId) || []).length}
+          {resident && <ReviewForm resident={resident} level={resLevel(resident).n} recentInc={recentInc} recentVariances={recentVariances} last={latestReview(resId)} reviewedBy={clinicianName} heldPlanCount={(draftPlansByResident.get(resId) || []).length}
             onSubmit={async (rec) => {
               // Idempotency (governance): block a duplicate review for the same resident in
               // the same review period. LOC-change decisions are exempt (reassessment-driven).
@@ -244,52 +360,34 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
                 .sort((a, b) => s(b.createdAt || b.startDate).localeCompare(s(a.createdAt || a.startDate)));
               const targetPlan = drafts[0];
               const now = new Date().toISOString();
-              const base = { ...rec, id: newId(), createdAt: now, submittedById: clinicianId, planId: targetPlan ? s(targetPlan.id) : undefined };
+              const sponsorId = s((resident?.raw as Row | undefined)?.sponsorId);
+              const base = { ...rec, id: newId(), createdAt: now, submittedById: clinicianId, planId: targetPlan ? s(targetPlan.id) : undefined,
+                residentName: s(resident?.name), room: s(resident?.room), sponsorId: sponsorId || undefined };
 
-              // LOC-change decisions need a SECOND authorized approver (Step 6): route to the
-              // Pending Approval queue and hold the draft — do NOT release now.
-              if (requiresSecondApproval(rec.decision) && targetPlan) {
-                try { await updateRecord("care-plans", s(targetPlan.id), { status: "UNDER_REVIEW" }); } catch { /* status flip is best-effort */ }
-                await persist([{ ...base, approvalStatus: "PENDING", pendingReason: `${rec.decision} — requires a second authorized approver.` }, ...reviews]);
+              const isHold = HOLD_DECISIONS.has(rec.decision);
+              const willRelease = !!targetPlan && !isHold; // this review would activate/change a plan
+
+              // FAMILY SIGN-OFF GATE — a plan-releasing review is NOT released on submit. It is
+              // held for the resident's family to sign off; once they approve, a Care Manager
+              // finalizes it (which releases the plan and dispatches caregiver tasks).
+              if (willRelease) {
+                try { await updateRecord("care-plans", s(targetPlan!.id), { status: "UNDER_REVIEW" }); } catch { /* best-effort */ }
+                await persist([{ ...base, approvalStatus: "PENDING_FAMILY", pendingReason: "Awaiting family sign-off." }, ...reviews]);
                 await cpQ.refetch?.();
+                if (sponsorId) {
+                  try { await createRecord("notifications", { userId: sponsorId, type: "SYSTEM_ALERT", title: "Care plan needs your sign-off", message: `A care plan review for ${base.residentName || "your relative"} is ready for your approval.`, relatedEntityId: base.id, relatedEntityType: "care_plan_review", severity: "INFO" }); } catch { /* non-critical */ }
+                }
                 setResId(""); setTab("pending");
-                Swal.fire({ icon: "info", title: "Sent for authorized approval", text: "This level-of-care change needs a second authorized approver before the plan is released. It is now in Pending Approval." });
+                Swal.fire(sponsorId
+                  ? { icon: "info", title: "Sent to family for sign-off", text: "The family sponsor has been notified. Once they approve, a Care Manager can finalize the plan." }
+                  : { icon: "info", title: "Held for family sign-off", text: "No family sponsor is linked to this resident — a Care Manager can finalize it directly from Pending Approval." });
                 return;
               }
 
-              // Single nursing approval (Step 9): releasing = flip the held draft to ACTIVE; the
-              // materializer then spins today's tasks for the scheduled caregiver.
-              const isHold = HOLD_DECISIONS.has(rec.decision);
-              const willRelease = !!targetPlan && !isHold;
-              let dispatched = 0;
-              if (willRelease) {
-                try {
-                  await releaseCarePlan(s(targetPlan.id), { approvedByName: rec.reviewedBy || clinicianName, effectiveDate: rec.reviewDate, nextReviewDate: rec.nextReviewDate || "" });
-                  dispatched = await materializeTodayTasks();
-                  await cpQ.refetch?.();
-                } catch (error) {
-                  // Activation gates incomplete → durable Awaiting-approval state (visible in the
-                  // Pending Approval queue with the missing gates), not a fleeting toast.
-                  const why = error instanceof Error ? error.message : "Activation gates incomplete.";
-                  try { await updateRecord("care-plans", s(targetPlan.id), { status: "UNDER_REVIEW" }); } catch { /* best-effort */ }
-                  await persist([{ ...base, approvalStatus: "PENDING", pendingReason: why }, ...reviews]);
-                  await cpQ.refetch?.();
-                  setResId(""); setTab("pending");
-                  Swal.fire({ icon: "warning", title: "Plan held — activation gates incomplete", text: `${why} Complete the plan, then approve it from Pending Approval.` });
-                  return;
-                }
-              }
-              await persist([{ ...base, approvalStatus: "APPROVED", approvedByName: willRelease ? (rec.reviewedBy || clinicianName) : undefined, approvedById: willRelease ? clinicianId : undefined, approvedAt: willRelease ? now : undefined }, ...reviews]);
+              // No plan to release (hold decision, or a continue-as-is review) — record directly.
+              await persist([{ ...base, approvalStatus: "APPROVED" }, ...reviews]);
               setResId(""); setTab("history");
-              if (willRelease) {
-                Swal.fire({ icon: "success", title: "Review approved · plan released", html: dispatched > 0
-                  ? `${dispatched} task${dispatched === 1 ? "" : "s"} dispatched to today's scheduled caregiver${dispatched === 1 ? "" : "s"}. The plan will keep generating tasks daily for whoever covers the resident.`
-                  : `Plan is now active. Tasks will appear for the resident's caregiver on days one is scheduled (none scheduled today).`, timer: 3600, showConfirmButton: false });
-              } else if (isHold && targetPlan) {
-                Swal.fire({ toast: true, position: "top-end", icon: "info", title: "Review submitted · plan kept on hold", showConfirmButton: false, timer: 2400 });
-              } else {
-                Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Care plan review submitted", showConfirmButton: false, timer: 1800 });
-              }
+              Swal.fire({ toast: true, position: "top-end", icon: isHold && targetPlan ? "info" : "success", title: isHold && targetPlan ? "Review submitted · plan kept on hold" : "Care plan review submitted", showConfirmButton: false, timer: 1800 });
             }} />}
         </div>
       )}
@@ -325,7 +423,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
                           <p className="font-bold text-[var(--clinical-ink)]">{s(r.name)} — Rm {s(r.room)}</p>
                           {overdue && <StatusPill status="OVERDUE" />}
                         </div>
-                        <p className="text-xs text-[var(--clinical-muted)]">Level {levelOf(r).n} • Last review: {lastReview} • Next due: {nextDue}</p>
+                        <p className="text-xs text-[var(--clinical-muted)]">Level {resLevel(r).n} • Last review: {lastReview} • Next due: {nextDue}</p>
                       </div>
                       <ClinicalButton variant="primary" size="sm" className="shrink-0" onClick={() => { setResId(s(r.id)); setTab("new"); }}>Start Review</ClinicalButton>
                     </div>
@@ -341,36 +439,53 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
         <DataState
           loading={loading && reviews.length === 0}
           error={error}
-          empty={pendingReviews.length === 0}
+          empty={pendingQueue.length === 0}
           emptyTitle="Nothing awaiting approval"
-          emptyHint="Level-of-care changes and plans with incomplete activation gates appear here for authorized approval."
+          emptyHint="Plans awaiting family sign-off, family-approved plans ready to finalize, and any pending clinician approvals appear here."
           onRetry={() => void refetch()}
           skeletonRows={3}
         >
           <div className="space-y-3">
-            {pendingReviews.map((rv) => {
+            {pendingQueue.map((rv) => {
               const r = residents.find((x: Row) => s(x.id) === rv.residentId);
               const mine = !!rv.submittedById && rv.submittedById === clinicianId;
               const acting = actingId === rv.id;
+              const isReady = rv.approvalStatus === "FAMILY_APPROVED";
+              const isAwaitingFamily = rv.approvalStatus === "PENDING_FAMILY";
+              const canFin = canFinalizeCarePlan(clinicianRole);
+              // A family-approved plan, or a plan-releasing review with no family linked, is
+              // finalized by a Care Manager. Legacy PENDING reviews keep the old approve/reject.
+              const finalizable = isReady || (isAwaitingFamily && !rv.sponsorId);
               return (
                 <ClinicalCard key={rv.id} className="p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-bold text-[var(--clinical-ink)]">{s(r?.name) || "Resident"} <span className="text-xs font-normal text-[var(--clinical-muted)]">Rm {s(r?.room)}</span></p>
-                        <StatusPill status={requiresSecondApproval(rv.decision) ? "AWAITING APPROVAL" : "GATES INCOMPLETE"} />
+                        <p className="font-bold text-[var(--clinical-ink)]">{s(r?.name) || rv.residentName || "Resident"} <span className="text-xs font-normal text-[var(--clinical-muted)]">Rm {s(r?.room) || rv.room}</span></p>
+                        <StatusPill status={isReady ? "FAMILY APPROVED" : isAwaitingFamily ? "AWAITING FAMILY" : requiresSecondApproval(rv.decision) ? "AWAITING APPROVAL" : "GATES INCOMPLETE"} />
                       </div>
                       <p className="mt-1 text-sm text-[var(--clinical-ink-soft)]"><b>{rv.decision}</b> · Level {rv.levelAtReview} · {rv.reviewPeriod}</p>
-                      {rv.pendingReason && <p className="mt-1 text-xs" style={{ color: "var(--clinical-coral)" }}>{rv.pendingReason}</p>}
                       {rv.reason && <p className="mt-1 text-xs text-[var(--clinical-muted)]">Rationale: {rv.reason}</p>}
                       <p className="mt-1 text-xs text-[var(--clinical-muted)]">Submitted {fmt((rv.createdAt || "").slice(0, 10))}{rv.reviewedBy ? ` by ${rv.reviewedBy}` : ""}</p>
-                      {mine && <p className="mt-1.5 text-xs" style={{ color: "var(--clinical-coral)" }}>You submitted this review — a different authorized approver must release it.</p>}
+                      {rv.familyDecidedAt && <p className="mt-1 text-xs font-medium" style={{ color: "var(--clinical-green)" }}>Family signed off — {rv.familyDecidedByName || "Family"} · {fmt(rv.familyDecidedAt.slice(0, 10))}</p>}
+                      {isAwaitingFamily && <p className="mt-1.5 text-xs" style={{ color: "var(--clinical-amber)" }}>{rv.sponsorId ? "Waiting for the family sponsor to sign off." : "No family linked — a Care Manager may finalize directly."}</p>}
+                      {isReady && !canFin && <p className="mt-1.5 text-xs text-[var(--clinical-muted)]">A Care Manager or Superadmin will finalize this plan.</p>}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <ClinicalButton variant="secondary" size="sm" disabled={acting} onClick={() => void rejectPending(rv)}>Reject</ClinicalButton>
-                      <ClinicalButton variant="primary" size="sm" disabled={acting || mine} onClick={() => void approvePending(rv)} title={mine ? "A second authorized approver is required" : undefined}>
-                        {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />} Approve &amp; release
-                      </ClinicalButton>
+                      {finalizable ? (
+                        <ClinicalButton variant="primary" size="sm" disabled={acting || !canFin} onClick={() => void finalizeReview(rv)} title={!canFin ? "Care Manager / Superadmin only" : undefined}>
+                          {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />} Finalize
+                        </ClinicalButton>
+                      ) : isAwaitingFamily ? (
+                        <span className="text-xs font-medium text-[var(--clinical-muted)]">Awaiting family</span>
+                      ) : (
+                        <>
+                          <ClinicalButton variant="secondary" size="sm" disabled={acting} onClick={() => void rejectPending(rv)}>Reject</ClinicalButton>
+                          <ClinicalButton variant="primary" size="sm" disabled={acting || mine} onClick={() => void approvePending(rv)} title={mine ? "A second authorized approver is required" : undefined}>
+                            {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />} Approve &amp; release
+                          </ClinicalButton>
+                        </>
+                      )}
                     </div>
                   </div>
                 </ClinicalCard>
@@ -400,7 +515,11 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
                     <td className="px-4 py-2.5 text-[var(--clinical-ink-soft)]">{fmt(rv.reviewDate)} <span className="text-[var(--clinical-muted)]">· {rv.reviewPeriod}</span></td>
                     <td className="px-4 py-2.5 font-semibold text-[var(--clinical-ink-soft)]">Level {rv.levelAtReview}</td>
                     <td className="px-4 py-2.5 text-[var(--clinical-ink-soft)]">{rv.decision}</td>
-                    <td className="px-4 py-2.5 text-[var(--clinical-ink-soft)]">{reviewOutcome({ decision: rv.decision, approvalStatus: rv.approvalStatus, released: !!rv.approvedAt, approvedByName: rv.approvedByName })}</td>
+                    <td className="px-4 py-2.5 text-[var(--clinical-ink-soft)]">
+                      {reviewOutcome({ decision: rv.decision, approvalStatus: rv.approvalStatus, released: !!rv.approvedAt, approvedByName: rv.approvedByName })}
+                      {rv.familyDecidedAt && <span className="mt-0.5 block text-[11px] text-[var(--clinical-muted)]">Family: {rv.familyDecidedByName || "—"} · {fmt(rv.familyDecidedAt.slice(0, 10))}</span>}
+                      {rv.approvedAt && <span className="mt-0.5 block text-[11px] text-[var(--clinical-muted)]">Finalized: {rv.approvedByName || "—"} · {fmt(rv.approvedAt.slice(0, 10))}</span>}
+                    </td>
                     <td className="px-4 py-2.5 text-[var(--clinical-ink-soft)]">{rv.reviewedBy || "—"}</td>
                   </tr>
                 ); })}
@@ -412,7 +531,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
       {genConfirm && resident && (
         <ClinicalModal open onClose={() => setGenConfirm(null)} size="md"
           title="Generate care plan &amp; tasks?"
-          description={`A Level ${levelOf(resident).n} plan for ${s(resident.name)} · ${genConfirm.plan ? `${genConfirm.plan.interventions.length} individualized intervention${genConfirm.plan.interventions.length === 1 ? "" : "s"}` : "baseline package"}`}
+          description={`A Level ${resLevel(resident).n} plan for ${s(resident.name)} · ${genConfirm.plan ? `${genConfirm.plan.interventions.length} individualized intervention${genConfirm.plan.interventions.length === 1 ? "" : "s"}` : "baseline package"}`}
           footer={
             <>
               <ClinicalButton variant="secondary" onClick={() => setGenConfirm(null)} disabled={genBusy}>Cancel</ClinicalButton>
@@ -428,7 +547,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
               <div className="min-w-0">
                 <p className="truncate font-semibold text-[var(--clinical-ink)]">{s(resident.name)}</p>
                 <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[var(--clinical-muted)]">
-                  <span className="rounded-md px-1.5 py-0.5 font-bold text-white" style={{ backgroundColor: "var(--clinical-panel)" }}>Level {levelOf(resident).n}</span>
+                  <span className="rounded-md px-1.5 py-0.5 font-bold text-white" style={{ backgroundColor: "var(--clinical-panel)" }}>Level {resLevel(resident).n}</span>
                   <span>Room {s(resident.room)}</span>
                   <span aria-hidden>·</span>
                   <span>{genConfirm.plan ? `${genConfirm.plan.interventions.length} individualized intervention${genConfirm.plan.interventions.length === 1 ? "" : "s"}` : "Baseline package"}</span>
@@ -450,6 +569,69 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
           </div>
         </ClinicalModal>
       )}
+      {viewPlan && (
+        <ClinicalModal open onClose={() => setViewPlan(null)} size="lg"
+          title="Current Care Plan"
+          description={`${s(viewPlan.resident.name)} — Rm ${s(viewPlan.resident.room)} · ${s(viewPlan.plan.title) || `Level ${resLevel(viewPlan.resident).n} plan`}`}
+          footer={<ClinicalButton variant="secondary" onClick={() => setViewPlan(null)}>Close</ClinicalButton>}
+        >
+          <CurrentPlanView plan={viewPlan.plan} nextReviewDate={latestReview(s(viewPlan.resident.id))?.nextReviewDate} />
+        </ClinicalModal>
+      )}
+    </div>
+  );
+}
+
+// Read-only view of a resident's active care plan — meta strip, goals, and
+// interventions (each parsed into title · detail · frequency pill).
+function CurrentPlanView({ plan, nextReviewDate }: { plan: Row; nextReviewDate?: string }) {
+  const goals = s(plan.careGoals).split("\n").map((x) => x.trim()).filter(Boolean);
+  const ivs = s(plan.interventions).split("\n").map((x) => x.trim()).filter(Boolean).map(parseIntervention);
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <StatusPill status={s(plan.status)} />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--clinical-muted)]">
+          {plan.startDate && <span>Active since <span className="font-semibold text-[var(--clinical-ink-soft)]">{fmt(s(plan.startDate).slice(0, 10))}</span></span>}
+          {plan.reviewFrequency && <span className="capitalize">{s(plan.reviewFrequency).toLowerCase()} review</span>}
+          {nextReviewDate && <span className="inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" /> Next {fmt(nextReviewDate)}</span>}
+        </div>
+      </div>
+
+      <section>
+        <div className="mb-2.5 flex items-center gap-2"><Target className="h-4 w-4" style={{ color: "var(--clinical-panel)" }} /><h3 className="text-sm font-bold text-[var(--clinical-ink)]">Care Goals</h3></div>
+        {goals.length ? (
+          <ul className="space-y-1.5">
+            {goals.map((g, i) => (
+              <li key={i} className="flex gap-2.5 text-sm leading-6 text-[var(--clinical-ink-soft)]">
+                <span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: "var(--clinical-panel)" }} />
+                <span>{g}</span>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="text-sm text-[var(--clinical-muted)]">No goals recorded.</p>}
+      </section>
+
+      <section>
+        <div className="mb-2.5 flex items-center gap-2">
+          <ListChecks className="h-4 w-4" style={{ color: "var(--clinical-panel)" }} />
+          <h3 className="text-sm font-bold text-[var(--clinical-ink)]">Interventions</h3>
+          {ivs.length > 0 && <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)", color: "var(--clinical-panel)" }}>{ivs.length}</span>}
+        </div>
+        {ivs.length ? (
+          <ul className="overflow-hidden rounded-xl border" style={{ borderColor: "var(--clinical-line)" }}>
+            {ivs.map((iv, i) => (
+              <li key={i} className="flex items-start justify-between gap-3 border-t px-3.5 py-2.5 first:border-t-0" style={{ borderColor: "var(--clinical-line)" }}>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[var(--clinical-ink)]">{iv.title}</p>
+                  {iv.desc && <p className="mt-0.5 text-xs leading-5 text-[var(--clinical-muted)]">{iv.desc}</p>}
+                </div>
+                {iv.freq && <span className="mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em]" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)", color: "var(--clinical-panel)" }}>{iv.freq}</span>}
+              </li>
+            ))}
+          </ul>
+        ) : <p className="text-sm text-[var(--clinical-muted)]">No interventions recorded.</p>}
+      </section>
     </div>
   );
 }
@@ -631,13 +813,15 @@ function CarePlanBuilder({ level, genBusy, onGenerate }: {
   );
 }
 
-function ReviewForm({ resident, recentInc, recentVariances = [], last, reviewedBy, heldPlanCount = 0, onSubmit }: {
-  resident: Row; recentInc: Row[]; recentVariances?: Row[]; last?: Review; reviewedBy: string; heldPlanCount?: number;
+function ReviewForm({ resident, level, recentInc, recentVariances = [], last, reviewedBy, heldPlanCount = 0, onSubmit }: {
+  resident: Row; level: number; recentInc: Row[]; recentVariances?: Row[]; last?: Review; reviewedBy: string; heldPlanCount?: number;
   onSubmit: (rec: Omit<Review, "id" | "createdAt">) => Promise<void>;
 }) {
   const today = new Date();
-  const lvl = levelOf(resident).n;
-  const [nextReviewDate, setNextReviewDate] = useState(isoDate(addMonths(today, 3)));
+  const lvl = level;
+  const [reviewInterval, setReviewInterval] = useState(60);
+  const [nextReviewDate, setNextReviewDate] = useState(isoDate(addDays(today, 60)));
+  const applyInterval = (days: number) => { setReviewInterval(days); setNextReviewDate(isoDate(addDays(today, days))); };
   const [carePlanStatus, setCarePlanStatus] = useState("No Change");
   const [familyUpdate, setFamilyUpdate] = useState(false);
   const [physicianFollowup, setPhysicianFollowup] = useState(false);
@@ -679,6 +863,7 @@ function ReviewForm({ resident, recentInc, recentVariances = [], last, reviewedB
           <Field label="Review Date" value={isoDate(today)} />
           <Field label="Reviewed By" value={reviewedBy || "Staff"} />
           <Field label="Last Review" value={last ? fmt(last.reviewDate) : "Never"} />
+          <div><FieldLabel htmlFor="cpr-interval">Review Interval</FieldLabel><select id="cpr-interval" value={reviewInterval} onChange={(e) => applyInterval(Number(e.target.value))} className={controlClass}><option value={30}>30 days</option><option value={60}>60 days</option></select></div>
           <div><FieldLabel htmlFor="cpr-next">Next Review Date</FieldLabel><input id="cpr-next" type="date" value={nextReviewDate} onChange={(e) => setNextReviewDate(e.target.value)} className={controlClass} /></div>
         </div>
         <div className="mt-4 grid grid-cols-1 items-center gap-4 lg:grid-cols-3">
@@ -710,7 +895,7 @@ function ReviewForm({ resident, recentInc, recentVariances = [], last, reviewedB
           {heldPlanCount > 0 && (
             <div className="flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm" style={{ borderColor: "#4F46E5", backgroundColor: "color-mix(in srgb, #4F46E5 8%, transparent)" }}>
               <ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-[#4F46E5]" />
-              <span className="text-[var(--clinical-ink)]"><b>{heldPlanCount} draft care plan{heldPlanCount === 1 ? "" : "s"} held.</b> Submitting this review releases the plan and dispatches its tasks to caregivers — unless you choose <i>Refer to Physician</i> or <i>Schedule Family Conference</i>, which keep it on hold.</span>
+              <span className="text-[var(--clinical-ink)]"><b>{heldPlanCount} draft care plan{heldPlanCount === 1 ? "" : "s"} held.</b> Submitting a plan-changing review sends it to the resident&apos;s family for sign-off; once they approve, a Care Manager finalizes it and tasks dispatch to caregivers. <i>Refer to Physician</i> and <i>Schedule Family Conference</i> keep the plan on hold instead.</span>
             </div>
           )}
           <div><FieldLabel required htmlFor="cpr-decision">Decision</FieldLabel><select id="cpr-decision" value={decision} onChange={(e) => setDecision(e.target.value)} className={`${controlClass} max-w-xs`}><option value="">Select a decision…</option>{DECISIONS.map((d) => <option key={d} value={d}>{d}</option>)}</select></div>
@@ -720,7 +905,7 @@ function ReviewForm({ resident, recentInc, recentVariances = [], last, reviewedB
             <div><FieldLabel htmlFor="cpr-resp">Responsible Person</FieldLabel><input id="cpr-resp" value={responsible} onChange={(e) => setResponsible(e.target.value)} placeholder="Name or role" className={controlClass} /></div>
             <div><FieldLabel htmlFor="cpr-target">Target Completion Date</FieldLabel><input id="cpr-target" type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className={controlClass} /></div>
           </div>
-          <button onClick={submit} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] disabled:opacity-60"><ClipboardList className="h-4 w-4" /> {saving ? "Submitting…" : heldPlanCount > 0 ? "Submit review & release plan" : "Submit Care Plan Review"}</button>
+          <button onClick={submit} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] disabled:opacity-60"><ClipboardList className="h-4 w-4" /> {saving ? "Submitting…" : heldPlanCount > 0 ? "Submit for family sign-off" : "Submit Care Plan Review"}</button>
         </div>
       </Section>
     </>

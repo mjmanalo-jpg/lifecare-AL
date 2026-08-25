@@ -5,7 +5,15 @@
 //     so a LEVEL-OF-CARE change needs a second authorized sign-off before release.
 // Kept free of React/Prisma imports so it unit-tests under `node --test`.
 
-export type CarePlanReviewApprovalStatus = "APPROVED" | "PENDING" | "REJECTED";
+// Base clinician states plus the family sign-off gate:
+//   PENDING_FAMILY  → a plan-releasing review is held awaiting the resident's family sign-off.
+//   FAMILY_APPROVED → family signed off; awaiting a Care Manager / Superadmin to finalize (release).
+export type CarePlanReviewApprovalStatus = "APPROVED" | "PENDING" | "REJECTED" | "PENDING_FAMILY" | "FAMILY_APPROVED";
+
+// Only a Care Manager or Superadmin may finalize (release) a family-approved care plan.
+export function canFinalizeCarePlan(role: string | null | undefined): boolean {
+  return role === "CARE_MANAGER" || role === "SUPERADMIN";
+}
 
 export interface ReviewLike {
   residentId: string;
@@ -56,6 +64,8 @@ export function reviewOutcome(input: {
   released?: boolean;
   approvedByName?: string;
 }): string {
+  if (input.approvalStatus === "PENDING_FAMILY") return "Awaiting family sign-off";
+  if (input.approvalStatus === "FAMILY_APPROVED") return "Family approved · Ready to finalize";
   if (input.approvalStatus === "PENDING") {
     return requiresSecondApproval(input.decision) ? "Awaiting second approval" : "Awaiting approval";
   }

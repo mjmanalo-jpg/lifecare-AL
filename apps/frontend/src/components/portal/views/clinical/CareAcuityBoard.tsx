@@ -24,6 +24,7 @@ import assessmentDomains from "@/lib/lifecare/data/assessment_domains.json";
 import { adaptResident } from "@/lib/adapters";
 import type { ClinicianRole } from "./useClinician";
 import ResidentAssessmentV42 from "./ResidentAssessmentV42";
+import LocSignoffApprovals from "./LocSignoffApprovals";
 import {
   ClinicalPage, ClinicalHeader, ClinicalCard, ClinicalModal, ClinicalButton,
   StatCard, controlClass, SERIF,
@@ -143,7 +144,7 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
   // Unified Level of Care history (pre-admission + reassessment + acuity approvals).
   const locHistory = useMemo(() => parseLocHistory(settingRows.find((r) => (r.key || r.id) === LOC_HISTORY_KEY)?.value), [settingRows]);
 
-  const [tab, setTab] = useState<"queue" | "packages" | "activities" | "history">("queue");
+  const [tab, setTab] = useState<"queue" | "approvals" | "packages" | "activities" | "history">("queue");
   // Bumping this signals the embedded assessment board to open a new assessment —
   // lets the "New Assessment" action live in this board's header, not inside it.
   const [newSignal, setNewSignal] = useState(0);
@@ -200,7 +201,7 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
 
       {/* Tabs */}
       <div className="mb-5 inline-flex flex-wrap gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
-        {([["queue", "Assessments"], ["packages", "Service Packages"], ["activities", "Care Activities"], ["history", "Level History"]] as const).map(([v, label]) => (
+        {([["queue", "Assessments"], ["approvals", "Pending Approval"], ["packages", "Service Packages"], ["activities", "Care Activities"], ["history", "Level History"]] as const).map(([v, label]) => (
           <button key={v} onClick={() => setTab(v)} className={`rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors ${tab === v ? "bg-[var(--clinical-surface)] shadow-sm text-[var(--clinical-ink)]" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>{label}</button>
         ))}
       </div>
@@ -208,6 +209,8 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
       {/* Assessments — the single v4.2 3-layer instrument, embedded. New → complete
           → nurse-validate → care plan; stores to assessments_v42. */}
       {tab === "queue" && <ResidentAssessmentV42 clinicianRole={roleForV42} embedded origin="ACUITY" deepLinkResident={deepLinkResident} deepLinkReason={deepLinkReason} newSignal={newSignal} />}
+
+      {tab === "approvals" && <LocSignoffApprovals clinicianRole={roleForV42} />}
 
       {tab === "packages" && (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">

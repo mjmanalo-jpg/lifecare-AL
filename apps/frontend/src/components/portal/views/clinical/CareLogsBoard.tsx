@@ -38,6 +38,9 @@ import { qrDataUrl } from "@/lib/qr";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, SearchInput, DataState, controlClass } from "./clinical-ui";
 import { careLevelEnumToLevel, domainInPackage, domainDailyAllowance, DOMAIN_LABEL, recordOutOfPackageService, OVERAGE_EVENTS_KEY, parseOverageEvents, upsertOverageEvent, type OverageEvent } from "@/lib/lifecare/carePackage";
+import { activeLevel } from "@/lib/lifecare/activeLevel";
+import { parseLocHistory, LOC_HISTORY_KEY } from "@/lib/lifecare/locHistory";
+import { levelMeta } from "@/lib/lifecare/levelModel";
 import ASSESSMENT_DOMAINS from "@/lib/lifecare/data/assessment_domains.json";
 import { CLINICAL_ALERT_RULES } from "@/lib/lifecare/clinicalAlerts";
 
@@ -92,6 +95,7 @@ export const levelOf = (r: Row) => LEVELS[s(r.careLevel)] || { n: 2, label: "Ass
 // (green independent → amber moderate → coral memory/skilled), replacing the
 // hardcoded light bg-*-100 badges that stranded contrast in dark mode.
 const LEVEL_DOT: Record<number, string> = { 1: "var(--clinical-green)", 2: "var(--clinical-panel)", 3: "var(--clinical-amber)", 4: "var(--clinical-coral)", 5: "var(--clinical-coral)" };
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 function LevelBadge({ lvl }: { lvl: { n: number; label: string } }) {
   return (
     <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>
@@ -293,6 +297,9 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
   const refetchAll = async () => { await Promise.allSettled([roundQ.refetch(), vitQ.refetch(), mealQ.refetch(), bowQ.refetch(), uriQ.refetch(), edeQ.refetch(), conQ.refetch(), moodQ.refetch(), painQ.refetch(), mobQ.refetch(), sleepQ.refetch(), refetchSettings()]); };
   // About Me profiles — for the directory's preferred-name + blocklist glance.
   const aboutStore = useMemo(() => parseAboutMeStore(settingRows.find((r) => (r.key || r.id) === ABOUT_ME_KEY)?.value), [settingRows]);
+  // Authoritative active level of care comes from loc_history (true L1..L5), not the
+  // careLevel enum (which can't distinguish L2 from L3).
+  const locHistory = useMemo(() => parseLocHistory(settingRows.find((r) => (r.key || r.id) === LOC_HISTORY_KEY)?.value), [settingRows]);
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
 
   const roundToRes = useMemo(() => {
@@ -399,7 +406,7 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
 
   const refetchResidents = () => resQ.refetch();
 
-  return { residents, entries, allEntries, byResident, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, refetchResidents, aboutStore, loading: resQ.loading };
+  return { residents, entries, allEntries, byResident, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, refetchResidents, aboutStore, locHistory, loading: resQ.loading };
 }
 
 // ── Residents tab — quick-log list (Image 15) ────────────────────────────────
@@ -407,7 +414,7 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
 // so nurse / care-manager / admin keep the full directory; the caregiver view
 // passes false to stay read-only (View + QR) per the role visibility matrix.
 export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = true }: { clinicianRole?: ClinicianRole; canManage?: boolean }) {
-  const { residents, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, ensureRound, saveNote, refetchAll, refetchResidents, bowelRef, saveBowelRef, aboutStore, loading } = useCareLogData(clinicianRole);
+  const { residents, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, ensureRound, saveNote, refetchAll, refetchResidents, bowelRef, saveBowelRef, aboutStore, locHistory, loading } = useCareLogData(clinicianRole);
 
   const [search, setSearch] = useState("");
   const [careLevelFilter, setCareLevelFilter] = useState("");
@@ -480,21 +487,24 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
       >
         <div className="space-y-3">
           {filtered.map((r: Row) => {
-            const lvl = levelOf(r);
+            const n = activeLevel({ residentId: s(r.id), careLevel: s(r.careLevel), locHistory, residentName: s(r.name) });
+            const lvl = { n, label: levelMeta(n).name };
             const diet = s(r.dietRestriction) || s(r.raw?.dietType) || "Regular";
+            const dot = LEVEL_DOT[lvl.n] ?? "var(--clinical-panel)";
             return (
-              <div key={s(r.id)} className="rounded-xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+              <div key={s(r.id)} className="group rounded-xl border p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_-22px_rgba(15,23,42,0.55)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-3">
-                  <div className="flex min-w-0 items-start gap-3 sm:flex-1 sm:items-center">
-                  <div className="w-11 h-11 rounded-xl bg-[var(--clinical-surface-2)] flex flex-col items-center justify-center leading-none shrink-0"><span className="text-[9px] font-semibold text-[var(--clinical-muted)]">Rm</span><span className="text-sm font-bold text-[var(--clinical-ink-soft)]">{s(r.room)}</span></div>
+                  <div className="flex min-w-0 items-center gap-3.5 sm:flex-1">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold" style={{ backgroundColor: `color-mix(in srgb, ${dot} 15%, transparent)`, color: dot, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${dot} 32%, transparent)` }}>{initials(s(r.name))}</span>
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
-                      <p className="break-words font-bold leading-snug text-[var(--clinical-ink)] sm:truncate">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <p className="font-bold text-[var(--clinical-ink)]">
                         {s(r.name)}
                         {profileFor(aboutStore, s(r.id)).preferredName?.trim() && (
                           <span className="ml-1.5 font-medium text-[var(--clinical-muted)]">“{profileFor(aboutStore, s(r.id)).preferredName}”</span>
                         )}
                       </p>
+                      <span className="text-xs font-medium text-[var(--clinical-muted)]">Rm {s(r.room)}</span>
                       <LevelBadge lvl={lvl} />
                       {hasBlocklist(profileFor(aboutStore, s(r.id))) && (
                         <span className="inline-flex items-center gap-1 rounded border border-red-200 bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700" title="This resident has a blocklisted contact">
@@ -502,7 +512,7 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-[var(--clinical-muted)] mt-0.5">{genderLabel(r.raw?.gender)} · {diet}</p>
+                    <p className="mt-1 text-xs text-[var(--clinical-muted)]">{genderLabel(r.raw?.gender)} · {diet}</p>
                   </div>
                   </div>
                   <div className={`grid w-full ${canManage ? "grid-cols-4" : "grid-cols-2"} gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:gap-1.5`}>
@@ -1066,43 +1076,53 @@ function ViewModal({ resident, loggedDomains, onOpenLog, onClose }: { resident: 
   const lvl = levelOf(resident);
   // Open the resident's full care card (same /rcard/<id> page the per-resident QR encodes).
   const goFull = () => { try { window.location.href = `/rcard/${s(resident.id)}`; } catch { /* noop */ } };
-  const field = (label: string, value: string) => <div><p className="text-[11px] text-[var(--clinical-muted)]">{label}</p><p className="text-sm font-semibold text-[var(--clinical-ink)]">{value || "—"}</p></div>;
-
+  const field = (label: string, value: string) => (
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">{label}</p>
+      <p className="mt-0.5 text-sm font-semibold text-[var(--clinical-ink)]">{value || "—"}</p>
+    </div>
+  );
   return (
     <ClinicalModal
       open
       onClose={onClose}
       title={s(resident.name)}
       description={`Room ${s(resident.room)} · Level ${lvl.n} · ${lvl.label}`}
+      size="lg"
       footer={<ClinicalButton variant="primary" onClick={goFull} className="w-full"><UserRound className="w-4 h-4" /> View Full Profile</ClinicalButton>}
     >
       <div className="space-y-5">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-[var(--clinical-surface-2)] flex flex-col items-center justify-center leading-none shrink-0"><span className="text-[9px] font-semibold text-[var(--clinical-muted)]">Rm</span><span className="text-sm font-bold text-[var(--clinical-ink-soft)]">{s(resident.room)}</span></div>
-          <div className="min-w-0"><p className="font-bold text-[var(--clinical-ink)] truncate">{s(resident.name)}</p><LevelBadge lvl={lvl} /></div>
+        <div className="rounded-xl border p-4" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+            {field("Date of Birth", s(raw.dateOfBirth).slice(0, 10))}
+            {field("Gender", s(raw.gender))}
+            {field("Admission Date", s(raw.admissionDate).slice(0, 10))}
+            {field("Diet Type", s(resident.dietRestriction) || s(raw.dietType) || "Regular")}
+            {field("Mobility Aid", s(raw.mobility) || s(raw.mobilityAid))}
+            {field("Assigned Nurse", s(raw.assignedNurse))}
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          {field("Date of Birth", s(raw.dateOfBirth).slice(0, 10))}
-          {field("Gender", s(raw.gender))}
-          {field("Admission Date", s(raw.admissionDate).slice(0, 10))}
-          {field("Diet Type", s(resident.dietRestriction) || s(raw.dietType) || "Regular")}
-          {field("Mobility Aid", s(raw.mobility) || s(raw.mobilityAid))}
-          {field("Assigned Nurse", s(raw.assignedNurse))}
-        </div>
+
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--clinical-muted)] mb-2">Today&apos;s Care Logging</p>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="mb-2.5 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--clinical-muted)]">Today&apos;s Care Logging</p>
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-green) 14%, transparent)", color: "var(--clinical-green)" }}>{loggedDomains.size}/{DOMAINS.length} logged</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {DOMAINS.map((d) => { const on = loggedDomains.has(d.key); const Icon = d.icon; return (
-              <button key={d.key} onClick={() => onOpenLog(d.key)} aria-label={`Log ${d.label}`} className="relative rounded-xl border p-2 flex flex-col items-center gap-1 hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: on ? "var(--clinical-green)" : "var(--clinical-line)", backgroundColor: on ? "color-mix(in srgb, var(--clinical-green) 12%, transparent)" : "transparent" }}>
-                <Icon className="w-4 h-4" style={{ color: on ? "var(--clinical-green)" : "var(--clinical-ink-soft)" }} />
-                <span className="text-[10px] text-[var(--clinical-ink-soft)]">{d.label}</span>
-                {on ? <Check className="w-3 h-3" style={{ color: "var(--clinical-green)" }} /> : <span className="text-[9px] text-[var(--clinical-muted)]">log</span>}
+              <button key={d.key} onClick={() => onOpenLog(d.key)} aria-label={`Log ${d.label}`} className="flex flex-col items-center gap-1.5 rounded-xl border p-2.5 text-center transition duration-150 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-18px_rgba(15,23,42,0.5)]" style={{ borderColor: on ? "var(--clinical-green)" : "var(--clinical-line)", backgroundColor: on ? "color-mix(in srgb, var(--clinical-green) 10%, transparent)" : "var(--clinical-surface)" }}>
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: on ? "color-mix(in srgb, var(--clinical-green) 18%, transparent)" : "var(--clinical-surface-2)", color: on ? "var(--clinical-green)" : "var(--clinical-ink-soft)" }}><Icon className="h-4 w-4" /></span>
+                <span className="text-[10px] font-medium leading-tight text-[var(--clinical-ink-soft)]">{d.label}</span>
+                {on
+                  ? <span className="inline-flex items-center gap-0.5 text-[9px] font-bold" style={{ color: "var(--clinical-green)" }}><Check className="h-3 w-3" /> Logged</span>
+                  : <span className="text-[9px] font-semibold uppercase tracking-wide text-[var(--clinical-muted)]">Log</span>}
               </button>
             ); })}
           </div>
         </div>
+
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--clinical-muted)] mb-2 flex items-center gap-1.5"><Pill className="w-3.5 h-3.5" /> Medications</p>
+          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--clinical-muted)]"><Pill className="h-3.5 w-3.5" /> Medications</p>
           <MedsList residentId={s(resident.id)} />
         </div>
       </div>

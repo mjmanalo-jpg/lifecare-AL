@@ -1,6 +1,6 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { X, Search } from "lucide-react";
+import { X, Search, type LucideIcon } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
 // SLMS "clinical-editorial" design kit — matches the Feature Overview PDF:
@@ -233,13 +233,18 @@ export function SearchInput({ value, onChange, placeholder = "Search…", classN
 }
 
 type StatAccent = "ink" | "teal" | "coral" | "amber" | "green";
-/** Modern KPI card — uppercase micro-label over a large bold numeral, soft depth. */
-export function StatCard({ value, label, accent = "ink" }: { value: React.ReactNode; label: string; accent?: StatAccent }) {
+/** Modern KPI card — uppercase micro-label over a large bold numeral, soft depth.
+ *  Optional `icon` renders a tinted chip in the corner; `hint` adds a sub-label. */
+export function StatCard({ value, label, accent = "ink", icon: Icon, hint }: { value: React.ReactNode; label: string; accent?: StatAccent; icon?: LucideIcon; hint?: string }) {
   const color = { ink: "var(--clinical-ink)", teal: "var(--clinical-panel)", coral: "var(--clinical-coral)", amber: "var(--clinical-amber)", green: "var(--clinical-green)" }[accent];
   return (
     <div className="rounded-xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">{label}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">{label}</p>
+        {Icon && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `color-mix(in srgb, ${color} 14%, transparent)`, color }}><Icon className="h-4 w-4" /></span>}
+      </div>
       <p className="mt-1.5 text-[1.75rem] font-bold leading-none tabular-nums" style={{ color, fontFamily: DISPLAY }}>{value}</p>
+      {hint && <p className="mt-1.5 text-[11px] text-[var(--clinical-muted)]">{hint}</p>}
     </div>
   );
 }

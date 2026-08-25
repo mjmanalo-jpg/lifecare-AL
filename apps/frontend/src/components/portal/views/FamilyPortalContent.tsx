@@ -23,6 +23,8 @@ import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocume
 import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker";
 import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
 import FamilyApprovals from "@/components/portal/views/family/FamilyApprovals";
+import FamilyCarePlanApprovals from "@/components/portal/views/family/FamilyCarePlanApprovals";
+import FamilyReassessmentApprovals from "@/components/portal/views/family/FamilyReassessmentApprovals";
 import ClinicalRecordsBoard from "@/components/portal/views/clinical/ClinicalRecordsBoard";
 import ResidentJourneyBoard from "@/components/portal/views/clinical/ResidentJourneyBoard";
 import ResidentCareHistory from "@/components/portal/views/clinical/ResidentCareHistory";
@@ -86,7 +88,13 @@ export default function FamilyPortalContent({ tab }: FamilyPortalContentProps) {
     case "followups":
       return <FollowUpTracker />;
     case "approvals":
-      return <FamilyApprovals />;
+      return (
+        <div className="space-y-6">
+          <FamilyApprovals />
+          <FamilyReassessmentApprovals />
+          <FamilyCarePlanApprovals />
+        </div>
+      );
     // Read-only clinical views — the residents query is sponsor-scoped by the API
     // (tenantWhere → residentAccessWhere for FAMILY), so only the family's own
     // resident(s) appear and can be opened. Wrapped in `clinical-portal-content`

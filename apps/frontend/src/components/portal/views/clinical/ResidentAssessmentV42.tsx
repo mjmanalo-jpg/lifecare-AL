@@ -11,11 +11,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   Plus, X, Trash2, Pencil, CheckCircle2, Gauge, AlertTriangle,
-  ShieldCheck, RefreshCw, Info, Layers, ArrowLeftRight, LayoutGrid, Table2,
+  ShieldCheck, RefreshCw, Info, Layers, LayoutGrid, Table2,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { upsertRecord, updateRecord } from "@/lib/api";
+import { upsertRecord, updateRecord, createRecord } from "@/lib/api";
+import { recordLocSignoff } from "@/lib/lifecare/locSignoff";
+import { levelMeta } from "@/lib/lifecare/levelModel";
 import { recordAudit } from "@/lib/auditClient";
 import { generateCarePlanFromV42 } from "@/lib/carePlanV42Gen";
 import { decideLocApplication } from "@/lib/lifecare/downstream.ts";
@@ -40,10 +42,6 @@ type SettingRow = { key?: string; id?: string; value?: string };
 
 const RAW_MAX = 56;
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
-const ORIGIN_LABEL: Record<AssessmentOrigin, string> = {
-  PREADMISSION: "Pre-Admission Assessment",
-  ACUITY: "Care Acuity & Level of Care",
-};
 const LEVELS: CareLevel[] = ["L1", "L2", "L3", "L4", "L5"];
 const LEVEL_LABEL: Record<CareLevel, string> = {
   L1: "Level 1", L2: "Level 2", L3: "Level 3", L4: "Level 4", L5: "Level 5 (Pathway)",
@@ -154,9 +152,10 @@ const ageFromDob = (dob?: string): string => {
   return a >= 0 && a < 130 ? String(a) : "";
 };
 
-function ResidentPicker({ value, onChange, admissions, linkedId, onPick, onUnlink }: {
+function ResidentPicker({ value, onChange, admissions, linkedId, onPick, onUnlink, placeholder = "Search converted leads or type a name…", linkedLabel = "From CRM", emptyHint = "No in-progress admissions match — keep typing to enter a new name.", optionFallback = "Converted lead · in-progress admission" }: {
   value?: string; onChange: (v: string) => void; admissions: AdmissionOpt[];
   linkedId: string; onPick: (a: AdmissionOpt) => void; onUnlink: () => void;
+  placeholder?: string; linkedLabel?: string; emptyHint?: string; optionFallback?: string;
 }) {
   const [open, setOpen] = useState(false);
   const q = (value ?? "").trim().toLowerCase();
@@ -170,26 +169,26 @@ function ResidentPicker({ value, onChange, admissions, linkedId, onPick, onUnlin
           onChange={(e) => { onChange(e.target.value); if (linkedId) onUnlink(); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onBlur={() => window.setTimeout(() => setOpen(false), 150)}
-          placeholder="Search converted leads or type a name…"
+          placeholder={placeholder}
           className={`${input} ${linkedId ? "pr-24" : ""}`}
           autoComplete="off"
         />
         {linkedId && (
           <span className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded text-[var(--clinical-panel)]" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)" }}>
-            From CRM
-            <button type="button" aria-label="Unlink admission" onMouseDown={(e) => { e.preventDefault(); onUnlink(); }} className="hover:text-[var(--clinical-coral)]"><X className="w-3 h-3" /></button>
+            {linkedLabel}
+            <button type="button" aria-label="Unlink" onMouseDown={(e) => { e.preventDefault(); onUnlink(); }} className="hover:text-[var(--clinical-coral)]"><X className="w-3 h-3" /></button>
           </span>
         )}
       </div>
       {open && admissions.length > 0 && (
         <div className="absolute z-30 mt-1 w-full max-h-56 overflow-y-auto rounded-lg border shadow-lg scrollbar-thin" style={{ backgroundColor: "var(--clinical-ground)", borderColor: "var(--clinical-line-strong)" }}>
           {matches.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-[var(--clinical-muted)]">No in-progress admissions match — keep typing to enter a new name.</div>
+            <div className="px-3 py-2 text-xs text-[var(--clinical-muted)]">{emptyHint}</div>
           ) : matches.map((a) => (
             <button key={a.id} type="button" onMouseDown={(e) => { e.preventDefault(); onPick(a); setOpen(false); }}
               className="w-full text-left px-3 py-2 hover:bg-[var(--clinical-surface-2)] border-b last:border-b-0" style={{ borderColor: "var(--clinical-line)" }}>
               <div className="text-sm font-medium text-[var(--clinical-ink)]">{a.name}</div>
-              <div className="text-[11px] text-[var(--clinical-muted)]">{[a.sex, a.dob && `DOB ${a.dob}`, a.phone].filter(Boolean).join(" · ") || "Converted lead · in-progress admission"}</div>
+              <div className="text-[11px] text-[var(--clinical-muted)]">{[a.contact, a.sex, a.dob && `DOB ${a.dob}`, a.phone].filter(Boolean).join(" · ") || optionFallback}</div>
             </button>
           ))}
         </div>
@@ -249,8 +248,27 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     [admissionRows]
   );
 
+  // For a reassessment (LOC Decision Review, origin ACUITY) the picker lists ADMITTED
+  // residents — the CRM converted-lead list is only for the Pre-Admission form.
+  const { data: residentRows } = useLiveQuery<{ id: string; firstName?: string; lastName?: string; name?: string; dateOfBirth?: string; gender?: string; roomNumber?: string; status?: string }>("residents", { tables: ["Resident"] });
+  const residentOpts = useMemo<AdmissionOpt[]>(
+    () => (residentRows || [])
+      .filter((r) => String(r.status || "").toUpperCase() !== "DISCHARGED")
+      .map((r) => ({
+        id: String(r.id),
+        name: `${r.firstName ?? ""} ${r.lastName ?? ""}`.replace(/\s+/g, " ").trim() || String(r.name || ""),
+        dob: r.dateOfBirth ? String(r.dateOfBirth).slice(0, 10) : undefined,
+        sex: r.gender || undefined,
+        contact: r.roomNumber ? `Room ${r.roomNumber}` : undefined,
+      }))
+      .filter((a) => a.name),
+    [residentRows]
+  );
+  const isAcuity = origin === "ACUITY";
+
   const [me, setMe] = useState("");
-  useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => { if (d?.authenticated) setMe(d.session?.name ?? ""); }).catch(() => {}); }, []);
+  const [myId, setMyId] = useState("");
+  useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => { if (d?.authenticated) { setMe(d.session?.name ?? ""); setMyId(d.session?.userId ?? ""); } }).catch(() => {}); }, []);
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -365,6 +383,20 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
       convertedAdmissionId: a.id,
     });
     setLinkedAdmissionId(a.id);
+  };
+
+  // Reassessment picker (ACUITY): link to an existing RESIDENT record (not a CRM
+  // admission), so the validated level change applies to that resident.
+  const pickResident = (a: AdmissionOpt) => {
+    patchLayer1({
+      residentName: a.name,
+      residentId: a.id,
+      dateOfBirth: a.dob || draft?.layer1.dateOfBirth,
+      sex: a.sex || draft?.layer1.sex,
+      age: ageFromDob(a.dob) || draft?.layer1.age,
+      convertedAdmissionId: undefined,
+    });
+    setLinkedAdmissionId("");
   };
 
   // Live classification of the working draft (Layer 3 read-out + list scoring).
@@ -497,6 +529,40 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
       if (ds && !ds.apply && ds.blockedReason) {
         Swal.fire({ title: "Level of Care not applied", text: ds.blockedReason, icon: "warning" });
       }
+
+      // FAMILY SIGN-OFF GATE — an applicable LOC change that actually MOVES the level
+      // for an existing resident changes the monthly care fee, so it is NOT applied
+      // now. Hold it for the family to sign off; a nurse/Care Manager then finalizes
+      // it (which applies careLevel + billing + the draft plan + the loc_history
+      // entry). Pre-admission (no resident) and no-change re-affirmations apply as
+      // before. Note: the assessment is already saved VALIDATED above.
+      const rid = draft.layer1.residentId ?? "";
+      const newLevelNorm = normalizeLevel(draft.layer3.finalLevel);
+      const levelChanged = !!priorLevel && newLevelNorm !== priorLevel;
+      if (ds && ds.apply && rid && levelChanged) {
+        let sponsorId = "";
+        try {
+          const rr = await fetch(`/api/db/residents/${rid}`, { credentials: "include", cache: "no-store" });
+          const rj = rr.ok ? await rr.json() : null;
+          sponsorId = String((rj?.data as { sponsorId?: string } | undefined)?.sponsorId ?? "");
+        } catch { /* no sponsor resolved */ }
+        const sg = await recordLocSignoff({
+          residentId: rid, residentName: draft.layer1.residentName, sponsorId: sponsorId || undefined,
+          oldLevel: priorLevel, newLevel: newLevelNorm,
+          careLevelEnum: ds.careLevelEnum, numericLevel: ds.numericLevel,
+          postLocCharge: ds.postLocCharge, generatePlan: ds.generatePlan,
+          assessmentId: draft.id, justification: draft.layer3.finalLevelJustification,
+          submittedById: myId || undefined, submittedByName: me || undefined, role: roleLabel,
+        });
+        if (sg && sponsorId) {
+          try { await createRecord("notifications", { userId: sponsorId, type: "SYSTEM_ALERT", title: "Level of care change needs your sign-off", message: `${draft.layer1.residentName || "Your relative"}'s care level is proposed to change to Level ${newLevelNorm.replace(/^L/, "")}. Please review and approve.`, relatedEntityId: sg.id, relatedEntityType: "loc_signoff", severity: "INFO" }); } catch { /* non-critical */ }
+        }
+        Swal.fire(sponsorId
+          ? { icon: "info", title: "Sent to family for sign-off", text: "This level-of-care change is held until the resident's family approves it. A nurse or Care Manager can then finalize and apply it." }
+          : { icon: "info", title: "Held for family sign-off", text: "No family sponsor is linked — a nurse or Care Manager can finalize this level-of-care change from the assessment board." });
+        return; // defer careLevel/billing/plan/loc-history to Finalize
+      }
+
       if (ds && ds.apply) {
         try {
           await updateRecord("residents", ds.residentId, { careLevel: ds.careLevelEnum });
@@ -550,22 +616,6 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     await persist(assessments.filter((x) => x.id !== a.id));
   };
 
-  // Reassign a record to the other board (fixes legacy/untagged records that
-  // landed on the wrong list, and any genuine misfile). Rewrites the full store.
-  const otherOrigin: AssessmentOrigin = origin === "ACUITY" ? "PREADMISSION" : "ACUITY";
-  const moveTo = async (a: AssessmentV42, target: AssessmentOrigin) => {
-    const c = await Swal.fire({
-      title: `Move to ${ORIGIN_LABEL[target]}?`,
-      text: `This assessment will leave ${ORIGIN_LABEL[origin]} and appear only in ${ORIGIN_LABEL[target]}.`,
-      icon: "question", showCancelButton: true, confirmButtonColor: "#2E4A48", confirmButtonText: "Move",
-    });
-    if (!c.isConfirmed) return;
-    const now = new Date().toISOString();
-    const updated = allStored.map((x) => (x.id === a.id ? { ...x, origin: target, updatedAt: now } : x));
-    await upsertRecord("app-settings", ASSESSMENTS_V42_KEY, { key: ASSESSMENTS_V42_KEY, value: JSON.stringify(updated) });
-    await refetch();
-  };
-
   const startReassessment = async (prior: AssessmentV42) => {
     const c = await Swal.fire({ title: "Start reassessment?", text: "Creates a new draft carrying this clinical picture forward.", icon: "question", showCancelButton: true, confirmButtonColor: "#2E4A48", confirmButtonText: "Start" });
     if (!c.isConfirmed) return;
@@ -604,6 +654,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
         </div>
       )}
 
+
       {!modalOnly && (<>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SearchInput value={search} onChange={setSearch} placeholder="Search by resident name…" className="max-w-sm flex-1" />
@@ -629,7 +680,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
         skeletonRows={3}
       >
         {viewMode === "table" ? (
-          <AssessmentTable rows={filtered} onEdit={openEdit} onMove={(a) => moveTo(a, otherOrigin)} onRemove={remove} moveLabel={ORIGIN_LABEL[otherOrigin]} />
+          <AssessmentTable rows={filtered} onEdit={openEdit} onRemove={remove} />
         ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map((a) => {
@@ -639,10 +690,10 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
             const overridden = a.layer3?.finalLevel && res && a.layer3.finalLevel !== res.suggestedLevel;
             const top = a.status === "VALIDATED" ? "teal" : a.status === "COMPLETED" ? "green" : "amber";
             return (
-              <ClinicalCard key={a.id} top={top} className="flex flex-col gap-3.5 p-4 sm:p-5">
+              <ClinicalCard key={a.id} top={top} className="group flex flex-col gap-3.5 p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-24px_rgba(15,23,42,0.5)] sm:p-5">
                 {/* header — avatar · identity · status · action cluster */}
                 <div className="flex items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold" style={{ background: eff ? `color-mix(in srgb, ${LEVEL_COLOR[eff]} 16%, var(--clinical-surface))` : "var(--clinical-surface-2)", color: eff ? LEVEL_COLOR[eff] : "var(--clinical-ink-soft)" }}>
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold" style={{ backgroundColor: eff ? `color-mix(in srgb, ${LEVEL_COLOR[eff]} 15%, transparent)` : "var(--clinical-surface-2)", color: eff ? LEVEL_COLOR[eff] : "var(--clinical-ink-soft)", boxShadow: eff ? `inset 0 0 0 1px color-mix(in srgb, ${LEVEL_COLOR[eff]} 32%, transparent)` : "none" }}>
                     {initials(a.layer1?.residentName || "")}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -652,14 +703,13 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                   <div className="flex shrink-0 items-center gap-2">
                     {a.status === "VALIDATED" ? <StatusPill status="APPROVED">Validated</StatusPill> : <StatusPill status={a.status} />}
                     <div className="flex items-center overflow-hidden rounded-lg border" style={{ borderColor: "var(--clinical-line)" }}>
-                      <button onClick={() => moveTo(a, otherOrigin)} aria-label={`Move to ${ORIGIN_LABEL[otherOrigin]}`} title={`Move to ${ORIGIN_LABEL[otherOrigin]}`} className="p-1.5 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]"><ArrowLeftRight className="h-4 w-4" /></button>
-                      <button onClick={() => openEdit(a)} aria-label="Edit assessment" title="Edit assessment" className="border-l p-1.5 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]" style={{ borderColor: "var(--clinical-line)" }}><Pencil className="h-4 w-4" /></button>
+                      <button onClick={() => openEdit(a)} aria-label="Edit assessment" title="Edit assessment" className="p-1.5 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]"><Pencil className="h-4 w-4" /></button>
                       <button onClick={() => remove(a)} aria-label="Delete" title="Delete assessment" className="border-l p-1.5 text-[var(--clinical-coral)] transition hover:bg-[color-mix(in_srgb,var(--clinical-coral)_10%,transparent)]" style={{ borderColor: "var(--clinical-line)" }}><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </div>
                 </div>
 
-                {/* badges */}
+                {/* badges — soft tinted chips (a dot/icon carries the semantic; never a heavy solid button) */}
                 {(a.status === "COMPLETED" || (res && res.capabilityGate) || a.layer3?.priorAssessmentId || a.layer1?.convertedAdmissionId) && (
                   <div className="flex flex-wrap items-center gap-1.5">
                     {a.status === "COMPLETED" && (
@@ -667,35 +717,37 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                         type="button"
                         onClick={() => openEdit(a, 3)}
                         title="Sign off the Final Level of Care in Layer 3 · Evaluation"
-                        className="inline-flex items-center gap-1 rounded-full bg-[var(--clinical-amber)] px-2.5 py-1 text-[10px] font-bold text-white shadow-sm transition hover:brightness-95"
+                        className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition hover:brightness-95"
+                        style={{ backgroundColor: "color-mix(in srgb, var(--clinical-amber) 14%, transparent)", borderColor: "color-mix(in srgb, var(--clinical-amber) 32%, transparent)", color: "var(--clinical-amber)" }}
                       >
-                        <ShieldCheck className="h-3 w-3" /> Awaiting Validation · Layer 3
+                        <ShieldCheck className="h-3.5 w-3.5" /> Awaiting validation
                       </button>
                     )}
-                    {res && res.capabilityGate && <span className="inline-flex items-center gap-1 rounded-full bg-[var(--clinical-coral)] px-2.5 py-1 text-[10px] font-bold text-white"><AlertTriangle className="h-3 w-3" /> Capability gate</span>}
-                    {a.layer3?.priorAssessmentId && <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}><RefreshCw className="h-3 w-3" /> Reassessment</span>}
-                    {a.layer1?.convertedAdmissionId && <span className="rounded-full px-2.5 py-1 text-[10px] font-semibold text-[var(--clinical-panel)]" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)" }}>From CRM</span>}
+                    {res && res.capabilityGate && <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-coral) 14%, transparent)", borderColor: "color-mix(in srgb, var(--clinical-coral) 32%, transparent)", color: "var(--clinical-coral)" }}><AlertTriangle className="h-3.5 w-3.5" /> Capability gate</span>}
+                    {a.layer3?.priorAssessmentId && <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: "var(--clinical-line)" }}><RefreshCw className="h-3.5 w-3.5" /> Reassessment</span>}
+                    {a.layer1?.convertedAdmissionId && <span className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)", borderColor: "color-mix(in srgb, var(--clinical-panel) 28%, transparent)", color: "var(--clinical-panel)" }}>From CRM</span>}
                   </div>
                 )}
 
-                {/* acuity gauge */}
-                <div className="rounded-xl border p-3.5" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: "var(--clinical-line)" }}>
-                  <div className="flex items-end justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">Raw acuity</p>
-                      <p className="mt-0.5 flex items-baseline gap-1">
-                        <span className="text-2xl font-bold tabular-nums text-[var(--clinical-ink)]">{raw}</span>
-                        <span className="text-sm text-[var(--clinical-muted)]">/ {RAW_MAX}</span>
-                      </p>
+                {/* level of care + acuity gauge */}
+                <div className="overflow-hidden rounded-xl border" style={{ borderColor: "var(--clinical-line)" }}>
+                  {eff && (
+                    <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ backgroundColor: `color-mix(in srgb, ${LEVEL_COLOR[eff]} 12%, var(--clinical-surface))`, borderBottom: "1px solid var(--clinical-line)" }}>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: LEVEL_COLOR[eff] }}>Level of Care</p>
+                        <p className="truncate text-sm font-bold text-[var(--clinical-ink)]">{levelMeta(Number(eff.replace("L", "")) || 2).name}</p>
+                      </div>
+                      <span className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold text-white shadow-sm" style={{ background: LEVEL_COLOR[eff] }}>{LEVEL_LABEL[eff]}{overridden ? " · override" : ""}</span>
                     </div>
-                    {eff && (
-                      <span className="inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-bold text-white shadow-sm" style={{ background: LEVEL_COLOR[eff] }}>
-                        {LEVEL_LABEL[eff]}{overridden ? " · override" : ""}
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: "var(--clinical-line)" }}>
-                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.round((raw / RAW_MAX) * 100))}%`, background: eff ? LEVEL_COLOR[eff] : "var(--clinical-panel)" }} />
+                  )}
+                  <div className="px-4 py-3" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">Raw acuity</p>
+                      <p className="flex items-baseline gap-1"><span className="text-lg font-bold tabular-nums text-[var(--clinical-ink)]">{raw}</span><span className="text-xs text-[var(--clinical-muted)]">/ {RAW_MAX}</span></p>
+                    </div>
+                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: "var(--clinical-line)" }}>
+                      <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.round((raw / RAW_MAX) * 100))}%`, background: eff ? LEVEL_COLOR[eff] : "var(--clinical-panel)" }} />
+                    </div>
                   </div>
                 </div>
               </ClinicalCard>
@@ -763,7 +815,15 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                 <>
                   <Section code="A" title="Resident Profile & Clinical Context">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <ResidentPicker value={draft.layer1.residentName} onChange={(v) => patchLayer1({ residentName: v })} admissions={admissionOpts} linkedId={linkedAdmissionId} onPick={pickAdmission} onUnlink={() => { setLinkedAdmissionId(""); patchLayer1({ convertedAdmissionId: undefined }); }} />
+                      <ResidentPicker value={draft.layer1.residentName} onChange={(v) => patchLayer1({ residentName: v })}
+                        admissions={isAcuity ? residentOpts : admissionOpts}
+                        linkedId={isAcuity ? (draft.layer1.residentId ?? "") : linkedAdmissionId}
+                        linkedLabel={isAcuity ? "Resident" : "From CRM"}
+                        placeholder={isAcuity ? "Search admitted residents…" : "Search converted leads or type a name…"}
+                        emptyHint={isAcuity ? "No admitted residents match — keep typing to enter a name." : "No in-progress admissions match — keep typing to enter a new name."}
+                        optionFallback={isAcuity ? "Admitted resident" : "Converted lead · in-progress admission"}
+                        onPick={isAcuity ? pickResident : pickAdmission}
+                        onUnlink={isAcuity ? () => patchLayer1({ residentId: undefined }) : () => { setLinkedAdmissionId(""); patchLayer1({ convertedAdmissionId: undefined }); }} />
                       <Text label="Assessment Date" type="date" value={draft.layer1.assessmentDate} onChange={(v) => patchLayer1({ assessmentDate: v })} />
                       <div className="grid grid-cols-3 gap-2">
                         <Text label="Date of Birth" type="date" value={draft.layer1.dateOfBirth} onChange={(v) => patchLayer1({ dateOfBirth: v })} />
@@ -1110,12 +1170,10 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
 }
 
 // ── Table view — the same records as the card grid, in a dense sortable-feel table ──
-function AssessmentTable({ rows, onEdit, onMove, onRemove, moveLabel }: {
+function AssessmentTable({ rows, onEdit, onRemove }: {
   rows: AssessmentV42[];
   onEdit: (a: AssessmentV42, layer?: 1 | 2 | 3) => void;
-  onMove: (a: AssessmentV42) => void;
   onRemove: (a: AssessmentV42) => void;
-  moveLabel: string;
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
@@ -1151,9 +1209,9 @@ function AssessmentTable({ rows, onEdit, onMove, onRemove, moveLabel }: {
                 <td className="px-4 py-3.5">
                   {(a.status === "COMPLETED" || (res && res.capabilityGate) || a.layer3?.priorAssessmentId) ? (
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                      {a.status === "COMPLETED" && <button onClick={() => onEdit(a, 3)} title="Sign off in Layer 3 · Evaluation" className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-[var(--clinical-amber)] px-2.5 py-1 text-[10px] font-bold text-white shadow-sm transition hover:brightness-95"><ShieldCheck className="h-3 w-3" /> Layer 3</button>}
-                      {res && res.capabilityGate && <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-[var(--clinical-coral)] px-2.5 py-1 text-[10px] font-bold text-white"><AlertTriangle className="h-3 w-3" /> Gate</span>}
-                      {a.layer3?.priorAssessmentId && <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-semibold text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}><RefreshCw className="h-3 w-3" /> Reassess</span>}
+                      {a.status === "COMPLETED" && <button onClick={() => onEdit(a, 3)} title="Sign off in Layer 3 · Evaluation" className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold transition hover:brightness-95" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-amber) 14%, transparent)", borderColor: "color-mix(in srgb, var(--clinical-amber) 32%, transparent)", color: "var(--clinical-amber)" }}><ShieldCheck className="h-3.5 w-3.5" /> Awaiting validation</button>}
+                      {res && res.capabilityGate && <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-coral) 14%, transparent)", borderColor: "color-mix(in srgb, var(--clinical-coral) 32%, transparent)", color: "var(--clinical-coral)" }}><AlertTriangle className="h-3.5 w-3.5" /> Capability gate</span>}
+                      {a.layer3?.priorAssessmentId && <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: "var(--clinical-line)" }}><RefreshCw className="h-3.5 w-3.5" /> Reassess</span>}
                     </div>
                   ) : <span className="text-[var(--clinical-muted)]">—</span>}
                 </td>
@@ -1172,8 +1230,7 @@ function AssessmentTable({ rows, onEdit, onMove, onRemove, moveLabel }: {
                 <td className="px-4 py-3.5">
                   <div className="flex justify-end">
                    <div className="inline-flex items-center overflow-hidden rounded-lg border" style={{ borderColor: "var(--clinical-line)" }}>
-                    <button onClick={() => onMove(a)} aria-label={`Move to ${moveLabel}`} title={`Move to ${moveLabel}`} className="p-1.5 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]"><ArrowLeftRight className="h-4 w-4" /></button>
-                    <button onClick={() => onEdit(a)} aria-label="Edit" title="Edit assessment" className="border-l p-1.5 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]" style={{ borderColor: "var(--clinical-line)" }}><Pencil className="h-4 w-4" /></button>
+                    <button onClick={() => onEdit(a)} aria-label="Edit" title="Edit assessment" className="p-1.5 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]"><Pencil className="h-4 w-4" /></button>
                     <button onClick={() => onRemove(a)} aria-label="Delete" title="Delete assessment" className="border-l p-1.5 text-[var(--clinical-coral)] transition hover:bg-[color-mix(in_srgb,var(--clinical-coral)_10%,transparent)]" style={{ borderColor: "var(--clinical-line)" }}><Trash2 className="h-4 w-4" /></button>
                    </div>
                   </div>
