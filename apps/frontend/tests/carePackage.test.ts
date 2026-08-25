@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { domainDailyAllowance, domainInPackage, overageRecommendations, type UsageEvent } from "../src/lib/lifecare/carePackage.ts";
+import { domainDailyAllowance, domainInPackage, overageRecommendations, upsertOverageEvent, type UsageEvent, type OverageEvent } from "../src/lib/lifecare/carePackage.ts";
 
 // Frequency allowance (times/day) — the LOC overage gate reads these.
 test("L3 ADLs allows 4×/day (the worked example)", () => {
@@ -35,6 +35,22 @@ test("overageRecommendations flags a resident over their per-domain allowance", 
   assert.equal(recos[0].count, 5);
   assert.equal(recos[0].allowance, 4);
 });
+test("upsertOverageEvent keeps one row per resident/domain/day at the peak count", () => {
+  const base: OverageEvent = { id: "e1", residentId: "R1", domain: "AS-10", level: 3, allowance: 4, count: 5, date: "2026-08-25", firstAt: "2026-08-25T10:00:00Z", lastAt: "2026-08-25T10:00:00Z" };
+  let events = upsertOverageEvent([], base);
+  assert.equal(events.length, 1);
+  // Same resident/domain/day, higher count → merge (peak count, keep firstAt, new lastAt).
+  events = upsertOverageEvent(events, { ...base, id: "e2", count: 9, lastAt: "2026-08-25T14:00:00Z" });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].count, 9);
+  assert.equal(events[0].id, "e1");                       // kept the original row
+  assert.equal(events[0].firstAt, "2026-08-25T10:00:00Z"); // firstAt preserved
+  assert.equal(events[0].lastAt, "2026-08-25T14:00:00Z");
+  // A different day → a new row.
+  events = upsertOverageEvent(events, { ...base, id: "e3", date: "2026-08-26" });
+  assert.equal(events.length, 2);
+});
+
 test("overageRecommendations ignores other days + non-AS domains", () => {
   const recos = overageRecommendations([
     { residentId: "R1", domain: "AS-01", date: "2026-08-24T10:00:00Z" }, // yesterday

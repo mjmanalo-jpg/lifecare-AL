@@ -36,7 +36,7 @@ import { createRecord, upsertRecord, updateRecord } from "@/lib/api";
 import { qrDataUrl } from "@/lib/qr";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, SearchInput, DataState, controlClass } from "./clinical-ui";
-import { careLevelEnumToLevel, domainInPackage, domainDailyAllowance, DOMAIN_LABEL, recordOutOfPackageService } from "@/lib/lifecare/carePackage";
+import { careLevelEnumToLevel, domainInPackage, domainDailyAllowance, DOMAIN_LABEL, recordOutOfPackageService, OVERAGE_EVENTS_KEY, parseOverageEvents, upsertOverageEvent, type OverageEvent } from "@/lib/lifecare/carePackage";
 import ASSESSMENT_DOMAINS from "@/lib/lifecare/data/assessment_domains.json";
 import { CLINICAL_ALERT_RULES } from "@/lib/lifecare/clinicalAlerts";
 
@@ -384,9 +384,19 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
     await refetchSettings();
   };
 
+  // Overage paper trail — one durable record per resident × domain × day, kept at
+  // the day's peak count (app-setting `package_overage_events`). Read-modify-write.
+  const overageEvents = useMemo(() => parseOverageEvents(settingRows.find((r) => (r.key || r.id) === OVERAGE_EVENTS_KEY)?.value), [settingRows]);
+  const recordOverage = async (core: { residentId: string; residentName?: string; room?: string; domain: string; domainLabel?: string; level: number; allowance: number; count: number }) => {
+    const now = new Date().toISOString();
+    const ev: OverageEvent = { id: `ovr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, ...core, date: todayKey(), shift: shiftNow(), by: clinicianName, firstAt: now, lastAt: now };
+    await upsertRecord("app-settings", OVERAGE_EVENTS_KEY, { key: OVERAGE_EVENTS_KEY, value: JSON.stringify(upsertOverageEvent(overageEvents, ev)) });
+    await refetchSettings();
+  };
+
   const refetchResidents = () => resQ.refetch();
 
-  return { residents, entries, allEntries, byResident, domainsByRes, domainCountsByRes, nurseUserIds, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, refetchResidents, loading: resQ.loading };
+  return { residents, entries, allEntries, byResident, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, refetchResidents, loading: resQ.loading };
 }
 
 // ── Residents tab — quick-log list (Image 15) ────────────────────────────────
@@ -394,7 +404,7 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
 // so nurse / care-manager / admin keep the full directory; the caregiver view
 // passes false to stay read-only (View + QR) per the role visibility matrix.
 export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = true }: { clinicianRole?: ClinicianRole; canManage?: boolean }) {
-  const { residents, domainsByRes, domainCountsByRes, nurseUserIds, ensureRound, saveNote, refetchAll, refetchResidents, bowelRef, saveBowelRef, loading } = useCareLogData(clinicianRole);
+  const { residents, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, ensureRound, saveNote, refetchAll, refetchResidents, bowelRef, saveBowelRef, loading } = useCareLogData(clinicianRole);
 
   const [search, setSearch] = useState("");
   const [careLevelFilter, setCareLevelFilter] = useState("");
@@ -495,7 +505,7 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
         </div>
       </DataState>
 
-      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} domainCounts={domainCountsByRes.get(s(logFor.id))} nurseUserIds={nurseUserIds} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
+      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} domainCounts={domainCountsByRes.get(s(logFor.id))} nurseUserIds={nurseUserIds} recordOverage={recordOverage} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
       {qrFor && <QrModal resident={qrFor} onClose={() => setQrFor(null)} />}
       {viewFor && <ViewModal resident={viewFor} loggedDomains={domainsByRes.get(s(viewFor.id)) || new Set()} onOpenLog={(t) => { setViewFor(null); openLog(viewFor, t); }} onClose={() => setViewFor(null)} />}
       {editFor && <EditResidentModal resident={editFor} onSaved={refetchResidents} onClose={() => setEditFor(null)} />}
@@ -505,7 +515,7 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
 
 // ── Care Logs tab — today's log timeline (Image 18) ──────────────────────────
 export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
-  const { residents, entries, byResident, domainsByRes, domainCountsByRes, nurseUserIds, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, loading } = useCareLogData(clinicianRole);
+  const { residents, entries, byResident, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, loading } = useCareLogData(clinicianRole);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [logFor, setLogFor] = useState<Row | null>(null);
@@ -655,7 +665,7 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
         </div>
       </DataState>
 
-      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} domainCounts={domainCountsByRes.get(s(logFor.id))} nurseUserIds={nurseUserIds} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
+      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} domainCounts={domainCountsByRes.get(s(logFor.id))} nurseUserIds={nurseUserIds} recordOverage={recordOverage} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
     </ClinicalPage>
   );
 }
@@ -725,8 +735,8 @@ const APPETITE_BY_INTAKE: Record<string, string> = { "0%": "REFUSED", "25%": "PO
 const MOOD_MAP: Record<string, string> = { Calm: "CALM", Happy: "HAPPY", Anxious: "ANXIOUS", Agitated: "AGITATED", Confused: "CONFUSED", Withdrawn: "WITHDRAWN", Distressed: "SAD", Combative: "AGGRESSIVE" };
 const SLEEP_MAP: Record<string, string> = { Excellent: "RESTFUL", Good: "FAIR", Fair: "RESTLESS", Poor: "POOR", "Very Poor": "INSOMNIA" };
 
-function LogModal({ resident, initialTab, loggedDomains, domainCounts, nurseUserIds, ensureRound, saveNote, clinicianRole, bowelRef, saveBowelRef, onDone, onClose }: {
-  resident: Row; initialTab: DomainKey; loggedDomains: Set<DomainKey>; domainCounts?: Map<DomainKey, number>; nurseUserIds: string[]; ensureRound: (id: string) => Promise<string>; saveNote: (rec: { residentId: string; dailyRoundId?: string; domain: string; status?: number; note?: string }) => Promise<void>; clinicianRole: ClinicianRole; bowelRef: string; saveBowelRef: (dataUrl: string | null) => Promise<void>; onDone: () => Promise<void>; onClose: () => void;
+function LogModal({ resident, initialTab, loggedDomains, domainCounts, nurseUserIds, recordOverage, ensureRound, saveNote, clinicianRole, bowelRef, saveBowelRef, onDone, onClose }: {
+  resident: Row; initialTab: DomainKey; loggedDomains: Set<DomainKey>; domainCounts?: Map<DomainKey, number>; nurseUserIds: string[]; recordOverage: (core: { residentId: string; residentName?: string; room?: string; domain: string; domainLabel?: string; level: number; allowance: number; count: number }) => Promise<void>; ensureRound: (id: string) => Promise<string>; saveNote: (rec: { residentId: string; dailyRoundId?: string; domain: string; status?: number; note?: string }) => Promise<void>; clinicianRole: ClinicianRole; bowelRef: string; saveBowelRef: (dataUrl: string | null) => Promise<void>; onDone: () => Promise<void>; onClose: () => void;
 }) { // rendered only when open (parent gates on logFor); ClinicalModal open is always true here
   const [tab, setTab] = useState<DomainKey>(initialTab);
   const [f, setF] = useState<Row>({});
@@ -824,6 +834,8 @@ function LogModal({ resident, initialTab, loggedDomains, domainCounts, nurseUser
     const message = `${s(resident.name)}${rm ? ` (Room ${rm})` : ""} — ${label} is ${reason}. Review as an Additional Clinical Service (DT-014).`;
     // Notify the care manager + nurse EVERY time the resident goes over their package.
     nurseUserIds.forEach((uid) => createRecord("notifications", { userId: uid, type: "TASK_ASSIGNMENT", title, message, severity: "WARNING", relatedEntityType: "serviceRequest" }).catch(() => null));
+    // Persist the paper trail — one record per resident × domain × day, kept at the peak count.
+    if (overage && allowance != null) void recordOverage({ residentId: s(resident.id), residentName: s(resident.name), room: s(resident.room) || undefined, domain: tab, domainLabel: label, level, allowance, count: newCount }).catch(() => {});
     // Route the chargeable DT-014 item only once per day/domain so the ACS board isn't spammed.
     if (firstOutOfPkg || firstOverage) void recordOutOfPackageService({ residentId: s(resident.id), residentName: s(resident.name), room: rm || undefined, domainCode: tab, domainLabel: label, level, notes: overage ? `Frequency overage on ${todayKey()}` : (notes.trim() || undefined) });
     Swal.fire({ toast: true, position: "top-end", icon: "info", title: overage ? `Over package — ${label} ${newCount}/${allowance}` : `Beyond package — ${label}`, text: "Care manager & nurse notified.", showConfirmButton: false, timer: 2600 });

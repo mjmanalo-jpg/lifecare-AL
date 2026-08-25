@@ -19,7 +19,7 @@ import { ClinicalPage, ClinicalHeader, StatCard, DataState, SERIF } from "./clin
 import { DOMAIN_CODES } from "@/lib/lifecare/types";
 import type { DomainCode } from "@/lib/lifecare/types";
 import { ASSESSMENTS_V42_KEY } from "@/lib/lifecare/assessment";
-import { careLevelEnumToLevel, overageRecommendations, type UsageEvent } from "@/lib/lifecare/carePackage";
+import { careLevelEnumToLevel, overageRecommendations, OVERAGE_EVENTS_KEY, parseOverageEvents, type UsageEvent } from "@/lib/lifecare/carePackage";
 import assessmentDomains from "@/lib/lifecare/data/assessment_domains.json";
 import {
   CARE_LOG_NOTES_KEY, INCIDENT_SCORE, PERSIST_DAYS,
@@ -77,6 +77,9 @@ export default function DomainMonitoringBoard({ clinicianRole = "NURSE" }: { cli
     return out;
   }, [notes, roundInfo, mobQ.data, mealQ.data, bowelQ.data, urineQ.data, edemaQ.data]);
   const overage = useMemo(() => overageRecommendations(usageEvents, (rid) => levelByRes.get(rid) ?? 2, todayStr), [usageEvents, levelByRes, todayStr]);
+  // Persistent overage paper trail (all days), newest first.
+  const overageHistory = useMemo(() => parseOverageEvents(settingRows.find((r) => (r.key || r.id) === OVERAGE_EVENTS_KEY)?.value).sort((a, b) => (b.lastAt || b.date).localeCompare(a.lastAt || a.date)), [settingRows]);
+  const fmtDay = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { month: "short", day: "numeric" }); };
 
   // Per-resident discrepancy summary, straight from the daily care logs.
   const summaries = useMemo<ResidentSummary[]>(() => {
@@ -186,6 +189,39 @@ export default function DomainMonitoringBoard({ clinicianRole = "NURSE" }: { cli
           <p className="mt-4 flex items-center gap-1.5 text-xs text-[var(--clinical-muted)]"><ShieldCheck className="h-3.5 w-3.5" /> Scores come from the caregivers&apos; Daily Care Logs. A domain flags when it drifts above the resident&apos;s assessment baseline; {PERSIST_DAYS}+ discrepancy days (or a severe {INCIDENT_SCORE}) recommends a Level of Care review.</p>
         )}
       </div>
+
+      {overageHistory.length > 0 && (
+        <div className="mt-6">
+          <h2 className="mb-3 flex items-center gap-2 font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}><ClipboardList className="h-5 w-5 text-[var(--clinical-panel)]" /> Package overage history <span className="rounded-full bg-[var(--clinical-surface-2)] px-2 py-0.5 text-xs font-semibold text-[var(--clinical-ink-soft)]">{overageHistory.length}</span></h2>
+          <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "var(--clinical-line)" }}>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[var(--clinical-muted)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
+                  <th className="px-3 py-2 font-semibold">Date</th>
+                  <th className="px-3 py-2 font-semibold">Resident</th>
+                  <th className="px-3 py-2 font-semibold">Domain</th>
+                  <th className="px-3 py-2 font-semibold">Delivered / allowed</th>
+                  <th className="px-3 py-2 font-semibold">Over by</th>
+                  <th className="px-3 py-2 font-semibold">Logged by</th>
+                </tr>
+              </thead>
+              <tbody>
+                {overageHistory.slice(0, 100).map((o) => (
+                  <tr key={o.id} className="border-t" style={{ borderColor: "var(--clinical-line)" }}>
+                    <td className="px-3 py-2 font-medium text-[var(--clinical-ink)]">{fmtDay(o.date)}</td>
+                    <td className="px-3 py-2 text-[var(--clinical-ink-soft)]">{o.residentName || resNameById.get(o.residentId) || "Resident"}{o.room ? ` · Rm ${o.room}` : ""}</td>
+                    <td className="px-3 py-2 text-[var(--clinical-ink-soft)]">{o.domain} · {o.domainLabel || DOMAIN_NAME[o.domain] || o.domain}</td>
+                    <td className="px-3 py-2 tabular-nums text-[var(--clinical-ink-soft)]">{o.count} / {o.allowance}</td>
+                    <td className="px-3 py-2 font-bold text-[var(--clinical-amber)]">+{o.count - o.allowance}</td>
+                    <td className="px-3 py-2 text-[var(--clinical-muted)]">{o.by || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[11px] text-[var(--clinical-muted)]">A durable record for each day a resident drew a domain beyond their Level package allowance — the paper trail for review, reassessment, and (later) Additional Clinical Service charges.</p>
+        </div>
+      )}
     </ClinicalPage>
   );
 }

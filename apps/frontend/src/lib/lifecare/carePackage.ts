@@ -99,6 +99,43 @@ export function domainDailyAllowance(level: number, domainCode: string): number 
   return LEVEL_DOMAIN_FREQUENCY[clampLevel(level)]?.[domainCode as DomainCode] ?? null;
 }
 
+// ── Overage paper trail ───────────────────────────────────────────────────────
+// A durable record each time a resident exceeds a domain's Level allowance — one
+// entry per resident × domain × day (kept at the day's peak count). Migration-free
+// JSON in the app-setting `package_overage_events`.
+export const OVERAGE_EVENTS_KEY = "package_overage_events";
+export interface OverageEvent {
+  id: string;
+  residentId: string;
+  residentName?: string;
+  room?: string;
+  domain: string;
+  domainLabel?: string;
+  level: number;
+  allowance: number;
+  count: number;      // peak deliveries recorded that day
+  date: string;       // YYYY-MM-DD
+  shift?: string;
+  by?: string;
+  firstAt: string;    // ISO — first time it went over that day
+  lastAt: string;     // ISO — most recent excess that day
+}
+export function parseOverageEvents(raw: string | null | undefined): OverageEvent[] {
+  if (!raw) return [];
+  try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((e) => e && typeof e.id === "string") : []; } catch { return []; }
+}
+const overageKey = (e: Pick<OverageEvent, "residentId" | "domain" | "date">) => `${e.residentId}|${e.domain}|${e.date}`;
+/** Upsert by resident × domain × day — one row per exceed-day, kept at the peak count. */
+export function upsertOverageEvent(events: OverageEvent[], ev: OverageEvent): OverageEvent[] {
+  const k = overageKey(ev);
+  const idx = events.findIndex((e) => overageKey(e) === k);
+  if (idx === -1) return [ev, ...events];
+  const prev = events[idx];
+  const next = events.slice();
+  next[idx] = { ...prev, count: Math.max(prev.count, ev.count), allowance: ev.allowance, level: ev.level, shift: ev.shift ?? prev.shift, by: ev.by ?? prev.by, lastAt: ev.lastAt };
+  return next;
+}
+
 /** One recorded care delivery, for the usage-overage recommendation. */
 export interface UsageEvent { residentId: string; domain: string; date: string }
 export interface OverageReco { residentId: string; domain: DomainCode; count: number; allowance: number }

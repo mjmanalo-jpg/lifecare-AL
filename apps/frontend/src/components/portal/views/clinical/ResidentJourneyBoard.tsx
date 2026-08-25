@@ -63,7 +63,7 @@ const CATEGORY_ICON: Record<JourneyCategory, LucideIcon> = {
   CARE_EVENT: ClipboardCheck,
   ACUITY: Layers, MEDICATION: Pill, INCIDENT: AlertTriangle, WOUND: Bandage,
   REFERRAL: Stethoscope, CLINICAL_RECORD: FolderOpen, ENDORSEMENT: FileText,
-  WEIGHT: Scale, PRIVATE_CARE: HeartHandshake, DOCUMENT: FileText, NOTE: StickyNote,
+  WEIGHT: Scale, PRIVATE_CARE: HeartHandshake, OVERAGE: TrendingUp, DOCUMENT: FileText, NOTE: StickyNote,
 };
 
 const settingVal = (rows: Row[], key: string) => rows.find((r) => s(r.key || r.id) === key)?.value as string | undefined;
@@ -154,6 +154,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       weightLogs: parseArr(settingVal(settingRows, "weight_logs")),
       clinicalRecords: parseObj(settingVal(settingRows, "clinical_records")),
       privateCare: parseArr(settingVal(settingRows, "private_caregiver_assignments")),
+      overageEvents: parseArr(settingVal(settingRows, "package_overage_events")),
       medications: medQ.data || [],
       incidents: incQ.data || [],
       referrals: refQ.data || [],

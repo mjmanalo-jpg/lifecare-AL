@@ -21,7 +21,7 @@ const pickDate = (r: Row, ...keys: string[]): string => {
 export type JourneyCategory =
   | "ADMISSION" | "ASSESSMENT" | "LOC" | "CARE_PLAN" | "ACUITY" | "CARE_EVENT"
   | "MEDICATION" | "INCIDENT" | "WOUND" | "REFERRAL" | "CLINICAL_RECORD"
-  | "ENDORSEMENT" | "WEIGHT" | "PRIVATE_CARE" | "DOCUMENT" | "NOTE";
+  | "ENDORSEMENT" | "WEIGHT" | "PRIVATE_CARE" | "OVERAGE" | "DOCUMENT" | "NOTE";
 
 export type JourneyAccent = "teal" | "green" | "amber" | "coral" | "ink";
 
@@ -47,6 +47,7 @@ export const JOURNEY_CATEGORY_META: Record<JourneyCategory, JourneyCategoryMeta>
   ENDORSEMENT: { label: "Shift Endorsement", accent: "ink", tab: "shiftendorsements" },
   WEIGHT: { label: "Weight", accent: "green", tab: "weightmonitoring" },
   PRIVATE_CARE: { label: "Private Caregiver", accent: "teal", tab: "privatecare" },
+  OVERAGE: { label: "Package Overage", accent: "amber", tab: "domainmonitoring" },
   DOCUMENT: { label: "Document", accent: "ink", tab: "clinicalrecords" },
   NOTE: { label: "Note", accent: "ink" },
 };
@@ -54,7 +55,7 @@ export const JOURNEY_CATEGORY_META: Record<JourneyCategory, JourneyCategoryMeta>
 export const JOURNEY_CATEGORY_ORDER: JourneyCategory[] = [
   "ADMISSION", "ASSESSMENT", "LOC", "ACUITY", "CARE_PLAN", "CARE_EVENT", "MEDICATION",
   "INCIDENT", "WOUND", "REFERRAL", "CLINICAL_RECORD", "ENDORSEMENT",
-  "WEIGHT", "PRIVATE_CARE", "DOCUMENT", "NOTE",
+  "WEIGHT", "PRIVATE_CARE", "OVERAGE", "DOCUMENT", "NOTE",
 ];
 
 export interface JourneyEvent {
@@ -85,6 +86,7 @@ export interface JourneySources {
   weightLogs?: Row[];
   clinicalRecords?: Record<string, Row[]> | null;
   privateCare?: Row[];
+  overageEvents?: Row[];
   medications?: Row[];
   incidents?: Row[];
   referrals?: Row[];
@@ -268,6 +270,17 @@ export function buildJourney(src: JourneySources): JourneyEvent[] {
       title: `Private caregiver — ${s(p.caregiverName) || "assigned"}`,
       summary: s(p.schedule) || undefined, status: titleCase(s(p.status).replace(/_/g, " ")),
       by: s(p.requestedBy) || undefined, date: pickDate(p, "requestedAt", "startDate"),
+    });
+  }
+
+  // Package overage — resident drew a domain beyond their Level package allowance.
+  for (const o of forRes(src.overageEvents, rid)) {
+    push({
+      id: `overage:${s(o.id)}`, category: "OVERAGE",
+      title: `Over package — ${s(o.domainLabel || o.domain)}`,
+      summary: `Delivered ${s(o.count)}× · Level ${s(o.level)} allows ${s(o.allowance)}`,
+      status: `Over by ${Number(o.count) - Number(o.allowance)}`, by: s(o.by) || undefined,
+      date: pickDate(o, "lastAt", "firstAt", "date"),
     });
   }
 
