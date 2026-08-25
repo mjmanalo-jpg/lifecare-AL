@@ -78,6 +78,27 @@ export function domainCodeFromLabel(label: string): DomainCode | null {
   return null;
 }
 
+/**
+ * Provisional per-level, per-domain DAILY delivery allowance (times/day). Only the
+ * recurring hands-on domains are frequency-capped; monitoring/assessment domains
+ * (fall risk, cognition, communication, safety, reablement, clinical) are uncapped
+ * (absent → null → no overage). When a resident's logged deliveries for a domain
+ * exceed this, they've drawn care beyond their Level package → notify + DT-014 review.
+ * Tune to the LifeCare SOP (v3.6 decision rules); values are deliberately generous.
+ */
+export const LEVEL_DOMAIN_FREQUENCY: Record<number, Partial<Record<DomainCode, number>>> = {
+  1: {}, // L1 package is monitoring-only (fall/clinical/reablement) — no hands-on frequency cap
+  2: { "AS-01": 2, "AS-02": 2, "AS-07": 2, "AS-08": 3, "AS-10": 3 },
+  3: { "AS-01": 4, "AS-02": 3, "AS-07": 3, "AS-08": 4, "AS-10": 4, "AS-11": 1, "AS-12": 1 },
+  4: { "AS-01": 6, "AS-02": 4, "AS-07": 4, "AS-08": 5, "AS-10": 6, "AS-11": 2 },
+  5: { "AS-01": 6, "AS-02": 4, "AS-07": 4, "AS-08": 5, "AS-10": 6, "AS-11": 2 },
+};
+
+/** Allowed daily deliveries of a domain at a level, or null when uncapped. */
+export function domainDailyAllowance(level: number, domainCode: string): number | null {
+  return LEVEL_DOMAIN_FREQUENCY[clampLevel(level)]?.[domainCode as DomainCode] ?? null;
+}
+
 /** Is a scored domain (AS-code) part of the resident's package at this level? */
 export function domainInPackage(level: number, domainCode: string): boolean {
   const set = LEVEL_PACKAGE_DOMAINS[clampLevel(level)] ?? LEVEL_PACKAGE_DOMAINS[4];

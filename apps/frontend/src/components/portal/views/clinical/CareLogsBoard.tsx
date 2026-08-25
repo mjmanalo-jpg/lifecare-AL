@@ -36,7 +36,8 @@ import { createRecord, upsertRecord, updateRecord } from "@/lib/api";
 import { qrDataUrl } from "@/lib/qr";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, SearchInput, DataState, controlClass } from "./clinical-ui";
-import { careLevelEnumToLevel, domainInPackage, DOMAIN_LABEL, recordOutOfPackageService } from "@/lib/lifecare/carePackage";
+import { careLevelEnumToLevel, domainInPackage, domainDailyAllowance, DOMAIN_LABEL, recordOutOfPackageService } from "@/lib/lifecare/carePackage";
+import ASSESSMENT_DOMAINS from "@/lib/lifecare/data/assessment_domains.json";
 import { CLINICAL_ALERT_RULES } from "@/lib/lifecare/clinicalAlerts";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -108,14 +109,11 @@ function DomainChip({ label }: { label: string }) {
 // the resident's Level-of-Care package. "pain" is a standalone symptom log and is
 // NEVER gated. Care outside the package is warned (not blocked) and routed to
 // DT-014 Additional Clinical Services.
+// A domain is "beyond package" when it's a scored AS-code not in the resident's
+// Level-of-Care package. "pain" is a standalone symptom log and is never gated.
+// Logging is open; this only DETECTS out-of-package care for DT-014 review.
 const outOfPackage = (level: number, key: DomainKey): boolean =>
   key !== "pain" && /^AS-\d{2}$/.test(key) && !domainInPackage(level, key);
-// Small amber "Not in L{level} package" pill for a gated domain.
-function PackageBadge({ level }: { level: number }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.03em]" style={{ borderColor: "var(--clinical-amber)", color: "var(--clinical-amber)", backgroundColor: "color-mix(in srgb, var(--clinical-amber) 12%, transparent)" }}>Not in L{level}</span>
-  );
-}
 const BOWEL_REF_KEY = "bowel_reference_photo"; // migration-free: one community reference image (data URL), set by nurse/care manager
 
 // Downscale an image file to a JPEG data URL so the app-settings JSON stays small.
@@ -172,6 +170,14 @@ const STATUS_ANCHORS: { v: number; label: string }[] = [
   { v: 0, label: "Independent" }, { v: 1, label: "Low" }, { v: 2, label: "Moderate" }, { v: 3, label: "High" }, { v: 4, label: "Very high" },
 ];
 const statusLabel = (n: unknown) => STATUS_ANCHORS.find((a) => a.v === Number(n))?.label ?? "";
+
+// Per-domain detail (what the domain covers + what each 0–4 score means + what to
+// document) from the assessment instrument — shown on the generic quick-logs so a
+// caregiver isn't scoring a bare 0–4 with no context.
+const DOMAIN_META: Record<string, { scope?: string; anchors?: string[]; evidence?: string }> = Object.fromEntries(
+  (ASSESSMENT_DOMAINS as { code: string; scope?: string; anchors?: string[]; evidenceRequired?: string }[])
+    .map((d) => [d.code, { scope: d.scope, anchors: d.anchors, evidence: d.evidenceRequired }]),
+);
 
 // A generic quick-log record stored in the `care_log_notes` app-setting array.
 type NoteRec = { id: string; residentId: string; dailyRoundId?: string; domain: string; status?: number; note?: string; shift?: string; by?: string; at: string };
@@ -274,6 +280,14 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
   const mobQ = useLiveQuery<Row>("mobility-records", { query: "take=800", tables: ["MobilityRecord"] });
   const sleepQ = useLiveQuery<Row>("round-sleep-records", { query: "take=800", tables: ["SleepRecord"] });
   const { data: settingRows, refetch: refetchSettings } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
+  const staffQ = useLiveQuery<{ userId?: string; user?: { role?: string } }>("staff", { query: "include=user&take=300", tables: ["Staff"] });
+  // Overage notifications go to the clinical oversight roles (nurse + care manager),
+  // never the caregiver who logged it.
+  const nurseUserIds = useMemo(() => {
+    const set = new Set<string>();
+    (staffQ.data || []).forEach((st) => { if ((st.user?.role === "NURSE" || st.user?.role === "CARE_MANAGER") && st.userId) set.add(s(st.userId)); });
+    return [...set];
+  }, [staffQ.data]);
 
   const refetchAll = async () => { await Promise.allSettled([roundQ.refetch(), vitQ.refetch(), mealQ.refetch(), bowQ.refetch(), uriQ.refetch(), edeQ.refetch(), conQ.refetch(), moodQ.refetch(), painQ.refetch(), mobQ.refetch(), sleepQ.refetch(), refetchSettings()]); };
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
@@ -313,6 +327,14 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
   const domainsByRes = useMemo(() => {
     const m = new Map<string, Set<DomainKey>>();
     entries.forEach((e) => { const set = m.get(e.resId); if (set) set.add(e.domain); else m.set(e.resId, new Set([e.domain])); });
+    return m;
+  }, [entries]);
+
+  // How many times each domain has been logged TODAY, per resident — for the LOC
+  // package frequency-overage check when a caregiver logs.
+  const domainCountsByRes = useMemo(() => {
+    const m = new Map<string, Map<DomainKey, number>>();
+    entries.forEach((e) => { let dm = m.get(e.resId); if (!dm) { dm = new Map(); m.set(e.resId, dm); } dm.set(e.domain, (dm.get(e.domain) || 0) + 1); });
     return m;
   }, [entries]);
 
@@ -364,7 +386,7 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
 
   const refetchResidents = () => resQ.refetch();
 
-  return { residents, entries, allEntries, byResident, domainsByRes, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, refetchResidents, loading: resQ.loading };
+  return { residents, entries, allEntries, byResident, domainsByRes, domainCountsByRes, nurseUserIds, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, refetchResidents, loading: resQ.loading };
 }
 
 // ── Residents tab — quick-log list (Image 15) ────────────────────────────────
@@ -372,7 +394,7 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
 // so nurse / care-manager / admin keep the full directory; the caregiver view
 // passes false to stay read-only (View + QR) per the role visibility matrix.
 export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = true }: { clinicianRole?: ClinicianRole; canManage?: boolean }) {
-  const { residents, domainsByRes, ensureRound, saveNote, refetchAll, refetchResidents, bowelRef, saveBowelRef, loading } = useCareLogData(clinicianRole);
+  const { residents, domainsByRes, domainCountsByRes, nurseUserIds, ensureRound, saveNote, refetchAll, refetchResidents, bowelRef, saveBowelRef, loading } = useCareLogData(clinicianRole);
 
   const [search, setSearch] = useState("");
   const [careLevelFilter, setCareLevelFilter] = useState("");
@@ -473,7 +495,7 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
         </div>
       </DataState>
 
-      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
+      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} domainCounts={domainCountsByRes.get(s(logFor.id))} nurseUserIds={nurseUserIds} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
       {qrFor && <QrModal resident={qrFor} onClose={() => setQrFor(null)} />}
       {viewFor && <ViewModal resident={viewFor} loggedDomains={domainsByRes.get(s(viewFor.id)) || new Set()} onOpenLog={(t) => { setViewFor(null); openLog(viewFor, t); }} onClose={() => setViewFor(null)} />}
       {editFor && <EditResidentModal resident={editFor} onSaved={refetchResidents} onClose={() => setEditFor(null)} />}
@@ -483,7 +505,7 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
 
 // ── Care Logs tab — today's log timeline (Image 18) ──────────────────────────
 export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
-  const { residents, entries, byResident, domainsByRes, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, loading } = useCareLogData(clinicianRole);
+  const { residents, entries, byResident, domainsByRes, domainCountsByRes, nurseUserIds, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, loading } = useCareLogData(clinicianRole);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [logFor, setLogFor] = useState<Row | null>(null);
@@ -633,7 +655,7 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
         </div>
       </DataState>
 
-      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
+      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} domainCounts={domainCountsByRes.get(s(logFor.id))} nurseUserIds={nurseUserIds} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
     </ClinicalPage>
   );
 }
@@ -703,8 +725,8 @@ const APPETITE_BY_INTAKE: Record<string, string> = { "0%": "REFUSED", "25%": "PO
 const MOOD_MAP: Record<string, string> = { Calm: "CALM", Happy: "HAPPY", Anxious: "ANXIOUS", Agitated: "AGITATED", Confused: "CONFUSED", Withdrawn: "WITHDRAWN", Distressed: "SAD", Combative: "AGGRESSIVE" };
 const SLEEP_MAP: Record<string, string> = { Excellent: "RESTFUL", Good: "FAIR", Fair: "RESTLESS", Poor: "POOR", "Very Poor": "INSOMNIA" };
 
-function LogModal({ resident, initialTab, loggedDomains, ensureRound, saveNote, clinicianRole, bowelRef, saveBowelRef, onDone, onClose }: {
-  resident: Row; initialTab: DomainKey; loggedDomains: Set<DomainKey>; ensureRound: (id: string) => Promise<string>; saveNote: (rec: { residentId: string; dailyRoundId?: string; domain: string; status?: number; note?: string }) => Promise<void>; clinicianRole: ClinicianRole; bowelRef: string; saveBowelRef: (dataUrl: string | null) => Promise<void>; onDone: () => Promise<void>; onClose: () => void;
+function LogModal({ resident, initialTab, loggedDomains, domainCounts, nurseUserIds, ensureRound, saveNote, clinicianRole, bowelRef, saveBowelRef, onDone, onClose }: {
+  resident: Row; initialTab: DomainKey; loggedDomains: Set<DomainKey>; domainCounts?: Map<DomainKey, number>; nurseUserIds: string[]; ensureRound: (id: string) => Promise<string>; saveNote: (rec: { residentId: string; dailyRoundId?: string; domain: string; status?: number; note?: string }) => Promise<void>; clinicianRole: ClinicianRole; bowelRef: string; saveBowelRef: (dataUrl: string | null) => Promise<void>; onDone: () => Promise<void>; onClose: () => void;
 }) { // rendered only when open (parent gates on logFor); ClinicalModal open is always true here
   const [tab, setTab] = useState<DomainKey>(initialTab);
   const [f, setF] = useState<Row>({});
@@ -781,29 +803,30 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, saveNote, 
     await Promise.allSettled(posts.map((p) => fetch("/api/vitals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ residentId: s(resident.id), type: p.type, value: p.value, unit: p.unit }) })));
   };
 
+  // Logging is fully OPEN — no one-per-day limit and no package gate. Instead, AFTER
+  // a save we DETECT whether care went beyond the resident's Level package (domain
+  // not included, or delivered more times today than the package allows) and notify
+  // the care manager + nurse for DT-014 review. Never blocks. Fires once per day:
+  // out-of-package on the first log; overage when today's count first crosses the cap.
+  const flagBeyondPackage = () => {
+    const label = DOMAIN_LABEL[tab] ?? dom.label;
+    const allowance = domainDailyAllowance(level, tab);
+    const newCount = (domainCounts?.get(tab) ?? 0) + 1;
+    const firstOutOfPkg = outOfPackage(level, tab) && newCount === 1;
+    const firstOverage = allowance != null && newCount === allowance + 1;
+    if (!firstOutOfPkg && !firstOverage) return;
+    const rm = s(resident.room);
+    const reason = firstOverage
+      ? `delivered ${newCount}× today — above the Level ${level} package allowance of ${allowance}×/day`
+      : `not included in the resident's Level ${level} package`;
+    const title = firstOverage ? "Care package frequency exceeded" : "Care beyond package";
+    const message = `${s(resident.name)}${rm ? ` (Room ${rm})` : ""} — ${label} is ${reason}. Review as an Additional Clinical Service (DT-014).`;
+    nurseUserIds.forEach((uid) => createRecord("notifications", { userId: uid, type: "TASK_ASSIGNMENT", title, message, severity: "WARNING", relatedEntityType: "serviceRequest" }).catch(() => null));
+    void recordOutOfPackageService({ residentId: s(resident.id), residentName: s(resident.name), room: rm || undefined, domainCode: tab, domainLabel: label, level, notes: firstOverage ? `Frequency overage ${newCount}/${allowance} on ${todayKey()}` : (notes.trim() || undefined) });
+    Swal.fire({ toast: true, position: "top-end", icon: "info", title: firstOverage ? `Over package — ${label} ${newCount}/${allowance}` : `Beyond package — ${label}`, text: "Care manager & nurse notified for DT-014 review.", showConfirmButton: false, timer: 2600 });
+  };
+
   const save = async () => {
-    // One entry per domain per day — flag a duplicate and let the user override
-    // (e.g. to correct an earlier entry).
-    if (logged.has(tab) || savedNow.has(tab)) {
-      const proceed = await Swal.fire({
-        title: `${dom.label} already logged today`,
-        text: `A ${dom.label} entry already exists for ${s(resident.name)} today — one entry per domain per day is expected. Log another anyway?`,
-        icon: "warning", showCancelButton: true, confirmButtonColor: "#2563eb", confirmButtonText: "Log anyway", cancelButtonText: "Cancel",
-      });
-      if (!proceed.isConfirmed) return;
-    }
-    // LOC package gate — care outside the resident's Level package is an Additional
-    // Clinical Service (DT-014): warn (never block), and on proceed flag it for review.
-    const gated = outOfPackage(level, tab);
-    if (gated) {
-      const proceed = await Swal.fire({
-        title: "Outside care package",
-        text: `${DOMAIN_LABEL[tab] ?? dom.label} is not in ${s(resident.name)}'s Level ${level} package. Care outside the package is an Additional Clinical Service and may be chargeable (DT-014). Proceed anyway?`,
-        icon: "warning", showCancelButton: true, confirmButtonColor: "#d97706",
-        confirmButtonText: "Proceed & flag for DT-014", cancelButtonText: "Cancel",
-      });
-      if (!proceed.isConfirmed) return;
-    }
     setSaving(true);
     try {
       const roundId = await ensureRound(s(resident.id));
@@ -813,7 +836,7 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, saveNote, 
       if (form === "generic") {
         if (f.status == null && !notes.trim()) { Swal.fire({ title: "Nothing to save", text: "Select a status or add a note for this domain.", icon: "info" }); setSaving(false); return; }
         await saveNote({ residentId: s(resident.id), dailyRoundId: roundId, domain: tab, status: f.status != null ? Number(f.status) : undefined, note: notes.trim() || undefined });
-        if (gated) await recordOutOfPackageService({ residentId: s(resident.id), residentName: s(resident.name), room: s(resident.room) || undefined, domainCode: tab, domainLabel: DOMAIN_LABEL[tab] ?? dom.label, level, notes: notes.trim() || undefined });
+        flagBeyondPackage();
         setSavedNow((prev) => new Set(prev).add(tab));
         await onDone();
         Swal.fire({ toast: true, position: "top-end", icon: "success", title: `${dom.label} logged`, showConfirmButton: false, timer: 1500 });
@@ -842,7 +865,7 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, saveNote, 
         }
       }
       if (skinNote) { try { await saveNote({ residentId: s(resident.id), dailyRoundId: roundId, domain: tab, note: skinNote }); } catch { /* best-effort */ } }
-      if (gated) await recordOutOfPackageService({ residentId: s(resident.id), residentName: s(resident.name), room: s(resident.room) || undefined, domainCode: tab, domainLabel: DOMAIN_LABEL[tab] ?? dom.label, level, notes: notes.trim() || undefined });
+      flagBeyondPackage();
 
       setSavedNow((prev) => new Set(prev).add(tab));
       await onDone();
@@ -868,11 +891,10 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, saveNote, 
       }
     >
       <div className="mb-5 grid grid-cols-5 gap-1 rounded-2xl bg-[var(--clinical-surface-2)] p-1.5 sm:grid-cols-8 lg:grid-cols-8">
-        {DOMAINS.map((d) => { const on = d.key === tab; const doneD = logged.has(d.key) || savedNow.has(d.key); const oop = outOfPackage(level, d.key); const Icon = d.icon; return (
-          <button key={d.key} onClick={() => switchTab(d.key)} aria-label={`${d.code} ${d.label}${oop ? ` — not in Level ${level} package` : ""}`} title={oop ? `${d.code} · ${d.label} — not in Level ${level} package (DT-014)` : `${d.code} · ${d.label}`} className={`relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 transition ${on ? "bg-[var(--clinical-surface)] text-[var(--clinical-panel)] shadow-sm" : "text-[var(--clinical-muted)] hover:bg-[var(--clinical-surface)] hover:text-[var(--clinical-ink)]"}`}>
-            <Icon className="h-4 w-4 shrink-0" style={oop ? { color: "var(--clinical-amber)" } : undefined} />
+        {DOMAINS.map((d) => { const on = d.key === tab; const doneD = logged.has(d.key) || savedNow.has(d.key); const Icon = d.icon; return (
+          <button key={d.key} onClick={() => switchTab(d.key)} aria-label={`${d.code} ${d.label}`} title={`${d.code} · ${d.label}`} className={`relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 transition ${on ? "bg-[var(--clinical-surface)] text-[var(--clinical-panel)] shadow-sm" : "text-[var(--clinical-muted)] hover:bg-[var(--clinical-surface)] hover:text-[var(--clinical-ink)]"}`}>
+            <Icon className="h-4 w-4 shrink-0" />
             <span className="text-[9px] font-semibold leading-tight text-center line-clamp-2">{d.label}</span>
-            {oop && <span className="absolute left-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[var(--clinical-amber)]" aria-hidden />}
             {doneD && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--clinical-green)]" aria-label="Already documented" />}
           </button>
         ); })}
@@ -882,13 +904,19 @@ function LogModal({ resident, initialTab, loggedDomains, ensureRound, saveNote, 
           <div className="flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>
             <span className="rounded-md bg-[var(--clinical-panel)] px-1.5 py-0.5 text-[10px] font-bold text-white">{dom.code}</span>
             <span className="text-sm font-semibold text-[var(--clinical-ink)]">{dom.label}</span>
-            {outOfPackage(level, tab) && <PackageBadge level={level} />}
           </div>
-          {outOfPackage(level, tab) && (
-            <p className="text-[11px] leading-relaxed text-[var(--clinical-amber)]">Not in Level {level} package — logging this is an Additional Clinical Service (DT-014) and may be chargeable.</p>
-          )}
           {form === "generic" && (<>
-            <div><Label>Status (v4.2 anchor)</Label><Chips cols={5} value={s(f.status)} onChange={(v) => set({ status: v === "" ? undefined : Number(v) })} options={STATUS_ANCHORS.map((a) => ({ v: String(a.v), label: `${a.v} · ${a.label}` }))} /><p className="text-[10px] text-[var(--clinical-muted)] mt-1">0 Independent · 1 Low · 2 Moderate · 3 High · 4 Very high</p></div>
+            {DOMAIN_META[tab]?.scope && <p className="rounded-lg px-3 py-2 text-[11px] leading-relaxed text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}><span className="font-semibold text-[var(--clinical-ink)]">What to assess: </span>{DOMAIN_META[tab]!.scope}</p>}
+            <div>
+              <Label>Status (v4.2 anchor)</Label>
+              <Chips cols={5} value={s(f.status)} onChange={(v) => set({ status: v === "" ? undefined : Number(v) })} options={STATUS_ANCHORS.map((a) => ({ v: String(a.v), label: `${a.v} · ${a.label}` }))} />
+              {f.status != null && DOMAIN_META[tab]?.anchors?.[Number(f.status)] ? (
+                <p className="mt-1.5 rounded-lg px-3 py-2 text-xs leading-relaxed text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}><span className="font-bold text-[var(--clinical-panel)]">{f.status} · {statusLabel(f.status)}: </span>{DOMAIN_META[tab]!.anchors![Number(f.status)]}</p>
+              ) : (
+                <p className="text-[10px] text-[var(--clinical-muted)] mt-1">Pick a level to see what it means for {dom.label}. · 0 Independent · 1 Low · 2 Moderate · 3 High · 4 Very high</p>
+              )}
+              {DOMAIN_META[tab]?.evidence && <p className="mt-1 text-[10px] text-[var(--clinical-muted)]"><span className="font-semibold">Document:</span> {DOMAIN_META[tab]!.evidence}</p>}
+            </div>
           </>)}
           {form === "vitals" && (<>
             <div><Label>Blood Pressure</Label><div className="grid grid-cols-2 gap-2">
@@ -1036,11 +1064,11 @@ function ViewModal({ resident, loggedDomains, onOpenLog, onClose }: { resident: 
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--clinical-muted)] mb-2">Today&apos;s Care Logging</p>
           <div className="grid grid-cols-4 gap-2">
-            {DOMAINS.map((d) => { const on = loggedDomains.has(d.key); const oop = outOfPackage(lvl.n, d.key); const Icon = d.icon; return (
-              <button key={d.key} onClick={() => onOpenLog(d.key)} aria-label={`Log ${d.label}${oop ? ` — not in Level ${lvl.n} package` : ""}`} title={oop ? `${d.label} — not in Level ${lvl.n} package (DT-014)` : undefined} className="relative rounded-xl border p-2 flex flex-col items-center gap-1 hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: on ? "var(--clinical-green)" : oop ? "var(--clinical-amber)" : "var(--clinical-line)", backgroundColor: on ? "color-mix(in srgb, var(--clinical-green) 12%, transparent)" : "transparent" }}>
-                <Icon className="w-4 h-4" style={{ color: on ? "var(--clinical-green)" : oop ? "var(--clinical-amber)" : "var(--clinical-ink-soft)" }} />
+            {DOMAINS.map((d) => { const on = loggedDomains.has(d.key); const Icon = d.icon; return (
+              <button key={d.key} onClick={() => onOpenLog(d.key)} aria-label={`Log ${d.label}`} className="relative rounded-xl border p-2 flex flex-col items-center gap-1 hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: on ? "var(--clinical-green)" : "var(--clinical-line)", backgroundColor: on ? "color-mix(in srgb, var(--clinical-green) 12%, transparent)" : "transparent" }}>
+                <Icon className="w-4 h-4" style={{ color: on ? "var(--clinical-green)" : "var(--clinical-ink-soft)" }} />
                 <span className="text-[10px] text-[var(--clinical-ink-soft)]">{d.label}</span>
-                {on ? <Check className="w-3 h-3" style={{ color: "var(--clinical-green)" }} /> : oop ? <PackageBadge level={lvl.n} /> : <span className="text-[9px] text-[var(--clinical-muted)]">log</span>}
+                {on ? <Check className="w-3 h-3" style={{ color: "var(--clinical-green)" }} /> : <span className="text-[9px] text-[var(--clinical-muted)]">log</span>}
               </button>
             ); })}
           </div>
