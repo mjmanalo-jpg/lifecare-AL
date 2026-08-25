@@ -5,12 +5,15 @@ import { useParams } from "next/navigation";
 import {
   Pill, ClipboardList, ConciergeBell, ShieldAlert,
   UserRound, CalendarClock, Loader2, FileDown, StickyNote, IdCard,
-  Users, Phone, Syringe, Activity, HeartPulse, Gauge, AlertTriangle,
+  Users, Phone, Syringe, Activity, HeartPulse, Gauge, AlertTriangle, Heart,
 } from "lucide-react";
 import { taskNotesOf } from "@/lib/taskNotes";
 import { patientCode } from "@/lib/patientId";
 import { parseAcuityItems, LOC_LEVEL_META } from "@/lib/locBilling";
 import { parseLocHistory, historyForResident, LOC_SOURCE_LABEL } from "@/lib/lifecare/locHistory";
+import { ABOUT_ME_KEY, parseAboutMeStore, profileFor, AboutMeProfile as AboutProfile } from "@/lib/aboutMe";
+import AboutMeProfile from "@/components/portal/views/clinical/AboutMeProfile";
+import { upsertRecord } from "@/lib/api";
 import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
 
@@ -58,8 +61,9 @@ const ACUITY_DOMAIN_LABEL: Record<string, string> = {
   elimination: "Elimination", medication: "Medication", medical: "Medical", psychosocial: "Psychosocial", night: "Night Care",
 };
 
-type TabKey = "family" | "emergency" | "vaccines" | "adl" | "medical" | "advance" | "acuity" | "preadmit";
+type TabKey = "about" | "family" | "emergency" | "vaccines" | "adl" | "medical" | "advance" | "acuity" | "preadmit";
 const TABS: { key: TabKey; label: string; icon: typeof Pill }[] = [
+  { key: "about", label: "About Me", icon: Heart },
   { key: "family", label: "Family", icon: Users },
   { key: "emergency", label: "Emergency", icon: Phone },
   { key: "vaccines", label: "Vaccines", icon: Syringe },
@@ -142,12 +146,16 @@ export default function ResidentCardPage() {
   const [assessV42Rows, setAssessV42Rows] = useState<Row[]>([]);
   const [locHistoryRows, setLocHistoryRows] = useState<Row[]>([]);
   const [sponsor, setSponsor] = useState<Row | null>(null);
-  const [tab, setTab] = useState<TabKey>("family");
+  const [aboutRows, setAboutRows] = useState<Row[]>([]);
+  const [sessionRole, setSessionRole] = useState<string>("");
+  const [tab, setTab] = useState<TabKey>("about");
   const [cardUrl, setCardUrl] = useState("");
   const [qrData, setQrData] = useState("");
 
   useEffect(() => { setCardUrl(window.location.href); }, []);
   useEffect(() => { if (cardUrl) QRCode.toDataURL(cardUrl, { width: 512, margin: 1 }).then(setQrData).catch(() => {}); }, [cardUrl]);
+  // Viewer role — only Nurse / Care Manager may edit the About Me profile.
+  useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => setSessionRole(s(d?.session?.role))).catch(() => {}); }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -159,7 +167,7 @@ export default function ResidentCardPage() {
       if (res.status === 401) { setDenied(true); setLoading(false); return; }
       const r = res.data as Row | null;
       setResident(r);
-      const [m, sr, tk, pc, dt, adm, vax, alg, acu, av42, lh] = await Promise.all([
+      const [m, sr, tk, pc, dt, adm, vax, alg, acu, av42, lh, abt] = await Promise.all([
         getJson(`/api/db/medications?f_residentId=${id}&take=100`),
         getJson(`/api/db/service-requests?f_residentId=${id}&take=100`),
         getJson(`/api/db/tasks?f_residentId=${id}&take=100`),
@@ -171,6 +179,7 @@ export default function ResidentCardPage() {
         getJson(`/api/db/app-settings?f_key=acuity_assessments&take=50`),
         getJson(`/api/db/app-settings?f_key=assessments_v42&take=100`),
         getJson(`/api/db/app-settings?f_key=loc_history&take=1`),
+        getJson(`/api/db/app-settings?f_key=${ABOUT_ME_KEY}&take=1`),
       ]);
       if (!alive) return;
       setMeds((m.data as Row[]) || []);
@@ -184,6 +193,7 @@ export default function ResidentCardPage() {
       setAcuityRows((acu.data as Row[]) || []);
       setAssessV42Rows((av42.data as Row[]) || []);
       setLocHistoryRows((lh.data as Row[]) || []);
+      setAboutRows((abt.data as Row[]) || []);
       const sponsorId = s(r?.sponsorId);
       if (sponsorId) {
         const sp = await getJson(`/api/db/users?f_id=${sponsorId}&take=1`);
@@ -236,6 +246,20 @@ export default function ResidentCardPage() {
     const admissionIds = admissions.map((a) => s(a.id));
     return historyForResident(parseLocHistory(row ? s(row.value) : ""), id, admissionIds);
   }, [locHistoryRows, admissions, id]);
+
+  // About Me profile (migration-free app-setting, keyed by residentId).
+  const aboutStore = useMemo(() => {
+    const row = aboutRows.find((x) => s(x.key) === ABOUT_ME_KEY) || aboutRows[0];
+    return parseAboutMeStore(row ? s(row.value) : "");
+  }, [aboutRows]);
+  const aboutProfile = useMemo(() => profileFor(aboutStore, id), [aboutStore, id]);
+  const canEditAbout = sessionRole === "NURSE" || sessionRole === "CARE_MANAGER";
+  const saveAbout = async (next: AboutProfile) => {
+    const stamped: AboutProfile = { ...next, updatedAt: new Date().toISOString(), updatedBy: sessionRole || "staff" };
+    const nextStore = { ...aboutStore, [id]: stamped };
+    await upsertRecord("app-settings", ABOUT_ME_KEY, { key: ABOUT_ME_KEY, value: JSON.stringify(nextStore) });
+    setAboutRows([{ key: ABOUT_ME_KEY, value: JSON.stringify(nextStore) }]);
+  };
 
   // Resident has no diagnosis/medicalAssessment column, and allergies/medicalHistory
   // may be blank on the resident while the linked Admission holds them — so fall
@@ -313,17 +337,18 @@ export default function ResidentCardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-6 px-4 print:bg-white print:py-0">
-      <div className="max-w-4xl mx-auto bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden print:shadow-none print:border-0">
+      <div className="max-w-7xl mx-auto space-y-4">
         {/* Title bar */}
-        <div className="bg-[#2E4A48] text-white px-5 py-3 flex items-center justify-between">
+        <div className="bg-[#2E4A48] text-white px-5 py-3 flex items-center justify-between rounded-2xl shadow-sm print:shadow-none">
           <span className="text-sm font-semibold uppercase tracking-wide flex items-center gap-2"><UserRound className="w-4 h-4" /> Resident Care Card</span>
           <button onClick={downloadFullPdf} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-sm font-semibold transition print:hidden">
             <FileDown className="w-4 h-4" /> Download PDF
           </button>
         </div>
 
-        {/* Module 01 summary — photo, identity, status + field grid */}
-        <div className="px-5 pt-5 pb-4 border-b border-gray-100">
+        <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)] items-start">
+        {/* Summary rail — identity + key fields, stays in view while editing */}
+        <aside className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 lg:sticky lg:top-6 print:static print:shadow-none">
           <div className="flex items-start gap-4">
             {resident.photoUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
@@ -340,7 +365,7 @@ export default function ResidentCardPage() {
             </div>
             <span className={`shrink-0 px-2.5 py-1 rounded text-[11px] font-bold uppercase border ${STATUS_META[s(resident.status)] || STATUS_META.ACTIVE}`}>{s(resident.status).replace(/_/g, " ") || "ACTIVE"}</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3 mt-4">
+          <div className="grid grid-cols-1 gap-y-3 mt-4">
             <Cell label="Primary Diagnosis" value={primaryDiagnosis} />
             <Cell label="Care Level" value={s(resident.careLevel).replace(/_/g, " ")} accent />
             <Cell label="Allergies" value={allergies} danger />
@@ -348,9 +373,11 @@ export default function ResidentCardPage() {
             <Cell label="Emergency Contact" value={[s(resident.emergencyContact), s(resident.emergencyContactPhone)].filter(Boolean).join(" · ")} />
             <Cell label="Diet Restriction" value={dietRestriction} accent />
           </div>
-        </div>
+        </aside>
 
-        {/* Resident profile tab bar (Family/Emergency/Vaccines/ADL/Medical/Advance/Acuity) */}
+        {/* Main content — tabs + panels */}
+        <main className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden print:shadow-none">
+        {/* Resident profile tab bar (About/Family/Emergency/Vaccines/ADL/Medical/Advance/Acuity) */}
         <div className="border-b border-gray-200 bg-gray-50/60 print:hidden">
           <div className="flex gap-0.5 overflow-x-auto px-3 no-scrollbar">
             {TABS.map(({ key, label, icon: Icon }) => {
@@ -372,6 +399,10 @@ export default function ResidentCardPage() {
 
         {/* Active tab panel */}
         <div className="px-5 py-5">
+          {tab === "about" && (
+            <AboutMeProfile profile={aboutProfile} canEdit={canEditAbout} onSave={saveAbout} />
+          )}
+
           {tab === "family" && (
             <Section title="Family & Sponsor" icon={Users}>
               {(sponsorName || sponsorEmail) ? (
@@ -634,6 +665,8 @@ export default function ResidentCardPage() {
             )}
           </Section>
           <p className="text-[11px] text-gray-400 text-center">Generated {fmt(new Date().toISOString())} · confidential — for authorized care staff only.</p>
+        </div>
+        </main>
         </div>
       </div>
     </div>

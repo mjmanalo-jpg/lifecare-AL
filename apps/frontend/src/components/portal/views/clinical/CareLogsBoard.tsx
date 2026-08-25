@@ -26,12 +26,13 @@ import {
   CalendarDays, Sun, Clock,
   ChevronUp, ChevronDown, Plus, QrCode, Eye, Download, Sparkles,
   UserRound, Pill, Check, Camera, Image as ImageIcon, Trash2, Pencil, UserX,
-  ExternalLink, Bath, TrendingDown, Brain, MessageCircle, Dumbbell, ShieldAlert,
+  ExternalLink, Bath, TrendingDown, Brain, MessageCircle, Dumbbell, ShieldAlert, Ban,
   type LucideIcon,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
+import { ABOUT_ME_KEY, parseAboutMeStore, profileFor, hasBlocklist } from "@/lib/aboutMe";
 import { createRecord, upsertRecord, updateRecord } from "@/lib/api";
 import { qrDataUrl } from "@/lib/qr";
 import { useClinician, type ClinicianRole } from "./useClinician";
@@ -290,6 +291,8 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
   }, [staffQ.data]);
 
   const refetchAll = async () => { await Promise.allSettled([roundQ.refetch(), vitQ.refetch(), mealQ.refetch(), bowQ.refetch(), uriQ.refetch(), edeQ.refetch(), conQ.refetch(), moodQ.refetch(), painQ.refetch(), mobQ.refetch(), sleepQ.refetch(), refetchSettings()]); };
+  // About Me profiles — for the directory's preferred-name + blocklist glance.
+  const aboutStore = useMemo(() => parseAboutMeStore(settingRows.find((r) => (r.key || r.id) === ABOUT_ME_KEY)?.value), [settingRows]);
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
 
   const roundToRes = useMemo(() => {
@@ -396,7 +399,7 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
 
   const refetchResidents = () => resQ.refetch();
 
-  return { residents, entries, allEntries, byResident, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, refetchResidents, loading: resQ.loading };
+  return { residents, entries, allEntries, byResident, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, refetchResidents, aboutStore, loading: resQ.loading };
 }
 
 // ── Residents tab — quick-log list (Image 15) ────────────────────────────────
@@ -404,7 +407,7 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
 // so nurse / care-manager / admin keep the full directory; the caregiver view
 // passes false to stay read-only (View + QR) per the role visibility matrix.
 export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = true }: { clinicianRole?: ClinicianRole; canManage?: boolean }) {
-  const { residents, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, ensureRound, saveNote, refetchAll, refetchResidents, bowelRef, saveBowelRef, loading } = useCareLogData(clinicianRole);
+  const { residents, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, ensureRound, saveNote, refetchAll, refetchResidents, bowelRef, saveBowelRef, aboutStore, loading } = useCareLogData(clinicianRole);
 
   const [search, setSearch] = useState("");
   const [careLevelFilter, setCareLevelFilter] = useState("");
@@ -486,8 +489,18 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
                   <div className="w-11 h-11 rounded-xl bg-[var(--clinical-surface-2)] flex flex-col items-center justify-center leading-none shrink-0"><span className="text-[9px] font-semibold text-[var(--clinical-muted)]">Rm</span><span className="text-sm font-bold text-[var(--clinical-ink-soft)]">{s(r.room)}</span></div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
-                      <p className="break-words font-bold leading-snug text-[var(--clinical-ink)] sm:truncate">{s(r.name)}</p>
+                      <p className="break-words font-bold leading-snug text-[var(--clinical-ink)] sm:truncate">
+                        {s(r.name)}
+                        {profileFor(aboutStore, s(r.id)).preferredName?.trim() && (
+                          <span className="ml-1.5 font-medium text-[var(--clinical-muted)]">“{profileFor(aboutStore, s(r.id)).preferredName}”</span>
+                        )}
+                      </p>
                       <LevelBadge lvl={lvl} />
+                      {hasBlocklist(profileFor(aboutStore, s(r.id))) && (
+                        <span className="inline-flex items-center gap-1 rounded border border-red-200 bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700" title="This resident has a blocklisted contact">
+                          <Ban className="h-3 w-3" /> Blocklist
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-[var(--clinical-muted)] mt-0.5">{genderLabel(r.raw?.gender)} · {diet}</p>
                   </div>
