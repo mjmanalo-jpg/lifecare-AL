@@ -26,6 +26,7 @@ import CaregiverScheduleBoard from "@/components/portal/views/clinical/Caregiver
 import StaffRosterBoard from "@/components/portal/views/clinical/StaffRosterBoard";
 import ResidentCareHistory from "@/components/portal/views/clinical/ResidentCareHistory";
 import VitalsTrendBoard from "@/components/portal/views/clinical/VitalsTrendBoard";
+import DomainMonitoringBoard from "@/components/portal/views/clinical/DomainMonitoringBoard";
 import ClinicalRecordsBoard from "@/components/portal/views/clinical/ClinicalRecordsBoard";
 import ResidentJourneyBoard from "@/components/portal/views/clinical/ResidentJourneyBoard";
 import StaffProfilesBoard from "@/components/portal/views/clinical/StaffProfilesBoard";
@@ -122,6 +123,8 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
       return <StaffProfilesBoard clinicianRole="CARE_MANAGER" />;
     case "vitalstrend":
       return <VitalsTrendBoard clinicianRole="CARE_MANAGER" />;
+    case "domainmonitoring":
+      return <DomainMonitoringBoard clinicianRole="CARE_MANAGER" />;
     case "medinventory":
       return <MedicationInventoryBoard clinicianRole="CARE_MANAGER" />;
     case "minipharmacy":

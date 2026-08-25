@@ -18,16 +18,32 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import {
   Activity, Heart, Thermometer, Droplets, Wind, Scale, Zap, Moon,
   Utensils, Footprints, Smile, AlertTriangle, CircleDot, Waves,
-  FileDown, type LucideIcon,
+  FileDown, Gauge, ExternalLink, type LucideIcon,
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { levelOf } from "./CareLogsBoard";
 import type { ClinicianRole } from "./useClinician";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, StatCard, DataState, controlClass, SERIF } from "./clinical-ui";
+import { DOMAIN_CODES } from "@/lib/lifecare/types";
+import type { DomainCode } from "@/lib/lifecare/types";
+import { ASSESSMENTS_V42_KEY } from "@/lib/lifecare/assessment";
+import assessmentDomains from "@/lib/lifecare/data/assessment_domains.json";
+import {
+  DOMAIN_LOGS_KEY, DOMAIN_CASES_KEY, parseDomainLogs, parseDomainCases,
+  baselineFor, evaluateDomainTriggers, REASON_LABEL, CASE_STATUS_LABEL,
+  type DomainTrigger, type CaseStatus,
+} from "@/lib/lifecare/domainMonitoring";
+
+// AS-code → domain name, for the 14 monitoring trend cards.
+const DOMAIN_NAME: Record<string, string> = Object.fromEntries(
+  (assessmentDomains as { code: string; name: string }[]).map((d) => [d.code, d.name]),
+);
+const SHIFT_HOUR: Record<string, number> = { AM: 8, PM: 16, NOC: 23 };
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (v: unknown) => (v == null ? "" : String(v));
@@ -350,6 +366,54 @@ function OtherTrendCard({ title, icon: Icon, tint, color, unit, points, digits, 
   );
 }
 
+// ── Domain-monitoring trend card (0–4, baseline band + discrepancy flag) ──────
+function DomainTrendCard({ code, name, points, baseline, trigger, caseStatus, onLocReview }: {
+  code: string; name: string; points: { at: string; v: number | null }[]; baseline?: number;
+  trigger?: DomainTrigger; caseStatus?: CaseStatus; onLocReview: () => void;
+}) {
+  const values = points.map((p) => p.v);
+  const hasData = values.some((v) => v != null);
+  const latest = [...values].reverse().find((v): v is number => v != null) ?? null;
+  const band = typeof baseline === "number" ? ([0, baseline] as const) : undefined;
+  const off = latest != null && typeof baseline === "number" && latest > baseline;
+  const flagged = !!trigger;
+  const dueReview = caseStatus === "LOC_REVIEW_DUE";
+  return (
+    <div className="rounded-xl border p-4 shadow-sm shadow-black/[0.03]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: flagged ? (dueReview ? "var(--clinical-coral)" : "var(--clinical-amber)") : "var(--clinical-line)" }}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--clinical-panel)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}><Gauge className="h-4 w-4" /></span>
+          <div className="min-w-0">
+            <h3 className="truncate text-sm font-bold text-[var(--clinical-ink)]"><span className="text-[var(--clinical-muted)]">{code}</span> · {name}</h3>
+            <p className="truncate text-[11px] text-[var(--clinical-muted)]">{typeof baseline === "number" ? `Baseline ${baseline} · 0–4 scale` : "0–4 scale"}</p>
+          </div>
+        </div>
+        {caseStatus && <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ backgroundColor: dueReview ? "var(--clinical-coral)" : caseStatus === "MANAGING" ? "var(--clinical-panel)" : "var(--clinical-amber)" }}>{CASE_STATUS_LABEL[caseStatus]}</span>}
+      </div>
+      <div className="mt-2.5 flex items-baseline gap-1.5">
+        <span className="text-2xl font-bold tracking-tight" style={{ color: off ? "var(--clinical-coral)" : "var(--clinical-ink)" }}>{latest == null ? "—" : latest}</span>
+        <span className="text-xs font-medium text-[var(--clinical-muted)]">/4</span>
+        {off && <span className="ml-1 rounded-full bg-[var(--clinical-coral)] px-1.5 py-0.5 text-[10px] font-semibold text-white">Above baseline</span>}
+      </div>
+      {flagged && trigger && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {trigger.reasons.map((r) => <span key={r} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: "var(--clinical-surface-2)", color: "var(--clinical-ink-soft)" }}><AlertTriangle className="h-3 w-3 text-[var(--clinical-amber)]" />{REASON_LABEL[r]}</span>)}
+        </div>
+      )}
+      {dueReview && (
+        <button type="button" onClick={onLocReview} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--clinical-coral)] hover:underline">Re-assess · Level of Care review <ExternalLink className="h-3 w-3" /></button>
+      )}
+      <div className="mt-1.5">
+        {hasData ? (
+          <LineChart points={points} series={[{ label: name, color: "#7c3aed", values }]} band={band} height={140} yDigits={0} area idBase={`dm-${code}`} />
+        ) : (
+          <div className="flex h-[140px] items-center justify-center text-sm text-[var(--clinical-muted)]">No scores in range</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Board ────────────────────────────────────────────────────────────────────
 const WEIGHT_KEY = "weight_logs";
 
@@ -501,6 +565,35 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE" }: { clinicia
     };
   }, [residentId, roundInfo, rangeStart, nowMs, urineQ.data, mealQ.data, mobQ.data, bowelQ.data, edemaQ.data, moodQ.data, concernQ.data]);
 
+  // ── Domain monitoring (the 14 assessment domains scored per shift) ──────────
+  const router = useRouter();
+  const pathname = usePathname();
+  const domainLogsAll = useMemo(() => parseDomainLogs(settingRows.find((r) => (r.key || r.id) === DOMAIN_LOGS_KEY)?.value), [settingRows]);
+  const domainCasesAll = useMemo(() => parseDomainCases(settingRows.find((r) => (r.key || r.id) === DOMAIN_CASES_KEY)?.value), [settingRows]);
+  const v42All = useMemo(() => { try { const v = JSON.parse(settingRows.find((r) => (r.key || r.id) === ASSESSMENTS_V42_KEY)?.value || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } }, [settingRows]);
+  const domainBaseline = useMemo(() => (residentId ? baselineFor(residentId, v42All) : {}), [residentId, v42All]);
+  const residentDomainLogs = useMemo(() => domainLogsAll.filter((l) => l.residentId === residentId), [domainLogsAll, residentId]);
+  const domainTriggers = useMemo(() => (residentId ? evaluateDomainTriggers(residentId, residentDomainLogs, domainBaseline) : []), [residentId, residentDomainLogs, domainBaseline]);
+  const triggerByCode = useMemo(() => new Map(domainTriggers.map((t) => [t.domain, t])), [domainTriggers]);
+  const caseByCode = useMemo(() => new Map(domainCasesAll.filter((c) => c.residentId === residentId && c.status !== "RESOLVED").map((c) => [c.domain, c])), [domainCasesAll, residentId]);
+  const domainSeries = useMemo(() => {
+    const m = {} as Record<DomainCode, { at: string; v: number | null }[]>;
+    DOMAIN_CODES.forEach((c) => { m[c] = []; });
+    residentDomainLogs.forEach((l) => {
+      const at = `${l.date}T${String(SHIFT_HOUR[l.shift] ?? 8).padStart(2, "0")}:00:00`;
+      const t = new Date(at).getTime();
+      if (!Number.isFinite(t) || t < rangeStart || t > nowMs) return;
+      DOMAIN_CODES.forEach((c) => { const v = l.scores[c]; if (v != null) m[c].push({ at, v }); });
+    });
+    DOMAIN_CODES.forEach((c) => m[c].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()));
+    return m;
+  }, [residentDomainLogs, rangeStart, nowMs]);
+  const openLocReview = () => {
+    if (!residentId) return;
+    const seg = (pathname || "").split("/").filter(Boolean)[0] || "nurse";
+    router.push(`/${seg}/careacuity?resident=${encodeURIComponent(residentId)}&reason=locreview`);
+  };
+
   const startLabel = useMemo(() => new Date(rangeStart).toISOString().slice(0, 10), [rangeStart]);
   const endLabel = useMemo(() => new Date(nowMs).toISOString().slice(0, 10), [nowMs]);
 
@@ -600,6 +693,22 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE" }: { clinicia
                 <OtherTrendCard title="Edema Severity" icon={Waves} tint="text-blue-500" color="#3b82f6" unit="" points={domain.edema} digits={0} band={[0, 1]} fmt={fmtEdema} caption="None → Deep (0–5)" idBase="ot-edema" />
                 <OtherTrendCard title="Mood" icon={Smile} tint="text-purple-500" color="#a855f7" unit="" points={domain.mood} digits={0} fmt={fmtMood} caption="Wellbeing (worst → best)" idBase="ot-mood" />
                 <OtherTrendCard title="Concerns" icon={AlertTriangle} tint="text-red-500" color="#ef4444" unit="" points={domain.concern} digits={0} band={[0, 1]} fmt={fmtConcern} caption="Severity: Low → Critical" idBase="ot-concern" />
+              </div>
+
+              {/* Domain Monitoring — the 14 assessment domains scored per shift */}
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <h2 className="flex items-center gap-2 font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}><Gauge className="h-5 w-5 text-[var(--clinical-panel)]" /> Domain Monitoring (14)</h2>
+                    <p className="text-xs text-[var(--clinical-muted)]">Per-shift 0–4 scores vs. assessment baseline. A flag opens a monitoring case that escalates to a Level of Care review if it persists.</p>
+                  </div>
+                  {domainTriggers.length > 0 && <span className="shrink-0 rounded-full px-2 py-0.5 text-xs font-bold text-white" style={{ backgroundColor: "var(--clinical-amber)" }}>{domainTriggers.length} flagged</span>}
+                </div>
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  {DOMAIN_CODES.map((code) => (
+                    <DomainTrendCard key={code} code={code} name={DOMAIN_NAME[code] || code} points={domainSeries[code]} baseline={domainBaseline[code]} trigger={triggerByCode.get(code)} caseStatus={caseByCode.get(code)?.status} onLocReview={openLocReview} />
+                  ))}
+                </div>
               </div>
 
               {/* Raw readings table */}

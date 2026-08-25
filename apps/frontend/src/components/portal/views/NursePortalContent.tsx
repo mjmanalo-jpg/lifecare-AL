@@ -44,6 +44,7 @@ import CaregiverScheduleBoard from "@/components/portal/views/clinical/Caregiver
 import StaffRosterBoard from "@/components/portal/views/clinical/StaffRosterBoard";
 import ResidentCareHistory from "@/components/portal/views/clinical/ResidentCareHistory";
 import VitalsTrendBoard from "@/components/portal/views/clinical/VitalsTrendBoard";
+import DomainMonitoringBoard from "@/components/portal/views/clinical/DomainMonitoringBoard";
 import ClinicalRecordsBoard from "@/components/portal/views/clinical/ClinicalRecordsBoard";
 import ResidentJourneyBoard from "@/components/portal/views/clinical/ResidentJourneyBoard";
 import ClockInBoard from "@/components/portal/views/clinical/ClockInBoard";
@@ -882,6 +883,9 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   }
   if (tab === "vitalstrend") {
     return <VitalsTrendBoard clinicianRole="NURSE" />;
+  }
+  if (tab === "domainmonitoring") {
+    return <DomainMonitoringBoard clinicianRole="NURSE" />;
   }
   if (tab === "medinventory") {
     return <MedicationInventoryBoard clinicianRole="NURSE" />;
