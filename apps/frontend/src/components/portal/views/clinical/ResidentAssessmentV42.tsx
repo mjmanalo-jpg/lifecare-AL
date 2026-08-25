@@ -311,12 +311,16 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     openNew();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newSignal]);
-  // Deep-link target: open the resident's latest assessment, or start a new one
-  // pre-filled with the resident (the "why a private caregiver is needed" is
-  // documented here). Called once when arrived via ?resident=<id>.
+  // Deep-link target. A REASSESSMENT (opened from a PCG / LOC-review request —
+  // deepLinkReason is set) must ALWAYS start a fresh EMPTY form: the resident
+  // "undergoes all the questions again", and the prior assessment stays saved as
+  // history. Only a plain identity deep-link (no reason) resumes the latest.
+  // Called once when arrived via ?resident=<id>.
   const openForResident = (rid: string, rname: string) => {
-    const existing = assessments.find((a) => a.layer1?.residentId === rid);
-    if (existing) { openEdit(existing); return; }
+    if (!deepLinkReason) {
+      const existing = assessments.find((a) => a.layer1?.residentId === rid);
+      if (existing) { openEdit(existing); return; }
+    }
     const a = newAssessment(newId(), me || undefined, new Date().toISOString());
     a.origin = origin;
     a.layer1.residentId = rid;
