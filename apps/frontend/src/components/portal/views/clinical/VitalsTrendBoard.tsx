@@ -34,9 +34,9 @@ import type { DomainCode } from "@/lib/lifecare/types";
 import { ASSESSMENTS_V42_KEY } from "@/lib/lifecare/assessment";
 import assessmentDomains from "@/lib/lifecare/data/assessment_domains.json";
 import {
-  DOMAIN_LOGS_KEY, DOMAIN_CASES_KEY, parseDomainLogs, parseDomainCases,
-  baselineFor, evaluateDomainTriggers, REASON_LABEL, CASE_STATUS_LABEL,
-  type DomainTrigger, type CaseStatus,
+  CARE_LOG_NOTES_KEY, PERSIST_DAYS, INCIDENT_SCORE, careLogNotesToDomainLogs,
+  baselineFor, evaluateDomainTriggers, discrepancyDayCount, REASON_LABEL, CASE_STATUS_LABEL,
+  type DomainTrigger, type CaseStatus, type CareLogNote,
 } from "@/lib/lifecare/domainMonitoring";
 
 // AS-code → domain name, for the 14 monitoring trend cards.
@@ -574,14 +574,23 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE" }: { clinicia
   // ── Domain monitoring (the 14 assessment domains scored per shift) ──────────
   const router = useRouter();
   const pathname = usePathname();
-  const domainLogsAll = useMemo(() => parseDomainLogs(settingRows.find((r) => (r.key || r.id) === DOMAIN_LOGS_KEY)?.value), [settingRows]);
-  const domainCasesAll = useMemo(() => parseDomainCases(settingRows.find((r) => (r.key || r.id) === DOMAIN_CASES_KEY)?.value), [settingRows]);
+  const domainLogsAll = useMemo(() => {
+    let notes: CareLogNote[] = [];
+    try { const v = JSON.parse(settingRows.find((r) => (r.key || r.id) === CARE_LOG_NOTES_KEY)?.value || "[]"); if (Array.isArray(v)) notes = v; } catch { /* ignore */ }
+    return careLogNotesToDomainLogs(notes);
+  }, [settingRows]);
   const v42All = useMemo(() => { try { const v = JSON.parse(settingRows.find((r) => (r.key || r.id) === ASSESSMENTS_V42_KEY)?.value || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } }, [settingRows]);
   const domainBaseline = useMemo(() => (residentId ? baselineFor(residentId, v42All) : {}), [residentId, v42All]);
   const residentDomainLogs = useMemo(() => domainLogsAll.filter((l) => l.residentId === residentId), [domainLogsAll, residentId]);
   const domainTriggers = useMemo(() => (residentId ? evaluateDomainTriggers(residentId, residentDomainLogs, domainBaseline) : []), [residentId, residentDomainLogs, domainBaseline]);
   const triggerByCode = useMemo(() => new Map(domainTriggers.map((t) => [t.domain, t])), [domainTriggers]);
-  const caseByCode = useMemo(() => new Map(domainCasesAll.filter((c) => c.residentId === residentId && c.status !== "RESOLVED").map((c) => [c.domain, c])), [domainCasesAll, residentId]);
+  // Case status per drifting domain, derived live (no stored cases): persistent
+  // drift or a severe score → LOC review due; otherwise an open discrepancy.
+  const caseStatusByCode = useMemo(() => {
+    const m = new Map<DomainCode, CaseStatus>();
+    domainTriggers.forEach((t) => { const days = discrepancyDayCount(residentId, residentDomainLogs, t.domain, domainBaseline); m.set(t.domain, (days >= PERSIST_DAYS || t.latestScore >= INCIDENT_SCORE) ? "LOC_REVIEW_DUE" : "OPEN"); });
+    return m;
+  }, [domainTriggers, residentId, residentDomainLogs, domainBaseline]);
   const domainSeries = useMemo(() => {
     const m = {} as Record<DomainCode, { at: string; v: number | null }[]>;
     DOMAIN_CODES.forEach((c) => { m[c] = []; });
@@ -712,7 +721,7 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE" }: { clinicia
                 </div>
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                   {DOMAIN_TREND_CODES.map((code) => (
-                    <DomainTrendCard key={code} code={code} name={DOMAIN_NAME[code] || code} points={domainSeries[code]} baseline={domainBaseline[code]} trigger={triggerByCode.get(code)} caseStatus={caseByCode.get(code)?.status} onLocReview={openLocReview} />
+                    <DomainTrendCard key={code} code={code} name={DOMAIN_NAME[code] || code} points={domainSeries[code]} baseline={domainBaseline[code]} trigger={triggerByCode.get(code)} caseStatus={caseStatusByCode.get(code)} onLocReview={openLocReview} />
                   ))}
                 </div>
               </div>

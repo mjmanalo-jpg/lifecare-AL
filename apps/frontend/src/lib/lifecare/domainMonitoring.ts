@@ -176,6 +176,56 @@ export function evaluateDomainTriggers(
   return out;
 }
 
+// ── Sourcing from the daily care logs (care_log_notes) ────────────────────────
+// The caregivers score the 14 domains in "Document care"; those 0–4 status logs
+// are the single source. Domain Monitoring never re-scores — it adapts these logs
+// and runs the trigger engine over them.
+export const CARE_LOG_NOTES_KEY = "care_log_notes";
+export interface CareLogNote { residentId: string; domain: string; status?: number; shift?: string; at: string }
+
+/** Adapt Document-care 0–4 status logs into DomainLogs grouped per resident × date
+ *  × shift. Only scored AS-domains with a numeric status are included; a domain
+ *  logged twice in one shift keeps the worst score. */
+export function careLogNotesToDomainLogs(notes: CareLogNote[]): DomainLog[] {
+  const byKey = new Map<string, DomainLog>();
+  for (const n of notes || []) {
+    if (typeof n.status !== "number") continue;
+    const code = n.domain as DomainCode;
+    if (!DOMAIN_CODES.includes(code)) continue;
+    const date = String(n.at || "").slice(0, 10);
+    if (!date) continue;
+    const shift = (n.shift === "AM" || n.shift === "PM" || n.shift === "NOC" ? n.shift : "AM") as Shift;
+    const k = `${n.residentId}|${date}|${shift}`;
+    let log = byKey.get(k);
+    if (!log) { log = { id: k, residentId: n.residentId, date, shift, scores: {}, by: "", at: n.at }; byKey.set(k, log); }
+    const score = Math.max(0, Math.min(4, Math.round(n.status))) as DomainScore;
+    const prev = log.scores[code];
+    log.scores[code] = prev == null ? score : (Math.max(prev, score) as DomainScore);
+  }
+  return [...byKey.values()];
+}
+
+/** Distinct days where a domain read as a discrepancy (worse than baseline, or
+ *  absolute-severe) — the persistence signal used to decide a reassessment. */
+export function discrepancyDayCount(residentId: string, logs: DomainLog[], domain: DomainCode, baseline: Partial<Record<DomainCode, number>>): number {
+  const bl = baseline[domain];
+  const dayMax = new Map<string, number>();
+  for (const l of logs) {
+    if (l.residentId !== residentId) continue;
+    const sc = l.scores[domain];
+    if (typeof sc !== "number") continue;
+    dayMax.set(l.date, Math.max(dayMax.get(l.date) ?? -1, sc));
+  }
+  let days = 0;
+  for (const sc of dayMax.values()) {
+    // Reassessment is about DRIFT: worse than the assessed baseline. With no
+    // baseline on file, fall back to absolute-severe (≥3) as the proxy.
+    const drift = typeof bl === "number" ? sc >= bl + WORSE_DELTA : sc >= ABS_SEVERE;
+    if (drift) days++;
+  }
+  return days;
+}
+
 // ── case lifecycle ────────────────────────────────────────────────────────────
 const dateOnly = (s: string) => s.slice(0, 10);
 const daysBetween = (fromISO: string, toDate: string) => {

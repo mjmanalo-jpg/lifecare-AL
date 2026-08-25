@@ -4,6 +4,7 @@ import {
   evaluateDomainTriggers, baselineFor, advanceCase, addManagementNote, resolveCase,
   carryForwardScores, upsertDomainLog,
   PERSIST_DAYS, PERSIST_AGE_DAYS,
+  careLogNotesToDomainLogs, discrepancyDayCount,
   type DomainLog, type DomainCase, type TriggerReason,
 } from "../src/lib/lifecare/domainMonitoring.ts";
 
@@ -129,4 +130,26 @@ test("upsertDomainLog replaces the same resident/date/shift row", () => {
   const next = upsertDomainLog([a], { ...a, id: "new", scores: { "AS-01": 2 } });
   assert.equal(next.length, 1);
   assert.equal(next[0].scores["AS-01"], 2);
+});
+
+// ── sourcing from care_log_notes ─────────────────────────────────────────────
+test("careLogNotesToDomainLogs groups by resident/date/shift, worst-of duplicates, drops non-AS", () => {
+  const logs = careLogNotesToDomainLogs([
+    { residentId: "R1", domain: "AS-01", status: 2, shift: "AM", at: "2026-08-20T08:00:00Z" },
+    { residentId: "R1", domain: "AS-01", status: 4, shift: "AM", at: "2026-08-20T09:00:00Z" }, // same shift → worst kept
+    { residentId: "R1", domain: "AS-03", status: 1, shift: "AM", at: "2026-08-20T08:30:00Z" },
+    { residentId: "R1", domain: "pain", status: 3, shift: "AM", at: "2026-08-20T08:00:00Z" },   // non-AS → dropped
+    { residentId: "R1", domain: "AS-01", status: 0, at: "" },                                    // no date → dropped
+  ]);
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].scores["AS-01"], 4);
+  assert.equal(logs[0].scores["AS-03"], 1);
+  assert.equal(logs[0].scores["pain" as never], undefined);
+});
+
+test("discrepancyDayCount counts distinct discrepancy days vs baseline", () => {
+  const mk = (date: string, sc: number): DomainLog => ({ id: date, residentId: "R1", date, shift: "AM", scores: { "AS-13": sc } as DomainLog["scores"], by: "", at: `${date}T08:00:00Z` });
+  const logs = [mk("2026-08-18", 1), mk("2026-08-19", 3), mk("2026-08-20", 2)]; // baseline 1 → 08-19(+2) & 08-20(+1) discrepant
+  assert.equal(discrepancyDayCount("R1", logs, "AS-13", { "AS-13": 1 }), 2);
+  assert.equal(discrepancyDayCount("R1", logs, "AS-13", { "AS-13": 3 }), 0); // baseline 3 → none worse
 });
