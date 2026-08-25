@@ -419,7 +419,6 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Resident Progress Reports", icon: FileText, route: "/nurse/progressreport", group: "Shift Endorsement" },
       { name: "Safeguarding", icon: ShieldCheck, route: "/nurse/safeguarding", group: "Shift Endorsement" },
       { name: "Infection Control", icon: Activity, route: "/nurse/infectioncontrol", group: "Shift Endorsement" },
-      { name: "Clinical Reports", icon: BarChart3, route: "/nurse/clinicalreports", group: "Shift Endorsement" },
     ],
   },
   CAREGIVER: {
