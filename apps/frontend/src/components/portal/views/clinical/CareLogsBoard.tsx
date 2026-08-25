@@ -813,17 +813,20 @@ function LogModal({ resident, initialTab, loggedDomains, domainCounts, nurseUser
     const allowance = domainDailyAllowance(level, tab);
     const newCount = (domainCounts?.get(tab) ?? 0) + 1;
     const firstOutOfPkg = outOfPackage(level, tab) && newCount === 1;
+    const overage = allowance != null && newCount > allowance;         // over the daily cap — flag EVERY time
     const firstOverage = allowance != null && newCount === allowance + 1;
-    if (!firstOutOfPkg && !firstOverage) return;
+    if (!firstOutOfPkg && !overage) return;
     const rm = s(resident.room);
-    const reason = firstOverage
+    const reason = overage
       ? `delivered ${newCount}× today — above the Level ${level} package allowance of ${allowance}×/day`
       : `not included in the resident's Level ${level} package`;
-    const title = firstOverage ? "Care package frequency exceeded" : "Care beyond package";
+    const title = overage ? "Care package frequency exceeded" : "Care beyond package";
     const message = `${s(resident.name)}${rm ? ` (Room ${rm})` : ""} — ${label} is ${reason}. Review as an Additional Clinical Service (DT-014).`;
+    // Notify the care manager + nurse EVERY time the resident goes over their package.
     nurseUserIds.forEach((uid) => createRecord("notifications", { userId: uid, type: "TASK_ASSIGNMENT", title, message, severity: "WARNING", relatedEntityType: "serviceRequest" }).catch(() => null));
-    void recordOutOfPackageService({ residentId: s(resident.id), residentName: s(resident.name), room: rm || undefined, domainCode: tab, domainLabel: label, level, notes: firstOverage ? `Frequency overage ${newCount}/${allowance} on ${todayKey()}` : (notes.trim() || undefined) });
-    Swal.fire({ toast: true, position: "top-end", icon: "info", title: firstOverage ? `Over package — ${label} ${newCount}/${allowance}` : `Beyond package — ${label}`, text: "Care manager & nurse notified for DT-014 review.", showConfirmButton: false, timer: 2600 });
+    // Route the chargeable DT-014 item only once per day/domain so the ACS board isn't spammed.
+    if (firstOutOfPkg || firstOverage) void recordOutOfPackageService({ residentId: s(resident.id), residentName: s(resident.name), room: rm || undefined, domainCode: tab, domainLabel: label, level, notes: overage ? `Frequency overage on ${todayKey()}` : (notes.trim() || undefined) });
+    Swal.fire({ toast: true, position: "top-end", icon: "info", title: overage ? `Over package — ${label} ${newCount}/${allowance}` : `Beyond package — ${label}`, text: "Care manager & nurse notified.", showConfirmButton: false, timer: 2600 });
   };
 
   const save = async () => {
