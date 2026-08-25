@@ -43,6 +43,15 @@ const newId = () => globalThis.crypto?.randomUUID?.() ?? `pcg-${Date.now()}-${Ma
 const peso = (n: number) => `₱${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—");
 
+// Re-assessment marker: the ISO time a PCG request last opened the assessment form
+// for a resident. Set when the assessor clicks "New assessment", cleared once a
+// request is sent — so EVERY private-caregiver request re-assesses, even when a
+// (e.g. pre-admission) completed assessment already recommends a PCG.
+const pcgReassessKey = (rid: string) => `pcg-reassess:${rid}`;
+const readReassessMarker = (rid: string) => {
+  try { return (typeof localStorage !== "undefined" ? localStorage.getItem(pcgReassessKey(rid)) : "") || ""; } catch { return ""; }
+};
+
 type ResOpt = { id: string; name: string; room: string; sponsorId: string; sponsorName: string };
 
 /** Assessment-derived DT-013 (private-caregiver) recommendation for a resident. */
@@ -134,6 +143,12 @@ export default function PrivateCaregiverBoard({ clinicianRole = "NURSE" }: { cli
   // Route to the resident assessment form (Acuity & Level of Care → Assessments)
   // where the DT-013 justification for a private caregiver is documented.
   const openAssessment = (residentId?: string, reason?: string) => {
+    // A PCG request must always be backed by a fresh re-assessment (DT-013) — even
+    // when a completed assessment already exists. Stamp the request time so the
+    // modal only unlocks "Send" once a newer assessment is completed for THIS request.
+    if (residentId && reason === "pcg") {
+      try { localStorage.setItem(pcgReassessKey(residentId), new Date().toISOString()); } catch { /* ignore */ }
+    }
     // Care Manager portal passes clinicianRole="FACILITY_ADMIN", so derive the
     // portal segment from the live URL instead of the role. Carry the resident so
     // the assessment form opens straight to them, plus a `reason` so the form can
@@ -163,6 +178,8 @@ export default function PrivateCaregiverBoard({ clinicianRole = "NURSE" }: { cli
     const nowIso = new Date().toISOString();
     const rec: PrivateCareAssignment = { ...a, id: newId(), status: "PENDING_FAMILY", requestedBy: clinicianName, requestedAt: nowIso, authorisedBy: clinicianName, authorisedAt: nowIso };
     await save([rec, ...assignments]);
+    // Consume the re-assessment marker so the NEXT request re-assesses again.
+    try { localStorage.removeItem(pcgReassessKey(rec.residentId)); } catch { /* ignore */ }
     setAssignOpen(false);
     // Log the request in the resident's Care Level History (best-effort) so the
     // PCG request — and the level it was made at — is part of the LOC trail.
@@ -329,6 +346,10 @@ function AssignModal({ residents, caregivers, recoByResident, onOpenAssessment, 
   // Track whether the assessor hand-edited the rationale, so we don't clobber it
   // when re-prefilling from the assessment on resident change.
   const [rationaleTouched, setRationaleTouched] = useState(false);
+  // ISO time this request opened the assessment form for the selected resident
+  // (from localStorage). Only an assessment completed at/after this counts as done
+  // FOR this request — a pre-existing assessment does not.
+  const [reassessAt, setReassessAt] = useState("");
 
   const resident = residents.find((r) => r.id === residentId);
   const caregiver = caregivers.find((c) => c.id === caregiverId);
@@ -336,12 +357,17 @@ function AssignModal({ residents, caregivers, recoByResident, onOpenAssessment, 
   // Strict rule: a completed (COMPLETED/VALIDATED) reassessment is required before
   // a private-caregiver request can be sent.
   const assessmentReady = !!reco?.ready;
+  // Every PCG request re-assesses: the completed assessment must be newer than the
+  // moment this request opened the form. A pre-existing (e.g. pre-admission)
+  // assessment — even one recommending a PCG — doesn't unlock "Send".
+  // ponytail: ISO-string compare; both sides are app-generated toISOString() values.
+  const assessmentFresh = assessmentReady && !!reassessAt && (reco?.assessedAt || "") >= reassessAt;
   // Acuity gate: a private caregiver is justified at Level 3–5. At Level 1–2 the
   // acuity alone doesn't warrant 1:1 staffing, so a reassessment must be opened to
   // document the clinical need (DT-013) before a request can be sent.
   const levelNum = (() => { const m = /([1-5])/.exec(reco?.level || ""); return m ? Number(m[1]) : 0; })();
   const levelQualifies = levelNum >= 3;
-  const needsReassessment = !!residentId && (!assessmentReady || !levelQualifies);
+  const needsReassessment = !!residentId && (!assessmentFresh || !levelQualifies);
   // Residents the assessment flags for a private caregiver float to the top.
   const sortedResidents = useMemo(() => [...residents].sort((a, b) => {
     const ra = recoByResident.get(a.id)?.recommend ? 1 : 0;
@@ -369,6 +395,7 @@ function AssignModal({ residents, caregivers, recoByResident, onOpenAssessment, 
   // here it pre-fills so the assigner confirms rather than retypes.
   const selectResident = (id: string) => {
     setResidentId(id);
+    setReassessAt(id ? readReassessMarker(id) : "");
     const rc = id ? recoByResident.get(id) : undefined;
     if (!rc) return;
     const sug = rc.suggestion;
@@ -383,7 +410,9 @@ function AssignModal({ residents, caregivers, recoByResident, onOpenAssessment, 
     if (needsReassessment) {
       const text = !assessmentReady
         ? (reco?.hasAssessment ? "This resident's assessment isn't finished yet. Complete (and validate) it before requesting a private caregiver." : "You can't request a private caregiver without a completed resident assessment. Open the assessment form and finish it first.")
-        : `${resident?.name || "This resident"} is at Level ${levelNum} of care. A private caregiver is justified at Level 3–5 — open a reassessment to document the clinical need (DT-013) before requesting.`;
+        : !assessmentFresh
+          ? `A private-caregiver request must be backed by a fresh re-assessment. Re-assess ${resident?.name || "this resident"} for this request before sending.`
+          : `${resident?.name || "This resident"} is at Level ${levelNum} of care. A private caregiver is justified at Level 3–5 — open a reassessment to document the clinical need (DT-013) before requesting.`;
       Swal.fire({ title: "Reassessment required", text, icon: "warning" });
       return;
     }
@@ -442,7 +471,7 @@ function AssignModal({ residents, caregivers, recoByResident, onOpenAssessment, 
         {/* Assessment-driven justification — the "why" lives in the resident assessment (DT-013).
             A finished (COMPLETED/VALIDATED) assessment is REQUIRED before a request can be sent. */}
         {resident && (
-          assessmentReady ? (
+          assessmentFresh ? (
             <div className="rounded-xl border px-4 py-3" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: reco!.recommend ? "var(--clinical-panel)" : "var(--clinical-line)" }}>
               <div className="flex items-start justify-between gap-3">
                 <p className="flex items-center gap-1.5 text-sm font-bold text-[var(--clinical-ink)]">
@@ -471,10 +500,12 @@ function AssignModal({ residents, caregivers, recoByResident, onOpenAssessment, 
             </div>
           ) : (
             <div className="rounded-xl border px-4 py-3" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: "var(--clinical-amber)" }}>
-              <p className="flex items-center gap-1.5 text-sm font-bold text-[var(--clinical-amber)]"><AlertTriangle className="h-4 w-4" /> {reco?.hasAssessment ? "Reassessment not finished" : "No assessment on file"}</p>
-              <p className="mt-1 text-xs text-[var(--clinical-ink-soft)]">{reco?.hasAssessment
-                ? `This resident's assessment is still ${reco.status.toLowerCase()}. Finish and validate it before requesting a private caregiver.`
-                : "A completed resident assessment (DT-013) is required to request a private caregiver. Reassess the resident first — that's where the clinical justification is documented."}</p>
+              <p className="flex items-center gap-1.5 text-sm font-bold text-[var(--clinical-amber)]"><AlertTriangle className="h-4 w-4" /> {assessmentReady ? "Re-assessment required for this request" : reco?.hasAssessment ? "Reassessment not finished" : "No assessment on file"}</p>
+              <p className="mt-1 text-xs text-[var(--clinical-ink-soft)]">{assessmentReady
+                ? `Every private-caregiver request must be backed by a fresh assessment. ${resident?.name || "This resident"} already has a completed assessment${reco?.recommend ? " recommending a private caregiver" : ""}, but re-assess now to document the current clinical justification (DT-013) for this request.`
+                : reco?.hasAssessment
+                  ? `This resident's assessment is still ${reco.status.toLowerCase()}. Finish and validate it before requesting a private caregiver.`
+                  : "A completed resident assessment (DT-013) is required to request a private caregiver. Reassess the resident first — that's where the clinical justification is documented."}</p>
               <button type="button" onClick={() => onOpenAssessment(residentId, "pcg")} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--clinical-panel)] hover:underline">New assessment · request for private caregiver <ExternalLink className="h-3 w-3" /></button>
             </div>
           )
