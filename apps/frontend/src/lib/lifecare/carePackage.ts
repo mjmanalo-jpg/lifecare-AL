@@ -99,6 +99,32 @@ export function domainDailyAllowance(level: number, domainCode: string): number 
   return LEVEL_DOMAIN_FREQUENCY[clampLevel(level)]?.[domainCode as DomainCode] ?? null;
 }
 
+/** One recorded care delivery, for the usage-overage recommendation. */
+export interface UsageEvent { residentId: string; domain: string; date: string }
+export interface OverageReco { residentId: string; domain: DomainCode; count: number; allowance: number }
+
+/**
+ * Residents who drew a domain MORE times on `day` than their Level package allows
+ * — the "over usage" recommendation. Pure: `levelOf` resolves a resident's level.
+ * Uncapped domains (allowance null) are never over.
+ */
+export function overageRecommendations(events: UsageEvent[], levelOf: (residentId: string) => number, day: string): OverageReco[] {
+  const counts = new Map<string, number>();
+  for (const e of events || []) {
+    if (String(e.date || "").slice(0, 10) !== day) continue;
+    if (!DOMAIN_CODES.includes(e.domain as DomainCode)) continue;
+    const k = `${e.residentId}|${e.domain}`;
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const out: OverageReco[] = [];
+  for (const [k, count] of counts) {
+    const [residentId, domain] = k.split("|") as [string, DomainCode];
+    const allowance = domainDailyAllowance(levelOf(residentId), domain);
+    if (allowance != null && count > allowance) out.push({ residentId, domain, count, allowance });
+  }
+  return out.sort((a, b) => (b.count - b.allowance) - (a.count - a.allowance));
+}
+
 /** Is a scored domain (AS-code) part of the resident's package at this level? */
 export function domainInPackage(level: number, domainCode: string): boolean {
   const set = LEVEL_PACKAGE_DOMAINS[clampLevel(level)] ?? LEVEL_PACKAGE_DOMAINS[4];

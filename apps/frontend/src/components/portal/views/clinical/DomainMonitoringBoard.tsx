@@ -11,7 +11,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Gauge, AlertTriangle, ExternalLink, ShieldCheck, ClipboardList } from "lucide-react";
+import { AlertTriangle, ExternalLink, ShieldCheck, ClipboardList, TrendingUp } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
@@ -19,6 +19,7 @@ import { ClinicalPage, ClinicalHeader, StatCard, DataState, SERIF } from "./clin
 import { DOMAIN_CODES } from "@/lib/lifecare/types";
 import type { DomainCode } from "@/lib/lifecare/types";
 import { ASSESSMENTS_V42_KEY } from "@/lib/lifecare/assessment";
+import { careLevelEnumToLevel, overageRecommendations, type UsageEvent } from "@/lib/lifecare/carePackage";
 import assessmentDomains from "@/lib/lifecare/data/assessment_domains.json";
 import {
   CARE_LOG_NOTES_KEY, INCIDENT_SCORE, PERSIST_DAYS,
@@ -49,11 +50,33 @@ export default function DomainMonitoringBoard({ clinicianRole = "NURSE" }: { cli
   const [todayStr] = useState(() => today());
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const { data: settingRows, loading } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
+  // Care-log record models — for counting today's deliveries per domain (usage overage).
+  const roundQ = useLiveQuery<Row>("daily-rounds", { query: "take=2000", tables: ["DailyRound"] });
+  const mobQ = useLiveQuery<Row>("mobility-records", { query: "take=2000", tables: ["MobilityRecord"] });
+  const mealQ = useLiveQuery<Row>("meal-records", { query: "take=2000", tables: ["MealRecord"] });
+  const bowelQ = useLiveQuery<Row>("bowel-records", { query: "take=2000", tables: ["BowelRecord"] });
+  const urineQ = useLiveQuery<Row>("urine-records", { query: "take=2000", tables: ["UrineRecord"] });
+  const edemaQ = useLiveQuery<Row>("edema-records", { query: "take=2000", tables: ["EdemaRecord"] });
 
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
+  const resNameById = useMemo(() => new Map(residents.map((r: Row) => [s(r.id), s(r.name)])), [residents]);
+  const resRoomById = useMemo(() => new Map(residents.map((r: Row) => [s(r.id), s(r.room)])), [residents]);
+  const levelByRes = useMemo(() => { const m = new Map<string, number>(); (resQ.data || []).forEach((r) => m.set(s(r.id), careLevelEnumToLevel(s(r.careLevel)))); return m; }, [resQ.data]);
   const notes = useMemo(() => parseNotes(settingRows.find((r) => (r.key || r.id) === CARE_LOG_NOTES_KEY)?.value), [settingRows]);
   const assessments = useMemo(() => { try { const v = JSON.parse(settingRows.find((r) => (r.key || r.id) === ASSESSMENTS_V42_KEY)?.value || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } }, [settingRows]);
   const allLogs = useMemo(() => careLogNotesToDomainLogs(notes), [notes]);
+
+  // ── Usage overage: count today's deliveries per resident × domain vs the Level
+  // package allowance. Sources: generic 0–4 notes + the frequency-relevant records.
+  const roundInfo = useMemo(() => { const m = new Map<string, { resId: string; date: string }>(); (roundQ.data || []).forEach((r) => m.set(s(r.id), { resId: s(r.residentId), date: s(r.roundDate) })); return m; }, [roundQ.data]);
+  const usageEvents = useMemo<UsageEvent[]>(() => {
+    const out: UsageEvent[] = [];
+    notes.forEach((n) => { if (n.residentId && n.domain) out.push({ residentId: n.residentId, domain: n.domain, date: String(n.at || "") }); });
+    const collect = (rows: Row[] | undefined, domain: string) => (rows || []).forEach((r) => { const info = roundInfo.get(s(r.dailyRoundId)); if (info) out.push({ residentId: info.resId, domain, date: s(r.time || r.createdAt || info.date) }); });
+    collect(mobQ.data, "AS-02"); collect(mealQ.data, "AS-08"); collect(bowelQ.data, "AS-10"); collect(urineQ.data, "AS-10"); collect(edemaQ.data, "AS-11");
+    return out;
+  }, [notes, roundInfo, mobQ.data, mealQ.data, bowelQ.data, urineQ.data, edemaQ.data]);
+  const overage = useMemo(() => overageRecommendations(usageEvents, (rid) => levelByRes.get(rid) ?? 2, todayStr), [usageEvents, levelByRes, todayStr]);
 
   // Per-resident discrepancy summary, straight from the daily care logs.
   const summaries = useMemo<ResidentSummary[]>(() => {
@@ -95,6 +118,27 @@ export default function DomainMonitoringBoard({ clinicianRole = "NURSE" }: { cli
         <StatCard value={scoredToday} label="Residents scored today" accent="ink" />
         <StatCard value={residents.length} label="Residents" accent="ink" />
       </div>
+
+      {overage.length > 0 && (
+        <div className="mt-5">
+          <h2 className="mb-3 flex items-center gap-2 font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>
+            <TrendingUp className="h-5 w-5 text-[var(--clinical-amber)]" /> Over-package usage
+            <span className="rounded-full px-2 py-0.5 text-xs font-bold text-white" style={{ backgroundColor: "var(--clinical-amber)" }}>{overage.length}</span>
+          </h2>
+          <div className="space-y-2">
+            {overage.map((o) => (
+              <div key={`${o.residentId}-${o.domain}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-amber)" }}>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[var(--clinical-ink)]">{resNameById.get(o.residentId) || "Resident"}{resRoomById.get(o.residentId) ? ` · Room ${resRoomById.get(o.residentId)}` : ""}</p>
+                  <p className="text-xs text-[var(--clinical-ink-soft)]"><span className="font-semibold">{o.domain} · {DOMAIN_NAME[o.domain] || o.domain}</span> — drawn <b>{o.count}×</b> today; the Level package allows <b>{o.allowance}</b>. <span className="font-bold text-[var(--clinical-amber)]">Over by {o.count - o.allowance}.</span></p>
+                </div>
+                <button onClick={() => openLocReview(o.residentId)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold text-[var(--clinical-panel)]" style={{ borderColor: "var(--clinical-line-strong)" }}><ClipboardList className="h-3.5 w-3.5" /> Reassess</button>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-[var(--clinical-muted)]">This resident drew more care than their Level package allows today. A chargeable Additional Clinical Service (DT-014) is already routed to the Additional Services board — review, or reassess if their needs have increased.</p>
+        </div>
+      )}
 
       <div className="mt-5">
         <DataState loading={loading && notes.length === 0} error={resQ.error} empty={summaries.length === 0}
