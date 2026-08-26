@@ -581,7 +581,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                       </td>
                       <td className="px-6 py-4 text-gray-700">{staff.position}</td>
                       <td className="px-6 py-4 text-gray-700">{staff.department}</td>
-                      <td className="px-6 py-4 text-gray-600 text-xs">{staff.email}</td>
+                      <td className="px-6 py-4 text-gray-600 text-xs">{staff.email?.endsWith(".slms.local") ? "No email" : staff.email}</td>
                       <td className="px-6 py-4">
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -679,7 +679,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                     </div>
                     <p className="text-sm text-gray-600 truncate">{staff.position}</p>
                     <p className="text-xs text-gray-500 truncate">{staff.department}</p>
-                    <p className="text-xs text-gray-500 truncate mt-1">{staff.email}</p>
+                    <p className="text-xs text-gray-500 truncate mt-1">{staff.email?.endsWith(".slms.local") ? "No email" : staff.email}</p>
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => setViewingStaff(staff)}
@@ -749,7 +749,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-semibold text-gray-600 mb-2">Email</label>
-                    <p className="text-lg text-gray-900">{viewingStaff.email}</p>
+                    <p className="text-lg text-gray-900">{viewingStaff.email?.endsWith(".slms.local") ? "No email" : viewingStaff.email}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-600 mb-2">Phone</label>
