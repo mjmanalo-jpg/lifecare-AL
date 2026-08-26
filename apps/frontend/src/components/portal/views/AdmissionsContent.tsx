@@ -414,21 +414,47 @@ export default function AdmissionsContent() {
 
   const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
 
-  // Medical-assessment report attachments (uploaded to /api/upload, stored in the
-  // careAssessment blob). Migration-free.
+  // Assessment-report attachments are LINKS (e.g. Google Drive / Dropbox) the
+  // assessor pastes in — stored in the careAssessment blob. Migration-free.
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [uploadingAtt, setUploadingAtt] = useState(false);
-  const addAttachment = async (file: File) => {
-    setUploadingAtt(true);
-    try {
-      const fd = new FormData(); fd.append("file", file); fd.append("folder", "documents");
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || "Upload failed");
-      setAttachments((a) => [...a, { url: s(body.url), name: s(body.name) || file.name }]);
-    } catch (e) {
-      Swal.fire({ title: "Upload failed", text: e instanceof Error ? e.message : "Could not upload the file.", icon: "error" });
-    } finally { setUploadingAtt(false); }
+  const addLink = async () => {
+    const { value } = await Swal.fire({
+      title: "Add link attachment",
+      width: 480,
+      html: `
+        <div style="display:flex;flex-direction:column;gap:1rem;text-align:left">
+          <p style="margin:0;font-size:0.8125rem;line-height:1.5;color:var(--muted-foreground)">
+            Paste a shareable link to the assessment report — Google Drive, Dropbox, or OneDrive. Confirm link sharing is on so the care team can open it.
+          </p>
+          <div style="display:flex;flex-direction:column;gap:0.4rem">
+            <label for="att-label" style="font-size:0.7rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--muted-foreground)">Label <span style="font-weight:500;text-transform:none;letter-spacing:0;opacity:0.7">· optional</span></label>
+            <input id="att-label" type="text" autocomplete="off" placeholder="e.g. Assessment report — Jan 2026" />
+          </div>
+          <div style="display:flex;flex-direction:column;gap:0.4rem">
+            <label for="att-url" style="font-size:0.7rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--muted-foreground)">Link URL</label>
+            <div style="position:relative;display:flex;align-items:center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:0.8rem;width:1rem;height:1rem;color:var(--muted-foreground);pointer-events:none">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+              </svg>
+              <input id="att-url" type="url" autocomplete="off" placeholder="https://drive.google.com/…" style="padding-left:2.35rem" />
+            </div>
+          </div>
+        </div>`,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: "Add link",
+      didOpen: () => { (document.getElementById("att-label") as HTMLInputElement | null)?.focus(); },
+      preConfirm: () => {
+        const label = (document.getElementById("att-label") as HTMLInputElement | null)?.value.trim() ?? "";
+        let url = (document.getElementById("att-url") as HTMLInputElement | null)?.value.trim() ?? "";
+        if (!url) { Swal.showValidationMessage("Paste a link (URL)."); return false; }
+        if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+        try { new URL(url); } catch { Swal.showValidationMessage("Enter a valid link (URL)."); return false; }
+        return { url, name: label || url };
+      },
+    });
+    const v = value as { url: string; name: string } | undefined;
+    if (v) setAttachments((a) => (a.some((x) => x.url === v.url) ? a : [...a, v]));
   };
   const removeAttachment = (url: string) => setAttachments((a) => a.filter((x) => x.url !== url));
 
@@ -1295,17 +1321,16 @@ export default function AdmissionsContent() {
                 <div className="space-y-4">
                   <Field label="Medical Assessment"><textarea rows={4} className={inputCls} value={form.medicalAssessment} onChange={(e) => set({ medicalAssessment: e.target.value })} placeholder="Clinical findings & diagnoses (medications are listed separately below)…" /></Field>
 
-                  {/* Assessment report attachment(s) — uploaded to /api/upload, kept on the admission */}
+                  {/* Assessment report attachment(s) — LINKS (e.g. Google Drive), kept on the admission */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5"><Paperclip className="w-3.5 h-3.5 text-indigo-600" /> Assessment Report</span>
-                      <label className={`inline-flex items-center gap-1 text-xs font-semibold ${uploadingAtt ? "text-gray-400" : "text-indigo-700 hover:text-indigo-800 cursor-pointer"}`}>
-                        <Plus className="w-3.5 h-3.5" /> {uploadingAtt ? "Uploading…" : "Add attachment"}
-                        <input type="file" className="hidden" disabled={uploadingAtt} onChange={(e) => { const f = e.target.files?.[0]; if (f) addAttachment(f); e.target.value = ""; }} />
-                      </label>
+                      <button type="button" onClick={addLink} className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:text-indigo-800 cursor-pointer">
+                        <Plus className="w-3.5 h-3.5" /> Add link
+                      </button>
                     </div>
                     {attachments.length === 0 ? (
-                      <p className="rounded-lg border border-dashed border-gray-200 px-3 py-2 text-xs text-gray-500">No file attached. Attach the scanned or PDF assessment report (max 10&nbsp;MB).</p>
+                      <p className="rounded-lg border border-dashed border-gray-200 px-3 py-2 text-xs text-gray-500">No link added. Paste a link to the assessment report (e.g. Google Drive, Dropbox).</p>
                     ) : (
                       <ul className="space-y-1.5">
                         {attachments.map((att) => (

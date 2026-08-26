@@ -108,6 +108,8 @@ export interface CapabilityReview {
 export interface AssessmentLayer3 {
   finalLevel?: CareLevel;        // nurse-selected Final LOC
   finalLevelJustification?: string;
+  /** Clinical rationale when the nurse/CM sets a Final LOC BELOW the engine's MLR floor (G3 soft override). */
+  belowFloorReason?: string;
   /** Final applied modifier set retained for existing downstream consumers. */
   reconciledModifiers?: string[];
   /** Per-flag disposition proves every suggested/in-flow modifier was reviewed. */
@@ -211,8 +213,10 @@ export function assessmentValidationIssues(a: Pick<AssessmentV42, "domains" | "c
     issues.push({ gate: "G2", layer: 3, message: `Reconcile every flagged modifier: ${modifierIssues.join("; ")}.` });
   }
 
-  if (result.mlrFloor && a.layer3.finalLevel && LEVEL_RANK[a.layer3.finalLevel] < LEVEL_RANK[result.mlrFloor]) {
-    issues.push({ gate: "G3", layer: 3, message: `Final LOC ${a.layer3.finalLevel} cannot be below the triggered ${result.mlrFloor} minimum-level floor.` });
+  // G3 — a Final LOC below the engine's minimum-level floor is the nurse/CM's
+  // clinical call, but must be justified: allowed only with a documented reason.
+  if (result.mlrFloor && a.layer3.finalLevel && LEVEL_RANK[a.layer3.finalLevel] < LEVEL_RANK[result.mlrFloor] && !a.layer3.belowFloorReason?.trim()) {
+    issues.push({ gate: "G3", layer: 3, message: `Final LOC ${a.layer3.finalLevel} is below the triggered ${result.mlrFloor} minimum-level floor — document the clinical reason for going below the floor.` });
   }
 
   if (a.context.overrideLevel && !a.context.overrideReason?.trim()) {

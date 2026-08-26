@@ -37,6 +37,7 @@ import {
   ASSESSMENT_DOMAINS, modifierById,
 } from "@/lib/lifecare/dataset.ts";
 import type { CareLevel, DomainCode, ClinicalContext } from "@/lib/lifecare/types.ts";
+import { CRM_LEADS_KEY, parseLeads } from "@/lib/crmLeads";
 import DomainScoreGrid from "./DomainScoreGrid";
 
 type SettingRow = { key?: string; id?: string; value?: string };
@@ -140,7 +141,7 @@ function Section({ code, title, subtitle, children }: { code?: string; title: st
 }
 
 // ── Resident picker (converted-lead admissions) ───────────────────────────────
-type AdmissionOpt = { id: string; name: string; dob?: string; sex?: string; phone?: string; contact?: string };
+type AdmissionOpt = { id: string; name: string; dob?: string; sex?: string; phone?: string; contact?: string; referralSource?: string };
 
 const ageFromDob = (dob?: string): string => {
   if (!dob) return "";
@@ -229,6 +230,15 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   // write (persist rewrites the whole store, so we re-append these each time).
   const foreignRecords = useMemo(() => allStored.filter((a) => originOf(a) !== origin), [allStored, origin]);
 
+  // Referral source lives on the CRM lead (not the Admission), linked by
+  // convertedAdmissionId. Read it from the same app-settings rows we already load.
+  const leadSourceByAdmission = useMemo<Record<string, string>>(() => {
+    const raw = settingRows.find((r) => (r.key || r.id) === CRM_LEADS_KEY)?.value;
+    const out: Record<string, string> = {};
+    for (const l of parseLeads(raw)) if (l.convertedAdmissionId && l.source) out[l.convertedAdmissionId] = l.source;
+    return out;
+  }, [settingRows]);
+
   // Converted CRM leads land here as in-progress admissions — offer them for the picker.
   const { data: admissionRows } = useLiveQuery<{ id: string; firstName?: string; lastName?: string; dateOfBirth?: string; gender?: string; phone?: string; sponsorName?: string; status?: string }>("admissions", { query: "take=500", tables: ["Admission"] });
   const admissionOpts = useMemo<AdmissionOpt[]>(
@@ -244,9 +254,10 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
         sex: r.gender || undefined,
         phone: r.phone || undefined,
         contact: r.sponsorName || undefined,
+        referralSource: leadSourceByAdmission[String(r.id)] || undefined,
       }))
       .filter((a) => a.name),
-    [admissionRows]
+    [admissionRows, leadSourceByAdmission]
   );
 
   // For a reassessment (LOC Decision Review, origin ACUITY) the picker lists ADMITTED
@@ -381,6 +392,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
       age: ageFromDob(a.dob) || draft?.layer1.age,
       contactNo: a.phone || draft?.layer1.contactNo,
       primaryContact: a.contact || draft?.layer1.primaryContact,
+      referralSource: a.referralSource || "", // from CRM; blank when the lead has none
       convertedAdmissionId: a.id,
     });
     setLinkedAdmissionId(a.id);
@@ -607,6 +619,12 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
       // form was opened FROM a private-caregiver request, tag the entry as such so
       // the Care Level History shows why the reassessment happened.
       const openedForPcg = pcgOpen;
+      // A Final LOC set below the engine's MLR floor carries its own rationale into
+      // the LOC history so the deviation is auditable, not silent.
+      const belowFloorNote = draft.layer3.belowFloorReason?.trim()
+        ? ` [Below-floor override → Final ${draft.layer3.finalLevel} under ${liveResult?.mlrFloor ?? "floor"}: ${draft.layer3.belowFloorReason.trim()}]`
+        : "";
+      const baseNote = openedForPcg ? `Reassessed for a private caregiver request. ${draft.layer3.finalLevelJustification ?? ""}`.trim() : (draft.layer3.finalLevelJustification ?? "");
       void recordLocChange({
         residentId: draft.layer1.residentId,
         admissionId: draft.layer1.convertedAdmissionId,
@@ -617,7 +635,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
         rawScore: assessmentRawScore(draft),
         by: me || "Clinician",
         role: roleLabel,
-        notes: openedForPcg ? `Reassessed for a private caregiver request. ${draft.layer3.finalLevelJustification ?? ""}`.trim() : draft.layer3.finalLevelJustification,
+        notes: `${baseNote}${belowFloorNote}`.trim() || undefined,
       });
     }
   };
@@ -998,20 +1016,6 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                       <Bool label="Dysphagia" value={draft.context.dysphagia} onChange={(v) => patchContext({ dysphagia: v })} />
                       <Bool label="Unintended weight loss" value={draft.context.weightLoss} onChange={(v) => patchContext({ weightLoss: v })} />
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <MicroLabel className="mb-1.5">Clinical Override Level</MicroLabel>
-                        <div className="flex flex-wrap gap-1.5">
-                          <button type="button" onClick={() => patchContext({ overrideLevel: undefined, overrideReason: undefined })} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${!draft.context.overrideLevel ? chipOn : chipOff}`}>None</button>
-                          {LEVELS.map((l) => (
-                            <button key={l} type="button" onClick={() => patchContext({ overrideLevel: l })} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${draft.context.overrideLevel === l ? chipOn : chipOff}`}>{l}</button>
-                          ))}
-                        </div>
-                      </div>
-                      {draft.context.overrideLevel && (
-                        <Text label="Override Reason" value={draft.context.overrideReason} onChange={(v) => patchContext({ overrideReason: v })} placeholder="Clinical reason for override…" />
-                      )}
-                    </div>
                   </Section>
 
                   {liveResult.capabilityGate && (
@@ -1045,6 +1049,14 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                       </div>
                     </div>
                     <Area label="Final LOC Justification *" rows={3} value={draft.layer3.finalLevelJustification} onChange={(v) => patchLayer3({ finalLevelJustification: v })} placeholder="What does this resident actually need? Reconcile the score, MLR floors, modifiers and override." />
+                    {/* Below-floor override — the nurse/CM may set a Final LOC under the engine's
+                        MLR floor, but must document why (G3 soft gate). Kept in LOC history. */}
+                    {!!liveResult.mlrFloor && !!draft.layer3.finalLevel && Number(draft.layer3.finalLevel.slice(1)) < Number(liveResult.mlrFloor.slice(1)) && (
+                      <div className="rounded-lg border p-3" style={{ borderColor: "color-mix(in srgb, var(--clinical-amber) 40%, transparent)", background: "color-mix(in srgb, var(--clinical-amber) 8%, transparent)" }}>
+                        <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-[var(--clinical-amber)]"><AlertTriangle className="h-3.5 w-3.5" /> Final {LEVEL_LABEL[draft.layer3.finalLevel]} is below the engine&rsquo;s {LEVEL_LABEL[liveResult.mlrFloor]} minimum-level floor</p>
+                        <Area label="Below-floor override reason *" rows={2} value={draft.layer3.belowFloorReason} onChange={(v) => patchLayer3({ belowFloorReason: v })} placeholder="Clinical reason for confirming a Final LOC below the engine's minimum-level floor…" />
+                      </div>
+                    )}
                   </Section>
 
                   <Section title="DT-013 · Private Caregiver Review" subtitle="Separate determination — LOC never decides it.">

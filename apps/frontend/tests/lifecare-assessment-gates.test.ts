@@ -55,6 +55,15 @@ test("G3 prevents Final LOC from falling below the highest triggered MLR floor",
   assert.match(g3.message, /L3 minimum-level floor/);
 });
 
+test("G3 clears once the below-floor override reason is documented", () => {
+  const a = assessment("L2");
+  a.domains["AS-02"] = { score: 3, evidence: "Extensive transfer assistance" };
+  a.layer3.modifierReconciliations = { "MOD-MOB-02": { decision: "APPLIED" } };
+  a.layer3.reconciledModifiers = ["MOD-MOB-02"];
+  a.layer3.belowFloorReason = "Resident declines the higher tier; risk mitigated by 1:1 family support and reviewed weekly.";
+  assert.ok(!assessmentValidationIssues(a).some((issue) => issue.gate === "G3"));
+});
+
 test("G4 requires override and capability-review rationale", () => {
   const a = assessment("L4");
   a.domains["AS-04"] = { score: 4, evidence: "Pervasive cognitive supervision" };
