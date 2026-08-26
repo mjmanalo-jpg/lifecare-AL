@@ -4,12 +4,12 @@ import { useMemo, useState } from "react";
 import {
   DoorOpen, Search, X, Eye, Edit, Building2, MapPin,
   ChevronDown, ChevronRight, Users, DollarSign, BedDouble,
-  Wifi, Bath, Snowflake, Maximize, Check, XCircle, Settings,
+  Wifi, Bath, Snowflake, Maximize, Check, XCircle, Settings, Plus,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptRoom, residentName } from "@/lib/adapters";
-import { updateRecord } from "@/lib/api";
+import { createRecord, updateRecord } from "@/lib/api";
 
 type Room = ReturnType<typeof adaptRoom>;
 
@@ -72,6 +72,7 @@ export default function FacilityRooms() {
   const [viewing, setViewing] = useState<Room | null>(null);
   const [editing, setEditing] = useState<Room | null>(null);
   const [editingStatus, setEditingStatus] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [editForm, setEditForm] = useState({
     roomNumber: "", floor: "", wing: "", roomType: "", capacity: 1,
     status: "AVAILABLE", features: "", rateMonthly: "", notes: "",
@@ -138,6 +139,30 @@ export default function FacilityRooms() {
       rateMonthly: room.rateMonthly ? String(room.rateMonthly) : "",
       notes: room.notes,
     });
+  };
+
+  const startCreating = () => {
+    setCreating(true);
+    setEditing(null);
+    setEditingStatus(false);
+    setEditForm({ roomNumber: "", floor: "", wing: "", roomType: "PRIVATE", capacity: 1, status: "AVAILABLE", features: "", rateMonthly: "", notes: "" });
+  };
+
+  const handleCreate = async () => {
+    if (!editForm.roomNumber.trim()) { Swal.fire({ title: "Room number required", icon: "warning" }); return; }
+    try {
+      await createRecord("rooms", {
+        roomNumber: editForm.roomNumber.trim(), floor: Number(editForm.floor) || null,
+        wing: editForm.wing, roomType: editForm.roomType, capacity: editForm.capacity,
+        status: editForm.status, features: editForm.features,
+        rateMonthly: Number(editForm.rateMonthly) || null, notes: editForm.notes,
+      });
+      await refetch();
+      setCreating(false);
+      Swal.fire({ title: "Room added", text: `Room ${editForm.roomNumber} created.`, icon: "success", timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: "Add Failed", text: err instanceof Error ? err.message : "Could not create room.", icon: "error" });
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -258,6 +283,9 @@ export default function FacilityRooms() {
           </h1>
           <p className="text-gray-600">Manage facility rooms, assignments, and maintenance</p>
         </div>
+        <button onClick={startCreating} className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition active:scale-95">
+          <Plus className="w-4 h-4" /> Add Room
+        </button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -459,12 +487,12 @@ export default function FacilityRooms() {
         </div>
       )}
 
-      {editing && (
+      {(editing || creating) && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90dvh] overflow-y-auto">
             <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-4 sm:p-6 flex items-center justify-between border-b border-yellow-600">
-              <h2 className="text-xl sm:text-2xl font-bold">Edit Room {editForm.roomNumber}</h2>
-              <button onClick={() => setEditing(null)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+              <h2 className="text-xl sm:text-2xl font-bold">{creating ? "Add Room" : `Edit Room ${editForm.roomNumber}`}</h2>
+              <button onClick={() => { setEditing(null); setCreating(false); }} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
             <div className="p-4 sm:p-8 space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -490,8 +518,8 @@ export default function FacilityRooms() {
               </div>
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-2">
-              <button onClick={() => setEditing(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
-              <button onClick={handleSaveEdit} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Save Changes</button>
+              <button onClick={() => { setEditing(null); setCreating(false); }} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
+              <button onClick={creating ? handleCreate : handleSaveEdit} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">{creating ? "Add Room" : "Save Changes"}</button>
             </div>
           </div>
         </div>
