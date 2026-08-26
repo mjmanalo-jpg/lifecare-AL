@@ -461,6 +461,17 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     void save("COMPLETED", { completedBy: me || "Clinician", completedAt: now }, "Assessment completed").then(() => setOpen(false));
   };
 
+  // All three layers must be complete before the assessment can be signed off:
+  // Layer 1 profile (resident name), Layer 2 every domain scored + evidenced (G1),
+  // and Layer 3 final LOC + justification + modifier reconciliation (G2–G5).
+  const completionIssues = useMemo<{ layer: number; message: string }[]>(() => {
+    if (!draft) return [];
+    const out: { layer: number; message: string }[] = [];
+    if (!draft.layer1.residentName?.trim()) out.push({ layer: 1, message: "Layer 1 — enter the resident name." });
+    for (const i of assessmentValidationIssues(draft)) out.push({ layer: i.layer, message: `Layer ${i.layer} — ${i.message}` });
+    return out;
+  }, [draft]);
+
   // Nurse → admin validation block (like LevelOfCareReview).
   const validate = async (decision: NonNullable<AssessmentV42["validation"]>["decision"], notes: string) => {
     if (!draft) return;
@@ -1144,10 +1155,16 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
 
             {/* Footer */}
             <div className="flex flex-none items-center justify-between gap-2 border-t px-5 py-3.5" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
-              <span className="text-xs text-[var(--clinical-muted)]">{editingId ? "Editing" : "New"} · {roleLabel}</span>
+              <span className="text-xs text-[var(--clinical-muted)]">
+                {completionIssues.length > 0
+                  ? `${completionIssues.length} item${completionIssues.length > 1 ? "s" : ""} left across Layers 1–3`
+                  : `${editingId ? "Editing" : "New"} · ${roleLabel}`}
+              </span>
               <div className="flex items-center gap-2">
                 <ClinicalButton variant="secondary" size="sm" onClick={() => save("DRAFT", {}, "Draft saved")} disabled={saving}>{saving ? "Saving…" : "Save Draft"}</ClinicalButton>
-                <ClinicalButton variant="accent" onClick={() => setShowPin(true)} disabled={saving}><CheckCircle2 className="w-4 h-4" /> Complete Assessment</ClinicalButton>
+                <span title={completionIssues.length ? `Complete all 3 layers first:\n${completionIssues.map((i) => `• ${i.message}`).join("\n")}` : undefined} className={completionIssues.length ? "cursor-not-allowed" : undefined}>
+                  <ClinicalButton variant="accent" onClick={() => setShowPin(true)} disabled={saving || completionIssues.length > 0}><CheckCircle2 className="w-4 h-4" /> Complete Assessment</ClinicalButton>
+                </span>
               </div>
             </div>
           </div>
