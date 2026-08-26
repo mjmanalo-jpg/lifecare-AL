@@ -11,7 +11,9 @@ import {
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFacilityConfig } from "@/lib/useFacilityConfig";
-import { ASSESSMENTS_V42_KEY, originOf, classifyAssessment, assessmentRawScore, type AssessmentV42 } from "@/lib/lifecare/assessment";
+import { ASSESSMENTS_V42_KEY, originOf, classifyAssessment, assessmentRawScore, newAssessment, type AssessmentV42, type DomainEntry } from "@/lib/lifecare/assessment";
+import type { CareLevel, DomainCode } from "@/lib/lifecare/types.ts";
+import DomainScoreGrid from "@/components/portal/views/clinical/DomainScoreGrid";
 import { createRecord, updateRecord, upsertRecord, deleteRecord } from "@/lib/api";
 import { recordAudit } from "@/lib/auditClient";
 import { qrDataUrl } from "@/lib/qr";
@@ -25,9 +27,7 @@ const STEPS = [
 ] as const;
 const STEP_COUNT = STEPS.length; // 4
 
-const CARE_LEVELS = ["INDEPENDENT", "ASSISTED", "MEMORY", "SKILLED"];
-
-// ── 12-domain comprehensive clinical assessment (Stage 3) ─────────────────────
+// ── v4.2 14-domain clinical assessment (Care Assess step) ─────────────────────
 // Stored migration-free as JSON inside the existing free-text `careAssessment`
 // column: { __v: "clinical-12", note, domains: { <key>: { level, notes } } }.
 // Each domain's option list is ordered by acuity (index 0 = lowest … 3 = highest);
@@ -73,23 +73,6 @@ const acuityTone = (i: number): string =>
   : i === 1 ? "bg-amber-400 text-white border-amber-400"
   : i === 2 ? "bg-orange-500 text-white border-orange-500"
   : "bg-red-500 text-white border-red-500";
-const clinicalSummary = (domains: ClinicalState) => {
-  let flags = 0, filled = 0, max = 0;
-  for (const d of CLINICAL_DOMAINS) {
-    const lvl = domains[d.key]?.level; if (!lvl) continue;
-    filled++; const i = domainIndex(d.key, lvl); if (i >= 2) flags++; if (i > max) max = i;
-  }
-  return { flags, filled, max };
-};
-// Heuristic level-of-care suggestion from the domain acuities.
-const suggestLevel = (domains: ClinicalState): string => {
-  const idx = (k: string) => domainIndex(k, domains[k]?.level || "");
-  if (idx("clinical") >= 3 || idx("skin") >= 3 || idx("medication") >= 3 || idx("mobility") >= 3 || idx("emergency") >= 3) return "SKILLED";
-  if (idx("cognitive") >= 2 || idx("behavioral") >= 2) return "MEMORY";
-  const { flags, max } = clinicalSummary(domains);
-  if (flags >= 1 || max >= 1) return "ASSISTED";
-  return "INDEPENDENT";
-};
 // Serialize the free-text note + domains into the careAssessment column. Falls
 // back to a plain note (or null) when no structured domain has been captured, so
 // legacy free-text records keep working.
@@ -315,6 +298,28 @@ const normDOB = (v: unknown) => {
 };
 const paLevel = (p: Record<string, unknown>) => Number(p.overrideLevel) || Number((p.scores as Record<string, unknown> | undefined)?.level) || 0;
 
+// v4.2 Level of Care (L1–L5) display names + mapping to the legacy resident
+// careLevel enum kept by downstream billing / care-plan generation.
+const V42_LEVEL_LABEL: Record<string, string> = { L1: "Level 1", L2: "Level 2", L3: "Level 3", L4: "Level 4", L5: "Level 5 (Pathway)" };
+const v42LevelToEnum = (lvl: string): string => {
+  const n = Number(String(lvl).match(/([1-5])/)?.[1] || 0);
+  return n === 1 ? "INDEPENDENT" : n === 4 ? "MEMORY" : n === 5 ? "SKILLED" : n ? "ASSISTED" : "";
+};
+// Derive the legacy word-chip clinical map from v4.2 domain scores, so the
+// acuity seed (buildSeedAcuity) keeps working off the same instrument.
+const deriveClinicalFromV42 = (domains: Record<string, DomainEntry>): ClinicalState => {
+  const out: ClinicalState = {};
+  for (const mp of V42_DOMAIN_MAP) {
+    const raw = domains[mp.as]?.score;
+    if (raw == null) continue;
+    const dom = CLINICAL_DOMAINS.find((d) => d.key === mp.dom); if (!dom) continue;
+    const idx = scoreIdx(raw, 4);
+    const cur = out[mp.dom]; const curIdx = cur ? (dom.options as readonly string[]).indexOf(cur.level) : -1;
+    if (idx > curIdx) out[mp.dom] = { level: dom.options[idx], notes: "" };
+  }
+  return out;
+};
+
 type Row = Record<string, unknown>;
 type TeamMember = { id: string; name: string; role: string; userId?: string };
 
@@ -396,6 +401,27 @@ export default function AdmissionsContent() {
 
   const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
 
+  // ── v4.2 14-domain assessment (Care Assess step) ──────────────────────────
+  // The admission edits the same v4.2 instrument used at pre-admission. `v42Domains`
+  // holds the AS-01..AS-14 scores; `v42SourceId` links back to the assessments_v42
+  // record we seed from / write to.
+  const [v42Domains, setV42Domains] = useState<Record<string, DomainEntry>>({});
+  const [v42SourceId, setV42SourceId] = useState<string>("");
+  const patchV42 = (code: DomainCode, p: Partial<DomainEntry>) =>
+    setV42Domains((d) => ({ ...d, [code]: { score: 0, evidence: "", ...d[code], ...p } }));
+  const v42Level = useMemo<CareLevel | null>(() => {
+    if (!Object.keys(v42Domains).length) return null;
+    return classifyAssessment({ domains: v42Domains, context: {} }).suggestedLevel;
+  }, [v42Domains]);
+  // Keep the legacy careLevel enum + acuity-seed map in sync with the v4.2 scores,
+  // so downstream billing / care-plan / seeding keep working off one instrument.
+  useEffect(() => {
+    if (!v42Level) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    set({ careLevel: v42LevelToEnum(v42Level) });
+    setClinical(deriveClinicalFromV42(v42Domains));
+  }, [v42Domains, v42Level]);
+
   // Stage 2 → Stage 3 handoff: pull a completed pre-admission assessment into the
   // wizard (demographics, medical history, care level + the 14 domains).
   // v4.2 pre-admission → wizard prefill (demographics, medical history, care level
@@ -419,18 +445,10 @@ export default function AdmissionsContent() {
     const careLevel = lvl === 1 ? "INDEPENDENT" : lvl === 4 ? "MEMORY" : lvl === 5 ? "SKILLED" : lvl ? "ASSISTED" : "";
     setPrefillTotal(assessmentRawScore({ domains: a.domains ?? {} }) || null);
 
-    const scores = (a.domains ?? {}) as Record<string, { score?: number } | undefined>;
-    const nextClinical: ClinicalState = {};
-    for (const mp of V42_DOMAIN_MAP) {
-      const raw = scores[mp.as]?.score;
-      if (raw == null) continue;
-      const dom = CLINICAL_DOMAINS.find((d) => d.key === mp.dom); if (!dom) continue;
-      const idx = scoreIdx(raw, 4);
-      const cur = nextClinical[mp.dom];
-      const curIdx = cur ? (dom.options as readonly string[]).indexOf(cur.level) : -1;
-      if (idx > curIdx) nextClinical[mp.dom] = { level: dom.options[idx], notes: "" }; // AS-02+AS-03 → mobility: keep higher
-    }
-    setClinical(nextClinical);
+    // Carry the actual v4.2 domain scores in — the Care Assess step renders and
+    // edits them directly (the careLevel + acuity-seed sync effect derives the rest).
+    setV42Domains(a.domains ?? {});
+    setV42SourceId(s(a.id));
 
     const meds = s(a.layer1?.medications);
     const medRows: MedRow[] = meds
@@ -549,7 +567,7 @@ export default function AdmissionsContent() {
     [allRooms, occupiedRooms, form.roomNumber]
   );
 
-  const openNew = () => { setForm({ ...emptyForm }); setClinical({}); setSkinWounds([]); setMedList([]); setPrefillTotal(null); setStep(1); setWizardOpen(true); };
+  const openNew = () => { setForm({ ...emptyForm }); setClinical({}); setSkinWounds([]); setMedList([]); setPrefillTotal(null); setV42Domains({}); setV42SourceId(""); setStep(1); setWizardOpen(true); };
 
   const openView = (row: Row) => {
     setSelectedAdmission(row);
@@ -630,6 +648,14 @@ export default function AdmissionsContent() {
       careTeam: s(row.careTeam) || "[]", carePlan: s(row.carePlan), carePlanGoals: s(row.carePlanGoals),
       completedSteps: s(row.completedSteps) || "[]", status: s(row.status),
     });
+    // Seed the v4.2 Care Assess grid from the linked pre-admission assessment
+    // (by explicit link, else by resident name). Blank = a fresh assessment.
+    const rid = s(row.id);
+    const rname = `${s(row.firstName)} ${s(row.lastName)}`.trim().toLowerCase();
+    const linked = preadmitsV42.find((a) => s(a.layer1?.convertedAdmissionId) === rid && rid)
+      || preadmitsV42.find((a) => s(a.layer1?.residentName).trim().toLowerCase() === rname && rname);
+    setV42Domains(linked?.domains ?? {});
+    setV42SourceId(linked ? s(linked.id) : "");
     setStep(Math.min(Math.max(Number(row.currentStep) || 1, 1), STEP_COUNT));
     setWizardOpen(true);
   };
@@ -672,6 +698,27 @@ export default function AdmissionsContent() {
     return true;
   };
 
+  // Write the edited v4.2 domains back to the linked pre-admission assessment
+  // (create one linked to this admission if none), so the admission and the
+  // assessment board stay one source of truth.
+  const persistV42 = async (admissionId: string) => {
+    if (!Object.keys(v42Domains).length) return;
+    const now = new Date().toISOString();
+    const list = parseArr(settingRows.find((r) => (r.key ?? r.id) === ASSESSMENTS_V42_KEY)?.value) as unknown as AssessmentV42[];
+    const existing = v42SourceId ? list.find((a) => s(a.id) === v42SourceId) : undefined;
+    const residentName = `${form.firstName} ${form.lastName}`.trim();
+    let rec: AssessmentV42;
+    if (existing) {
+      rec = { ...existing, domains: v42Domains, updatedAt: now, layer1: { ...existing.layer1, residentName: residentName || existing.layer1?.residentName, convertedAdmissionId: admissionId } };
+    } else {
+      const base = newAssessment(newId(), undefined, now);
+      rec = { ...base, origin: "PREADMISSION", domains: v42Domains, layer1: { ...base.layer1, residentName, convertedAdmissionId: admissionId } };
+      setV42SourceId(rec.id);
+    }
+    const next = [rec, ...list.filter((a) => s(a.id) !== s(rec.id))];
+    await upsertRecord("app-settings", ASSESSMENTS_V42_KEY, { key: ASSESSMENTS_V42_KEY, value: JSON.stringify(next) });
+  };
+
   const saveStep = async (advance: boolean): Promise<string | undefined> => {
     // Block continuing past a step whose required fields aren't filled.
     // A plain Save (draft) is allowed to be partial, except step 1 — the
@@ -701,6 +748,7 @@ export default function AdmissionsContent() {
       } else {
         await updateRecord("admissions", id, payload);
       }
+      if (id) await persistV42(id);
       await refetch();
       setForm((f) => ({ ...f, id, completedSteps }));
       if (advance) setStep(nextStep);
@@ -1173,65 +1221,35 @@ export default function AdmissionsContent() {
                 </div>
               )}
               {step === 3 && (() => {
-                const sum = clinicalSummary(clinical);
-                const suggestion = sum.filled >= 3 ? suggestLevel(clinical) : "";
-                const setDomain = (key: string, patch: Partial<DomainState>) =>
-                  setClinical((c) => ({ ...c, [key]: { level: c[key]?.level || "", notes: c[key]?.notes || "", ...patch } }));
+                const scored = Object.values(v42Domains).filter((e) => e && Number.isInteger(e.score)).length;
                 return (
                 <div className="space-y-4">
-                  {/* Risk roll-up + suggested level of care (Stage 3 → 5 handoff) */}
+                  {/* v4.2 14-domain roll-up + read-only Level of Care */}
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2 text-sm">
                       <ClipboardList className="w-4 h-4 text-indigo-600" />
-                      <span className="font-semibold text-gray-800">{CLINICAL_DOMAINS.length}-Domain Clinical Assessment</span>
-                      <span className="text-gray-500">· {sum.filled}/{CLINICAL_DOMAINS.length} assessed</span>
-                      {sum.flags > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700"><AlertTriangle className="w-3 h-3" />{sum.flags} elevated</span>}
+                      <span className="font-semibold text-gray-800">14-Domain Assessment (v4.2)</span>
+                      <span className="text-gray-500">· {scored}/14 scored</span>
                     </div>
-                    {suggestion && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Sparkles className="w-4 h-4 text-indigo-500" />
-                        <span className="text-gray-500">Suggested:</span>
-                        <button type="button" onClick={() => set({ careLevel: suggestion })} className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-3 py-1 text-xs font-bold text-white hover:bg-indigo-700">
-                          {suggestion[0] + suggestion.slice(1).toLowerCase()}{form.careLevel !== suggestion ? " — apply" : ""}
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-gray-500">Level of Care:</span>
+                      {v42Level
+                        ? <span className="inline-flex items-center rounded-full bg-indigo-600 px-3 py-1 text-xs font-bold text-white">{V42_LEVEL_LABEL[v42Level] ?? v42Level}</span>
+                        : <span className="text-xs text-gray-400">Score the domains to compute</span>}
+                    </div>
                   </div>
 
-                  {/* The 12 clinical domains */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    {CLINICAL_DOMAINS.map((d) => {
-                      const Icon = d.icon; const cur = clinical[d.key] || { level: "", notes: "" };
-                      return (
-                        <div key={d.key} className="rounded-xl border border-gray-200 bg-white p-3">
-                          <div className="flex items-start gap-2 mb-2">
-                            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><Icon className="w-4 h-4" /></span>
-                            <div className="min-w-0">
-                              <p className="text-sm font-bold text-gray-800 leading-tight">{d.label}</p>
-                              <p className="text-[11px] text-gray-400 leading-tight">{d.hint}</p>
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-1 mb-2">
-                            {d.options.map((opt, i) => {
-                              const on = cur.level === opt;
-                              return (
-                                <button key={opt} type="button" onClick={() => setDomain(d.key, { level: on ? "" : opt })}
-                                  className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${on ? acuityTone(i) : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"}`}>
-                                  {opt}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <input value={cur.notes} onChange={(e) => setDomain(d.key, { notes: e.target.value })} placeholder="Notes (optional)…"
-                            className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg bg-white text-gray-900 text-xs focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" />
-                          {d.key === "skin" && <SkinWoundSection wounds={skinWounds} onChange={setSkinWounds} />}
-                        </div>
-                      );
-                    })}
+                  <p className="text-xs text-gray-500">Carried from the resident&apos;s pre-admission assessment — review and adjust each domain. The Level of Care is computed automatically.</p>
+
+                  <DomainScoreGrid domains={v42Domains} onPatch={patchV42} showIntro={false} />
+
+                  {/* Skin / Wound marks (feeds the Wound Care Tracker on completion) */}
+                  <div className="rounded-xl border border-gray-200 bg-white p-3">
+                    <p className="text-sm font-bold text-gray-800 mb-1">Skin / Wound marks <span className="text-[11px] font-normal text-gray-400">(AS-11)</span></p>
+                    <SkinWoundSection wounds={skinWounds} onChange={setSkinWounds} />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Field label="Care Level *"><select className={inputCls} value={form.careLevel} onChange={(e) => set({ careLevel: e.target.value })}><option value="">—</option>{CARE_LEVELS.map((c) => <option key={c} value={c}>{c[0] + c.slice(1).toLowerCase()}</option>)}</select></Field>
                     <Field label="Mobility"><input className={inputCls} value={form.mobility} onChange={(e) => set({ mobility: e.target.value })} placeholder="Independent / Walker / Wheelchair" /></Field>
                   </div>
                   <Field label="Assessment Summary / Additional Notes"><textarea rows={3} className={inputCls} value={form.careAssessment} onChange={(e) => set({ careAssessment: e.target.value })} placeholder="Overall clinical summary, support needs, priorities…" /></Field>
