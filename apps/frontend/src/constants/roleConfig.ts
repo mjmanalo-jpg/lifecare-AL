@@ -347,6 +347,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Camera Activity Log", icon: Activity, route: "/superadmin/cameralogs" },
       { name: "Camera Registry", icon: Camera, route: "/superadmin/cameras" },
       { name: "Geofencing", icon: MapPin, route: "/superadmin/geofencing", group: "Administration" },
+      { name: "Staff Profiles & Records", icon: Users, route: "/superadmin/staffprofiles", group: "Administration" },
       // "Portal Matrix" is merged into "SLMS Feature Matrix" as its Access Control tab.
       { name: "CRM & Leads", icon: UserPlus, route: "/superadmin/crm" },
       { name: "Consent & Move-in Forms", icon: ClipboardList, route: "/superadmin/consentforms" },

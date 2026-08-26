@@ -30,6 +30,7 @@ import GeofenceSettingsBoard from "@/components/portal/views/clinical/GeofenceSe
 import CareAcuityBoard from "@/components/portal/views/clinical/CareAcuityBoard";
 import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAssessmentV42";
 import FacilityRooms from "@/components/portal/views/FacilityRooms";
+import StaffProfilesBoard from "@/components/portal/views/clinical/StaffProfilesBoard";
 import FeatureMatrixDashboard from "@/components/portal/views/superadmin/FeatureMatrixDashboard";
 import { Trash2, Search, Eye, Edit, X, XCircle, UserPlus } from "lucide-react";
 import { useState, useMemo } from "react";
@@ -446,6 +447,9 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   }
   if (tab === "rooms") {
     return <FacilityRooms />;
+  }
+  if (tab === "staffprofiles") {
+    return <StaffProfilesBoard clinicianRole="FACILITY_ADMIN" />;
   }
   if (tab === "careplans") {
     return <CarePlanBoard />;
