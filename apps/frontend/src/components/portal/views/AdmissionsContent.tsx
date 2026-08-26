@@ -7,7 +7,7 @@ import {
   Users, HeartPulse, Check, ChevronLeft, ChevronRight, X, Plus, Search,
   CheckCircle2, Loader2, CircleDot, Ban, AlertTriangle, Download, Printer, Pencil,
   Brain, Activity, Apple, Pill, Droplets, MessageSquare, Siren, Sparkles,
-  Camera, Trash2, Image as ImageIcon, Eye, Moon,
+  Camera, Trash2, Image as ImageIcon, Eye, Moon, Paperclip,
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFacilityConfig } from "@/lib/useFacilityConfig";
@@ -55,6 +55,7 @@ const CLINICAL_DOMAINS = [
 const CLINICAL_TAG = "clinical-12";
 type DomainState = { level: string; notes: string };
 type ClinicalState = Record<string, DomainState>;
+type Attachment = { url: string; name: string };
 
 // Wound / marks captured under the Skin/Wound domain — shape mirrors the Wound
 // Care Tracker's record (app-setting `wound_records`) so they carry over on
@@ -80,14 +81,15 @@ const acuityTone = (i: number): string =>
 type MedRow = { id: string; name: string; dose: string; frequency: string };
 const serializeClinical = (
   note: string, domains: ClinicalState, wounds: WoundEntry[] = [],
-  meds: MedRow[] = [], extra: { surgeries?: string; hospitalizations?: string } = {},
+  meds: MedRow[] = [], extra: { surgeries?: string; hospitalizations?: string; attachments?: Attachment[] } = {},
 ): string | null => {
   const filled = Object.entries(domains).filter(([, v]) => v && (v.level || (v.notes || "").trim()));
   const hasWounds = Array.isArray(wounds) && wounds.length > 0;
   const cleanMeds = (meds || []).filter((m) => m.name.trim());
   const surgeries = (extra.surgeries || "").trim();
   const hospitalizations = (extra.hospitalizations || "").trim();
-  const hasExtra = cleanMeds.length > 0 || !!surgeries || !!hospitalizations;
+  const attachments = (extra.attachments || []).filter((a) => a && a.url);
+  const hasExtra = cleanMeds.length > 0 || !!surgeries || !!hospitalizations || attachments.length > 0;
   if (!filled.length && !hasWounds && !hasExtra) return note.trim() || null;
   return JSON.stringify({
     __v: CLINICAL_TAG, note: note.trim() || undefined, domains: Object.fromEntries(filled),
@@ -95,9 +97,10 @@ const serializeClinical = (
     ...(cleanMeds.length ? { medications: cleanMeds } : {}),
     ...(surgeries ? { surgeries } : {}),
     ...(hospitalizations ? { hospitalizations } : {}),
+    ...(attachments.length ? { attachments } : {}),
   });
 };
-const parseClinical = (raw: string): { note: string; domains: ClinicalState; wounds: WoundEntry[]; meds: MedRow[]; surgeries: string; hospitalizations: string } => {
+const parseClinical = (raw: string): { note: string; domains: ClinicalState; wounds: WoundEntry[]; meds: MedRow[]; surgeries: string; hospitalizations: string; attachments: Attachment[] } => {
   const t = (raw || "").trim();
   if (t.startsWith("{")) {
     try {
@@ -107,10 +110,11 @@ const parseClinical = (raw: string): { note: string; domains: ClinicalState; wou
         wounds: Array.isArray(o.wounds) ? (o.wounds as WoundEntry[]) : [],
         meds: Array.isArray(o.medications) ? (o.medications as MedRow[]) : [],
         surgeries: String(o.surgeries ?? ""), hospitalizations: String(o.hospitalizations ?? ""),
+        attachments: Array.isArray(o.attachments) ? (o.attachments as Attachment[]) : [],
       };
     } catch { /* not structured */ }
   }
-  return { note: t, domains: {}, wounds: [], meds: [], surgeries: "", hospitalizations: "" };
+  return { note: t, domains: {}, wounds: [], meds: [], surgeries: "", hospitalizations: "", attachments: [] };
 };
 
 // ── Carry-forward: seed a Care Acuity assessment (Stage 5) on completion ───────
@@ -382,7 +386,7 @@ export default function AdmissionsContent() {
   // Open CRM leads (community-scoped) that don't yet have an admission — offered
   // as a prefill source so an admission can be started straight from a lead.
   const openLeads = useMemo<Lead[]>(
-    () => parseLeads(settingRows.find((r) => (r.key ?? r.id) === CRM_LEADS_KEY)?.value)
+    () => parseLeads(s(settingRows.find((r) => (r.key ?? r.id) === CRM_LEADS_KEY)?.value))
       .filter((l) => !l.convertedAdmissionId && l.stage !== "LOST" && String(l.name ?? "").trim())
       .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))),
     [settingRows]
@@ -409,6 +413,24 @@ export default function AdmissionsContent() {
   const [statusFilter, setStatusFilter] = useState<"all" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED">("all");
 
   const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
+
+  // Medical-assessment report attachments (uploaded to /api/upload, stored in the
+  // careAssessment blob). Migration-free.
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploadingAtt, setUploadingAtt] = useState(false);
+  const addAttachment = async (file: File) => {
+    setUploadingAtt(true);
+    try {
+      const fd = new FormData(); fd.append("file", file); fd.append("folder", "documents");
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || "Upload failed");
+      setAttachments((a) => [...a, { url: s(body.url), name: s(body.name) || file.name }]);
+    } catch (e) {
+      Swal.fire({ title: "Upload failed", text: e instanceof Error ? e.message : "Could not upload the file.", icon: "error" });
+    } finally { setUploadingAtt(false); }
+  };
+  const removeAttachment = (url: string) => setAttachments((a) => a.filter((x) => x.url !== url));
 
   // ── v4.2 14-domain assessment (Care Assess step) ──────────────────────────
   // The admission edits the same v4.2 instrument used at pre-admission. `v42Domains`
@@ -616,7 +638,7 @@ export default function AdmissionsContent() {
     [allRooms, occupiedRooms, form.roomNumber]
   );
 
-  const openNew = () => { setForm({ ...emptyForm }); setClinical({}); setSkinWounds([]); setMedList([]); setPrefillTotal(null); setV42Domains({}); setV42SourceId(""); setStep(1); setWizardOpen(true); };
+  const openNew = () => { setForm({ ...emptyForm }); setClinical({}); setSkinWounds([]); setMedList([]); setAttachments([]); setPrefillTotal(null); setV42Domains({}); setV42SourceId(""); setStep(1); setWizardOpen(true); };
 
   const openView = (row: Row) => {
     setSelectedAdmission(row);
@@ -681,6 +703,7 @@ export default function AdmissionsContent() {
     setClinical(parsedCA.domains);
     setSkinWounds(parsedCA.wounds);
     setMedList(parsedCA.meds);
+    setAttachments(parsedCA.attachments);
     setForm({
       id: s(row.id),
       firstName: s(row.firstName), lastName: s(row.lastName),
@@ -716,7 +739,7 @@ export default function AdmissionsContent() {
     emergencyContact: form.emergencyContact || null, emergencyContactPhone: form.emergencyContactPhone || null,
     sponsorName: form.sponsorName || null, sponsorEmail: form.sponsorEmail || null,
     medicalAssessment: form.medicalAssessment || null, allergies: form.allergies || null, medicalHistory: form.medicalHistory || null,
-    careAssessment: serializeClinical(form.careAssessment, clinical, skinWounds, medList, { surgeries: form.surgeries, hospitalizations: form.hospitalizations }), careLevel: form.careLevel || null, mobility: form.mobility || null,
+    careAssessment: serializeClinical(form.careAssessment, clinical, skinWounds, medList, { surgeries: form.surgeries, hospitalizations: form.hospitalizations, attachments }), careLevel: form.careLevel || null, mobility: form.mobility || null,
     insuranceProvider: form.insuranceProvider || null, insurancePolicyNumber: form.insurancePolicyNumber || null,
     insuranceVerified: form.insuranceVerified, insuranceVerifiedAt: form.insuranceVerifiedAt || null,
     roomNumber: form.roomNumber || null, qrPayload: form.qrPayload || null,
@@ -1245,6 +1268,29 @@ export default function AdmissionsContent() {
                 <div className="space-y-4">
                   <Field label="Medical Assessment"><textarea rows={4} className={inputCls} value={form.medicalAssessment} onChange={(e) => set({ medicalAssessment: e.target.value })} placeholder="Clinical findings & diagnoses (medications are listed separately below)…" /></Field>
 
+                  {/* Assessment report attachment(s) — uploaded to /api/upload, kept on the admission */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5"><Paperclip className="w-3.5 h-3.5 text-indigo-600" /> Assessment Report</span>
+                      <label className={`inline-flex items-center gap-1 text-xs font-semibold ${uploadingAtt ? "text-gray-400" : "text-indigo-700 hover:text-indigo-800 cursor-pointer"}`}>
+                        <Plus className="w-3.5 h-3.5" /> {uploadingAtt ? "Uploading…" : "Add attachment"}
+                        <input type="file" className="hidden" disabled={uploadingAtt} onChange={(e) => { const f = e.target.files?.[0]; if (f) addAttachment(f); e.target.value = ""; }} />
+                      </label>
+                    </div>
+                    {attachments.length === 0 ? (
+                      <p className="rounded-lg border border-dashed border-gray-200 px-3 py-2 text-xs text-gray-500">No file attached. Attach the scanned or PDF assessment report (max 10&nbsp;MB).</p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {attachments.map((att) => (
+                          <li key={att.url} className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 text-xs">
+                            <a href={att.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-w-0 items-center gap-1.5 font-medium text-indigo-700 hover:underline"><Paperclip className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{att.name}</span></a>
+                            <button type="button" onClick={() => removeAttachment(att.url)} className="shrink-0 text-gray-400 hover:text-rose-600" aria-label="Remove attachment"><X className="w-3.5 h-3.5" /></button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
                   {/* Structured current medications → become ACTIVE meds on the resident card + MAR */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
@@ -1769,7 +1815,7 @@ function AdmissionEditForm({ row, onSave }: {
       careLevel: careLevel || null, mobility: mobility || null, roomNumber: roomNumber || null,
       insuranceProvider: insuranceProvider || null, insurancePolicyNumber: insurancePolicyNumber || null,
       carePlan: carePlan || null, carePlanGoals: carePlanGoals || null,
-      careAssessment: serializeClinical(ca.note, ca.domains, ca.wounds, meds, { surgeries, hospitalizations }),
+      careAssessment: serializeClinical(ca.note, ca.domains, ca.wounds, meds, { surgeries, hospitalizations, attachments: ca.attachments }),
     };
     // NOTE: medicalAssessment/diagnosis are NOT Resident columns — they live on the
     // Admission and the rcard reads them from there.
