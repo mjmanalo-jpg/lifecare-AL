@@ -14,6 +14,7 @@ import { useFacilityConfig } from "@/lib/useFacilityConfig";
 import { ASSESSMENTS_V42_KEY, originOf, classifyAssessment, assessmentRawScore, newAssessment, type AssessmentV42, type DomainEntry } from "@/lib/lifecare/assessment";
 import type { CareLevel, DomainCode } from "@/lib/lifecare/types.ts";
 import DomainScoreGrid from "@/components/portal/views/clinical/DomainScoreGrid";
+import { CRM_LEADS_KEY, parseLeads, type Lead } from "@/lib/crmLeads";
 import { createRecord, updateRecord, upsertRecord, deleteRecord } from "@/lib/api";
 import { recordAudit } from "@/lib/auditClient";
 import { qrDataUrl } from "@/lib/qr";
@@ -378,6 +379,14 @@ export default function AdmissionsContent() {
       .sort((a, b) => String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? ""))),
     [settingRows]
   );
+  // Open CRM leads (community-scoped) that don't yet have an admission — offered
+  // as a prefill source so an admission can be started straight from a lead.
+  const openLeads = useMemo<Lead[]>(
+    () => parseLeads(settingRows.find((r) => (r.key ?? r.id) === CRM_LEADS_KEY)?.value)
+      .filter((l) => !l.convertedAdmissionId && l.stage !== "LOST" && String(l.name ?? "").trim())
+      .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))),
+    [settingRows]
+  );
 
   const [wizardOpen, setWizardOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
@@ -489,7 +498,32 @@ export default function AdmissionsContent() {
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Prefilled from pre-admission", showConfirmButton: false, timer: 1600 });
   };
 
+  // Start an admission straight from a CRM lead — pulls the prospective
+  // resident's name and the lead's contact/sponsor details.
+  const prefillFromLead = async (id: string) => {
+    const l = openLeads.find((x) => x.id === id);
+    if (!l) return;
+    const who = String(l.prospectiveResident || l.name).trim();
+    const c = await Swal.fire({
+      title: "Prefill from CRM lead?",
+      text: `Populate this admission with ${who || "the lead"}'s details? Matching fields already entered will be overwritten.`,
+      icon: "question", showCancelButton: true, confirmButtonColor: "#4f46e5", confirmButtonText: "Prefill",
+    });
+    if (!c.isConfirmed) return;
+    const [first, ...rest] = who.split(/\s+/);
+    set({
+      firstName: first || l.name || form.firstName,
+      lastName: rest.join(" ") || form.lastName,
+      phone: s(l.contact) || form.phone,
+      email: s(l.email) || form.email,
+      sponsorName: l.name || form.sponsorName,
+      sponsorEmail: s(l.email) || form.sponsorEmail,
+    });
+    Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Prefilled from lead", showConfirmButton: false, timer: 1600 });
+  };
+
   const prefillFromPreadmission = async (paId: string) => {
+    if (paId.startsWith("lead:")) { await prefillFromLead(paId.slice(5)); return; }
     if (paId.startsWith("v42:")) { await prefillFromV42(paId.slice(4)); return; }
     const pa = preadmits.find((p) => s(p.id) === paId);
     if (!pa) return;
@@ -1155,14 +1189,21 @@ export default function AdmissionsContent() {
             <div className="p-6 overflow-y-auto flex-1">
               {step === 1 && (
                 <div className="space-y-4">
-                  {(preadmits.length > 0 || preadmitsV42.length > 0) && (
+                  {(preadmits.length > 0 || preadmitsV42.length > 0 || openLeads.length > 0) && (
                     <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <Sparkles className="w-4 h-4 text-indigo-500" />
-                        <span className="text-xs font-semibold text-indigo-800">Prefill from a Pre-Admission Assessment</span>
+                        <span className="text-xs font-semibold text-indigo-800">Prefill from a CRM Lead or Pre-Admission Assessment</span>
                       </div>
                       <select value="" onChange={(e) => { const v = e.target.value; if (v) prefillFromPreadmission(v); }} className={`${inputCls} mt-2`}>
-                        <option value="">Select a completed pre-admission assessment…</option>
+                        <option value="">Select a CRM lead or completed pre-admission assessment…</option>
+                        {openLeads.length > 0 && (
+                          <optgroup label="CRM Leads">
+                            {openLeads.map((l) => (
+                              <option key={`lead:${l.id}`} value={`lead:${l.id}`}>{s(l.prospectiveResident || l.name)}{l.stage ? ` — ${l.stage.replace(/_/g, " ").toLowerCase()}` : ""}</option>
+                            ))}
+                          </optgroup>
+                        )}
                         {preadmitsV42.length > 0 && (
                           <optgroup label="Resident Assessment (v4.2)">
                             {preadmitsV42.map((a) => { const lvl = s(a.layer3?.finalLevel); const dt = s(a.layer1?.assessmentDate) || s(a.updatedAt).slice(0, 10); return (
@@ -1178,7 +1219,7 @@ export default function AdmissionsContent() {
                           </optgroup>
                         )}
                       </select>
-                      <p className="text-[11px] text-indigo-600/80 mt-1.5">Pulls name, DOB, contact, diagnoses, allergies, care level, the 14-domain assessment &amp; the care plan. Review before completing.</p>
+                      <p className="text-[11px] text-indigo-600/80 mt-1.5">A CRM lead pulls the prospective resident&apos;s name + contact/sponsor. A pre-admission assessment also pulls DOB, diagnoses, allergies, care level &amp; the 14-domain scores. Review before completing.</p>
                     </div>
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
