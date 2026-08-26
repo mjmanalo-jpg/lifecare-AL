@@ -44,6 +44,11 @@ const FEATURE_ICONS: Record<string, React.ReactNode> = {
   wheelchair: <Accessibility className="w-3 h-3" />,
 };
 
+// Shared modal form styles — indigo focus (primary), 12px radius, 44px targets.
+const FIELD_CLS = "w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-[15px] text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/25";
+const LABEL_CLS = "mb-1.5 block text-sm font-medium text-gray-700";
+const GROUP_CLS = "text-[11px] font-semibold uppercase tracking-wider text-gray-400";
+
 export default function FacilityRooms() {
   const { data: roomRows, loading, error, refetch } = useLiveQuery<Record<string, unknown>>(
     "rooms", { query: "take=100", tables: ["Room"] }
@@ -73,6 +78,8 @@ export default function FacilityRooms() {
   const [editing, setEditing] = useState<Room | null>(null);
   const [editingStatus, setEditingStatus] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [roomErr, setRoomErr] = useState(false);
   const [editForm, setEditForm] = useState({
     roomNumber: "", floor: "", wing: "", roomType: "", capacity: 1,
     status: "AVAILABLE", features: "", rateMonthly: "", notes: "",
@@ -132,6 +139,7 @@ export default function FacilityRooms() {
   const startEditing = (room: Room) => {
     setEditing(room);
     setEditingStatus(false);
+    setRoomErr(false);
     setEditForm({
       roomNumber: room.roomNumber, floor: String(room.floor),
       wing: room.wing, roomType: room.roomType, capacity: room.capacity,
@@ -145,11 +153,15 @@ export default function FacilityRooms() {
     setCreating(true);
     setEditing(null);
     setEditingStatus(false);
+    setRoomErr(false);
     setEditForm({ roomNumber: "", floor: "", wing: "", roomType: "PRIVATE", capacity: 1, status: "AVAILABLE", features: "", rateMonthly: "", notes: "" });
   };
 
+  const closeModal = () => { setEditing(null); setCreating(false); setRoomErr(false); };
+
   const handleCreate = async () => {
-    if (!editForm.roomNumber.trim()) { Swal.fire({ title: "Room number required", icon: "warning" }); return; }
+    if (!editForm.roomNumber.trim()) { setRoomErr(true); return; }
+    setSaving(true);
     try {
       await createRecord("rooms", {
         roomNumber: editForm.roomNumber.trim(), floor: Number(editForm.floor) || null,
@@ -162,16 +174,20 @@ export default function FacilityRooms() {
       Swal.fire({ title: "Room added", text: `Room ${editForm.roomNumber} created.`, icon: "success", timer: 1500, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ title: "Add Failed", text: err instanceof Error ? err.message : "Could not create room.", icon: "error" });
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleSaveEdit = async () => {
+    if (!editForm.roomNumber.trim()) { setRoomErr(true); return; }
     const result = await Swal.fire({
       title: "Save Changes?", text: `Update Room ${editForm.roomNumber}?`, icon: "question",
-      showCancelButton: true, confirmButtonColor: "#fbbf24", cancelButtonColor: "#6b7280",
+      showCancelButton: true, confirmButtonColor: "#4f46e5", cancelButtonColor: "#6b7280",
       confirmButtonText: "Save", cancelButtonText: "Cancel",
     });
     if (result.isConfirmed && editing) {
+      setSaving(true);
       try {
         await updateRecord("rooms", editing.id, {
           roomNumber: editForm.roomNumber, floor: Number(editForm.floor) || null,
@@ -184,6 +200,8 @@ export default function FacilityRooms() {
         Swal.fire({ title: "Saved", text: `Room ${editForm.roomNumber} updated.`, icon: "success", timer: 1500, showConfirmButton: false });
       } catch (err) {
         Swal.fire({ title: "Save Failed", text: err instanceof Error ? err.message : "Could not update room.", icon: "error" });
+      } finally {
+        setSaving(false);
       }
     }
   };
@@ -278,7 +296,7 @@ export default function FacilityRooms() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 mb-2">
             Room Management
           </h1>
           <p className="text-gray-600">Manage facility rooms, assignments, and maintenance</p>
@@ -300,10 +318,10 @@ export default function FacilityRooms() {
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
           <input type="text" placeholder="Search room number, wing, features..." value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none" />
+            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" />
         </div>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none bg-white text-sm">
+          className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-sm">
           <option value="all">All Status</option>
           <option value="AVAILABLE">Available</option>
           <option value="OCCUPIED">Occupied</option>
@@ -311,20 +329,20 @@ export default function FacilityRooms() {
           <option value="RESERVED">Reserved</option>
         </select>
         <select value={wingFilter} onChange={(e) => setWingFilter(e.target.value)}
-          className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none bg-white text-sm">
+          className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-sm">
           <option value="all">All Wings</option>
           {wings.map((w) => <option key={w} value={w}>{w}</option>)}
         </select>
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
-          className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none bg-white text-sm">
+          className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-sm">
           <option value="all">All Types</option>
           {Object.entries(TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
         <div className="flex rounded-lg border border-gray-300 overflow-hidden">
-          <button onClick={() => setViewMode("grid")} className={`px-4 py-3 text-sm font-medium transition ${viewMode === "grid" ? "bg-yellow-400 text-black" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
+          <button onClick={() => setViewMode("grid")} className={`px-4 py-3 text-sm font-medium transition ${viewMode === "grid" ? "bg-indigo-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
             Grid
           </button>
-          <button onClick={() => setViewMode("table")} className={`px-4 py-3 text-sm font-medium transition ${viewMode === "table" ? "bg-yellow-400 text-black" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
+          <button onClick={() => setViewMode("table")} className={`px-4 py-3 text-sm font-medium transition ${viewMode === "table" ? "bg-indigo-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
             Table
           </button>
         </div>
@@ -334,7 +352,7 @@ export default function FacilityRooms() {
 
       {loading && rooms.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
-          <div className="inline-block w-6 h-6 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin mb-3" />
+          <div className="inline-block w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3" />
           <p>Loading rooms...</p>
         </div>
       ) : filtered.length === 0 ? (
@@ -481,45 +499,112 @@ export default function FacilityRooms() {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setViewing(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
-              <button onClick={() => { startEditing(viewing); setViewing(null); }} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Edit</button>
+              <button onClick={() => { startEditing(viewing); setViewing(null); }} className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition active:scale-95">Edit</button>
             </div>
           </div>
         </div>
       )}
 
       {(editing || creating) && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90dvh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-4 sm:p-6 flex items-center justify-between border-b border-yellow-600">
-              <h2 className="text-xl sm:text-2xl font-bold">{creating ? "Add Room" : `Edit Room ${editForm.roomNumber}`}</h2>
-              <button onClick={() => { setEditing(null); setCreating(false); }} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
-            </div>
-            <div className="p-4 sm:p-8 space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div><label className="block text-sm font-semibold text-gray-700 mb-2">Room Number</label><input type="text" value={editForm.roomNumber} onChange={(e) => setEditForm({ ...editForm, roomNumber: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-                <div><label className="block text-sm font-semibold text-gray-700 mb-2">Floor</label><input type="number" value={editForm.floor} onChange={(e) => setEditForm({ ...editForm, floor: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-                <div><label className="block text-sm font-semibold text-gray-700 mb-2">Wing</label><input type="text" value={editForm.wing} onChange={(e) => setEditForm({ ...editForm, wing: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-                <div><label className="block text-sm font-semibold text-gray-700 mb-2">Type</label><select value={editForm.roomType} onChange={(e) => setEditForm({ ...editForm, roomType: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none bg-white">
-                  <option value="PRIVATE">Private</option>
-                  <option value="SEMI_PRIVATE">Semi-Private</option>
-                  <option value="WARD">Ward</option>
-                  <option value="SUITE">Suite</option>
-                </select></div>
-                <div><label className="block text-sm font-semibold text-gray-700 mb-2">Capacity</label><input type="number" min="1" value={editForm.capacity} onChange={(e) => setEditForm({ ...editForm, capacity: Number(e.target.value) || 1 })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-                <div><label className="block text-sm font-semibold text-gray-700 mb-2">Rate (Monthly $)</label><input type="number" value={editForm.rateMonthly} onChange={(e) => setEditForm({ ...editForm, rateMonthly: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-                <div className="col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-2">Status</label><select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none bg-white">
-                  <option value="AVAILABLE">Available</option>
-                  <option value="OCCUPIED">Occupied</option>
-                  <option value="MAINTENANCE">Maintenance</option>
-                  <option value="RESERVED">Reserved</option>
-                </select></div>
-                <div className="col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-2">Features</label><input type="text" value={editForm.features} onChange={(e) => setEditForm({ ...editForm, features: e.target.value })} placeholder="e.g. AC, Private bath, Balcony" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
-                <div className="col-span-2"><label className="block text-sm font-semibold text-gray-700 mb-2">Notes</label><textarea value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} rows={3} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none" /></div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
+          <div role="dialog" aria-modal="true" aria-label={creating ? "Add room" : "Edit room"} className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5">
+            {/* Header */}
+            <div className="flex items-start gap-3 bg-indigo-600 px-6 py-5 text-white">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25">
+                {creating ? <Plus className="h-5 w-5" /> : <Edit className="h-5 w-5" />}
               </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-xl font-bold leading-tight">{creating ? "Add Room" : `Edit Room ${editForm.roomNumber}`}</h2>
+                <p className="mt-0.5 text-sm text-indigo-100">{creating ? "Create a room residents can be assigned to." : "Update this room's details and status."}</p>
+              </div>
+              <button onClick={closeModal} aria-label="Close" className="-mr-2 rounded-lg p-2 text-indigo-100 transition hover:bg-white/15 hover:text-white"><X className="h-5 w-5" /></button>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-2">
-              <button onClick={() => { setEditing(null); setCreating(false); }} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
-              <button onClick={creating ? handleCreate : handleSaveEdit} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">{creating ? "Add Room" : "Save Changes"}</button>
+
+            {/* Body */}
+            <div className="flex-1 space-y-7 overflow-y-auto px-6 py-6">
+              <section className="space-y-4">
+                <p className={GROUP_CLS}>Location</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={LABEL_CLS}>Room Number <span className="text-rose-500">*</span></label>
+                    <input autoFocus value={editForm.roomNumber} onChange={(e) => { setEditForm({ ...editForm, roomNumber: e.target.value }); if (roomErr) setRoomErr(false); }} placeholder="e.g. 204" className={`${FIELD_CLS} ${roomErr ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/25" : ""}`} />
+                    {roomErr && <p className="mt-1.5 text-xs font-medium text-rose-600">Enter a room number.</p>}
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>Floor</label>
+                    <input type="number" value={editForm.floor} onChange={(e) => setEditForm({ ...editForm, floor: e.target.value })} placeholder="e.g. 2" className={FIELD_CLS} />
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>Wing</label>
+                    <input type="text" value={editForm.wing} onChange={(e) => setEditForm({ ...editForm, wing: e.target.value })} placeholder="e.g. East" className={FIELD_CLS} />
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>Type</label>
+                    <select value={editForm.roomType} onChange={(e) => setEditForm({ ...editForm, roomType: e.target.value })} className={FIELD_CLS}>
+                      <option value="PRIVATE">Private</option>
+                      <option value="SEMI_PRIVATE">Semi-Private</option>
+                      <option value="WARD">Ward</option>
+                      <option value="SUITE">Suite</option>
+                    </select>
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <p className={GROUP_CLS}>Capacity &amp; Rate</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={LABEL_CLS}>Capacity</label>
+                    <div className="flex items-center gap-2">
+                      <button type="button" aria-label="Decrease capacity" onClick={() => setEditForm((f) => ({ ...f, capacity: Math.max(1, f.capacity - 1) }))} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-300 text-lg text-gray-600 transition hover:bg-gray-50 active:scale-95">−</button>
+                      <input type="number" min="1" value={editForm.capacity} onChange={(e) => setEditForm({ ...editForm, capacity: Math.max(1, Number(e.target.value) || 1) })} className={`${FIELD_CLS} text-center`} />
+                      <button type="button" aria-label="Increase capacity" onClick={() => setEditForm((f) => ({ ...f, capacity: f.capacity + 1 }))} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-300 text-lg text-gray-600 transition hover:bg-gray-50 active:scale-95">+</button>
+                    </div>
+                    <p className="mt-1.5 text-xs text-gray-500">{editForm.capacity === 1 ? "Single occupancy" : `Shared — ${editForm.capacity} beds`}</p>
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS}>Monthly Rate</label>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500">₱</span>
+                      <input type="number" value={editForm.rateMonthly} onChange={(e) => setEditForm({ ...editForm, rateMonthly: e.target.value })} placeholder="0" className={`${FIELD_CLS} pl-8`} />
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <p className={GROUP_CLS}>Details</p>
+                <div>
+                  <label className={LABEL_CLS}>Status</label>
+                  <div className="relative">
+                    <span className={`pointer-events-none absolute left-3.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full ${STATUS_HEADER[editForm.status] || "bg-gray-400"}`} />
+                    <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className={`${FIELD_CLS} pl-8`}>
+                      <option value="AVAILABLE">Available</option>
+                      <option value="OCCUPIED">Occupied</option>
+                      <option value="MAINTENANCE">Maintenance</option>
+                      <option value="RESERVED">Reserved</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Features</label>
+                  <input type="text" value={editForm.features} onChange={(e) => setEditForm({ ...editForm, features: e.target.value })} placeholder="e.g. AC, Private bath, Balcony" className={FIELD_CLS} />
+                  <p className="mt-1.5 text-xs text-gray-500">Separate features with commas.</p>
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Notes</label>
+                  <textarea value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} rows={3} placeholder="Anything staff should know about this room…" className={`${FIELD_CLS} resize-y`} />
+                </div>
+              </section>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
+              <button onClick={closeModal} className="rounded-xl px-4 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-200/70">Cancel</button>
+              <button onClick={creating ? handleCreate : handleSaveEdit} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60">
+                {saving && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
+                {saving ? (creating ? "Adding…" : "Saving…") : (creating ? "Add Room" : "Save Changes")}
+              </button>
             </div>
           </div>
         </div>

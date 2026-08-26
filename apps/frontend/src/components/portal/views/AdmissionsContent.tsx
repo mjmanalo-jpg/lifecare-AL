@@ -14,7 +14,6 @@ import { useFacilityConfig } from "@/lib/useFacilityConfig";
 import { ASSESSMENTS_V42_KEY, originOf, classifyAssessment, assessmentRawScore, type AssessmentV42 } from "@/lib/lifecare/assessment";
 import { createRecord, updateRecord, upsertRecord, deleteRecord } from "@/lib/api";
 import { recordAudit } from "@/lib/auditClient";
-import { insuranceProvider } from "@/lib/integrations/insurance";
 import { qrDataUrl } from "@/lib/qr";
 
 // ── Step catalogue (required = blocks completion until satisfied) ──────────────
@@ -22,12 +21,9 @@ const STEPS = [
   { n: 1, key: "registration", label: "Registration",        icon: UserPlus,      required: true  },
   { n: 2, key: "medical",      label: "Medical Assess.",     icon: Stethoscope,   required: false },
   { n: 3, key: "care",         label: "Care Assess.",        icon: ClipboardList, required: true  },
-  { n: 4, key: "insurance",    label: "Insurance Verify",    icon: ShieldCheck,   required: false },
-  { n: 5, key: "room",         label: "Room & QR",           icon: BedDouble,     required: true  },
-  { n: 6, key: "team",         label: "Assign Care Team",    icon: Users,         required: false },
-  { n: 7, key: "plan",         label: "Care Plan",           icon: HeartPulse,    required: false },
+  { n: 4, key: "room",         label: "Room & QR",           icon: BedDouble,     required: true  },
 ] as const;
-const STEP_COUNT = STEPS.length; // 7
+const STEP_COUNT = STEPS.length; // 4
 
 const CARE_LEVELS = ["INDEPENDENT", "ASSISTED", "MEMORY", "SKILLED"];
 
@@ -212,7 +208,7 @@ async function toDataUrl(file: File, maxDim = 900, quality = 0.7): Promise<strin
     reader.readAsDataURL(file);
   });
 }
-const woundInp = "w-full px-2.5 py-1.5 border border-gray-200 rounded-lg bg-white text-gray-900 text-xs outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent";
+const woundInp = "w-full px-2.5 py-1.5 border border-gray-200 rounded-lg bg-white text-gray-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent";
 
 // Wound / Marks capture embedded in the Skin/Wound domain card. Mirrors the Wound
 // Care Tracker's add form (location, type, stage, notes, photo upload / take-photo).
@@ -239,7 +235,7 @@ function SkinWoundSection({ wounds, onChange }: { wounds: WoundEntry[]; onChange
     <div className="mt-3 border-t border-gray-100 pt-3">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Wound / Marks Record{wounds.length ? ` (${wounds.length})` : ""}</span>
-        {!adding && <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 hover:text-amber-700"><Plus className="w-3.5 h-3.5" /> Add wound / mark</button>}
+        {!adding && <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-700"><Plus className="w-3.5 h-3.5" /> Add wound / mark</button>}
       </div>
 
       {wounds.length > 0 && (
@@ -259,7 +255,7 @@ function SkinWoundSection({ wounds, onChange }: { wounds: WoundEntry[]; onChange
       )}
 
       {adding && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 space-y-2">
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 p-3 space-y-2">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input value={draft.bodyLocation} onChange={(e) => setDraft((d) => ({ ...d, bodyLocation: e.target.value }))} placeholder="Body location (e.g. Sacrum)" className={woundInp} />
             <select value={draft.woundType} onChange={(e) => setDraft((d) => ({ ...d, woundType: e.target.value }))} className={woundInp}>{WOUND_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
@@ -276,7 +272,7 @@ function SkinWoundSection({ wounds, onChange }: { wounds: WoundEntry[]; onChange
             {draft.photo && <img src={draft.photo} alt="preview" className="h-9 w-9 rounded object-cover border border-gray-200" />}
             <div className="ml-auto flex items-center gap-2">
               <button type="button" onClick={() => { setAdding(false); setDraft(blank); }} className="text-[11px] font-semibold text-gray-500">Cancel</button>
-              <button type="button" onClick={add} className="rounded-lg bg-amber-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-amber-600">Add</button>
+              <button type="button" onClick={add} className="rounded-lg bg-indigo-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700">Add</button>
             </div>
           </div>
         </div>
@@ -353,11 +349,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 const inputCls =
-  "w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-amber-400 focus:border-transparent outline-none text-sm";
+  "w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm";
 
 export default function AdmissionsContent() {
   const { data: admissionRows, loading, refetch } = useLiveQuery<Row>("admissions", { tables: ["Admission"] });
-  const { data: staffRows } = useLiveQuery<Row>("staff", { query: "include=user", tables: ["Staff"] });
   const { data: residentRows } = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const { data: userRows } = useLiveQuery<Row>("users", { tables: ["User"] });
   const { data: settingRows } = useLiveQuery<Row>("app-settings", { tables: ["AppSetting"] });
@@ -379,14 +374,6 @@ export default function AdmissionsContent() {
     [settingRows]
   );
 
-  const staffOptions = useMemo<TeamMember[]>(
-    () => staffRows.map((r) => {
-      const user = r.user as { name?: string } | undefined;
-      return { id: s(r.id), name: user?.name ?? "Staff", role: s(r.position), userId: s(r.userId) };
-    }),
-    [staffRows]
-  );
-
   const [wizardOpen, setWizardOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedAdmission, setSelectedAdmission] = useState<Row | null>(null);
@@ -404,8 +391,6 @@ export default function AdmissionsContent() {
   const removeMed = (mid: string) => setMedList((l) => l.filter((m) => m.id !== mid));
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [verifyMsg, setVerifyMsg] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED">("all");
 
@@ -564,7 +549,7 @@ export default function AdmissionsContent() {
     [allRooms, occupiedRooms, form.roomNumber]
   );
 
-  const openNew = () => { setForm({ ...emptyForm }); setClinical({}); setSkinWounds([]); setMedList([]); setPrefillTotal(null); setStep(1); setVerifyMsg(""); setWizardOpen(true); };
+  const openNew = () => { setForm({ ...emptyForm }); setClinical({}); setSkinWounds([]); setMedList([]); setPrefillTotal(null); setStep(1); setWizardOpen(true); };
 
   const openView = (row: Row) => {
     setSelectedAdmission(row);
@@ -646,7 +631,6 @@ export default function AdmissionsContent() {
       completedSteps: s(row.completedSteps) || "[]", status: s(row.status),
     });
     setStep(Math.min(Math.max(Number(row.currentStep) || 1, 1), STEP_COUNT));
-    setVerifyMsg("");
     setWizardOpen(true);
   };
 
@@ -672,7 +656,7 @@ export default function AdmissionsContent() {
     if (n === 1 && (!form.firstName.trim() || !form.lastName.trim()))
       return "First and last name are required to register.";
     if (n === 3 && !form.careLevel) return "Select a care level before continuing.";
-    if (n === 5) {
+    if (n === 4) {
       if (!form.roomNumber) return "Assign a room before continuing.";
       if (occupiedRooms.has(form.roomNumber)) return `Room ${form.roomNumber} is already taken.`;
     }
@@ -728,28 +712,10 @@ export default function AdmissionsContent() {
     }
   };
 
-  const runVerify = async () => {
-    if (!form.insuranceProvider.trim() || !form.insurancePolicyNumber.trim()) {
-      setVerifyMsg("Enter a provider and policy number first.");
-      return;
-    }
-    setVerifying(true);
-    try {
-      const r = await insuranceProvider.verify({
-        provider: form.insuranceProvider, policyNumber: form.insurancePolicyNumber,
-        firstName: form.firstName, lastName: form.lastName,
-      });
-      set({ insuranceVerified: r.verified, insuranceVerifiedAt: r.verified ? r.verifiedAt : "" });
-      setVerifyMsg(r.message + (r.reference ? ` (Ref ${r.reference})` : ""));
-    } finally {
-      setVerifying(false);
-    }
-  };
-
   // Auto-assign the first available room when the resident reaches Step 5 and
   // none has been picked yet. Staff can still change it via the dropdown.
   useEffect(() => {
-    if (step === 5 && !form.roomNumber && availableRooms.length) {
+    if (step === 4 && !form.roomNumber && availableRooms.length) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       set({ roomNumber: availableRooms[0] });
     }
@@ -757,7 +723,7 @@ export default function AdmissionsContent() {
 
   // Auto-generate a unique QR payload when the resident reaches Step 5 and has an ID.
   useEffect(() => {
-    if (step === 5 && !form.qrPayload && form.id) {
+    if (step === 4 && !form.qrPayload && form.id) {
       const payload = `GH-RES-${form.id.slice(0, 8)}`;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       set({ qrPayload: payload });
@@ -789,13 +755,6 @@ export default function AdmissionsContent() {
     w.document.close();
     w.onload = () => { w.print(); w.close(); };
   }, [form.qrPayload, form.firstName, form.lastName]);
-
-  const toggleTeam = (m: TeamMember) => {
-    const team = parseTeam(form.careTeam);
-    const exists = team.find((t) => t.id === m.id);
-    const next = exists ? team.filter((t) => t.id !== m.id) : [...team, m];
-    set({ careTeam: JSON.stringify(next) });
-  };
 
   // Missing requirements block completion (precision guardrail).
   const missing = useMemo(() => {
@@ -986,20 +945,20 @@ export default function AdmissionsContent() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-amber-500 to-yellow-600 bg-clip-text text-transparent">Admissions &amp; Onboarding</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Admissions &amp; Onboarding</h1>
           <p className="text-gray-600 text-sm mt-1 flex items-center gap-2">
             <span className="inline-flex items-center gap-1 text-green-600"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Live</span>
             {STEP_COUNT}-step resident onboarding pipeline
           </p>
         </div>
-        <button onClick={openNew} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-600 text-white font-semibold hover:shadow-lg transition self-start">
+        <button onClick={openNew} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition self-start">
           <Plus className="w-4 h-4" /> New Admission
         </button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-        <Stat label="In Progress" value={count("IN_PROGRESS")} tone="amber" />
+        <Stat label="In Progress" value={count("IN_PROGRESS")} tone="indigo" />
         <Stat label="Completed" value={count("COMPLETED")} tone="green" />
         <Stat label="Cancelled" value={count("CANCELLED")} tone="gray" />
       </div>
@@ -1008,7 +967,7 @@ export default function AdmissionsContent() {
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
         <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden bg-white text-sm">
           {(["all", "IN_PROGRESS", "COMPLETED", "CANCELLED"] as const).map((f) => (
-            <button key={f} onClick={() => setStatusFilter(f)} className={`px-3 py-2 font-medium transition ${statusFilter === f ? "bg-amber-500 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
+            <button key={f} onClick={() => setStatusFilter(f)} className={`px-3 py-2 font-medium transition ${statusFilter === f ? "bg-indigo-500 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
               {f === "all" ? "All" : f === "IN_PROGRESS" ? "In Progress" : f[0] + f.slice(1).toLowerCase()}
             </button>
           ))}
@@ -1032,9 +991,9 @@ export default function AdmissionsContent() {
             const isDone = st === "COMPLETED";
             const isCancelled = st === "CANCELLED";
             const cur = STEPS.find((x) => x.n === (Number(a.currentStep) || 1));
-            const badge = isDone ? "bg-green-100 text-green-700" : isCancelled ? "bg-gray-200 text-gray-600" : "bg-amber-100 text-amber-700";
+            const badge = isDone ? "bg-green-100 text-green-700" : isCancelled ? "bg-gray-200 text-gray-600" : "bg-indigo-100 text-indigo-700";
             return (
-              <div key={s(a.id)} className="bg-white rounded-xl border border-gray-200 p-5 hover:border-amber-300 hover:shadow-md transition">
+              <div key={s(a.id)} className="bg-white rounded-xl border border-gray-200 p-5 hover:border-indigo-300 hover:shadow-md transition">
                 <button onClick={() => openView(a)} className="w-full text-left">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="font-bold text-gray-900">{s(a.firstName)} {s(a.lastName)}</h3>
@@ -1046,13 +1005,13 @@ export default function AdmissionsContent() {
                   <div className="mt-3">
                     <div className="flex items-center justify-between text-xs text-gray-500 mb-1"><span>Progress</span><span>{done}/{STEP_COUNT}</span></div>
                     <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                      <div className={`h-full ${isDone ? "bg-green-500" : isCancelled ? "bg-gray-400" : "bg-amber-500"} transition-all`} style={{ width: `${(done / STEP_COUNT) * 100}%` }} />
+                      <div className={`h-full ${isDone ? "bg-green-500" : isCancelled ? "bg-gray-400" : "bg-indigo-500"} transition-all`} style={{ width: `${(done / STEP_COUNT) * 100}%` }} />
                     </div>
                   </div>
                 </button>
                 <div className="mt-3 flex items-center justify-end gap-1 border-t border-gray-100 pt-2.5">
                   <button onClick={() => openView(a)} title="View" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 transition"><Eye className="w-4 h-4" /> View</button>
-                  <button onClick={() => (s(a.status) === "COMPLETED" ? openViewEdit(a) : openExisting(a))} title="Edit" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-amber-600 hover:bg-amber-50 transition"><Pencil className="w-4 h-4" /> Edit</button>
+                  <button onClick={() => (s(a.status) === "COMPLETED" ? openViewEdit(a) : openExisting(a))} title="Edit" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 transition"><Pencil className="w-4 h-4" /> Edit</button>
                   <button onClick={() => deleteAdmission(s(a.id), `${s(a.firstName)} ${s(a.lastName)}`.trim())} title="Delete" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition"><Trash2 className="w-4 h-4" /> Delete</button>
                 </div>
               </div>
@@ -1066,7 +1025,7 @@ export default function AdmissionsContent() {
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white px-6 pt-4 pb-5">
+            <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 text-white px-6 pt-4 pb-5">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20 text-base font-bold ring-2 ring-white/40">
@@ -1116,10 +1075,10 @@ export default function AdmissionsContent() {
                       title={reachable ? st.label : "Fill in the required fields on the earlier steps first."}
                       className={`group relative z-10 flex w-full flex-col items-center gap-1.5 px-1 ${reachable ? "" : "cursor-not-allowed"}`}
                     >
-                      <span className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold shadow-sm transition ${active ? "scale-110 border-amber-500 bg-amber-500 text-white ring-4 ring-amber-500/20" : isDone ? "border-green-500 bg-green-500 text-white" : reachable ? "border-gray-300 bg-white text-gray-600 group-hover:border-amber-400 group-hover:text-amber-500" : "border-gray-200 bg-white text-gray-400"}`}>
+                      <span className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold shadow-sm transition ${active ? "scale-110 border-indigo-600 bg-indigo-600 text-white ring-4 ring-indigo-500/20" : isDone ? "border-green-500 bg-green-500 text-white" : reachable ? "border-gray-300 bg-white text-gray-600 group-hover:border-indigo-400 group-hover:text-indigo-500" : "border-gray-200 bg-white text-gray-400"}`}>
                         {isDone && !active ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
                       </span>
-                      <span className={`text-center text-[10px] leading-tight ${active ? "font-bold text-amber-600" : isDone ? "font-medium text-gray-600" : "text-gray-400"}`}>
+                      <span className={`text-center text-[10px] leading-tight ${active ? "font-bold text-indigo-600" : isDone ? "font-medium text-gray-600" : "text-gray-400"}`}>
                         {st.label}{st.required && <span className="text-red-500">*</span>}
                       </span>
                     </button>
@@ -1168,8 +1127,8 @@ export default function AdmissionsContent() {
                     <Field label="Emergency Contact"><input className={inputCls} value={form.emergencyContact} onChange={(e) => set({ emergencyContact: e.target.value })} /></Field>
                     <Field label="Emergency Phone"><input className={inputCls} value={form.emergencyContactPhone} onChange={(e) => set({ emergencyContactPhone: e.target.value })} /></Field>
                   </div>
-                  <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-4">
-                    <p className="text-xs font-semibold text-amber-800 mb-2">Family Sponsor (gets a scoped Family portal login)</p>
+                  <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-4">
+                    <p className="text-xs font-semibold text-indigo-800 mb-2">Family Sponsor (gets a scoped Family portal login)</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <Field label="Sponsor Name"><input className={inputCls} value={form.sponsorName} onChange={(e) => set({ sponsorName: e.target.value })} /></Field>
                       <Field label="Sponsor Email"><input className={inputCls} value={form.sponsorEmail} onChange={(e) => set({ sponsorEmail: e.target.value })} placeholder="family@example.com" /></Field>
@@ -1184,8 +1143,8 @@ export default function AdmissionsContent() {
                   {/* Structured current medications → become ACTIVE meds on the resident card + MAR */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5"><Pill className="w-3.5 h-3.5 text-amber-600" /> Medications</span>
-                      <button type="button" onClick={addMed} className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800"><Plus className="w-3.5 h-3.5" /> Add medication</button>
+                      <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5"><Pill className="w-3.5 h-3.5 text-indigo-600" /> Medications</span>
+                      <button type="button" onClick={addMed} className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:text-indigo-800"><Plus className="w-3.5 h-3.5" /> Add medication</button>
                     </div>
                     {medList.length === 0 ? (
                       <p className="text-xs text-gray-500 border border-dashed border-gray-300 rounded-lg px-3 py-2">No medications added. Each one you add becomes an active medication on the resident card & MAR.</p>
@@ -1223,16 +1182,16 @@ export default function AdmissionsContent() {
                   {/* Risk roll-up + suggested level of care (Stage 3 → 5 handoff) */}
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <ClipboardList className="w-4 h-4 text-amber-600" />
+                      <ClipboardList className="w-4 h-4 text-indigo-600" />
                       <span className="font-semibold text-gray-800">{CLINICAL_DOMAINS.length}-Domain Clinical Assessment</span>
                       <span className="text-gray-500">· {sum.filled}/{CLINICAL_DOMAINS.length} assessed</span>
                       {sum.flags > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700"><AlertTriangle className="w-3 h-3" />{sum.flags} elevated</span>}
                     </div>
                     {suggestion && (
                       <div className="flex items-center gap-2 text-sm">
-                        <Sparkles className="w-4 h-4 text-amber-500" />
+                        <Sparkles className="w-4 h-4 text-indigo-500" />
                         <span className="text-gray-500">Suggested:</span>
-                        <button type="button" onClick={() => set({ careLevel: suggestion })} className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-white hover:bg-amber-600">
+                        <button type="button" onClick={() => set({ careLevel: suggestion })} className="inline-flex items-center gap-1 rounded-full bg-indigo-500 px-3 py-1 text-xs font-bold text-white hover:bg-indigo-700">
                           {suggestion[0] + suggestion.slice(1).toLowerCase()}{form.careLevel !== suggestion ? " — apply" : ""}
                         </button>
                       </div>
@@ -1246,7 +1205,7 @@ export default function AdmissionsContent() {
                       return (
                         <div key={d.key} className="rounded-xl border border-gray-200 bg-white p-3">
                           <div className="flex items-start gap-2 mb-2">
-                            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600"><Icon className="w-4 h-4" /></span>
+                            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><Icon className="w-4 h-4" /></span>
                             <div className="min-w-0">
                               <p className="text-sm font-bold text-gray-800 leading-tight">{d.label}</p>
                               <p className="text-[11px] text-gray-400 leading-tight">{d.hint}</p>
@@ -1264,7 +1223,7 @@ export default function AdmissionsContent() {
                             })}
                           </div>
                           <input value={cur.notes} onChange={(e) => setDomain(d.key, { notes: e.target.value })} placeholder="Notes (optional)…"
-                            className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg bg-white text-gray-900 text-xs focus:ring-2 focus:ring-amber-400 focus:border-transparent outline-none" />
+                            className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg bg-white text-gray-900 text-xs focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" />
                           {d.key === "skin" && <SkinWoundSection wounds={skinWounds} onChange={setSkinWounds} />}
                         </div>
                       );
@@ -1280,22 +1239,6 @@ export default function AdmissionsContent() {
                 );
               })()}
               {step === 4 && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Field label="Insurance Provider"><input className={inputCls} value={form.insuranceProvider} onChange={(e) => { set({ insuranceProvider: e.target.value, insuranceVerified: false, insuranceVerifiedAt: "" }); setVerifyMsg(""); }} /></Field>
-                    <Field label="Policy Number"><input className={inputCls} value={form.insurancePolicyNumber} onChange={(e) => { set({ insurancePolicyNumber: e.target.value, insuranceVerified: false, insuranceVerifiedAt: "" }); setVerifyMsg(""); }} /></Field>
-                  </div>
-                  <button onClick={runVerify} disabled={verifying} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">
-                    {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />} Verify Coverage
-                  </button>
-                  {(verifyMsg || form.insuranceVerified) && (
-                    <div className={`rounded-lg px-4 py-3 text-sm flex items-center gap-2 ${form.insuranceVerified ? "bg-green-50 text-green-800 border border-green-200" : "bg-amber-50 text-amber-800 border border-amber-200"}`}>
-                      {form.insuranceVerified ? <CheckCircle2 className="w-4 h-4" /> : <CircleDot className="w-4 h-4" />} {verifyMsg || "Verified."}
-                    </div>
-                  )}
-                </div>
-              )}
-              {step === 5 && (
                 <div className="space-y-4">
                   <Field label="Room Assignment *">
                     <select className={inputCls} value={form.roomNumber} onChange={(e) => set({ roomNumber: e.target.value })}>
@@ -1324,33 +1267,11 @@ export default function AdmissionsContent() {
                       )}
                     </div>
                   )}
-                </div>
-              )}
-              {step === 6 && (
-                <div className="space-y-3">
-                  <p className="text-sm text-gray-600">Select the care team assigned to this resident. They&apos;re notified on completion.</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto">
-                    {staffOptions.length === 0 && <p className="text-sm text-gray-500">No staff found.</p>}
-                    {staffOptions.map((m) => {
-                      const selected = parseTeam(form.careTeam).some((t) => t.id === m.id);
-                      return (
-                        <button key={m.id} onClick={() => toggleTeam(m)} className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border text-left text-sm transition ${selected ? "border-amber-400 bg-amber-50" : "border-gray-200 hover:border-amber-200"}`}>
-                          <span><span className="font-medium text-gray-900">{m.name}</span><span className="block text-xs text-gray-500">{m.role}</span></span>
-                          {selected && <Check className="w-4 h-4 text-amber-600 flex-shrink-0" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              {step === 7 && (
-                <div className="space-y-4">
-                  <Field label="Individual Care Plan"><textarea rows={4} className={inputCls} value={form.carePlan} onChange={(e) => set({ carePlan: e.target.value })} placeholder="Daily routine, interventions, preferences…" /></Field>
-                  <Field label="Care Goals"><textarea rows={2} className={inputCls} value={form.carePlanGoals} onChange={(e) => set({ carePlanGoals: e.target.value })} placeholder="Measurable wellness objectives…" /></Field>
+
                   {missing.length > 0 ? (
                     <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Before completing, provide: <b>{missing.join(", ")}</b>.</div>
                   ) : (
-                    <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">Ready — completing creates the resident{form.sponsorEmail ? ", links the family sponsor," : ""} notifies the care team, and opens an orientation task.</div>
+                    <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">Ready — completing creates the resident{form.sponsorEmail ? ", links the family sponsor," : ""} and opens an orientation task.</div>
                   )}
                 </div>
               )}
@@ -1362,7 +1283,7 @@ export default function AdmissionsContent() {
               <div className="flex flex-wrap items-center gap-2 justify-end">
                 <button onClick={() => saveStep(false)} disabled={saving} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm font-medium disabled:opacity-60">{saving ? "Saving…" : "Save"}</button>
                 {step < STEP_COUNT ? (
-                  <button onClick={() => saveStep(true)} disabled={saving || !!stepError(step)} title={stepError(step) ?? ""} className="inline-flex items-center gap-1 px-5 py-2 rounded-lg bg-amber-500 text-white font-semibold hover:bg-amber-600 text-sm disabled:opacity-50 disabled:cursor-not-allowed">Save &amp; Continue <ChevronRight className="w-4 h-4" /></button>
+                  <button onClick={() => saveStep(true)} disabled={saving || !!stepError(step)} title={stepError(step) ?? ""} className="inline-flex items-center gap-1 px-5 py-2 rounded-lg bg-indigo-500 text-white font-semibold hover:bg-indigo-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed">Save &amp; Continue <ChevronRight className="w-4 h-4" /></button>
                 ) : (
                   <button onClick={completeAdmission} disabled={saving || missing.length > 0} title={missing.length ? `Missing: ${missing.join(", ")}` : ""} className="inline-flex items-center gap-1 px-5 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 text-sm disabled:opacity-50"><CheckCircle2 className="w-4 h-4" /> Complete Admission</button>
                 )}
@@ -1379,7 +1300,7 @@ export default function AdmissionsContent() {
         const isDone = st === "COMPLETED";
         const isCancelled = st === "CANCELLED";
         const done = parseCompleted(row.completedSteps).length;
-        const badge = isDone ? "bg-green-100 text-green-700" : isCancelled ? "bg-gray-200 text-gray-600" : "bg-amber-100 text-amber-700";
+        const badge = isDone ? "bg-green-100 text-green-700" : isCancelled ? "bg-gray-200 text-gray-600" : "bg-indigo-100 text-indigo-700";
         const teamList = parseTeam(row.careTeam);
         const qrPayloadStr = s(row.qrPayload);
 
@@ -1411,7 +1332,7 @@ export default function AdmissionsContent() {
                         setViewOpen(false);
                         openExisting(row);
                       }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition"
                     >
                       <Pencil className="w-3.5 h-3.5" /> Edit Onboarding
                     </button>
@@ -1430,7 +1351,7 @@ export default function AdmissionsContent() {
                   {isDone && !editView && (
                     <button
                       onClick={() => setEditView(true)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition"
                     >
                       <Pencil className="w-3.5 h-3.5" /> Edit
                     </button>
@@ -1451,7 +1372,7 @@ export default function AdmissionsContent() {
                     <span>{Math.round((done / STEP_COUNT) * 100)}% ({done}/{STEP_COUNT} Steps)</span>
                   </div>
                   <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                    <div className={`h-full ${isDone ? "bg-green-500" : isCancelled ? "bg-gray-400" : "bg-amber-500"} transition-all`} style={{ width: `${(done / STEP_COUNT) * 100}%` }} />
+                    <div className={`h-full ${isDone ? "bg-green-500" : isCancelled ? "bg-gray-400" : "bg-indigo-500"} transition-all`} style={{ width: `${(done / STEP_COUNT) * 100}%` }} />
                   </div>
                 </div>
 
@@ -1608,7 +1529,7 @@ export default function AdmissionsContent() {
                       <h3 className="text-sm font-bold text-slate-800 border-b border-gray-100 pb-2">Room & Identifiers</h3>
                       <div>
                         <span className="block text-xs font-semibold text-gray-500">Assigned Room</span>
-                        <span className="text-lg font-bold text-amber-600">{row.roomNumber ? `Room ${s(row.roomNumber)}` : "Not assigned"}</span>
+                        <span className="text-lg font-bold text-indigo-600">{row.roomNumber ? `Room ${s(row.roomNumber)}` : "Not assigned"}</span>
                       </div>
 
                       {qrPayloadStr && (
@@ -1671,7 +1592,7 @@ export default function AdmissionsContent() {
                             <CheckCircle2 className="w-3.5 h-3.5" /> Verified
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200">
                             <CircleDot className="w-3.5 h-3.5" /> Unverified / Pending
                           </span>
                         )}
@@ -1704,13 +1625,13 @@ export default function AdmissionsContent() {
                 {editView ? (
                   <>
                     <button type="button" onClick={() => setEditView(false)} disabled={viewSaving} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm font-medium disabled:opacity-50">Cancel</button>
-                    <button type="submit" form="admission-edit-form" disabled={viewSaving} className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold shadow-sm transition disabled:opacity-50">{viewSaving ? "Saving…" : "Save changes"}</button>
+                    <button type="submit" form="admission-edit-form" disabled={viewSaving} className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition disabled:opacity-50">{viewSaving ? "Saving…" : "Save changes"}</button>
                   </>
                 ) : (
                   <>
                     <button onClick={() => setViewOpen(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm font-medium">Close</button>
                     {!isDone && !isCancelled && (
-                      <button onClick={() => { setViewOpen(false); openExisting(row); }} className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold shadow-sm transition">
+                      <button onClick={() => { setViewOpen(false); openExisting(row); }} className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition">
                         <Pencil className="w-4 h-4" /> Edit Onboarding
                       </button>
                     )}
@@ -1790,7 +1711,7 @@ function AdmissionEditForm({ row, onSave }: {
 
   return (
     <form id="admission-edit-form" onSubmit={(e) => { e.preventDefault(); submit(); }} className="space-y-5">
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+      <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-xs text-indigo-800">
         Editing this admission — saving updates the record and syncs the profile, medical details &amp; new medications to the resident card.
       </div>
 
@@ -1830,7 +1751,7 @@ function AdmissionEditForm({ row, onSave }: {
       <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
         <div className="flex items-center justify-between border-b border-gray-100 pb-2">
           <h3 className="text-sm font-bold text-slate-800">Medications</h3>
-          <button type="button" onClick={addM} className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800"><Plus className="w-3.5 h-3.5" /> Add medication</button>
+          <button type="button" onClick={addM} className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:text-indigo-800"><Plus className="w-3.5 h-3.5" /> Add medication</button>
         </div>
         {meds.length === 0 ? (
           <p className="text-xs text-gray-500">No medications. New ones you add are created on the resident&apos;s MAR (existing ones aren&apos;t duplicated).</p>
@@ -1871,8 +1792,8 @@ function AdmissionEditForm({ row, onSave }: {
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number; tone: "gray" | "amber" | "green" }) {
-  const tones: Record<string, string> = { gray: "text-gray-700", amber: "text-amber-600", green: "text-green-600" };
+function Stat({ label, value, tone }: { label: string; value: number; tone: "gray" | "indigo" | "green" }) {
+  const tones: Record<string, string> = { gray: "text-gray-700", indigo: "text-indigo-600", green: "text-green-600" };
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{label}</p>
