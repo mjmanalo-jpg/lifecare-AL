@@ -456,20 +456,26 @@ export default function AdmissionsContent() {
       : [];
     setMedList(medRows);
 
+    const L = a.layer1;
+    const goals = [s(L?.goalsPreferences), ...(Array.isArray(L?.overallGoals) ? L!.overallGoals! : [])].filter(Boolean).join("; ");
     set({
       firstName: firstName || form.firstName,
       lastName: lastName || form.lastName,
-      dateOfBirth: normDOB(a.layer1?.dateOfBirth) || form.dateOfBirth,
-      gender: s(a.layer1?.sex) || form.gender,
-      phone: s(a.layer1?.contactNo) || form.phone,
-      emergencyContact: s(a.layer1?.primaryContact) || form.emergencyContact,
-      allergies: s(a.layer1?.allergies) || form.allergies,
-      medicalHistory: s(a.layer1?.diagnoses) || form.medicalHistory,
-      medicalAssessment: s(a.layer1?.reasonForAdmission) || form.medicalAssessment,
-      surgeries: s(a.layer1?.surgeries) || form.surgeries,
-      hospitalizations: [a.layer1?.hospitalEd12mo ? "ED / hospital in last 12 months" : "", s(a.layer1?.hospitalEdReason)].filter(Boolean).join(" — ") || form.hospitalizations,
-      careAssessment: s(a.layer1?.reasonForAdmission) || form.careAssessment,
+      dateOfBirth: normDOB(L?.dateOfBirth) || form.dateOfBirth,
+      gender: s(L?.sex) || form.gender,
+      phone: s(L?.contactNo) || form.phone,
+      emergencyContact: [s(L?.primaryContact), s(L?.primaryContactRelationship)].filter(Boolean).join(" — ") || form.emergencyContact,
+      allergies: s(L?.allergies) || form.allergies,
+      medicalHistory: s(L?.diagnoses) || form.medicalHistory,
+      surgeries: s(L?.surgeries) || form.surgeries,
+      hospitalizations: [L?.hospitalEd12mo ? "ED / hospital in last 12 months" : "", s(L?.hospitalEdReason), s(L?.hospitalizations)].filter(Boolean).join(" — ") || form.hospitalizations,
+      // Clinical findings/notes (distinct from the reason-for-admission summary).
+      medicalAssessment: [L?.significantChange3090 ? `Significant change: ${s(L?.significantChangeDescribe)}` : "", s(L?.physicianFollowUp) && `Physician follow-up: ${s(L?.physicianFollowUp)}`].filter(Boolean).join("\n") || form.medicalAssessment,
+      careAssessment: s(L?.reasonForAdmission) || form.careAssessment,
       careLevel: careLevel || form.careLevel,
+      // Person-centred baseline → sponsor + care-plan goals.
+      sponsorName: s(L?.authorizedRepresentative) || form.sponsorName,
+      carePlanGoals: goals || form.carePlanGoals,
     });
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Prefilled from pre-admission", showConfirmButton: false, timer: 1600 });
   };
