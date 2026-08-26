@@ -236,8 +236,8 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
           experience: editForm.experience || null,
           documents: editForm.documents.length > 0 ? editForm.documents : null,
         });
-        const userId = editingStaff.raw?.userId;
-        if (userId) { await updateRecord("users", userId, { name: editForm.name, email: editForm.email, phone: editForm.phone }); }
+        const res = await fetch(`/api/staff/${editingStaff.id}/contact`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: editForm.name, email: editForm.email, phone: editForm.phone }) });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Could not update staff contact details.");
         await refetch();
         setEditingStaff(null);
         setViewingStaff(null);

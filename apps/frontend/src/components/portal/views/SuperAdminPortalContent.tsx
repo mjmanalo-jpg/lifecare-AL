@@ -28,6 +28,7 @@ import CameraActivityLog from "@/components/portal/views/clinical/CameraActivity
 import CameraRegistryBoard from "@/components/portal/views/CameraRegistryBoard";
 import GeofenceSettingsBoard from "@/components/portal/views/clinical/GeofenceSettingsBoard";
 import CareAcuityBoard from "@/components/portal/views/clinical/CareAcuityBoard";
+import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAssessmentV42";
 import FeatureMatrixDashboard from "@/components/portal/views/superadmin/FeatureMatrixDashboard";
 import { Trash2, Search, Eye, Edit, X, XCircle, UserPlus } from "lucide-react";
 import { useState, useMemo } from "react";
@@ -223,14 +224,12 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
           experience: editForm.experience || null,
           documents: editForm.documents.length > 0 ? editForm.documents : null,
         });
-        const userId = editingStaff.raw?.userId;
-        if (userId) {
-          await updateRecord("users", userId, {
-            name: editForm.name,
-            email: editForm.email,
-            phone: editForm.phone,
-          });
-        }
+        const res = await fetch(`/api/staff/${editingStaff.id}/contact`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: editForm.name, email: editForm.email, phone: editForm.phone }),
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Could not update staff contact details.");
         // Keep the roster employee-code mapping in sync (migration-free).
         if ((codeByStaffId[editingStaff.id] ?? "") !== editForm.employeeCode.trim()) {
           await setStaffCode(editingStaff.id, editForm.employeeCode);
@@ -440,6 +439,9 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   }
   if (tab === "rounds") {
     return <CareAcuityBoard clinicianRole="FACILITY_ADMIN" />;
+  }
+  if (tab === "prescreen") {
+    return <ResidentAssessmentV42 clinicianRole="FACILITY_ADMIN" />;
   }
   if (tab === "careplans") {
     return <CarePlanBoard />;
