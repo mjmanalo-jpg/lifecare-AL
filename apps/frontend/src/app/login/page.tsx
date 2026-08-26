@@ -58,6 +58,7 @@ export default function LoginPage() {
   // Employee flow: Continue resolves the account, then a pop-up collects the
   // password ("password") or, first-time, sets one ("firstTime").
   const [pwPrompt, setPwPrompt] = useState<null | "password" | "firstTime">(null);
+  const [employeeName, setEmployeeName] = useState("");
 
   // ── Shared state ──
   const [theme, setTheme] = useState<"dark" | "light">(loginConfig.baseTheme);
@@ -123,8 +124,8 @@ export default function LoginPage() {
         body: JSON.stringify({ company, mobile }),
       });
       const data = await response.json();
-      if (data.needsFirstPassword) { setNewPassword(""); setConfirmPassword(""); setPwPrompt("firstTime"); setIsLoading(false); return; }
-      if (data.needsPassword) { setPassword(""); setPwPrompt("password"); setIsLoading(false); return; }
+      if (data.needsFirstPassword) { setEmployeeName(data.name || ""); setNewPassword(""); setConfirmPassword(""); setPwPrompt("firstTime"); setIsLoading(false); return; }
+      if (data.needsPassword) { setEmployeeName(data.name || ""); setPassword(""); setPwPrompt("password"); setIsLoading(false); return; }
       if (!response.ok) throw new Error(data.error || "We couldn't find that account.");
       if (data.redirectUrl) { router.push(data.redirectUrl); return; }
       setIsLoading(false);
@@ -469,11 +470,13 @@ export default function LoginPage() {
               className="w-full max-w-sm rounded-2xl bg-background border border-border p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-lg font-bold tracking-tight mb-1">{pwPrompt === "firstTime" ? "Set up your first-time password" : "Enter your password"}</h3>
-              <p className="text-sm text-muted-foreground mb-4">
+              <h3 className="text-lg font-bold tracking-tight mb-1 text-center">
+                {employeeName ? <>Welcome{pwPrompt === "firstTime" ? "" : " back"}, <span className="text-primary">{employeeName}</span>!</> : (pwPrompt === "firstTime" ? "Set up your first-time password" : "Enter your password")}
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4 text-center">
                 {pwPrompt === "firstTime"
                   ? `You don't have a password yet — create one to finish signing in to ${company || "your company"}. You'll use it every time from now on.`
-                  : `Signing in to ${company || "your company"} as ${mobile || "your number"}.`}
+                  : `Signing in to ${company || "your company"}.`}
               </p>
 
               {error && (

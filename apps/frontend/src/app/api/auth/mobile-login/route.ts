@@ -63,12 +63,12 @@ export async function POST(request: NextRequest) {
 
     // 3) First-time activation: no password yet.
     if (!user.passwordHash) {
-      if (!newPassword) return NextResponse.json({ needsFirstPassword: true }, { status: 200 });
+      if (!newPassword) return NextResponse.json({ needsFirstPassword: true, name: user.name }, { status: 200 });
       if (newPassword.length < 8) return NextResponse.json({ error: "Choose a password of at least 8 characters." }, { status: 400 });
       await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(newPassword, 10) } });
     } else {
       // Returning account — "Continue" (no password yet) → prompt for password.
-      if (!password) return NextResponse.json({ needsPassword: true }, { status: 200 });
+      if (!password) return NextResponse.json({ needsPassword: true, name: user.name }, { status: 200 });
       if (!(await bcrypt.compare(password, user.passwordHash))) {
         return NextResponse.json({ error: "Incorrect password." }, { status: 401 });
       }
