@@ -23,7 +23,7 @@ export type AssessmentStatus = "DRAFT" | "COMPLETED" | "VALIDATED" | "SUPERSEDED
  * Legacy records written before this tag existed default to PREADMISSION (the
  * instrument's original home), via {@link originOf}.
  */
-export type AssessmentOrigin = "PREADMISSION" | "ACUITY";
+export type AssessmentOrigin = "PREADMISSION" | "ACUITY" | "ADMISSION";
 
 /** The board an assessment belongs to; untagged legacy records → PREADMISSION. */
 export function originOf(a: Pick<AssessmentV42, "origin">): AssessmentOrigin {

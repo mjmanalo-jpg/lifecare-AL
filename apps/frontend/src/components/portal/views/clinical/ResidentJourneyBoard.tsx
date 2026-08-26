@@ -21,7 +21,7 @@ import {
   UserPlus, ClipboardList, Gauge, Layers, Pill, AlertTriangle, Bandage,
   Stethoscope, FolderOpen, FileText, Scale, HeartHandshake, StickyNote, ClipboardCheck,
   RefreshCw, ShieldCheck, ShieldAlert, CalendarClock,
-  TrendingUp, TrendingDown, Minus, ArrowRight, GitCompareArrows,
+  TrendingUp, TrendingDown, Minus, ArrowRight, GitCompareArrows, Paperclip,
   type LucideIcon,
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -48,7 +48,21 @@ interface FormRecord {
   validation: FormValidation | null; completedBy: string; completedAt: string;
   domains: DomainRow[];
 }
+interface AdmissionForm {
+  id: string; date: string; residentName: string; room: string; careLevel: string; v42Level: string; status: string;
+  dob: string; gender: string; phone: string; email: string; emergencyContact: string; emergencyContactPhone: string;
+  medicalAssessment: string; allergies: string; medicalHistory: string; surgeries: string; hospitalizations: string;
+  medications: { name: string; dose?: string; frequency?: string }[];
+  attachments: { url: string; name: string }[];
+  domains: DomainRow[];
+}
 const s = (v: unknown) => (v == null ? "" : String(v));
+// Parse the admission's serialized careAssessment blob (migration-free clinical store).
+const parseCareBlob = (raw: string): { meds: { name: string; dose?: string; frequency?: string }[]; attachments: { url: string; name: string }[]; surgeries: string; hospitalizations: string } => {
+  const t = (raw || "").trim();
+  if (t.startsWith("{")) { try { const o = JSON.parse(t); return { meds: Array.isArray(o.medications) ? o.medications : [], attachments: Array.isArray(o.attachments) ? o.attachments : [], surgeries: String(o.surgeries ?? ""), hospitalizations: String(o.hospitalizations ?? "") }; } catch { /* not structured */ } }
+  return { meds: [], attachments: [], surgeries: "", hospitalizations: "" };
+};
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 const pick = (r: Row, ...keys: string[]) => { for (const k of keys) { const v = r?.[k]; if (v != null && v !== "") return s(v); } return ""; };
 const fmtDate = (iso: string) => { const d = new Date(iso); return isNaN(d.getTime()) ? "—" : d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); };
@@ -127,7 +141,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
   const forms = useMemo<FormRecord[]>(() => {
     if (!resident) return [];
     return assessmentsV42
-      .filter((a) => s(a?.layer1?.residentId) === resident.id)
+      .filter((a) => s(a?.layer1?.residentId) === resident.id && originOf(a) !== "ADMISSION")
       .map((a) => {
         const isAcuity = originOf(a) === "ACUITY";
         const isReassess = !!s(a?.layer3?.priorAssessmentId);
@@ -158,6 +172,33 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       })
       .sort((x, y) => (y.date || "").localeCompare(x.date || ""));
   }, [resident, assessmentsV42]);
+
+  // Completed admission intake forms — the full onboarding record (all details),
+  // distinct from the screening pre-admission. 14-domain + LOC come from the
+  // admission's own ADMISSION-origin assessment (av42-adm-<id>).
+  const admissionForms = useMemo<AdmissionForm[]>(() => {
+    if (!resident) return [];
+    const byId = new Map((parseArr(settingVal(settingRows, "assessments_v42")) as Row[]).map((a) => [s(a.id), a]));
+    return (admQ.data || [])
+      .filter((a) => s(a.residentId) === resident.id && s(a.status).toUpperCase() === "COMPLETED")
+      .map((a) => {
+        const blob = parseCareBlob(s(a.careAssessment));
+        const v42 = byId.get(`av42-adm-${s(a.id)}`);
+        const v42Level = v42 ? (s(v42.layer3?.finalLevel) || s(classifyAssessment({ domains: v42.domains ?? {}, context: v42.context ?? {} }).suggestedLevel)) : "";
+        return {
+          id: s(a.id), date: pick(a, "completedAt", "updatedAt", "createdAt"),
+          residentName: `${s(a.firstName)} ${s(a.lastName)}`.trim(), room: s(a.roomNumber),
+          careLevel: s(a.careLevel), v42Level, status: s(a.status).toUpperCase(),
+          dob: s(a.dateOfBirth).slice(0, 10), gender: s(a.gender), phone: s(a.phone), email: s(a.email),
+          emergencyContact: s(a.emergencyContact), emergencyContactPhone: s(a.emergencyContactPhone),
+          medicalAssessment: s(a.medicalAssessment), allergies: s(a.allergies), medicalHistory: s(a.medicalHistory),
+          surgeries: blob.surgeries || s(a.surgeries), hospitalizations: blob.hospitalizations || s(a.hospitalizations),
+          medications: blob.meds, attachments: blob.attachments,
+          domains: v42 ? DOMAIN_CODES.map((code) => ({ code, name: DOMAIN_NAME[code] || code, score: Number(v42.domains?.[code]?.score ?? 0), note: s(v42.domains?.[code]?.goalNote) })) : [],
+        };
+      })
+      .sort((x, y) => (y.date || "").localeCompare(x.date || ""));
+  }, [resident, admQ.data, settingRows]);
 
   const journey = useMemo<JourneyEvent[]>(() => {
     if (!resident) return [];
@@ -273,7 +314,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       </div>
 
       {view === "forms" ? (
-        <FormsPanel forms={forms} />
+        <FormsPanel forms={forms} admissions={admissionForms} />
       ) : (
       <>
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -381,18 +422,26 @@ function TrendPill({ delta, suffix = "" }: { delta: number; suffix?: string }) {
   );
 }
 
-function FormsPanel({ forms }: { forms: FormRecord[] }) {
+function FormsPanel({ forms, admissions = [] }: { forms: FormRecord[]; admissions?: AdmissionForm[] }) {
   const [openId, setOpenId] = useState<string | null>(forms[0]?.id ?? null);
-  if (forms.length === 0) {
+  const [openAdm, setOpenAdm] = useState<string | null>(admissions[0]?.id ?? null);
+  if (forms.length === 0 && admissions.length === 0) {
     return (
       <div className="rounded-2xl border p-10 text-center text-sm text-[var(--clinical-muted)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
-        No assessment forms recorded for this resident yet. Pre-admission assessments and reassessments appear here as they are created.
+        No assessment forms recorded for this resident yet. Pre-admission assessments, admissions, and reassessments appear here as they are created.
       </div>
     );
   }
   return (
     <div className="space-y-6">
-      <p className="text-sm text-[var(--clinical-muted)]">Complete record trail of every assessment form for this resident — from pre-admission intake through each reassessment. Click a form to view its result. {forms.length} form{forms.length === 1 ? "" : "s"} on file.</p>
+      {admissions.length > 0 && (
+        <section className="space-y-3">
+          <h3 className="text-sm font-bold text-[var(--clinical-ink)]">Admission / Intake {admissions.length > 1 ? `(${admissions.length})` : ""}</h3>
+          {admissions.map((a) => <AdmissionCard key={a.id} a={a} open={openAdm === a.id} onToggle={() => setOpenAdm(openAdm === a.id ? null : a.id)} />)}
+        </section>
+      )}
+      {forms.length > 0 && <p className="text-sm text-[var(--clinical-muted)]">Complete record trail of every assessment form for this resident — from pre-admission intake through each reassessment. Click a form to view its result. {forms.length} form{forms.length === 1 ? "" : "s"} on file.</p>}
+      {forms.length > 0 && (
       <ol className="relative space-y-3 border-l-2 pl-6" style={{ borderColor: "var(--clinical-line)" }}>
         {forms.map((f, i) => {
           const Icon = f.icon;
@@ -433,6 +482,82 @@ function FormsPanel({ forms }: { forms: FormRecord[] }) {
           );
         })}
       </ol>
+      )}
+    </div>
+  );
+}
+
+// Full read-only admission / intake record — every detail captured on the form.
+function AdmField({ label, value }: { label: string; value: string }) {
+  if (!value) return null;
+  return <div><p className="text-[10px] font-bold uppercase tracking-wide text-[var(--clinical-muted)]">{label}</p><p className="mt-0.5 whitespace-pre-wrap text-[var(--clinical-ink)]">{value}</p></div>;
+}
+function AdmissionCard({ a, open, onToggle }: { a: AdmissionForm; open: boolean; onToggle: () => void }) {
+  const scored = a.domains.filter((d) => d.score > 0);
+  return (
+    <div className="overflow-hidden rounded-xl border transition" style={{ backgroundColor: "var(--clinical-surface)", borderColor: open ? "var(--clinical-panel)" : "var(--clinical-line)", boxShadow: open ? "0 0 0 1px var(--clinical-panel)" : undefined }}>
+      <button onClick={onToggle} aria-expanded={open} className="flex w-full items-start gap-3 p-4 text-left transition hover:bg-[var(--clinical-surface-2)]">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 14%, var(--clinical-surface))", color: "var(--clinical-panel)" }}><UserPlus className="h-5 w-5" /></span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-bold text-[var(--clinical-ink)]">Admission / Intake</span>
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ backgroundColor: "var(--clinical-surface-2)", color: "var(--clinical-ink-soft)" }}>Onboarding</span>
+            <span className="ml-auto text-[11px] tabular-nums text-[var(--clinical-muted)]">{fmtDate(a.date)}</span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white" style={{ backgroundColor: "var(--clinical-green)" }}>{a.status}</span>
+            {a.v42Level && <span className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-bold text-white" style={{ backgroundColor: "var(--clinical-coral)" }}>{a.v42Level}</span>}
+            {a.room && <span className="text-[11px] text-[var(--clinical-muted)]">Room {a.room}</span>}
+          </div>
+        </div>
+        <ChevronDown className={`mt-1 h-4 w-4 shrink-0 text-[var(--clinical-muted)] transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="space-y-4 border-t p-4 text-sm" style={{ borderColor: "var(--clinical-line)" }}>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <AdmField label="Date of birth" value={a.dob} />
+            <AdmField label="Gender" value={a.gender} />
+            <AdmField label="Phone" value={a.phone} />
+            <AdmField label="Email" value={a.email} />
+            <AdmField label="Emergency contact" value={a.emergencyContact} />
+            <AdmField label="Emergency phone" value={a.emergencyContactPhone} />
+            <AdmField label="Room" value={a.room} />
+            <AdmField label="Care level" value={a.careLevel} />
+          </div>
+          <AdmField label="Medical assessment" value={a.medicalAssessment} />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <AdmField label="Allergies" value={a.allergies} />
+            <AdmField label="Medical history" value={a.medicalHistory} />
+            <AdmField label="Previous surgeries" value={a.surgeries} />
+            <AdmField label="Hospitalizations" value={a.hospitalizations} />
+          </div>
+          {a.medications.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--clinical-muted)]">Medications</p>
+              <ul className="mt-1 space-y-1">{a.medications.map((m, i) => <li key={i} className="text-[var(--clinical-ink)]">{m.name}{[m.dose, m.frequency].filter(Boolean).length ? ` — ${[m.dose, m.frequency].filter(Boolean).join(" · ")}` : ""}</li>)}</ul>
+            </div>
+          )}
+          {a.attachments.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--clinical-muted)]">Assessment report</p>
+              <ul className="mt-1 space-y-1">{a.attachments.map((att) => <li key={att.url}><a href={att.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 font-medium text-[var(--clinical-panel)] hover:underline"><Paperclip className="h-3.5 w-3.5" />{att.name}</a></li>)}</ul>
+            </div>
+          )}
+          {scored.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--clinical-muted)]">14-domain assessment</p>
+              <div className="mt-1 grid grid-cols-1 gap-1 sm:grid-cols-2">
+                {scored.map((d) => (
+                  <div key={d.code} className="flex items-center justify-between gap-2 rounded-md px-2 py-1" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
+                    <span className="truncate text-[var(--clinical-ink-soft)]"><span className="font-bold text-[var(--clinical-panel)]">{d.code}</span> {d.name}</span>
+                    <span className="shrink-0 font-bold tabular-nums text-[var(--clinical-ink)]">{d.score}/4</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -377,7 +377,7 @@ export default function AdmissionsContent() {
   // records that are completed/validated are offered as a prefill source.
   const preadmitsV42 = useMemo<AssessmentV42[]>(
     () => (parseArr(settingRows.find((r) => (r.key ?? r.id) === ASSESSMENTS_V42_KEY)?.value) as unknown as AssessmentV42[])
-      .filter((a) => originOf(a) !== "ACUITY")
+      .filter((a) => originOf(a) === "PREADMISSION")
       .filter((a) => a.status === "COMPLETED" || a.status === "VALIDATED")
       .filter((a) => String(a.layer1?.residentName ?? "").trim())
       .sort((a, b) => String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? ""))),
@@ -433,11 +433,13 @@ export default function AdmissionsContent() {
   const removeAttachment = (url: string) => setAttachments((a) => a.filter((x) => x.url !== url));
 
   // ── v4.2 14-domain assessment (Care Assess step) ──────────────────────────
-  // The admission edits the same v4.2 instrument used at pre-admission. `v42Domains`
-  // holds the AS-01..AS-14 scores; `v42SourceId` links back to the assessments_v42
-  // record we seed from / write to.
+  // The admission owns a DISTINCT v4.2 assessment (origin ADMISSION), seeded from
+  // the screening pre-admission but never overwriting it. `v42Domains` holds the
+  // AS-01..AS-14 scores; `v42PriorId` records the screening lineage.
   const [v42Domains, setV42Domains] = useState<Record<string, DomainEntry>>({});
-  const [v42SourceId, setV42SourceId] = useState<string>("");
+  // The screening pre-admission this admission was prefilled from (lineage only —
+  // stored as priorAssessmentId on the distinct admission assessment).
+  const [v42PriorId, setV42PriorId] = useState<string>("");
   // Latest assessments_v42 list this wizard session wrote — avoids re-reading the
   // polled settingRows (which can lag) when persisting twice in one session.
   const v42ListRef = useRef<AssessmentV42[] | null>(null);
@@ -495,7 +497,7 @@ export default function AdmissionsContent() {
     // Carry the actual v4.2 domain scores in — the Care Assess step renders and
     // edits them directly (the careLevel + acuity-seed sync effect derives the rest).
     setV42Domains(a.domains ?? {});
-    setV42SourceId(s(a.id));
+    setV42PriorId(s(a.id));
 
     const meds = s(a.layer1?.medications);
     const medRows: MedRow[] = meds
@@ -645,7 +647,7 @@ export default function AdmissionsContent() {
     [allRooms, occupiedRooms, form.roomNumber]
   );
 
-  const openNew = () => { setForm({ ...emptyForm }); setClinical({}); setSkinWounds([]); setMedList([]); setAttachments([]); setPrefillTotal(null); setV42Domains({}); setV42SourceId(""); setStep(1); setWizardOpen(true); };
+  const openNew = () => { setForm({ ...emptyForm }); setClinical({}); setSkinWounds([]); setMedList([]); setAttachments([]); setPrefillTotal(null); setV42Domains({}); setV42PriorId(""); setStep(1); setWizardOpen(true); };
 
   const openView = (row: Row) => {
     setSelectedAdmission(row);
@@ -727,14 +729,20 @@ export default function AdmissionsContent() {
       careTeam: s(row.careTeam) || "[]", carePlan: s(row.carePlan), carePlanGoals: s(row.carePlanGoals),
       completedSteps: s(row.completedSteps) || "[]", status: s(row.status),
     });
-    // Seed the v4.2 Care Assess grid from the linked pre-admission assessment
-    // (by explicit link, else by resident name). Blank = a fresh assessment.
+    // Seed the v4.2 Care Assess grid: prefer this admission's OWN saved assessment
+    // (av42-adm-<id>); else fall back to the linked screening pre-admission.
     const rid = s(row.id);
     const rname = `${s(row.firstName)} ${s(row.lastName)}`.trim().toLowerCase();
-    const linked = preadmitsV42.find((a) => s(a.layer1?.convertedAdmissionId) === rid && rid)
-      || preadmitsV42.find((a) => s(a.layer1?.residentName).trim().toLowerCase() === rname && rname);
-    setV42Domains(linked?.domains ?? {});
-    setV42SourceId(linked ? s(linked.id) : "");
+    const allV42 = parseArr(settingRows.find((r) => (r.key ?? r.id) === ASSESSMENTS_V42_KEY)?.value) as unknown as AssessmentV42[];
+    const own = allV42.find((a) => s(a.id) === `av42-adm-${rid}`);
+    if (own) {
+      setV42Domains(own.domains ?? {});
+      setV42PriorId(s(own.layer3?.priorAssessmentId));
+    } else {
+      const screening = allV42.find((a) => originOf(a) === "PREADMISSION" && ((s(a.layer1?.convertedAdmissionId) === rid && rid) || (s(a.layer1?.residentName).trim().toLowerCase() === rname && rname)));
+      setV42Domains(screening?.domains ?? {});
+      setV42PriorId(screening ? s(screening.id) : "");
+    }
     setStep(Math.min(Math.max(Number(row.currentStep) || 1, 1), STEP_COUNT));
     setWizardOpen(true);
   };
@@ -787,17 +795,21 @@ export default function AdmissionsContent() {
     // so a second write in the same session (e.g. the completion backfill) finds
     // the record it just created instead of duplicating it.
     const list = v42ListRef.current ?? (parseArr(settingRows.find((r) => (r.key ?? r.id) === ASSESSMENTS_V42_KEY)?.value) as unknown as AssessmentV42[]);
-    const existing = list.find((a) => (v42SourceId && s(a.id) === v42SourceId) || s(a.layer1?.convertedAdmissionId) === admissionId);
+    // One distinct ADMISSION-origin assessment per admission (deterministic id), so
+    // it never overwrites the screening pre-admission — both stay on file.
+    const recId = `av42-adm-${admissionId}`;
+    const existing = list.find((a) => s(a.id) === recId);
     const residentName = `${form.firstName} ${form.lastName}`.trim();
-    let rec: AssessmentV42;
-    if (existing) {
-      rec = { ...existing, domains: v42Domains, updatedAt: now, layer1: { ...existing.layer1, residentName: residentName || existing.layer1?.residentName, convertedAdmissionId: admissionId, ...(residentId ? { residentId } : {}) } };
-    } else {
-      const base = newAssessment(newId(), undefined, now);
-      rec = { ...base, origin: "PREADMISSION", domains: v42Domains, layer1: { ...base.layer1, residentName, convertedAdmissionId: admissionId, ...(residentId ? { residentId } : {}) } };
-      setV42SourceId(rec.id);
-    }
-    const next = [rec, ...list.filter((a) => s(a.id) !== s(rec.id))];
+    const base = existing ?? newAssessment(recId, undefined, now);
+    const rec: AssessmentV42 = {
+      ...base,
+      origin: "ADMISSION",
+      domains: v42Domains,
+      updatedAt: now,
+      layer1: { ...base.layer1, residentName: residentName || base.layer1?.residentName, convertedAdmissionId: admissionId, ...(residentId ? { residentId } : {}) },
+      layer3: { ...base.layer3, ...(v42PriorId ? { priorAssessmentId: v42PriorId } : {}) },
+    };
+    const next = [rec, ...list.filter((a) => s(a.id) !== recId)];
     v42ListRef.current = next;
     await upsertRecord("app-settings", ASSESSMENTS_V42_KEY, { key: ASSESSMENTS_V42_KEY, value: JSON.stringify(next) });
   };
