@@ -34,9 +34,10 @@ import {
   type AssessmentOrigin, type ModifierReconciliationDecision,
 } from "@/lib/lifecare/assessment.ts";
 import {
-  SCORED_DOMAINS, ASSESSMENT_DOMAINS, CLINICAL_MODIFIERS, modifierById,
+  ASSESSMENT_DOMAINS, modifierById,
 } from "@/lib/lifecare/dataset.ts";
 import type { CareLevel, DomainCode, ClinicalContext } from "@/lib/lifecare/types.ts";
+import DomainScoreGrid from "./DomainScoreGrid";
 
 type SettingRow = { key?: string; id?: string; value?: string };
 
@@ -901,69 +902,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
               )}
 
               {/* ── LAYER 2 ── */}
-              {layer === 2 && (
-                <>
-                  <div className="rounded-lg border px-3 py-2 text-[11px] text-[var(--clinical-muted)] flex items-start gap-2" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
-                    <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[var(--clinical-panel)]" />
-                    <span>Score each domain 0–4 against the anchor that best matches the resident&apos;s assessed need. The score is <b>advisory</b> — the deterministic rule engine (Layer 3) sets the Level of Care. NS-01 is captured in Layer 1 and never counted in the total.</span>
-                  </div>
-                  {SCORED_DOMAINS.map((dom) => {
-                    const code = dom.code as DomainCode;
-                    const entry = draft.domains[code] ?? { score: 0 };
-                    // Modifiers whose affectedDomains relate to this domain (best-effort match on the AS name tokens) + always allow flagging any.
-                    const relatedMods = CLINICAL_MODIFIERS.filter((m) => {
-                      const hay = `${dom.name} ${dom.scope}`.toUpperCase();
-                      return m.affectedDomains.some((d) => hay.includes(d));
-                    });
-                    const flags = entry.modifierFlags ?? [];
-                    const toggleFlag = (id: string) => {
-                      const set = new Set(flags);
-                      if (set.has(id)) set.delete(id); else set.add(id);
-                      patchDomain(code, { modifierFlags: [...set] });
-                    };
-                    return (
-                      <ClinicalCard key={code} top="teal" className="p-4 sm:p-5">
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <h3 className="text-sm font-bold text-[var(--clinical-ink)]"><span className="text-[var(--clinical-panel)] mr-1.5">{code}</span>{dom.name}</h3>
-                          <span className="text-xs font-bold text-[var(--clinical-panel)] rounded px-2 py-0.5" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)" }}>{entry.score}<span className="text-[var(--clinical-muted)] font-medium">/4</span></span>
-                        </div>
-                        <div className="grid grid-cols-1 gap-1.5">
-                          {dom.anchors.map((anchor, i) => {
-                            const on = entry.score === i;
-                            return (
-                              <button key={i} type="button" onClick={() => patchDomain(code, { score: i })}
-                                className={`text-left px-3 py-2 rounded-lg text-xs border transition flex items-start gap-2 ${on ? chipOn : chipOff}`}>
-                                <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${on ? "bg-white/20" : "bg-[var(--clinical-surface-2)] text-[var(--clinical-muted)]"}`}>{i}</span>
-                                <span className="leading-snug">{anchor}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                          <Area label="Supporting Evidence *" value={entry.evidence} onChange={(v) => patchDomain(code, { evidence: v })} placeholder={dom.evidenceRequired} />
-                          <Area label="Goal / Preference Note" value={entry.goalNote} onChange={(v) => patchDomain(code, { goalNote: v })} placeholder="Resident-specific goal, routine or preference…" />
-                        </div>
-                        {relatedMods.length > 0 && (
-                          <div className="mt-3">
-                            <MicroLabel className="mb-1.5">Clinical Modifier Flags</MicroLabel>
-                            <div className="flex flex-wrap gap-1.5">
-                              {relatedMods.map((m) => {
-                                const on = flags.includes(m.id);
-                                return (
-                                  <button key={m.id} type="button" onClick={() => toggleFlag(m.id)} title={m.taskPlanEffect}
-                                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition ${on ? chipOn : chipOff}`}>
-                                    {m.id} · {m.name}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </ClinicalCard>
-                    );
-                  })}
-                </>
-              )}
+              {layer === 2 && <DomainScoreGrid domains={draft.domains} onPatch={patchDomain} />}
 
               {/* ── LAYER 3 ── */}
               {layer === 3 && liveResult && (
