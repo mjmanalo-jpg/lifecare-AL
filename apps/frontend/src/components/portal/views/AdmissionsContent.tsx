@@ -413,6 +413,15 @@ export default function AdmissionsContent() {
     if (!Object.keys(v42Domains).length) return null;
     return classifyAssessment({ domains: v42Domains, context: {} }).suggestedLevel;
   }, [v42Domains]);
+  // Lock the page scroll while a modal is open, so the background scrollbar
+  // doesn't sit beside the modal's own scrollbar (the double-scrollbar overlap).
+  useEffect(() => {
+    if (!wizardOpen && !viewOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [wizardOpen, viewOpen]);
+
   // Keep the legacy careLevel enum + acuity-seed map in sync with the v4.2 scores,
   // so downstream billing / care-plan / seeding keep working off one instrument.
   useEffect(() => {
