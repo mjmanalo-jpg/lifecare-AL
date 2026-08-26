@@ -359,7 +359,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Residents", icon: Users, route: "/superadmin/records" },
       { name: "Assessment & Level of Care", icon: ClipboardList, route: "/superadmin/rounds" },
       { name: "Pre-Admission Assessment (v4.2)", icon: ClipboardList, route: "/superadmin/prescreen", group: "Operations" },
-      { name: "Rooms", icon: DoorOpen, route: "/superadmin/rooms", group: "Operations" },
+      { name: "Room Management", icon: DoorOpen, route: "/superadmin/rooms", group: "Operations" },
       { name: "Care Planning", icon: Target, route: "/superadmin/careplans" },
       { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/superadmin/tasks" },
       { name: "Shift Endorsement & Continuity", icon: FileText, route: "/superadmin/reports" },
