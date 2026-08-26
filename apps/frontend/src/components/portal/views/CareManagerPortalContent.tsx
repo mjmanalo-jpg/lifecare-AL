@@ -4,6 +4,7 @@ import CareManagerGovernance from "@/components/portal/dashboards/care-manager/C
 import AlertCenter from "@/components/portal/views/clinical/AlertCenter";
 import ApprovalWorkflows from "@/components/portal/views/clinical/ApprovalWorkflows";
 import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
+import FacilityRooms from "@/components/portal/views/FacilityRooms";
 import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAssessmentV42";
 import TodaysCareBoard from "@/components/portal/views/clinical/TodaysCareBoard";
 import AdditionalServicesBoard from "@/components/portal/views/clinical/AdditionalServicesBoard";
@@ -69,6 +70,8 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
       return <LeadPipelineBoard />;
     case "admissions":
       return <OnboardingHub initialTab="admissions" />;
+    case "rooms":
+      return <FacilityRooms />;
     case "residents":
       return <CareLogsBoard clinicianRole="CARE_MANAGER" />;
     case "records":

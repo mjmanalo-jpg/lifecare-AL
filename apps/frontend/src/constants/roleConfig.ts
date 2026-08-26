@@ -521,6 +521,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Incident Reports", icon: AlertTriangle, route: "/care_manager/incidents", group: "Safety / Transitions" },
       { name: "CRM & Leads", icon: UserPlus, route: "/care_manager/crm", group: "Safety / Transitions" },
       { name: "Admissions & Returns", icon: UserPlus, route: "/care_manager/admissions", group: "Safety / Transitions" },
+      { name: "Room Management", icon: DoorOpen, route: "/care_manager/rooms", group: "Safety / Transitions" },
       { name: "Live Safety Monitoring", icon: Video, route: "/care_manager/monitoring", group: "Safety / Transitions" },
       { name: "Wound Care", icon: Bandage, route: "/care_manager/woundcare", group: "Safety / Transitions" },
       { name: "Vital Sign Trends", icon: HeartPulse, route: "/care_manager/vitalstrend", group: "Safety / Transitions" },
