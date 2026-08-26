@@ -84,6 +84,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
   const docQ = useLiveQuery<Row>("resident-documents", { query: "take=1000", tables: ["ResidentDocument"] });
   const noteQ = useLiveQuery<Row>("resident-notes", { query: "take=2000", tables: ["ResidentNote"] });
   const ceQ = useLiveQuery<Row>("care-events", { query: "take=2000", tables: ["CareEvent"] });
+  const admQ = useLiveQuery<Row>("admissions", { query: "take=2000", tables: ["Admission"] });
 
   const residents = useMemo(() => (resQ.data || []).map((raw) => {
     const a = adaptResident(raw);
@@ -102,11 +103,30 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
 
   const resident = useMemo(() => residents.find((r) => r.id === resId) || null, [residents, resId]);
 
+  // This resident's admissions — used to link a pre-admission/admission v4.2
+  // assessment (which carries convertedAdmissionId, not always residentId) to the
+  // resident so a validated pre-admission and a completed admission both surface.
+  const residentAdmissionIds = useMemo(() => {
+    if (!resident) return new Set<string>();
+    return new Set((admQ.data || []).filter((a) => s(a.residentId) === resident.id).map((a) => s(a.id)));
+  }, [admQ.data, resident]);
+  const assessmentsV42 = useMemo<Row[]>(() => {
+    const list = parseArr(settingVal(settingRows, "assessments_v42")) as Row[];
+    if (!resident) return list;
+    return list.map((a) => {
+      if (s(a?.layer1?.residentId) === resident.id) return a;
+      if (a?.layer1?.convertedAdmissionId && residentAdmissionIds.has(s(a.layer1.convertedAdmissionId))) {
+        return { ...a, layer1: { ...a.layer1, residentId: resident.id } };
+      }
+      return a;
+    });
+  }, [settingRows, resident, residentAdmissionIds]);
+
   // Assessment-form history (Pre-Admission → reassessment) for the Forms tab.
   // Live off `assessments_v42`, so every new reassessment shows up automatically.
   const forms = useMemo<FormRecord[]>(() => {
     if (!resident) return [];
-    return parseArr(settingVal(settingRows, "assessments_v42"))
+    return assessmentsV42
       .filter((a) => s(a?.layer1?.residentId) === resident.id)
       .map((a) => {
         const isAcuity = originOf(a) === "ACUITY";
@@ -137,7 +157,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
         };
       })
       .sort((x, y) => (y.date || "").localeCompare(x.date || ""));
-  }, [resident, settingRows]);
+  }, [resident, assessmentsV42]);
 
   const journey = useMemo<JourneyEvent[]>(() => {
     if (!resident) return [];
@@ -146,7 +166,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       admittedAt: resident.admittedAt || undefined,
       admissionSummary: resident.admissionSummary,
       locHistory: parseArr(settingVal(settingRows, "loc_history")),
-      assessmentsV42: parseArr(settingVal(settingRows, "assessments_v42")),
+      assessmentsV42,
       carePlanReviews: parseArr(settingVal(settingRows, "care_plan_reviews")),
       acuity: parseArr(settingVal(settingRows, "acuity_assessments")),
       woundRecords: parseArr(settingVal(settingRows, "wound_records")),
@@ -162,7 +182,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       notes: noteQ.data || [],
       careEvents: ceQ.data || [],
     });
-  }, [resident, settingRows, medQ.data, incQ.data, refQ.data, docQ.data, noteQ.data, ceQ.data]);
+  }, [resident, assessmentsV42, settingRows, medQ.data, incQ.data, refQ.data, docQ.data, noteQ.data, ceQ.data]);
 
   // Counts per category (for the filter chips) + the filtered feed.
   const counts = useMemo(() => {

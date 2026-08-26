@@ -438,12 +438,19 @@ export default function AdmissionsContent() {
   // record we seed from / write to.
   const [v42Domains, setV42Domains] = useState<Record<string, DomainEntry>>({});
   const [v42SourceId, setV42SourceId] = useState<string>("");
+  // Latest assessments_v42 list this wizard session wrote — avoids re-reading the
+  // polled settingRows (which can lag) when persisting twice in one session.
+  const v42ListRef = useRef<AssessmentV42[] | null>(null);
   const patchV42 = (code: DomainCode, p: Partial<DomainEntry>) =>
     setV42Domains((d) => ({ ...d, [code]: { score: 0, evidence: "", ...d[code], ...p } }));
   const v42Level = useMemo<CareLevel | null>(() => {
     if (!Object.keys(v42Domains).length) return null;
     return classifyAssessment({ domains: v42Domains, context: {} }).suggestedLevel;
   }, [v42Domains]);
+  // Fresh v4.2 write-list per wizard session (avoids carrying one admission's
+  // list into the next). Reset in an effect so handlers never touch the ref.
+  useEffect(() => { if (wizardOpen) v42ListRef.current = null; }, [wizardOpen]);
+
   // Lock the page scroll while a modal is open, so the background scrollbar
   // doesn't sit beside the modal's own scrollbar (the double-scrollbar overlap).
   useEffect(() => {
@@ -773,21 +780,25 @@ export default function AdmissionsContent() {
   // Write the edited v4.2 domains back to the linked pre-admission assessment
   // (create one linked to this admission if none), so the admission and the
   // assessment board stay one source of truth.
-  const persistV42 = async (admissionId: string) => {
+  const persistV42 = async (admissionId: string, residentId?: string) => {
     if (!Object.keys(v42Domains).length) return;
     const now = new Date().toISOString();
-    const list = parseArr(settingRows.find((r) => (r.key ?? r.id) === ASSESSMENTS_V42_KEY)?.value) as unknown as AssessmentV42[];
-    const existing = v42SourceId ? list.find((a) => s(a.id) === v42SourceId) : undefined;
+    // Prefer the list this session last wrote (ref) over the polled settingRows,
+    // so a second write in the same session (e.g. the completion backfill) finds
+    // the record it just created instead of duplicating it.
+    const list = v42ListRef.current ?? (parseArr(settingRows.find((r) => (r.key ?? r.id) === ASSESSMENTS_V42_KEY)?.value) as unknown as AssessmentV42[]);
+    const existing = list.find((a) => (v42SourceId && s(a.id) === v42SourceId) || s(a.layer1?.convertedAdmissionId) === admissionId);
     const residentName = `${form.firstName} ${form.lastName}`.trim();
     let rec: AssessmentV42;
     if (existing) {
-      rec = { ...existing, domains: v42Domains, updatedAt: now, layer1: { ...existing.layer1, residentName: residentName || existing.layer1?.residentName, convertedAdmissionId: admissionId } };
+      rec = { ...existing, domains: v42Domains, updatedAt: now, layer1: { ...existing.layer1, residentName: residentName || existing.layer1?.residentName, convertedAdmissionId: admissionId, ...(residentId ? { residentId } : {}) } };
     } else {
       const base = newAssessment(newId(), undefined, now);
-      rec = { ...base, origin: "PREADMISSION", domains: v42Domains, layer1: { ...base.layer1, residentName, convertedAdmissionId: admissionId } };
+      rec = { ...base, origin: "PREADMISSION", domains: v42Domains, layer1: { ...base.layer1, residentName, convertedAdmissionId: admissionId, ...(residentId ? { residentId } : {}) } };
       setV42SourceId(rec.id);
     }
     const next = [rec, ...list.filter((a) => s(a.id) !== s(rec.id))];
+    v42ListRef.current = next;
     await upsertRecord("app-settings", ASSESSMENTS_V42_KEY, { key: ASSESSMENTS_V42_KEY, value: JSON.stringify(next) });
   };
 
@@ -965,6 +976,10 @@ export default function AdmissionsContent() {
       // Never mark the admission COMPLETED if the resident profile didn't persist —
       // surface it instead of silently orphaning the admission (residentId null).
       if (!residentId) throw new Error("Resident profile could not be saved — the room may already be assigned to a different resident.");
+
+      // Link the admission's v4.2 assessment to the new resident so this admission
+      // form surfaces in One Care · One Journey (Forms) and the resident timeline.
+      if (id) await persistV42(id, residentId);
 
       // Handoff: notify the assigned care team + create an onboarding task.
       const team = parseTeam(form.careTeam);
