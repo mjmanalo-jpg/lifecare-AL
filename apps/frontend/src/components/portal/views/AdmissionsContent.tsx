@@ -1139,7 +1139,7 @@ export default function AdmissionsContent() {
                       title={reachable ? st.label : "Fill in the required fields on the earlier steps first."}
                       className={`group relative z-10 flex w-full flex-col items-center gap-1.5 px-1 ${reachable ? "" : "cursor-not-allowed"}`}
                     >
-                      <span className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold shadow-sm transition ${active ? "scale-110 border-indigo-600 bg-indigo-600 text-white ring-4 ring-indigo-500/20" : isDone ? "border-green-500 bg-green-500 text-white" : reachable ? "border-gray-300 bg-white text-gray-600 group-hover:border-indigo-400 group-hover:text-indigo-500" : "border-gray-200 bg-white text-gray-400"}`}>
+                      <span className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold shadow-sm transition ${active ? "border-indigo-600 bg-indigo-600 text-white shadow-md" : isDone ? "border-green-500 bg-green-500 text-white" : reachable ? "border-gray-300 bg-white text-gray-600 group-hover:border-indigo-400 group-hover:text-indigo-500" : "border-gray-200 bg-white text-gray-400"}`}>
                         {isDone && !active ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
                       </span>
                       <span className={`text-center text-[10px] leading-tight ${active ? "font-bold text-indigo-600" : isDone ? "font-medium text-gray-600" : "text-gray-400"}`}>
