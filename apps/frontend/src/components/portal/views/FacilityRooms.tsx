@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   DoorOpen, Search, X, Eye, Edit, Building2, MapPin,
-  ChevronDown, ChevronRight, Users, DollarSign, BedDouble,
+  ChevronDown, ChevronRight, Users, BedDouble,
   Wifi, Bath, Snowflake, Maximize, Check, XCircle, Settings, Plus,
 } from "lucide-react";
 import Swal from "@/lib/swal";
@@ -242,7 +242,7 @@ export default function FacilityRooms() {
           <div className="flex items-center gap-4 text-sm text-gray-600">
             <span>{room.capacity === 1 ? "Single" : `${room.capacity} beds`}</span>
             {room.rateMonthly && (
-              <span className="flex items-center gap-1"><DollarSign className="w-3.5 h-3.5" /> {room.rateMonthly.toLocaleString()}/mo</span>
+              <span className="flex items-center gap-1">₱{room.rateMonthly.toLocaleString()}/mo</span>
             )}
           </div>
           {room.features && (

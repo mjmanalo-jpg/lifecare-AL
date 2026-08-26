@@ -1114,9 +1114,10 @@ export default function AdmissionsContent() {
                 const rightFilled = isDone;
                 return (
                   <div key={st.n} className="relative flex min-w-[72px] flex-1 flex-col items-center">
-                    {/* connectors between nodes (centered on the 8×8 node → top-4) */}
-                    {idx > 0 && <span className="absolute right-1/2 top-4 h-0.5 w-full" style={{ backgroundColor: leftFilled ? "#22c55e" : "#e5e7eb" }} />}
-                    {idx < STEPS.length - 1 && <span className="absolute left-1/2 top-4 h-0.5 w-full" style={{ backgroundColor: rightFilled ? "#22c55e" : "#e5e7eb" }} />}
+                    {/* connectors sit in the gaps, inset past the 32px node so they
+                        never run under the circles (radius 16px + 2px breathing room) */}
+                    {idx > 0 && <span className="absolute left-0 top-4 h-0.5" style={{ width: "calc(50% - 18px)", backgroundColor: leftFilled ? "#22c55e" : "#e5e7eb" }} />}
+                    {idx < STEPS.length - 1 && <span className="absolute right-0 top-4 h-0.5" style={{ width: "calc(50% - 18px)", backgroundColor: rightFilled ? "#22c55e" : "#e5e7eb" }} />}
                     <button
                       onClick={() => reachable && setStep(st.n)}
                       disabled={!reachable}
