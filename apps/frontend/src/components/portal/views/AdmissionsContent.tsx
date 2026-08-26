@@ -1119,7 +1119,7 @@ export default function AdmissionsContent() {
             </div>
 
             {/* Stepper */}
-            <div className="flex items-start border-b border-gray-100 bg-gray-50/60 px-4 py-4 overflow-x-auto">
+            <div className="flex items-start border-b border-gray-100 bg-gray-50/60 px-4 py-4 overflow-hidden">
               {STEPS.map((st, idx) => {
                 const isDone = doneSet.has(st.n);
                 const active = st.n === step;
