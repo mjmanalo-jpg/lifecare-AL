@@ -15,6 +15,7 @@ import { ABOUT_ME_KEY, parseAboutMeStore, profileFor, AboutMeProfile as AboutPro
 import AboutMeProfile from "@/components/portal/views/clinical/AboutMeProfile";
 import DocumentSection from "@/components/portal/views/clinical/DocumentSection";
 import VaccinesPanel from "@/components/portal/views/clinical/VaccinesPanel";
+import BelongingsFormsPanel from "@/components/portal/views/clinical/BelongingsForms";
 import { updateRecord, upsertRecord } from "@/lib/api";
 import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
@@ -437,6 +438,7 @@ export default function ResidentCardPage() {
           {tab === "about" && (
             <>
               <AboutMeProfile profile={aboutProfile} canEdit={canEditAbout} onSave={saveAbout} />
+              <BelongingsFormsPanel residentId={id} residentName={name} room={s(resident.roomNumber)} canEdit={canEditAbout} />
               <DocumentSection residentId={id} documentType="BELONGINGS" label="Signed Documents" canEdit={canEditAbout} docs={docs} onChanged={refetchDocs} uploadedByName={sessionRole} />
             </>
           )}
