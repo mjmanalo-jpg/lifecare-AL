@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import {
   Pill, ClipboardList, ConciergeBell, ShieldAlert,
   UserRound, CalendarClock, Loader2, FileDown, StickyNote, IdCard,
-  Users, Phone, Syringe, Activity, HeartPulse, Gauge, AlertTriangle, Heart,
+  Users, Phone, Syringe, Activity, HeartPulse, Gauge, AlertTriangle, Heart, X,
 } from "lucide-react";
 import { taskNotesOf } from "@/lib/taskNotes";
 import { patientCode } from "@/lib/patientId";
@@ -13,7 +13,7 @@ import { parseAcuityItems, LOC_LEVEL_META } from "@/lib/locBilling";
 import { parseLocHistory, historyForResident, LOC_SOURCE_LABEL } from "@/lib/lifecare/locHistory";
 import { ABOUT_ME_KEY, parseAboutMeStore, profileFor, AboutMeProfile as AboutProfile } from "@/lib/aboutMe";
 import AboutMeProfile from "@/components/portal/views/clinical/AboutMeProfile";
-import { upsertRecord } from "@/lib/api";
+import { updateRecord, upsertRecord } from "@/lib/api";
 import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
 
@@ -154,7 +154,7 @@ export default function ResidentCardPage() {
 
   useEffect(() => { setCardUrl(window.location.href); }, []);
   useEffect(() => { if (cardUrl) QRCode.toDataURL(cardUrl, { width: 512, margin: 1 }).then(setQrData).catch(() => {}); }, [cardUrl]);
-  // Viewer role — only Nurse / Care Manager may edit the About Me profile.
+  // Viewer role — only Nurse / Care Manager / Super Admin may edit the About Me profile.
   useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => setSessionRole(s(d?.session?.role))).catch(() => {}); }, []);
 
   useEffect(() => {
@@ -217,15 +217,19 @@ export default function ResidentCardPage() {
 
   // Primary physician derived from the latest physician communication; diet from
   // the resident's active diet order (both migration-free).
+  // Prefer the resident record's own value (editable on the card); fall back to the
+  // derived value (latest physician comm / active diet order) when it's blank.
   const primaryPhysician = useMemo(() => {
+    if (s(resident?.primaryPhysician)) return s(resident?.primaryPhysician);
     const latest = [...comms].sort((a, b) => new Date(s(b.occurredAt)).getTime() - new Date(s(a.occurredAt)).getTime())[0];
     return s(latest?.physicianName);
-  }, [comms]);
+  }, [comms, resident]);
   const dietRestriction = useMemo(() => {
+    if (s(resident?.dietRestriction)) return s(resident?.dietRestriction);
     const active = diets.filter(d => d.active !== false)[0];
     if (!active) return "";
     return [s(active.dietType).replace(/_/g, " "), s(active.restrictions)].filter(Boolean).join(" · ");
-  }, [diets]);
+  }, [diets, resident]);
 
   // The admission 12-domain clinical assessment doubles as the ADL baseline.
   const baseline = useMemo(() => parseAssessment(s(admissions[0]?.careAssessment)), [admissions]);
@@ -253,7 +257,11 @@ export default function ResidentCardPage() {
     return parseAboutMeStore(row ? s(row.value) : "");
   }, [aboutRows]);
   const aboutProfile = useMemo(() => profileFor(aboutStore, id), [aboutStore, id]);
-  const canEditAbout = sessionRole === "NURSE" || sessionRole === "CARE_MANAGER";
+  const canEditAbout = sessionRole === "NURSE" || sessionRole === "CARE_MANAGER" || sessionRole === "SUPERADMIN";
+  // Resident master-profile fields (allergies, physician, emergency contact, diet)
+  // are server-gated to Care Manager / Super Admin (see residentProfileEditDenied),
+  // so mirror that on the client — a nurse editing them would 403 on save.
+  const canEditProfile = sessionRole === "CARE_MANAGER" || sessionRole === "SUPERADMIN";
   const saveAbout = async (next: AboutProfile) => {
     const stamped: AboutProfile = { ...next, updatedAt: new Date().toISOString(), updatedBy: sessionRole || "staff" };
     const nextStore = { ...aboutStore, [id]: stamped };
@@ -269,6 +277,19 @@ export default function ResidentCardPage() {
   const effHistory = useMemo(() => s(resident?.medicalHistory) || s(adm0.medicalHistory), [resident, adm0]);
   const effAssessment = useMemo(() => s(adm0.medicalAssessment), [adm0]);
   const primaryDiagnosis = useMemo(() => (effHistory.split(/[;·]/)[0] || "").trim(), [effHistory]);
+  // Editable, add-many diagnoses persist in the About Me store (migration-free);
+  // fall back to the medical-history-derived primary diagnosis when none saved yet.
+  const diagnoses = useMemo(() => {
+    const stored = (aboutProfile.diagnoses ?? []).map((d) => s(d).trim()).filter(Boolean);
+    return stored.length ? stored : primaryDiagnosis ? [primaryDiagnosis] : [];
+  }, [aboutProfile, primaryDiagnosis]);
+  const saveDiagnoses = (next: string[]) => saveAbout({ ...aboutProfile, diagnoses: next });
+  // Write editable care-card fields straight to the resident record so every view
+  // (directory, care logs, family portal) auto-updates from the same source.
+  const saveResident = async (patch: Record<string, string>) => {
+    await updateRecord("residents", id, patch);
+    setResident((r) => (r ? { ...r, ...patch } : r));
+  };
   // Family sponsor: prefer the linked sponsor User, else fall back to the
   // admission's captured sponsor name/email.
   const sponsorName = useMemo(() => ([s(sponsor?.firstName), s(sponsor?.lastName)].filter(Boolean).join(" ") || s(sponsor?.name) || s(adm0.sponsorName)), [sponsor, adm0]);
@@ -366,12 +387,12 @@ export default function ResidentCardPage() {
             <span className={`shrink-0 px-2.5 py-1 rounded text-[11px] font-bold uppercase border ${STATUS_META[s(resident.status)] || STATUS_META.ACTIVE}`}>{s(resident.status).replace(/_/g, " ") || "ACTIVE"}</span>
           </div>
           <div className="grid grid-cols-1 gap-y-3 mt-4">
-            <Cell label="Primary Diagnosis" value={primaryDiagnosis} />
+            <DiagnosisCell diagnoses={diagnoses} canEdit={canEditAbout} onSave={saveDiagnoses} />
             <Cell label="Care Level" value={s(resident.careLevel).replace(/_/g, " ")} accent />
-            <Cell label="Allergies" value={allergies} danger />
-            <Cell label="Primary Physician" value={primaryPhysician} />
-            <Cell label="Emergency Contact" value={[s(resident.emergencyContact), s(resident.emergencyContactPhone)].filter(Boolean).join(" · ")} />
-            <Cell label="Diet Restriction" value={dietRestriction} accent />
+            <EditableResidentCell label="Allergies" value={allergies} canEdit={canEditProfile} danger onSave={saveResident} fields={[{ key: "allergies", current: s(resident.allergies), placeholder: "e.g. Penicillin, peanuts" }]} />
+            <EditableResidentCell label="Primary Physician" value={primaryPhysician} canEdit={canEditProfile} onSave={saveResident} fields={[{ key: "primaryPhysician", current: s(resident.primaryPhysician), placeholder: "Dr. name" }]} />
+            <EditableResidentCell label="Emergency Contact" value={[s(resident.emergencyContact), s(resident.emergencyContactPhone)].filter(Boolean).join(" · ")} canEdit={canEditProfile} onSave={saveResident} fields={[{ key: "emergencyContact", current: s(resident.emergencyContact), placeholder: "Contact name" }, { key: "emergencyContactPhone", current: s(resident.emergencyContactPhone), placeholder: "Phone" }]} />
+            <EditableResidentCell label="Diet Restriction" value={dietRestriction} canEdit={canEditProfile} accent onSave={saveResident} fields={[{ key: "dietRestriction", current: s(resident.dietRestriction), placeholder: "e.g. Low sodium" }]} />
           </div>
         </aside>
 
@@ -678,6 +699,83 @@ function Cell({ label, value, danger, accent }: { label: string; value: string; 
     <div>
       <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{label}</p>
       <p className={`text-sm mt-0.5 ${danger && value ? "text-red-600 font-semibold" : accent && value ? "text-[#2E4A48] font-semibold" : "text-gray-800"}`}>{value || "—"}</p>
+    </div>
+  );
+}
+
+// Primary Diagnosis: read-only list for viewers; add-many inline editor for
+// Nurse / Care Manager / Super Admin. Persists via the About Me store (onSave).
+function DiagnosisCell({ diagnoses, canEdit, onSave }: { diagnoses: string[]; canEdit: boolean; onSave: (next: string[]) => void | Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [list, setList] = useState<string[]>(diagnoses);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { if (!editing) setList(diagnoses); }, [diagnoses, editing]);
+  const add = () => { const v = draft.trim(); if (!v) return; setList((l) => [...l, v]); setDraft(""); };
+  const save = async () => { setSaving(true); try { await onSave([...list, draft.trim()].map((d) => d.trim()).filter(Boolean)); setDraft(""); setEditing(false); } finally { setSaving(false); } };
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Primary Diagnosis</p>
+        {canEdit && !editing && <button onClick={() => setEditing(true)} className="text-[10px] font-semibold text-[#2E4A48] hover:underline">{diagnoses.length ? "Edit" : "Add"}</button>}
+      </div>
+      {!editing ? (
+        diagnoses.length
+          ? <ul className="mt-0.5 space-y-0.5">{diagnoses.map((d, i) => <li key={i} className="text-sm font-semibold text-gray-800">{d}</li>)}</ul>
+          : <p className="mt-0.5 text-sm text-gray-400">—</p>
+      ) : (
+        <div className="mt-1 space-y-1.5">
+          {list.map((d, i) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <span className="flex-1 text-sm text-gray-800">{d}</span>
+              <button onClick={() => setList((l) => l.filter((_, idx) => idx !== i))} aria-label={`Remove ${d}`} className="text-gray-300 hover:text-red-500"><X className="w-3.5 h-3.5" /></button>
+            </div>
+          ))}
+          <div className="flex items-center gap-1.5">
+            <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} placeholder="Add diagnosis…" className="flex-1 min-w-0 rounded-md border border-gray-300 px-2 py-1 text-sm" />
+            <button onClick={add} className="shrink-0 rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-200">Add</button>
+          </div>
+          <div className="flex items-center gap-2 pt-0.5">
+            <button onClick={save} disabled={saving} className="rounded-md bg-[#2E4A48] px-2.5 py-1 text-xs font-semibold text-white hover:brightness-110 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+            <button onClick={() => { setEditing(false); setList(diagnoses); setDraft(""); }} className="text-xs font-medium text-gray-500 hover:text-gray-700">Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Inline editor for a resident-record field (or two, e.g. emergency name + phone).
+// Saves straight to the residents model so all resident-record views auto-update.
+function EditableResidentCell({ label, value, canEdit, danger, accent, onSave, fields }: {
+  label: string; value: string; canEdit: boolean; danger?: boolean; accent?: boolean;
+  onSave: (patch: Record<string, string>) => Promise<void>;
+  fields: { key: string; current: string; placeholder?: string }[];
+}) {
+  const [editing, setEditing] = useState(false);
+  const [vals, setVals] = useState<Record<string, string>>(() => Object.fromEntries(fields.map((f) => [f.key, f.current])));
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { if (!editing) setVals(Object.fromEntries(fields.map((f) => [f.key, f.current]))); }, [editing, fields]);
+  const save = async () => { setSaving(true); try { await onSave(Object.fromEntries(Object.entries(vals).map(([k, v]) => [k, v.trim()]))); setEditing(false); } catch { /* leave the editor open so the value isn't lost on a failed save */ } finally { setSaving(false); } };
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{label}</p>
+        {canEdit && !editing && <button onClick={() => setEditing(true)} className="text-[10px] font-semibold text-[#2E4A48] hover:underline">Edit</button>}
+      </div>
+      {!editing ? (
+        <p className={`text-sm mt-0.5 ${danger && value ? "text-red-600 font-semibold" : accent && value ? "text-[#2E4A48] font-semibold" : "text-gray-800"}`}>{value || "—"}</p>
+      ) : (
+        <div className="mt-1 space-y-1.5">
+          {fields.map((f) => (
+            <input key={f.key} value={vals[f.key] ?? ""} onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))} placeholder={f.placeholder} className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+          ))}
+          <div className="flex items-center gap-2 pt-0.5">
+            <button onClick={save} disabled={saving} className="rounded-md bg-[#2E4A48] px-2.5 py-1 text-xs font-semibold text-white hover:brightness-110 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+            <button onClick={() => setEditing(false)} className="text-xs font-medium text-gray-500 hover:text-gray-700">Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -423,6 +423,9 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
   const [logTab, setLogTab] = useState<DomainKey>("AS-01");
   const [qrFor, setQrFor] = useState<Row | null>(null);
   const [viewFor, setViewFor] = useState<Row | null>(null);
+  // Caregivers don't get the resident View Profile / full care card; only Nurse,
+  // Care Manager, and Super Admin (all non-caregiver roles) can open it.
+  const canViewProfile = clinicianRole !== "CAREGIVER";
   const [editFor, setEditFor] = useState<Row | null>(null);
 
   const q = search.trim().toLowerCase();
@@ -515,8 +518,8 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
                     <p className="mt-1 text-xs text-[var(--clinical-muted)]">{genderLabel(r.raw?.gender)} · {diet}</p>
                   </div>
                   </div>
-                  <div className={`grid w-full ${canManage ? "grid-cols-4" : "grid-cols-2"} gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:gap-1.5`}>
-                    <button onClick={() => setViewFor(r)} aria-label={`View ${s(r.name)}'s profile`} title="View profile" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-ink-soft)] hover:brightness-95 sm:w-11"><Eye className="w-4 h-4" /></button>
+                  <div className={`grid w-full ${canManage ? "grid-cols-4" : canViewProfile ? "grid-cols-2" : "grid-cols-1"} gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:gap-1.5`}>
+                    {canViewProfile && <button onClick={() => setViewFor(r)} aria-label={`View ${s(r.name)}'s profile`} title="View profile" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-ink-soft)] hover:brightness-95 sm:w-11"><Eye className="w-4 h-4" /></button>}
                     {canManage && <button onClick={() => setEditFor(r)} aria-label={`Edit ${s(r.name)}`} title="Edit resident" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-panel)] hover:brightness-95 sm:w-11"><Pencil className="w-4 h-4" /></button>}
                     {canManage && <button onClick={() => deactivate(r)} aria-label={`Deactivate ${s(r.name)}`} title="Deactivate resident" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-coral)] hover:brightness-95 sm:w-11"><UserX className="w-4 h-4" /></button>}
                     <button onClick={() => setQrFor(r)} aria-label={`Show QR for ${s(r.name)}`} title="Resident QR" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-ink-soft)] hover:brightness-95 sm:w-11"><QrCode className="w-4 h-4" /></button>

@@ -81,6 +81,8 @@ export interface AboutMeProfile {
 
   people: AboutPerson[];
   belongings: AboutBelonging[];
+  /** Clinical primary diagnoses shown on the care card (editable, add-many). */
+  diagnoses?: string[];
   updatedAt?: string;
   updatedBy?: string;
 }
@@ -114,6 +116,7 @@ export function parseAboutMeStore(raw: string | null | undefined): AboutMeStore 
         keyDates: Array.isArray(prof.keyDates) ? prof.keyDates : [],
         people: Array.isArray(prof.people) ? prof.people : [],
         belongings: Array.isArray(prof.belongings) ? prof.belongings : [],
+        diagnoses: Array.isArray(prof.diagnoses) ? prof.diagnoses.filter((x): x is string => typeof x === "string") : undefined,
       };
     }
     return out;
