@@ -14,6 +14,35 @@ import { ClinicalCard, MicroLabel, controlClass } from "./clinical-ui";
 const chipOn = "bg-[var(--clinical-panel)] text-white border-[var(--clinical-panel)]";
 const chipOff = "bg-[var(--clinical-surface)] text-[var(--clinical-ink-soft)] border-[var(--clinical-line-strong)] hover:border-[var(--clinical-panel)]";
 
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+// The domain `scope` (e.g. AS-01 "Bathing, dressing, …") doubles as quick-add
+// tags for Supporting Evidence. Treat evidence as a comma-token list: toggling
+// only adds/removes the exact tag token, so free-typed notes are never touched.
+const evidenceTagsFor = (scope?: string) =>
+  (scope ?? "").split(/,|;|\//).map((s) => cap(s.trim())).filter(Boolean);
+const evidenceTokens = (evidence?: string) => (evidence ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+const hasEvidenceTag = (evidence: string | undefined, tag: string) =>
+  evidenceTokens(evidence).some((t) => t.toLowerCase() === tag.toLowerCase());
+const toggleEvidenceTag = (evidence: string | undefined, tag: string) => {
+  const toks = evidenceTokens(evidence);
+  const next = hasEvidenceTag(evidence, tag) ? toks.filter((t) => t.toLowerCase() !== tag.toLowerCase()) : [...toks, tag];
+  return next.join(", ");
+};
+
+// Single-select evidence dropdowns per domain (e.g. transfer assist level). Options
+// live in the same comma-token evidence field; picking one replaces any prior option
+// from the same group. Add a domain code here to give it a dropdown.
+const EVIDENCE_SELECTS: Record<string, { label: string; options: string[] }> = {
+  "AS-02": { label: "Assist level", options: ["Independent", "Standby assist", "One-person assist", "Two-person assist", "Mechanical lift / hoist"] },
+};
+const currentSelectValue = (evidence: string | undefined, options: string[]) =>
+  evidenceTokens(evidence).find((t) => options.some((o) => o.toLowerCase() === t.toLowerCase())) ?? "";
+const setSelectValue = (evidence: string | undefined, options: string[], chosen: string) => {
+  const opts = new Set(options.map((o) => o.toLowerCase()));
+  const kept = evidenceTokens(evidence).filter((t) => !opts.has(t.toLowerCase()));
+  return (chosen ? [...kept, chosen] : kept).join(", ");
+};
+
 function Area({ label, value, onChange, placeholder, rows = 2, disabled }: { label: string; value?: string; onChange: (v: string) => void; placeholder?: string; rows?: number; disabled?: boolean }) {
   return (
     <label className="block">
@@ -45,6 +74,8 @@ export default function DomainScoreGrid({
       {SCORED_DOMAINS.map((dom) => {
         const code = dom.code as DomainCode;
         const entry = domains[code] ?? { score: 0, evidence: "" };
+        const evidenceTags = evidenceTagsFor(dom.scope);
+        const evidenceSelect = EVIDENCE_SELECTS[code];
         const relatedMods = CLINICAL_MODIFIERS.filter((m) => {
           const hay = `${dom.name} ${dom.scope}`.toUpperCase();
           return m.affectedDomains.some((d) => hay.includes(d));
@@ -75,7 +106,38 @@ export default function DomainScoreGrid({
               })}
             </div>
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Area label="Supporting Evidence *" value={entry.evidence} onChange={(v) => onPatch(code, { evidence: v })} placeholder={dom.evidenceRequired} disabled={readOnly} />
+              <label className="block">
+                <MicroLabel className="mb-1">Supporting Evidence *</MicroLabel>
+                {evidenceTags.length > 0 && (
+                  <div className="mb-1.5 flex flex-wrap items-center gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--clinical-muted)] mr-0.5">Quick add</span>
+                    {evidenceTags.map((tag) => {
+                      const on = hasEvidenceTag(entry.evidence, tag);
+                      return (
+                        <button key={tag} type="button" disabled={readOnly}
+                          onClick={() => onPatch(code, { evidence: toggleEvidenceTag(entry.evidence, tag) })}
+                          className={`px-2 py-1 rounded-md text-[11px] font-medium border transition ${on ? chipOn : chipOff} ${readOnly ? "cursor-default" : ""}`}>
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {evidenceSelect && (
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--clinical-muted)] shrink-0">{evidenceSelect.label}</span>
+                    <select
+                      value={currentSelectValue(entry.evidence, evidenceSelect.options)}
+                      onChange={(e) => onPatch(code, { evidence: setSelectValue(entry.evidence, evidenceSelect.options, e.target.value) })}
+                      disabled={readOnly}
+                      className="rounded-md border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface)] text-[var(--clinical-ink)] text-[11px] font-medium px-2 py-1 disabled:cursor-default">
+                      <option value="">Select…</option>
+                      {evidenceSelect.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
+                )}
+                <textarea rows={2} value={entry.evidence ?? ""} onChange={(e) => onPatch(code, { evidence: e.target.value })} placeholder={dom.evidenceRequired} disabled={readOnly} className={controlClass} />
+              </label>
               <Area label="Goal / Preference Note" value={entry.goalNote} onChange={(v) => onPatch(code, { goalNote: v })} placeholder="Resident-specific goal, routine or preference…" disabled={readOnly} />
             </div>
             {relatedMods.length > 0 && (
