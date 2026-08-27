@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Pill, ClipboardList, ConciergeBell, ShieldAlert,
@@ -12,7 +12,9 @@ import { patientCode } from "@/lib/patientId";
 import { parseAcuityItems, LOC_LEVEL_META } from "@/lib/locBilling";
 import { parseLocHistory, historyForResident, LOC_SOURCE_LABEL } from "@/lib/lifecare/locHistory";
 import { ABOUT_ME_KEY, parseAboutMeStore, profileFor, AboutMeProfile as AboutProfile } from "@/lib/aboutMe";
+import { HEALTH_ASSESSMENT_KEY, parseHealthStore, healthFor, HealthAssessment } from "@/lib/healthAssessment";
 import AboutMeProfile from "@/components/portal/views/clinical/AboutMeProfile";
+import HealthAssessmentForm from "@/components/portal/views/clinical/HealthAssessmentForm";
 import DocumentSection from "@/components/portal/views/clinical/DocumentSection";
 import VaccinesPanel from "@/components/portal/views/clinical/VaccinesPanel";
 import BelongingsFormsPanel from "@/components/portal/views/clinical/BelongingsForms";
@@ -157,9 +159,11 @@ export default function ResidentCardPage() {
   const [locHistoryRows, setLocHistoryRows] = useState<Row[]>([]);
   const [sponsor, setSponsor] = useState<Row | null>(null);
   const [aboutRows, setAboutRows] = useState<Row[]>([]);
+  const [healthRows, setHealthRows] = useState<Row[]>([]);
   const [docs, setDocs] = useState<Row[]>([]);
   const [sessionRole, setSessionRole] = useState<string>("");
   const [reloadKey, setReloadKey] = useState(0);
+  const loadedIdRef = useRef("");
   const [tab, setTab] = useState<TabKey>("about");
   const [cardUrl, setCardUrl] = useState("");
   const [qrData, setQrData] = useState("");
@@ -173,13 +177,16 @@ export default function ResidentCardPage() {
     if (!id) return;
     let alive = true;
     (async () => {
-      setLoading(true);
+      // Full-screen spinner only on the first load of a resident; the focus /
+      // visibility refresh below re-runs this effect and must stay silent so the
+      // card doesn't flash a loader every time the browser tab regains focus.
+      if (loadedIdRef.current !== id) setLoading(true);
       const res = await getJson(`/api/db/residents/${id}`);
       if (!alive) return;
       if (res.status === 401) { setDenied(true); setLoading(false); return; }
       const r = res.data as Row | null;
       setResident(r);
-      const [m, sr, tk, pc, dt, adm, vax, alg, acu, av42, lh, abt, doc] = await Promise.all([
+      const [m, sr, tk, pc, dt, adm, vax, alg, acu, av42, lh, abt, hlth, doc] = await Promise.all([
         getJson(`/api/db/medications?f_residentId=${id}&take=100`),
         getJson(`/api/db/service-requests?f_residentId=${id}&take=100`),
         getJson(`/api/db/tasks?f_residentId=${id}&take=100`),
@@ -192,10 +199,12 @@ export default function ResidentCardPage() {
         getJson(`/api/db/app-settings?f_key=assessments_v42&take=100`),
         getJson(`/api/db/app-settings?f_key=loc_history&take=1`),
         getJson(`/api/db/app-settings?f_key=${ABOUT_ME_KEY}&take=1`),
+        getJson(`/api/db/app-settings?f_key=${HEALTH_ASSESSMENT_KEY}&take=1`),
         getJson(`/api/db/resident-documents?f_residentId=${id}&take=500`),
       ]);
       if (!alive) return;
       setDocs((doc.data as Row[]) || []);
+      setHealthRows((hlth.data as Row[]) || []);
       setMeds((m.data as Row[]) || []);
       setRequests((sr.data as Row[]) || []);
       setTasks((tk.data as Row[]) || []);
@@ -213,6 +222,7 @@ export default function ResidentCardPage() {
         const sp = await getJson(`/api/db/users?f_id=${sponsorId}&take=1`);
         if (alive) setSponsor(((sp.data as Row[]) || [])[0] || null);
       }
+      loadedIdRef.current = id;
       setLoading(false);
     })();
     return () => { alive = false; };
@@ -305,6 +315,19 @@ export default function ResidentCardPage() {
   }, [aboutRows]);
   const aboutProfile = useMemo(() => profileFor(aboutStore, id), [aboutStore, id]);
   const canEditAbout = sessionRole === "NURSE" || sessionRole === "CARE_MANAGER" || sessionRole === "SUPERADMIN";
+
+  // APPENDIX IV health assessment (migration-free app-setting, keyed by residentId).
+  const healthStore = useMemo(() => {
+    const row = healthRows.find((x) => s(x.key) === HEALTH_ASSESSMENT_KEY) || healthRows[0];
+    return parseHealthStore(row ? s(row.value) : "");
+  }, [healthRows]);
+  const healthProfile = useMemo(() => healthFor(healthStore, id), [healthStore, id]);
+  const saveHealth = async (next: HealthAssessment) => {
+    const stamped: HealthAssessment = { ...next, updatedAt: new Date().toISOString(), updatedBy: sessionRole || "staff" };
+    const nextStore = { ...healthStore, [id]: stamped };
+    await upsertRecord("app-settings", HEALTH_ASSESSMENT_KEY, { key: HEALTH_ASSESSMENT_KEY, value: JSON.stringify(nextStore) });
+    setHealthRows([{ key: HEALTH_ASSESSMENT_KEY, value: JSON.stringify(nextStore) }]);
+  };
   // Resident master-profile fields (allergies, physician, emergency contact, diet)
   // are server-gated to Care Manager / Super Admin (see residentProfileEditDenied),
   // so mirror that on the client — a nurse editing them would 403 on save.
@@ -569,6 +592,7 @@ export default function ResidentCardPage() {
                 </div>
               </div>
             </Section>
+            <HealthAssessmentForm profile={healthProfile} canEdit={canEditAbout} residentName={name} defaultPhysician={primaryPhysician} defaultAllergies={effAllergies} onSave={saveHealth} />
             <DocumentSection residentId={id} documentType="MEDICAL_HISTORY" label="Documents" canEdit={canEditAbout} docs={docs} onChanged={refetchDocs} uploadedByName={sessionRole} />
             </>
           )}
