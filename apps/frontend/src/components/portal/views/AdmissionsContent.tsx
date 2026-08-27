@@ -341,6 +341,7 @@ const parseTeam = (v: unknown): TeamMember[] => {
 
 const emptyForm = {
   firstName: "", middleName: "", lastName: "", dateOfBirth: "", gender: "", phone: "", email: "",
+  admissionDate: "",
   emergencyContact: "", emergencyContactPhone: "",
   sponsorName: "", sponsorEmail: "",
   medicalAssessment: "", allergies: "", medicalHistory: "", surgeries: "", hospitalizations: "",
@@ -751,6 +752,7 @@ export default function AdmissionsContent() {
       id: s(row.id),
       firstName: fnTokens.shift() || "", middleName: fnTokens.join(" "), lastName: s(row.lastName),
       dateOfBirth: row.dateOfBirth ? s(row.dateOfBirth).slice(0, 10) : "",
+      admissionDate: row.admissionDate ? s(row.admissionDate).slice(0, 10) : "",
       gender: s(row.gender), phone: s(row.phone), email: s(row.email),
       emergencyContact: s(row.emergencyContact), emergencyContactPhone: s(row.emergencyContactPhone),
       sponsorName: s(row.sponsorName), sponsorEmail: s(row.sponsorEmail),
@@ -785,6 +787,7 @@ export default function AdmissionsContent() {
     // No middle-name column on Admission — compose middle into firstName ("First Middle").
     firstName: composeName(form.firstName, form.middleName), lastName: form.lastName,
     dateOfBirth: form.dateOfBirth ? new Date(form.dateOfBirth).toISOString() : null,
+    admissionDate: form.admissionDate ? new Date(form.admissionDate).toISOString() : null,
     gender: form.gender || null, phone: form.phone || null, email: form.email || null,
     emergencyContact: form.emergencyContact || null, emergencyContactPhone: form.emergencyContactPhone || null,
     sponsorName: form.sponsorName || null, sponsorEmail: form.sponsorEmail || null,
@@ -1001,7 +1004,7 @@ export default function AdmissionsContent() {
         gender: form.gender || null, phone: form.phone || null, email: form.email || null,
         roomNumber: form.roomNumber,
         careLevel: form.careLevel,
-        admissionDate: new Date().toISOString(),
+        admissionDate: form.admissionDate ? new Date(form.admissionDate).toISOString() : new Date().toISOString(),
         emergencyContact: form.emergencyContact || null, emergencyContactPhone: form.emergencyContactPhone || null,
         allergies: form.allergies || null, medicalHistory: form.medicalHistory || null,
         surgeries: form.surgeries || null, hospitalizations: form.hospitalizations || null,
@@ -1244,7 +1247,7 @@ export default function AdmissionsContent() {
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 text-white px-6 pt-4 pb-5">
+            <div className="shrink-0 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white px-6 pt-4 pb-5">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20 text-base font-bold ring-2 ring-white/40">
@@ -1275,7 +1278,7 @@ export default function AdmissionsContent() {
             </div>
 
             {/* Stepper */}
-            <div className="flex items-start border-b border-gray-100 bg-gray-50/60 px-4 py-4 overflow-hidden">
+            <div className="shrink-0 flex items-start border-b border-gray-100 bg-gray-50/60 px-4 py-5 overflow-hidden">
               {STEPS.map((st, idx) => {
                 const isDone = doneSet.has(st.n);
                 const active = st.n === step;
@@ -1285,20 +1288,20 @@ export default function AdmissionsContent() {
                 const rightFilled = isDone;
                 return (
                   <div key={st.n} className="relative flex min-w-[72px] flex-1 flex-col items-center">
-                    {/* connectors sit in the gaps, inset past the 32px node so they
-                        never run under the circles (radius 16px + 2px breathing room) */}
-                    {idx > 0 && <span className="absolute left-0 top-4 h-0.5" style={{ width: "calc(50% - 18px)", backgroundColor: leftFilled ? "#22c55e" : "#e5e7eb" }} />}
-                    {idx < STEPS.length - 1 && <span className="absolute right-0 top-4 h-0.5" style={{ width: "calc(50% - 18px)", backgroundColor: rightFilled ? "#22c55e" : "#e5e7eb" }} />}
+                    {/* connectors centered on the 40px node (radius 20px + 2px breathing
+                        room) so they meet the circles without running under them */}
+                    {idx > 0 && <span className="absolute left-0 top-5 h-[3px] rounded-full transition-colors" style={{ width: "calc(50% - 22px)", backgroundColor: leftFilled ? "#22c55e" : "#e5e7eb" }} />}
+                    {idx < STEPS.length - 1 && <span className="absolute right-0 top-5 h-[3px] rounded-full transition-colors" style={{ width: "calc(50% - 22px)", backgroundColor: rightFilled ? "#22c55e" : "#e5e7eb" }} />}
                     <button
                       onClick={() => reachable && setStep(st.n)}
                       disabled={!reachable}
                       title={reachable ? st.label : "Fill in the required fields on the earlier steps first."}
-                      className={`group relative z-10 flex w-full flex-col items-center gap-1.5 px-1 ${reachable ? "" : "cursor-not-allowed"}`}
+                      className={`group relative z-10 flex w-full flex-col items-center gap-2 px-1 ${reachable ? "" : "cursor-not-allowed"}`}
                     >
-                      <span className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold shadow-sm transition ${active ? "border-indigo-600 bg-indigo-600 text-white shadow-md" : isDone ? "border-green-500 bg-green-500 text-white" : reachable ? "border-gray-300 bg-white text-gray-600 group-hover:border-indigo-400 group-hover:text-indigo-500" : "border-gray-200 bg-white text-gray-400"}`}>
-                        {isDone && !active ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                      <span className={`flex h-10 w-10 items-center justify-center rounded-full border-2 shadow-sm transition ${active ? "border-indigo-600 bg-indigo-600 text-white shadow-md ring-4 ring-indigo-100" : isDone ? "border-green-500 bg-green-500 text-white" : reachable ? "border-gray-300 bg-white text-gray-500 group-hover:border-indigo-400 group-hover:text-indigo-500" : "border-gray-200 bg-gray-100 text-gray-400"}`}>
+                        {isDone && !active ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
                       </span>
-                      <span className={`text-center text-[10px] leading-tight ${active ? "font-bold text-indigo-600" : isDone ? "font-medium text-gray-600" : "text-gray-400"}`}>
+                      <span className={`text-center text-[11px] leading-tight ${active ? "font-bold text-indigo-600" : isDone ? "font-semibold text-gray-700" : "text-gray-400"}`}>
                         {st.label}{st.required && <span className="text-red-500">*</span>}
                       </span>
                     </button>
@@ -1308,7 +1311,7 @@ export default function AdmissionsContent() {
             </div>
 
             {/* Body */}
-            <div className="p-6 overflow-y-auto flex-1">
+            <div className="p-6 overflow-y-auto flex-1 min-h-0">
               {step === 1 && (
                 <div className="space-y-4">
                   {(preadmits.length > 0 || preadmitsV42.length > 0 || openLeads.length > 0) && (
@@ -1349,6 +1352,7 @@ export default function AdmissionsContent() {
                     <Field label="Middle Name (optional)"><input className={inputCls} value={form.middleName} onChange={(e) => set({ middleName: e.target.value })} /></Field>
                     <Field label="Last Name *"><input className={inputCls} value={form.lastName} onChange={(e) => set({ lastName: e.target.value })} /></Field>
                     <Field label="Date of Birth"><input type="date" className={inputCls} value={form.dateOfBirth} onChange={(e) => set({ dateOfBirth: e.target.value })} /></Field>
+                    <Field label="Date Admitted"><input type="date" className={inputCls} value={form.admissionDate} onChange={(e) => set({ admissionDate: e.target.value })} /></Field>
                     <Field label="Gender"><select className={inputCls} value={form.gender} onChange={(e) => set({ gender: e.target.value })}><option value="">—</option><option>Female</option><option>Male</option><option>Other</option></select></Field>
                     <Field label="Phone"><input className={inputCls} value={form.phone} onChange={(e) => set({ phone: e.target.value })} /></Field>
                     <Field label="Email"><input className={inputCls} value={form.email} onChange={(e) => set({ email: e.target.value })} /></Field>

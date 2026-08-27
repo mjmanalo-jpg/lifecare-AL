@@ -905,8 +905,8 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                         <Text label="Middle Name (optional)" value={draft.layer1.middleName} onChange={(v) => setNamePart({ middleName: v })} />
                         <Text label="Last Name *" value={draft.layer1.lastName} onChange={(v) => setNamePart({ lastName: v })} />
                       </div>
-                      <Text label="Assessment Date" type="date" value={draft.layer1.assessmentDate} onChange={(v) => patchLayer1({ assessmentDate: v })} />
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="sm:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <Text label="Assessment Date" type="date" value={draft.layer1.assessmentDate} onChange={(v) => patchLayer1({ assessmentDate: v })} />
                         <Text label="Date of Birth" type="date" value={draft.layer1.dateOfBirth} onChange={(v) => patchLayer1({ dateOfBirth: v })} />
                         <Text label="Age" value={draft.layer1.age} onChange={(v) => patchLayer1({ age: v })} />
                         <Text label="Sex" value={draft.layer1.sex} onChange={(v) => patchLayer1({ sex: v })} placeholder="M / F" />
