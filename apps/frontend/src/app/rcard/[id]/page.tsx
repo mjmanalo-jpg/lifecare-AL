@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import {
   Pill, ClipboardList, ConciergeBell, ShieldAlert,
   UserRound, CalendarClock, Loader2, FileDown, StickyNote, IdCard,
-  Users, Phone, Syringe, Activity, HeartPulse, Gauge, AlertTriangle, Heart, X,
+  Users, Phone, Syringe, Activity, HeartPulse, Gauge, AlertTriangle, Heart, X, Package,
 } from "lucide-react";
 import { taskNotesOf } from "@/lib/taskNotes";
 import { patientCode } from "@/lib/patientId";
@@ -64,9 +64,10 @@ const ACUITY_DOMAIN_LABEL: Record<string, string> = {
   elimination: "Elimination", medication: "Medication", medical: "Medical", psychosocial: "Psychosocial", night: "Night Care",
 };
 
-type TabKey = "about" | "family" | "emergency" | "vaccines" | "adl" | "medical" | "advance" | "acuity" | "preadmit" | "care";
+type TabKey = "about" | "belongings" | "family" | "emergency" | "vaccines" | "adl" | "medical" | "advance" | "acuity" | "preadmit" | "care";
 const TABS: { key: TabKey; label: string; icon: typeof Pill }[] = [
   { key: "about", label: "About Me", icon: Heart },
+  { key: "belongings", label: "Belongings", icon: Package },
   { key: "family", label: "Family", icon: Users },
   { key: "emergency", label: "Emergency", icon: Phone },
   { key: "vaccines", label: "Vaccines", icon: Syringe },
@@ -436,8 +437,11 @@ export default function ResidentCardPage() {
         {/* Active tab panel */}
         <div className="px-5 py-5">
           {tab === "about" && (
+            <AboutMeProfile profile={aboutProfile} canEdit={canEditAbout} onSave={saveAbout} />
+          )}
+
+          {tab === "belongings" && (
             <>
-              <AboutMeProfile profile={aboutProfile} canEdit={canEditAbout} onSave={saveAbout} />
               <BelongingsFormsPanel residentId={id} residentName={name} room={s(resident.roomNumber)} canEdit={canEditAbout} />
               <DocumentSection residentId={id} documentType="BELONGINGS" label="Signed Documents" canEdit={canEditAbout} docs={docs} onChanged={refetchDocs} uploadedByName={sessionRole} />
             </>
