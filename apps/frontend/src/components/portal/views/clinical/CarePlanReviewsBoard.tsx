@@ -45,7 +45,7 @@ const HOLD_DECISIONS = new Set(["Refer to Physician", "Schedule Family Conferenc
 const PLAN_CHANGE_DECISIONS = new Set(["Update Care Plan", "Escalate Level of Care", "De-escalate Level of Care"]);
 // Roles authorized to countersign a level-of-care change (the "Administrator/Authorized
 // Approver" half of the Step-6 two-person sign-off).
-const AUTHORIZED_APPROVERS = new Set(["CARE_MANAGER", "FACILITY_ADMIN", "SUPERADMIN"]);
+const AUTHORIZED_APPROVERS = new Set(["CARE_MANAGER", "SUPERADMIN"]);
 const PLAN_STATUS = ["No Change", "Updated", "Under Review", "Escalated", "De-escalated"];
 // Review cadence options (mirrors the assessment Reassessment Interval). "On change
 // of condition" is event-driven — no scheduled date (a 6-month backstop is stored on
@@ -89,8 +89,10 @@ const parseIntervention = (line: string): { title: string; desc: string; freq: s
   return { title: ci > -1 ? body.slice(0, ci).trim() : body, desc: ci > -1 ? body.slice(ci + 1).trim() : "", freq };
 };
 
-export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
-  const { name: clinicianName, userId: clinicianId } = useClinician(clinicianRole);
+export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: { clinicianRole?: ClinicianRole | "SUPERADMIN"; tabs?: Array<"plans" | "new" | "due" | "history" | "pending"> }) {
+  // SUPERADMIN isn't a staff-linked clinician role; resolve its display name via the
+  // admin path, while the finalize guards below key off the raw "SUPERADMIN" string.
+  const { name: clinicianName, userId: clinicianId } = useClinician(clinicianRole === "SUPERADMIN" ? "FACILITY_ADMIN" : clinicianRole);
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const incQ = useLiveQuery<Row>("incidents", { query: "take=400", tables: ["Incident"] });
   const ceQ = useLiveQuery<Row>("care-events", { query: "take=1000", tables: ["CareEvent"] });
@@ -129,7 +131,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
     return m;
   }, [cpQ.data]);
 
-  const [tab, setTab] = useState<"plans" | "new" | "due" | "history" | "pending">("plans");
+  const [tab, setTab] = useState<"plans" | "new" | "due" | "history" | "pending">(tabs?.[0] ?? "plans");
   const [viewPlan, setViewPlan] = useState<{ resident: Row; plan: Row } | null>(null);
   const [resId, setResId] = useState("");
   const [genBusy, setGenBusy] = useState(false);
@@ -292,7 +294,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
       </div>
 
       <div className="flex items-center gap-2" role="tablist" aria-label="Care plan reviews view">
-        {([["plans", "Care Plans"], ["new", "New Review"], ["pending", "Pending Approval"], ["due", "Reviews Due"], ["history", "History"]] as const).map(([v, label]) => (
+        {([["plans", "Care Plans"], ["new", "New Review"], ["pending", "Pending Approval"], ["due", "Reviews Due"], ["history", "History"]] as const).filter(([v]) => !tabs || tabs.includes(v)).map(([v, label]) => (
           <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${tab === v ? "bg-[#4F46E5] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}{v === "due" && dueList.length ? ` (${dueList.length})` : ""}{v === "pending" && pendingQueue.length ? ` (${pendingQueue.length})` : ""}</button>
         ))}
       </div>
@@ -444,8 +446,8 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
                 }
                 setResId(""); setTab("pending");
                 Swal.fire(sponsorId
-                  ? { icon: "info", title: "Sent to family for sign-off", text: "The family sponsor has been notified. Once they approve, a Care Manager can finalize the plan." }
-                  : { icon: "info", title: "Held for family sign-off", text: "No family sponsor is linked to this resident — a Care Manager can finalize it directly from Pending Approval." });
+                  ? { icon: "info", title: "Sent to family for sign-off", text: "The family sponsor has been notified. Once they approve, a Care Manager or Super Admin can finalize the plan." }
+                  : { icon: "info", title: "Held for family sign-off", text: "No family sponsor is linked to this resident — a Care Manager or Super Admin can finalize it directly from Pending Approval." });
                 return;
               }
 
@@ -538,7 +540,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
                       {rv.reason && <p className="mt-1 text-xs text-[var(--clinical-muted)]">Rationale: {rv.reason}</p>}
                       <p className="mt-1 text-xs text-[var(--clinical-muted)]">Submitted {fmt((rv.createdAt || "").slice(0, 10))}{rv.reviewedBy ? ` by ${rv.reviewedBy}` : ""}</p>
                       {rv.familyDecidedAt && <p className="mt-1 text-xs font-medium" style={{ color: "var(--clinical-green)" }}>Family signed off — {rv.familyDecidedByName || "Family"} · {fmt(rv.familyDecidedAt.slice(0, 10))}</p>}
-                      {isAwaitingFamily && <p className="mt-1.5 text-xs" style={{ color: "var(--clinical-amber)" }}>{rv.sponsorId ? "Waiting for the family sponsor to sign off." : "No family linked — a Care Manager may finalize directly."}</p>}
+                      {isAwaitingFamily && <p className="mt-1.5 text-xs" style={{ color: "var(--clinical-amber)" }}>{rv.sponsorId ? "Waiting for the family sponsor to sign off." : "No family linked — a Care Manager or Super Admin may finalize directly."}</p>}
                       {isReady && !canFin && <p className="mt-1.5 text-xs text-[var(--clinical-muted)]">A Care Manager or Superadmin will finalize this plan.</p>}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">

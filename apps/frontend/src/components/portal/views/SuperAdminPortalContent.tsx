@@ -15,6 +15,7 @@ import FacilityInventory from "@/components/portal/views/FacilityInventory";
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
 import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
 import CarePlanBoard from "@/components/portal/views/clinical/CarePlanBoard";
+import CarePlanReviewsBoard from "@/components/portal/views/clinical/CarePlanReviewsBoard";
 import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
 import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
 import MARBoard from "@/components/portal/views/clinical/MARBoard";
@@ -453,6 +454,9 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   }
   if (tab === "careplans") {
     return <CarePlanBoard />;
+  }
+  if (tab === "careplangovernance") {
+    return <CarePlanReviewsBoard clinicianRole="SUPERADMIN" tabs={["pending", "history"]} />;
   }
   if (tab === "tasks") {
     return <DailyDocumentation clinicianRole="FACILITY_ADMIN" />;
