@@ -42,3 +42,6 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# user uploads — now stored in the private Supabase Storage bucket, never in the repo
+/public/uploads/
