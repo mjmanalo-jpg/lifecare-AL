@@ -38,7 +38,7 @@ import {
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const DOMAIN_NAME: Record<string, string> = Object.fromEntries(ASSESSMENT_DOMAINS.map((d) => [d.code, d.name]));
-interface DomainRow { code: string; name: string; score: number; note: string }
+interface DomainRow { code: string; name: string; score: number; note: string; evidence: string; flags: string[] }
 interface FormValidation { by: string; role: string; at: string; decision: string; notes: string }
 interface FormRecord {
   id: string; kind: string; originLabel: string; icon: LucideIcon;
@@ -167,7 +167,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
           validation: v ? { by: s(v.by), role: s(v.role), at: s(v.at), decision: s(v.decision).replace(/_/g, " "), notes: s(v.notes) } : null,
           completedBy: s(a?.completedBy),
           completedAt: s(a?.completedAt),
-          domains: DOMAIN_CODES.map((code) => ({ code, name: DOMAIN_NAME[code] || code, score: Number(a?.domains?.[code]?.score ?? 0), note: s(a?.domains?.[code]?.goalNote) })),
+          domains: DOMAIN_CODES.map((code) => ({ code, name: DOMAIN_NAME[code] || code, score: Number(a?.domains?.[code]?.score ?? 0), note: s(a?.domains?.[code]?.goalNote), evidence: s(a?.domains?.[code]?.evidence), flags: Array.isArray(a?.domains?.[code]?.modifierFlags) ? a.domains[code].modifierFlags : [] })),
         };
       })
       .sort((x, y) => (y.date || "").localeCompare(x.date || ""));
@@ -194,7 +194,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
           medicalAssessment: s(a.medicalAssessment), allergies: s(a.allergies), medicalHistory: s(a.medicalHistory),
           surgeries: blob.surgeries || s(a.surgeries), hospitalizations: blob.hospitalizations || s(a.hospitalizations),
           medications: blob.meds, attachments: blob.attachments,
-          domains: v42 ? DOMAIN_CODES.map((code) => ({ code, name: DOMAIN_NAME[code] || code, score: Number(v42.domains?.[code]?.score ?? 0), note: s(v42.domains?.[code]?.goalNote) })) : [],
+          domains: v42 ? DOMAIN_CODES.map((code) => ({ code, name: DOMAIN_NAME[code] || code, score: Number(v42.domains?.[code]?.score ?? 0), note: s(v42.domains?.[code]?.goalNote), evidence: s(v42.domains?.[code]?.evidence), flags: Array.isArray(v42.domains?.[code]?.modifierFlags) ? v42.domains[code].modifierFlags : [] })) : [],
         };
       })
       .sort((x, y) => (y.date || "").localeCompare(x.date || ""));
@@ -679,20 +679,30 @@ function FormResult({ f, tone, prev, chg }: { f: FormRecord; tone: string; prev?
       {/* domain breakdown */}
       <div>
         <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--clinical-muted)]">Domain scores {scored.length > 0 ? `(${scored.length}/14 scored)` : ""}</p>
-        <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">
           {f.domains.map((d) => {
             const dlt = deltaByCode.get(d.code) ?? 0;
             const dltColor = dlt > 0 ? "var(--clinical-coral)" : "var(--clinical-green)";
+            const hasDetail = !!d.evidence || !!d.note || d.flags.length > 0;
             return (
-            <div key={d.code} className="flex items-center gap-2 text-xs">
-              <span className="w-32 shrink-0 truncate text-[var(--clinical-ink-soft)]" title={d.name}>{d.name}</span>
-              <span className="flex flex-1 gap-0.5">
-                {[0, 1, 2, 3].map((n) => (
-                  <span key={n} className="h-1.5 flex-1 rounded-full" style={{ backgroundColor: n < d.score ? tone : "var(--clinical-line)" }} />
-                ))}
-              </span>
-              {dlt !== 0 && <span className="shrink-0 text-[10px] font-bold tabular-nums" style={{ color: dltColor }}>{dlt > 0 ? `+${dlt}` : dlt}</span>}
-              <span className="w-6 shrink-0 text-right font-bold tabular-nums text-[var(--clinical-ink)]">{d.score}</span>
+            <div key={d.code} className="text-xs">
+              <div className="flex items-center gap-2">
+                <span className="w-32 shrink-0 truncate text-[var(--clinical-ink-soft)]" title={d.name}>{d.name}</span>
+                <span className="flex flex-1 gap-0.5">
+                  {[0, 1, 2, 3].map((n) => (
+                    <span key={n} className="h-1.5 flex-1 rounded-full" style={{ backgroundColor: n < d.score ? tone : "var(--clinical-line)" }} />
+                  ))}
+                </span>
+                {dlt !== 0 && <span className="shrink-0 text-[10px] font-bold tabular-nums" style={{ color: dltColor }}>{dlt > 0 ? `+${dlt}` : dlt}</span>}
+                <span className="w-6 shrink-0 text-right font-bold tabular-nums text-[var(--clinical-ink)]">{d.score}</span>
+              </div>
+              {hasDetail && (
+                <div className="mt-1 space-y-0.5 pl-1">
+                  {d.evidence && <p className="text-[11px] leading-snug text-[var(--clinical-ink-soft)]"><span className="font-semibold text-[var(--clinical-muted)]">Evidence: </span>{d.evidence}</p>}
+                  {d.note && <p className="text-[11px] leading-snug text-[var(--clinical-muted)]"><span className="font-semibold">Goal: </span>{d.note}</p>}
+                  {d.flags.length > 0 && <p className="text-[11px] leading-snug text-[var(--clinical-muted)]"><span className="font-semibold">Flags: </span>{d.flags.join(", ")}</p>}
+                </div>
+              )}
             </div>
             );
           })}

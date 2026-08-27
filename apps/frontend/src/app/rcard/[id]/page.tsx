@@ -13,6 +13,8 @@ import { parseAcuityItems, LOC_LEVEL_META } from "@/lib/locBilling";
 import { parseLocHistory, historyForResident, LOC_SOURCE_LABEL } from "@/lib/lifecare/locHistory";
 import { ABOUT_ME_KEY, parseAboutMeStore, profileFor, AboutMeProfile as AboutProfile } from "@/lib/aboutMe";
 import AboutMeProfile from "@/components/portal/views/clinical/AboutMeProfile";
+import DocumentSection from "@/components/portal/views/clinical/DocumentSection";
+import VaccinesPanel from "@/components/portal/views/clinical/VaccinesPanel";
 import { updateRecord, upsertRecord } from "@/lib/api";
 import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
@@ -61,17 +63,18 @@ const ACUITY_DOMAIN_LABEL: Record<string, string> = {
   elimination: "Elimination", medication: "Medication", medical: "Medical", psychosocial: "Psychosocial", night: "Night Care",
 };
 
-type TabKey = "about" | "family" | "emergency" | "vaccines" | "adl" | "medical" | "advance" | "acuity" | "preadmit";
+type TabKey = "about" | "family" | "emergency" | "vaccines" | "adl" | "medical" | "advance" | "acuity" | "preadmit" | "care";
 const TABS: { key: TabKey; label: string; icon: typeof Pill }[] = [
   { key: "about", label: "About Me", icon: Heart },
   { key: "family", label: "Family", icon: Users },
   { key: "emergency", label: "Emergency", icon: Phone },
   { key: "vaccines", label: "Vaccines", icon: Syringe },
   { key: "adl", label: "ADL Baseline", icon: Activity },
-  { key: "medical", label: "Medical Hx", icon: ClipboardList },
+  { key: "medical", label: "Medical & Surgical Hx", icon: ClipboardList },
   { key: "advance", label: "Advance Care", icon: HeartPulse },
   { key: "preadmit", label: "Pre-Admission (v4.2)", icon: ClipboardList },
   { key: "acuity", label: "Care Acuity", icon: Gauge },
+  { key: "care", label: "Meds & Tasks", icon: CalendarClock },
 ];
 
 async function getJson(url: string) {
@@ -147,6 +150,7 @@ export default function ResidentCardPage() {
   const [locHistoryRows, setLocHistoryRows] = useState<Row[]>([]);
   const [sponsor, setSponsor] = useState<Row | null>(null);
   const [aboutRows, setAboutRows] = useState<Row[]>([]);
+  const [docs, setDocs] = useState<Row[]>([]);
   const [sessionRole, setSessionRole] = useState<string>("");
   const [tab, setTab] = useState<TabKey>("about");
   const [cardUrl, setCardUrl] = useState("");
@@ -167,7 +171,7 @@ export default function ResidentCardPage() {
       if (res.status === 401) { setDenied(true); setLoading(false); return; }
       const r = res.data as Row | null;
       setResident(r);
-      const [m, sr, tk, pc, dt, adm, vax, alg, acu, av42, lh, abt] = await Promise.all([
+      const [m, sr, tk, pc, dt, adm, vax, alg, acu, av42, lh, abt, doc] = await Promise.all([
         getJson(`/api/db/medications?f_residentId=${id}&take=100`),
         getJson(`/api/db/service-requests?f_residentId=${id}&take=100`),
         getJson(`/api/db/tasks?f_residentId=${id}&take=100`),
@@ -180,8 +184,10 @@ export default function ResidentCardPage() {
         getJson(`/api/db/app-settings?f_key=assessments_v42&take=100`),
         getJson(`/api/db/app-settings?f_key=loc_history&take=1`),
         getJson(`/api/db/app-settings?f_key=${ABOUT_ME_KEY}&take=1`),
+        getJson(`/api/db/resident-documents?f_residentId=${id}&take=500`),
       ]);
       if (!alive) return;
+      setDocs((doc.data as Row[]) || []);
       setMeds((m.data as Row[]) || []);
       setRequests((sr.data as Row[]) || []);
       setTasks((tk.data as Row[]) || []);
@@ -286,9 +292,17 @@ export default function ResidentCardPage() {
   const saveDiagnoses = (next: string[]) => saveAbout({ ...aboutProfile, diagnoses: next });
   // Write editable care-card fields straight to the resident record so every view
   // (directory, care logs, family portal) auto-updates from the same source.
-  const saveResident = async (patch: Record<string, string>) => {
+  const saveResident = async (patch: Record<string, string | boolean>) => {
     await updateRecord("residents", id, patch);
     setResident((r) => (r ? { ...r, ...patch } : r));
+  };
+  const refetchDocs = async () => {
+    const d = await getJson(`/api/db/resident-documents?f_residentId=${id}&take=500`);
+    setDocs((d.data as Row[]) || []);
+  };
+  const refetchVaccines = async () => {
+    const v = await getJson(`/api/db/vaccinations?f_residentId=${id}&take=100`);
+    setVaccinations((v.data as Row[]) || []);
   };
   // Family sponsor: prefer the linked sponsor User, else fall back to the
   // admission's captured sponsor name/email.
@@ -421,7 +435,10 @@ export default function ResidentCardPage() {
         {/* Active tab panel */}
         <div className="px-5 py-5">
           {tab === "about" && (
-            <AboutMeProfile profile={aboutProfile} canEdit={canEditAbout} onSave={saveAbout} />
+            <>
+              <AboutMeProfile profile={aboutProfile} canEdit={canEditAbout} onSave={saveAbout} />
+              <DocumentSection residentId={id} documentType="BELONGINGS" label="Signed Documents" canEdit={canEditAbout} docs={docs} onChanged={refetchDocs} uploadedByName={sessionRole} />
+            </>
           )}
 
           {tab === "family" && (
@@ -453,26 +470,10 @@ export default function ResidentCardPage() {
           )}
 
           {tab === "vaccines" && (
-            <Section title={`Vaccinations (${vaccinations.length})`} icon={Syringe}>
-              {vaccinations.length === 0 ? <p className="text-sm text-gray-400">No vaccination records.</p> : (
-                <ul className="space-y-2">
-                  {vaccinations.map((v) => (
-                    <li key={s(v.id)} className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 p-2.5">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900">{s(v.vaccineName) || s(v.vaccineType) || "Vaccine"}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {[s(v.vaccineType).replace(/_/g, " "),
-                            v.doseNumber ? `Dose ${s(v.doseNumber)}${v.totalDoses ? `/${s(v.totalDoses)}` : ""}` : "",
-                            v.dateGiven ? `Given ${fmtDate(v.dateGiven)}` : v.scheduledDate ? `Scheduled ${fmtDate(v.scheduledDate)}` : "",
-                          ].filter(Boolean).join(" · ") || "—"}
-                        </p>
-                      </div>
-                      <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${VAX_STATUS[s(v.status)] || VAX_STATUS.SCHEDULED}`}>{s(v.status).replace(/_/g, " ") || "—"}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Section>
+            <>
+            <VaccinesPanel residentId={id} vaccines={vaccinations} canEdit={canEditAbout} onChanged={refetchVaccines} />
+            <DocumentSection residentId={id} documentType="VACCINATION_CARD" label="Vaccination Card" canEdit={canEditAbout} docs={docs} onChanged={refetchDocs} uploadedByName={sessionRole} />
+            </>
           )}
 
           {tab === "adl" && (
@@ -497,13 +498,14 @@ export default function ResidentCardPage() {
           )}
 
           {tab === "medical" && (
-            <Section title="Medical History" icon={ClipboardList}>
+            <>
+            <Section title="Medical & Surgical History" icon={ClipboardList}>
               <div className="space-y-3">
                 <KV label="Primary Diagnosis" value={primaryDiagnosis} />
                 {effAssessment ? <KV label="Clinical Assessment" value={effAssessment} /> : null}
-                <KV label="History" value={effHistory} />
-                {resident.surgeries ? <KV label="Surgeries" value={s(resident.surgeries)} /> : null}
-                {resident.hospitalizations ? <KV label="Hospitalizations" value={s(resident.hospitalizations)} /> : null}
+                <EditableResidentCell label="History" value={effHistory} canEdit={canEditProfile} multiline onSave={saveResident} fields={[{ key: "medicalHistory", current: s(resident.medicalHistory), placeholder: "Medical & surgical history" }]} />
+                <EditableResidentCell label="Surgeries" value={s(resident.surgeries)} canEdit={canEditProfile} multiline onSave={saveResident} fields={[{ key: "surgeries", current: s(resident.surgeries), placeholder: "Past surgeries" }]} />
+                <EditableResidentCell label="Hospitalizations" value={s(resident.hospitalizations)} canEdit={canEditProfile} multiline onSave={saveResident} fields={[{ key: "hospitalizations", current: s(resident.hospitalizations), placeholder: "Hospitalizations" }]} />
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400 mb-1">Allergies</p>
                   {allergyRecs.length > 0 ? (
@@ -521,22 +523,22 @@ export default function ResidentCardPage() {
                 </div>
               </div>
             </Section>
+            <DocumentSection residentId={id} documentType="MEDICAL_HISTORY" label="Documents" canEdit={canEditAbout} docs={docs} onChanged={refetchDocs} uploadedByName={sessionRole} />
+            </>
           )}
 
           {tab === "advance" && (
+            <>
             <Section title="Advance Care Planning" icon={HeartPulse}>
               <div className="space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold border border-gray-200 bg-gray-50 text-gray-700">Code status: {s(resident.codeStatus).replace(/_/g, " ") || "—"}</span>
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold border ${resident.dnrStatus ? "bg-red-100 text-red-700 border-red-200" : "bg-emerald-100 text-emerald-700 border-emerald-200"}`}>
-                    {resident.dnrStatus ? "DNR — Do Not Resuscitate" : "Full resuscitation"}
-                  </span>
-                </div>
-                <KV label="Advance Directives" value={s(resident.advanceDirectives)} />
-                {resident.livingWill ? <KV label="Living Will" value={s(resident.livingWill)} /> : null}
-                <KV label="Healthcare Proxy" value={[s(resident.healthcareProxy), s(resident.healthcareProxyPhone)].filter(Boolean).join(" · ")} />
+                <CodeStatusEditor codeStatus={s(resident.codeStatus)} dnrStatus={!!resident.dnrStatus} canEdit={canEditProfile} onSave={saveResident} />
+                <EditableResidentCell label="Advance Directives" value={s(resident.advanceDirectives)} canEdit={canEditProfile} multiline onSave={saveResident} fields={[{ key: "advanceDirectives", current: s(resident.advanceDirectives), placeholder: "Advance directive / POLST / goals of care" }]} />
+                <EditableResidentCell label="Living Will" value={s(resident.livingWill)} canEdit={canEditProfile} multiline onSave={saveResident} fields={[{ key: "livingWill", current: s(resident.livingWill), placeholder: "Living will details" }]} />
+                <EditableResidentCell label="Healthcare Proxy" value={[s(resident.healthcareProxy), s(resident.healthcareProxyPhone)].filter(Boolean).join(" · ")} canEdit={canEditProfile} onSave={saveResident} fields={[{ key: "healthcareProxy", current: s(resident.healthcareProxy), placeholder: "Proxy name" }, { key: "healthcareProxyPhone", current: s(resident.healthcareProxyPhone), placeholder: "Proxy phone" }]} />
               </div>
             </Section>
+            <DocumentSection residentId={id} documentType="ADVANCE_CARE" label="Documents" canEdit={canEditAbout} docs={docs} onChanged={refetchDocs} uploadedByName={sessionRole} />
+            </>
           )}
 
           {tab === "preadmit" && (
@@ -554,13 +556,20 @@ export default function ResidentCardPage() {
                   </div>
                   <p className="text-xs text-gray-500">Assessed {fmtDate(assessV42.updatedAt || assessV42.createdAt)} · advisory raw score (banding not yet calibrated — GAP-001)</p>
                   {assessV42.domains && typeof assessV42.domains === "object" ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {Object.entries(V42_DOMAIN_LABEL).map(([code, label]) => (
-                        <div key={code} className="rounded-lg border border-gray-200 p-2 flex items-center justify-between">
-                          <span className="text-xs text-gray-600">{label}</span>
-                          <span className="text-sm font-bold text-[#2E4A48]">{s(assessV42.domains?.[code]?.score ?? 0)}</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-start">
+                      {Object.entries(V42_DOMAIN_LABEL).map(([code, label]) => {
+                        const dom = assessV42.domains?.[code] as { score?: number; evidence?: string; goalNote?: string } | undefined;
+                        return (
+                        <div key={code} className="rounded-lg border border-gray-200 p-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-semibold text-gray-700">{label}</span>
+                            <span className="text-sm font-bold text-[#2E4A48]">{s(dom?.score ?? 0)}<span className="text-gray-400 font-medium">/4</span></span>
+                          </div>
+                          {s(dom?.evidence) ? <p className="mt-1 text-[11px] leading-snug text-gray-500"><span className="font-semibold text-gray-600">Evidence: </span>{s(dom.evidence)}</p> : null}
+                          {s(dom?.goalNote) ? <p className="mt-0.5 text-[11px] leading-snug text-gray-400"><span className="font-semibold">Goal: </span>{s(dom.goalNote)}</p> : null}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : null}
                   {assessV42.layer3?.finalLevelJustification ? <p className="text-xs text-gray-500 whitespace-pre-wrap pt-1"><b className="text-gray-700">Justification:</b> {s(assessV42.layer3.finalLevelJustification)}</p> : null}
@@ -627,8 +636,9 @@ export default function ResidentCardPage() {
           )}
         </div>
 
-        {/* Operational sections — live care ops, kept below the profile tabs */}
-        <div className="px-5 pb-5 space-y-4 border-t border-gray-100 pt-5">
+        {/* Meds & Tasks tab — live care ops (moved out from below the tabs) */}
+        {tab === "care" && (
+        <div className="px-5 py-5 space-y-4">
           {/* Active medications */}
           <Section title={`Medications (${activeMeds.length})`} icon={Pill}>
             {activeMeds.length === 0 ? <p className="text-sm text-gray-400">No active medications.</p> : (
@@ -687,6 +697,7 @@ export default function ResidentCardPage() {
           </Section>
           <p className="text-[11px] text-gray-400 text-center">Generated {fmt(new Date().toISOString())} · confidential — for authorized care staff only.</p>
         </div>
+        )}
         </main>
         </div>
       </div>
@@ -747,8 +758,8 @@ function DiagnosisCell({ diagnoses, canEdit, onSave }: { diagnoses: string[]; ca
 
 // Inline editor for a resident-record field (or two, e.g. emergency name + phone).
 // Saves straight to the residents model so all resident-record views auto-update.
-function EditableResidentCell({ label, value, canEdit, danger, accent, onSave, fields }: {
-  label: string; value: string; canEdit: boolean; danger?: boolean; accent?: boolean;
+function EditableResidentCell({ label, value, canEdit, danger, accent, multiline, onSave, fields }: {
+  label: string; value: string; canEdit: boolean; danger?: boolean; accent?: boolean; multiline?: boolean;
   onSave: (patch: Record<string, string>) => Promise<void>;
   fields: { key: string; current: string; placeholder?: string }[];
 }) {
@@ -764,11 +775,13 @@ function EditableResidentCell({ label, value, canEdit, danger, accent, onSave, f
         {canEdit && !editing && <button onClick={() => setEditing(true)} className="text-[10px] font-semibold text-[#2E4A48] hover:underline">Edit</button>}
       </div>
       {!editing ? (
-        <p className={`text-sm mt-0.5 ${danger && value ? "text-red-600 font-semibold" : accent && value ? "text-[#2E4A48] font-semibold" : "text-gray-800"}`}>{value || "—"}</p>
+        <p className={`text-sm mt-0.5 whitespace-pre-wrap ${danger && value ? "text-red-600 font-semibold" : accent && value ? "text-[#2E4A48] font-semibold" : "text-gray-800"}`}>{value || "—"}</p>
       ) : (
         <div className="mt-1 space-y-1.5">
           {fields.map((f) => (
-            <input key={f.key} value={vals[f.key] ?? ""} onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))} placeholder={f.placeholder} className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+            multiline
+              ? <textarea key={f.key} rows={3} value={vals[f.key] ?? ""} onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))} placeholder={f.placeholder} className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
+              : <input key={f.key} value={vals[f.key] ?? ""} onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))} placeholder={f.placeholder} className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
           ))}
           <div className="flex items-center gap-2 pt-0.5">
             <button onClick={save} disabled={saving} className="rounded-md bg-[#2E4A48] px-2.5 py-1 text-xs font-semibold text-white hover:brightness-110 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
@@ -776,6 +789,34 @@ function EditableResidentCell({ label, value, canEdit, danger, accent, onSave, f
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Code status (select) + DNR (toggle) — writes to the resident record.
+function CodeStatusEditor({ codeStatus, dnrStatus, canEdit, onSave }: { codeStatus: string; dnrStatus: boolean; canEdit: boolean; onSave: (patch: Record<string, string | boolean>) => Promise<void> }) {
+  const OPTS = ["FULL_CODE", "DNR", "DNI", "COMFORT_CARE"];
+  const [editing, setEditing] = useState(false);
+  const [cs, setCs] = useState(codeStatus || "FULL_CODE");
+  const [dnr, setDnr] = useState(dnrStatus);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { if (!editing) { setCs(codeStatus || "FULL_CODE"); setDnr(dnrStatus); } }, [editing, codeStatus, dnrStatus]);
+  const save = async () => { setSaving(true); try { await onSave({ codeStatus: cs, dnrStatus: dnr }); setEditing(false); } catch { /* keep open */ } finally { setSaving(false); } };
+  if (editing) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={cs} onChange={(e) => setCs(e.target.value)} className="rounded-md border border-gray-300 px-2 py-1 text-sm">{OPTS.map((o) => <option key={o} value={o}>{o.replace(/_/g, " ")}</option>)}</select>
+        <label className="inline-flex items-center gap-1.5 text-sm text-gray-700"><input type="checkbox" checked={dnr} onChange={(e) => setDnr(e.target.checked)} /> DNR</label>
+        <button onClick={save} disabled={saving} className="rounded-md bg-[#2E4A48] px-2.5 py-1 text-xs font-semibold text-white hover:brightness-110 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>
+        <button onClick={() => setEditing(false)} className="text-xs font-medium text-gray-500 hover:text-gray-700">Cancel</button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold border border-gray-200 bg-gray-50 text-gray-700">Code status: {(codeStatus || "").replace(/_/g, " ") || "—"}</span>
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold border ${dnrStatus ? "bg-red-100 text-red-700 border-red-200" : "bg-emerald-100 text-emerald-700 border-emerald-200"}`}>{dnrStatus ? "DNR — Do Not Resuscitate" : "Full resuscitation"}</span>
+      {canEdit && <button onClick={() => setEditing(true)} className="text-[10px] font-semibold text-[#2E4A48] hover:underline">Edit</button>}
     </div>
   );
 }
