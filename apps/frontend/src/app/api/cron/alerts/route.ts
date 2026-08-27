@@ -31,7 +31,7 @@ export const dynamic = "force-dynamic";
 // signed-in NURSE / FACILITY_ADMIN / SUPERADMIN scans only their community.
 // ─────────────────────────────────────────────────────────────
 
-const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "weightReminder", "incident", "slaBreach", "escalation", "assessment", "purchaseRequest", "serviceRequest", "maintenance", "diningReservation", "elimination", "referral"];
+const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "weightReminder", "incident", "slaBreach", "escalation", "assessment", "carePlanReview", "purchaseRequest", "serviceRequest", "maintenance", "diningReservation", "elimination", "referral"];
 
 // A family-pending appointment (raised with the "Family Notified" toggle) is a
 // HospitalReferral in REQUESTED, not yet decided, carrying this flag in notes.
@@ -626,6 +626,42 @@ async function scanCommunity(communityId: string, organizationId: string | null)
       if (!st || !st.overdue) continue;
       const key = `locdue:${rid}:${st.dueISO.slice(0, 7)}`;
       if (await notify("SYSTEM_ALERT", "assessment", key, "LOC reassessment due", `${rname(r)} (Room ${room(r)}) is ${st.daysOverdue} day(s) overdue for a ${lv} Level-of-Care reassessment (last assessed ${fmtDate(at)}). Reopen the assessment to re-confirm the level (DT-012).`, "WARNING", reassessTeam)) counts.reassessmentDue++;
+    }
+  });
+
+  // Care-plan review due (nurse-chosen cadence). Reads the migration-free
+  // `care_plan_reviews` app-setting: the latest review per resident carries the
+  // Review Interval + Next Review Date the nurse set. When that date passes, push a
+  // reminder to the Nurse / Care Manager. "On change of condition" reviews carry no
+  // schedule — they get a condition-watch notice instead (keyed per review).
+  await runSource("care-plan-review-due", async () => {
+    const reviewTeam = idsForRoles(["NURSE", "CARE_MANAGER"]);
+    if (!reviewTeam.length) return;
+    const setting = await prisma.appSetting.findFirst({ where: { communityId, key: "care_plan_reviews" }, select: { value: true } });
+    let revs: Array<{ id?: string; residentId?: string; nextReviewDate?: string; reviewInterval?: string; createdAt?: string; reviewDate?: string; approvalStatus?: string }> = [];
+    try { const v = JSON.parse(setting?.value || "[]"); if (Array.isArray(v)) revs = v; } catch { return; }
+    // Latest (non-rejected) review per resident, by createdAt then reviewDate.
+    const latest = new Map<string, (typeof revs)[number]>();
+    for (const r of revs) {
+      const rid = r?.residentId; if (!rid || r.approvalStatus === "REJECTED") continue;
+      const cur = latest.get(rid);
+      const k = String(r.createdAt || r.reviewDate || "");
+      const ck = cur ? String(cur.createdAt || cur.reviewDate || "") : "";
+      if (!cur || k.localeCompare(ck) > 0) latest.set(rid, r);
+    }
+    if (!latest.size) return;
+    const residents = await prisma.resident.findMany({ where: { communityId, id: { in: [...latest.keys()] }, status: { not: "DISCHARGED" } }, select: { id: true, firstName: true, lastName: true, roomNumber: true } });
+    const rmap = new Map(residents.map((r) => [r.id, r]));
+    const todayStr = now.toISOString().slice(0, 10);
+    for (const [rid, rv] of latest) {
+      const r = rmap.get(rid); if (!r) continue;
+      if (rv.reviewInterval === "On change of condition") {
+        if (await notify("SYSTEM_ALERT", "carePlanReview", `cpronchange:${rv.id}`, "Care plan — review on change of condition", `${rname(r)} (Room ${room(r)}) is on condition-triggered care-plan review. Reassess and update the plan on any significant change in condition.`, "INFO", reviewTeam)) counts.reassessmentDue++;
+        continue;
+      }
+      const due = String(rv.nextReviewDate || "").slice(0, 10);
+      if (!due || due > todayStr) continue;
+      if (await notify("SYSTEM_ALERT", "carePlanReview", `cprdue:${rid}:${due}`, "Care plan review due", `${rname(r)} (Room ${room(r)}) is due for a care-plan review (scheduled ${fmtDate(due)}). Open Care Plan Reviews to complete it.`, "WARNING", reviewTeam)) counts.reassessmentDue++;
     }
   });
 

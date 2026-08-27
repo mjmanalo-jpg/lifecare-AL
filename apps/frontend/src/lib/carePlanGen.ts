@@ -37,19 +37,6 @@ interface LevelRow { level: string; conceptualProfile: string; typicalNeedPatter
 interface BaselineRow { domain: string; L1: string; L2: string; L3: string; L4: string; modifierRule: string; }
 const MODEL = careLevelModel as { levels: LevelRow[]; baselineByDomain: BaselineRow[] };
 
-// Which baseline care domains are included in the package at each level (the
-// package broadens as acuity rises). L5 is the comfort/palliative pathway.
-const LEVEL_DOMAINS: Record<number, string[]> = {
-  1: ["Personal ADLs", "Clinical Monitoring", "Reablement / Engagement"],
-  2: ["Personal ADLs", "Mobility / Transfers", "Meals / Nutrition", "Medication", "Clinical Monitoring"],
-  3: ["Personal ADLs", "Mobility / Transfers", "Toileting / Continence", "Meals / Nutrition", "Medication", "Clinical Monitoring", "Safety / Fall Prevention", "Skin Integrity"],
-  4: MODEL.baselineByDomain.map((b) => b.domain), // comprehensive: all baseline domains
-  5: ["Clinical Monitoring", "Medication", "Skin Integrity", "Meals / Nutrition", "Personal ADLs"],
-};
-
-const levelCol = (b: BaselineRow, level: number): string =>
-  level >= 4 ? b.L4 : level === 3 ? b.L3 : level === 2 ? b.L2 : b.L1;
-
 export interface PlanIntervention { title: string; freq: string; note?: string; domain?: string; taskId?: string }
 export interface LevelPlanTemplate { title: string; goals: string[]; interventions: PlanIntervention[] }
 
@@ -57,25 +44,31 @@ export interface LevelPlanTemplate { title: string; goals: string[]; interventio
 export function levelPlan(level: number): LevelPlanTemplate {
   const n = Math.min(5, Math.max(1, level));
   const lm = MODEL.levels.find((l) => l.level === `L${n}`) ?? MODEL.levels[1];
-  const domains = LEVEL_DOMAINS[n] ?? LEVEL_DOMAINS[2];
   const goals = [
     lm.typicalNeedPattern,
     "Maintain the highest practicable independence, dignity, comfort and safety.",
     "Recognise, document and escalate any significant change in condition.",
   ].filter(Boolean);
-  const interventions: PlanIntervention[] = domains
-    .map((d) => MODEL.baselineByDomain.find((b) => b.domain === d))
-    .filter((b): b is BaselineRow => !!b)
-    .map((b) => ({
-      domain: b.domain,
-      title: `${b.domain}: ${n >= 5 ? "comfort-focused support" : levelCol(b, n)}`,
+  // Baseline interventions = one representative governed task per domain in the Level-N
+  // package. Each carries its governed Care Task ID and a default individualization note
+  // (approved intervention + responsible role) so the plan satisfies the step-9 release
+  // gates out of the box — the nurse refines specifics in the ICP editor before finalize.
+  const seen = new Set<string>();
+  const interventions: PlanIntervention[] = [];
+  for (const t of levelCareTasks(n)) {
+    if (seen.has(t.domain)) continue;
+    seen.add(t.domain);
+    const role = (t.responsibleRole || t.primaryRole || "Caregiver").trim();
+    const detail = (t.approvedIntervention || t.definition || "Provide governed support; individualize technique and preferences.").trim();
+    interventions.push({
+      domain: t.domain,
+      title: `${t.domain}: ${t.name}`,
       freq: "Per care plan — individualise",
-    }));
-  return {
-    title: `${lm.conceptualProfile} (Level ${n}) — Care Plan`,
-    goals,
-    interventions,
-  };
+      taskId: t.id,
+      note: role ? `${detail} · Role: ${role}` : detail,
+    });
+  }
+  return { title: `${lm.conceptualProfile} (Level ${n}) — Care Plan`, goals, interventions };
 }
 
 /**

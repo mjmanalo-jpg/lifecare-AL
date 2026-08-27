@@ -19,6 +19,7 @@ import {
   toDateStr, todayStr, type CaregiverSchedule, type ShiftKey,
 } from "@/lib/caregiverSchedule";
 import type { ClinicianRole } from "./useClinician";
+import { materializeTodayTasks } from "@/lib/carePlanGen";
 
 type SettingRow = { key?: string; id?: string; value?: string };
 type StaffRow = { id: string; userId?: string; user?: { name?: string; role?: string } };
@@ -82,6 +83,9 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
   const persist = async (next: CaregiverSchedule[]) => {
     await upsertRecord("app-settings", CAREGIVER_SCHEDULE_KEY, { key: CAREGIVER_SCHEDULE_KEY, value: JSON.stringify(next) });
     await refetch();
+    // A newly-scheduled caregiver should see today's care-plan tasks immediately —
+    // materialize now (best-effort, idempotent) instead of waiting for the hourly cron.
+    void materializeTodayTasks();
   };
 
   // ---- Manager calendar state ------------------------------------------------

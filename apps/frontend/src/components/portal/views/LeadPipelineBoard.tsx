@@ -9,10 +9,11 @@ import {
   CRM_LEADS_KEY, LEAD_STAGES, OPEN_STAGES, STAGE_META, LEAD_SOURCES,
   parseLeads, newId, followUpDaysLeft, type Lead, type LeadStage,
 } from "@/lib/crmLeads";
+import { composeName, nameParts } from "@/lib/names";
 
 type SettingRow = { id: string; key?: string; value: string };
 const input = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white";
-const EMPTY: Omit<Lead, "id" | "createdAt" | "activity"> = { name: "", contact: "", email: "", source: "Website", prospectiveResident: "", stage: "NEW", assignedTo: "", notes: "", followUpDate: "" };
+const EMPTY: Omit<Lead, "id" | "createdAt" | "activity"> = { name: "", contact: "", email: "", source: "Website", prospectiveResident: "", residentFirstName: "", residentMiddleName: "", residentLastName: "", stage: "NEW", assignedTo: "", notes: "", followUpDate: "" };
 
 /** Lead & Pipeline Management — the pre-admission CRM funnel (New → Toured →
  *  Application → Move-in), follow-ups, pipeline analytics, and convert-to-admission. */
@@ -48,7 +49,16 @@ export default function LeadPipelineBoard() {
   }, [leads]);
 
   const openAdd = () => { setEditing(null); setForm(EMPTY); setShowForm(true); };
-  const openEdit = (l: Lead) => { setEditing(l); setForm({ ...EMPTY, ...l }); setShowForm(true); };
+  const openEdit = (l: Lead) => {
+    setEditing(l);
+    // Populate the structured resident-name fields, splitting a legacy combined name.
+    const p = nameParts({ firstName: l.residentFirstName, middleName: l.residentMiddleName, lastName: l.residentLastName, name: l.prospectiveResident });
+    setForm({ ...EMPTY, ...l, residentFirstName: p.firstName, residentMiddleName: p.middleName, residentLastName: p.lastName });
+    setShowForm(true);
+  };
+  // Update a resident-name part and keep the composed `prospectiveResident` in sync.
+  const setResidentPart = (patch: Partial<Pick<Lead, "residentFirstName" | "residentMiddleName" | "residentLastName">>) =>
+    setForm((f) => { const n = { ...f, ...patch }; return { ...n, prospectiveResident: composeName(n.residentFirstName, n.residentMiddleName, n.residentLastName) }; });
 
   const saveForm = async () => {
     if (!form.name.trim()) { Swal.fire({ title: "Name required", icon: "warning" }); return; }
@@ -67,9 +77,11 @@ export default function LeadPipelineBoard() {
   // Create the Admission (move-in) record from a lead's details. Shared by the
   // explicit "Convert" button and the auto-conversion when a lead reaches Move-In.
   const createAdmissionForLead = async (lead: Lead): Promise<string | undefined> => {
-    const [first, ...rest] = String(lead.prospectiveResident || lead.name).trim().split(/\s+/);
+    // Prefer structured resident parts; the Admission has no middle-name column, so
+    // middle is composed into firstName ("First Middle") and last stays separate.
+    const p = nameParts({ firstName: lead.residentFirstName, middleName: lead.residentMiddleName, lastName: lead.residentLastName, name: lead.prospectiveResident || lead.name });
     const res = await createRecord("admissions", {
-      firstName: first || lead.name, lastName: rest.join(" ") || "—",
+      firstName: composeName(p.firstName, p.middleName) || lead.name, lastName: p.lastName || "—",
       phone: lead.contact || null, email: lead.email || null,
       status: "IN_PROGRESS", currentStep: 1, completedSteps: "[]",
       sponsorName: lead.name, sponsorEmail: lead.email || null,
@@ -204,7 +216,9 @@ export default function LeadPipelineBoard() {
             </div>
             <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="text-xs font-medium text-gray-600 sm:col-span-2">Contact name *<input className={input + " mt-1"} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
-              <label className="text-xs font-medium text-gray-600">Prospective resident<input className={input + " mt-1"} value={form.prospectiveResident} onChange={(e) => setForm({ ...form, prospectiveResident: e.target.value })} placeholder="Who's moving in" /></label>
+              <label className="text-xs font-medium text-gray-600">Resident first name<input className={input + " mt-1"} value={form.residentFirstName} onChange={(e) => setResidentPart({ residentFirstName: e.target.value })} placeholder="Who's moving in" /></label>
+              <label className="text-xs font-medium text-gray-600">Middle name <span className="text-gray-400">(optional)</span><input className={input + " mt-1"} value={form.residentMiddleName} onChange={(e) => setResidentPart({ residentMiddleName: e.target.value })} /></label>
+              <label className="text-xs font-medium text-gray-600">Resident last name<input className={input + " mt-1"} value={form.residentLastName} onChange={(e) => setResidentPart({ residentLastName: e.target.value })} /></label>
               <label className="text-xs font-medium text-gray-600">Source<select className={input + " mt-1"} value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>{LEAD_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
               <label className="text-xs font-medium text-gray-600">Phone<input className={input + " mt-1"} value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} /></label>
               <label className="text-xs font-medium text-gray-600">Email<input className={input + " mt-1"} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label>

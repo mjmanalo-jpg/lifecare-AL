@@ -28,6 +28,8 @@ import { ClinicalButton, ClinicalCard, ClinicalModal, StatCard, DataState, Field
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const REVIEW_KEY = "care_plan_reviews";
 const s = (v: unknown) => (v == null ? "" : String(v));
+/** The level a care plan was built at, parsed from its title ("… (Level N) …"). */
+const planLevelOf = (plan?: Row | null): number | null => { const m = /\(Level (\d)\)/.exec(s(plan?.title)); return m ? Number(m[1]) : null; };
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 const newId = () => globalThis.crypto?.randomUUID?.() ?? `rev-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 const isoDate = (d: Date) => d.toISOString().split("T")[0];
@@ -39,11 +41,21 @@ const periodOf = (d: Date) => `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3
 const DECISIONS = ["Continue Current Plan", "Update Care Plan", "Escalate Level of Care", "De-escalate Level of Care", "Refer to Physician", "Schedule Family Conference"];
 // Decisions that DON'T release a held plan — the plan stays held for follow-up.
 const HOLD_DECISIONS = new Set(["Refer to Physician", "Schedule Family Conference"]);
+// Decisions that CHANGE the care plan — they require a generated draft to release.
+const PLAN_CHANGE_DECISIONS = new Set(["Update Care Plan", "Escalate Level of Care", "De-escalate Level of Care"]);
+// Roles authorized to countersign a level-of-care change (the "Administrator/Authorized
+// Approver" half of the Step-6 two-person sign-off).
+const AUTHORIZED_APPROVERS = new Set(["CARE_MANAGER", "FACILITY_ADMIN", "SUPERADMIN"]);
 const PLAN_STATUS = ["No Change", "Updated", "Under Review", "Escalated", "De-escalated"];
+// Review cadence options (mirrors the assessment Reassessment Interval). "On change
+// of condition" is event-driven — no scheduled date (a 6-month backstop is stored on
+// submit so the plan stays finalizable and never silently lapses).
+const REVIEW_INTERVALS = ["30 days", "90 days", "6 months", "Annually", "On change of condition"];
+const ON_CHANGE_INTERVAL = "On change of condition";
 
 interface Review {
   id: string; residentId: string; reviewDate: string; reviewPeriod: string; levelAtReview: number;
-  nextReviewDate?: string; carePlanStatus: string; familyUpdate: boolean; physicianFollowup: boolean;
+  nextReviewDate?: string; reviewInterval?: string; carePlanStatus: string; familyUpdate: boolean; physicianFollowup: boolean;
   decision: string; reason?: string; actionPlan?: string; responsible?: string; targetDate?: string;
   reviewedBy?: string; createdAt: string;
   // Governance workflow (migration-free): a review can release the plan directly (single
@@ -67,7 +79,10 @@ const parseReviews = (raw: string | null | undefined): Review[] => { if (!raw) r
 // A stored intervention line ("Title: detail… (Daily)") → title · detail · frequency,
 // so the plan view can show the frequency as a pill instead of trailing text.
 const parseIntervention = (line: string): { title: string; desc: string; freq: string } => {
-  const m = line.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  // The trailing "(freq)" can itself contain nested parens — e.g. "(Twice daily (BID))".
+  // Capture the last balanced group (one level of nesting) so BID/TID parse into a pill
+  // instead of leaking into the title.
+  const m = line.match(/^(.*?)\s*\(((?:[^()]+|\([^()]*\))*)\)\s*$/);
   const freq = m ? m[2].trim() : "";
   const body = (m ? m[1] : line).trim();
   const ci = body.indexOf(":");
@@ -97,6 +112,14 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
   const draftPlansByResident = useMemo(() => {
     const m = new Map<string, Row[]>();
     (cpQ.data || []).filter((p) => s(p.status) === "DRAFT").forEach((p) => { const rid = s(p.residentId); const g = m.get(rid) || []; g.push(p); m.set(rid, g); });
+    return m;
+  }, [cpQ.data]);
+  // Plans submitted for review (a plan-changing review flips its plan to UNDER_REVIEW)
+  // — pending family sign-off / finalize. Kept separate so the roster shows "pending"
+  // instead of "No plan" and never offers a duplicate "Create care plan".
+  const underReviewByResident = useMemo(() => {
+    const m = new Map<string, Row>();
+    (cpQ.data || []).filter((p) => s(p.status) === "UNDER_REVIEW").forEach((p) => { const rid = s(p.residentId); if (!m.has(rid)) m.set(rid, p); });
     return m;
   }, [cpQ.data]);
   // Active (released) plan per resident — the current care plan of record.
@@ -162,6 +185,11 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
     setGenBusy(true);
     try {
       const raw = (resident.raw || {}) as Row;
+      // Supersede any prior held DRAFT for this resident so regenerating replaces it
+      // instead of leaving orphan drafts (A4). Under-review/active plans are untouched.
+      for (const d of draftPlansByResident.get(s(resident.id)) || []) {
+        try { await updateRecord("care-plans", s(d.id), { status: "DISCONTINUED", discontinuedReason: "Superseded by regenerated draft" }); } catch { /* best-effort */ }
+      }
       const { interventionCount } = await generateCarePlanForResident({ residentId: s(resident.id), level: n, communityId: s(raw.communityId) || undefined, createdByName: clinicianName, plan, hold: true });
       await cpQ.refetch?.();
       Swal.fire({ icon: "success", title: "Draft care plan created", html: `Level ${n} plan with <b>${interventionCount} intervention${interventionCount === 1 ? "" : "s"}</b> prepared and <b>held</b>. Submit the care plan review below — once approved, tasks are generated daily for the resident's scheduled caregiver.`, timer: 3600, showConfirmButton: false });
@@ -177,17 +205,34 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
       return;
     }
     if (!rv.planId) { Swal.fire("No linked plan", "This review has no draft plan to release.", "error"); return; }
-    const c = await Swal.fire({ title: "Finalize & release plan?", text: "The family has signed off. Releasing activates the plan and dispatches tasks to the assigned caregiver.", icon: "question", showCancelButton: true, confirmButtonColor: "#4F46E5", confirmButtonText: "Finalize & release" });
-    if (!c.isConfirmed) return;
+    if (!(await confirmRelease(rv))) return;
     setActingId(rv.id);
     try {
       await releaseCarePlan(s(rv.planId), { approvedByName: clinicianName, effectiveDate: rv.reviewDate, nextReviewDate: rv.nextReviewDate || "" });
       const dispatched = await materializeTodayTasks();
       await persist(reviews.map((r) => (r.id === rv.id ? { ...r, approvalStatus: "APPROVED" as const, approvedById: clinicianId, approvedByName: clinicianName, approvedAt: new Date().toISOString(), pendingReason: undefined } : r)));
       await cpQ.refetch?.();
+      // Notify the family sponsor that the plan they signed off on is now active (A5).
+      if (rv.sponsorId) { try { await createRecord("notifications", { userId: s(rv.sponsorId), type: "SYSTEM_ALERT", title: "Care plan activated", message: `${rv.residentName || "Your relative"}'s care plan is now active.`, relatedEntityId: rv.id, relatedEntityType: "care_plan_review", severity: "INFO" }); } catch { /* non-critical */ } }
       Swal.fire({ icon: "success", title: "Care plan finalized · released", html: dispatched > 0 ? `${dispatched} task${dispatched === 1 ? "" : "s"} dispatched to today's scheduled caregiver.` : "Plan is now active. Tasks appear for the resident's caregiver on days one is scheduled.", timer: 3200, showConfirmButton: false });
     } catch (e) { Swal.fire("Couldn't finalize", e instanceof Error ? e.message : "The plan's activation gates are still incomplete.", "error"); }
     finally { setActingId(""); }
+  };
+
+  // Shared release confirmation. Warns when the held plan's baked level no longer matches
+  // the resident's current level of care (A2) — releasing a stale-level plan needs an
+  // explicit override. Returns true to proceed. `verb` labels the primary action.
+  const confirmRelease = async (rv: Review, verb = "Finalize & release"): Promise<boolean> => {
+    const planRow = (cpQ.data || []).find((p) => s(p.id) === s(rv.planId));
+    const planLvl = planLevelOf(planRow);
+    const res = residents.find((x: Row) => s(x.id) === rv.residentId);
+    const curLvl = res ? resLevel(res).n : null;
+    if (planLvl && curLvl && planLvl !== curLvl) {
+      const proceed = await Swal.fire({ icon: "warning", title: "Level of care mismatch", html: `This plan was built at <b>Level ${planLvl}</b>, but the resident's current level of care is <b>Level ${curLvl}</b>. Releasing it activates the <b>Level ${planLvl}</b> plan. Regenerate at Level ${curLvl} first, or release anyway.`, showCancelButton: true, confirmButtonColor: "#D97706", confirmButtonText: "Release anyway", cancelButtonText: "Cancel" });
+      return proceed.isConfirmed;
+    }
+    const c = await Swal.fire({ title: `${verb}?`, text: "Releasing activates the plan and dispatches tasks to the assigned caregiver.", icon: "question", showCancelButton: true, confirmButtonColor: "#4F46E5", confirmButtonText: verb });
+    return c.isConfirmed;
   };
 
   // Approve a pending review (second authorized sign-off / gate completion): release the
@@ -199,8 +244,13 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
       Swal.fire({ icon: "warning", title: "Second approver required", text: "A level-of-care change must be approved by someone other than the reviewer who submitted it." });
       return;
     }
-    const c = await Swal.fire({ title: "Approve & release plan?", text: `Approve "${rv.decision}" and release this resident's care plan?`, icon: "question", showCancelButton: true, confirmButtonColor: "#4F46E5", confirmButtonText: "Approve & release" });
-    if (!c.isConfirmed) return;
+    // Step-6 governance: a level-of-care change must be countersigned by an authorized
+    // approver (Care Manager / Facility Admin / Superadmin), not a second nurse (A6).
+    if (requiresSecondApproval(rv.decision) && !AUTHORIZED_APPROVERS.has(clinicianRole)) {
+      Swal.fire({ icon: "warning", title: "Authorized approver required", text: "A level-of-care change must be countersigned by a Care Manager, Facility Admin, or Superadmin." });
+      return;
+    }
+    if (!(await confirmRelease(rv, "Approve & release"))) return;
     setActingId(rv.id);
     try {
       await releaseCarePlan(s(rv.planId), { approvedByName: clinicianName, effectiveDate: rv.reviewDate, nextReviewDate: rv.nextReviewDate || "" });
@@ -264,10 +314,14 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
                   const rid = s(r.id);
                   const active = activePlanByResident.get(rid);
                   const drafts = draftPlansByResident.get(rid) || [];
+                  const underReview = underReviewByResident.get(rid);
                   const last = latestReview(rid);
                   const lvl = resLevel(r).n;
+                  const activeLvl = planLevelOf(active);
+                  const locMismatch = !!active && activeLvl !== null && activeLvl !== lvl;
                   const st = active ? { label: "Active", color: "var(--clinical-green)" }
                     : drafts.length ? { label: "Draft", color: "var(--clinical-amber)" }
+                    : underReview ? { label: "Pending approval", color: "var(--clinical-amber)" }
                     : { label: "No plan", color: "var(--clinical-muted)" };
                   return (
                     <div key={rid} className="group flex flex-col gap-3 rounded-xl border px-4 py-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_-22px_rgba(15,23,42,0.55)] sm:flex-row sm:items-center sm:gap-3.5" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
@@ -281,15 +335,20 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
                           </div>
                           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--clinical-muted)]">
                             <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)", color: "var(--clinical-panel)" }}>Level {lvl}</span>
+                            {locMismatch && <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-amber) 18%, transparent)", color: "var(--clinical-amber)" }}><AlertTriangle className="h-3 w-3" /> Plan is Level {activeLvl} · LOC now {lvl}</span>}
                             {active && <span>Active since {fmt(s(active.startDate).slice(0, 10))}</span>}
                             {last?.nextReviewDate && <span className="inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" /> Next review {fmt(last.nextReviewDate)}</span>}
                           </div>
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
-                        {active && <ClinicalButton variant="secondary" size="sm" className="max-sm:flex-1" onClick={() => setViewPlan({ resident: r, plan: active })}>View</ClinicalButton>}
+                        {(active || underReview) && <ClinicalButton variant="secondary" size="sm" className="max-sm:flex-1" onClick={() => setViewPlan({ resident: r, plan: (active || underReview) as Row })}>View</ClinicalButton>}
                         {drafts.length > 0
                           ? <ClinicalButton variant="primary" size="sm" className="max-sm:flex-1" onClick={() => { setResId(rid); setTab("new"); }}>Finalize draft</ClinicalButton>
+                          : underReview
+                          ? <ClinicalButton variant="primary" size="sm" className="max-sm:flex-1" onClick={() => setTab("pending")}>Awaiting approval</ClinicalButton>
+                          : locMismatch
+                          ? <ClinicalButton variant="primary" size="sm" className="max-sm:flex-1" onClick={() => { setResId(rid); setTab("new"); }}>Update to Level {lvl}</ClinicalButton>
                           : !active && <ClinicalButton variant="primary" size="sm" className="max-sm:flex-1" onClick={() => { setResId(rid); setTab("new"); }}>Create care plan</ClinicalButton>}
                       </div>
                     </div>
@@ -359,6 +418,12 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
               const drafts = [...(draftPlansByResident.get(rec.residentId) || [])]
                 .sort((a, b) => s(b.createdAt || b.startDate).localeCompare(s(a.createdAt || a.startDate)));
               const targetPlan = drafts[0];
+              // A plan-changing decision needs a generated draft to release — otherwise the
+              // review would record as "approved" with no plan change (A1). Block it.
+              if (PLAN_CHANGE_DECISIONS.has(rec.decision) && !targetPlan) {
+                Swal.fire({ icon: "warning", title: "No care plan to change", text: `"${rec.decision}" changes the care plan, but no draft has been generated. Generate a care plan above first, then submit the review.` });
+                return;
+              }
               const now = new Date().toISOString();
               const sponsorId = s((resident?.raw as Row | undefined)?.sponsorId);
               const base = { ...rec, id: newId(), createdAt: now, submittedById: clinicianId, planId: targetPlan ? s(targetPlan.id) : undefined,
@@ -448,6 +513,10 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
           <div className="space-y-3">
             {pendingQueue.map((rv) => {
               const r = residents.find((x: Row) => s(x.id) === rv.residentId);
+              const planRow = rv.planId ? (cpQ.data || []).find((p) => s(p.id) === s(rv.planId)) : null;
+              const planLvl = planLevelOf(planRow);       // the level the plan was actually built at
+              const curLvl = r ? resLevel(r).n : null;    // the resident's current level of care
+              const lvlMismatch = planLvl !== null && curLvl !== null && planLvl !== curLvl;
               const mine = !!rv.submittedById && rv.submittedById === clinicianId;
               const acting = actingId === rv.id;
               const isReady = rv.approvalStatus === "FAMILY_APPROVED";
@@ -464,7 +533,8 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
                         <p className="font-bold text-[var(--clinical-ink)]">{s(r?.name) || rv.residentName || "Resident"} <span className="text-xs font-normal text-[var(--clinical-muted)]">Rm {s(r?.room) || rv.room}</span></p>
                         <StatusPill status={isReady ? "FAMILY APPROVED" : isAwaitingFamily ? "AWAITING FAMILY" : requiresSecondApproval(rv.decision) ? "AWAITING APPROVAL" : "GATES INCOMPLETE"} />
                       </div>
-                      <p className="mt-1 text-sm text-[var(--clinical-ink-soft)]"><b>{rv.decision}</b> · Level {rv.levelAtReview} · {rv.reviewPeriod}</p>
+                      <p className="mt-1 text-sm text-[var(--clinical-ink-soft)]"><b>{rv.decision}</b> · Level {planLvl ?? rv.levelAtReview} · {rv.reviewPeriod}</p>
+                      {lvlMismatch && <p className="mt-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-bold" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-amber) 18%, transparent)", color: "var(--clinical-amber)" }}><AlertTriangle className="h-3 w-3" /> Plan is Level {planLvl} · resident now Level {curLvl} — regenerate before finalizing</p>}
                       {rv.reason && <p className="mt-1 text-xs text-[var(--clinical-muted)]">Rationale: {rv.reason}</p>}
                       <p className="mt-1 text-xs text-[var(--clinical-muted)]">Submitted {fmt((rv.createdAt || "").slice(0, 10))}{rv.reviewedBy ? ` by ${rv.reviewedBy}` : ""}</p>
                       {rv.familyDecidedAt && <p className="mt-1 text-xs font-medium" style={{ color: "var(--clinical-green)" }}>Family signed off — {rv.familyDecidedByName || "Family"} · {fmt(rv.familyDecidedAt.slice(0, 10))}</p>}
@@ -472,6 +542,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
                       {isReady && !canFin && <p className="mt-1.5 text-xs text-[var(--clinical-muted)]">A Care Manager or Superadmin will finalize this plan.</p>}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
+                      {planRow && <ClinicalButton variant="secondary" size="sm" onClick={() => setViewPlan({ resident: (r || { id: rv.residentId, name: rv.residentName, room: rv.room }) as Row, plan: planRow as Row })}>View plan</ClinicalButton>}
                       {finalizable ? (
                         <ClinicalButton variant="primary" size="sm" disabled={acting || !canFin} onClick={() => void finalizeReview(rv)} title={!canFin ? "Care Manager / Superadmin only" : undefined}>
                           {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />} Finalize
@@ -563,7 +634,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
             {genConfirm.already && (
               <div className="flex items-start gap-2.5 rounded-xl border p-3 text-sm" style={{ borderColor: "color-mix(in srgb, #b45309 40%, transparent)", backgroundColor: "color-mix(in srgb, #b45309 10%, transparent)", color: "var(--clinical-ink-soft)" }}>
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "#b45309" }} />
-                <p>This resident <b className="text-[var(--clinical-ink)]">already has a care plan</b> — generating creates another draft alongside it.</p>
+                <p>This resident <b className="text-[var(--clinical-ink)]">already has a care plan</b>. Regenerating <b className="text-[var(--clinical-ink)]">replaces any held draft</b>; an active or under-review plan stays in place until this new draft is submitted and finalized.</p>
               </div>
             )}
           </div>
@@ -575,6 +646,12 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE" }: { clin
           description={`${s(viewPlan.resident.name)} — Rm ${s(viewPlan.resident.room)} · ${s(viewPlan.plan.title) || `Level ${resLevel(viewPlan.resident).n} plan`}`}
           footer={<ClinicalButton variant="secondary" onClick={() => setViewPlan(null)}>Close</ClinicalButton>}
         >
+          {(() => { const pl = planLevelOf(viewPlan.plan); const cur = resLevel(viewPlan.resident).n; return pl !== null && pl !== cur ? (
+            <div className="mb-4 flex items-start gap-2 rounded-xl border p-3 text-xs" style={{ borderColor: "color-mix(in srgb, var(--clinical-amber) 40%, transparent)", backgroundColor: "color-mix(in srgb, var(--clinical-amber) 12%, transparent)", color: "var(--clinical-amber)" }}>
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>This plan was built at <b>Level {pl}</b>, but the resident&apos;s current level of care is <b>Level {cur}</b>. Create a new Level {cur} plan (Care Plans → Update to Level {cur}) and finalize it to supersede this one.</span>
+            </div>
+          ) : null; })()}
           <CurrentPlanView plan={viewPlan.plan} nextReviewDate={latestReview(s(viewPlan.resident.id))?.nextReviewDate} />
         </ClinicalModal>
       )}
@@ -697,24 +774,21 @@ function CarePlanBuilder({ level, genBusy, onGenerate }: {
   }, [items]);
 
   const submit = () => {
-    const incomplete = chosen.filter((it) => !it.freq || !it.note.trim() || (it.assistanceChoices.length > 0 && !it.assistance));
-    if (incomplete.length) {
-      Swal.fire({
-        title: "Individualization incomplete",
-        text: `Set assistance where applicable and add a resident-specific technique/preference note for: ${incomplete.slice(0, 6).map((it) => it.name).join(", ")}${incomplete.length > 6 ? ` and ${incomplete.length - 6} more` : ""}.`,
-        icon: "warning",
-      });
-      return;
-    }
+    // Blanks are accepted — a task the nurse leaves untouched falls back to its governed
+    // default intervention + responsible role, so the plan still satisfies the finalize
+    // gate. The nurse only fills in what they want to individualize.
     onGenerate({
       goals: goals.split("\n").map((g) => g.trim()).filter(Boolean),
-      interventions: chosen.map((it) => ({
-        domain: it.domain,
-        title: it.name,
-        freq: it.freq,
-        taskId: it.taskId,
-        note: [it.assistance && `Assistance: ${it.assistance}`, it.note.trim(), it.responsibleRole && `Role: ${it.responsibleRole}`].filter(Boolean).join(" · ") || undefined,
-      })),
+      interventions: chosen.map((it) => {
+        const detail = it.note.trim() || it.intervention.trim() || "Individualize assistance, technique and preferences.";
+        return {
+          domain: it.domain,
+          title: it.name,
+          freq: it.freq,
+          taskId: it.taskId,
+          note: [it.assistance && `Assistance: ${it.assistance}`, detail, it.responsibleRole && `Role: ${it.responsibleRole}`].filter(Boolean).join(" · "),
+        };
+      }),
     });
   };
 
@@ -819,9 +893,19 @@ function ReviewForm({ resident, level, recentInc, recentVariances = [], last, re
 }) {
   const today = new Date();
   const lvl = level;
-  const [reviewInterval, setReviewInterval] = useState(60);
-  const [nextReviewDate, setNextReviewDate] = useState(isoDate(addDays(today, 60)));
-  const applyInterval = (days: number) => { setReviewInterval(days); setNextReviewDate(isoDate(addDays(today, days))); };
+  const nextReviewFor = (opt: string) => {
+    switch (opt) {
+      case "30 days": return isoDate(addDays(today, 30));
+      case "90 days": return isoDate(addDays(today, 90));
+      case "6 months": return isoDate(addMonths(today, 6));
+      case "Annually": return isoDate(addMonths(today, 12));
+      default: return ""; // On change of condition — event-driven, no scheduled date
+    }
+  };
+  const [reviewInterval, setReviewInterval] = useState("90 days");
+  const [nextReviewDate, setNextReviewDate] = useState(nextReviewFor("90 days"));
+  const onChangeInterval = reviewInterval === ON_CHANGE_INTERVAL;
+  const applyInterval = (opt: string) => { setReviewInterval(opt); setNextReviewDate(nextReviewFor(opt)); };
   const [carePlanStatus, setCarePlanStatus] = useState("No Change");
   const [familyUpdate, setFamilyUpdate] = useState(false);
   const [physicianFollowup, setPhysicianFollowup] = useState(false);
@@ -844,11 +928,14 @@ function ReviewForm({ resident, level, recentInc, recentVariances = [], last, re
 
   const submit = async () => {
     if (!decision) { Swal.fire({ title: "Select a decision", text: "Choose a decision before submitting the review.", icon: "warning" }); return; }
-    if (!nextReviewDate) { Swal.fire({ title: "Next review date required", text: "Set the next review date before approving the care plan.", icon: "warning" }); return; }
+    if (!onChangeInterval && !nextReviewDate) { Swal.fire({ title: "Next review date required", text: "Set the next review date before approving the care plan.", icon: "warning" }); return; }
     if (!reason.trim()) { Swal.fire({ title: "Decision rationale required", text: "Document the nursing rationale before submitting the review.", icon: "warning" }); return; }
     setSaving(true);
     try {
-      await onSubmit({ residentId: s(resident.id), reviewDate: isoDate(today), reviewPeriod: periodOf(today), levelAtReview: lvl, nextReviewDate, carePlanStatus, familyUpdate, physicianFollowup, decision, reason: reason || undefined, actionPlan: actionPlan || undefined, responsible: responsible || undefined, targetDate: targetDate || undefined, reviewedBy });
+      // "On change of condition" has no scheduled date — store a 6-month backstop so the
+      // plan stays finalizable and appears in Reviews Due by then at the latest.
+      const effectiveNextReview = onChangeInterval ? isoDate(addMonths(today, 6)) : nextReviewDate;
+      await onSubmit({ residentId: s(resident.id), reviewDate: isoDate(today), reviewPeriod: periodOf(today), levelAtReview: lvl, nextReviewDate: effectiveNextReview, reviewInterval, carePlanStatus, familyUpdate, physicianFollowup, decision, reason: reason || undefined, actionPlan: actionPlan || undefined, responsible: responsible || undefined, targetDate: targetDate || undefined, reviewedBy });
     } finally { setSaving(false); }
   };
 
@@ -863,8 +950,8 @@ function ReviewForm({ resident, level, recentInc, recentVariances = [], last, re
           <Field label="Review Date" value={isoDate(today)} />
           <Field label="Reviewed By" value={reviewedBy || "Staff"} />
           <Field label="Last Review" value={last ? fmt(last.reviewDate) : "Never"} />
-          <div><FieldLabel htmlFor="cpr-interval">Review Interval</FieldLabel><select id="cpr-interval" value={reviewInterval} onChange={(e) => applyInterval(Number(e.target.value))} className={controlClass}><option value={30}>30 days</option><option value={60}>60 days</option></select></div>
-          <div><FieldLabel htmlFor="cpr-next">Next Review Date</FieldLabel><input id="cpr-next" type="date" value={nextReviewDate} onChange={(e) => setNextReviewDate(e.target.value)} className={controlClass} /></div>
+          <div><FieldLabel htmlFor="cpr-interval">Review Interval</FieldLabel><select id="cpr-interval" value={reviewInterval} onChange={(e) => applyInterval(e.target.value)} className={controlClass}>{REVIEW_INTERVALS.map((o) => <option key={o} value={o}>{o}</option>)}</select></div>
+          <div><FieldLabel htmlFor="cpr-next">Next Review Date</FieldLabel><input id="cpr-next" type="date" value={nextReviewDate} onChange={(e) => setNextReviewDate(e.target.value)} disabled={onChangeInterval} className={controlClass} />{onChangeInterval && <p className="mt-1 text-[11px] text-[var(--clinical-muted)]">Event-driven — reviewed on any significant change; a 6-month backstop applies.</p>}</div>
         </div>
         <div className="mt-4 grid grid-cols-1 items-center gap-4 lg:grid-cols-3">
           <div><FieldLabel htmlFor="cpr-status">Care Plan Status</FieldLabel><select id="cpr-status" value={carePlanStatus} onChange={(e) => setCarePlanStatus(e.target.value)} className={controlClass}>{PLAN_STATUS.map((p) => <option key={p} value={p}>{p}</option>)}</select></div>

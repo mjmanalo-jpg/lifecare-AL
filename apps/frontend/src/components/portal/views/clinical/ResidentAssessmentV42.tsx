@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   Plus, X, Trash2, Pencil, CheckCircle2, Gauge, AlertTriangle,
-  ShieldCheck, RefreshCw, Info, Layers, LayoutGrid, Table2,
+  ShieldCheck, RefreshCw, Info, Layers, LayoutGrid, Table2, FileText,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -38,6 +38,8 @@ import {
 } from "@/lib/lifecare/dataset.ts";
 import type { CareLevel, DomainCode, ClinicalContext } from "@/lib/lifecare/types.ts";
 import { CRM_LEADS_KEY, parseLeads } from "@/lib/crmLeads";
+import { composeName, nameParts } from "@/lib/names";
+import { printNarrativeReport } from "@/lib/lifecare/narrativeReport";
 import DomainScoreGrid from "./DomainScoreGrid";
 
 type SettingRow = { key?: string; id?: string; value?: string };
@@ -61,6 +63,19 @@ const LEVEL_COLOR: Record<CareLevel, string> = {
 const NS01 = ASSESSMENT_DOMAINS.find((d) => d.code === "NS-01");
 
 const REASSESSMENT_OPTIONS = ["30 days", "90 days", "6 months", "Annually", "On change of condition"];
+/** Next review date (local yyyy-mm-dd) auto-computed from a reassessment interval; "" for event-driven. */
+function nextReviewFor(option: string): string {
+  const d = new Date();
+  switch (option) {
+    case "30 days": d.setDate(d.getDate() + 30); break;
+    case "90 days": d.setDate(d.getDate() + 90); break;
+    case "6 months": d.setMonth(d.getMonth() + 6); break;
+    case "Annually": d.setFullYear(d.getFullYear() + 1); break;
+    default: return ""; // "On change of condition" — event-driven, no scheduled date
+  }
+  const pad = (x: number) => String(x).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 const CAPABILITY_OUTCOMES = [
   { value: "WITHIN_CAPABILITY", label: "Within capability" },
   { value: "ESCALATE_TRANSFER", label: "Escalate / transfer" },
@@ -154,17 +169,17 @@ const ageFromDob = (dob?: string): string => {
   return a >= 0 && a < 130 ? String(a) : "";
 };
 
-function ResidentPicker({ value, onChange, admissions, linkedId, onPick, onUnlink, placeholder = "Search converted leads or type a name…", linkedLabel = "From CRM", emptyHint = "No in-progress admissions match — keep typing to enter a new name.", optionFallback = "Converted lead · in-progress admission" }: {
+function ResidentPicker({ value, onChange, admissions, linkedId, onPick, onUnlink, label = "Resident Name *", placeholder = "Search converted leads or type a name…", linkedLabel = "From CRM", emptyHint = "No in-progress admissions match — keep typing to enter a new name.", optionFallback = "Converted lead · in-progress admission" }: {
   value?: string; onChange: (v: string) => void; admissions: AdmissionOpt[];
   linkedId: string; onPick: (a: AdmissionOpt) => void; onUnlink: () => void;
-  placeholder?: string; linkedLabel?: string; emptyHint?: string; optionFallback?: string;
+  label?: string; placeholder?: string; linkedLabel?: string; emptyHint?: string; optionFallback?: string;
 }) {
   const [open, setOpen] = useState(false);
   const q = (value ?? "").trim().toLowerCase();
   const matches = admissions.filter((a) => !q || a.name.toLowerCase().includes(q)).slice(0, 8);
   return (
     <label className="block relative">
-      <MicroLabel className="mb-1">Resident Name *</MicroLabel>
+      <MicroLabel className="mb-1">{label}</MicroLabel>
       <div className="relative">
         <input
           value={value ?? ""}
@@ -238,6 +253,17 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     for (const l of parseLeads(raw)) if (l.convertedAdmissionId && l.source) out[l.convertedAdmissionId] = l.source;
     return out;
   }, [settingRows]);
+  // Structured resident-name parts from the source CRM lead, keyed by the converted
+  // admission id — so picking a converted lead prefills First / Middle / Last cleanly.
+  const leadNameByAdmission = useMemo<Record<string, { firstName: string; middleName: string; lastName: string }>>(() => {
+    const raw = settingRows.find((r) => (r.key || r.id) === CRM_LEADS_KEY)?.value;
+    const out: Record<string, { firstName: string; middleName: string; lastName: string }> = {};
+    for (const l of parseLeads(raw)) {
+      if (!l.convertedAdmissionId) continue;
+      out[l.convertedAdmissionId] = nameParts({ firstName: l.residentFirstName, middleName: l.residentMiddleName, lastName: l.residentLastName, name: l.prospectiveResident });
+    }
+    return out;
+  }, [settingRows]);
 
   // Converted CRM leads land here as in-progress admissions — offer them for the picker.
   const { data: admissionRows } = useLiveQuery<{ id: string; firstName?: string; lastName?: string; dateOfBirth?: string; gender?: string; phone?: string; sponsorName?: string; status?: string }>("admissions", { query: "take=500", tables: ["Admission"] });
@@ -289,7 +315,8 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
-  const [showPin, setShowPin] = useState(false);
+  const [showPin, setShowPin] = useState(false); // PIN gate for the Care Manager Validate sign-off
+  const [pinValidate, setPinValidate] = useState<{ decision: NonNullable<AssessmentV42["validation"]>["decision"]; notes: string } | null>(null);
   const [linkedAdmissionId, setLinkedAdmissionId] = useState("");
   // True while the open modal was launched from a private-caregiver request. Held
   // in state (not read live from the URL) so it survives the URL being cleared and
@@ -300,6 +327,9 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
 
   // ── draft mutation helpers ──────────────────────────────────────────────────
   const patchLayer1 = (p: Partial<AssessmentLayer1>) => setDraft((d) => (d ? { ...d, layer1: { ...d.layer1, ...p } } : d));
+  // Update a resident-name part and keep the composed residentName (used by 100+ readers) in sync.
+  const setNamePart = (p: Partial<Pick<AssessmentLayer1, "firstName" | "middleName" | "lastName">>) =>
+    setDraft((d) => { if (!d) return d; const l1 = { ...d.layer1, ...p }; return { ...d, layer1: { ...l1, residentName: composeName(l1.firstName, l1.middleName, l1.lastName) } }; });
   const toggleLayer1Multi = (key: "familyInvolvement" | "overallGoals", v: string) =>
     setDraft((d) => {
       if (!d) return d;
@@ -330,7 +360,13 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   };
   const openEdit = (a: AssessmentV42, initialLayer: 1 | 2 | 3 = 1) => {
     setEditingId(a.id); setLinkedAdmissionId(a.layer1?.convertedAdmissionId ?? "");
-    setDraft(JSON.parse(JSON.stringify(a))); setLayer(initialLayer); setPcgOpen(false); setOpen(true);
+    const clone: AssessmentV42 = JSON.parse(JSON.stringify(a));
+    // Backfill structured name parts for legacy records so the First/Middle/Last inputs populate.
+    if (!clone.layer1.firstName && !clone.layer1.middleName && !clone.layer1.lastName) {
+      const np = nameParts({ name: clone.layer1.residentName });
+      clone.layer1.firstName = np.firstName; clone.layer1.middleName = np.middleName; clone.layer1.lastName = np.lastName;
+    }
+    setDraft(clone); setLayer(initialLayer); setPcgOpen(false); setOpen(true);
   };
   // When embedded, the host board (Care Acuity) owns the "New Assessment" button in
   // its header and triggers us via an incrementing `newSignal` — skip the first run.
@@ -385,8 +421,11 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   }, [openSignal, loading]);
 
   const pickAdmission = (a: AdmissionOpt) => {
+    // Prefill structured name from the source CRM lead (clean parts), else split the name.
+    const np = leadNameByAdmission[a.id] || nameParts({ name: a.name });
     patchLayer1({
-      residentName: a.name,
+      residentName: composeName(np.firstName, np.middleName, np.lastName) || a.name,
+      firstName: np.firstName, middleName: np.middleName, lastName: np.lastName,
       dateOfBirth: a.dob || draft?.layer1.dateOfBirth,
       sex: a.sex || draft?.layer1.sex,
       age: ageFromDob(a.dob) || draft?.layer1.age,
@@ -401,8 +440,10 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   // Reassessment picker (ACUITY): link to an existing RESIDENT record (not a CRM
   // admission), so the validated level change applies to that resident.
   const pickResident = (a: AdmissionOpt) => {
+    const np = nameParts({ name: a.name });
     patchLayer1({
       residentName: a.name,
+      firstName: np.firstName, middleName: np.middleName, lastName: np.lastName,
       residentId: a.id,
       dateOfBirth: a.dob || draft?.layer1.dateOfBirth,
       sex: a.sex || draft?.layer1.sex,
@@ -468,10 +509,12 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     } finally { setSaving(false); }
   };
 
-  // "Complete Assessment" — PIN-signed → COMPLETED.
+  // "Complete Assessment" → COMPLETED. Never downgrade an already-VALIDATED assessment
+  // (validation is the terminal state; completing after sign-off must not revert it).
   const completeSigned = () => {
     const now = new Date().toISOString();
-    void save("COMPLETED", { completedBy: me || "Clinician", completedAt: now }, "Assessment completed").then(() => setOpen(false));
+    const nextStatus = draft?.status === "VALIDATED" ? "VALIDATED" : "COMPLETED";
+    void save(nextStatus, { completedBy: me || "Clinician", completedAt: now }, "Assessment completed").then(() => setOpen(false));
   };
 
   // All three layers must be complete before the assessment can be signed off:
@@ -733,6 +776,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                   <div className="flex shrink-0 items-center gap-2">
                     {a.status === "VALIDATED" ? <StatusPill status="APPROVED">Validated</StatusPill> : <StatusPill status={a.status} />}
                     <div className="flex items-center overflow-hidden rounded-lg border" style={{ borderColor: "var(--clinical-line)" }}>
+                      {a.status === "VALIDATED" && <button onClick={() => printNarrativeReport(a)} aria-label="Generate narrative report" title="Generate narrative report (PDF)" className="border-r p-1.5 text-[var(--clinical-panel)] transition hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: "var(--clinical-line)" }}><FileText className="h-4 w-4" /></button>}
                       <button onClick={() => openEdit(a)} aria-label="Edit assessment" title="Edit assessment" className="p-1.5 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]"><Pencil className="h-4 w-4" /></button>
                       <button onClick={() => remove(a)} aria-label="Delete" title="Delete assessment" className="border-l p-1.5 text-[var(--clinical-coral)] transition hover:bg-[color-mix(in_srgb,var(--clinical-coral)_10%,transparent)]" style={{ borderColor: "var(--clinical-line)" }}><Trash2 className="h-4 w-4" /></button>
                     </div>
@@ -845,15 +889,19 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                 <>
                   <Section code="A" title="Resident Profile & Clinical Context">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <ResidentPicker value={draft.layer1.residentName} onChange={(v) => patchLayer1({ residentName: v })}
-                        admissions={isAcuity ? residentOpts : admissionOpts}
-                        linkedId={isAcuity ? (draft.layer1.residentId ?? "") : linkedAdmissionId}
-                        linkedLabel={isAcuity ? "Resident" : "From CRM"}
-                        placeholder={isAcuity ? "Search admitted residents…" : "Search converted leads or type a name…"}
-                        emptyHint={isAcuity ? "No admitted residents match — keep typing to enter a name." : "No in-progress admissions match — keep typing to enter a new name."}
-                        optionFallback={isAcuity ? "Admitted resident" : "Converted lead · in-progress admission"}
-                        onPick={isAcuity ? pickResident : pickAdmission}
-                        onUnlink={isAcuity ? () => patchLayer1({ residentId: undefined }) : () => { setLinkedAdmissionId(""); patchLayer1({ convertedAdmissionId: undefined }); }} />
+                      <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <ResidentPicker label="First Name *" value={draft.layer1.firstName ?? ""} onChange={(v) => { setNamePart({ firstName: v }); }}
+                          admissions={isAcuity ? residentOpts : admissionOpts}
+                          linkedId={isAcuity ? (draft.layer1.residentId ?? "") : linkedAdmissionId}
+                          linkedLabel={isAcuity ? "Resident" : "From CRM"}
+                          placeholder={isAcuity ? "Search admitted residents…" : "Search converted leads or type a name…"}
+                          emptyHint={isAcuity ? "No admitted residents match — keep typing to enter a name." : "No in-progress admissions match — keep typing to enter a new name."}
+                          optionFallback={isAcuity ? "Admitted resident" : "Converted lead · in-progress admission"}
+                          onPick={isAcuity ? pickResident : pickAdmission}
+                          onUnlink={isAcuity ? () => patchLayer1({ residentId: undefined }) : () => { setLinkedAdmissionId(""); patchLayer1({ convertedAdmissionId: undefined }); }} />
+                        <Text label="Middle Name (optional)" value={draft.layer1.middleName} onChange={(v) => setNamePart({ middleName: v })} />
+                        <Text label="Last Name *" value={draft.layer1.lastName} onChange={(v) => setNamePart({ lastName: v })} />
+                      </div>
                       <Text label="Assessment Date" type="date" value={draft.layer1.assessmentDate} onChange={(v) => patchLayer1({ assessmentDate: v })} />
                       <div className="grid grid-cols-3 gap-2">
                         <Text label="Date of Birth" type="date" value={draft.layer1.dateOfBirth} onChange={(v) => patchLayer1({ dateOfBirth: v })} />
@@ -1088,7 +1136,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                       <MicroLabel className="mb-1.5">Reassessment Interval</MicroLabel>
                       <div className="flex flex-wrap gap-1.5">
                         {REASSESSMENT_OPTIONS.map((o) => (
-                          <button key={o} type="button" onClick={() => patchLayer3({ reassessmentInterval: o })} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${draft.layer3.reassessmentInterval === o ? chipOn : chipOff}`}>{o}</button>
+                          <button key={o} type="button" onClick={() => patchLayer3({ reassessmentInterval: o, nextReviewDate: nextReviewFor(o) })} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${draft.layer3.reassessmentInterval === o ? chipOn : chipOff}`}>{o}</button>
                         ))}
                       </div>
                     </div>
@@ -1099,7 +1147,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                   </Section>
 
                   {/* Validation block (nurse → admin) */}
-                  <ValidationBlock draft={draft} roleLabel={roleLabel} onValidate={validate} busy={saving} />
+                  <ValidationBlock draft={draft} roleLabel={roleLabel} onValidate={(decision, notes) => { setPinValidate({ decision, notes }); setShowPin(true); }} busy={saving} />
                 </>
               )}
             </div>
@@ -1113,23 +1161,27 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
               </span>
               <div className="flex items-center gap-2">
                 <ClinicalButton variant="secondary" size="sm" onClick={() => save("DRAFT", {}, "Draft saved")} disabled={saving}>{saving ? "Saving…" : "Save Draft"}</ClinicalButton>
-                <span title={completionIssues.length ? `Complete all 3 layers first:\n${completionIssues.map((i) => `• ${i.message}`).join("\n")}` : undefined} className={completionIssues.length ? "cursor-not-allowed" : undefined}>
-                  <ClinicalButton variant="accent" onClick={() => setShowPin(true)} disabled={saving || completionIssues.length > 0}><CheckCircle2 className="w-4 h-4" /> Complete Assessment</ClinicalButton>
-                </span>
+                {draft?.status === "VALIDATED" ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-green) 16%, transparent)", color: "var(--clinical-green)" }}><CheckCircle2 className="w-4 h-4" /> Validated</span>
+                ) : (
+                  <span title={completionIssues.length ? `Complete all 3 layers first:\n${completionIssues.map((i) => `• ${i.message}`).join("\n")}` : undefined} className={completionIssues.length ? "cursor-not-allowed" : undefined}>
+                    <ClinicalButton variant="accent" onClick={() => completeSigned()} disabled={saving || completionIssues.length > 0}><CheckCircle2 className="w-4 h-4" /> Complete Assessment</ClinicalButton>
+                  </span>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* PIN-signed completion */}
+      {/* PIN-signed Care Manager sign-off — validates the Final Level of Care. */}
       <SignatureModal
         open={showPin}
-        onClose={() => setShowPin(false)}
-        onSigned={() => { setShowPin(false); completeSigned(); }}
+        onClose={() => { setShowPin(false); setPinValidate(null); }}
+        onSigned={() => { setShowPin(false); if (pinValidate) { void validate(pinValidate.decision, pinValidate.notes); setPinValidate(null); } }}
         mode="sign"
-        title="Sign to complete assessment"
-        description="Enter your 4-digit signing PIN to submit this v4.2 resident assessment."
+        title="Sign to validate Level of Care"
+        description="Enter your 4-digit signing PIN to confirm the Final Level of Care (Care Manager sign-off)."
       />
     </>
   );
@@ -1198,6 +1250,7 @@ function AssessmentTable({ rows, onEdit, onRemove }: {
                 <td className="px-4 py-3.5">
                   <div className="flex justify-end">
                    <div className="inline-flex items-center overflow-hidden rounded-lg border" style={{ borderColor: "var(--clinical-line)" }}>
+                    {a.status === "VALIDATED" && <button onClick={() => printNarrativeReport(a)} aria-label="Generate narrative report" title="Generate narrative report (PDF)" className="border-r p-1.5 text-[var(--clinical-panel)] transition hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: "var(--clinical-line)" }}><FileText className="h-4 w-4" /></button>}
                     <button onClick={() => onEdit(a)} aria-label="Edit" title="Edit assessment" className="p-1.5 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]"><Pencil className="h-4 w-4" /></button>
                     <button onClick={() => onRemove(a)} aria-label="Delete" title="Delete assessment" className="border-l p-1.5 text-[var(--clinical-coral)] transition hover:bg-[color-mix(in_srgb,var(--clinical-coral)_10%,transparent)]" style={{ borderColor: "var(--clinical-line)" }}><Trash2 className="h-4 w-4" /></button>
                    </div>

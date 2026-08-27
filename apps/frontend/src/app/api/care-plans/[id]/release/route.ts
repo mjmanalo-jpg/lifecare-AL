@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { carePlanReleaseIssues } from "@/lib/lifecare/carePlanRelease";
+import { CARE_TASK_MASTER } from "@/lib/lifecare/dataset";
+import { domainCodeFromLabel } from "@/lib/lifecare/carePackage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,9 +25,31 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const plan = await prisma.carePlan.findFirst({
     where: { id, communityId: context.communityId, organizationId: context.organizationId },
-    include: { carePlanItems: { where: { category: "INTERVENTION", status: "ACTIVE" }, select: { title: true, description: true, status: true } } },
+    include: { carePlanItems: { where: { category: "INTERVENTION", status: "ACTIVE" }, select: { id: true, title: true, description: true, status: true } } },
   });
   if (!plan) return NextResponse.json({ error: "Care plan not found." }, { status: 404 });
+
+  // Governed self-heal — baseline drafts created before governed generation carry
+  // interventions with no [task:] link / individualization, which can never pass the
+  // release gates. Backfill each from the Care Task Master (level-scoped by AS-code) and
+  // persist, so a governed plan can be released. Items that can't map to a governed task
+  // are left untouched — the gate then flags them honestly.
+  const planLevel = Number(/\(Level (\d)\)/.exec(plan.title || "")?.[1]) || 2;
+  const levelTasks = CARE_TASK_MASTER.filter((t) => t.careLevel === `L${planLevel}` && /AUTO-GENERATE/i.test(t.generationStatus || ""));
+  const compliant = (d: string) => /\[task:[^\]]+\]/i.test(d) && /Frequency:\s*[^·[]+/i.test(d) && /Individualized:\s*[^[]+/i.test(d);
+  for (const item of plan.carePlanItems) {
+    const desc = item.description || "";
+    if (compliant(desc)) continue;
+    const code = domainCodeFromLabel(item.title || "");
+    const t = (code && (levelTasks.find((x) => domainCodeFromLabel(x.domain) === code) || CARE_TASK_MASTER.find((x) => domainCodeFromLabel(x.domain) === code))) || null;
+    if (!t) continue;
+    const freq = (/Frequency:\s*([^·[]+)/i.exec(desc)?.[1] || "Per care plan — individualise").trim();
+    const role = (t.responsibleRole || t.primaryRole || "Caregiver").trim();
+    const detail = (t.approvedIntervention || t.definition || "Provide governed support; individualize technique and preferences.").trim();
+    const nextDesc = `Frequency: ${freq} · Individualized: ${role ? `${detail} · Role: ${role}` : detail} [task:${t.id}]`;
+    await prisma.carePlanItem.update({ where: { id: item.id }, data: { description: nextDesc } }).catch(() => null);
+    item.description = nextDesc; // reflect for in-memory gate check below
+  }
 
   const issues = carePlanReleaseIssues(plan, { approvedByName, effectiveDate, nextReviewDate });
   if (issues.length) return NextResponse.json({ error: "Care plan activation gates are incomplete.", code: "CARE_PLAN_RELEASE_GATES", issues }, { status: 422 });

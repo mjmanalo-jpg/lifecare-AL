@@ -35,6 +35,18 @@ const careTaskIdOf = (desc: string | null): string | null => /\[task:([^\]]+)\]/
 const weekdayOf = (dateStr: string) => new Date(dateStr + "T00:00:00Z").getUTCDay();
 const localDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(d);
 
+// How many task cards a frequency yields per day, and when each is due (local hour).
+// BID → 2, TID → 3, "Every shift" → 3 (AM/PM/NOC). Everything else (Daily / Per care
+// plan / Weekly) → a single card. PRN & weekly-anchor are filtered before this.
+type Occurrence = { label: string; hour: number };
+function occurrencesFor(freq: string): Occurrence[] {
+  const f = freq.toLowerCase();
+  if (/every shift/.test(f)) return [{ label: "AM", hour: 8 }, { label: "PM", hour: 16 }, { label: "NOC", hour: 23 }];
+  if (/\btid\b|three times/.test(f)) return [{ label: "Morning", hour: 8 }, { label: "Afternoon", hour: 14 }, { label: "Evening", hour: 20 }];
+  if (/\bbid\b|twice/.test(f)) return [{ label: "AM", hour: 8 }, { label: "PM", hour: 18 }];
+  return [{ label: "", hour: 0 }]; // single card (hour 0 → use end-of-day due)
+}
+
 async function materializeCommunity(communityId: string, organizationId: string | null): Promise<number> {
   const now = new Date();
   const todayStr = localDay(now);
@@ -71,31 +83,39 @@ async function materializeCommunity(communityId: string, organizationId: string 
     if (!assignee?.caregiverStaffId) continue;
 
     const startWd = weekdayOf(localDay(new Date(plan.startDate)));
+    const dueAt = (hour: number) => new Date(`${todayStr}T${String(hour).padStart(2, "0")}:00:00+08:00`);
     for (const item of plan.carePlanItems) {
       const freq = freqOf(item.description);
       if (/PRN|as needed/i.test(freq)) continue;                 // on-demand only
       if (/Weekly/i.test(freq) && startWd !== todayWd) continue; // weekly anchor day
-      const key = `${plan.id}|${item.title}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
+      const category = item.title.split(":")[0].trim() || "Care Plan";
       const careTaskId = careTaskIdOf(item.description);
-      try {
-        await prisma.task.create({
-          data: {
-            organizationId, communityId, residentId: plan.residentId,
-            title: item.title,
-            description: item.description ? `From care plan · ${item.description}` : `From care plan · ${freq}`,
-            category: item.title.split(":")[0].trim() || "Care Plan",
-            status: "PENDING", priority: "MEDIUM",
-            dueDate: dayEnd, generatedFrom: plan.id,
-            assignedToId: assignee.caregiverStaffId,
-            // Governed care-event linkage — lets task completion resolve the routine's
-            // Care Task Master archetype (doc template + escalation/reassessment).
-            recurringPattern: careTaskId ? { careTaskId } : undefined,
-          },
-        });
-        created++;
-      } catch { /* FK / transient — skip this task, keep going */ }
+      // One card per occurrence, each with its own shift-based due time. The occurrence
+      // label is folded into the title so the per-(plan,title) dedup keeps each slot
+      // distinct and idempotent across re-runs.
+      for (const occ of occurrencesFor(freq)) {
+        const title = occ.label ? `${item.title} · ${occ.label}` : item.title;
+        const key = `${plan.id}|${title}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        try {
+          await prisma.task.create({
+            data: {
+              organizationId, communityId, residentId: plan.residentId,
+              title,
+              description: item.description ? `From care plan · ${item.description}` : `From care plan · ${freq}`,
+              category,
+              status: "PENDING", priority: "MEDIUM",
+              dueDate: occ.label ? dueAt(occ.hour) : dayEnd, generatedFrom: plan.id,
+              assignedToId: assignee.caregiverStaffId,
+              // Governed care-event linkage — lets task completion resolve the routine's
+              // Care Task Master archetype (doc template + escalation/reassessment).
+              recurringPattern: careTaskId ? { careTaskId } : undefined,
+            },
+          });
+          created++;
+        } catch { /* FK / transient — skip this task, keep going */ }
+      }
     }
   }
   return created;

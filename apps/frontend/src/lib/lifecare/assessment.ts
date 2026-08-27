@@ -37,7 +37,10 @@ export type AdvanceDirectiveStatus = "AVAILABLE" | "REQUESTED" | "NOT_AVAILABLE"
 /** Layer 1 — resident profile + clinical history + decision-support baseline. */
 export interface AssessmentLayer1 {
   // Resident profile
-  residentName: string;
+  residentName: string;              // composed "First Middle Last" (kept for all readers)
+  firstName?: string;                // structured name parts (prefilled from CRM lead)
+  middleName?: string;
+  lastName?: string;
   residentId?: string;               // linked resident record, once admitted
   convertedAdmissionId?: string;     // link to in-progress admission (CRM lead)
   dateOfBirth?: string;

@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Swal from "@/lib/swal";
+import { composeName, nameParts } from "@/lib/names";
 import {
   UserPlus, Stethoscope, ClipboardList, ShieldCheck, BedDouble,
   Users, HeartPulse, Check, ChevronLeft, ChevronRight, X, Plus, Search,
   CheckCircle2, Loader2, CircleDot, Ban, AlertTriangle, Download, Printer, Pencil,
   Brain, Activity, Apple, Pill, Droplets, MessageSquare, Siren, Sparkles,
-  Camera, Trash2, Image as ImageIcon, Eye, Moon, Paperclip,
+  Camera, Trash2, Image as ImageIcon, Eye, Moon, Paperclip, ChevronsUpDown, ChevronUp, ChevronDown,
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFacilityConfig } from "@/lib/useFacilityConfig";
@@ -339,7 +340,7 @@ const parseTeam = (v: unknown): TeamMember[] => {
 };
 
 const emptyForm = {
-  firstName: "", lastName: "", dateOfBirth: "", gender: "", phone: "", email: "",
+  firstName: "", middleName: "", lastName: "", dateOfBirth: "", gender: "", phone: "", email: "",
   emergencyContact: "", emergencyContactPhone: "",
   sponsorName: "", sponsorEmail: "",
   medicalAssessment: "", allergies: "", medicalHistory: "", surgeries: "", hospitalizations: "",
@@ -360,6 +361,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 const inputCls =
   "w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm";
+
+type SortKey = "name" | "room" | "status" | "step" | "progress";
 
 export default function AdmissionsContent() {
   const { data: admissionRows, loading, refetch } = useLiveQuery<Row>("admissions", { tables: ["Admission"] });
@@ -411,6 +414,8 @@ export default function AdmissionsContent() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED">("all");
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
 
@@ -739,9 +744,12 @@ export default function AdmissionsContent() {
     setSkinWounds(parsedCA.wounds);
     setMedList(parsedCA.meds);
     setAttachments(parsedCA.attachments);
+    // Stored firstName may carry a composed middle ("First Middle"); split it back so
+    // the First / Middle inputs round-trip. First token → first, remainder → middle.
+    const fnTokens = s(row.firstName).trim().split(/\s+/).filter(Boolean);
     setForm({
       id: s(row.id),
-      firstName: s(row.firstName), lastName: s(row.lastName),
+      firstName: fnTokens.shift() || "", middleName: fnTokens.join(" "), lastName: s(row.lastName),
       dateOfBirth: row.dateOfBirth ? s(row.dateOfBirth).slice(0, 10) : "",
       gender: s(row.gender), phone: s(row.phone), email: s(row.email),
       emergencyContact: s(row.emergencyContact), emergencyContactPhone: s(row.emergencyContactPhone),
@@ -774,7 +782,8 @@ export default function AdmissionsContent() {
   };
 
   const buildPayload = (extra: Row = {}): Row => ({
-    firstName: form.firstName, lastName: form.lastName,
+    // No middle-name column on Admission — compose middle into firstName ("First Middle").
+    firstName: composeName(form.firstName, form.middleName), lastName: form.lastName,
     dateOfBirth: form.dateOfBirth ? new Date(form.dateOfBirth).toISOString() : null,
     gender: form.gender || null, phone: form.phone || null, email: form.email || null,
     emergencyContact: form.emergencyContact || null, emergencyContactPhone: form.emergencyContactPhone || null,
@@ -987,7 +996,7 @@ export default function AdmissionsContent() {
       const sponsorId = await resolveSponsorId();
       let seededAcuity = false;
       const residentPayload: Row = {
-        firstName: form.firstName, lastName: form.lastName,
+        firstName: composeName(form.firstName, form.middleName), lastName: form.lastName,
         dateOfBirth: form.dateOfBirth ? new Date(form.dateOfBirth).toISOString() : null,
         gender: form.gender || null, phone: form.phone || null, email: form.email || null,
         roomNumber: form.roomNumber,
@@ -1111,6 +1120,23 @@ export default function AdmissionsContent() {
     .filter((a) => !q || `${s(a.firstName)} ${s(a.lastName)}`.toLowerCase().includes(q) || s(a.roomNumber).toLowerCase().includes(q));
   const count = (st: string) => admissionRows.filter((a) => s(a.status) === st).length;
 
+  // Column sort for the admissions table. Default (null) keeps newest-first order.
+  const STATUS_RANK: Record<string, number> = { IN_PROGRESS: 0, COMPLETED: 1, CANCELLED: 2 };
+  const sortVal = (a: Row): string | number => {
+    switch (sortKey) {
+      case "name": return `${s(a.firstName)} ${s(a.lastName)}`.trim().toLowerCase();
+      case "room": return Number(s(a.roomNumber)) || 0;
+      case "status": return STATUS_RANK[s(a.status)] ?? 9;
+      case "step": return Number(a.currentStep) || 0;
+      case "progress": return parseCompleted(a.completedSteps).length;
+      default: return 0;
+    }
+  };
+  const sorted = sortKey
+    ? [...filtered].sort((a, b) => { const av = sortVal(a), bv = sortVal(b); const c = av < bv ? -1 : av > bv ? 1 : 0; return sortDir === "asc" ? c : -c; })
+    : filtered;
+  const toggleSort = (k: SortKey) => { if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc")); else { setSortKey(k); setSortDir("asc"); } };
+
   const doneSet = new Set(parseCompleted(form.completedSteps));
 
   return (
@@ -1157,39 +1183,59 @@ export default function AdmissionsContent() {
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">No admissions match. Click <b>New Admission</b> to start onboarding.</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filtered.map((a) => {
-            const done = parseCompleted(a.completedSteps).length;
-            const st = s(a.status);
-            const isDone = st === "COMPLETED";
-            const isCancelled = st === "CANCELLED";
-            const cur = STEPS.find((x) => x.n === (Number(a.currentStep) || 1));
-            const badge = isDone ? "bg-green-100 text-green-700" : isCancelled ? "bg-gray-200 text-gray-600" : "bg-indigo-100 text-indigo-700";
-            return (
-              <div key={s(a.id)} className="bg-white rounded-xl border border-gray-200 p-5 hover:border-indigo-300 hover:shadow-md transition">
-                <button onClick={() => openView(a)} className="w-full text-left">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-bold text-gray-900">{s(a.firstName)} {s(a.lastName)}</h3>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badge}`}>{isDone ? "Completed" : isCancelled ? "Cancelled" : "In Progress"}</span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {a.roomNumber ? `Room ${s(a.roomNumber)} • ` : ""}{isDone ? "Onboarded" : isCancelled ? "Cancelled" : `Next: ${cur?.label ?? "Registration"}`}
-                  </p>
-                  <div className="mt-3">
-                    <div className="flex items-center justify-between text-xs text-gray-500 mb-1"><span>Progress</span><span>{done}/{STEP_COUNT}</span></div>
-                    <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                      <div className={`h-full ${isDone ? "bg-green-500" : isCancelled ? "bg-gray-400" : "bg-indigo-500"} transition-all`} style={{ width: `${(done / STEP_COUNT) * 100}%` }} />
-                    </div>
-                  </div>
-                </button>
-                <div className="mt-3 flex items-center justify-end gap-1 border-t border-gray-100 pt-2.5">
-                  <button onClick={() => openView(a)} title="View" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 transition"><Eye className="w-4 h-4" /> View</button>
-                  <button onClick={() => (s(a.status) === "COMPLETED" ? openViewEdit(a) : openExisting(a))} title="Edit" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 transition"><Pencil className="w-4 h-4" /> Edit</button>
-                  <button onClick={() => deleteAdmission(s(a.id), `${s(a.firstName)} ${s(a.lastName)}`.trim())} title="Delete" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition"><Trash2 className="w-4 h-4" /> Delete</button>
-                </div>
-              </div>
-            );
-          })}
+        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50/60 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                {([["name", "Name"], ["room", "Room"], ["status", "Status"], ["step", "Next step"], ["progress", "Progress"]] as const).map(([k, label]) => (
+                  <th key={k} className="px-4 py-3">
+                    <button onClick={() => toggleSort(k)} className="inline-flex items-center gap-1 transition hover:text-gray-800">
+                      {label}
+                      {sortKey === k
+                        ? (sortDir === "asc" ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />)
+                        : <ChevronsUpDown className="h-3.5 w-3.5 opacity-40" />}
+                    </button>
+                  </th>
+                ))}
+                <th className="px-4 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((a) => {
+                const done = parseCompleted(a.completedSteps).length;
+                const st = s(a.status);
+                const isDone = st === "COMPLETED";
+                const isCancelled = st === "CANCELLED";
+                const cur = STEPS.find((x) => x.n === (Number(a.currentStep) || 1));
+                const badge = isDone ? "bg-green-100 text-green-700" : isCancelled ? "bg-gray-200 text-gray-600" : "bg-indigo-100 text-indigo-700";
+                return (
+                  <tr key={s(a.id)} className="border-b border-gray-50 last:border-0 transition hover:bg-gray-50/60">
+                    <td className="px-4 py-3">
+                      <button onClick={() => openView(a)} className="font-semibold text-gray-900 transition hover:text-indigo-600">{s(a.firstName)} {s(a.lastName)}</button>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">{a.roomNumber ? s(a.roomNumber) : "—"}</td>
+                    <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badge}`}>{isDone ? "Completed" : isCancelled ? "Cancelled" : "In Progress"}</span></td>
+                    <td className="px-4 py-3 text-gray-600">{isDone || isCancelled ? "—" : (cur?.label ?? "Registration")}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-gray-100">
+                          <div className={`h-full ${isDone ? "bg-green-500" : isCancelled ? "bg-gray-400" : "bg-indigo-500"}`} style={{ width: `${Math.min(100, (done / STEP_COUNT) * 100)}%` }} />
+                        </div>
+                        <span className="text-xs tabular-nums text-gray-500">{done}/{STEP_COUNT}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => openView(a)} title="View" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 transition"><Eye className="w-4 h-4" /> View</button>
+                        <button onClick={() => (st === "COMPLETED" ? openViewEdit(a) : openExisting(a))} title="Edit" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 transition"><Pencil className="w-4 h-4" /> Edit</button>
+                        <button onClick={() => deleteAdmission(s(a.id), `${s(a.firstName)} ${s(a.lastName)}`.trim())} title="Delete" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition"><Trash2 className="w-4 h-4" /> Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -1300,6 +1346,7 @@ export default function AdmissionsContent() {
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field label="First Name *"><input className={inputCls} value={form.firstName} onChange={(e) => set({ firstName: e.target.value })} /></Field>
+                    <Field label="Middle Name (optional)"><input className={inputCls} value={form.middleName} onChange={(e) => set({ middleName: e.target.value })} /></Field>
                     <Field label="Last Name *"><input className={inputCls} value={form.lastName} onChange={(e) => set({ lastName: e.target.value })} /></Field>
                     <Field label="Date of Birth"><input type="date" className={inputCls} value={form.dateOfBirth} onChange={(e) => set({ dateOfBirth: e.target.value })} /></Field>
                     <Field label="Gender"><select className={inputCls} value={form.gender} onChange={(e) => set({ gender: e.target.value })}><option value="">—</option><option>Female</option><option>Male</option><option>Other</option></select></Field>
@@ -1827,7 +1874,10 @@ function AdmissionEditForm({ row, onSave }: {
 }) {
   const g = (k: string) => s(row[k]);
   const ca = parseClinical(g("careAssessment"));
-  const [firstName, setFirstName] = useState(g("firstName"));
+  // Stored firstName may carry a composed middle ("First Middle") — split for editing.
+  const _fnTokens = g("firstName").trim().split(/\s+/).filter(Boolean);
+  const [firstName, setFirstName] = useState(_fnTokens.shift() || "");
+  const [middleName, setMiddleName] = useState(_fnTokens.join(" "));
   const [lastName, setLastName] = useState(g("lastName"));
   const [dateOfBirth, setDateOfBirth] = useState(g("dateOfBirth") ? g("dateOfBirth").slice(0, 10) : "");
   const [gender, setGender] = useState(g("gender"));
@@ -1859,7 +1909,7 @@ function AdmissionEditForm({ row, onSave }: {
     if (!firstName.trim() || !lastName.trim()) { Swal.fire({ title: "First and last name are required", icon: "warning" }); return; }
     const dob = dateOfBirth ? new Date(dateOfBirth).toISOString() : null;
     const admission: Row = {
-      firstName: firstName.trim(), lastName: lastName.trim(), dateOfBirth: dob,
+      firstName: composeName(firstName, middleName), lastName: lastName.trim(), dateOfBirth: dob,
       gender: gender || null, phone: phone || null, email: email || null,
       emergencyContact: emergencyContact || null, emergencyContactPhone: emergencyContactPhone || null,
       sponsorName: sponsorName || null, sponsorEmail: sponsorEmail || null,
@@ -1872,7 +1922,7 @@ function AdmissionEditForm({ row, onSave }: {
     // NOTE: medicalAssessment/diagnosis are NOT Resident columns — they live on the
     // Admission and the rcard reads them from there.
     const residentSync: Row = {
-      firstName: firstName.trim(), lastName: lastName.trim(), dateOfBirth: dob,
+      firstName: composeName(firstName, middleName), lastName: lastName.trim(), dateOfBirth: dob,
       gender: gender || null, phone: phone || null, email: email || null,
       emergencyContact: emergencyContact || null, emergencyContactPhone: emergencyContactPhone || null,
       allergies: allergies || null, medicalHistory: medicalHistory || null,
@@ -1892,6 +1942,7 @@ function AdmissionEditForm({ row, onSave }: {
         <h3 className="text-sm font-bold text-slate-800 border-b border-gray-100 pb-2">Resident Profile</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="First Name"><input className={inputCls} value={firstName} onChange={(e) => setFirstName(e.target.value)} /></Field>
+          <Field label="Middle Name (optional)"><input className={inputCls} value={middleName} onChange={(e) => setMiddleName(e.target.value)} /></Field>
           <Field label="Last Name"><input className={inputCls} value={lastName} onChange={(e) => setLastName(e.target.value)} /></Field>
           <Field label="Date of Birth"><input type="date" className={inputCls} value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} /></Field>
           <Field label="Gender"><input className={inputCls} value={gender} onChange={(e) => setGender(e.target.value)} /></Field>

@@ -10,11 +10,22 @@
 
 import { useMemo } from "react";
 import { Activity, Utensils, Droplets, Smile, Footprints, Moon, Wind, CheckCircle2, Circle, AlertTriangle, RefreshCw, Bath, TrendingDown, Brain, Pill, MessageCircle, Dumbbell, ShieldAlert, type LucideIcon } from "lucide-react";
-import { useCareLogData, levelOf } from "./CareLogsBoard";
+import { useCareLogData } from "./CareLogsBoard";
+import { activeLevel } from "@/lib/lifecare/activeLevel";
 import { type ClinicianRole } from "./useClinician";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (v: unknown) => (v == null ? "" : String(v));
+
+// Level badge by TRUE level number (1–5, resolved from loc_history) — the careLevel
+// enum collapses L2/L3 and can't represent L1 vs L3 faithfully, so we colour by number.
+const LEVEL_BADGE: Record<number, string> = {
+  1: "bg-green-100 text-green-700",
+  2: "bg-amber-100 text-amber-700",
+  3: "bg-orange-100 text-orange-700",
+  4: "bg-rose-100 text-rose-700",
+  5: "bg-red-100 text-red-700",
+};
 
 // 14 domain columns — the LifeCare v4.2 assessment domains (AS-01 … AS-14), the
 // same domain keys the shared hook's domainsByRes now uses. Pain is a standalone
@@ -37,7 +48,7 @@ const COLS: { key: string; label: string; icon: LucideIcon }[] = [
 ];
 
 export default function ShiftSummaryBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
-  const { residents, entries, domainsByRes, refetchAll } = useCareLogData(clinicianRole);
+  const { residents, entries, domainsByRes, refetchAll, locHistory } = useCareLogData(clinicianRole);
 
   const isDone = (resId: string, col: (typeof COLS)[number]) => {
     const set = domainsByRes.get(resId);
@@ -106,12 +117,12 @@ export default function ShiftSummaryBoard({ clinicianRole = "NURSE" }: { clinici
           <tbody>
             {residents.map((r: Row) => {
               const doneCount = COLS.filter((c) => isDone(s(r.id), c)).length;
-              const lvl = levelOf(r);
+              const lvlN = activeLevel({ residentId: s(r.id), careLevel: s(r.careLevel), locHistory, residentName: s(r.name) });
               return (
                 <tr key={s(r.id)} className="border-b border-slate-50 last:border-0">
                   <td className="px-4 py-3 font-semibold text-slate-600">{s(r.room)}</td>
                   <td className="px-4 py-3 font-bold text-slate-900">{s(r.name)}</td>
-                  <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${lvl.badge}`}>L{lvl.n}</span></td>
+                  <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${LEVEL_BADGE[lvlN] || LEVEL_BADGE[2]}`}>L{lvlN}</span></td>
                   {COLS.map((c) => (
                     <td key={c.key} className="px-2 py-3 text-center">{isDone(s(r.id), c) ? <CheckCircle2 className="inline h-5 w-5 text-[#16A34A]" /> : <Circle className="inline h-5 w-5 text-slate-300" />}</td>
                   ))}

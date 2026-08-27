@@ -61,7 +61,7 @@ export const DOMAIN_LABEL: Record<string, string> = {
  */
 export function domainCodeFromLabel(label: string): DomainCode | null {
   const l = (label || "").toLowerCase();
-  if (/\b(adl|personal care|bath|dress|groom)\b/.test(l)) return "AS-01";
+  if (/\b(adls?|personal care|personal adls?|bath|dress|groom)\b/.test(l)) return "AS-01";
   if (/(mobil|transfer|ambulat|reposition)/.test(l)) return "AS-02";
   if (/fall/.test(l)) return "AS-03";
   if (/(cognit|memory|dementia|reorient|cue)/.test(l)) return "AS-04";

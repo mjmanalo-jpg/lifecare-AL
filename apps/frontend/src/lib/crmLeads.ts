@@ -37,7 +37,10 @@ export interface Lead {
   contact?: string;
   email?: string;
   source?: string;
-  prospectiveResident?: string;   // who the move-in is for (may differ from the contact)
+  prospectiveResident?: string;   // who the move-in is for (composed First Middle Last; may differ from the contact)
+  residentFirstName?: string;     // structured prospective-resident name (prefills Admission + Assessment)
+  residentMiddleName?: string;
+  residentLastName?: string;
   stage: LeadStage;
   assignedTo?: string;
   notes?: string;

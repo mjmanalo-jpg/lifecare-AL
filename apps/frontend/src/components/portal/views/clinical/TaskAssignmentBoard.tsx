@@ -322,7 +322,8 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
   const [filterDate, setFilterDate] = useState(""); // "" = all dates (Board View shows every task)
   const [filterAssignee, setFilterAssignee] = useState("all");
   const [filterResident, setFilterResident] = useState("all");
-  const [activeTab, setActiveTab] = useState<"board" | "mine" | "summary" | "handover">("board");
+  // Workers land on their own worklist (My Tasks); managers land on the overview.
+  const [activeTab, setActiveTab] = useState<"board" | "mine" | "summary" | "handover">(MANAGER_ROLES.has(clinicianRole) ? "board" : "mine");
   const [completedScope, setCompletedScope] = useState<CompletedScope>("today");
   const [showAssign, setShowAssign] = useState(false);
   // Add-note modal (replaces the bare Swal textarea prompt).
@@ -381,14 +382,17 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
     });
   }, [tasks, filterAssignee, filterResident, filterDate]);
 
-  // Tab scoping: "My Tasks" = tasks assigned to the current user (within the
-  // already-visible set). For a worker the whole board is already their tasks.
+  // Tab scoping:
+  //  • "My Tasks" = tasks assigned to the current user.
+  //  • "Board View" for a WORKER (caregiver) = only UNASSIGNED tasks — the claimable
+  //    pool for their residents; their own assigned tasks live solely under My Tasks.
+  //    Managers keep the full overview (they assign from Board View).
   const tabTasks = useMemo(() => {
-    if (activeTab !== "mine") return visibleTasks;
-    return visibleTasks.filter(
-      (t) => (t.raw as { assignedToId?: string } | undefined)?.assignedToId === myStaffId
-    );
-  }, [activeTab, visibleTasks, myStaffId]);
+    const assignedOf = (t: Task) => (t.raw as { assignedToId?: string } | undefined)?.assignedToId || null;
+    if (activeTab === "mine") return visibleTasks.filter((t) => assignedOf(t) === myStaffId);
+    if (activeTab === "board" && isWorker) return visibleTasks.filter((t) => !assignedOf(t));
+    return visibleTasks;
+  }, [activeTab, visibleTasks, myStaffId, isWorker]);
 
   const rawStatus = (t: Task) =>
     String((t.raw as { status?: string } | undefined)?.status ?? "").toUpperCase();
