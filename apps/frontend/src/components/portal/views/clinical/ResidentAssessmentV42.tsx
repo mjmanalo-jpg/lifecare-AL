@@ -479,7 +479,10 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
 
   const save = async (status: AssessmentStatus, extra: Partial<AssessmentV42> = {}, toast?: string) => {
     if (!draft) return;
-    if (!draft.layer1.residentName?.trim()) {
+    // A DRAFT must capture whatever the assessor has entered across Layers 1–3, even
+    // without a name yet (it lists as "Unnamed resident" and reopens). The name is only
+    // required to finalize (COMPLETED/VALIDATED), where it becomes an identity of record.
+    if (status !== "DRAFT" && !draft.layer1.residentName?.trim()) {
       Swal.fire({ title: "Resident name required", text: "Enter the resident's name in Layer 1 before saving.", icon: "warning" });
       setLayer(1); return;
     }
