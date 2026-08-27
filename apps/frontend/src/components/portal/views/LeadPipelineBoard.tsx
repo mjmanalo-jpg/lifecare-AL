@@ -33,6 +33,8 @@ export default function LeadPipelineBoard() {
   const [form, setForm] = useState<typeof EMPTY>(EMPTY);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const toggleCollapse = (stage: string) => setCollapsed((c) => ({ ...c, [stage]: !c[stage] }));
 
   const persist = async (next: Lead[]) => {
     await upsertRecord("app-settings", CRM_LEADS_KEY, { key: CRM_LEADS_KEY, value: JSON.stringify(next) });
@@ -147,16 +149,21 @@ export default function LeadPipelineBoard() {
       </div>
 
       {/* Pipeline kanban */}
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 items-start">
         {LEAD_STAGES.map((stage) => {
           const col = leads.filter((l) => l.stage === stage);
+          const isCollapsed = !!collapsed[stage];
           return (
-            <div key={stage} className="min-w-[240px] w-[240px] flex-shrink-0">
-              <div className="flex items-center justify-between mb-2 px-1">
-                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STAGE_META[stage].badge}`}>{STAGE_META[stage].label}</span>
-                <span className="text-xs font-semibold text-gray-400">{col.length}</span>
-              </div>
-              <div className="space-y-2 rounded-xl border border-gray-100 bg-gray-50/70 p-2 min-h-[140px]">
+            <div key={stage} className="flex flex-col rounded-xl border border-gray-200 bg-gray-50/60 overflow-hidden">
+              <button type="button" onClick={() => toggleCollapse(stage)} aria-expanded={!isCollapsed}
+                className="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-gray-100 bg-white/70 hover:bg-gray-50 text-left">
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <ChevronRight className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform ${isCollapsed ? "" : "rotate-90"}`} />
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STAGE_META[stage].badge}`}>{STAGE_META[stage].label}</span>
+                </span>
+                <span className={`min-w-[1.5rem] text-center text-xs font-bold px-1.5 py-0.5 rounded-full ${col.length ? "bg-gray-200 text-gray-700" : "bg-gray-100 text-gray-400"}`}>{col.length}</span>
+              </button>
+              {!isCollapsed && <div className="flex flex-1 flex-col gap-2 p-2 min-h-[120px]">
                 {col.map((lead) => {
                   const idx = LEAD_STAGES.indexOf(lead.stage);
                   const next = LEAD_STAGES[idx + 1];
@@ -193,14 +200,14 @@ export default function LeadPipelineBoard() {
                         <button onClick={() => setFollowUp(lead)} className="text-[11px] px-2 py-1 rounded border border-gray-200 text-gray-600 hover:bg-gray-50">Follow-up</button>
                         {next && next !== "LOST" && <button onClick={() => moveStage(lead, next)} className="text-[11px] px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 inline-flex items-center gap-0.5">{STAGE_META[next].label} <ChevronRight className="w-3 h-3" /></button>}
                         {OPEN_STAGES.includes(lead.stage) && <button onClick={() => moveStage(lead, "LOST")} className="text-[11px] px-2 py-1 rounded text-rose-600 hover:bg-rose-50">Lost</button>}
-                        {(lead.stage === "APPLICATION" || lead.stage === "TOURED") && !lead.convertedAdmissionId && <button onClick={() => convert(lead)} className="text-[11px] px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700 inline-flex items-center gap-0.5"><ArrowRight className="w-3 h-3" /> Convert</button>}
+                        {(lead.stage === "APPLICATION" || lead.stage === "CARE_ASSESSMENT" || lead.stage === "TOURED") && !lead.convertedAdmissionId && <button onClick={() => convert(lead)} className="text-[11px] px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700 inline-flex items-center gap-0.5"><ArrowRight className="w-3 h-3" /> Convert</button>}
                         {lead.stage === "MOVE_IN" && !lead.convertedAdmissionId && <button onClick={() => convert(lead)} className="text-[11px] px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700 inline-flex items-center gap-0.5"><UserPlus className="w-3 h-3" /> Create admission</button>}
                       </div>
                     </div>
                   );
                 })}
-                {col.length === 0 && <p className="text-center text-[11px] text-gray-300 py-8">No leads</p>}
-              </div>
+                {col.length === 0 && <div className="m-auto py-6 text-[11px] font-medium text-gray-400">No leads</div>}
+              </div>}
             </div>
           );
         })}

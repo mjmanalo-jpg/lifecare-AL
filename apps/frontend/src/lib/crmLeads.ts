@@ -7,21 +7,22 @@
 
 export const CRM_LEADS_KEY = "crm_leads";
 
-export const LEAD_STAGES = ["NEW", "CONTACTED", "TOUR_SCHEDULED", "TOURED", "APPLICATION", "MOVE_IN", "LOST"] as const;
+export const LEAD_STAGES = ["NEW", "CONTACTED", "TOUR_SCHEDULED", "TOURED", "CARE_ASSESSMENT", "APPLICATION", "MOVE_IN", "LOST"] as const;
 export type LeadStage = (typeof LEAD_STAGES)[number];
 
 export const STAGE_META: Record<LeadStage, { label: string; color: string; badge: string }> = {
-  NEW:            { label: "New Lead",       color: "#3b82f6", badge: "bg-blue-100 text-blue-700 border border-blue-200" },
-  CONTACTED:      { label: "Contacted",      color: "#6366f1", badge: "bg-indigo-100 text-indigo-700 border border-indigo-200" },
-  TOUR_SCHEDULED: { label: "Tour Scheduled", color: "#a855f7", badge: "bg-purple-100 text-purple-700 border border-purple-200" },
-  TOURED:         { label: "Toured",         color: "#f59e0b", badge: "bg-amber-100 text-amber-700 border border-amber-200" },
-  APPLICATION:    { label: "Application",    color: "#14b8a6", badge: "bg-teal-100 text-teal-700 border border-teal-200" },
-  MOVE_IN:        { label: "Move-In (Won)",  color: "#22c55e", badge: "bg-green-100 text-green-700 border border-green-200" },
-  LOST:           { label: "Lost",           color: "#ef4444", badge: "bg-rose-100 text-rose-700 border border-rose-200" },
+  NEW:             { label: "New Lead",        color: "#3b82f6", badge: "bg-blue-100 text-blue-700 border border-blue-200" },
+  CONTACTED:       { label: "Contacted",       color: "#6366f1", badge: "bg-indigo-100 text-indigo-700 border border-indigo-200" },
+  TOUR_SCHEDULED:  { label: "Tour Scheduled",  color: "#a855f7", badge: "bg-purple-100 text-purple-700 border border-purple-200" },
+  TOURED:          { label: "Toured",          color: "#f59e0b", badge: "bg-amber-100 text-amber-700 border border-amber-200" },
+  CARE_ASSESSMENT: { label: "Care Assessment", color: "#0ea5e9", badge: "bg-sky-100 text-sky-700 border border-sky-200" },
+  APPLICATION:     { label: "Application",     color: "#14b8a6", badge: "bg-teal-100 text-teal-700 border border-teal-200" },
+  MOVE_IN:         { label: "Move-In (Won)",   color: "#22c55e", badge: "bg-green-100 text-green-700 border border-green-200" },
+  LOST:            { label: "Lost",            color: "#ef4444", badge: "bg-rose-100 text-rose-700 border border-rose-200" },
 };
 
 /** Open pipeline stages (exclude the terminal Won/Lost). */
-export const OPEN_STAGES: LeadStage[] = ["NEW", "CONTACTED", "TOUR_SCHEDULED", "TOURED", "APPLICATION"];
+export const OPEN_STAGES: LeadStage[] = ["NEW", "CONTACTED", "TOUR_SCHEDULED", "TOURED", "CARE_ASSESSMENT", "APPLICATION"];
 
 export const LEAD_SOURCES = ["Website", "Referral", "Walk-in", "Phone", "Event", "Social Media", "Other"];
 
