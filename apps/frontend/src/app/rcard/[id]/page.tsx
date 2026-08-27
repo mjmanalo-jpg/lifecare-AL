@@ -159,6 +159,7 @@ export default function ResidentCardPage() {
   const [aboutRows, setAboutRows] = useState<Row[]>([]);
   const [docs, setDocs] = useState<Row[]>([]);
   const [sessionRole, setSessionRole] = useState<string>("");
+  const [reloadKey, setReloadKey] = useState(0);
   const [tab, setTab] = useState<TabKey>("about");
   const [cardUrl, setCardUrl] = useState("");
   const [qrData, setQrData] = useState("");
@@ -215,7 +216,15 @@ export default function ResidentCardPage() {
       setLoading(false);
     })();
     return () => { alive = false; };
-  }, [id]);
+  }, [id, reloadKey]);
+  // Realtime-ish: refresh the card's records whenever the user returns to the tab
+  // (e.g. after validating an assessment elsewhere) so it never shows stale data.
+  useEffect(() => {
+    const bump = () => { if (document.visibilityState === "visible") setReloadKey((k) => k + 1); };
+    window.addEventListener("focus", bump);
+    document.addEventListener("visibilitychange", bump);
+    return () => { window.removeEventListener("focus", bump); document.removeEventListener("visibilitychange", bump); };
+  }, []);
 
   const activeMeds = useMemo(() => meds.filter(m => s(m.status) === "ACTIVE" || s(m.status) === "PENDING"), [meds]);
   const recentRequests = useMemo(
@@ -258,6 +267,30 @@ export default function ResidentCardPage() {
     const rname = [s(resident?.firstName), s(resident?.lastName)].filter(Boolean).join(" ").trim();
     return latestV42For(parseV42Items(row ? s(row.value) : ""), id, admissionIds, rname);
   }, [assessV42Rows, admissions, id, resident]);
+  // Care Acuity view — the authoritative Level of Care is the validated v4.2 decision
+  // when one exists (its Final LOC can override the raw acuity band); otherwise fall
+  // back to the legacy acuity record.
+  const acuityView = useMemo(() => {
+    const av = assessV42;
+    if (av && (av.status === "VALIDATED" || av.status === "COMPLETED") && av.layer3?.finalLevel) {
+      const levelN = String(av.layer3.finalLevel).replace(/^L/i, "");
+      const doms = (av.domains ?? {}) as Record<string, { score?: number }>;
+      return {
+        levelN, levelName: LOC_LEVEL_META.find((l) => l.level === Number(levelN))?.name || "",
+        score: v42RawScore(av), max: 56, status: s(av.status), assessedAt: s(av.updatedAt || av.createdAt),
+        trigger: "", notes: s(av.layer3.finalLevelJustification),
+        domainList: Object.entries(V42_DOMAIN_LABEL).map(([code, label]) => ({ label, score: s(doms[code]?.score ?? 0) })),
+      };
+    }
+    if (!acuity) return null;
+    const scores = (acuity.scores && typeof acuity.scores === "object" ? acuity.scores : {}) as Record<string, unknown>;
+    return {
+      levelN: s(acuity.level), levelName: LOC_LEVEL_META.find((l) => l.level === Number(acuity.level))?.name || s(acuity.levelName),
+      score: Number(acuity.total) || 0, max: 50, status: s(acuity.status), assessedAt: s(acuity.decidedAt || acuity.createdAt),
+      trigger: s(acuity.trigger), notes: s(acuity.notes),
+      domainList: Object.entries(scores).map(([k, v]) => ({ label: ACUITY_DOMAIN_LABEL[k] || cap(k), score: s(v) })),
+    };
+  }, [assessV42, acuity]);
   // Full Level of Care history (pre-admission → reassessments → acuity approvals).
   const locTimeline = useMemo(() => {
     const row = locHistoryRows.find((x) => s(x.key) === "loc_history") || locHistoryRows[0];
@@ -596,25 +629,25 @@ export default function ResidentCardPage() {
           )}
           {tab === "acuity" && (
             <Section title="Care Acuity — Level of Care" icon={Gauge}>
-              {acuity ? (
+              {acuityView ? (
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-bold bg-[#2E4A48] text-white">Level {s(acuity.level)} · {LOC_LEVEL_META.find((l) => l.level === Number(acuity.level))?.name || s(acuity.levelName)}</span>
-                    <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-bold border border-gray-200 bg-gray-50 text-gray-700">Score {s(acuity.total)}/50</span>
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded text-[10px] font-bold uppercase border ${acuity.status === "APPROVED" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-amber-100 text-amber-700 border-amber-200"}`}>{s(acuity.status).replace(/_/g, " ")}</span>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-bold bg-[#2E4A48] text-white">Level {acuityView.levelN}{acuityView.levelName ? ` · ${acuityView.levelName}` : ""}</span>
+                    <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-bold border border-gray-200 bg-gray-50 text-gray-700">Score {acuityView.score}/{acuityView.max}</span>
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded text-[10px] font-bold uppercase border ${acuityView.status === "APPROVED" || acuityView.status === "VALIDATED" || acuityView.status === "COMPLETED" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-amber-100 text-amber-700 border-amber-200"}`}>{acuityView.status.replace(/_/g, " ") || "DRAFT"}</span>
                   </div>
-                  <p className="text-xs text-gray-500">{[acuity.trigger ? `Trigger: ${s(acuity.trigger)}` : "", `Assessed ${fmtDate(acuity.decidedAt || acuity.createdAt)}`].filter(Boolean).join(" · ")}</p>
-                  {acuity.scores && typeof acuity.scores === "object" ? (
+                  <p className="text-xs text-gray-500">{[acuityView.trigger ? `Trigger: ${acuityView.trigger}` : "", `Assessed ${fmtDate(acuityView.assessedAt)}`].filter(Boolean).join(" · ")}</p>
+                  {acuityView.domainList.length ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {Object.entries(acuity.scores as Record<string, unknown>).map(([k, v]) => (
-                        <div key={k} className="rounded-lg border border-gray-200 p-2 flex items-center justify-between">
-                          <span className="text-xs text-gray-600">{ACUITY_DOMAIN_LABEL[k] || cap(k)}</span>
-                          <span className="text-sm font-bold text-[#2E4A48]">{s(v)}</span>
+                      {acuityView.domainList.map((d, i) => (
+                        <div key={i} className="rounded-lg border border-gray-200 p-2 flex items-center justify-between">
+                          <span className="text-xs text-gray-600">{d.label}</span>
+                          <span className="text-sm font-bold text-[#2E4A48]">{d.score}</span>
                         </div>
                       ))}
                     </div>
                   ) : null}
-                  {acuity.notes ? <p className="text-xs text-gray-500 whitespace-pre-wrap pt-1"><b className="text-gray-700">Notes:</b> {s(acuity.notes)}</p> : null}
+                  {acuityView.notes ? <p className="text-xs text-gray-500 whitespace-pre-wrap pt-1"><b className="text-gray-700">Notes:</b> {acuityView.notes}</p> : null}
                 </div>
               ) : (
                 <p className="text-sm text-gray-400">No acuity (Level of Care) assessment recorded yet.</p>
