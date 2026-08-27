@@ -123,6 +123,9 @@ export interface AssessmentLayer3 {
   reassessmentInterval?: string;
   nextReviewDate?: string;
   priorAssessmentId?: string;
+  /** In-progress Clinical Validation sign-off (decision + notes), saved with a DRAFT
+   * before the PIN-signed `validation` is committed, so it survives Save Draft / reopen. */
+  validationDraft?: { decision: "APPROVED" | "APPROVED_WITH_CHANGES" | "NEEDS_REASSESSMENT"; notes?: string };
 }
 
 export interface AssessmentV42 {

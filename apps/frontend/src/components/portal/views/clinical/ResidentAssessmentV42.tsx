@@ -1150,7 +1150,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                   </Section>
 
                   {/* Validation block (nurse → admin) */}
-                  <ValidationBlock draft={draft} roleLabel={roleLabel} onValidate={(decision, notes) => { setPinValidate({ decision, notes }); setShowPin(true); }} busy={saving} />
+                  <ValidationBlock draft={draft} roleLabel={roleLabel} onChange={(v) => patchLayer3({ validationDraft: v })} onValidate={(decision, notes) => { setPinValidate({ decision, notes }); setShowPin(true); }} busy={saving} />
                 </>
               )}
             </div>
@@ -1269,17 +1269,20 @@ function AssessmentTable({ rows, onEdit, onRemove }: {
 }
 
 // ── Validation block (nurse → admin approval), mirrors LevelOfCareReview ──────
-function ValidationBlock({ draft, roleLabel, onValidate, busy }: {
+function ValidationBlock({ draft, roleLabel, onValidate, onChange, busy }: {
   draft: AssessmentV42; roleLabel: string; busy: boolean;
   onValidate: (decision: NonNullable<AssessmentV42["validation"]>["decision"], notes: string) => void;
+  onChange: (v: { decision: NonNullable<AssessmentV42["validation"]>["decision"]; notes: string }) => void;
 }) {
   const DECISIONS: { value: NonNullable<AssessmentV42["validation"]>["decision"]; label: string }[] = [
     { value: "APPROVED", label: "Approve" },
     { value: "APPROVED_WITH_CHANGES", label: "Approve with changes" },
     { value: "NEEDS_REASSESSMENT", label: "Needs reassessment" },
   ];
-  const [decision, setDecision] = useState<NonNullable<AssessmentV42["validation"]>["decision"]>(draft.validation?.decision ?? "APPROVED");
-  const [notes, setNotes] = useState(draft.validation?.notes ?? "");
+  // Controlled off the draft so the decision/notes are captured by Save Draft and
+  // restored on reopen. validationDraft (in-progress) wins over a prior signed validation.
+  const decision = draft.layer3.validationDraft?.decision ?? draft.validation?.decision ?? "APPROVED";
+  const notes = draft.layer3.validationDraft?.notes ?? draft.validation?.notes ?? "";
   return (
     <ClinicalCard top="teal" className="p-4 sm:p-5">
       <h3 className="text-sm font-bold text-[var(--clinical-ink)] mb-3 flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-[var(--clinical-panel)]" /> Clinical Validation &amp; Decision</h3>
@@ -1294,10 +1297,10 @@ function ValidationBlock({ draft, roleLabel, onValidate, busy }: {
       <MicroLabel className="mb-1.5">Decision</MicroLabel>
       <div className="flex flex-wrap gap-1.5 mb-3">
         {DECISIONS.map((d) => (
-          <button key={d.value} type="button" onClick={() => setDecision(d.value)} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${decision === d.value ? chipOn : chipOff}`}>{d.label}</button>
+          <button key={d.value} type="button" onClick={() => onChange({ decision: d.value, notes })} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${decision === d.value ? chipOn : chipOff}`}>{d.label}</button>
         ))}
       </div>
-      <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Decision notes — what does this resident actually need?" className={input} />
+      <textarea rows={2} value={notes} onChange={(e) => onChange({ decision, notes: e.target.value })} placeholder="Decision notes — what does this resident actually need?" className={input} />
       <div className="flex items-center gap-2 mt-3">
         <ClinicalButton variant="primary" size="sm" onClick={() => onValidate(decision, notes)} disabled={busy}><CheckCircle2 className="w-4 h-4" /> {draft.status === "VALIDATED" ? "Re-validate" : "Validate Level of Care"}</ClinicalButton>
         <span className="text-[11px] text-[var(--clinical-muted)]">{roleLabel} sign-off</span>
