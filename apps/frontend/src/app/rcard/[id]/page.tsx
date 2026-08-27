@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import {
   Pill, ClipboardList, ConciergeBell, ShieldAlert,
   UserRound, CalendarClock, Loader2, FileDown, StickyNote, IdCard,
-  Users, Phone, Syringe, Activity, HeartPulse, Gauge, AlertTriangle, Heart, X, Package,
+  Users, Phone, Syringe, Activity, HeartPulse, Gauge, AlertTriangle, Heart, X, Package, FileText,
 } from "lucide-react";
 import { taskNotesOf } from "@/lib/taskNotes";
 import { patientCode } from "@/lib/patientId";
@@ -64,10 +64,11 @@ const ACUITY_DOMAIN_LABEL: Record<string, string> = {
   elimination: "Elimination", medication: "Medication", medical: "Medical", psychosocial: "Psychosocial", night: "Night Care",
 };
 
-type TabKey = "about" | "belongings" | "family" | "emergency" | "vaccines" | "adl" | "medical" | "advance" | "acuity" | "preadmit" | "care";
+type TabKey = "about" | "belongings" | "documents" | "family" | "emergency" | "vaccines" | "adl" | "medical" | "advance" | "acuity" | "preadmit" | "care";
 const TABS: { key: TabKey; label: string; icon: typeof Pill }[] = [
   { key: "about", label: "About Me", icon: Heart },
   { key: "belongings", label: "Belongings", icon: Package },
+  { key: "documents", label: "Documents", icon: FileText },
   { key: "family", label: "Family", icon: Users },
   { key: "emergency", label: "Emergency", icon: Phone },
   { key: "vaccines", label: "Vaccines", icon: Syringe },
@@ -441,10 +442,11 @@ export default function ResidentCardPage() {
           )}
 
           {tab === "belongings" && (
-            <>
-              <BelongingsFormsPanel residentId={id} residentName={name} room={s(resident.roomNumber)} canEdit={canEditAbout} />
-              <DocumentSection residentId={id} documentType="BELONGINGS" label="Signed Documents" canEdit={canEditAbout} docs={docs} onChanged={refetchDocs} uploadedByName={sessionRole} />
-            </>
+            <BelongingsFormsPanel residentId={id} residentName={name} room={s(resident.roomNumber)} canEdit={canEditAbout} />
+          )}
+
+          {tab === "documents" && (
+            <DocumentSection residentId={id} documentType="BELONGINGS" label="Signed Documents" canEdit={canEditAbout} docs={docs} onChanged={refetchDocs} uploadedByName={sessionRole} />
           )}
 
           {tab === "family" && (
