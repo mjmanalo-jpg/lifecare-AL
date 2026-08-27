@@ -195,21 +195,23 @@ export function buildNarrativeHtml(a: AssessmentV42): string {
   .company{font-weight:800;font-size:17px;margin:0 0 2px}
   .title{font-weight:700;font-size:14px;color:#343a40;margin:0 0 12px}
   .idrow{margin:2px 0}.idl{font-weight:700}.idv{color:#343a40}
-  section{margin-top:22px;page-break-inside:avoid}
-  h2{font-size:15px;color:#212529;border-bottom:1.5px solid #dee2e6;padding-bottom:5px;margin:0 0 10px}
-  h3{font-size:13.5px;color:#1c7ed6;margin:12px 0 3px}
+  section{margin-top:22px}
+  h2{font-size:15px;color:#212529;border-bottom:1.5px solid #dee2e6;padding-bottom:5px;margin:0 0 10px;break-after:avoid;page-break-after:avoid}
+  h3{font-size:13.5px;color:#1c7ed6;margin:12px 0 3px;break-after:avoid;page-break-after:avoid}
   p{margin:6px 0}
   ul{margin:6px 0;padding-left:22px}li{margin:3px 0}
   table.acuity{width:100%;border-collapse:collapse;margin:6px 0;max-width:460px}
   table.acuity th{text-align:left;font-size:12px;color:#495057;border-bottom:1.5px solid #dee2e6;padding:6px 4px}
   table.acuity td{padding:6px 4px;border-bottom:1px solid #f1f3f5}
   table.acuity td.sc{text-align:right;font-variant-numeric:tabular-nums}
+  table.acuity,tr,li{page-break-inside:avoid}
   table.acuity tr.total td{font-weight:800;border-top:1.5px solid #ced4da;border-bottom:0}
   .lochead{font-weight:800;font-size:15px;color:#2f9e44;margin:10px 0 2px}
   .signoff{font-size:12.5px;color:#495057;background:#f1f3f5;border-radius:8px;padding:8px 12px}
   .prepared{margin-top:26px}.prepared .l{font-weight:800;margin-bottom:4px}
   .foot{margin-top:26px;border-top:1px solid #e9ecef;padding-top:10px;color:#adb5bd;font-size:11px}
-  @media print{body{padding:0 8px}}
+  @page{margin:0}
+  @media print{body{padding:24px 40px 28px}}
 </style></head><body>
   <div class="brand"><span class="life">Life</span><span class="care">Care</span><span class="living">LIVING</span></div>
   <hr class="rule">
