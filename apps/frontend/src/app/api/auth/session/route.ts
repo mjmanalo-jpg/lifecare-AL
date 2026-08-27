@@ -73,6 +73,14 @@ export async function POST(request: NextRequest) {
       : ["OWNER", "ADMIN"].includes(organization?.role || "")
         ? "ORGANIZATION_ADMIN"
         : databaseRole) as PortalRole;
+
+    // The organization ("client") sign-in is for organization/platform accounts
+    // only. Staff and family (employee accounts) must use the Employee login
+    // (company + mobile) — otherwise a care manager etc. could sign in here.
+    if (role !== "PLATFORM_ADMIN" && role !== "ORGANIZATION_ADMIN") {
+      return NextResponse.json({ error: "This is the organization sign-in. Staff and family accounts should use the Employee login." }, { status: 403 });
+    }
+
     const success = await createSession(role, user.id, {
       authUserId,
       authAssuranceLevel: assuranceLevel(tokens?.access_token),
