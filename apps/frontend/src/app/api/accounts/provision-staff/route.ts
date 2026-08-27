@@ -5,6 +5,7 @@ import type { Role } from "@prisma/client";
 import { requireTenantContext, canManageOrganization } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { createSupabaseUser, SupabaseUserExistsError, isSupabaseAuthConfigured } from "@/lib/supabaseAuth";
+import { normalizeMobile } from "@/lib/mobileAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,8 +58,23 @@ export async function POST(request: NextRequest) {
   const password = genPassword();
 
   try {
+    // Never overwrite an existing account. Adding a staff whose email (or mobile)
+    // already belongs to someone must be REJECTED — an upsert here would silently
+    // clobber the existing account's role/identity (e.g. demote a Super Admin).
     const existingUser = await prisma.user.findUnique({ where: { email } });
-    let authUserId: string | undefined = existingUser?.authUserId ?? undefined;
+    if (existingUser) {
+      return NextResponse.json({ error: "An account with this email already exists. Edit that staff member instead of adding a new one." }, { status: 409 });
+    }
+    if (phone) {
+      const mobile = normalizeMobile(phone);
+      if (mobile.length >= 7) {
+        const orgMembers = await prisma.communityMembership.findMany({ where: { community: { organizationId } }, select: { user: { select: { phone: true } } } });
+        if (orgMembers.some((m) => normalizeMobile(m.user?.phone || "") === mobile)) {
+          return NextResponse.json({ error: "A staff member with this mobile number already exists." }, { status: 409 });
+        }
+      }
+    }
+    let authUserId: string | undefined;
     let passwordSet = false;
 
     if (isSupabaseAuthConfigured()) {
@@ -82,10 +98,10 @@ export async function POST(request: NextRequest) {
     const passwordHash = passwordSet ? await bcrypt.hash(password, 10) : undefined;
 
     const result = await prisma.$transaction(async (tx) => {
-      const u = await tx.user.upsert({
-        where: { email },
-        create: { email, name: name || email.split("@")[0], phone, role, isActive: true, ...(authUserId ? { authUserId } : {}), ...(passwordHash ? { passwordHash } : {}) },
-        update: { name: name || undefined, phone, role, isActive: true, ...(authUserId ? { authUserId } : {}), ...(passwordHash ? { passwordHash } : {}) },
+      // create (not upsert): the email is guaranteed new by the checks above, and the
+      // unique constraint is the final guard against a race — it must never overwrite.
+      const u = await tx.user.create({
+        data: { email, name: name || email.split("@")[0], phone, role, isActive: true, ...(authUserId ? { authUserId } : {}), ...(passwordHash ? { passwordHash } : {}) },
       });
       await tx.organizationMembership.upsert({
         where: { userId_organizationId: { userId: u.id, organizationId } },
