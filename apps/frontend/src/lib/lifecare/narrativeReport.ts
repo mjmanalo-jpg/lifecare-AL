@@ -66,7 +66,8 @@ function funcArea(a: AssessmentV42, title: string, codes: string[]): string {
     return body.trim();
   }).filter(Boolean);
   if (!parts.length) return "";
-  return `<h3>${esc(title)}</h3>${parts.map((p) => `<p>${p}</p>`).join("")}`;
+  // Wrap the subsection so its heading + paragraphs stay together across a page break.
+  return `<div class="block"><h3>${esc(title)}</h3>${parts.map((p) => `<p>${p}</p>`).join("")}</div>`;
 }
 
 /** Build the full report HTML for a validated assessment. */
@@ -204,7 +205,8 @@ export function buildNarrativeHtml(a: AssessmentV42): string {
   table.acuity th{text-align:left;font-size:12px;color:#495057;border-bottom:1.5px solid #dee2e6;padding:6px 4px}
   table.acuity td{padding:6px 4px;border-bottom:1px solid #f1f3f5}
   table.acuity td.sc{text-align:right;font-variant-numeric:tabular-nums}
-  table.acuity,tr,li{page-break-inside:avoid}
+  table.acuity,tr,li,.block{page-break-inside:avoid;break-inside:avoid}
+  .block{margin:10px 0}.block h3{margin-top:0}
   table.acuity tr.total td{font-weight:800;border-top:1.5px solid #ced4da;border-bottom:0}
   .lochead{font-weight:800;font-size:15px;color:#2f9e44;margin:10px 0 2px}
   .signoff{font-size:12.5px;color:#495057;background:#f1f3f5;border-radius:8px;padding:8px 12px}
@@ -223,7 +225,7 @@ export function buildNarrativeHtml(a: AssessmentV42): string {
   ${S("Functional Assessment", functional)}
   ${S("Resident Strengths", bullets(strengths))}
   ${S("Recommended Care Priorities", bullets(priorities))}
-  ${S("LifeCare Acuity Classification", acuityTable + `<p class="lochead">Recommended Level of Care: ${esc(levelName)}</p>` + locRationale)}
+  ${S("LifeCare Acuity Classification", `<div class="block">${acuityTable}<p class="lochead">Recommended Level of Care: ${esc(levelName)}</p></div>` + locRationale)}
   ${S("Recommendation", recommendation + signoff)}
   <div class="prepared"><div class="l">Prepared by</div>${preparedBy.map((x, i) => `<div${i === 0 ? ' style="font-weight:700"' : ""}>${esc(x)}</div>`).join("")}</div>
   <div class="foot">Model ${esc(a.modelVersion || "v4.2")} · Generated ${esc(new Date().toLocaleString())} · Confidential — for authorized use only.</div>
