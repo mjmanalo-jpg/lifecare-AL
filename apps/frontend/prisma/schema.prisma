@@ -4017,12 +4017,12 @@ enum AppetiteLevel {
 }
 
 enum AssistanceLevel {
-  INDEPENDENT
-  SUPERVISED
-  MINIMAL
-  MODERATE
-  MAXIMAL
-  DEPENDENT
+  SBA
+  CGA
+  MIN
+  MOD
+  MAX
+  TOTAL
 }
 
 model DailyRound {
