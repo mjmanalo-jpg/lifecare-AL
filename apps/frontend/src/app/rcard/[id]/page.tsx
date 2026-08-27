@@ -111,7 +111,7 @@ const V42_DOMAIN_LABEL: Record<string, string> = {
 };
 type V42 = {
   id?: string; status?: string; updatedAt?: string; createdAt?: string;
-  layer1?: { residentId?: string; convertedAdmissionId?: string; reasonForAdmission?: string; goalsPreferences?: string };
+  layer1?: { residentId?: string; convertedAdmissionId?: string; residentName?: string; reasonForAdmission?: string; goalsPreferences?: string };
   domains?: Record<string, { score?: number }>;
   layer3?: { finalLevel?: string; finalLevelJustification?: string };
 };
@@ -119,11 +119,15 @@ function parseV42Items(raw: string): V42[] {
   if (!raw) return [];
   try { const v = JSON.parse(raw); return Array.isArray(v) ? (v as V42[]) : []; } catch { return []; }
 }
-/** Latest v4.2 assessment for a resident — matched by linked residentId or admission id. */
-function latestV42For(items: V42[], residentId: string, admissionIds: string[]): V42 | null {
+/** Latest v4.2 assessment for a resident — matched by linked residentId, admission id,
+ * or resident name (a validated assessment may not carry a residentId/admission link yet). */
+function latestV42For(items: V42[], residentId: string, admissionIds: string[], residentName: string): V42 | null {
+  const norm = (v: unknown) => String(v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  const rn = norm(residentName);
   const mine = items.filter((a) =>
     a?.layer1?.residentId === residentId ||
-    (a?.layer1?.convertedAdmissionId && admissionIds.includes(String(a.layer1.convertedAdmissionId))));
+    (a?.layer1?.convertedAdmissionId && admissionIds.includes(String(a.layer1.convertedAdmissionId))) ||
+    (!!rn && norm(a?.layer1?.residentName) === rn));
   const validated = mine.filter((a) => a.status === "VALIDATED" || a.status === "COMPLETED");
   const pool = validated.length ? validated : mine;
   return pool.sort((a, b) => s(b.updatedAt || b.createdAt).localeCompare(s(a.updatedAt || a.createdAt)))[0] || null;
@@ -251,8 +255,9 @@ export default function ResidentCardPage() {
   const assessV42 = useMemo(() => {
     const row = assessV42Rows.find((x) => s(x.key) === "assessments_v42") || assessV42Rows[0];
     const admissionIds = admissions.map((a) => s(a.id));
-    return latestV42For(parseV42Items(row ? s(row.value) : ""), id, admissionIds);
-  }, [assessV42Rows, admissions, id]);
+    const rname = [s(resident?.firstName), s(resident?.lastName)].filter(Boolean).join(" ").trim();
+    return latestV42For(parseV42Items(row ? s(row.value) : ""), id, admissionIds, rname);
+  }, [assessV42Rows, admissions, id, resident]);
   // Full Level of Care history (pre-admission → reassessments → acuity approvals).
   const locTimeline = useMemo(() => {
     const row = locHistoryRows.find((x) => s(x.key) === "loc_history") || locHistoryRows[0];

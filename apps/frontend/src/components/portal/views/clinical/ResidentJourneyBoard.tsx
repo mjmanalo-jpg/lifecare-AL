@@ -127,9 +127,17 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
   const assessmentsV42 = useMemo<Row[]>(() => {
     const list = parseArr(settingVal(settingRows, "assessments_v42")) as Row[];
     if (!resident) return list;
+    const norm = (v: unknown) => s(v).trim().toLowerCase().replace(/\s+/g, " ");
+    const rn = norm(resident.name);
     return list.map((a) => {
       if (s(a?.layer1?.residentId) === resident.id) return a;
       if (a?.layer1?.convertedAdmissionId && residentAdmissionIds.has(s(a.layer1.convertedAdmissionId))) {
+        return { ...a, layer1: { ...a.layer1, residentId: resident.id } };
+      }
+      // Fall back to a resident-name match so a validated assessment captured by name
+      // (no residentId / admission link resolved yet) still surfaces in Journey + Forms.
+      // ponytail: exact-name match; a rare same-name collision would cross-link.
+      if (rn && norm(a?.layer1?.residentName) === rn) {
         return { ...a, layer1: { ...a.layer1, residentId: resident.id } };
       }
       return a;
