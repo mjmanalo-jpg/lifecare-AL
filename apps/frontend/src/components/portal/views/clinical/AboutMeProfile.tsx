@@ -8,12 +8,12 @@
 
 import { useState } from "react";
 import {
-  Heart, Users, Phone, ShieldAlert, Package, Pencil, Plus, Trash2,
+  Heart, Users, Phone, ShieldAlert, Pencil, Plus, Trash2,
   Save, X, Ban, Sparkles, BookOpen, Palette, MessageCircle, CalendarHeart,
 } from "lucide-react";
 import {
-  AboutMeProfile as Profile, AboutPerson, AboutBelonging, AboutKeyDate,
-  emptyProfile, newPerson, newBelonging, newKeyDate, sortedPeople,
+  AboutMeProfile as Profile, AboutPerson, AboutKeyDate,
+  emptyProfile, newPerson, newKeyDate, sortedPeople,
 } from "@/lib/aboutMe";
 
 const s = (v: unknown) => (v == null ? "" : String(v));
@@ -147,35 +147,6 @@ function ReadView({ profile }: { profile: Profile }) {
         )}
       </Panel>
 
-      <Panel icon={Package} title={`Personal Belongings (${profile.belongings.length})`}>
-        {profile.belongings.length === 0 ? (
-          <p className="text-sm text-gray-400">No belongings recorded.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400">
-                  <th className="py-1.5 pr-3 font-semibold">Item</th>
-                  <th className="py-1.5 pr-3 font-semibold">Description</th>
-                  <th className="py-1.5 pr-3 font-semibold">Kept</th>
-                  <th className="py-1.5 pr-3 font-semibold">Brought</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {profile.belongings.map((b) => (
-                  <tr key={b.id}>
-                    <td className="py-1.5 pr-3 font-medium text-gray-800">{b.item || "—"}</td>
-                    <td className="py-1.5 pr-3 text-gray-600">{b.description || "—"}</td>
-                    <td className="py-1.5 pr-3 text-gray-600">{b.location || "—"}</td>
-                    <td className="py-1.5 pr-3 text-gray-600">{b.broughtDate || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
-
       {profile.otherNotes?.trim() && (
         <Panel icon={ShieldAlert} title="Other details">
           <p className="whitespace-pre-wrap text-sm text-gray-800">{profile.otherNotes}</p>
@@ -232,8 +203,6 @@ function EditView({ initial, saving, onCancel, onSave }: {
   const set = <K extends keyof Profile>(k: K, v: Profile[K]) => setDraft((d) => ({ ...d, [k]: v }));
   const setPerson = (id: string, patch: Partial<AboutPerson>) =>
     setDraft((d) => ({ ...d, people: d.people.map((p) => (p.id === id ? { ...p, ...patch } : p)) }));
-  const setBelonging = (id: string, patch: Partial<AboutBelonging>) =>
-    setDraft((d) => ({ ...d, belongings: d.belongings.map((b) => (b.id === id ? { ...b, ...patch } : b)) }));
   const setKeyDate = (id: string, patch: Partial<AboutKeyDate>) =>
     setDraft((d) => ({ ...d, keyDates: (d.keyDates || []).map((k) => (k.id === id ? { ...k, ...patch } : k)) }));
 
@@ -328,21 +297,6 @@ function EditView({ initial, saving, onCancel, onSave }: {
           ))}
         </div>
         <button onClick={() => setDraft((d) => ({ ...d, people: [...d.people, newPerson()] }))} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:border-teal-400 hover:text-teal-700"><Plus className="h-4 w-4" /> Add person</button>
-      </Panel>
-
-      <Panel icon={Package} title="Personal Belongings">
-        <div className="space-y-3">
-          {draft.belongings.map((b) => (
-            <div key={b.id} className="grid grid-cols-1 gap-2 rounded-lg border border-gray-200 p-3 sm:grid-cols-12">
-              <input className={`${inputCls} sm:col-span-3`} value={s(b.item)} onChange={(e) => setBelonging(b.id, { item: e.target.value })} placeholder="Item" />
-              <input className={`${inputCls} sm:col-span-3`} value={s(b.description)} onChange={(e) => setBelonging(b.id, { description: e.target.value })} placeholder="Description" />
-              <input className={`${inputCls} sm:col-span-2`} value={s(b.location)} onChange={(e) => setBelonging(b.id, { location: e.target.value })} placeholder="Kept in…" />
-              <input type="date" className={`${inputCls} sm:col-span-3`} value={s(b.broughtDate)} onChange={(e) => setBelonging(b.id, { broughtDate: e.target.value })} />
-              <button onClick={() => setDraft((d) => ({ ...d, belongings: d.belongings.filter((x) => x.id !== b.id) }))} className="inline-flex items-center justify-center rounded-lg bg-gray-100 text-red-600 hover:bg-red-50 sm:col-span-1" aria-label="Remove belonging"><Trash2 className="h-4 w-4" /></button>
-            </div>
-          ))}
-        </div>
-        <button onClick={() => setDraft((d) => ({ ...d, belongings: [...d.belongings, newBelonging()] }))} className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:border-teal-400 hover:text-teal-700"><Plus className="h-4 w-4" /> Add belonging</button>
       </Panel>
 
       <Panel icon={ShieldAlert} title="Other details">
