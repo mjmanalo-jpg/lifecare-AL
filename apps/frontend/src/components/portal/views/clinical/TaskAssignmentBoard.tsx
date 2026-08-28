@@ -812,7 +812,7 @@ function AssignTaskModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[92vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-slate-200 px-5 py-4 flex items-center justify-between z-10">
           <h2 className="text-lg font-bold text-slate-900">Assign New Task</h2>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg transition text-slate-500"><X className="w-5 h-5" /></button>

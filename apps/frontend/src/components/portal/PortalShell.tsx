@@ -4,6 +4,7 @@ import { useState, ReactNode, useEffect, useMemo, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { computeSidebarBadges } from "@/lib/sidebarBadges";
 import { useFacilityConfig } from "@/lib/useFacilityConfig";
 import {
   Menu,
@@ -120,6 +121,21 @@ function writeStoredGroups(role: Role, state: Record<string, boolean>): void {
   try { localStorage.setItem(SIDEBAR_GROUPS_KEY(role), JSON.stringify(state)); } catch { /* ignore quota / disabled storage */ }
 }
 
+// Per-user "seen" watermark for sidebar badges: the tab's count at the moment
+// the user last opened it. A badge shows only while the live count exceeds this
+// watermark (i.e. there are items the user hasn't looked at yet) — so opening
+// the tab clears its badge, and it reappears only when new items arrive.
+const SIDEBAR_SEEN_KEY = (userId: string) => `lcms_tab_seen_${userId}`;
+function readStoredSeen(userId: string): Record<string, number> {
+  if (typeof window === "undefined") return {};
+  try { const raw = localStorage.getItem(SIDEBAR_SEEN_KEY(userId)); return raw ? (JSON.parse(raw) as Record<string, number>) : {}; }
+  catch { return {}; }
+}
+function writeStoredSeen(userId: string, state: Record<string, number>): void {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(SIDEBAR_SEEN_KEY(userId), JSON.stringify(state)); } catch { /* ignore quota / disabled storage */ }
+}
+
 // Every notification resolves to an explicit sidebar tab. The ENTITY a
 // notification points at is the precise signal (many types are shared —
 // SYSTEM_ALERT alone covers inventory, camera, subscription, system health,
@@ -130,15 +146,18 @@ function writeStoredGroups(role: Role, state: Record<string, boolean>): void {
 // when present, else Vitals Trends), never a 404 or the wrong dashboard.
 const NOTIF_TARGET_ROUTES: Record<string, string[]> = {
   // Care system
-  vitalsLog: ["monitoring", "vitals", "records", "dashboard"],
-  weightTrend: ["monitoring", "vitals", "records", "dashboard"],
-  weightreminder: ["weightmonitoring", "monitoring", "dashboard"], // key is lowercase — routeForNotification lowercases relatedEntityType before lookup
+  vitalsLog: ["monitoring", "vitals", "vitalstrend", "domainmonitoring", "records", "dashboard"],
+  weightTrend: ["monitoring", "vitals", "vitalstrend", "weightmonitoring", "records", "dashboard"],
+  weightreminder: ["weightmonitoring", "monitoring", "vitalstrend", "dashboard"], // key is lowercase — routeForNotification lowercases relatedEntityType before lookup
   medicationAdministration: ["mar", "medications", "orders", "dashboard"],
   incident: ["incidents", "alertcenter", "records", "dashboard"],
   escalation: ["escalations", "alertcenter", "dashboard"],
   slaBreach: ["alertcenter", "alerts", "escalations", "dashboard"],
   followUp: ["followups", "records", "dashboard"],
   assessment: ["rounds", "casereview", "dashboard"],
+  carePlanReview: ["careplans", "approvals", "dashboard"],
+  reassessment: ["locreview", "careplans", "approvals", "dashboard"],
+  approval: ["approvals", "careplans", "privatecaregiver", "dashboard"],
   task: ["taskboard", "tasks", "taskassignment", "documentation", "dashboard"],
   handover: ["taskassignment", "shiftendorsements", "endorsementdashboard", "dashboard"],
   dailyDoc: ["carelogs", "documentation", "tasks", "reports", "dashboard"],
@@ -250,7 +269,8 @@ export default function PortalShell({
 
   // Session details from GET /api/auth/session
   const [sessionUserId, setSessionUserId] = useState<string | null>(null);
-  
+  const [sessionStaffId, setSessionStaffId] = useState<string | null>(null);
+
   useEffect(() => {
     fetch("/api/auth/session")
       .then((res) => res.json())
@@ -258,6 +278,7 @@ export default function PortalShell({
         if (data.authenticated) {
           const userId = data.session?.userId || "demo-user";
           setSessionUserId(userId);
+          setSessionStaffId(data.session?.staffId ?? null);
           setProfileName(data.workspaces?.user?.name || roleDetails.profileName);
           setProfileEmail(data.workspaces?.user?.email || "");
           try {
@@ -426,6 +447,57 @@ export default function PortalShell({
     value: string;
   }>("app-settings", { tables: ["AppSetting"] });
 
+  // ── Live per-tab attention badges ──────────────────────────────────────────
+  // Real counts computed from the same data the boards render from, so a badge
+  // always equals what the tab itself shows. The underlying collections are only
+  // fetched for roles whose sidebar actually has the tab (enabled gate), and on
+  // a relaxed poll since a sidebar count doesn't need sub-second freshness.
+  const hasTab = (seg: string) => roleDetails.sidebarLinks.some((l) => l.route.split("?")[0].split("/").pop() === seg);
+  const badgeResQ = useLiveQuery<Record<string, unknown>>("residents", { tables: ["Resident"], enabled: hasTab("weightmonitoring"), pollMs: 30000 });
+  const badgeIncQ = useLiveQuery<Record<string, unknown>>("incidents", { query: "take=400", tables: ["Incident"], enabled: hasTab("incidents"), pollMs: 30000 });
+  const badgeCpQ = useLiveQuery<Record<string, unknown>>("care-plans", { query: "take=300", tables: ["CarePlan"], enabled: hasTab("careplans"), pollMs: 30000 });
+  const badgeTaskQ = useLiveQuery<Record<string, unknown>>("tasks", { query: "take=300", tables: ["Task"], enabled: hasTab("taskassignment"), pollMs: 30000 });
+  const badgeBySegment = useMemo(() => computeSidebarBadges({
+    residents: badgeResQ.data || [],
+    incidents: badgeIncQ.data || [],
+    carePlans: badgeCpQ.data || [],
+    appSettings: settingRows || [],
+    unreadNotifications,
+    tasks: badgeTaskQ.data || [],
+    taskViewer: { staffId: sessionStaffId, scope: userRole === "CAREGIVER" ? "own" : "all" },
+  }), [badgeResQ.data, badgeIncQ.data, badgeCpQ.data, badgeTaskQ.data, settingRows, unreadNotifications, sessionStaffId, userRole]);
+
+  // "Seen" watermarks (per user, localStorage). A badge shows only while its live
+  // count exceeds what the user last saw on that tab.
+  const [seenCounts, setSeenCounts] = useState<Record<string, number>>({});
+  useEffect(() => { if (sessionUserId) setSeenCounts(readStoredSeen(sessionUserId)); }, [sessionUserId]);
+  useEffect(() => {
+    if (!sessionUserId) return;
+    const activeSeg = pathname.split("/")[2] || "";
+    setSeenCounts((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      // Decay a watermark that now exceeds the live count (items were handled),
+      // so the badge re-triggers cleanly when new items later arrive.
+      for (const seg of Object.keys(next)) {
+        const cur = badgeBySegment[seg] ?? 0;
+        if (next[seg] > cur) { next[seg] = cur; changed = true; }
+      }
+      // Opening a badged tab marks its current items as seen → clears the badge.
+      if (activeSeg && (badgeBySegment[activeSeg] ?? 0) !== (next[activeSeg] ?? 0)) {
+        next[activeSeg] = badgeBySegment[activeSeg] ?? 0; changed = true;
+      }
+      if (changed) writeStoredSeen(sessionUserId, next);
+      return changed ? next : prev;
+    });
+  }, [pathname, badgeBySegment, sessionUserId]);
+
+  const badgeFor = (route: string) => {
+    const seg = route.split("?")[0].split("/").pop() || "";
+    const cur = badgeBySegment[seg] || 0;
+    return cur > (seenCounts[seg] ?? 0) ? cur : 0;
+  };
+
   const filteredLinks = useMemo(() => {
     const rawLinks = roleDetails.sidebarLinks;
     
@@ -536,6 +608,8 @@ export default function PortalShell({
   const renderLink = (link: SidebarLink, showLabel: boolean) => {
     const isActive = isLinkActive(link);
     const Icon = link.icon;
+    const count = badgeFor(link.route);
+    const countLabel = count > 99 ? "99+" : String(count);
     return (
       <Link
         key={`${link.name}-${link.route}`}
@@ -546,9 +620,9 @@ export default function PortalShell({
             setPendingRoute(link.route.split("?")[0]);
           }
         }}
-        title={showLabel ? undefined : link.name}
+        title={showLabel ? undefined : `${link.name}${count ? ` — ${count} new` : ""}`}
         aria-current={isActive ? "page" : undefined}
-        className={`group/nav flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+        className={`group/nav relative flex min-h-9 items-center gap-2.5 rounded-lg px-2.5 py-1.5 outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
           isActive
             ? theme === "dark"
               ? "bg-blue-500/15 text-blue-200 shadow-[inset_0_0_0_1px_rgba(96,165,250,.24)]"
@@ -558,8 +632,26 @@ export default function PortalShell({
             : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
         } ${showLabel ? "" : "justify-center"}`}
       >
-        <Icon className="flex-shrink-0 w-5 h-5" />
-        {showLabel && <span className="text-sm font-semibold">{link.name}</span>}
+        <Icon className="flex-shrink-0 w-4 h-4" />
+        {showLabel && <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight">{link.name}</span>}
+        {count > 0 && (
+          showLabel ? (
+            <span
+              aria-label={`${count} new`}
+              className="ml-auto shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white"
+            >
+              {countLabel}
+            </span>
+          ) : (
+            // Collapsed rail: compact corner badge on the icon.
+            <span
+              aria-label={`${count} new`}
+              className="absolute right-1 top-1 min-w-[15px] rounded-full bg-red-500 px-1 text-center text-[9px] font-bold leading-[15px] tabular-nums text-white ring-2 ring-white dark:ring-slate-950"
+            >
+              {countLabel}
+            </span>
+          )
+        )}
       </Link>
     );
   };
@@ -568,6 +660,7 @@ export default function PortalShell({
   const renderGroupedNav = () =>
     groupedLinks.map(({ group, links }) => {
       const collapsed = navQuery ? false : !!collapsedGroups[group];
+      const groupCount = links.reduce((sum, l) => sum + badgeFor(l.route), 0);
       return (
         <div key={group} className="space-y-1">
           <button
@@ -578,6 +671,12 @@ export default function PortalShell({
             aria-expanded={!collapsed}
           >
             <span className="min-w-0 flex-1 text-left text-[11px] font-bold uppercase tracking-[0.12em] leading-snug">{group}</span>
+            {/* Roll the hidden tabs' badges up to the header only while collapsed. */}
+            {collapsed && groupCount > 0 && (
+              <span className="ml-2 shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">
+                {groupCount > 99 ? "99+" : groupCount}
+              </span>
+            )}
             <span className="ml-2 mr-2 shrink-0 text-[10px] tabular-nums opacity-70">{links.length}</span>
             <ChevronDown
               className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${
@@ -726,7 +825,7 @@ export default function PortalShell({
           clinical workspace never loses a third of its usable width. */}
       <aside
         className={`${
-          sidebarOpen ? "w-72" : "w-[76px]"
+          sidebarOpen ? "w-60" : "w-[76px]"
         } hidden shrink-0 flex-col overflow-hidden border-r transition-[width] duration-200 xl:flex ${
           theme === "dark"
             ? "border-slate-800 bg-slate-950 text-white"
@@ -1238,9 +1337,16 @@ export default function PortalShell({
             const isActive = isLinkActive(link);
             const segment = link.route.split("/").pop();
             const label = segment === "dashboard" ? "Home" : segment === "alertcenter" ? "Alerts" : segment === "residents" ? "Residents" : segment === "carelogs" ? "Care logs" : segment === "mar" ? "MAR" : link.name;
+            const dockCount = badgeFor(link.route);
             return (
-              <Link key={`dock-${link.route}`} href={link.route} onClick={(event) => { if (!isActive && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) setPendingRoute(link.route.split("?")[0]); }} aria-current={isActive ? "page" : undefined} className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${isActive ? "text-blue-600 dark:text-blue-300" : "text-slate-600 dark:text-slate-400"}`}>
-                <Icon className="h-5 w-5" /><span className="w-full truncate text-center">{label}</span>
+              <Link key={`dock-${link.route}`} href={link.route} onClick={(event) => { if (!isActive && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) setPendingRoute(link.route.split("?")[0]); }} aria-current={isActive ? "page" : undefined} className={`relative flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${isActive ? "text-blue-600 dark:text-blue-300" : "text-slate-600 dark:text-slate-400"}`}>
+                <span className="relative">
+                  <Icon className="h-5 w-5" />
+                  {dockCount > 0 && (
+                    <span aria-label={`${dockCount} new`} className="absolute -right-2 -top-1.5 min-w-[15px] rounded-full bg-red-500 px-1 text-center text-[9px] font-bold leading-[15px] tabular-nums text-white ring-2 ring-white dark:ring-slate-950">{dockCount > 99 ? "99+" : dockCount}</span>
+                  )}
+                </span>
+                <span className="w-full truncate text-center">{label}</span>
               </Link>
             );
           })}
