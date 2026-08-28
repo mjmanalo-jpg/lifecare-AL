@@ -112,6 +112,7 @@ interface Endorsement {
   outgoingBy?: string; incomingBy?: string; signedAt?: string; status: "PENDING" | "SIGNED_OFF" | "ACKNOWLEDGED";
   residents: EndResident[]; carryOvers: CarryOver[]; checklist: Record<string, boolean>; createdAt: string;
   outgoingById?: string; // User id of whoever logged it — only they may sign off.
+  authorRole?: ClinicianRole; // who authored it: caregiver handover vs nurse/CM endorsement.
   handover?: Handover;   // frozen snapshot of pending tasks + open incidents at sign-off
   acceptedBy?: string; acceptedById?: string; acceptedAt?: string; // stamped when incoming acknowledges
 }
@@ -132,6 +133,13 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
 
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
   const items = useMemo(() => parse(settingRows.find((r) => (r.key || r.id) === KEY)?.value), [settingRows]);
+  // Role-separated visibility: caregivers see only caregiver handovers, nurses see
+  // only nurse endorsements; the Care Manager (oversight) sees everything. Legacy
+  // records without authorRole are treated as nurse endorsements.
+  const visibleItems = useMemo(() => {
+    if (clinicianRole === "CARE_MANAGER") return items;
+    return items.filter((e) => (e.authorRole || "NURSE") === clinicianRole);
+  }, [items, clinicianRole]);
   const adlLogs = useMemo(() => { try { const v = JSON.parse(settingRows.find((r) => (r.key || r.id) === ADL_KEY)?.value || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } }, [settingRows]);
   const woundRecords = useMemo(() => { try { const v = JSON.parse(settingRows.find((r) => (r.key || r.id) === "wound_records")?.value || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } }, [settingRows]);
   const weightLogs = useMemo(() => { try { const v = JSON.parse(settingRows.find((r) => (r.key || r.id) === "weight_logs")?.value || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } }, [settingRows]);
@@ -326,22 +334,22 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
     carry: active?.carryOvers.length ?? 0,
   }), [incQ.data, taskQ.data, adlLogs, active, scopedIds, clinicianRole]);
 
-  const pendingCount = items.filter((e) => e.status !== "ACKNOWLEDGED").length;
+  const pendingCount = visibleItems.filter((e) => e.status !== "ACKNOWLEDGED").length;
 
   const filteredByRange = useMemo(() => {
     const today = new Date();
-    return items.filter((e) => {
+    return visibleItems.filter((e) => {
       const d = new Date(e.date + "T00:00:00");
       if (range === "today") return e.date === isoDate(today);
       const diff = (today.getTime() - d.getTime()) / 86_400_000;
       return range === "week" ? diff <= 7 && diff >= -1 : diff <= 31 && diff >= -1;
     });
-  }, [items, range]);
+  }, [visibleItems, range]);
 
   const grouped = useMemo(() => { const m = new Map<string, Endorsement[]>(); filteredByRange.forEach((e) => { const a = m.get(e.date); if (a) a.push(e); else m.set(e.date, [e]); }); return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0])); }, [filteredByRange]);
 
   const createEndorsement = async (data: { shiftLabel: string; shiftRange: string; generalNotes?: string; medicationNotes?: string; aiSummary?: string }) => {
-    const rec: Endorsement = { ...data, id: newId(), number: `#${2940000 + items.length + 1}`, date: isoDate(new Date()), outgoingBy: clinicianName, outgoingById: clinicianUserId, incomingBy: "(pending)", signedAt: nowTime(), status: "PENDING", residents: [], carryOvers: [], checklist: {}, createdAt: new Date().toISOString() };
+    const rec: Endorsement = { ...data, id: newId(), number: `#${2940000 + items.length + 1}`, date: isoDate(new Date()), outgoingBy: clinicianName, outgoingById: clinicianUserId, authorRole: clinicianRole, incomingBy: "(pending)", signedAt: nowTime(), status: "PENDING", residents: [], carryOvers: [], checklist: {}, createdAt: new Date().toISOString() };
     await persist([rec, ...items]);
     recordAudit({
       action: "CREATE",

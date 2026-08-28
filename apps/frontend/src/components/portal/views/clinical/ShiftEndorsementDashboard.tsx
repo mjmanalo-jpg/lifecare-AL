@@ -47,7 +47,7 @@ interface HIncident { id: string; type: string; resident: string; room: string; 
 interface Handover { pendingTasks: HTask[]; openIncidents: HIncident[]; snapshotAt: string }
 interface Endorsement {
   id: string; number: string; date: string; shiftLabel?: string; shiftRange?: string; generalNotes?: string;
-  outgoingBy?: string; outgoingById?: string; incomingBy?: string; signedAt?: string; status: "PENDING" | "SIGNED_OFF" | "ACKNOWLEDGED";
+  outgoingBy?: string; outgoingById?: string; authorRole?: ClinicianRole; incomingBy?: string; signedAt?: string; status: "PENDING" | "SIGNED_OFF" | "ACKNOWLEDGED";
   residents: EndResident[]; carryOvers: CarryOver[]; checklist: Record<string, boolean>; createdAt: string;
   handover?: Handover; acceptedBy?: string; acceptedById?: string; acceptedAt?: string;
 }
@@ -63,6 +63,12 @@ export default function ShiftEndorsementDashboard({ clinicianRole = "FACILITY_AD
 
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
   const items = useMemo(() => parse(settingRows.find((r) => (r.key || r.id) === KEY)?.value), [settingRows]);
+  // Role-separated visibility (matches the board): caregivers see only caregiver
+  // handovers, nurses only nurse endorsements; Care Manager / Facility Admin see all.
+  const visibleItems = useMemo(() => {
+    if (clinicianRole === "CARE_MANAGER" || clinicianRole === "FACILITY_ADMIN") return items;
+    return items.filter((e) => (e.authorRole || "NURSE") === clinicianRole);
+  }, [items, clinicianRole]);
   const adlLogs = useMemo(() => parseArr(settingRows.find((r) => (r.key || r.id) === ADL_KEY)?.value), [settingRows]);
   const resName = (id: string) => { const r = residents.find((x: Row) => s(x.id) === id); return r ? { name: s(r.name), room: s(r.room) } : { name: "Resident", room: "" }; };
 
@@ -76,8 +82,8 @@ export default function ShiftEndorsementDashboard({ clinicianRole = "FACILITY_AD
 
   const isOutgoing = (e: Endorsement) => (e.outgoingById ? clinicianUserId === e.outgoingById : clinicianName === e.outgoingBy);
 
-  const notAck = useMemo(() => items.filter((e) => e.status !== "ACKNOWLEDGED"), [items]);
-  const awaiting = useMemo(() => items.filter((e) => e.status === "SIGNED_OFF").sort((a, b) => (b.date + (b.signedAt || "")).localeCompare(a.date + (a.signedAt || ""))), [items]);
+  const notAck = useMemo(() => visibleItems.filter((e) => e.status !== "ACKNOWLEDGED"), [visibleItems]);
+  const awaiting = useMemo(() => visibleItems.filter((e) => e.status === "SIGNED_OFF").sort((a, b) => (b.date + (b.signedAt || "")).localeCompare(a.date + (a.signedAt || ""))), [visibleItems]);
   // Carry-overs on any not-yet-acknowledged endorsement are treated as unresolved.
   const unresolvedCarry = useMemo(() => notAck.flatMap((e) => e.carryOvers.map((c) => ({ c, e }))), [notAck]);
 
@@ -102,9 +108,9 @@ export default function ShiftEndorsementDashboard({ clinicianRole = "FACILITY_AD
   }, [unresolvedCarry, notAck, declineResidents]);
 
   const stats: { label: string; value: number; icon: LucideIcon; color: string }[] = [
-    { label: "Pending Sign-Off", value: items.filter((e) => e.status === "PENDING").length, icon: Clock, color: "#D97706" },
+    { label: "Pending Sign-Off", value: visibleItems.filter((e) => e.status === "PENDING").length, icon: Clock, color: "#D97706" },
     { label: "Awaiting Incoming", value: awaiting.length, icon: Inbox, color: "#2563EB" },
-    { label: "Acknowledged", value: items.filter((e) => e.status === "ACKNOWLEDGED").length, icon: CheckCircle2, color: "#16A34A" },
+    { label: "Acknowledged", value: visibleItems.filter((e) => e.status === "ACKNOWLEDGED").length, icon: CheckCircle2, color: "#16A34A" },
     { label: "Unresolved Carry-Overs", value: unresolvedCarry.length, icon: ArrowLeftRight, color: "#9333EA" },
     { label: "Urgent Carry-Overs", value: unresolvedCarry.filter(({ c }) => c.priority === "Urgent").length, icon: AlertTriangle, color: "#DC2626" },
     { label: "ADL Decline Residents", value: declineResidents.size, icon: Accessibility, color: "#64748B" },
@@ -113,14 +119,14 @@ export default function ShiftEndorsementDashboard({ clinicianRole = "FACILITY_AD
 
   const filtered = useMemo(() => {
     const today = new Date();
-    return items.filter((e) => {
+    return visibleItems.filter((e) => {
       if (range === "all") return true;
       const d = new Date(e.date + "T00:00:00");
       if (range === "today") return e.date === todayIso();
       const diff = (today.getTime() - d.getTime()) / 86_400_000;
       return range === "week" ? diff <= 7 && diff >= -1 : diff <= 31 && diff >= -1;
     }).sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || "").localeCompare(a.createdAt || ""));
-  }, [items, range]);
+  }, [visibleItems, range]);
 
   const persist = async (next: Endorsement[]) => { await upsertRecord("app-settings", KEY, { key: KEY, value: JSON.stringify(next) }); await refetch(); };
   // Acknowledge → stamp acceptance AND put the carry-overs on the incoming user's
