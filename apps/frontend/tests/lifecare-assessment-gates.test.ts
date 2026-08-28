@@ -26,10 +26,9 @@ test("G1 requires a valid score and supporting evidence for every scored domain"
   const a = assessment();
   delete a.domains["AS-09"];
   a.domains["AS-10"] = { score: 2 };
-  const g1 = assessmentValidationIssues(a).find((issue) => issue.gate === "G1");
-  assert.ok(g1);
-  assert.match(g1.message, /AS-09/);
-  assert.match(g1.message, /AS-10/);
+  const g1 = assessmentValidationIssues(a).filter((issue) => issue.gate === "G1");
+  assert.ok(g1.some((issue) => /AS-09/.test(issue.message)));
+  assert.ok(g1.some((issue) => /AS-10/.test(issue.message)));
 });
 
 test("G2 requires an explicit disposition for every suggested or in-flow modifier", () => {

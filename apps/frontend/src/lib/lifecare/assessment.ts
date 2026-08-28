@@ -204,8 +204,9 @@ export function assessmentValidationIssues(a: Pick<AssessmentV42, "domains" | "c
     const evidence = entry?.evidence?.trim() || entry?.goalNote?.trim();
     return !scoreValid || !evidence;
   });
-  if (unsupported.length) {
-    issues.push({ gate: "G1", layer: 2, message: `Document a 0–4 score and supporting evidence for ${unsupported.join(", ")}.` });
+  // One issue per incomplete domain so the "items left" count reflects real work.
+  for (const code of unsupported) {
+    issues.push({ gate: "G1", layer: 2, message: `Document a 0–4 score and supporting evidence for ${code}.` });
   }
 
   const modifierIssues: string[] = [];
@@ -215,8 +216,9 @@ export function assessmentValidationIssues(a: Pick<AssessmentV42, "domains" | "c
     if (!review && !a.layer3.reconciledModifiers?.includes(id)) modifierIssues.push(`${id} needs a disposition`);
     else if (review?.decision === "NOT_APPLICABLE" && !review.rationale?.trim()) modifierIssues.push(`${id} needs a not-applicable rationale`);
   }
-  if (modifierIssues.length) {
-    issues.push({ gate: "G2", layer: 3, message: `Reconcile every flagged modifier: ${modifierIssues.join("; ")}.` });
+  // One issue per flagged modifier so each counts as its own remaining item.
+  for (const m of modifierIssues) {
+    issues.push({ gate: "G2", layer: 3, message: `Reconcile flagged modifier — ${m}.` });
   }
 
   // G3 — a Final LOC below the engine's minimum-level floor is the nurse/CM's
