@@ -357,7 +357,7 @@ function AddItemModal({ item, residents, onClose, onSave }: { item: InvItem | nu
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-white w-full max-w-lg max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl shadow-2xl">
+      <div className="bg-white w-full max-w-2xl max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100">
           <div className="flex items-center gap-3 min-w-0">

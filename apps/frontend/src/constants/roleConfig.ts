@@ -410,6 +410,8 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Care Delivery", icon: Activity, route: "/nurse/caredelivery", group: "Care Delivery Status" },
       { name: "Medication Administration (MAR)", icon: Syringe, route: "/nurse/mar", group: "Care Delivery Status" },
       { name: "Medication Compliance", icon: PieChart, route: "/nurse/medcompliance", group: "Care Delivery Status" },
+      { name: "Med Inventory", icon: Package, route: "/nurse/medinventory", group: "Care Delivery Status" },
+      { name: "Mini Pharmacy", icon: Cross, route: "/nurse/minipharmacy", group: "Care Delivery Status" },
       { name: "Assessment & Level of Care", icon: Gauge, route: "/nurse/careacuity", group: "Assessment & LOC" },
       { name: "Pre-Admission Assessment (v4.2)", icon: ClipboardList, route: "/nurse/prescreen", group: "Assessment & LOC" },
       { name: "Care Plan Reviews", icon: Target, route: "/nurse/careplans", group: "Care Plan Governance" },
@@ -519,6 +521,8 @@ export const ROLES: Record<Role, RoleDetails> = {
       // Nurse/Caregiver portals and is reached from here via dashboard drill-down.
       { name: "Care Delivery Reliability", icon: Activity, route: "/care_manager/caredelivery", group: "Care Delivery Reliability" },
       { name: "Medication Compliance", icon: PieChart, route: "/care_manager/medcompliance", group: "Care Delivery Reliability" },
+      { name: "Med Inventory", icon: Package, route: "/care_manager/medinventory", group: "Care Delivery Reliability" },
+      { name: "Mini Pharmacy", icon: Cross, route: "/care_manager/minipharmacy", group: "Care Delivery Reliability" },
       { name: "Safety / Transitions", icon: ShieldCheck, route: "/care_manager/safeguarding", group: "Safety / Transitions" },
       { name: "Incident Reports", icon: AlertTriangle, route: "/care_manager/incidents", group: "Safety / Transitions" },
       { name: "CRM & Leads", icon: UserPlus, route: "/care_manager/crm", group: "Safety / Transitions" },
