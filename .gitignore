@@ -85,3 +85,9 @@ Care360_*.pdf
 # Agent/tool config & scratch
 .claude/
 .mcp.json
+
+# Playwright MCP session artifacts (snapshots, screenshots, tutorials)
+.playwright-mcp/
+
+# Local one-off migration/scratch SQL
+migrate_*.sql
