@@ -372,8 +372,9 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
     setNewOpen(false); setEditing(null);
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: edit ? "Endorsement updated" : "Endorsement created", showConfirmButton: false, timer: 1600 });
   };
-  // Only the author (or a Care Manager, oversight) may edit/delete an endorsement.
-  const canModify = (e: Endorsement) => clinicianRole === "CARE_MANAGER" || (e.outgoingById ? clinicianUserId === e.outgoingById : clinicianName === e.outgoingBy);
+  // Only the author (the nurse or caregiver who logged it) may edit/delete. The
+  // Care Manager is oversight-only here — sees everything, modifies nothing.
+  const canModify = (e: Endorsement) => clinicianRole !== "CARE_MANAGER" && (e.outgoingById ? clinicianUserId === e.outgoingById : clinicianName === e.outgoingBy);
   const deleteEndorsement = async (e: Endorsement) => {
     const c = await Swal.fire({ title: "Delete endorsement?", html: `Delete <b>${e.number}</b> (${e.shiftLabel})? This can't be undone.`, icon: "warning", showCancelButton: true, confirmButtonColor: "#dc2626", confirmButtonText: "Delete" });
     if (!c.isConfirmed) return;
