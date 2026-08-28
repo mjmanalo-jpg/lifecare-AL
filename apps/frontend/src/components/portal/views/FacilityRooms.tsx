@@ -56,7 +56,35 @@ export default function FacilityRooms() {
   const { data: residentRows } = useLiveQuery<Record<string, unknown>>(
     "residents", { query: "take=100", tables: ["Resident"] }
   );
-  const rooms = useMemo<Room[]>(() => roomRows.map(adaptRoom), [roomRows]);
+  const { data: admissionRows } = useLiveQuery<Record<string, unknown>>(
+    "admissions", { query: "take=200", tables: ["Admission"] }
+  );
+  // Beds taken per room: each resident + each active in-progress admission (a
+  // completed admission already has a Resident, so it isn't double-counted).
+  // Mirrors the Admissions wizard so both screens agree on occupancy.
+  const occupantCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    const bump = (rn: string) => m.set(rn, (m.get(rn) || 0) + 1);
+    (residentRows ?? []).forEach((r) => { const rn = r.roomNumber; if (rn) bump(String(rn)); });
+    (admissionRows ?? []).forEach((a) => { const rn = a.roomNumber; const st = String(a.status); if (rn && st !== "CANCELLED" && st !== "COMPLETED") bump(String(rn)); });
+    return m;
+  }, [residentRows, admissionRows]);
+  // Occupancy is the source of truth for AVAILABLE/OCCUPIED: full (beds >= capacity)
+  // shows OCCUPIED, a shared room with a free bed shows AVAILABLE (still assignable),
+  // and an empty room self-corrects to AVAILABLE. MAINTENANCE and an empty RESERVED
+  // hold are explicit ops states and are preserved.
+  const rooms = useMemo<Room[]>(
+    () => roomRows.map(adaptRoom).map((room) => {
+      if (room.status === "MAINTENANCE") return room;
+      const cap = Math.max(1, Number(room.capacity) || 1);
+      const count = occupantCounts.get(room.roomNumber) || 0;
+      if (count >= cap) return { ...room, status: "OCCUPIED" as const };
+      if (count > 0) return { ...room, status: "AVAILABLE" as const };
+      if (room.status === "RESERVED") return room;
+      return { ...room, status: "AVAILABLE" as const };
+    }),
+    [roomRows, occupantCounts]
+  );
 
   const residentMap = useMemo(() => {
     const m = new Map<string, any[]>(); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -240,7 +268,7 @@ export default function FacilityRooms() {
             <span className="flex items-center gap-1"><BedDouble className="w-3.5 h-3.5" /> {TYPE_LABEL[room.roomType] || room.roomType}</span>
           </div>
           <div className="flex items-center gap-4 text-sm text-gray-600">
-            <span>{room.capacity === 1 ? "Single" : `${room.capacity} beds`}</span>
+            <span>{room.capacity === 1 ? "Single" : `${occupantCounts.get(room.roomNumber) || 0}/${room.capacity} beds`}</span>
             {room.rateMonthly && (
               <span className="flex items-center gap-1">₱{room.rateMonthly.toLocaleString()}/mo</span>
             )}

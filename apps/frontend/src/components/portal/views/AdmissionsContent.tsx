@@ -671,29 +671,42 @@ export default function AdmissionsContent() {
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Prefilled from pre-admission", showConfirmButton: false, timer: 1600 });
   };
 
-  // Rooms already taken by residents or by other in-progress admissions.
-  const occupiedRooms = useMemo(() => {
-    const taken = new Set<string>();
-    const fullName = `${form.firstName} ${form.lastName}`.trim().toLowerCase();
-    residentRows.forEach((r) => {
-      if (!r.roomNumber) return;
-      // A resident's own room isn't "taken" when re-admitting that same person.
-      if (fullName && `${s(r.firstName)} ${s(r.lastName)}`.trim().toLowerCase() === fullName) return;
-      taken.add(s(r.roomNumber));
-    });
-    admissionRows.forEach((a) => {
-      if (s(a.id) !== s(form.id) && s(a.status) !== "CANCELLED" && a.roomNumber) taken.add(s(a.roomNumber));
-    });
-    return taken;
-  }, [residentRows, admissionRows, form.id, form.firstName, form.lastName]);
-
   const { data: roomRows } = useLiveQuery<Record<string, unknown>>(
     "rooms", { query: "take=200", tables: ["Room"] }
   );
   const allRooms = useMemo(() => roomRows.map((r) => s(r.roomNumber)).filter(Boolean), [roomRows]);
+  // Capacity per room (shared rooms hold 2+). Defaults to 1 for legacy rows.
+  const roomCapacity = useMemo(() => {
+    const m = new Map<string, number>();
+    roomRows.forEach((r) => { const rn = s(r.roomNumber); if (rn) m.set(rn, Math.max(1, Number(r.capacity) || 1)); });
+    return m;
+  }, [roomRows]);
+  // Beds already taken per room: each resident + each active in-progress admission
+  // (a completed admission already has a Resident, so it isn't double-counted). The
+  // resident/record being edited is excluded so re-admitting keeps their own room.
+  const roomOccupancy = useMemo(() => {
+    const count = new Map<string, number>();
+    const fullName = `${form.firstName} ${form.lastName}`.trim().toLowerCase();
+    const bump = (rn: string) => { if (rn) count.set(rn, (count.get(rn) || 0) + 1); };
+    residentRows.forEach((r) => {
+      if (!r.roomNumber) return;
+      if (fullName && `${s(r.firstName)} ${s(r.lastName)}`.trim().toLowerCase() === fullName) return;
+      bump(s(r.roomNumber));
+    });
+    admissionRows.forEach((a) => {
+      const st = s(a.status);
+      if (s(a.id) === s(form.id) || st === "CANCELLED" || st === "COMPLETED" || !a.roomNumber) return;
+      bump(s(a.roomNumber));
+    });
+    return count;
+  }, [residentRows, admissionRows, form.id, form.firstName, form.lastName]);
+  // A room is full when its taken beds reach its capacity — shared rooms stay
+  // assignable until every bed is filled.
+  const roomIsFull = (rn: string) => (roomOccupancy.get(rn) || 0) >= (roomCapacity.get(rn) || 1);
   const availableRooms = useMemo(
-    () => allRooms.filter((r) => !occupiedRooms.has(r) || r === form.roomNumber),
-    [allRooms, occupiedRooms, form.roomNumber]
+    () => allRooms.filter((r) => !roomIsFull(r) || r === form.roomNumber),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allRooms, roomOccupancy, roomCapacity, form.roomNumber]
   );
 
   const openNew = () => { setForm({ ...emptyForm }); setClinical({}); setSkinWounds([]); setMedList([]); setAttachments([]); setPrefillTotal(null); setV42Domains({}); setV42PriorId(""); setStep(1); setWizardOpen(true); };
@@ -827,7 +840,7 @@ export default function AdmissionsContent() {
     if (n === 3 && !form.careLevel) return "Select a care level before continuing.";
     if (n === 4) {
       if (!form.roomNumber) return "Assign a room before continuing.";
-      if (occupiedRooms.has(form.roomNumber)) return `Room ${form.roomNumber} is already taken.`;
+      if (roomIsFull(form.roomNumber)) return `Room ${form.roomNumber} is full.`;
     }
     return null;
   };
@@ -1486,10 +1499,14 @@ export default function AdmissionsContent() {
                   <Field label="Room Assignment *">
                     <select className={inputCls} value={form.roomNumber} onChange={(e) => set({ roomNumber: e.target.value })}>
                       <option value="">Select an available room…</option>
-                      {availableRooms.map((r) => <option key={r} value={r}>Room {r}</option>)}
+                      {availableRooms.map((r) => {
+                        const cap = roomCapacity.get(r) || 1;
+                        const taken = roomOccupancy.get(r) || 0;
+                        return <option key={r} value={r}>Room {r}{cap > 1 ? ` — shared (${taken}/${cap} beds)` : ""}</option>;
+                      })}
                     </select>
                   </Field>
-                  <p className="text-xs text-gray-500">A room is assigned automatically from the {availableRooms.length} available — change it above if needed. Occupied rooms are hidden.</p>
+                  <p className="text-xs text-gray-500">A room is assigned automatically from the {availableRooms.length} available — change it above if needed. Shared rooms stay listed until every bed is filled; full rooms are hidden.</p>
 
                   {/* QR Code — auto-generated, shown inline once the admission has an ID */}
                   {form.id && (
