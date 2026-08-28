@@ -798,7 +798,8 @@ export default function AdmissionsContent() {
     // No middle-name column on Admission — compose middle into firstName ("First Middle").
     firstName: composeName(form.firstName, form.middleName), lastName: form.lastName,
     dateOfBirth: form.dateOfBirth ? new Date(form.dateOfBirth).toISOString() : null,
-    admissionDate: form.admissionDate ? new Date(form.admissionDate).toISOString() : null,
+    // NB: `admissionDate` is a Resident column, not an Admission one — it's applied
+    // to the Resident at completion (see completeAdmission), never sent here.
     gender: form.gender || null, phone: form.phone || null, email: form.email || null,
     emergencyContact: form.emergencyContact || null, emergencyContactPhone: form.emergencyContactPhone || null,
     sponsorName: form.sponsorName || null, sponsorEmail: form.sponsorEmail || null,
