@@ -42,11 +42,11 @@ const chipOn = "bg-[var(--clinical-panel)] text-white border-[var(--clinical-pan
 const chipOff = "bg-[var(--clinical-surface)] text-[var(--clinical-ink-soft)] border-[var(--clinical-line-strong)] hover:border-[var(--clinical-panel)]";
 
 // ── Reusable inputs ──────────────────────────────────────────────────────────
-function Text({ label, value, onChange, placeholder, type = "text" }: { label: string; value?: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
+function Text({ label, value, onChange, placeholder, type = "text", readOnly }: { label: string; value?: string; onChange: (v: string) => void; placeholder?: string; type?: string; readOnly?: boolean }) {
   return (
     <label className="block">
       <MicroLabel className="mb-1">{label}</MicroLabel>
-      <input type={type} value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={input} />
+      <input type={type} value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} readOnly={readOnly} className={`${input}${readOnly ? " bg-black/5 cursor-not-allowed" : ""}`} />
     </label>
   );
 }
@@ -435,10 +435,10 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <ResidentPicker value={form.residentName} onChange={(v) => set({ residentName: v })} admissions={admissionOpts} linkedId={linkedAdmissionId} onPick={pickAdmission} onUnlink={() => setLinkedAdmissionId("")} />
                   <div className="grid grid-cols-2 gap-3">
-                    <Text label="Age" value={form.age} onChange={(v) => set({ age: v })} />
+                    <Text label="Age" value={form.age} onChange={() => {}} readOnly placeholder="Auto from DOB" />
                     <Text label="Sex" value={form.sex} onChange={(v) => set({ sex: v })} placeholder="Male / Female" />
                   </div>
-                  <Text label="Date of Birth" type="date" value={form.dateOfBirth} onChange={(v) => set({ dateOfBirth: v })} />
+                  <Text label="Date of Birth" type="date" value={form.dateOfBirth} onChange={(v) => set({ dateOfBirth: v, age: ageFromDob(v) })} />
                   <Text label="Date of Assessment" type="date" value={form.dateOfAssessment} onChange={(v) => set({ dateOfAssessment: v })} />
                   <Text label="Assessment Location" value={form.assessmentLocation} onChange={(v) => set({ assessmentLocation: v })} />
                   <Text label="Primary Contact" value={form.primaryContact} onChange={(v) => set({ primaryContact: v })} />
