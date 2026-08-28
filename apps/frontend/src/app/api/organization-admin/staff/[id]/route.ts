@@ -25,6 +25,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!staff) return NextResponse.json({ error: "Staff record not found" }, { status: 404 });
 
   const body = await request.json().catch(() => ({}));
+
+  // Reset to first-time setup: clear the stored password (and any Supabase link)
+  // so the next login prompts the staff to set their own password. Standalone
+  // action — doesn't require the full edit payload.
+  if (body.resetPassword) {
+    await prisma.user.update({ where: { id: staff.userId }, data: { passwordHash: null, authUserId: null } });
+    logAudit({ actorId: context!.userId, actorRole: context!.role, action: "UPDATE", entityType: "staff-account", entityId: staff.userId, organizationId, communityId: staff.communityId ?? undefined, reason: `Reset ${staff.user.name || "staff"}'s password — they set a new one on next login` });
+    invalidatePortalDataPrefix(`org-admin:${organizationId}:`);
+    return NextResponse.json({ success: true, reset: true });
+  }
+
   const name = body.name !== undefined ? String(body.name).trim() : staff.user.name;
   const position = body.position !== undefined ? String(body.position).trim() : staff.position;
   const department = body.department !== undefined ? (String(body.department).trim() || null) : staff.department;

@@ -21,7 +21,7 @@ export async function GET() {
           communities: { orderBy: { name: "asc" }, include: { _count: { select: { residents: true, staff: true, rooms: true } } } },
           memberships: { orderBy: { createdAt: "asc" }, include: { user: { select: { id: true, name: true, email: true, isActive: true, lastLogin: true, communityMemberships: { where: { community: { organizationId } }, include: { community: { select: { id: true, name: true } } } } } } } },
           invitations: { take: 100, orderBy: { createdAt: "desc" }, include: { community: { select: { id: true, name: true } } } },
-          staff: { orderBy: { createdAt: "desc" }, include: { user: { select: { id: true, name: true, email: true, phone: true, role: true, isActive: true } }, community: { select: { id: true, name: true } } } },
+          staff: { orderBy: { createdAt: "desc" }, include: { user: { select: { id: true, name: true, email: true, phone: true, role: true, isActive: true, passwordHash: true } }, community: { select: { id: true, name: true } } } },
         },
       }),
       prisma.auditLog.findMany({ where: { organizationId }, take: 100, orderBy: { createdAt: "desc" }, select: { id: true, actorName: true, actorRole: true, action: true, entityType: true, entityId: true, reason: true, createdAt: true } }),
@@ -35,6 +35,12 @@ export async function GET() {
     return {
       organization: {
         ...organization,
+        // Expose whether each staff still needs first-time password setup, without
+        // ever leaking the bcrypt hash to the client.
+        staff: organization.staff.map((st) => {
+          const { passwordHash, ...user } = st.user;
+          return { ...st, user, needsFirstPassword: !passwordHash };
+        }),
         subscription: organization.subscription ? { ...organization.subscription, nextBillingDate: nextBillingDate?.toISOString() || null, plan: plan ? { ...plan, maxStorageBytes: plan.maxStorageBytes?.toString() || null, priceMonthly: planMeta?.priceMonthly ?? null, currency: planMeta?.currency || "PHP" } : null } : null,
       },
       auditEvents,
