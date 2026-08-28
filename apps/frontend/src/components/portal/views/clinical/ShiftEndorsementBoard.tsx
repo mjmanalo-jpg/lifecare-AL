@@ -579,17 +579,31 @@ function DetailsView({ e, residents, resName, onBack, update, buildSections, has
       setAddOpen(false);
     } finally { setAddBusy(false); }
   };
-  // Auto-fill ONLY the residents who actually logged an action this shift.
+  // Auto-fill every resident who logged care this shift: ADD those not yet on the
+  // endorsement, AND draft already-added residents whose sections are still empty
+  // (never overwriting section text that's already been written — use the per-row
+  // re-fill for that).
   const autoFillAll = async () => {
-    const existing = new Set(e.residents.map((r) => r.residentId));
-    const opts = residents.filter((r: Row) => !existing.has(s(r.id)) && hasActivity(s(r.id), e.date));
-    if (!opts.length) { Swal.fire({ title: "Nothing to auto-fill", text: "No residents (not already added) have logged care this shift yet.", icon: "info" }); return; }
-    const c = await Swal.fire({ title: "Auto-fill from shift data?", html: `Add <b>${opts.length}</b> resident(s) who logged care this shift, with all 8 sections pre-drafted from their vitals, care logs, ADL, medications, wounds, incidents & escalations. Everything stays editable before sign-off.`, icon: "question", showCancelButton: true, confirmButtonColor: "#2563eb", confirmButtonText: "Auto-fill" });
+    const byId = new Map(e.residents.map((r) => [r.residentId, r]));
+    const isEmpty = (r?: EndResident) => !r || !Object.values(r.sections || {}).some((v) => (v || "").trim());
+    const active = residents.filter((r: Row) => hasActivity(s(r.id), e.date));
+    const toAdd = active.filter((r: Row) => !byId.has(s(r.id)));
+    const toFill = active.filter((r: Row) => byId.has(s(r.id)) && isEmpty(byId.get(s(r.id))));
+    const total = toAdd.length + toFill.length;
+    if (!total) { Swal.fire({ title: "Nothing to auto-fill", text: "No residents with logged care this shift need drafting — added residents already have section notes (use a row's re-fill to redraft).", icon: "info" }); return; }
+    const c = await Swal.fire({ title: "Auto-fill from shift data?", html: `Draft <b>${total}</b> resident(s) who logged care this shift${toAdd.length ? ` (${toAdd.length} added)` : ""} from their vitals, care logs, ADL, medications, wounds, incidents & escalations. Section text you've already written is kept.`, icon: "question", showCancelButton: true, confirmButtonColor: "#2563eb", confirmButtonText: "Auto-fill" });
     if (!c.isConfirmed) return;
     setFilling(true);
     try {
-      await update(e.id, (en) => ({ ...en, residents: [...en.residents, ...opts.map((r: Row) => ({ residentId: s(r.id), sections: buildSections(s(r.id), e.date) }))] }));
-      Swal.fire({ toast: true, position: "top-end", icon: "success", title: `Drafted ${opts.length} resident(s)`, showConfirmButton: false, timer: 1800 });
+      const fillIds = new Set(toFill.map((r: Row) => s(r.id)));
+      await update(e.id, (en) => ({
+        ...en,
+        residents: [
+          ...en.residents.map((r) => (fillIds.has(r.residentId) ? { ...r, sections: buildSections(r.residentId, e.date) } : r)),
+          ...toAdd.map((r: Row) => ({ residentId: s(r.id), sections: buildSections(s(r.id), e.date) })),
+        ],
+      }));
+      Swal.fire({ toast: true, position: "top-end", icon: "success", title: `Drafted ${total} resident(s)`, showConfirmButton: false, timer: 1800 });
     } finally { setFilling(false); }
   };
   // Re-draft one resident's sections from the data (overwrites the current text).
