@@ -27,6 +27,7 @@ import {
   ChevronUp, ChevronDown, Plus, QrCode, Eye, Download, Sparkles,
   UserRound, Pill, Check, Camera, Image as ImageIcon, Trash2, Pencil, UserX,
   ExternalLink, Bath, TrendingDown, Brain, MessageCircle, Dumbbell, ShieldAlert, Ban,
+  Route, FolderOpen, History, FileText, ArrowLeft, ChevronRight,
   type LucideIcon,
 } from "lucide-react";
 import Swal from "@/lib/swal";
@@ -37,6 +38,10 @@ import { createRecord, upsertRecord, updateRecord } from "@/lib/api";
 import { qrDataUrl } from "@/lib/qr";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, SearchInput, DataState, controlClass } from "./clinical-ui";
+import ResidentJourneyBoard from "./ResidentJourneyBoard";
+import ClinicalRecordsBoard from "./ClinicalRecordsBoard";
+import ResidentCareHistory from "./ResidentCareHistory";
+import ResidentProgressReport from "./ResidentProgressReport";
 import { careLevelEnumToLevel, domainInPackage, domainDailyAllowance, DOMAIN_LABEL, recordOutOfPackageService, OVERAGE_EVENTS_KEY, parseOverageEvents, upsertOverageEvent, type OverageEvent } from "@/lib/lifecare/carePackage";
 import { activeLevel } from "@/lib/lifecare/activeLevel";
 import { parseLocHistory, LOC_HISTORY_KEY } from "@/lib/lifecare/locHistory";
@@ -413,6 +418,51 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
   return { residents, entries, allEntries, byResident, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, refetchResidents, aboutStore, locHistory, loading: resQ.loading };
 }
 
+// ── Resident drill-down — pick a resident → cards → view a record inline ─────
+// Consolidates One Care·One Journey, Clinical Records, Care Timeline and the
+// Resident Progress Report into the directory so they can leave the sidebar.
+type DetailCardKey = "journey" | "clinical" | "timeline" | "progress";
+const DETAIL_CARDS: { key: DetailCardKey; label: string; desc: string; icon: LucideIcon }[] = [
+  { key: "journey", label: "One Care · One Journey", desc: "Every record & form in one timeline", icon: Route },
+  { key: "clinical", label: "Clinical Records", desc: "Labs, therapy, referrals, orders, diagnoses", icon: FolderOpen },
+  { key: "timeline", label: "Care Timeline", desc: "7-domain daily documentation history", icon: History },
+  { key: "progress", label: "Resident Progress Report", desc: "Period clinical summary", icon: FileText },
+];
+
+function ResidentDetail({ clinicianRole, resident, onBack }: { clinicianRole: ClinicianRole; resident: Row; onBack: () => void }) {
+  const [card, setCard] = useState<DetailCardKey | null>(null);
+  const rid = s(resident.id);
+  if (card) {
+    return (
+      <div className="space-y-3 p-4 sm:p-6">
+        <button onClick={() => setCard(null)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--clinical-panel)] hover:underline"><ArrowLeft className="h-4 w-4" /> {s(resident.name)} · back to records</button>
+        {card === "journey" && <ResidentJourneyBoard key={rid} clinicianRole={clinicianRole} residentId={rid} />}
+        {card === "clinical" && <ClinicalRecordsBoard key={rid} clinicianRole={clinicianRole} residentId={rid} />}
+        {card === "timeline" && <ResidentCareHistory key={rid} clinicianRole={clinicianRole} residentId={rid} />}
+        {card === "progress" && <ResidentProgressReport key={rid} clinicianRole={clinicianRole} residentId={rid} />}
+      </div>
+    );
+  }
+  return (
+    <ClinicalPage>
+      <button onClick={onBack} className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--clinical-panel)] hover:underline"><ArrowLeft className="h-4 w-4" /> All residents</button>
+      <ClinicalHeader title={s(resident.name)} subtitle={`Room ${s(resident.room) || "—"} · select a record to view`} />
+      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {DETAIL_CARDS.map((c) => { const Icon = c.icon; return (
+          <button key={c.key} onClick={() => setCard(c.key)} className="group flex items-center gap-4 rounded-xl border p-5 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_-22px_rgba(15,23,42,0.55)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)", color: "var(--clinical-panel)" }}><Icon className="h-6 w-6" /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-bold text-[var(--clinical-ink)]">{c.label}</span>
+              <span className="block text-sm text-[var(--clinical-muted)]">{c.desc}</span>
+            </span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-[var(--clinical-muted)] transition group-hover:translate-x-0.5" />
+          </button>
+        ); })}
+      </div>
+    </ClinicalPage>
+  );
+}
+
 // ── Residents tab — quick-log list (Image 15) ────────────────────────────────
 // `canManage` gates the mutating row actions (Edit / Deactivate). Defaults true
 // so nurse / care-manager / admin keep the full directory; the caregiver view
@@ -427,6 +477,7 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
   const [logTab, setLogTab] = useState<DomainKey>("AS-01");
   const [qrFor, setQrFor] = useState<Row | null>(null);
   const [viewFor, setViewFor] = useState<Row | null>(null);
+  const [detailFor, setDetailFor] = useState<Row | null>(null); // resident drill-down (records cards)
   // Everyone gets the Eye "View profile" info modal. Only non-caregivers (Nurse,
   // Care Manager, Super Admin) additionally get the QR card + the modal's
   // "View Full Profile" (/rcard) link; caregivers see the info only.
@@ -463,6 +514,8 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
       Swal.fire({ title: "Could not deactivate", text: err instanceof Error ? err.message : "Update failed.", icon: "error" });
     }
   };
+
+  if (detailFor) return <ResidentDetail clinicianRole={clinicianRole} resident={detailFor} onBack={() => setDetailFor(null)} />;
 
   return (
     <ClinicalPage>
@@ -507,7 +560,7 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <p className="font-bold text-[var(--clinical-ink)]">
-                        {s(r.name)}
+                        <button type="button" onClick={() => setDetailFor(r)} className="text-left hover:underline" title="Open records">{s(r.name)}</button>
                         {profileFor(aboutStore, s(r.id)).preferredName?.trim() && (
                           <span className="ml-1.5 font-medium text-[var(--clinical-muted)]">“{profileFor(aboutStore, s(r.id)).preferredName}”</span>
                         )}
