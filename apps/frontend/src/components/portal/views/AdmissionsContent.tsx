@@ -82,7 +82,7 @@ const acuityTone = (i: number): string =>
 type MedRow = { id: string; name: string; dose: string; frequency: string };
 const serializeClinical = (
   note: string, domains: ClinicalState, wounds: WoundEntry[] = [],
-  meds: MedRow[] = [], extra: { surgeries?: string; hospitalizations?: string; attachments?: Attachment[] } = {},
+  meds: MedRow[] = [], extra: { surgeries?: string; hospitalizations?: string; attachments?: Attachment[]; admissionDate?: string } = {},
 ): string | null => {
   const filled = Object.entries(domains).filter(([, v]) => v && (v.level || (v.notes || "").trim()));
   const hasWounds = Array.isArray(wounds) && wounds.length > 0;
@@ -90,7 +90,11 @@ const serializeClinical = (
   const surgeries = (extra.surgeries || "").trim();
   const hospitalizations = (extra.hospitalizations || "").trim();
   const attachments = (extra.attachments || []).filter((a) => a && a.url);
-  const hasExtra = cleanMeds.length > 0 || !!surgeries || !!hospitalizations || attachments.length > 0;
+  // Planned move-in date (distinct from the assessment date). Stored here rather
+  // than as an Admission column so a future admit date survives draft reopens with
+  // no schema migration; copied to Resident.admissionDate at completion.
+  const admissionDate = (extra.admissionDate || "").trim();
+  const hasExtra = cleanMeds.length > 0 || !!surgeries || !!hospitalizations || attachments.length > 0 || !!admissionDate;
   if (!filled.length && !hasWounds && !hasExtra) return note.trim() || null;
   return JSON.stringify({
     __v: CLINICAL_TAG, note: note.trim() || undefined, domains: Object.fromEntries(filled),
@@ -99,9 +103,10 @@ const serializeClinical = (
     ...(surgeries ? { surgeries } : {}),
     ...(hospitalizations ? { hospitalizations } : {}),
     ...(attachments.length ? { attachments } : {}),
+    ...(admissionDate ? { admissionDate } : {}),
   });
 };
-const parseClinical = (raw: string): { note: string; domains: ClinicalState; wounds: WoundEntry[]; meds: MedRow[]; surgeries: string; hospitalizations: string; attachments: Attachment[] } => {
+const parseClinical = (raw: string): { note: string; domains: ClinicalState; wounds: WoundEntry[]; meds: MedRow[]; surgeries: string; hospitalizations: string; attachments: Attachment[]; admissionDate: string } => {
   const t = (raw || "").trim();
   if (t.startsWith("{")) {
     try {
@@ -112,10 +117,11 @@ const parseClinical = (raw: string): { note: string; domains: ClinicalState; wou
         meds: Array.isArray(o.medications) ? (o.medications as MedRow[]) : [],
         surgeries: String(o.surgeries ?? ""), hospitalizations: String(o.hospitalizations ?? ""),
         attachments: Array.isArray(o.attachments) ? (o.attachments as Attachment[]) : [],
+        admissionDate: String(o.admissionDate ?? ""),
       };
     } catch { /* not structured */ }
   }
-  return { note: t, domains: {}, wounds: [], meds: [], surgeries: "", hospitalizations: "", attachments: [] };
+  return { note: t, domains: {}, wounds: [], meds: [], surgeries: "", hospitalizations: "", attachments: [], admissionDate: "" };
 };
 
 // ── Carry-forward: seed a Care Acuity assessment (Stage 5) on completion ───────
@@ -763,7 +769,7 @@ export default function AdmissionsContent() {
       id: s(row.id),
       firstName: fnTokens.shift() || "", middleName: fnTokens.join(" "), lastName: s(row.lastName),
       dateOfBirth: row.dateOfBirth ? s(row.dateOfBirth).slice(0, 10) : "",
-      admissionDate: row.admissionDate ? s(row.admissionDate).slice(0, 10) : "",
+      admissionDate: parsedCA.admissionDate ? s(parsedCA.admissionDate).slice(0, 10) : (row.admissionDate ? s(row.admissionDate).slice(0, 10) : ""),
       gender: s(row.gender), phone: s(row.phone), email: s(row.email),
       emergencyContact: s(row.emergencyContact), emergencyContactPhone: s(row.emergencyContactPhone),
       sponsorName: s(row.sponsorName), sponsorEmail: s(row.sponsorEmail),
@@ -798,13 +804,13 @@ export default function AdmissionsContent() {
     // No middle-name column on Admission — compose middle into firstName ("First Middle").
     firstName: composeName(form.firstName, form.middleName), lastName: form.lastName,
     dateOfBirth: form.dateOfBirth ? new Date(form.dateOfBirth).toISOString() : null,
-    // NB: `admissionDate` is a Resident column, not an Admission one — it's applied
-    // to the Resident at completion (see completeAdmission), never sent here.
+    // `admissionDate` (planned move-in, distinct from assessment date) has no
+    // Admission column — it rides inside careAssessment (see serializeClinical below).
     gender: form.gender || null, phone: form.phone || null, email: form.email || null,
     emergencyContact: form.emergencyContact || null, emergencyContactPhone: form.emergencyContactPhone || null,
     sponsorName: form.sponsorName || null, sponsorEmail: form.sponsorEmail || null,
     medicalAssessment: form.medicalAssessment || null, allergies: form.allergies || null, medicalHistory: form.medicalHistory || null,
-    careAssessment: serializeClinical(form.careAssessment, clinical, skinWounds, medList, { surgeries: form.surgeries, hospitalizations: form.hospitalizations, attachments }), careLevel: form.careLevel || null, mobility: form.mobility || null,
+    careAssessment: serializeClinical(form.careAssessment, clinical, skinWounds, medList, { surgeries: form.surgeries, hospitalizations: form.hospitalizations, attachments, admissionDate: form.admissionDate }), careLevel: form.careLevel || null, mobility: form.mobility || null,
     insuranceProvider: form.insuranceProvider || null, insurancePolicyNumber: form.insurancePolicyNumber || null,
     insuranceVerified: form.insuranceVerified, insuranceVerifiedAt: form.insuranceVerifiedAt || null,
     roomNumber: form.roomNumber || null, qrPayload: form.qrPayload || null,
@@ -1934,7 +1940,7 @@ function AdmissionEditForm({ row, onSave }: {
       careLevel: careLevel || null, mobility: mobility || null, roomNumber: roomNumber || null,
       insuranceProvider: insuranceProvider || null, insurancePolicyNumber: insurancePolicyNumber || null,
       carePlan: carePlan || null, carePlanGoals: carePlanGoals || null,
-      careAssessment: serializeClinical(ca.note, ca.domains, ca.wounds, meds, { surgeries, hospitalizations, attachments: ca.attachments }),
+      careAssessment: serializeClinical(ca.note, ca.domains, ca.wounds, meds, { surgeries, hospitalizations, attachments: ca.attachments, admissionDate: ca.admissionDate }),
     };
     // NOTE: medicalAssessment/diagnosis are NOT Resident columns — they live on the
     // Admission and the rcard reads them from there.
