@@ -477,7 +477,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     };
   };
 
-  const save = async (status: AssessmentStatus, extra: Partial<AssessmentV42> = {}, toast?: string) => {
+  const save = async (status: AssessmentStatus, extra: Partial<AssessmentV42> = {}, toast?: string, silent = false) => {
     if (!draft) return;
     // A DRAFT must capture whatever the assessor has entered across Layers 1–3, even
     // without a name yet (it lists as "Unnamed resident" and reopens). The name is only
@@ -499,18 +499,66 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
       }
       setDraft(rec);
       await persist(next);
-      recordAudit({
-        action: isEdit ? "UPDATE" : "CREATE",
-        entityType: "assessments",
-        entityId: rec.id,
-        residentName: rec.layer1.residentName?.trim() || undefined,
-        reason: `${status === "COMPLETED" ? "Completed" : isEdit ? "Updated" : "Started"} resident assessment for ${rec.layer1.residentName?.trim() || "resident"}`,
-      });
+      if (!silent) {
+        recordAudit({
+          action: isEdit ? "UPDATE" : "CREATE",
+          entityType: "assessments",
+          entityId: rec.id,
+          residentName: rec.layer1.residentName?.trim() || undefined,
+          reason: `${status === "COMPLETED" ? "Completed" : isEdit ? "Updated" : "Started"} resident assessment for ${rec.layer1.residentName?.trim() || "resident"}`,
+        });
+      }
       if (toast) Swal.fire({ title: toast, icon: "success", timer: 1600, showConfirmButton: false });
     } catch (e) {
       Swal.fire({ title: "Save failed", text: e instanceof Error ? e.message : "Could not save.", icon: "error" });
     } finally { setSaving(false); }
   };
+
+  // ── Auto-save ────────────────────────────────────────────────────────────────
+  // Persist the working draft without the assessor pressing "Save Draft", so an
+  // accidental close or tab switch never loses entered data. `updatedAt` is left
+  // out of the change key so re-stamping it on save can't trigger a save loop.
+  const contentKey = (d: Draft) => JSON.stringify({ ...d, updatedAt: undefined });
+  const autoSaveKeyRef = useRef<string | null>(null);
+  const flushAutoSave = useRef<() => void>(() => {});
+  flushAutoSave.current = () => {
+    if (!open || !draft || saving) return;
+    if (draft.status && draft.status !== "DRAFT") return; // never downgrade a finalized record
+    const key = contentKey(draft);
+    if (key === autoSaveKeyRef.current) return;           // nothing new since the last save
+    autoSaveKeyRef.current = key;
+    void save("DRAFT", {}, undefined, true);              // silent: no toast, no audit spam
+  };
+
+  // Debounce while the draft changes; seed a baseline on open so a freshly opened
+  // (untouched) record is never written back as a no-op.
+  useEffect(() => {
+    if (!open || !draft) { autoSaveKeyRef.current = null; return; }
+    if (draft.status && draft.status !== "DRAFT") return;
+    const key = contentKey(draft);
+    if (autoSaveKeyRef.current === null) { autoSaveKeyRef.current = key; return; }
+    if (key === autoSaveKeyRef.current) return;
+    const t = window.setTimeout(() => flushAutoSave.current(), 800);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, open]);
+
+  // Flush immediately on browser tab-hide / unload and on component unmount
+  // (switching portal tabs unmounts this board before the debounce could fire).
+  useEffect(() => {
+    const flush = () => flushAutoSave.current();
+    document.addEventListener("visibilitychange", flush);
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", flush);
+      window.removeEventListener("beforeunload", flush);
+      flush();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Flush before an explicit close so the final edits are captured pre-debounce.
+  const closeModal = () => { flushAutoSave.current(); setOpen(false); };
 
   // "Complete Assessment" → COMPLETED. Never downgrade an already-VALIDATED assessment
   // (validation is the terminal state; completing after sign-off must not revert it).
@@ -837,7 +885,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
 
       {/* Three-layer form modal */}
       {open && draft && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
           <div role="dialog" aria-modal="true" aria-label="Resident assessment v4.2" className="flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-2xl shadow-2xl sm:max-h-[92vh] sm:max-w-3xl sm:rounded-2xl" style={{ backgroundColor: "var(--clinical-ground)" }}>
             {/* Header */}
             <div className="flex flex-none items-center justify-between px-5 py-4 text-white" style={{ backgroundColor: "var(--clinical-panel)" }}>
@@ -845,7 +893,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/75">Resident Assessment v4.2</p>
                 <h2 className="text-lg font-bold truncate" style={{ fontFamily: DISPLAY }}>{draft.layer1.residentName || "New Assessment"}</h2>
               </div>
-              <button onClick={() => setOpen(false)} aria-label="Close" className="rounded-lg p-2 hover:bg-white/10"><X className="w-5 h-5" /></button>
+              <button onClick={() => closeModal()} aria-label="Close" className="rounded-lg p-2 hover:bg-white/10"><X className="w-5 h-5" /></button>
             </div>
 
             {/* Live raw-score bar (out of 56) */}
