@@ -33,7 +33,7 @@ import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAs
 import FacilityRooms from "@/components/portal/views/FacilityRooms";
 import StaffProfilesBoard from "@/components/portal/views/clinical/StaffProfilesBoard";
 import FeatureMatrixDashboard from "@/components/portal/views/superadmin/FeatureMatrixDashboard";
-import { Trash2, Search, Eye, Edit, X, XCircle, UserPlus } from "lucide-react";
+import { Trash2, Search, Eye, Edit, X, XCircle, UserPlus, KeyRound } from "lucide-react";
 import { useState, useMemo } from "react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -186,6 +186,28 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     }
   };
 
+  const resetStaffPassword = async (member: StaffMember) => {
+    const result = await Swal.fire({
+      title: `Reset ${member.name}'s password?`,
+      text: "Clears their current password so they set a new one on their next sign-in (company name + mobile number → first-time setup). Use this for accounts created with an auto-generated password.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#2563eb",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Reset",
+      cancelButtonText: "Cancel",
+    });
+    if (!result.isConfirmed) return;
+    try {
+      const res = await fetch(`/api/staff/${member.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ resetPassword: true }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Could not reset the password.");
+      await refetch();
+      Swal.fire({ title: "Password reset", text: `${member.name} will set a new password on their next sign-in.`, icon: "success", timer: 2000, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: "Reset Failed", text: err instanceof Error ? err.message : "Could not reset the password.", icon: "error" });
+    }
+  };
+
   const startEditing = (member: StaffMember) => {
     setEditingStaff(member);
     setEditForm({
@@ -258,8 +280,8 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   };
 
   const handleCreateStaff = async () => {
-    if (!createForm.name.trim() || !createForm.email.trim()) {
-      Swal.fire({ title: "Missing Fields", text: "Name and email are required.", icon: "warning" });
+    if (!createForm.name.trim() || !createForm.email.trim() || !createForm.phone.trim()) {
+      Swal.fire({ title: "Missing Fields", text: "Name, email, and mobile number are required — the mobile number is the staff member's sign-in ID.", icon: "warning" });
       return;
     }
     const result = await Swal.fire({
@@ -619,6 +641,9 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                         >
                           {staff.approved}
                         </span>
+                        {staff.needsFirstPassword
+                          ? <span className="mt-1 block text-[10px] font-semibold text-amber-600">First-time pending</span>
+                          : <span className="mt-1 block text-[10px] text-gray-400">Password set</span>}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -636,6 +661,15 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                           >
                             <Edit className="w-4 h-4" />
                           </button>
+                          {!staff.needsFirstPassword && (
+                            <button
+                              onClick={() => resetStaffPassword(staff)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                              title="Reset password — they set a new one on next sign-in"
+                            >
+                              <KeyRound className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -696,6 +730,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                     <p className="text-sm text-gray-600 truncate">{staff.position}</p>
                     <p className="text-xs text-gray-500 truncate">{staff.department}</p>
                     <p className="text-xs text-gray-500 truncate mt-1">{staff.email?.endsWith(".slms.local") ? "No email" : staff.email}</p>
+                    <p className={`text-[11px] font-semibold mt-1 ${staff.needsFirstPassword ? "text-amber-600" : "text-gray-400"}`}>{staff.needsFirstPassword ? "First-time password pending" : "Password set"}</p>
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => setViewingStaff(staff)}
@@ -711,6 +746,15 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                         <Edit className="w-4 h-4 inline mr-1" />
                         Edit
                       </button>
+                      {!staff.needsFirstPassword && (
+                        <button
+                          onClick={() => resetStaffPassword(staff)}
+                          className="px-3 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded text-sm font-medium transition"
+                          title="Reset password — they set a new one on next sign-in"
+                        >
+                          <KeyRound className="w-4 h-4 inline" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1093,7 +1137,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                 <h3 className="text-lg font-bold text-slate-900">Add staff member</h3>
                 <button onClick={() => setCreatingStaff(false)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><XCircle className="h-5 w-5" /></button>
               </div>
-              <p className="mb-4 text-sm text-slate-500">Enter the staff member&apos;s details. A first-time password is generated automatically and shown once after you create the account.</p>
+              <p className="mb-4 text-sm text-slate-500">Enter the staff member&apos;s details. They sign in with your company name + their mobile number, and set their own password on first login.</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <label className="mb-1 block text-xs font-semibold text-slate-600">Full name</label>
@@ -1116,7 +1160,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-600">Mobile number <span className="font-normal text-slate-400">(optional)</span></label>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Mobile number <span className="font-normal text-blue-600">*sign-in ID</span></label>
                   <input
                     type="tel"
                     value={createForm.phone}
@@ -1197,7 +1241,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                     className="w-full resize-none rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                <div className="sm:col-span-2 rounded-xl bg-blue-50 px-3.5 py-2.5 text-xs text-blue-700">A first-time password is generated automatically and shown once when you create the account — copy it and share it with the staff member.</div>
+                <div className="sm:col-span-2 rounded-xl bg-blue-50 px-3.5 py-2.5 text-xs text-blue-700">No password needed here — the staff member sets their own on first login. They sign in with your company name + their mobile number.</div>
                 <div className="sm:col-span-2 flex gap-2 pt-1">
                   <button type="button" onClick={() => setCreatingStaff(false)} className="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
                   <button type="button" onClick={handleCreateStaff} className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700">Add staff member</button>

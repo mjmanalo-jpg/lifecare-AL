@@ -204,6 +204,9 @@ export function adaptStaff(s: any) {
     experience: s.experience ?? "",
     documents: Array.isArray(s.documents) ? s.documents : [],
     startDate: s.hireDate ? new Date(s.hireDate).toISOString().slice(0, 10) : "—",
+    // Derived server-side flag (see /api/db GET): true = account still on first-time
+    // setup (no password), so an admin can reset auto-provisioned accounts.
+    needsFirstPassword: !!s.user?.needsFirstPassword,
     raw: s,
   };
 }

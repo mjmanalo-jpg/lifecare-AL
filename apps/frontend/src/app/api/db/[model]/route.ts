@@ -80,7 +80,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const data = model === "app-settings"
       ? (rows as Array<{ key?: string; id: string }>).filter((r) => !String(r.key || r.id).startsWith("__"))
       : rows;
-    return NextResponse.json({ data, count: data.length });
+    // An included `user` relation (?include=user) otherwise carries the bcrypt
+    // passwordHash + Supabase authUserId straight to the client. Strip them and
+    // expose only a derived first-time-setup flag (mirrors org-admin overview API).
+    const sanitized = (data as Array<Record<string, unknown>>).map((row) => {
+      const u = row?.user as Record<string, unknown> | undefined;
+      if (u && typeof u === "object" && "passwordHash" in u) {
+        const { passwordHash, authUserId, ...rest } = u;
+        void authUserId;
+        return { ...row, user: { ...rest, needsFirstPassword: !passwordHash } };
+      }
+      return row;
+    });
+    return NextResponse.json({ data: sanitized, count: sanitized.length });
   } catch {
     return NextResponse.json({ error: "Query failed" }, { status: 500 });
   }

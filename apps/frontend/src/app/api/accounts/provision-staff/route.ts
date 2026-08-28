@@ -43,6 +43,9 @@ export async function POST(request: NextRequest) {
   const isApproved = body.isApproved !== false;
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ error: "A valid email is required" }, { status: 400 });
+  // Mobile number is the staff member's sign-in ID (company + mobile → first-time
+  // setup); without it the account can never log in, so require a real one.
+  if (!phone || normalizeMobile(phone).length < 7) return NextResponse.json({ error: "A valid mobile number is required — it is the staff member's sign-in ID" }, { status: 400 });
 
   const organizationId = context.organizationId;
   const communityId = context.communityId;
