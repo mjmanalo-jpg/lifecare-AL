@@ -8,7 +8,7 @@
  * Migration-free: endorsements are a JSON array in the app-setting `shift_endorsements`.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FileText, Plus, X, AlertTriangle, Sparkles, ArrowLeft, ArrowLeftRight, ChevronDown, ChevronUp,
   User, Clock, Heart, Droplets, Accessibility, Shield, Brain, Pill, Calendar, Siren, ShieldCheck, CheckCircle2, Check, Trash2, ClipboardList,
@@ -348,14 +348,25 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
 
   const grouped = useMemo(() => { const m = new Map<string, Endorsement[]>(); filteredByRange.forEach((e) => { const a = m.get(e.date); if (a) a.push(e); else m.set(e.date, [e]); }); return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0])); }, [filteredByRange]);
 
-  const createEndorsement = async (data: { shiftLabel: string; shiftRange: string; generalNotes?: string; medicationNotes?: string; aiSummary?: string }) => {
+  type EndorsementDraft = { shiftLabel: string; shiftRange: string; generalNotes?: string; medicationNotes?: string; aiSummary?: string };
+  // Silent upsert used by the modal's auto-save + Save Draft: creates a PENDING
+  // record on first save, updates it thereafter. Returns the record id so the
+  // modal keeps writing to the same draft (no duplicates).
+  const saveEndorsement = async (data: EndorsementDraft, id?: string): Promise<string> => {
+    const existing = id ? items.find((e) => e.id === id) : undefined;
+    if (existing) { await persist(items.map((e) => (e.id === id ? { ...e, ...data } : e))); return existing.id; }
     const rec: Endorsement = { ...data, id: newId(), number: `#${2940000 + items.length + 1}`, date: isoDate(new Date()), outgoingBy: clinicianName, outgoingById: clinicianUserId, authorRole: clinicianRole, incomingBy: "(pending)", signedAt: nowTime(), status: "PENDING", residents: [], carryOvers: [], checklist: {}, createdAt: new Date().toISOString() };
     await persist([rec, ...items]);
+    return rec.id;
+  };
+  // Finalize (PIN-signed "Create Endorsement"): audit + close. The content was
+  // already persisted via saveEndorsement, so this just records + dismisses.
+  const finalizeEndorsement = (id: string, data: EndorsementDraft) => {
     recordAudit({
       action: "CREATE",
       entityType: "shift-endorsements",
-      entityId: rec.id,
-      reason: `Created shift endorsement ${rec.number} — ${data.shiftLabel}${data.shiftRange ? ` (${data.shiftRange})` : ""}`,
+      entityId: id,
+      reason: `Created shift endorsement — ${data.shiftLabel}${data.shiftRange ? ` (${data.shiftRange})` : ""}`,
     });
     setNewOpen(false);
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Endorsement created", showConfirmButton: false, timer: 1600 });
@@ -412,22 +423,51 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
             ))}
           </div>}
 
-      {newOpen && <NewEndorsementModal onClose={() => setNewOpen(false)} onCreate={createEndorsement} />}
+      {newOpen && <NewEndorsementModal onClose={() => setNewOpen(false)} onSave={saveEndorsement} onDone={finalizeEndorsement} />}
     </div>
   );
 }
 
 // ── New Endorsement modal ────────────────────────────────────────────────────
-function NewEndorsementModal({ onClose, onCreate }: { onClose: () => void; onCreate: (d: { shiftLabel: string; shiftRange: string; generalNotes?: string; medicationNotes?: string; aiSummary?: string }) => Promise<void> }) {
+function NewEndorsementModal({ onClose, onSave, onDone }: { onClose: () => void; onSave: (d: { shiftLabel: string; shiftRange: string; generalNotes?: string; medicationNotes?: string; aiSummary?: string }, id?: string) => Promise<string>; onDone: (id: string, d: { shiftLabel: string; shiftRange: string }) => void }) {
   const [shiftIdx, setShiftIdx] = useState(currentShiftIdx);
   const [general, setGeneral] = useState("");
   const [med, setMed] = useState("");
   const [ai, setAi] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savedTick, setSavedTick] = useState(false); // brief "Draft saved" confirmation
   const [aiLoading, setAiLoading] = useState(false);
   const [recapLoading, setRecapLoading] = useState(false);
   const [signOpen, setSignOpen] = useState(false);
   const sh = SHIFT_TYPES[shiftIdx];
+  // Id of the draft record once first saved — auto-save + Save Draft write to it.
+  const draftIdRef = useRef<string | null>(null);
+  const savingRef = useRef(false);
+  const hasContent = () => !!(general.trim() || med.trim() || ai.trim());
+  const draftData = () => ({ shiftLabel: sh.label, shiftRange: sh.range, generalNotes: general || undefined, medicationNotes: med || undefined, aiSummary: ai || undefined });
+  const persistDraft = async () => {
+    if (savingRef.current) return draftIdRef.current;
+    savingRef.current = true;
+    try { const id = await onSave(draftData(), draftIdRef.current ?? undefined); if (id) draftIdRef.current = id; return id; }
+    finally { savingRef.current = false; }
+  };
+  // Debounced auto-save: persists the draft ~1s after typing stops, once there's
+  // any content. Never blocks the UI; the record is PENDING until finalized.
+  useEffect(() => {
+    if (!hasContent()) return;
+    const t = window.setTimeout(() => { void persistDraft(); }, 1000);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [general, med, ai, shiftIdx]);
+  // Flush the latest edits on unmount (e.g. accidental close) so nothing is lost.
+  useEffect(() => () => { if (hasContent()) void persistDraft(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const saveDraft = async () => {
+    if (!hasContent()) return;
+    setSaving(true);
+    try { await persistDraft(); setSavedTick(true); window.setTimeout(() => setSavedTick(false), 1800); }
+    finally { setSaving(false); }
+  };
+  const closeModal = () => { if (hasContent()) void persistDraft(); onClose(); };
 
   // Auto-fill the whole endorsement from what actually happened this shift — the
   // meds given, incidents filed, escalations raised, tasks completed, plus open
@@ -460,13 +500,13 @@ function NewEndorsementModal({ onClose, onCreate }: { onClose: () => void; onCre
     } catch { setAi(compose()); }
     finally { setAiLoading(false); }
   };
-  const submit = async () => { setSaving(true); try { await onCreate({ shiftLabel: sh.label, shiftRange: sh.range, generalNotes: general || undefined, medicationNotes: med || undefined, aiSummary: ai || undefined }); } finally { setSaving(false); } };
+  const submit = async () => { setSaving(true); try { const id = await persistDraft(); if (id) onDone(id, { shiftLabel: sh.label, shiftRange: sh.range }); } finally { setSaving(false); } };
   const ta = "w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
   const lbl = "text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 block";
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"><h2 className="font-bold text-slate-900 text-lg flex items-center gap-2"><FileText className="w-5 h-5" /> New Shift Endorsement</h2><button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button></div>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"><h2 className="font-bold text-slate-900 text-lg flex items-center gap-2"><FileText className="w-5 h-5" /> New Shift Endorsement</h2><button onClick={closeModal} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button></div>
         <div className="p-5 overflow-y-auto flex-1 space-y-4">
           <div>
             <button onClick={autofill} disabled={recapLoading} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold hover:opacity-95 disabled:opacity-60"><Sparkles className="w-4 h-4" /> {recapLoading ? "Pulling your shift…" : "Auto-fill from my shift activity"}</button>
@@ -484,7 +524,11 @@ function NewEndorsementModal({ onClose, onCreate }: { onClose: () => void; onCre
             <textarea rows={3} value={ai} onChange={(e) => setAi(e.target.value)} placeholder="AI-generated narrative will appear here, or type manually…" className={ta} />
           </div>
         </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button><button onClick={() => setSignOpen(true)} disabled={saving} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? "Creating…" : "Create Endorsement"}</button></div>
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100">
+          <button onClick={closeModal} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button onClick={saveDraft} disabled={saving || !hasContent()} title="Save what you've entered without finalizing — auto-saves as you type" className="px-4 py-2 rounded-xl text-sm font-semibold text-blue-700 border border-blue-200 hover:bg-blue-50 disabled:opacity-50">{savedTick ? "Draft saved ✓" : "Save Draft"}</button>
+          <button onClick={() => setSignOpen(true)} disabled={saving} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? "Saving…" : "Create Endorsement"}</button>
+        </div>
       </div>
       <SignatureModal open={signOpen} onClose={() => setSignOpen(false)} onSigned={submit} title="Sign shift endorsement" description="Enter your 4-digit signing PIN to sign off and create this endorsement." />
     </div>
