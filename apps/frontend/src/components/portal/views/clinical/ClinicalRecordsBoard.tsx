@@ -102,7 +102,7 @@ function StatusChip({ label, accent }: { label: string; accent: Accent }) {
   );
 }
 
-export default function ClinicalRecordsBoard({ clinicianRole = "NURSE", readOnly = false }: { clinicianRole?: ClinicianRole; readOnly?: boolean }) {
+export default function ClinicalRecordsBoard({ clinicianRole = "NURSE", readOnly = false, residentId: residentIdProp }: { clinicianRole?: ClinicianRole; readOnly?: boolean; residentId?: string }) {
   // clinicianRole is kept for parity with sibling clinical boards.
   useClinician(clinicianRole);
   const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
@@ -112,7 +112,7 @@ export default function ClinicalRecordsBoard({ clinicianRole = "NURSE", readOnly
   // Vaccines are model-backed (not in the app-setting store) so they flow to the rcard.
   const vaxQ = useLiveQuery<Record<string, unknown>>("vaccinations", { query: "take=500", tables: ["Vaccination"] });
 
-  const [residentId, setResidentId] = useState("");
+  const [residentId, setResidentId] = useState(residentIdProp ?? "");
   const [tab, setTab] = useState<TabId>("labs");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<BaseRec | null>(null);
@@ -208,13 +208,15 @@ export default function ClinicalRecordsBoard({ clinicianRole = "NURSE", readOnly
         )}
       />
 
-      <div className="mt-5 mb-5 flex items-center gap-3">
-        <FieldLabel htmlFor="clr-resident">Resident</FieldLabel>
-        <select id="clr-resident" value={residentId} onChange={(e) => setResidentId(e.target.value)} className={`${controlClass} w-full sm:w-72 -mt-1.5`}>
-          <option value="">Select a resident…</option>
-          {residents.map((r) => <option key={r.id} value={r.id}>{r.room ? `Rm ${r.room} — ` : ""}{r.name}</option>)}
-        </select>
-      </div>
+      {!residentIdProp && (
+        <div className="mt-5 mb-5 flex items-center gap-3">
+          <FieldLabel htmlFor="clr-resident">Resident</FieldLabel>
+          <select id="clr-resident" value={residentId} onChange={(e) => setResidentId(e.target.value)} className={`${controlClass} w-full sm:w-72 -mt-1.5`}>
+            <option value="">Select a resident…</option>
+            {residents.map((r) => <option key={r.id} value={r.id}>{r.room ? `Rm ${r.room} — ` : ""}{r.name}</option>)}
+          </select>
+        </div>
+      )}
 
       {!residentId ? (
         <div className="@container">

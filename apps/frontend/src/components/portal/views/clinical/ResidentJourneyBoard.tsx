@@ -85,7 +85,7 @@ const settingVal = (rows: Row[], key: string) => rows.find((r) => s(r.key || r.i
 const parseArr = (raw: string | undefined): Row[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? v : []; } catch { return []; } };
 const parseObj = (raw: string | undefined): Record<string, Row[]> => { if (!raw) return {}; try { const v = JSON.parse(raw); return v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch { return {}; } };
 
-export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly = false }: { clinicianRole?: ClinicianRole; readOnly?: boolean }) {
+export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly = false, residentId }: { clinicianRole?: ClinicianRole; readOnly?: boolean; residentId?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   // Portal segment from the live URL (nurse / care_manager / …) — the Care Manager
@@ -115,7 +115,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
     };
   }), [resQ.data]);
 
-  const [resId, setResId] = useState("");
+  const [resId, setResId] = useState(residentId ?? "");
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState<JourneyCategory | "ALL">("ALL");
   const [view, setView] = useState<"journey" | "forms">("journey");
@@ -279,7 +279,9 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
   }, [events]);
 
   // ── Resident picker ─────────────────────────────────────────────────────────
-  if (!resident) {
+  // When embedded with a fixed residentId, never show the chooser: render a
+  // loading state until the resident row resolves, then the journey below.
+  if (!resident && !residentId) {
     return (
       <ClinicalPage>
         <ClinicalHeader title="One Care · One Journey" subtitle="Every record and form for a resident, compiled into one continuous journey." />
@@ -306,11 +308,21 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
   }
 
   // ── Resident journey ─────────────────────────────────────────────────────────
+  // Embedded (locked) instance whose resident row hasn't resolved yet.
+  if (!resident) {
+    return (
+      <ClinicalPage>
+        <DataState loading={resQ.loading} error={resQ.error} empty={!resQ.loading} emptyTitle="Resident not found" emptyHint="This resident could not be loaded." onRetry={() => void resQ.refetch()} skeletonRows={5}>
+          <div />
+        </DataState>
+      </ClinicalPage>
+    );
+  }
   return (
     <ClinicalPage>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <ClinicalButton variant="secondary" size="sm" onClick={() => { setResId(""); setCat("ALL"); }}><ChevronRight className="h-4 w-4 rotate-180" /> Residents</ClinicalButton>
+          {!residentId && <ClinicalButton variant="secondary" size="sm" onClick={() => { setResId(""); setCat("ALL"); }}><ChevronRight className="h-4 w-4 rotate-180" /> Residents</ClinicalButton>}
           <div>
             <h1 className="text-2xl font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>{resident.name}</h1>
             <p className="text-sm text-[var(--clinical-muted)]">One Care · One Journey{resident.room ? ` — Room ${resident.room}` : ""}</p>

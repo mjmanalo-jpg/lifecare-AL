@@ -97,7 +97,7 @@ const kg = (w: number) => (Number.isInteger(w) ? String(w) : w.toFixed(1));
 const RANGE_OPTIONS = [7, 14, 30] as const;
 type RangeDays = (typeof RANGE_OPTIONS)[number];
 
-export default function ResidentCareHistory({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
+export default function ResidentCareHistory({ clinicianRole = "NURSE", residentId: residentIdProp }: { clinicianRole?: ClinicianRole; residentId?: string }) {
   // allEntries spans ALL dates (not just today) so past days populate the grid.
   const { residents, allEntries: entries } = useCareLogData(clinicianRole);
   const { data: settingRows } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
@@ -105,7 +105,7 @@ export default function ResidentCareHistory({ clinicianRole = "NURSE" }: { clini
   const now = new Date();
   const todayIso = isoDay(now);
 
-  const [resId, setResId] = useState("");
+  const [resId, setResId] = useState(residentIdProp ?? "");
   const [rangeDays, setRangeDays] = useState<RangeDays>(14);
   // windowEnd = last (rightmost) day shown; defaults to today, arrows page it.
   const [windowEnd, setWindowEnd] = useState(todayIso);
@@ -204,10 +204,12 @@ export default function ResidentCareHistory({ clinicianRole = "NURSE" }: { clini
             {resident && (
               <ClinicalButton variant="secondary" size="sm" onClick={() => window.print()}><Printer className="h-4 w-4" /> Export PDF</ClinicalButton>
             )}
-            <select value={resId} onChange={(e) => { setResId(e.target.value); setWindowEnd(todayIso); }} aria-label="Select resident" className={`${controlClass} w-full sm:w-64`}>
-              <option value="">Select resident…</option>
-              {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>Rm {s(r.room)} — {s(r.name)}</option>)}
-            </select>
+            {!residentIdProp && (
+              <select value={resId} onChange={(e) => { setResId(e.target.value); setWindowEnd(todayIso); }} aria-label="Select resident" className={`${controlClass} w-full sm:w-64`}>
+                <option value="">Select resident…</option>
+                {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>Rm {s(r.room)} — {s(r.name)}</option>)}
+              </select>
+            )}
             <div className="inline-flex overflow-hidden rounded-lg border" style={{ borderColor: "var(--clinical-line-strong)" }}>
               {RANGE_OPTIONS.map((d) => (
                 <button
@@ -223,7 +225,9 @@ export default function ResidentCareHistory({ clinicianRole = "NURSE" }: { clini
       />
 
       <div className="mt-5">
-        {!resident ? (
+        {!resident && residentIdProp ? (
+          <div className="rounded-xl border-2 border-dashed p-16 text-center text-sm text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line-strong)", backgroundColor: "var(--clinical-surface)" }}>Loading care history…</div>
+        ) : !resident ? (
           <div className="@container">
             <div className="mb-4 flex items-center gap-2">
               <ClipboardList className="h-5 w-5 text-[var(--clinical-panel)]" />

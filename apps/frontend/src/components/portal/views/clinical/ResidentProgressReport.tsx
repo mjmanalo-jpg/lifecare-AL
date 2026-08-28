@@ -83,7 +83,7 @@ const CARE_RESOURCES: { resource: string; table: string; group: string }[] = [
 ];
 const CARE_GROUP_ORDER = ["Vitals", "Meals & Nutrition", "Elimination", "Mood & Behavior", "Pain Management", "Mobility & Activity", "Sleep & Rest"];
 
-export default function ResidentProgressReport({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
+export default function ResidentProgressReport({ clinicianRole = "NURSE", residentId: residentIdProp }: { clinicianRole?: ClinicianRole; residentId?: string }) {
   const { name: clinicianName } = useClinician(clinicianRole);
 
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
@@ -112,7 +112,7 @@ export default function ResidentProgressReport({ clinicianRole = "NURSE" }: { cl
     [c0.data, c1.data, c2.data, c3.data, c4.data, c5.data, c6.data, c7.data, c8.data, c9.data]);
 
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
-  const [residentId, setResidentId] = useState("");
+  const [residentId, setResidentId] = useState(residentIdProp || "");
   const [period, setPeriod] = useState<PeriodKey>("month");
   const resident = useMemo(() => residents.find((r: Row) => s(r.id) === residentId) || null, [residents, residentId]);
   const { start, end } = useMemo(() => rangeFor(period), [period]);
@@ -265,12 +265,14 @@ export default function ResidentProgressReport({ clinicianRole = "NURSE" }: { cl
       </div>
 
       <div className="flex flex-wrap items-center gap-4 mb-5">
-        <label className="flex items-center gap-2 text-sm"><span className="font-bold text-slate-700">Resident:</span>
-          <select value={residentId} onChange={(e) => setResidentId(e.target.value)} className={selCls}>
-            <option value="">Select a resident…</option>
-            {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>Rm {s(r.room)} — {s(r.name)}</option>)}
-          </select>
-        </label>
+        {!residentIdProp && (
+          <label className="flex items-center gap-2 text-sm"><span className="font-bold text-slate-700">Resident:</span>
+            <select value={residentId} onChange={(e) => setResidentId(e.target.value)} className={selCls}>
+              <option value="">Select a resident…</option>
+              {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>Rm {s(r.room)} — {s(r.name)}</option>)}
+            </select>
+          </label>
+        )}
         <label className="flex items-center gap-2 text-sm"><span className="font-bold text-slate-700">Period:</span>
           <select value={period} onChange={(e) => setPeriod(e.target.value as PeriodKey)} className={selCls}>
             {PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
@@ -279,6 +281,9 @@ export default function ResidentProgressReport({ clinicianRole = "NURSE" }: { cl
       </div>
 
       {!resident ? (
+        residentIdProp ? (
+          <p className="text-sm text-slate-400">Loading resident…</p>
+        ) : (
         <div className="@container">
           <div className="mb-4 flex items-center gap-2">
             <FileText className="w-5 h-5 text-slate-400" />
@@ -305,6 +310,7 @@ export default function ResidentProgressReport({ clinicianRole = "NURSE" }: { cl
             </div>
           )}
         </div>
+        )
       ) : (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-8">
           {/* Report header */}
