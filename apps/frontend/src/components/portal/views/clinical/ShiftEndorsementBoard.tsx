@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FileText, Plus, X, AlertTriangle, Sparkles, ArrowLeft, ArrowLeftRight, ChevronDown, ChevronUp,
-  User, Clock, Heart, Droplets, Accessibility, Shield, Brain, Pill, Calendar, Siren, ShieldCheck, CheckCircle2, Check, Trash2, ClipboardList,
+  User, Clock, Heart, Droplets, Accessibility, Shield, Brain, Pill, Calendar, Siren, ShieldCheck, CheckCircle2, Check, Trash2, Pencil, ClipboardList,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -162,6 +162,7 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
   const [activeId, setActiveId] = useState("");
   const [range, setRange] = useState<"today" | "week" | "month">("today");
   const [newOpen, setNewOpen] = useState(false);
+  const [editing, setEditing] = useState<Endorsement | null>(null); // edit an existing endorsement's content
   const active = items.find((e) => e.id === activeId) || null;
 
   const persist = async (next: Endorsement[]) => { await upsertRecord("app-settings", KEY, { key: KEY, value: JSON.stringify(next) }); await refetch(); };
@@ -361,15 +362,24 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
   };
   // Finalize (PIN-signed "Create Endorsement"): audit + close. The content was
   // already persisted via saveEndorsement, so this just records + dismisses.
-  const finalizeEndorsement = (id: string, data: EndorsementDraft) => {
+  const finalizeEndorsement = (id: string, data: EndorsementDraft, edit = false) => {
     recordAudit({
-      action: "CREATE",
+      action: edit ? "UPDATE" : "CREATE",
       entityType: "shift-endorsements",
       entityId: id,
-      reason: `Created shift endorsement — ${data.shiftLabel}${data.shiftRange ? ` (${data.shiftRange})` : ""}`,
+      reason: `${edit ? "Updated" : "Created"} shift endorsement — ${data.shiftLabel}${data.shiftRange ? ` (${data.shiftRange})` : ""}`,
     });
-    setNewOpen(false);
-    Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Endorsement created", showConfirmButton: false, timer: 1600 });
+    setNewOpen(false); setEditing(null);
+    Swal.fire({ toast: true, position: "top-end", icon: "success", title: edit ? "Endorsement updated" : "Endorsement created", showConfirmButton: false, timer: 1600 });
+  };
+  // Only the author (or a Care Manager, oversight) may edit/delete an endorsement.
+  const canModify = (e: Endorsement) => clinicianRole === "CARE_MANAGER" || (e.outgoingById ? clinicianUserId === e.outgoingById : clinicianName === e.outgoingBy);
+  const deleteEndorsement = async (e: Endorsement) => {
+    const c = await Swal.fire({ title: "Delete endorsement?", html: `Delete <b>${e.number}</b> (${e.shiftLabel})? This can't be undone.`, icon: "warning", showCancelButton: true, confirmButtonColor: "#dc2626", confirmButtonText: "Delete" });
+    if (!c.isConfirmed) return;
+    await persist(items.filter((x) => x.id !== e.id));
+    recordAudit({ action: "DELETE", entityType: "shift-endorsements", entityId: e.id, reason: `Deleted shift endorsement ${e.number} — ${e.shiftLabel}` });
+    Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Endorsement deleted", showConfirmButton: false, timer: 1500 });
   };
 
   // ── Structured Details view ────────────────────────────────────────────────
@@ -412,9 +422,11 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
                       </div>
                       <p className="text-sm font-semibold text-slate-800 mt-2 flex items-center gap-1.5"><User className="w-4 h-4 text-slate-400" />{e.outgoingBy} → {e.incomingBy} <span className="font-normal text-slate-400 inline-flex items-center gap-1 ml-1"><Clock className="w-3.5 h-3.5" /> Signed {e.signedAt}</span></p>
                       {e.generalNotes && <div className="mt-2"><p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">General Notes</p><p className="text-sm text-slate-600">{e.generalNotes}</p></div>}
-                      <div className="flex items-center gap-2 mt-3">
+                      <div className="flex flex-wrap items-center gap-2 mt-3">
                         <button onClick={() => { setActiveId(e.id); setView("details"); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"><FileText className="w-4 h-4" /> Structured Details</button>
                         <button onClick={() => { setActiveId(e.id); setView("carryover"); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"><ArrowLeftRight className="w-4 h-4" /> Carry-Over & Sign-Off</button>
+                        {canModify(e) && e.status !== "ACKNOWLEDGED" && <button onClick={() => setEditing(e)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Pencil className="w-4 h-4" /> Edit</button>}
+                        {canModify(e) && <button onClick={() => deleteEndorsement(e)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-sm font-semibold text-red-600 hover:bg-red-50"><Trash2 className="w-4 h-4" /> Delete</button>}
                       </div>
                     </div>
                   ))}
@@ -423,17 +435,18 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
             ))}
           </div>}
 
-      {newOpen && <NewEndorsementModal onClose={() => setNewOpen(false)} onSave={saveEndorsement} onDone={finalizeEndorsement} />}
+      {(newOpen || editing) && <NewEndorsementModal existing={editing ?? undefined} onClose={() => { setNewOpen(false); setEditing(null); }} onSave={saveEndorsement} onDone={finalizeEndorsement} />}
     </div>
   );
 }
 
 // ── New Endorsement modal ────────────────────────────────────────────────────
-function NewEndorsementModal({ onClose, onSave, onDone }: { onClose: () => void; onSave: (d: { shiftLabel: string; shiftRange: string; generalNotes?: string; medicationNotes?: string; aiSummary?: string }, id?: string) => Promise<string>; onDone: (id: string, d: { shiftLabel: string; shiftRange: string }) => void }) {
-  const [shiftIdx, setShiftIdx] = useState(currentShiftIdx);
-  const [general, setGeneral] = useState("");
-  const [med, setMed] = useState("");
-  const [ai, setAi] = useState("");
+function NewEndorsementModal({ existing, onClose, onSave, onDone }: { existing?: Endorsement; onClose: () => void; onSave: (d: { shiftLabel: string; shiftRange: string; generalNotes?: string; medicationNotes?: string; aiSummary?: string }, id?: string) => Promise<string>; onDone: (id: string, d: { shiftLabel: string; shiftRange: string }, edit?: boolean) => void }) {
+  const isEdit = !!existing;
+  const [shiftIdx, setShiftIdx] = useState(() => { const i = existing ? SHIFT_TYPES.findIndex((t) => t.label === existing.shiftLabel) : -1; return i >= 0 ? i : currentShiftIdx(); });
+  const [general, setGeneral] = useState(existing?.generalNotes ?? "");
+  const [med, setMed] = useState(existing?.medicationNotes ?? "");
+  const [ai, setAi] = useState(existing?.aiSummary ?? "");
   const [saving, setSaving] = useState(false);
   const [savedTick, setSavedTick] = useState(false); // brief "Draft saved" confirmation
   const [aiLoading, setAiLoading] = useState(false);
@@ -441,7 +454,8 @@ function NewEndorsementModal({ onClose, onSave, onDone }: { onClose: () => void;
   const [signOpen, setSignOpen] = useState(false);
   const sh = SHIFT_TYPES[shiftIdx];
   // Id of the draft record once first saved — auto-save + Save Draft write to it.
-  const draftIdRef = useRef<string | null>(null);
+  // In edit mode it starts as the existing record's id so writes update it.
+  const draftIdRef = useRef<string | null>(existing?.id ?? null);
   const savingRef = useRef(false);
   const hasContent = () => !!(general.trim() || med.trim() || ai.trim());
   const draftData = () => ({ shiftLabel: sh.label, shiftRange: sh.range, generalNotes: general || undefined, medicationNotes: med || undefined, aiSummary: ai || undefined });
@@ -500,13 +514,13 @@ function NewEndorsementModal({ onClose, onSave, onDone }: { onClose: () => void;
     } catch { setAi(compose()); }
     finally { setAiLoading(false); }
   };
-  const submit = async () => { setSaving(true); try { const id = await persistDraft(); if (id) onDone(id, { shiftLabel: sh.label, shiftRange: sh.range }); } finally { setSaving(false); } };
+  const submit = async () => { setSaving(true); try { const id = await persistDraft(); if (id) onDone(id, { shiftLabel: sh.label, shiftRange: sh.range }, isEdit); } finally { setSaving(false); } };
   const ta = "w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
   const lbl = "text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 block";
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"><h2 className="font-bold text-slate-900 text-lg flex items-center gap-2"><FileText className="w-5 h-5" /> New Shift Endorsement</h2><button onClick={closeModal} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button></div>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"><h2 className="font-bold text-slate-900 text-lg flex items-center gap-2"><FileText className="w-5 h-5" /> {isEdit ? "Edit Shift Endorsement" : "New Shift Endorsement"}</h2><button onClick={closeModal} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button></div>
         <div className="p-5 overflow-y-auto flex-1 space-y-4">
           <div>
             <button onClick={autofill} disabled={recapLoading} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold hover:opacity-95 disabled:opacity-60"><Sparkles className="w-4 h-4" /> {recapLoading ? "Pulling your shift…" : "Auto-fill from my shift activity"}</button>
@@ -527,7 +541,7 @@ function NewEndorsementModal({ onClose, onSave, onDone }: { onClose: () => void;
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100">
           <button onClick={closeModal} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
           <button onClick={saveDraft} disabled={saving || !hasContent()} title="Save what you've entered without finalizing — auto-saves as you type" className="px-4 py-2 rounded-xl text-sm font-semibold text-blue-700 border border-blue-200 hover:bg-blue-50 disabled:opacity-50">{savedTick ? "Draft saved ✓" : "Save Draft"}</button>
-          <button onClick={() => setSignOpen(true)} disabled={saving} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? "Saving…" : "Create Endorsement"}</button>
+          <button onClick={() => (isEdit ? submit() : setSignOpen(true))} disabled={saving} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? "Saving…" : isEdit ? "Save Changes" : "Create Endorsement"}</button>
         </div>
       </div>
       <SignatureModal open={signOpen} onClose={() => setSignOpen(false)} onSigned={submit} title="Sign shift endorsement" description="Enter your 4-digit signing PIN to sign off and create this endorsement." />
