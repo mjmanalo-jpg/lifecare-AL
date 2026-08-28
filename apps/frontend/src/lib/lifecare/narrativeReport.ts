@@ -7,6 +7,7 @@
 // Print dialog (same approach as the SBAR export).
 
 import type { AssessmentV42, DomainEntry } from "./assessment.ts";
+import { originOf } from "./assessment.ts";
 import { ASSESSMENT_DOMAINS } from "./dataset.ts";
 
 const LEVEL_NAME: Record<string, string> = {
@@ -80,11 +81,17 @@ export function buildNarrativeHtml(a: AssessmentV42): string {
   const rawScore = ASSESSMENT_DOMAINS.filter((d) => d.scored).reduce((sum, d) => sum + scoreOf(a, d.code), 0);
   const levelName = l3.finalLevel ? (LEVEL_NAME[l3.finalLevel] || l3.finalLevel) : "To be confirmed";
   const V = (sg: string, pl: string) => (p.isPlural ? pl : sg); // verb agreement helper
+  // A reassessment carries a prior assessment forward, or was raised from the Care
+  // Acuity / LOC Decision Review board (origin ACUITY) for an already-admitted resident.
+  const isReassessment = has(l3.priorAssessmentId) || originOf(a) === "ACUITY";
+  const reportTitle = isReassessment ? "Resident Reassessment Report" : "Pre-Admission Resident Assessment Report";
+  const assessmentKind = isReassessment ? "Reassessment" : "Pre-Admission Assessment";
 
   // ── Identity block ──────────────────────────────────────────────────────────
   const idRows = [
     ["Resident", name],
     ["Age", age ? `${age} years old` : ""],
+    ["Assessment Type", assessmentKind],
     ["Assessment Date", l1.assessmentDate],
     ["Assessment Conducted By", [l1.assessor, l1.assessorRole].filter(Boolean).join(" / ")],
     ["Recommended Level of Care", levelName],
@@ -92,7 +99,9 @@ export function buildNarrativeHtml(a: AssessmentV42): string {
   ].filter(([, v]) => has(v)).map(([l, v]) => `<div class="idrow"><span class="idl">${esc(l as string)}:</span> <span class="idv">${esc(v as string)}</span></div>`).join("");
 
   // ── Purpose ─────────────────────────────────────────────────────────────────
-  const purpose = para(`A comprehensive pre-admission assessment was conducted to evaluate ${esc(p.nameRef)}'s current health status, functional abilities, mobility, cognitive function, and overall care requirements. The objective is to recommend the most appropriate level of care that promotes ${esc(p.poss)} safety, independence, and quality of life within the LifeCare Living community.`);
+  const purpose = para(isReassessment
+    ? `A comprehensive reassessment was conducted to re-evaluate ${esc(p.nameRef)}'s current health status, functional abilities, mobility, cognitive function, and overall care requirements. The objective is to confirm the most appropriate level of care that continues to promote ${esc(p.poss)} safety, independence, and quality of life within the LifeCare Living community.`
+    : `A comprehensive pre-admission assessment was conducted to evaluate ${esc(p.nameRef)}'s current health status, functional abilities, mobility, cognitive function, and overall care requirements. The objective is to recommend the most appropriate level of care that promotes ${esc(p.poss)} safety, independence, and quality of life within the LifeCare Living community.`);
 
   // ── Clinical summary (templated from captured data) ─────────────────────────
   const sexWord = p.female ? "female" : p.male ? "male" : "resident";
@@ -172,7 +181,9 @@ export function buildNarrativeHtml(a: AssessmentV42): string {
     : para(`${esc(p.nameRef)}'s assessment indicates ${esc(p.poss)} care needs are best met under ${esc(levelName)}, balancing independence with the right level of supervision and support.`);
   const interval = has(l3.reassessmentInterval) ? val(l3.reassessmentInterval) : "periodically";
   const recommendation =
-    para(`Based on the assessment findings, LifeCare Living recommends admission under <b>${esc(levelName)}</b>.`) +
+    para(isReassessment
+      ? `Based on the reassessment findings, LifeCare Living recommends ${esc(name)}'s level of care be set to <b>${esc(levelName)}</b>.`
+      : `Based on the assessment findings, LifeCare Living recommends admission under <b>${esc(levelName)}</b>.`) +
     para(`This level of care provides an appropriate balance between promoting independence and ensuring safety through personalized assistance, routine nursing oversight, structured daily activities, and a supportive residential environment.`) +
     para(`${esc(name)} is expected to benefit from regular supervision, medication management, and opportunities for social engagement while preserving ${esc(p.poss)} dignity and independence.`) +
     para(`A reassessment will be conducted ${esc(interval)}, or earlier if there is a significant change in ${esc(p.poss)} medical or functional condition, to ensure that ${esc(p.poss)} care plan continues to meet ${esc(p.poss)} evolving needs.`);
@@ -186,7 +197,7 @@ export function buildNarrativeHtml(a: AssessmentV42): string {
 
   const S = (title: string, inner: string) => (inner.trim() ? `<section><h2>${esc(title)}</h2>${inner}</section>` : "");
 
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Pre-Admission Resident Assessment Report — ${esc(name)}</title>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(reportTitle)} — ${esc(name)}</title>
 <style>
   *{box-sizing:border-box}
   body{font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;color:#1f2933;line-height:1.6;max-width:820px;margin:0 auto;padding:44px 48px;font-size:14px}
@@ -218,7 +229,7 @@ export function buildNarrativeHtml(a: AssessmentV42): string {
   <div class="brand"><span class="life">Life</span><span class="care">Care</span><span class="living">LIVING</span></div>
   <hr class="rule">
   <p class="company">LifeCare Living Solutions, Inc.</p>
-  <p class="title">Pre-Admission Resident Assessment Report</p>
+  <p class="title">${esc(reportTitle)}</p>
   ${idRows}
   ${S("Purpose of Assessment", purpose)}
   ${S("Clinical Summary", clinicalSummary)}
