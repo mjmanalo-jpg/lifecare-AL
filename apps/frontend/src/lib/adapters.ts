@@ -98,10 +98,13 @@ export function adaptTask(t: any) {
     resident: residentName(t.resident),
     room: t.resident?.roomNumber ?? "—",
     dueTime: t.dueDate
-      ? new Date(t.dueDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      ? new Date(t.dueDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Manila" })
       : "",
     priority: priorityTier(t.priority),
     category: humanize(t.category) || "General",
+    // Care-plan cadence (e.g. "Every shift", "Daily", "BID") lifted from the
+    // description the materializer stamps — empty for ad-hoc tasks. Chip on the card.
+    cadence: /Frequency:\s*([^·[]+)/.exec(t.description || "")?.[1]?.trim() ?? "",
     dueDate: t.dueDate ?? null,
     completed: t.status === "COMPLETED",
     notes: t.description ?? "",

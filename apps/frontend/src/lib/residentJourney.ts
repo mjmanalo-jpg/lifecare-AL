@@ -20,6 +20,7 @@ const pickDate = (r: Row, ...keys: string[]): string => {
 
 export type JourneyCategory =
   | "ADMISSION" | "ASSESSMENT" | "LOC" | "CARE_PLAN" | "ACUITY" | "CARE_EVENT"
+  | "TASK" | "CALL_BELL" | "REQUEST"
   | "MEDICATION" | "INCIDENT" | "WOUND" | "REFERRAL" | "CLINICAL_RECORD"
   | "ENDORSEMENT" | "WEIGHT" | "PRIVATE_CARE" | "OVERAGE" | "DOCUMENT" | "NOTE";
 
@@ -36,9 +37,12 @@ export const JOURNEY_CATEGORY_META: Record<JourneyCategory, JourneyCategoryMeta>
   ADMISSION: { label: "Admission & Intake", accent: "teal", tab: "residents" },
   ASSESSMENT: { label: "Assessment", accent: "teal", tab: "careacuity" },
   LOC: { label: "Level of Care", accent: "teal", tab: "careacuity" },
-  CARE_PLAN: { label: "Care Plan Review", accent: "green", tab: "careplans" },
+  CARE_PLAN: { label: "Care Plan", accent: "green", tab: "careplans" },
   ACUITY: { label: "Care Acuity", accent: "teal", tab: "careacuity" },
   CARE_EVENT: { label: "Care Event", accent: "green", tab: "caredelivery" },
+  TASK: { label: "Task", accent: "green", tab: "taskassignment" },
+  CALL_BELL: { label: "Call Bell", accent: "coral" },
+  REQUEST: { label: "Service Request", accent: "amber" },
   MEDICATION: { label: "Medication", accent: "ink", tab: "mar" },
   INCIDENT: { label: "Incident", accent: "coral", tab: "incidents" },
   WOUND: { label: "Wound Care", accent: "coral", tab: "woundcare" },
@@ -53,7 +57,8 @@ export const JOURNEY_CATEGORY_META: Record<JourneyCategory, JourneyCategoryMeta>
 };
 
 export const JOURNEY_CATEGORY_ORDER: JourneyCategory[] = [
-  "ADMISSION", "ASSESSMENT", "LOC", "ACUITY", "CARE_PLAN", "CARE_EVENT", "MEDICATION",
+  "ADMISSION", "ASSESSMENT", "LOC", "ACUITY", "CARE_PLAN", "CARE_EVENT", "TASK",
+  "CALL_BELL", "REQUEST", "MEDICATION",
   "INCIDENT", "WOUND", "REFERRAL", "CLINICAL_RECORD", "ENDORSEMENT",
   "WEIGHT", "PRIVATE_CARE", "OVERAGE", "DOCUMENT", "NOTE",
 ];
@@ -79,7 +84,11 @@ export interface JourneySources {
   locHistory?: Row[];
   careEvents?: Row[];
   assessmentsV42?: Row[];
+  carePlans?: Row[];          // CarePlan rows (the individualized plan document)
   carePlanReviews?: Row[];
+  tasks?: Row[];              // Task rows (caregiver assignments, incl. completions)
+  callBells?: Row[];          // CallBell rows
+  serviceRequests?: Row[];    // ServiceRequest rows (hotel/concierge)
   acuity?: Row[];
   woundRecords?: Row[];
   endorsements?: Row[];
@@ -146,6 +155,41 @@ export function buildJourney(src: JourneySources): JourneyEvent[] {
     });
   }
 
+  // Caregiver tasks — record only COMPLETED ones: the journey is the record of care
+  // actually delivered. Pending/scheduled cards live on the task board, not here.
+  // Anchored to completedAt so it reads on the date the care happened.
+  for (const t of forRes(src.tasks, rid)) {
+    if (s(t.status) !== "COMPLETED") continue;
+    push({
+      id: `task:${s(t.id)}`, category: "TASK",
+      title: `Task — ${s(t.title) || "care task"}`,
+      summary: [s(t.category).replace(/_/g, " "), s(t.description)].filter(Boolean).join(" · ").slice(0, 140) || undefined,
+      status: "Completed",
+      by: s(t.assignedTo?.name) || undefined,
+      date: pickDate(t, "completedAt", "dueDate", "createdAt"),
+    });
+  }
+
+  // Call bells — every request raised from the room and how it was resolved.
+  for (const b of forRes(src.callBells, rid)) {
+    push({
+      id: `callbell:${s(b.id)}`, category: "CALL_BELL",
+      title: `Call bell${b.reason ? ` — ${s(b.reason)}` : ""}`,
+      summary: s(b.notes) || undefined, status: titleCase(s(b.status).replace(/_/g, " ")),
+      date: pickDate(b, "createdAt"),
+    });
+  }
+
+  // Service requests — hotel / concierge / housekeeping tickets for the resident.
+  for (const r of forRes(src.serviceRequests, rid)) {
+    push({
+      id: `svcreq:${s(r.id)}`, category: "REQUEST",
+      title: `Service request — ${titleCase(s(r.category).replace(/_/g, " ")) || "logged"}`,
+      summary: s(r.details) || undefined, status: titleCase(s(r.status).replace(/_/g, " ")),
+      date: pickDate(r, "createdAt"),
+    });
+  }
+
   // Level-of-Care history.
   for (const e of forRes(src.locHistory, rid)) {
     push({
@@ -164,6 +208,18 @@ export function buildJourney(src: JourneySources): JourneyEvent[] {
       summary: a.total != null ? `Score ${s(a.total)}` : undefined,
       status: titleCase(s(a.status).replace(/_/g, " ")), by: s(a.createdBy) || undefined,
       date: pickDate(a, "decidedAt", "createdAt"),
+    });
+  }
+
+  // Care plans — the individualized plan document itself (created / approved),
+  // distinct from the periodic reviews below. Both share the CARE_PLAN category.
+  for (const p of forRes(src.carePlans, rid)) {
+    push({
+      id: `careplan-doc:${s(p.id)}`, category: "CARE_PLAN",
+      title: `Care plan — ${s(p.title) || "individualized"}`,
+      summary: (s(p.careGoals).slice(0, 140) || undefined),
+      status: titleCase(s(p.status)), by: s(p.approvedByName) || s(p.createdByName) || undefined,
+      date: pickDate(p, "startDate", "createdAt"),
     });
   }
 

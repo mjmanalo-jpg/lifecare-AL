@@ -91,7 +91,7 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
     case "rounds":
       return <CareAcuityBoard clinicianRole="CAREGIVER" />;
     case "careplans":
-      return <CarePlanReviewsBoard clinicianRole="CAREGIVER" />;
+      return <CarePlanReviewsBoard clinicianRole="CAREGIVER" tabs={["plans", "history"]} />;
     case "medications":
       return <NurseMedications />;
     case "documentation":

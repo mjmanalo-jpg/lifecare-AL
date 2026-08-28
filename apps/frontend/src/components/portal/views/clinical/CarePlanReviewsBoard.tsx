@@ -25,6 +25,7 @@ import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { activeLevel } from "@/lib/lifecare/activeLevel";
 import { parseLocHistory, LOC_HISTORY_KEY } from "@/lib/lifecare/locHistory";
+import { CAREGIVER_SCHEDULE_KEY, parseSchedules, assigneeForResidentToday } from "@/lib/caregiverSchedule";
 import { ClinicalButton, ClinicalCard, ClinicalModal, StatCard, DataState, FieldLabel, controlClass, StatusPill, SERIF } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -95,14 +96,26 @@ const parseIntervention = (line: string): { title: string; desc: string; freq: s
 export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: { clinicianRole?: ClinicianRole | "SUPERADMIN"; tabs?: Array<"plans" | "new" | "due" | "history" | "pending"> }) {
   // SUPERADMIN isn't a staff-linked clinician role; resolve its display name via the
   // admin path, while the finalize guards below key off the raw "SUPERADMIN" string.
-  const { name: clinicianName, userId: clinicianId } = useClinician(clinicianRole === "SUPERADMIN" ? "FACILITY_ADMIN" : clinicianRole);
+  const { name: clinicianName, userId: clinicianId, staffId: clinicianStaffId } = useClinician(clinicianRole === "SUPERADMIN" ? "FACILITY_ADMIN" : clinicianRole);
+  // Caregivers are view-only here: they can open the plan of record but cannot
+  // create, finalize, approve, or start a review. Only the "View" action shows,
+  // and they see ONLY the residents assigned to them (plans list + history).
+  const readOnly = clinicianRole === "CAREGIVER";
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const incQ = useLiveQuery<Row>("incidents", { query: "take=400", tables: ["Incident"] });
   const ceQ = useLiveQuery<Row>("care-events", { query: "take=1000", tables: ["CareEvent"] });
   const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
 
   const cpQ = useLiveQuery<Row>("care-plans", { query: "take=300", tables: ["CarePlan"] });
-  const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
+  const residents = useMemo(() => {
+    const all = (resQ.data || []).map(adaptResident);
+    if (clinicianRole !== "CAREGIVER" || !clinicianStaffId) return all;
+    // Scope to the residents assigned to this caregiver today (same roster the
+    // task materializer + /api/caregiver/my-residents use).
+    const schedules = parseSchedules(settingRows.find((r) => (r.key || r.id) === CAREGIVER_SCHEDULE_KEY)?.value);
+    const now = new Date();
+    return all.filter((r: Row) => assigneeForResidentToday(schedules, s(r.id), now, "Asia/Manila")?.caregiverStaffId === clinicianStaffId);
+  }, [resQ.data, settingRows, clinicianRole, clinicianStaffId]);
   const reviews = useMemo(() => parseReviews(settingRows.find((r) => (r.key || r.id) === REVIEW_KEY)?.value), [settingRows]);
   // Editable per-resident builder snapshots (migration-free) — the source of
   // truth the CarePlanBuilder hydrates from and auto-saves to, so a nurse's
@@ -367,12 +380,14 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
 
       {tab === "plans" && (
         <>
+          {!readOnly && (
           <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatCard value={residents.length} label="Residents" accent="ink" icon={Users} />
             <StatCard value={activePlanByResident.size} label="Active Plans" accent="teal" icon={ClipboardCheck} hint="Released & generating tasks" />
             <StatCard value={residents.filter((r: Row) => draftPlansByResident.has(s(r.id)) && !activePlanByResident.has(s(r.id))).length} label="Drafts" accent="amber" icon={FileClock} hint="Awaiting review" />
             <StatCard value={residents.filter((r: Row) => !residentsWithPlan.has(s(r.id))).length} label="No Plan Yet" accent="coral" icon={FilePlus2} hint="Needs a care plan" />
           </div>
+          )}
           <ClinicalCard className="p-5">
             <p className="mb-1 font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>Resident Care Plans</p>
             <p className="mb-3 text-xs text-[var(--clinical-muted)]">Create a care plan for a resident, finalize a held draft, or view the current plan of record. Once activated, the resident&apos;s review appears under Reviews Due after the chosen interval.</p>
@@ -411,13 +426,13 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
                       </div>
                       <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
                         {(active || underReview || drafts.length > 0) && <ClinicalButton variant="secondary" size="sm" className="max-sm:flex-1" onClick={() => setViewPlan({ resident: r, plan: (active || underReview || drafts[0]) as Row })}>View</ClinicalButton>}
-                        {drafts.length > 0
+                        {!readOnly && (drafts.length > 0
                           ? <ClinicalButton variant="primary" size="sm" className="max-sm:flex-1" onClick={() => { setResId(rid); setTab("new"); }}>Finalize draft</ClinicalButton>
                           : underReview
                           ? <ClinicalButton variant="primary" size="sm" className="max-sm:flex-1" onClick={() => setTab("pending")}>Awaiting approval</ClinicalButton>
                           : locMismatch
                           ? <ClinicalButton variant="primary" size="sm" disabled={genBusy} className="max-sm:flex-1" onClick={() => void createPlanForResident(r)}>Update to Level {lvl}</ClinicalButton>
-                          : !active && <ClinicalButton variant="primary" size="sm" disabled={genBusy} className="max-sm:flex-1" onClick={() => void createPlanForResident(r)}>Create care plan</ClinicalButton>}
+                          : !active && <ClinicalButton variant="primary" size="sm" disabled={genBusy} className="max-sm:flex-1" onClick={() => void createPlanForResident(r)}>Create care plan</ClinicalButton>)}
                       </div>
                     </div>
                   );
@@ -661,7 +676,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
             <table className="w-full min-w-[760px] text-sm">
               <thead><tr className="border-b text-left text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line)" }}><th className="px-4 py-2.5 font-semibold">Resident</th><th className="px-4 py-2.5 font-semibold">Date</th><th className="px-4 py-2.5 font-semibold">Level</th><th className="px-4 py-2.5 font-semibold">Decision</th><th className="px-4 py-2.5 font-semibold">Status</th><th className="px-4 py-2.5 font-semibold">By</th></tr></thead>
               <tbody>
-                {[...reviews].sort((a, b) => (b.reviewDate || "").localeCompare(a.reviewDate || "")).map((rv) => { const r = residents.find((x: Row) => s(x.id) === rv.residentId); return (
+                {[...reviews].filter((rv) => !readOnly || residents.some((x: Row) => s(x.id) === rv.residentId)).sort((a, b) => (b.reviewDate || "").localeCompare(a.reviewDate || "")).map((rv) => { const r = residents.find((x: Row) => s(x.id) === rv.residentId); return (
                   <tr key={rv.id} className="border-b last:border-0" style={{ borderColor: "var(--clinical-line)" }}>
                     <td className="px-4 py-2.5"><span className="font-semibold text-[var(--clinical-ink)]">{s(r?.name) || "Resident"}</span> <span className="text-xs text-[var(--clinical-muted)]">Rm {s(r?.room)}</span></td>
                     <td className="px-4 py-2.5 text-[var(--clinical-ink-soft)]">{fmt(rv.reviewDate)} <span className="text-[var(--clinical-muted)]">· {rv.reviewPeriod}</span></td>

@@ -20,6 +20,7 @@ import {
   Search, ChevronRight, ChevronDown, ExternalLink, Printer,
   UserPlus, ClipboardList, Gauge, Layers, Pill, AlertTriangle, Bandage,
   Stethoscope, FolderOpen, FileText, Scale, HeartHandshake, StickyNote, ClipboardCheck,
+  ListChecks, BellRing, ConciergeBell,
   RefreshCw, ShieldCheck, ShieldAlert, CalendarClock,
   TrendingUp, TrendingDown, Minus, ArrowRight, GitCompareArrows, Paperclip,
   type LucideIcon,
@@ -74,7 +75,7 @@ const ACCENT_VAR: Record<JourneyAccent, string> = {
 };
 const CATEGORY_ICON: Record<JourneyCategory, LucideIcon> = {
   ADMISSION: UserPlus, ASSESSMENT: ClipboardList, LOC: Gauge, CARE_PLAN: ClipboardCheck,
-  CARE_EVENT: ClipboardCheck,
+  CARE_EVENT: ClipboardCheck, TASK: ListChecks, CALL_BELL: BellRing, REQUEST: ConciergeBell,
   ACUITY: Layers, MEDICATION: Pill, INCIDENT: AlertTriangle, WOUND: Bandage,
   REFERRAL: Stethoscope, CLINICAL_RECORD: FolderOpen, ENDORSEMENT: FileText,
   WEIGHT: Scale, PRIVATE_CARE: HeartHandshake, OVERAGE: TrendingUp, DOCUMENT: FileText, NOTE: StickyNote,
@@ -99,6 +100,10 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
   const noteQ = useLiveQuery<Row>("resident-notes", { query: "take=2000", tables: ["ResidentNote"] });
   const ceQ = useLiveQuery<Row>("care-events", { query: "take=2000", tables: ["CareEvent"] });
   const admQ = useLiveQuery<Row>("admissions", { query: "take=2000", tables: ["Admission"] });
+  const cpQ = useLiveQuery<Row>("care-plans", { query: "take=1000", tables: ["CarePlan"] });
+  const taskQ = useLiveQuery<Row>("tasks", { query: "take=3000", tables: ["Task"] });
+  const cbQ = useLiveQuery<Row>("call-bells", { query: "take=1000", tables: ["CallBell"] });
+  const svcQ = useLiveQuery<Row>("service-requests", { query: "take=1000", tables: ["ServiceRequest"] });
 
   const residents = useMemo(() => (resQ.data || []).map((raw) => {
     const a = adaptResident(raw);
@@ -216,7 +221,11 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       admissionSummary: resident.admissionSummary,
       locHistory: parseArr(settingVal(settingRows, "loc_history")),
       assessmentsV42,
+      carePlans: cpQ.data || [],
       carePlanReviews: parseArr(settingVal(settingRows, "care_plan_reviews")),
+      tasks: taskQ.data || [],
+      callBells: cbQ.data || [],
+      serviceRequests: svcQ.data || [],
       acuity: parseArr(settingVal(settingRows, "acuity_assessments")),
       woundRecords: parseArr(settingVal(settingRows, "wound_records")),
       endorsements: parseArr(settingVal(settingRows, "shift_endorsements")),
@@ -231,7 +240,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       notes: noteQ.data || [],
       careEvents: ceQ.data || [],
     });
-  }, [resident, assessmentsV42, settingRows, medQ.data, incQ.data, refQ.data, docQ.data, noteQ.data, ceQ.data]);
+  }, [resident, assessmentsV42, settingRows, medQ.data, incQ.data, refQ.data, docQ.data, noteQ.data, ceQ.data, cpQ.data, taskQ.data, cbQ.data, svcQ.data]);
 
   // Counts per category (for the filter chips) + the filtered feed.
   const counts = useMemo(() => {

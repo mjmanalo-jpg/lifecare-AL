@@ -5,6 +5,7 @@ import { isDbConfigured } from "@/lib/models";
 import { getSession } from "@/lib/auth";
 import { requireTenantContext } from "@/lib/tenant";
 import { withTenantDb } from "@/lib/tenantDb";
+import { CAREGIVER_SCHEDULE_KEY, parseSchedules, assigneeForResidentToday } from "@/lib/caregiverSchedule";
 import { getEntitlements } from "@/lib/entitlements";
 import {
   ASSISTANT_CONFIG_KEY,
@@ -1029,15 +1030,32 @@ async function handleShiftRecap(
   const myName = me?.name ?? "";
   const myStaffId = me?.staff?.id ?? null;
 
+  // A caregiver's "unit's open carry-over" is limited to the residents assigned to
+  // them today — the same roster the client scopes with — so they never pull other
+  // residents' data. Nurses / Care Managers keep the whole-community view.
+  let openResidentWhere: { communityId: string } | { communityId: string; id: { in: string[] } } = { communityId };
+  if (ctx.role === "CAREGIVER" && myStaffId) {
+    const [communityResidents, rosterSetting] = await Promise.all([
+      prisma.resident.findMany({ where: { communityId }, select: { id: true } }),
+      prisma.appSetting.findFirst({ where: { communityId, key: CAREGIVER_SCHEDULE_KEY }, select: { value: true } }),
+    ]);
+    const schedules = parseSchedules(rosterSetting?.value);
+    const now = new Date();
+    const assignedIds = communityResidents
+      .filter((r) => assigneeForResidentToday(schedules, r.id, now, "Asia/Manila")?.caregiverStaffId === myStaffId)
+      .map((r) => r.id);
+    openResidentWhere = { communityId, id: { in: assignedIds } };
+  }
+
   const [meds, incidents, escMine, comms, tasksDone, openEsc, pendingTasks, dueFollowups] = await Promise.all([
     prisma.medicationAdministration.findMany({ where: { recordedById: ctx.userId, actualTime: inWindow, resident: { communityId } }, select: { status: true, dosage: true, route: true, reasonForRefusal: true, heldReason: true, medication: { select: { name: true } }, resident: resSel } }),
     prisma.incident.findMany({ where: { reportedById: ctx.userId, createdAt: inWindow }, select: { incidentType: true, severity: true, description: true, resident: resSel } }),
     myName ? prisma.escalation.findMany({ where: { raisedBy: myName, createdAt: inWindow }, select: { situation: true, priority: true, status: true, resident: resSel } }) : Promise.resolve([]),
     prisma.physicianCommunication.findMany({ where: { loggedById: ctx.userId, occurredAt: inWindow }, select: { physicianName: true, method: true, reason: true, resident: resSel } }),
     myStaffId ? prisma.task.findMany({ where: { assignedToId: myStaffId, status: "COMPLETED", completedAt: inWindow }, select: { title: true, resident: resSel } }) : Promise.resolve([]),
-    prisma.escalation.findMany({ where: { resident: { communityId }, status: { notIn: ["RESOLVED", "CANCELLED"] } }, select: { situation: true, resident: resSel }, take: 20 }),
-    prisma.task.count({ where: { resident: { communityId }, status: { in: ["PENDING", "IN_PROGRESS"] } } }),
-    prisma.followUp.count({ where: { resident: { communityId }, status: { in: ["PENDING", "SCHEDULED", "OVERDUE"] } } }),
+    prisma.escalation.findMany({ where: { resident: openResidentWhere, status: { notIn: ["RESOLVED", "CANCELLED"] } }, select: { situation: true, resident: resSel }, take: 20 }),
+    prisma.task.count({ where: { resident: openResidentWhere, status: { in: ["PENDING", "IN_PROGRESS"] } } }),
+    prisma.followUp.count({ where: { resident: openResidentWhere, status: { in: ["PENDING", "SCHEDULED", "OVERDUE"] } } }),
   ]);
 
   // ── Deterministic structured fields (real records, nothing invented) ──

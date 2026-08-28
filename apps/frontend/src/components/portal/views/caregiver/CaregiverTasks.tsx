@@ -301,6 +301,7 @@ export default function CaregiverTasks() {
         {/* Category + assignee + overdue elapsed */}
         <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-2.5">
           <span className="inline-flex items-center px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-[0.05em] bg-[#D8DAD0] text-[#5A5D53]">{task.category.toUpperCase()}</span>
+          {task.cadence && <span className="inline-flex items-center px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-[0.05em] bg-[#E3E8DC] text-[#5F7A52]">{task.cadence}</span>}
           {assignee && <span className="text-[11px] text-[#8A8D82]">{assignee}</span>}
           {!task.completed && isOverdue && task.dueDate && (
             <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-[#C0573F]">

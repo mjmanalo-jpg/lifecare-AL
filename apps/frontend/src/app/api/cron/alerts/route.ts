@@ -6,6 +6,11 @@ import { scanCameraHealth } from "@/lib/cameraHealth";
 import { isAbnormalVital, vitalSeverity } from "@/lib/vitalThresholds";
 import { reassessmentStatus } from "@/lib/lifecare/reassessment";
 import type { CareLevel } from "@/lib/lifecare/types";
+import {
+  DOMAIN_LOGS_KEY, CARE_LOG_NOTES_KEY, PERSIST_DAYS,
+  parseDomainLogs, careLogNotesToDomainLogs, baselineFor, evaluateDomainTriggers, discrepancyDayCount,
+} from "@/lib/lifecare/domainMonitoring";
+import { ASSESSMENT_DOMAINS } from "@/lib/lifecare/dataset";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,7 +36,7 @@ export const dynamic = "force-dynamic";
 // signed-in NURSE / FACILITY_ADMIN / SUPERADMIN scans only their community.
 // ─────────────────────────────────────────────────────────────
 
-const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "weightReminder", "incident", "slaBreach", "escalation", "assessment", "carePlanReview", "purchaseRequest", "serviceRequest", "maintenance", "diningReservation", "elimination", "referral"];
+const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "weightReminder", "incident", "slaBreach", "escalation", "assessment", "carePlanReview", "purchaseRequest", "serviceRequest", "maintenance", "diningReservation", "elimination", "referral", "domainDiscrepancy"];
 
 // A family-pending appointment (raised with the "Family Notified" toggle) is a
 // HospitalReferral in REQUESTED, not yet decided, carrying this flag in notes.
@@ -58,6 +63,9 @@ const VITAL_LABEL: Record<string, string> = {
 // engine and the vitals UIs never disagree. `isAbnormal` aliases the shared fn.
 const isAbnormal = isAbnormalVital;
 
+// Scored-domain code → human name (AS-01..AS-14) for discrepancy alert copy.
+const DOMAIN_NAME: Record<string, string> = Object.fromEntries(ASSESSMENT_DOMAINS.map((d) => [d.code, d.name]));
+
 type Res = { firstName?: string | null; lastName?: string | null; roomNumber?: string | null } | null;
 const rname = (r: Res) => `${r?.firstName ?? ""} ${r?.lastName ?? ""}`.trim() || "Resident";
 const room = (r: Res) => r?.roomNumber ?? "—";
@@ -78,10 +86,11 @@ interface Scan {
   missedElimination: number;
   apptAutoApproved: number;
   reassessmentDue: number;
+  domainDiscrepancy: number;
 }
 
 async function scanCommunity(communityId: string, organizationId: string | null): Promise<Scan> {
-  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0, reassessmentDue: 0 };
+  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0, reassessmentDue: 0, domainDiscrepancy: 0 };
 
   // Recipient sets by care tier. General alerts go to the on-floor + admin team
   // (nurse + facility admin). SBAR SLA escalations follow the clinical chain of
@@ -486,6 +495,51 @@ async function scanCommunity(communityId: string, organizationId: string | null)
     }
   });
 
+  // 7b) Domain / Vitals-Trend discrepancies. The per-shift 0–4 domain scoring
+  //     (Domain Monitoring + Vitals Trend) is evaluated by the SAME engine the
+  //     UI uses. A tripped domain notifies Nurse + Care Manager; a discrepancy
+  //     sustained over PERSIST_DAYS distinct days is escalated as reassessment-
+  //     due. Idempotent — day-keyed for a trip, stable-keyed for a sustained case.
+  await runSource("domain-discrepancy", async () => {
+    const nurseCmIds = idsForRoles(["NURSE", "CARE_MANAGER"]);
+    if (!nurseCmIds.length) return;
+    const settings = await prisma.appSetting.findMany({
+      where: { communityId, key: { in: [DOMAIN_LOGS_KEY, CARE_LOG_NOTES_KEY, "assessments_v42"] } },
+      select: { key: true, value: true },
+    });
+    const valOf = (k: string) => settings.find((x) => x.key === k)?.value;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parseArr = (raw: string | null | undefined): any[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? v : []; } catch { return []; } };
+    const logs = [...parseDomainLogs(valOf(DOMAIN_LOGS_KEY)), ...careLogNotesToDomainLogs(parseArr(valOf(CARE_LOG_NOTES_KEY)))];
+    if (!logs.length) return;
+    const assessments = parseArr(valOf("assessments_v42"));
+    const residentIds = [...new Set(logs.map((l) => l.residentId))];
+    const residents = await prisma.resident.findMany({
+      where: { id: { in: residentIds }, communityId, status: { not: "DISCHARGED" } },
+      select: { id: true, firstName: true, lastName: true, roomNumber: true },
+    });
+    const resById = new Map(residents.map((r) => [r.id, r]));
+    for (const rid of residentIds) {
+      const r = resById.get(rid);
+      if (!r) continue; // not in this community / discharged
+      const baseline = baselineFor(rid, assessments);
+      for (const t of evaluateDomainTriggers(rid, logs, baseline)) {
+        const dName = DOMAIN_NAME[t.domain] || t.domain;
+        const sustained = discrepancyDayCount(rid, logs, t.domain, baseline) >= PERSIST_DAYS;
+        const fired = sustained
+          ? await notify("SYSTEM_ALERT", "domainDiscrepancy", `domdisc-loc:${rid}:${t.domain}`,
+              `Reassessment due — ${dName}`,
+              `${rname(r)} (Room ${room(r)}) — ${dName} has read as a discrepancy on ${PERSIST_DAYS}+ days (latest ${t.latestScore}/4 on ${t.latestShift}, ${t.latestDate}). Sustained drift from baseline — reassessment indicated; review the care plan / level of care.`,
+              "CRITICAL", nurseCmIds)
+          : await notify("SYSTEM_ALERT", "domainDiscrepancy", `domdisc:${rid}:${t.domain}:${t.latestDate}`,
+              `Domain discrepancy — ${dName}`,
+              `${rname(r)} (Room ${room(r)}) — ${dName} scored ${t.latestScore}/4 (${t.reasons.join(", ").toLowerCase()}) on the ${t.latestShift} shift${t.baseline != null ? `, above the assessed baseline of ${t.baseline}` : ""}. Please review.`,
+              "WARNING", nurseCmIds);
+        if (fired) counts.domainDiscrepancy++;
+      }
+    }
+  });
+
   // 8) SLA auto-escalation — CRITICAL alerts left unacknowledged past their
   //    response window are escalated to the on-call/admin team (Module 09 SLA
   //    enforcement, server side). Deduped per underlying alert.
@@ -684,7 +738,7 @@ async function runScan(request: NextRequest) {
     communities = [{ id: ctx.communityId, organizationId: ctx.organizationId ?? null }];
   }
 
-  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0, reassessmentDue: 0 };
+  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0, reassessmentDue: 0, domainDiscrepancy: 0 };
   for (const c of communities) {
     try {
       const s = await scanCommunity(c.id, c.organizationId);

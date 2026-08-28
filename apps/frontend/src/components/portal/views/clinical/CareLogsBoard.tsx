@@ -171,6 +171,10 @@ const DOMAINS: { key: DomainKey; code: string; label: string; icon: LucideIcon; 
 const DOMAIN_BY_KEY = new Map(DOMAINS.map((d) => [d.key, d]));
 
 // 0–4 status anchor labels (v4.2 independence / risk scale) for generic quick-logs.
+// The 14 scored assessment domains (AS-01..AS-14). "Pain" is an extra quick-log
+// tile, not one of the scored domains — so the "logged" badge counts against 14.
+const SCORED_DOMAINS = DOMAINS.filter((d) => /^AS-\d+$/.test(d.code));
+
 const STATUS_ANCHORS: { v: number; label: string }[] = [
   { v: 0, label: "Independent" }, { v: 1, label: "Low" }, { v: 2, label: "Moderate" }, { v: 3, label: "High" }, { v: 4, label: "Very high" },
 ];
@@ -423,8 +427,9 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
   const [logTab, setLogTab] = useState<DomainKey>("AS-01");
   const [qrFor, setQrFor] = useState<Row | null>(null);
   const [viewFor, setViewFor] = useState<Row | null>(null);
-  // Caregivers don't get the resident View Profile / full care card; only Nurse,
-  // Care Manager, and Super Admin (all non-caregiver roles) can open it.
+  // Everyone gets the Eye "View profile" info modal. Only non-caregivers (Nurse,
+  // Care Manager, Super Admin) additionally get the QR card + the modal's
+  // "View Full Profile" (/rcard) link; caregivers see the info only.
   const canViewProfile = clinicianRole !== "CAREGIVER";
   const [editFor, setEditFor] = useState<Row | null>(null);
 
@@ -519,10 +524,10 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
                   </div>
                   </div>
                   <div className={`grid w-full ${canManage ? "grid-cols-4" : canViewProfile ? "grid-cols-2" : "grid-cols-1"} gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center sm:gap-1.5`}>
-                    {canViewProfile && <button onClick={() => setViewFor(r)} aria-label={`View ${s(r.name)}'s profile`} title="View profile" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-ink-soft)] hover:brightness-95 sm:w-11"><Eye className="w-4 h-4" /></button>}
+                    <button onClick={() => setViewFor(r)} aria-label={`View ${s(r.name)}'s profile`} title="View profile" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-ink-soft)] hover:brightness-95 sm:w-11"><Eye className="w-4 h-4" /></button>
                     {canManage && <button onClick={() => setEditFor(r)} aria-label={`Edit ${s(r.name)}`} title="Edit resident" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-panel)] hover:brightness-95 sm:w-11"><Pencil className="w-4 h-4" /></button>}
                     {canManage && <button onClick={() => deactivate(r)} aria-label={`Deactivate ${s(r.name)}`} title="Deactivate resident" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-coral)] hover:brightness-95 sm:w-11"><UserX className="w-4 h-4" /></button>}
-                    <button onClick={() => setQrFor(r)} aria-label={`Show QR for ${s(r.name)}`} title="Resident QR" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-ink-soft)] hover:brightness-95 sm:w-11"><QrCode className="w-4 h-4" /></button>
+                    {canViewProfile && <button onClick={() => setQrFor(r)} aria-label={`Show QR for ${s(r.name)}`} title="Resident QR" className="flex h-11 w-full items-center justify-center rounded-xl bg-[var(--clinical-surface-2)] text-[var(--clinical-ink-soft)] hover:brightness-95 sm:w-11"><QrCode className="w-4 h-4" /></button>}
                   </div>
                 </div>
               </div>
@@ -533,7 +538,7 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
 
       {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} domainCounts={domainCountsByRes.get(s(logFor.id))} nurseUserIds={nurseUserIds} recordOverage={recordOverage} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
       {qrFor && <QrModal resident={qrFor} onClose={() => setQrFor(null)} />}
-      {viewFor && <ViewModal resident={viewFor} loggedDomains={domainsByRes.get(s(viewFor.id)) || new Set()} onOpenLog={(t) => { setViewFor(null); openLog(viewFor, t); }} onClose={() => setViewFor(null)} />}
+      {viewFor && <ViewModal resident={viewFor} loggedDomains={domainsByRes.get(s(viewFor.id)) || new Set()} canViewFull={canViewProfile} onOpenLog={(t) => { setViewFor(null); openLog(viewFor, t); }} onClose={() => setViewFor(null)} />}
       {editFor && <EditResidentModal resident={editFor} onSaved={refetchResidents} onClose={() => setEditFor(null)} />}
     </ClinicalPage>
   );
@@ -1074,7 +1079,7 @@ function MedsList({ residentId }: { residentId: string }) {
   );
 }
 
-function ViewModal({ resident, loggedDomains, onOpenLog, onClose }: { resident: Row; loggedDomains: Set<DomainKey>; onOpenLog: (t: DomainKey) => void; onClose: () => void }) {
+function ViewModal({ resident, loggedDomains, canViewFull = true, onOpenLog, onClose }: { resident: Row; loggedDomains: Set<DomainKey>; canViewFull?: boolean; onOpenLog: (t: DomainKey) => void; onClose: () => void }) {
   const raw = (resident.raw || {}) as Row;
   const lvl = levelOf(resident);
   // Open the resident's full care card (same /rcard/<id> page the per-resident QR encodes).
@@ -1092,7 +1097,7 @@ function ViewModal({ resident, loggedDomains, onOpenLog, onClose }: { resident: 
       title={s(resident.name)}
       description={`Room ${s(resident.room)} · Level ${lvl.n} · ${lvl.label}`}
       size="lg"
-      footer={<ClinicalButton variant="primary" onClick={goFull} className="w-full"><UserRound className="w-4 h-4" /> View Full Profile</ClinicalButton>}
+      footer={canViewFull ? <ClinicalButton variant="primary" onClick={goFull} className="w-full"><UserRound className="w-4 h-4" /> View Full Profile</ClinicalButton> : undefined}
     >
       <div className="space-y-5">
         <div className="rounded-xl border p-4" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
@@ -1109,7 +1114,7 @@ function ViewModal({ resident, loggedDomains, onOpenLog, onClose }: { resident: 
         <div>
           <div className="mb-2.5 flex items-center justify-between gap-2">
             <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--clinical-muted)]">Today&apos;s Care Logging</p>
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-green) 14%, transparent)", color: "var(--clinical-green)" }}>{loggedDomains.size}/{DOMAINS.length} logged</span>
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-green) 14%, transparent)", color: "var(--clinical-green)" }}>{SCORED_DOMAINS.filter((d) => loggedDomains.has(d.key)).length}/{SCORED_DOMAINS.length} logged</span>
           </div>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {DOMAINS.map((d) => { const on = loggedDomains.has(d.key); const Icon = d.icon; return (

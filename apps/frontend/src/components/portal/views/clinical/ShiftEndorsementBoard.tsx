@@ -21,6 +21,7 @@ import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { useCareLogData } from "./CareLogsBoard";
 import { TASK_NOTES_FIELD } from "@/lib/taskNotes";
+import { CAREGIVER_SCHEDULE_KEY, parseSchedules, assigneeForResidentToday } from "@/lib/caregiverSchedule";
 import SignatureModal from "@/components/portal/SignatureModal";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -73,6 +74,8 @@ const ROLES = ["Nurse", "Caregiver", "Care Manager", "Physician"];
 // Per-item current condition (§12): where the resident stands right now.
 const ITEM_STATUSES = ["Stable", "Watch", "Escalated"] as const;
 type ItemStatus = typeof ITEM_STATUSES[number];
+// Pre-drafted carry-over fields pulled from a resident's live shift data.
+type CarryOverDraft = { concern: string; action: string; priority: string; status: ItemStatus; whatChanged: string; pending: string; watchNext: string };
 // How an incoming shift disposes of a carry-over item (§12 close states).
 const CLOSE_STATES = ["Resolved", "Continue Monitoring", "Action Next Shift", "Awaiting External Response"] as const;
 type CloseState = typeof CLOSE_STATES[number];
@@ -134,6 +137,19 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
   const weightLogs = useMemo(() => { try { const v = JSON.parse(settingRows.find((r) => (r.key || r.id) === "weight_logs")?.value || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } }, [settingRows]);
   const resName = (id: string) => { const r = residents.find((x: Row) => s(x.id) === id); return r ? { name: s(r.name), room: s(r.room) } : { name: "Resident", room: "" }; };
 
+  // Caregivers endorse ONLY the residents assigned to them today — the same roster
+  // the task materializer and /api/caregiver/my-residents use. Every data pull
+  // (add-resident picker, auto-fill, handover snapshot, sign-off stats) is scoped
+  // to this set. Other roles (Nurse / Care Manager) see the whole community.
+  const scopedResidents = useMemo(() => {
+    if (clinicianRole !== "CAREGIVER" || !clinicianStaffId) return residents;
+    const schedules = parseSchedules(settingRows.find((r) => (r.key || r.id) === CAREGIVER_SCHEDULE_KEY)?.value);
+    const now = new Date();
+    return residents.filter((r: Row) => assigneeForResidentToday(schedules, s(r.id), now, "Asia/Manila")?.caregiverStaffId === clinicianStaffId);
+  }, [residents, settingRows, clinicianRole, clinicianStaffId]);
+  const scopedIds = useMemo(() => new Set(scopedResidents.map((r: Row) => s(r.id))), [scopedResidents]);
+  const inScope = (rid: string) => clinicianRole !== "CAREGIVER" || scopedIds.has(rid);
+
   const [view, setView] = useState<"list" | "details" | "carryover">("list");
   const [activeId, setActiveId] = useState("");
   const [range, setRange] = useState<"today" | "week" | "month">("today");
@@ -148,8 +164,8 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
   // Snapshot the shift's still-open work at sign-off — a frozen, accountable
   // record of what was outstanding when the shift ended.
   const buildHandover = (): Handover => ({
-    pendingTasks: (taskQ.data || []).filter((t) => s(t.status) === "PENDING").slice(0, 150).map((t) => { const rn = resName(s(t.residentId)); return { id: s(t.id), title: s(t.title), resident: rn.name, room: rn.room, priority: s(t.priority), due: s(t.dueDate) }; }),
-    openIncidents: (incQ.data || []).filter((i) => !i.resolvedAt).slice(0, 150).map((i) => { const rn = resName(s(i.residentId)); return { id: s(i.id), type: s(i.incidentType), resident: rn.name, room: rn.room, severity: s(i.severity) }; }),
+    pendingTasks: (taskQ.data || []).filter((t) => s(t.status) === "PENDING" && inScope(s(t.residentId))).slice(0, 150).map((t) => { const rn = resName(s(t.residentId)); return { id: s(t.id), title: s(t.title), resident: rn.name, room: rn.room, priority: s(t.priority), due: s(t.dueDate) }; }),
+    openIncidents: (incQ.data || []).filter((i) => !i.resolvedAt && inScope(s(i.residentId))).slice(0, 150).map((i) => { const rn = resName(s(i.residentId)); return { id: s(i.id), type: s(i.incidentType), resident: rn.name, room: rn.room, severity: s(i.severity) }; }),
     snapshotAt: new Date().toISOString(),
   });
 
@@ -274,13 +290,41 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
     return false;
   };
 
+  // Pre-draft a carry-over item for a resident from their live shift data — the
+  // remaining (pending / in-progress) tasks, open incidents & escalations, and any
+  // ADL declines. Same scoping as everything else (only assigned residents for a
+  // caregiver, since the picker is already scoped). Everything stays editable.
+  const buildCarryOverDraft = (rid: string): CarryOverDraft => {
+    const up = (v: unknown) => s(v).toUpperCase();
+    const cap = (x: string) => (x ? x[0].toUpperCase() + x.slice(1) : x);
+    const tasks = (taskQ.data || []).filter((t) => s(t.residentId) === rid && ["PENDING", "IN_PROGRESS"].includes(up(t.status)));
+    const incidents = (incQ.data || []).filter((i) => s(i.residentId) === rid && !i.resolvedAt);
+    const escs = (escQ.data || []).filter((x) => s(x.residentId) === rid && !["RESOLVED", "CANCELLED"].includes(up(x.status)));
+    const adlChanges = adlLogs.filter((l: Row) => s(l.residentId) === rid && (l.change === "Declined" || l.change === "Significant Decline")).map((l: Row) => `${cap(s(l.domain))} ${s(l.change).toLowerCase()}`);
+    const concern = [
+      ...tasks.map((t) => `Task: ${s(t.title)}`),
+      ...incidents.map((i) => `Open incident: ${s(i.incidentType).replace(/_/g, " ") || "event"}`),
+      ...escs.map((x) => `Open escalation: ${s(x.situation).slice(0, 80)}`),
+    ].join("\n");
+    const critical = escs.length > 0 || incidents.some((i) => ["CRITICAL", "SEVERE", "HIGH"].includes(up(i.severity)));
+    return {
+      concern,
+      action: tasks.map((t) => s(t.description) || s(t.title)).filter(Boolean).join("; "),
+      priority: critical ? "Urgent" : (tasks.some((t) => up(t.priority) === "HIGH") || incidents.length) ? "Important" : "Routine",
+      status: escs.length ? "Escalated" : (tasks.length || incidents.length) ? "Watch" : "Stable",
+      whatChanged: adlChanges.join("; "),
+      pending: tasks.map((t) => s(t.title)).join("; "),
+      watchNext: escs.map((x) => s(x.situation).slice(0, 60)).filter(Boolean).join("; "),
+    };
+  };
+
   // Derived sign-off stats.
   const stats = useMemo(() => ({
-    alerts: (incQ.data || []).filter((i) => !i.resolvedAt).length,
-    tasks: (taskQ.data || []).filter((t) => s(t.status) === "PENDING").length,
-    adl: adlLogs.filter((l: Row) => l.change === "Declined" || l.change === "Significant Decline").length,
+    alerts: (incQ.data || []).filter((i) => !i.resolvedAt && inScope(s(i.residentId))).length,
+    tasks: (taskQ.data || []).filter((t) => s(t.status) === "PENDING" && inScope(s(t.residentId))).length,
+    adl: adlLogs.filter((l: Row) => (l.change === "Declined" || l.change === "Significant Decline") && inScope(s(l.residentId))).length,
     carry: active?.carryOvers.length ?? 0,
-  }), [incQ.data, taskQ.data, adlLogs, active]);
+  }), [incQ.data, taskQ.data, adlLogs, active, scopedIds, clinicianRole]);
 
   const pendingCount = items.filter((e) => e.status !== "ACKNOWLEDGED").length;
 
@@ -310,9 +354,9 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
   };
 
   // ── Structured Details view ────────────────────────────────────────────────
-  if (view === "details" && active) return <DetailsView e={active} residents={residents} resName={resName} onBack={() => setView("list")} update={update} buildSections={buildSections} hasActivity={hasActivity} canEdit={active.outgoingById ? clinicianUserId === active.outgoingById : clinicianName === active.outgoingBy} />;
+  if (view === "details" && active) return <DetailsView e={active} residents={scopedResidents} resName={resName} onBack={() => setView("list")} update={update} buildSections={buildSections} hasActivity={hasActivity} canEdit={active.outgoingById ? clinicianUserId === active.outgoingById : clinicianName === active.outgoingBy} />;
   // ── Carry-Over & Sign-Off view ─────────────────────────────────────────────
-  if (view === "carryover" && active) return <CarryOverView e={active} residents={residents} resName={resName} stats={stats} by={clinicianName} byId={clinicianUserId} onBack={() => setView("details")} update={update} buildHandover={buildHandover} acceptHandover={acceptHandover} />;
+  if (view === "carryover" && active) return <CarryOverView e={active} residents={scopedResidents} resName={resName} stats={stats} by={clinicianName} byId={clinicianUserId} onBack={() => setView("details")} update={update} buildHandover={buildHandover} acceptHandover={acceptHandover} buildCarryOverDraft={buildCarryOverDraft} />;
 
   // ── List view ──────────────────────────────────────────────────────────────
   return (
@@ -413,7 +457,7 @@ function NewEndorsementModal({ onClose, onCreate }: { onClose: () => void; onCre
   const lbl = "text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 block";
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[95vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"><h2 className="font-bold text-slate-900 text-lg flex items-center gap-2"><FileText className="w-5 h-5" /> New Shift Endorsement</h2><button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button></div>
         <div className="p-5 overflow-y-auto flex-1 space-y-4">
           <div>
@@ -565,8 +609,8 @@ function DetailsView({ e, residents, resName, onBack, update, buildSections, has
 }
 
 // ── Carry-Over & Sign-Off view ───────────────────────────────────────────────
-function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update, buildHandover, acceptHandover }: {
-  e: Endorsement; residents: Row[]; resName: (id: string) => { name: string; room: string }; stats: { alerts: number; tasks: number; adl: number; carry: number }; by: string; byId: string; onBack: () => void; update: (id: string, patch: (e: Endorsement) => Endorsement) => Promise<void>; buildHandover: () => Handover; acceptHandover: (e: Endorsement) => Promise<void>;
+function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update, buildHandover, acceptHandover, buildCarryOverDraft }: {
+  e: Endorsement; residents: Row[]; resName: (id: string) => { name: string; room: string }; stats: { alerts: number; tasks: number; adl: number; carry: number }; by: string; byId: string; onBack: () => void; update: (id: string, patch: (e: Endorsement) => Endorsement) => Promise<void>; buildHandover: () => Handover; acceptHandover: (e: Endorsement) => Promise<void>; buildCarryOverDraft: (rid: string) => CarryOverDraft;
 }) {
   // Only the user who LOGGED the endorsement may sign it off. Everyone else can
   // only acknowledge — and only once it has been signed off.
@@ -681,7 +725,7 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
         </div>
       </div>
 
-      {addOpen && <AddCarryOverModal residents={residents} onClose={() => setAddOpen(false)} onAdd={addItem} />}
+      {addOpen && <AddCarryOverModal residents={residents} onClose={() => setAddOpen(false)} onAdd={addItem} buildDraft={buildCarryOverDraft} />}
       <SignatureModal open={signOpen} onClose={() => setSignOpen(false)} onSigned={doSignOff} title="Sign off shift endorsement" description="Enter your 4-digit signing PIN to sign off this shift." />
       <SignatureModal open={ackOpen} onClose={() => setAckOpen(false)} onSigned={doAcknowledge} title="Acknowledge shift endorsement" description="Enter your 4-digit signing PIN to acknowledge receipt of this shift endorsement." />
     </div>
@@ -692,7 +736,7 @@ function EndStat({ n, label, cls, color }: { n: number; label: string; cls: stri
   return <div className={`rounded-2xl border p-5 text-center ${cls}`}><p className={`text-3xl font-bold ${color}`}>{n}</p><p className={`text-sm mt-1 ${color}`}>{label}</p></div>;
 }
 
-function AddCarryOverModal({ residents, onClose, onAdd }: { residents: Row[]; onClose: () => void; onAdd: (c: Omit<CarryOver, "id">) => Promise<void> }) {
+function AddCarryOverModal({ residents, onClose, onAdd, buildDraft }: { residents: Row[]; onClose: () => void; onAdd: (c: Omit<CarryOver, "id">) => Promise<void>; buildDraft: (rid: string) => CarryOverDraft }) {
   const [residentId, setResidentId] = useState("");
   const [concern, setConcern] = useState("");
   const [priority, setPriority] = useState("Routine");
@@ -708,14 +752,34 @@ function AddCarryOverModal({ residents, onClose, onAdd }: { residents: Row[]; on
   const [autoAlert, setAutoAlert] = useState(false);
   const [saving, setSaving] = useState(false);
   const submit = async () => { if (!residentId || !concern.trim()) { Swal.fire({ title: "Resident and concern are required", icon: "warning" }); return; } setSaving(true); try { await onAdd({ residentId, concern: concern.trim(), priority, role, dueTime: dueTime || undefined, action: action || undefined, status, whatChanged: whatChanged.trim() || undefined, pending: pending.trim() || undefined, watchNext: watchNext.trim() || undefined, coverageNote: coverageNote.trim() || undefined, autoTask, autoAlert }); } finally { setSaving(false); } };
+  // Pull the resident's remaining tasks + open incidents/escalations + ADL changes
+  // into the form. Auto-runs the first time a resident is picked (only fills blank
+  // fields, so it never clobbers what the caregiver typed) and re-runs on demand.
+  const applyDraft = (rid: string, force = false) => {
+    if (!rid) return;
+    const d = buildDraft(rid);
+    if (force || !concern.trim()) setConcern(d.concern);
+    if (force || !action.trim()) setAction(d.action);
+    if (force || !whatChanged.trim()) setWhatChanged(d.whatChanged);
+    if (force || !pending.trim()) setPending(d.pending);
+    if (force || !watchNext.trim()) setWatchNext(d.watchNext);
+    if (force) { setPriority(d.priority); setStatus(d.status); }
+    else { if (priority === "Routine") setPriority(d.priority); if (status === "Watch") setStatus(d.status); }
+    if (d.concern || d.action) Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Pulled from shift data — review and edit.", showConfirmButton: false, timer: 2200 });
+    else Swal.fire({ toast: true, position: "top-end", icon: "info", title: "No open tasks or events for this resident.", showConfirmButton: false, timer: 2200 });
+  };
   const inp = "w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
   const lbl = "text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block";
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[95vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"><h2 className="font-bold text-slate-900 text-lg">Add Carry-Over Item</h2><button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button></div>
         <div className="p-5 overflow-y-auto flex-1 space-y-4">
-          <div><span className={lbl}>Resident</span><select value={residentId} onChange={(e) => setResidentId(e.target.value)} className={inp}><option value="">Select resident…</option>{residents.map((r) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)}</option>)}</select></div>
+          <div>
+            <button onClick={() => residentId ? applyDraft(residentId, true) : Swal.fire({ title: "Select a resident first", icon: "info" })} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold hover:opacity-95"><Sparkles className="w-4 h-4" /> Auto-fill from shift data</button>
+            <p className="text-xs text-slate-400 text-center mt-1.5">Pulls the resident&apos;s remaining tasks, open incidents &amp; escalations, and ADL changes into the form. Review before saving.</p>
+          </div>
+          <div><span className={lbl}>Resident</span><select value={residentId} onChange={(e) => { const v = e.target.value; setResidentId(v); applyDraft(v); }} className={inp}><option value="">Select resident…</option>{residents.map((r) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)}</option>)}</select></div>
           <div><span className={lbl}>Concern / Task to Carry Over</span><textarea rows={2} value={concern} onChange={(e) => setConcern(e.target.value)} placeholder="Describe what needs to continue into the next shift…" className={inp} /></div>
           <div className="grid grid-cols-2 gap-3">
             <div><span className={lbl}>Priority</span><select value={priority} onChange={(e) => setPriority(e.target.value)} className={inp}>{PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
