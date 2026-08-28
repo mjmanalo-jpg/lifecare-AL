@@ -8,8 +8,9 @@ import {
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
-import { upsertRecord } from "@/lib/api";
+import { upsertRecord, updateRecord } from "@/lib/api";
 import { recordAudit } from "@/lib/auditClient";
+import { TASK_NOTES_FIELD } from "@/lib/taskNotes";
 import {
   ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalCard, StatCard,
   DataState, MicroLabel, controlClass,
@@ -54,6 +55,8 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
 
   const { data: residentRows } = useLiveQuery<Record<string, unknown>>("residents", { query: "take=300", tables: ["Resident"] });
   const residents = useMemo(() => residentRows.map(adaptResident), [residentRows]);
+  // Open care tasks — used to carry work forward when a resident moves caregiver.
+  const { data: taskRows } = useLiveQuery<Record<string, unknown>>("tasks", { query: "take=1000", tables: ["Task"] });
   const resById = useMemo(() => {
     const m = new Map<string, { name: string; room: string }>();
     residents.forEach((r) => m.set(r.id, { name: r.name, room: r.room }));
@@ -170,6 +173,24 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
         ? schedules.map((s) => (s.id === targetId ? { ...s, ...base, createdAt: s.createdAt } : s))
         : [base, ...schedules];
       await persist(next);
+      // Carry-over: if a resident in this schedule was on a DIFFERENT caregiver for
+      // the same date+shift, move their open tasks to the new caregiver so the work
+      // follows the resident. (ponytail: scoped to same date+shift transfers; a
+      // cross-day/global sweep would belong in a cron job.)
+      const OPEN = new Set(["PENDING", "IN_PROGRESS"]);
+      let carried = 0;
+      for (const rid of form.residentIds) {
+        const prior = schedules.find((sc) => sc.id !== targetId && sc.date === form.date && sc.shift === form.shift && sc.caregiverStaffId !== cg.id && sc.residentIds.includes(rid));
+        if (!prior) continue;
+        const moved = taskRows.filter((t) => String(t.residentId) === rid && String(t.assignedToId) === prior.caregiverStaffId && OPEN.has(String(t.status)));
+        for (const t of moved) {
+          const prev = t[TASK_NOTES_FIELD] == null ? "" : String(t[TASK_NOTES_FIELD]);
+          const note = `${prev ? prev + "\n" : ""}Carried over from ${prior.caregiverName} to ${cg.name} on ${form.date} (${form.shift}) — resident reassigned.`;
+          await updateRecord("tasks", String(t.id), { assignedToId: cg.id, [TASK_NOTES_FIELD]: note }).catch(() => null);
+          carried++;
+        }
+      }
+      if (carried > 0) recordAudit({ action: "UPDATE", entityType: "caregiver-schedules", entityId: base.id, reason: `Carried ${carried} open task${carried === 1 ? "" : "s"} to ${cg.name} — resident(s) reassigned on ${form.date} (${form.shift})` });
       recordAudit({
         action: targetId ? "UPDATE" : "CREATE",
         entityType: "caregiver-schedules",
