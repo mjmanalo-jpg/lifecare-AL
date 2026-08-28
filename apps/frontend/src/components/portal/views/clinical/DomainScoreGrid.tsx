@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Info } from "lucide-react";
 import { SCORED_DOMAINS, CLINICAL_MODIFIERS } from "@/lib/lifecare/dataset.ts";
 import type { DomainEntry } from "@/lib/lifecare/assessment.ts";
@@ -16,18 +17,11 @@ const chipOff = "bg-[var(--clinical-surface)] text-[var(--clinical-ink-soft)] bo
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 // The domain `scope` (e.g. AS-01 "Bathing, dressing, …") doubles as quick-add
-// tags for Supporting Evidence. Treat evidence as a comma-token list: toggling
-// only adds/removes the exact tag token, so free-typed notes are never touched.
+// tags for Supporting Evidence. Chips are insert-at-caret buttons: clicking one
+// drops the tag wherever the cursor is, so free-typed notes are never disturbed.
 const evidenceTagsFor = (scope?: string) =>
   (scope ?? "").split(/,|;|\//).map((s) => cap(s.trim())).filter(Boolean);
 const evidenceTokens = (evidence?: string) => (evidence ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-const hasEvidenceTag = (evidence: string | undefined, tag: string) =>
-  evidenceTokens(evidence).some((t) => t.toLowerCase() === tag.toLowerCase());
-const toggleEvidenceTag = (evidence: string | undefined, tag: string) => {
-  const toks = evidenceTokens(evidence);
-  const next = hasEvidenceTag(evidence, tag) ? toks.filter((t) => t.toLowerCase() !== tag.toLowerCase()) : [...toks, tag];
-  return next.join(", ");
-};
 
 // Single-select evidence dropdowns per domain (e.g. transfer assist level). Options
 // live in the same comma-token evidence field; picking one replaces any prior option
@@ -48,6 +42,72 @@ function Area({ label, value, onChange, placeholder, rows = 2, disabled }: { lab
     <label className="block">
       <MicroLabel className="mb-1">{label}</MicroLabel>
       <textarea rows={rows} value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} disabled={disabled} className={controlClass} />
+    </label>
+  );
+}
+
+// Supporting Evidence field: free-typed textarea + Quick-add chips that insert
+// their tag at the current caret position (not appended, not toggled). Each
+// instance owns its textarea ref so caret tracking is scoped to one domain.
+function EvidenceField({ evidence, placeholder, tags, select, onChange, readOnly }: {
+  evidence?: string; placeholder?: string; tags: string[];
+  select?: { label: string; options: string[] };
+  onChange: (v: string) => void; readOnly?: boolean;
+}) {
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+  const pendingCaret = useRef<number | null>(null);
+
+  // Restore the caret to just after the inserted tag once the controlled value updates.
+  useEffect(() => {
+    if (pendingCaret.current != null && ref.current) {
+      ref.current.focus();
+      ref.current.setSelectionRange(pendingCaret.current, pendingCaret.current);
+      pendingCaret.current = null;
+    }
+  });
+
+  const insertAtCaret = (tag: string) => {
+    if (readOnly) return;
+    const cur = evidence ?? "";
+    const ta = ref.current;
+    const start = ta?.selectionStart ?? cur.length;
+    const end = ta?.selectionEnd ?? cur.length;
+    const before = cur.slice(0, start);
+    const after = cur.slice(end);
+    const lead = before && !/\s$/.test(before) ? " " : "";
+    const trail = after && !/^[\s,.;]/.test(after) ? " " : "";
+    pendingCaret.current = start + lead.length + tag.length;
+    onChange(before + lead + tag + trail + after);
+  };
+
+  return (
+    <label className="block">
+      <MicroLabel className="mb-1">Supporting Evidence *</MicroLabel>
+      {tags.length > 0 && (
+        <div className="mb-1.5 flex flex-wrap items-center gap-1">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--clinical-muted)] mr-0.5">Quick add</span>
+          {tags.map((tag) => (
+            <button key={tag} type="button" disabled={readOnly} onClick={() => insertAtCaret(tag)}
+              className={`px-2 py-1 rounded-md text-[11px] font-medium border transition ${chipOff} ${readOnly ? "cursor-default" : ""}`}>
+              {tag}
+            </button>
+          ))}
+        </div>
+      )}
+      {select && (
+        <div className="mb-1.5 flex items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--clinical-muted)] shrink-0">{select.label}</span>
+          <select
+            value={currentSelectValue(evidence, select.options)}
+            onChange={(e) => onChange(setSelectValue(evidence, select.options, e.target.value))}
+            disabled={readOnly}
+            className="rounded-md border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface)] text-[var(--clinical-ink)] text-[11px] font-medium px-2 py-1 disabled:cursor-default">
+            <option value="">Select…</option>
+            {select.options.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+      )}
+      <textarea ref={ref} rows={2} value={evidence ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} disabled={readOnly} className={controlClass} />
     </label>
   );
 }
@@ -106,38 +166,14 @@ export default function DomainScoreGrid({
               })}
             </div>
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="block">
-                <MicroLabel className="mb-1">Supporting Evidence *</MicroLabel>
-                {evidenceTags.length > 0 && (
-                  <div className="mb-1.5 flex flex-wrap items-center gap-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--clinical-muted)] mr-0.5">Quick add</span>
-                    {evidenceTags.map((tag) => {
-                      const on = hasEvidenceTag(entry.evidence, tag);
-                      return (
-                        <button key={tag} type="button" disabled={readOnly}
-                          onClick={() => onPatch(code, { evidence: toggleEvidenceTag(entry.evidence, tag) })}
-                          className={`px-2 py-1 rounded-md text-[11px] font-medium border transition ${on ? chipOn : chipOff} ${readOnly ? "cursor-default" : ""}`}>
-                          {tag}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                {evidenceSelect && (
-                  <div className="mb-1.5 flex items-center gap-2">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--clinical-muted)] shrink-0">{evidenceSelect.label}</span>
-                    <select
-                      value={currentSelectValue(entry.evidence, evidenceSelect.options)}
-                      onChange={(e) => onPatch(code, { evidence: setSelectValue(entry.evidence, evidenceSelect.options, e.target.value) })}
-                      disabled={readOnly}
-                      className="rounded-md border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface)] text-[var(--clinical-ink)] text-[11px] font-medium px-2 py-1 disabled:cursor-default">
-                      <option value="">Select…</option>
-                      {evidenceSelect.options.map((o) => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </div>
-                )}
-                <textarea rows={2} value={entry.evidence ?? ""} onChange={(e) => onPatch(code, { evidence: e.target.value })} placeholder={dom.evidenceRequired} disabled={readOnly} className={controlClass} />
-              </label>
+              <EvidenceField
+                evidence={entry.evidence}
+                placeholder={dom.evidenceRequired}
+                tags={evidenceTags}
+                select={evidenceSelect}
+                onChange={(v) => onPatch(code, { evidence: v })}
+                readOnly={readOnly}
+              />
               <Area label="Goal / Preference Note" value={entry.goalNote} onChange={(v) => onPatch(code, { goalNote: v })} placeholder="Resident-specific goal, routine or preference…" disabled={readOnly} />
             </div>
             {relatedMods.length > 0 && (
