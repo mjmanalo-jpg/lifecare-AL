@@ -908,7 +908,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                       <div className="sm:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <Text label="Assessment Date" type="date" value={draft.layer1.assessmentDate} onChange={(v) => patchLayer1({ assessmentDate: v })} />
                         <Text label="Date of Birth" type="date" value={draft.layer1.dateOfBirth} onChange={(v) => patchLayer1({ dateOfBirth: v, age: ageFromDob(v) })} />
-                        <Text label="Age" value={draft.layer1.age || ageFromDob(draft.layer1.dateOfBirth)} onChange={() => {}} readOnly placeholder="Auto from DOB" />
+                        <Text label="Age" value={draft.layer1.age || ageFromDob(draft.layer1.dateOfBirth)} onChange={(v) => patchLayer1({ age: v })} placeholder="Auto from DOB" />
                         <Text label="Sex" value={draft.layer1.sex} onChange={(v) => patchLayer1({ sex: v })} placeholder="M / F" />
                       </div>
                       <Text label="Assessment Location" value={draft.layer1.assessmentLocation ?? draft.layer1.location} onChange={(v) => patchLayer1({ assessmentLocation: v })} />
