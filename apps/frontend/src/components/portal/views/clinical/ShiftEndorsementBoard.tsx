@@ -31,8 +31,10 @@ const s = (v: unknown) => (v == null ? "" : String(v));
 // Readable label for a care-log domain code (the v4.2 AS-codes emitted by the
 // shared useCareLogData hook) used when composing endorsement section text.
 const CARE_DOMAIN_LABELS: Record<string, string> = {
-  "AS-01": "ADLs", "AS-02": "Mobility", "AS-05": "Behavior", "AS-08": "Nutrition",
-  "AS-10": "Continence", "AS-11": "Skin", "AS-13": "Concern", "pain": "Pain",
+  "AS-01": "ADLs", "AS-02": "Mobility", "AS-03": "Fall risk", "AS-04": "Cognition",
+  "AS-05": "Behavior", "AS-06": "Clinical monitoring", "AS-08": "Nutrition",
+  "AS-09": "Communication", "AS-10": "Continence", "AS-11": "Skin", "AS-12": "Sleep / routine",
+  "AS-13": "Concern", "AS-14": "Reablement / therapy", "pain": "Pain",
 };
 const careDomainLabel = (d: string) => CARE_DOMAIN_LABELS[d] ?? d;
 const newId = () => globalThis.crypto?.randomUUID?.() ?? `end-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -235,6 +237,9 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
     let gc = vparts.length ? `Vitals — ${vparts.join(", ")}.` : "";
     if (wLatest && !vlatest.WEIGHT) gc += `${gc ? " " : ""}Weight ${wLatest.weightKg} kg.`;
     if (sleep.length) gc += `${gc ? " " : ""}${sleep.join("; ")}.`;
+    // AS-06 Clinical Monitoring + AS-12 Sleep/Daily Routine care-log notes.
+    const gcCare = careEntries.filter((e) => e.resId === rid && inDay(e.at) && ["AS-06", "AS-12"].includes(e.domain)).map((e) => `${careDomainLabel(e.domain)}: ${e.summary}`);
+    if (gcCare.length) gc += `${gc ? " " : ""}${gcCare.join(" ")}`;
     if (gc) out.generalCondition = gc.trim();
 
     // 2. Intake & Elimination — care logs + ADL continence. Care-log domains are
@@ -244,10 +249,10 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
     const ieAll = [...ie, ...cont];
     if (ieAll.length) out.intakeElimination = ieAll.join(" ");
 
-    // 3. ADL & Mobility — AS-01 ADLs/Personal Care + AS-02 Mobility/Transfers.
+    // 3. ADL & Mobility — AS-01 ADLs, AS-02 Mobility, AS-03 Fall Risk, AS-14 Reablement/Therapy.
     const adlDomains = ["bathing", "dressing", "grooming", "toileting", "transfers", "feeding", "mobility"];
     const adlM = adl.filter((l: Row) => adlDomains.includes(s(l.domain).toLowerCase())).map(adlLine);
-    const mob = careEntries.filter((e) => e.resId === rid && inDay(e.at) && ["AS-01", "AS-02"].includes(e.domain)).map((e) => `${careDomainLabel(e.domain)}: ${e.summary}`);
+    const mob = careEntries.filter((e) => e.resId === rid && inDay(e.at) && ["AS-01", "AS-02", "AS-03", "AS-14"].includes(e.domain)).map((e) => `${careDomainLabel(e.domain)}: ${e.summary}`);
     const amAll = [...adlM, ...mob];
     if (amAll.length) out.adlMobility = amAll.join("; ");
 
@@ -255,8 +260,8 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
     const wounds = woundRecords.filter((w: Row) => s(w.residentId) === rid && !["HEALED", "RESOLVED", "CLOSED"].includes(s(w.status).toUpperCase()));
     if (wounds.length) out.skinWound = wounds.map((w: Row) => [s(w.location) || s(w.bodyLocation) || "Wound", s(w.type) || s(w.woundType), s(w.stage) ? `(${s(w.stage)})` : "", s(w.status) ? `· ${s(w.status)}` : ""].filter(Boolean).join(" ")).join("; ");
 
-    // 5. Behavior & Cognitive — AS-13 Safety/Concerns + AS-05 Behavior/BPSD.
-    const concerns = careEntries.filter((e) => e.resId === rid && inDay(e.at) && ["AS-13", "AS-05"].includes(e.domain)).map((e) => `${careDomainLabel(e.domain)}: ${e.summary}`);
+    // 5. Behavior & Cognitive — AS-13 Safety, AS-05 Behavior/BPSD, AS-04 Cognition, AS-09 Communication.
+    const concerns = careEntries.filter((e) => e.resId === rid && inDay(e.at) && ["AS-13", "AS-05", "AS-04", "AS-09"].includes(e.domain)).map((e) => `${careDomainLabel(e.domain)}: ${e.summary}`);
     const cog = adl.filter((l: Row) => ["cognition", "behavior"].includes(s(l.domain).toLowerCase())).map(adlLine);
     const bcAll = [...concerns, ...cog];
     if (bcAll.length) out.behaviorCognitive = bcAll.join(" ");
