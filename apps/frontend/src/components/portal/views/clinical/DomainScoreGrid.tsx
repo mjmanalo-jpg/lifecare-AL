@@ -77,11 +77,13 @@ function EvidenceField({ evidence, placeholder, tags, select, onChange, readOnly
     const ta = ref.current;
     const start = ta?.selectionStart ?? cur.length;
     const end = ta?.selectionEnd ?? cur.length;
-    const before = cur.slice(0, start);
-    const after = cur.slice(end);
-    const lead = before && !/\s$/.test(before) ? " " : "";
-    const trail = after && !/^[\s,.;]/.test(after) ? " " : "";
-    pendingCaret.current = start + lead.length + tag.length;
+    const before = cur.slice(0, start).replace(/\s+$/, "");
+    const after = cur.slice(end).replace(/^\s+/, "");
+    // Comma-separate the tag from adjacent content; keep a single space after an
+    // existing comma, and add none at the string edges.
+    const lead = before === "" ? "" : /[,;]$/.test(before) ? " " : ", ";
+    const trail = after === "" ? "" : /^[,;.]/.test(after) ? " " : ", ";
+    pendingCaret.current = (before + lead + tag).length;
     onChange(before + lead + tag + trail + after);
   };
 
