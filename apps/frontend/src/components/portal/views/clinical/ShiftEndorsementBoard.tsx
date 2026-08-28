@@ -311,24 +311,33 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
   const buildCarryOverDraft = (rid: string): CarryOverDraft => {
     const up = (v: unknown) => s(v).toUpperCase();
     const cap = (x: string) => (x ? x[0].toUpperCase() + x.slice(1) : x);
+    const uniq = (a: string[]) => [...new Set(a.map((x) => x.trim()).filter(Boolean))];
+    const CAP = 8; // keep lists readable; care-plan tasks can number in the dozens
+    const bullets = (a: string[]) => { const shown = a.slice(0, CAP); const more = a.length - shown.length; return shown.map((x) => `• ${x}`).join("\n") + (more > 0 ? `\n• +${more} more` : ""); };
     const tasks = (taskQ.data || []).filter((t) => s(t.residentId) === rid && ["PENDING", "IN_PROGRESS"].includes(up(t.status)));
     const incidents = (incQ.data || []).filter((i) => s(i.residentId) === rid && !i.resolvedAt);
     const escs = (escQ.data || []).filter((x) => s(x.residentId) === rid && !["RESOLVED", "CANCELLED"].includes(up(x.status)));
-    const adlChanges = adlLogs.filter((l: Row) => s(l.residentId) === rid && (l.change === "Declined" || l.change === "Significant Decline")).map((l: Row) => `${cap(s(l.domain))} ${s(l.change).toLowerCase()}`);
-    const concern = [
-      ...tasks.map((t) => `Task: ${s(t.title)}`),
-      ...incidents.map((i) => `Open incident: ${s(i.incidentType).replace(/_/g, " ") || "event"}`),
-      ...escs.map((x) => `Open escalation: ${s(x.situation).slice(0, 80)}`),
-    ].join("\n");
+    const adlChanges = uniq(adlLogs.filter((l: Row) => s(l.residentId) === rid && (l.change === "Declined" || l.change === "Significant Decline")).map((l: Row) => `${cap(s(l.domain))} ${s(l.change).toLowerCase()}`));
+    // Care-plan tasks repeat across shifts/AM-PM-NOC — collapse to distinct titles.
+    const taskTitles = uniq(tasks.map((t) => s(t.title)));
+    // Headline concern: notable clinical items first, then a concise task summary —
+    // never a wall of every task/intervention (that lives in the care plan).
+    const head: string[] = [];
+    incidents.forEach((i) => head.push(`Open incident: ${(s(i.incidentType).replace(/_/g, " ") || "event")}${up(i.severity) ? ` (${cap(s(i.severity).toLowerCase())})` : ""}`));
+    escs.forEach((x) => head.push(`Open escalation: ${s(x.situation).slice(0, 80)}`));
+    if (adlChanges.length) head.push(`ADL change: ${adlChanges.join(", ")}`);
+    if (taskTitles.length) head.push(`${taskTitles.length} pending care task${taskTitles.length === 1 ? "" : "s"} to continue`);
     const critical = escs.length > 0 || incidents.some((i) => ["CRITICAL", "SEVERE", "HIGH"].includes(up(i.severity)));
     return {
-      concern,
-      action: tasks.map((t) => s(t.description) || s(t.title)).filter(Boolean).join("; "),
+      concern: head.join("\n") || "No outstanding items this shift.",
+      // Auto-fill leaves the specific handover action for the clinician — the care
+      // plan holds the full intervention detail; a dump of it here is just noise.
+      action: "",
       priority: critical ? "Urgent" : (tasks.some((t) => up(t.priority) === "HIGH") || incidents.length) ? "Important" : "Routine",
       status: escs.length ? "Escalated" : (tasks.length || incidents.length) ? "Watch" : "Stable",
       whatChanged: adlChanges.join("; "),
-      pending: tasks.map((t) => s(t.title)).join("; "),
-      watchNext: escs.map((x) => s(x.situation).slice(0, 60)).filter(Boolean).join("; "),
+      pending: taskTitles.length ? bullets(taskTitles) : "",
+      watchNext: uniq(escs.map((x) => s(x.situation).slice(0, 60))).join("; "),
     };
   };
 
@@ -427,7 +436,7 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-slate-200 text-slate-600">{e.shiftLabel} · {e.shiftRange}</span>
                       </div>
                       <p className="text-sm font-semibold text-slate-800 mt-2 flex items-center gap-1.5"><User className="w-4 h-4 text-slate-400" />{e.outgoingBy} → {e.incomingBy} <span className="font-normal text-slate-400 inline-flex items-center gap-1 ml-1"><Clock className="w-3.5 h-3.5" /> Signed {e.signedAt}</span></p>
-                      {e.generalNotes && <div className="mt-2"><p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">General Notes</p><p className="text-sm text-slate-600">{e.generalNotes}</p></div>}
+                      {e.generalNotes && <div className="mt-2"><p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">General Notes</p><p className="text-sm text-slate-600 whitespace-pre-line line-clamp-4">{e.generalNotes}</p></div>}
                       <div className="flex flex-wrap items-center gap-2 mt-3">
                         <button onClick={() => { setActiveId(e.id); setView("details"); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"><FileText className="w-4 h-4" /> Structured Details</button>
                         <button onClick={() => { setActiveId(e.id); setView("carryover"); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"><ArrowLeftRight className="w-4 h-4" /> Carry-Over & Sign-Off</button>
@@ -753,10 +762,10 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
       ) : <div className="space-y-2 mb-6">{e.carryOvers.map((c) => { const rn = resName(c.residentId); return (
             <div key={c.id} className={`rounded-xl border bg-white p-4 ${c.closeState ? "border-slate-200 opacity-80" : "border-slate-200"}`}>
               <div className="flex flex-wrap items-center gap-2"><span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${c.priority === "Urgent" ? "bg-red-100 text-red-700" : c.priority === "Important" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"}`}>{c.priority}</span>{c.status && <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${STATUS_CLS[c.status] ?? "bg-slate-100 text-slate-600"}`}>{c.status}</span>}<span className="font-bold text-slate-900">{rn.name}</span><span className="text-xs text-slate-400">Rm {rn.room} · {c.role}{c.dueTime ? ` · due ${c.dueTime}` : ""}</span>{canEdit && <button onClick={() => update(e.id, (en) => ({ ...en, carryOvers: en.carryOvers.filter((x) => x.id !== c.id) }))} className="ml-auto p-1 rounded hover:bg-red-50 text-red-500"><Trash2 className="w-4 h-4" /></button>}</div>
-              <p className={`text-sm mt-1.5 ${c.closeState === "Resolved" ? "text-slate-400 line-through" : "text-slate-700"}`}>{c.concern}</p>
+              <p className={`text-sm mt-1.5 whitespace-pre-line ${c.closeState === "Resolved" ? "text-slate-400 line-through" : "text-slate-700"}`}>{c.concern}</p>
               {c.whatChanged && <p className="text-xs text-slate-500 mt-0.5">What changed: {c.whatChanged}</p>}
               {c.action && <p className="text-xs text-slate-500 mt-0.5">Action: {c.action}</p>}
-              {c.pending && <p className="text-xs text-slate-500 mt-0.5">Pending: {c.pending}</p>}
+              {c.pending && <p className="text-xs text-slate-500 mt-0.5 whitespace-pre-line">Pending:{"\n"}{c.pending}</p>}
               {c.watchNext && <p className="text-xs text-blue-600/90 mt-0.5">Watch next shift: {c.watchNext}</p>}
               {c.coverageNote && <p className="text-xs text-slate-500 mt-0.5 italic">Coverage: {c.coverageNote}</p>}
               {(e.status !== "PENDING") && (
