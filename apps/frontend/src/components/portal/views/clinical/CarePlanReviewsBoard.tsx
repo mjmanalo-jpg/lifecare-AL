@@ -11,12 +11,14 @@
  * reviews are a JSON array in the app-setting `care_plan_reviews`.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ClipboardList, ListChecks, Loader2, AlertTriangle, Users, ClipboardCheck, FileClock, FilePlus2, CalendarClock, Target } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, updateRecord, createRecord } from "@/lib/api";
-import { generateCarePlanForResident, releaseCarePlan, materializeTodayTasks, levelPlan, levelCareTasks, parseAssistanceOptions, type PlanIntervention } from "@/lib/carePlanGen";
+import { generateCarePlanForResident, releaseCarePlan, materializeTodayTasks, levelPlan, fullLevelPlan, levelCareTasks, parseAssistanceOptions, type PlanIntervention } from "@/lib/carePlanGen";
+import { CARE_PLAN_DRAFTS_KEY, parseCarePlanDrafts, upsertDraft, clearDraft, mergeSavedIntoTasks, toSavedItems, type DraftState } from "@/lib/carePlanDraft";
+import { taskById } from "@/lib/lifecare/dataset";
 import { duplicateReview, requiresSecondApproval, reviewOutcome, canFinalizeCarePlan, type CarePlanReviewApprovalStatus } from "@/lib/lifecare/carePlanReviewGuards";
 import { levelMeta } from "@/lib/lifecare/levelModel";
 import { adaptResident } from "@/lib/adapters";
@@ -38,11 +40,12 @@ const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.get
 const fmt = (isoStr: string) => (isoStr ? new Date(isoStr + (isoStr.length <= 10 ? "T00:00:00" : "")).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—");
 const periodOf = (d: Date) => `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`;
 
-const DECISIONS = ["Continue Current Plan", "Update Care Plan", "Escalate Level of Care", "De-escalate Level of Care", "Refer to Physician", "Schedule Family Conference"];
+const DECISIONS = ["New Plan", "Continue Current Plan", "Update Care Plan", "Escalate Level of Care", "De-escalate Level of Care", "Refer to Physician", "Schedule Family Conference"];
 // Decisions that DON'T release a held plan — the plan stays held for follow-up.
 const HOLD_DECISIONS = new Set(["Refer to Physician", "Schedule Family Conference"]);
-// Decisions that CHANGE the care plan — they require a generated draft to release.
-const PLAN_CHANGE_DECISIONS = new Set(["Update Care Plan", "Escalate Level of Care", "De-escalate Level of Care"]);
+// Decisions that CREATE or CHANGE the care plan — they require a generated draft to
+// release. "New Plan" is the first-time plan for a newly created resident.
+const PLAN_CHANGE_DECISIONS = new Set(["New Plan", "Update Care Plan", "Escalate Level of Care", "De-escalate Level of Care"]);
 // Roles authorized to countersign a level-of-care change (the "Administrator/Authorized
 // Approver" half of the Step-6 two-person sign-off).
 const AUTHORIZED_APPROVERS = new Set(["CARE_MANAGER", "SUPERADMIN"]);
@@ -101,6 +104,14 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
   const cpQ = useLiveQuery<Row>("care-plans", { query: "take=300", tables: ["CarePlan"] });
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
   const reviews = useMemo(() => parseReviews(settingRows.find((r) => (r.key || r.id) === REVIEW_KEY)?.value), [settingRows]);
+  // Editable per-resident builder snapshots (migration-free) — the source of
+  // truth the CarePlanBuilder hydrates from and auto-saves to, so a nurse's
+  // assistance/frequency/note edits survive navigation and regeneration.
+  const drafts = useMemo(() => parseCarePlanDrafts(settingRows.find((r) => (r.key || r.id) === CARE_PLAN_DRAFTS_KEY)?.value), [settingRows]);
+  // Read the latest settings without re-creating the persist callback (a stable
+  // callback keeps the builder's debounced auto-save effect from re-firing).
+  const settingRowsRef = useRef(settingRows);
+  useEffect(() => { settingRowsRef.current = settingRows; }, [settingRows]);
   // Authoritative ACTIVE level of care, resolved from loc_history (the true L1..L5)
   // rather than the coarse careLevel enum (which can't tell L2 from L3). Returns a
   // levelOf-shaped { n, label } so existing call sites work unchanged.
@@ -175,6 +186,24 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
 
   const persist = async (next: Review[]) => { await upsertRecord("app-settings", REVIEW_KEY, { key: REVIEW_KEY, value: JSON.stringify(next) }); await refetch(); };
 
+  // Persist one resident's builder snapshot. Reads the freshest map from the ref
+  // (not the render-time `drafts`) so concurrent edits to other residents aren't
+  // clobbered. Stable identity — safe as the builder's onPersist dependency.
+  const persistDraftState = useCallback(async (residentId: string, state: DraftState) => {
+    const cur = parseCarePlanDrafts(settingRowsRef.current.find((r) => (r.key || r.id) === CARE_PLAN_DRAFTS_KEY)?.value);
+    const next = upsertDraft(cur, residentId, state);
+    await upsertRecord("app-settings", CARE_PLAN_DRAFTS_KEY, { key: CARE_PLAN_DRAFTS_KEY, value: JSON.stringify(next) });
+    await refetch();
+  }, [refetch]);
+  // Drop a resident's snapshot once their plan is released (so a later new plan
+  // starts clean instead of hydrating stale selections).
+  const clearDraftState = useCallback(async (residentId: string) => {
+    const cur = parseCarePlanDrafts(settingRowsRef.current.find((r) => (r.key || r.id) === CARE_PLAN_DRAFTS_KEY)?.value);
+    if (!(residentId in cur)) return;
+    await upsertRecord("app-settings", CARE_PLAN_DRAFTS_KEY, { key: CARE_PLAN_DRAFTS_KEY, value: JSON.stringify(clearDraft(cur, residentId)) });
+    await refetch();
+  }, [refetch]);
+
   // Manual fallback for the Stage 8/9 handoff — build a care plan + caregiver tasks
   // from the resident's current Level of Care (for residents approved before the
   // auto-generation, or missing a plan).
@@ -187,22 +216,50 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
     setGenConfirm({ plan, already: residentsWithPlan.has(s(resident.id)) });
   };
 
+  // Core generation — supersede prior held drafts, then build the DRAFT plan for
+  // `res` from `plan` (individualized) or the level baseline. Shared by the
+  // builder's confirm flow and the one-click "Create care plan" roster action.
+  const doGenerate = async (res: Row, plan?: { title?: string; goals: string[]; interventions: PlanIntervention[] }): Promise<number> => {
+    const n = resLevel(res).n;
+    const raw = (res.raw || {}) as Row;
+    // Supersede any prior held DRAFT for this resident so regenerating replaces it
+    // instead of leaving orphan drafts (A4). Under-review/active plans are untouched.
+    for (const d of draftPlansByResident.get(s(res.id)) || []) {
+      try { await updateRecord("care-plans", s(d.id), { status: "DISCONTINUED", discontinuedReason: "Superseded by regenerated draft" }); } catch { /* best-effort */ }
+    }
+    const { interventionCount } = await generateCarePlanForResident({ residentId: s(res.id), level: n, communityId: s(raw.communityId) || undefined, createdByName: clinicianName, plan, hold: true });
+    await cpQ.refetch?.();
+    return interventionCount;
+  };
+
   const runGenerate = async (plan?: { title?: string; goals: string[]; interventions: PlanIntervention[] }) => {
     if (!resident || genBusy) return;
     const n = resLevel(resident).n;
     setGenConfirm(null);
     setGenBusy(true);
     try {
-      const raw = (resident.raw || {}) as Row;
-      // Supersede any prior held DRAFT for this resident so regenerating replaces it
-      // instead of leaving orphan drafts (A4). Under-review/active plans are untouched.
-      for (const d of draftPlansByResident.get(s(resident.id)) || []) {
-        try { await updateRecord("care-plans", s(d.id), { status: "DISCONTINUED", discontinuedReason: "Superseded by regenerated draft" }); } catch { /* best-effort */ }
-      }
-      const { interventionCount } = await generateCarePlanForResident({ residentId: s(resident.id), level: n, communityId: s(raw.communityId) || undefined, createdByName: clinicianName, plan, hold: true });
-      await cpQ.refetch?.();
+      const interventionCount = await doGenerate(resident, plan);
       Swal.fire({ icon: "success", title: "Draft care plan created", html: `Level ${n} plan with <b>${interventionCount} intervention${interventionCount === 1 ? "" : "s"}</b> prepared and <b>held</b>. Submit the care plan review below — once approved, tasks are generated daily for the resident's scheduled caregiver.`, timer: 3600, showConfirmButton: false });
     } catch (e) { Swal.fire("Couldn't generate", e instanceof Error ? e.message : "Please try again.", "error"); }
+    finally { setGenBusy(false); }
+  };
+
+  // One-click "Create care plan" from the roster: seed the resident's editable
+  // snapshot with the full Level-N package, generate the DRAFT immediately, and
+  // open New Review so the nurse can tailor it (the builder hydrates the seed).
+  const createPlanForResident = async (res: Row) => {
+    if (genBusy) return;
+    const rid = s(res.id);
+    const n = resLevel(res).n;
+    setResId(rid);
+    setTab("new");
+    setGenBusy(true);
+    try {
+      const tpl = fullLevelPlan(n);
+      await persistDraftState(rid, { level: n, goals: tpl.goals, items: levelCareTasks(n).map((t) => ({ taskId: t.id, included: true, assistance: "", freq: "Daily", note: "" })), updatedAt: new Date().toISOString() });
+      const interventionCount = await doGenerate(res, tpl);
+      Swal.fire({ icon: "success", title: "Draft care plan created", html: `Level ${n} plan with <b>${interventionCount} intervention${interventionCount === 1 ? "" : "s"}</b> prepared and <b>held</b>. Tailor the package below, then submit the care plan review.`, timer: 3600, showConfirmButton: false });
+    } catch (e) { Swal.fire("Couldn't create", e instanceof Error ? e.message : "Please try again.", "error"); }
     finally { setGenBusy(false); }
   };
 
@@ -221,6 +278,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
       const dispatched = await materializeTodayTasks();
       await persist(reviews.map((r) => (r.id === rv.id ? { ...r, approvalStatus: "APPROVED" as const, approvedById: clinicianId, approvedByName: clinicianName, approvedAt: new Date().toISOString(), pendingReason: undefined } : r)));
       await cpQ.refetch?.();
+      await clearDraftState(rv.residentId); // released — start any future plan clean
       // Notify the family sponsor that the plan they signed off on is now active (A5).
       if (rv.sponsorId) { try { await createRecord("notifications", { userId: s(rv.sponsorId), type: "SYSTEM_ALERT", title: "Care plan activated", message: `${rv.residentName || "Your relative"}'s care plan is now active.`, relatedEntityId: rv.id, relatedEntityType: "care_plan_review", severity: "INFO" }); } catch { /* non-critical */ } }
       Swal.fire({ icon: "success", title: "Care plan finalized · released", html: dispatched > 0 ? `${dispatched} task${dispatched === 1 ? "" : "s"} dispatched to today's scheduled caregiver.` : "Plan is now active. Tasks appear for the resident's caregiver on days one is scheduled.", timer: 3200, showConfirmButton: false });
@@ -266,6 +324,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
       const dispatched = await materializeTodayTasks();
       await persist(reviews.map((r) => (r.id === rv.id ? { ...r, approvalStatus: "APPROVED" as const, approvedById: clinicianId, approvedByName: clinicianName, approvedAt: new Date().toISOString(), pendingReason: undefined } : r)));
       await cpQ.refetch?.();
+      await clearDraftState(rv.residentId); // released — start any future plan clean
       Swal.fire({ icon: "success", title: "Approved · plan released", html: dispatched > 0 ? `${dispatched} task${dispatched === 1 ? "" : "s"} dispatched to today's scheduled caregiver.` : "Plan is now active.", timer: 3200, showConfirmButton: false });
     } catch (e) { Swal.fire("Couldn't release", e instanceof Error ? e.message : "The plan's activation gates are still incomplete.", "error"); }
     finally { setActingId(""); }
@@ -351,14 +410,14 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
-                        {(active || underReview) && <ClinicalButton variant="secondary" size="sm" className="max-sm:flex-1" onClick={() => setViewPlan({ resident: r, plan: (active || underReview) as Row })}>View</ClinicalButton>}
+                        {(active || underReview || drafts.length > 0) && <ClinicalButton variant="secondary" size="sm" className="max-sm:flex-1" onClick={() => setViewPlan({ resident: r, plan: (active || underReview || drafts[0]) as Row })}>View</ClinicalButton>}
                         {drafts.length > 0
                           ? <ClinicalButton variant="primary" size="sm" className="max-sm:flex-1" onClick={() => { setResId(rid); setTab("new"); }}>Finalize draft</ClinicalButton>
                           : underReview
                           ? <ClinicalButton variant="primary" size="sm" className="max-sm:flex-1" onClick={() => setTab("pending")}>Awaiting approval</ClinicalButton>
                           : locMismatch
-                          ? <ClinicalButton variant="primary" size="sm" className="max-sm:flex-1" onClick={() => { setResId(rid); setTab("new"); }}>Update to Level {lvl}</ClinicalButton>
-                          : !active && <ClinicalButton variant="primary" size="sm" className="max-sm:flex-1" onClick={() => { setResId(rid); setTab("new"); }}>Create care plan</ClinicalButton>}
+                          ? <ClinicalButton variant="primary" size="sm" disabled={genBusy} className="max-sm:flex-1" onClick={() => void createPlanForResident(r)}>Update to Level {lvl}</ClinicalButton>
+                          : !active && <ClinicalButton variant="primary" size="sm" disabled={genBusy} className="max-sm:flex-1" onClick={() => void createPlanForResident(r)}>Create care plan</ClinicalButton>}
                       </div>
                     </div>
                   );
@@ -413,7 +472,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
             </div>
           )}
 
-          {resident && <CarePlanBuilder key={resId} level={resLevel(resident).n} genBusy={genBusy} onGenerate={genPlan} onCountChange={setInterventionCount} onChange={setBuilderPlan} />}
+          {resident && <CarePlanBuilder key={resId} residentId={resId} level={resLevel(resident).n} genBusy={genBusy} saved={drafts[resId]} onPersist={persistDraftState} onGenerate={genPlan} onCountChange={setInterventionCount} onChange={setBuilderPlan} />}
 
           {resident && <ReviewForm resident={resident} level={resLevel(resident).n} recentInc={recentInc} recentVariances={recentVariances} last={latestReview(resId)} reviewedBy={clinicianName} heldPlanCount={(draftPlansByResident.get(resId) || []).length} hasExistingPlan={residentsWithPlan.has(resId)}
             onSubmit={async (rec) => {
@@ -432,7 +491,8 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
               // A plan-changing decision needs a generated draft to release — otherwise the
               // review would record as "approved" with no plan change (A1). Block it.
               if (PLAN_CHANGE_DECISIONS.has(rec.decision) && !targetPlan) {
-                Swal.fire({ icon: "warning", title: "No care plan to change", text: `"${rec.decision}" changes the care plan, but no draft has been generated. Generate a care plan above first, then submit the review.` });
+                const verb = rec.decision === "New Plan" ? "creates a care plan" : "changes the care plan";
+                Swal.fire({ icon: "warning", title: rec.decision === "New Plan" ? "No care plan to create" : "No care plan to change", text: `"${rec.decision}" ${verb}, but no draft has been generated. Generate a care plan above first, then submit the review.` });
                 return;
               }
               const now = new Date().toISOString();
@@ -673,7 +733,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
               <span>This plan was built at <b>Level {pl}</b>, but the resident&apos;s current level of care is <b>Level {cur}</b>. Create a new Level {cur} plan (Care Plans → Update to Level {cur}) and finalize it to supersede this one.</span>
             </div>
           ) : null; })()}
-          <CurrentPlanView plan={viewPlan.plan} nextReviewDate={latestReview(s(viewPlan.resident.id))?.nextReviewDate} />
+          <CurrentPlanView plan={viewPlan.plan} nextReviewDate={latestReview(s(viewPlan.resident.id))?.nextReviewDate} draft={s(viewPlan.plan.status) === "DRAFT" ? drafts[s(viewPlan.resident.id)] : undefined} />
         </ClinicalModal>
       )}
     </div>
@@ -682,9 +742,18 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
 
 // Read-only view of a resident's active care plan — meta strip, goals, and
 // interventions (each parsed into title · detail · frequency pill).
-function CurrentPlanView({ plan, nextReviewDate }: { plan: Row; nextReviewDate?: string }) {
-  const goals = s(plan.careGoals).split("\n").map((x) => x.trim()).filter(Boolean);
-  const ivs = s(plan.interventions).split("\n").map((x) => x.trim()).filter(Boolean).map(parseIntervention);
+function CurrentPlanView({ plan, nextReviewDate, draft }: { plan: Row; nextReviewDate?: string; draft?: DraftState | null }) {
+  // For a DRAFT with a live builder snapshot, render from the snapshot (the
+  // freshest, complete individualization) rather than the plan's stored string,
+  // which may lag the nurse's latest un-regenerated edits.
+  const goals = draft?.goals?.length ? draft.goals : s(plan.careGoals).split("\n").map((x) => x.trim()).filter(Boolean);
+  const ivs = draft
+    ? draft.items.filter((i) => i.included).map((i) => { const t = taskById(i.taskId); return {
+        title: t?.name || i.taskId,
+        desc: [i.assistance && `Assistance: ${i.assistance}`, i.note.trim() || t?.approvedIntervention || t?.definition || ""].filter(Boolean).join(" · "),
+        freq: i.freq,
+      }; })
+    : s(plan.interventions).split("\n").map((x) => x.trim()).filter(Boolean).map(parseIntervention);
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -776,21 +845,26 @@ interface TaskItem {
   included: boolean; assistance: string; freq: string; note: string;
 }
 
-function CarePlanBuilder({ level, genBusy, onGenerate, onCountChange, onChange }: {
-  level: number; genBusy: boolean;
+function CarePlanBuilder({ residentId, level, genBusy, saved, onPersist, onGenerate, onCountChange, onChange }: {
+  residentId: string; level: number; genBusy: boolean;
+  saved?: DraftState | null;
+  onPersist?: (residentId: string, state: DraftState) => void;
   onGenerate: (plan: { title?: string; goals: string[]; interventions: PlanIntervention[] }) => void;
   onCountChange?: (count: number) => void;
   onChange?: (plan: { title?: string; goals: string[]; interventions: PlanIntervention[] }) => void;
 }) {
   const meta = levelMeta(level);
   const base = useMemo(() => levelPlan(level), [level]);
-  const [goals, setGoals] = useState(() => base.goals.join("\n"));
-  const [items, setItems] = useState<TaskItem[]>(() => levelCareTasks(level).map((t) => ({
+  // Hydrate from the saved snapshot (the nurse's prior edits), else level
+  // defaults. The level task list stays authoritative — mergeSavedIntoTasks
+  // overlays only the editable fields and drops any retired governed tasks.
+  const [goals, setGoals] = useState(() => (saved?.goals?.length ? saved.goals.join("\n") : base.goals.join("\n")));
+  const [items, setItems] = useState<TaskItem[]>(() => mergeSavedIntoTasks(levelCareTasks(level).map((t) => ({
     taskId: t.id, domain: t.domain, name: t.name, intervention: t.approvedIntervention || t.definition || "",
     goal: t.approvedGoal || "", assistanceChoices: parseAssistanceOptions(t.assistanceOptions), freqHint: t.frequencyOptions || "",
     prompt: t.residentGoalPrompt || "", responsibleRole: t.responsibleRole || t.primaryRole || "Caregiver",
     included: true, assistance: "", freq: "Daily", note: "",
-  })));
+  })), saved));
 
   const patch = (id: string, p: Partial<TaskItem>) => setItems((arr) => arr.map((x) => (x.taskId === id ? { ...x, ...p } : x)));
   const setDomain = (domain: string, on: boolean) => setItems((arr) => arr.map((x) => (x.domain === domain ? { ...x, included: on } : x)));
@@ -804,10 +878,14 @@ function CarePlanBuilder({ level, genBusy, onGenerate, onCountChange, onChange }
   useEffect(() => { onCountChange?.(chosen.length); }, [chosen.length, onCountChange]);
 
   // Report the full plan state to the parent so the top-level "Generate" button can pass it.
+  // Depend on the stable `items` state ref (not the `chosen` array, which is a new
+  // reference every render) so this fires only on a real edit — otherwise
+  // setBuilderPlan re-renders the parent, producing a new `chosen`, re-firing the
+  // effect: an infinite render loop.
   useEffect(() => {
     onChange?.({
       goals: goals.split("\n").map((g) => g.trim()).filter(Boolean),
-      interventions: chosen.map((it) => ({
+      interventions: items.filter((x) => x.included).map((it) => ({
         domain: it.domain,
         title: it.name,
         freq: it.freq,
@@ -815,7 +893,21 @@ function CarePlanBuilder({ level, genBusy, onGenerate, onCountChange, onChange }
         note: [it.assistance && `Assistance: ${it.assistance}`, (it.note.trim() || it.intervention.trim() || "Individualize assistance, technique and preferences."), it.responsibleRole && `Role: ${it.responsibleRole}`].filter(Boolean).join(" · "),
       })),
     });
-  }, [goals, chosen, onChange]);
+  }, [goals, items, onChange]);
+
+  // Auto-save the builder snapshot (debounced) so the nurse's edits are never
+  // lost when they navigate away or regenerate — the resident's plan is a draft
+  // and must be fully preserved. Skips the initial (hydration) render so opening
+  // the builder doesn't overwrite the stored snapshot with itself.
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (!hydrated.current) { hydrated.current = true; return; }
+    if (!onPersist) return;
+    const t = setTimeout(() => {
+      onPersist(residentId, { level, goals: goals.split("\n").map((g) => g.trim()).filter(Boolean), items: toSavedItems(items), updatedAt: new Date().toISOString() });
+    }, 700);
+    return () => clearTimeout(t);
+  }, [goals, items, level, residentId, onPersist]);
 
   // Group tasks by domain for a navigable, level-scoped plan.
   const byDomain = useMemo(() => {

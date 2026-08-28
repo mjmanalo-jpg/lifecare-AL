@@ -72,6 +72,24 @@ export function levelPlan(level: number): LevelPlanTemplate {
 }
 
 /**
+ * The FULL individualized template for a level — every governed package task
+ * (not deduped by domain like {@link levelPlan}), with default frequency and the
+ * governed intervention + role as the note. Matches what the CarePlanBuilder
+ * shows (37/38 tasks), so a one-click "Create care plan" produces the same draft
+ * a nurse would get by opening the builder and generating without edits.
+ */
+export function fullLevelPlan(level: number): LevelPlanTemplate {
+  const n = Math.min(5, Math.max(1, Math.round(level) || 1));
+  const base = levelPlan(n); // title + goals
+  const interventions: PlanIntervention[] = levelCareTasks(n).map((t) => {
+    const role = (t.responsibleRole || t.primaryRole || "Caregiver").trim();
+    const detail = (t.approvedIntervention || t.definition || "Individualize assistance, technique and preferences.").trim();
+    return { domain: t.domain, title: t.name, freq: "Daily", taskId: t.id, note: role ? `${detail} · Role: ${role}` : detail };
+  });
+  return { title: base.title, goals: base.goals, interventions };
+}
+
+/**
  * The governed care-task PACKAGE for a Level of Care — the tasks whose
  * `careLevel` equals this level (auto-generate set) in the care_task_master
  * decision-rules. This is what an Individualized Care Plan draws from: a Level-N
@@ -152,7 +170,12 @@ export async function generateCarePlanForResident(opts: {
     startDate: now,
     reviewFrequency: REVIEW_FREQ[level] || "MONTHLY",
     careGoals: tpl.goals.join("\n"),
-    interventions: interventions.map((i) => `${i.title} (${i.freq})`).join("\n"),
+    // Include the individualized detail (assistance level + note + role) in the
+    // display string so the plan View shows what the nurse set — not just title
+    // + frequency. The daily materializer reads care-plan-items (below), so this
+    // string is display-only and safe to enrich. `parseIntervention` in the
+    // board splits title / detail / freq for the read-only view.
+    interventions: interventions.map((i) => `${i.title}${i.note?.trim() ? `: ${i.note.trim()}` : ""} (${i.freq})`).join("\n"),
     notes: opts.hold
       ? `Level ${level} care plan — HELD pending care-plan-review approval. Tasks are not dispatched until released.`
       : `Auto-generated from approved Level of Care ${level} (v3.9 baseline package). Review & personalize.`,
