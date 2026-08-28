@@ -288,7 +288,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
 
   // For a reassessment (LOC Decision Review, origin ACUITY) the picker lists ADMITTED
   // residents — the CRM converted-lead list is only for the Pre-Admission form.
-  const { data: residentRows } = useLiveQuery<{ id: string; firstName?: string; lastName?: string; name?: string; dateOfBirth?: string; gender?: string; roomNumber?: string; status?: string }>("residents", { tables: ["Resident"] });
+  const { data: residentRows } = useLiveQuery<{ id: string; firstName?: string; lastName?: string; name?: string; dateOfBirth?: string; gender?: string; roomNumber?: string; status?: string; diagnosis?: string; medicalHistory?: string; allergies?: string }>("residents", { tables: ["Resident"] });
   const residentOpts = useMemo<AdmissionOpt[]>(
     () => (residentRows || [])
       .filter((r) => String(r.status || "").toUpperCase() !== "DISCHARGED")
@@ -749,6 +749,40 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     openEdit(clone);
   };
 
+  // The narrative report reads Layer 1 clinical fields. A reassessment raised from
+  // Care Acuity (pick-resident) starts with a blank Layer 1, so backfill from the
+  // resident's richest prior assessment and their Resident record before printing —
+  // otherwise the Clinical Summary collapses to "<name> is a resident."
+  const openNarrativeReport = (a: AssessmentV42) => {
+    const s = (v: unknown) => (v == null ? "" : String(v));
+    const cur = a.layer1 || ({} as AssessmentV42["layer1"]);
+    const rid = s(cur.residentId);
+    const nm = s(cur.residentName).trim().toLowerCase();
+    const rich = (x?: AssessmentV42) => !!x && !!(s(x.layer1?.diagnoses).trim() || s(x.layer1?.medications).trim() || s(x.layer1?.reasonForAdmission).trim() || s(x.layer1?.dateOfBirth).trim());
+    const sameResident = (x: AssessmentV42) => x.id !== a.id && ((!!rid && s(x.layer1?.residentId) === rid) || (!!nm && s(x.layer1?.residentName).trim().toLowerCase() === nm));
+    const src = [
+      assessments.find((x) => x.id === a.layer3?.priorAssessmentId),
+      ...assessments.filter(sameResident).sort((x, y) => s(y.updatedAt).localeCompare(s(x.updatedAt))),
+    ].filter((x): x is AssessmentV42 => !!x).find(rich)?.layer1;
+    const resident = residentRows.find((r) => (!!rid && s(r.id) === rid) || (!!nm && `${s(r.firstName)} ${s(r.lastName)}`.trim().toLowerCase() === nm));
+    const pick = (...vals: Array<string | undefined>) => vals.map((v) => s(v).trim()).find(Boolean) || undefined;
+    const enriched: AssessmentV42 = {
+      ...a,
+      layer1: {
+        ...cur,
+        dateOfBirth: pick(cur.dateOfBirth, src?.dateOfBirth, resident?.dateOfBirth ? s(resident.dateOfBirth).slice(0, 10) : undefined),
+        sex: pick(cur.sex, src?.sex, resident?.gender),
+        age: pick(cur.age, src?.age),
+        diagnoses: pick(cur.diagnoses, src?.diagnoses, resident?.diagnosis, resident?.medicalHistory),
+        medications: pick(cur.medications, src?.medications),
+        allergies: pick(cur.allergies, src?.allergies, resident?.allergies),
+        surgeries: pick(cur.surgeries, src?.surgeries),
+        reasonForAdmission: pick(cur.reasonForAdmission, src?.reasonForAdmission),
+      },
+    };
+    printNarrativeReport(enriched);
+  };
+
   const q = search.trim().toLowerCase();
   const filtered = assessments.filter((a) => !q || (a.layer1?.residentName || "").toLowerCase().includes(q));
   const stat = (lvl: CareLevel) =>
@@ -804,7 +838,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
         skeletonRows={3}
       >
         {viewMode === "table" ? (
-          <AssessmentTable rows={filtered} onEdit={openEdit} onRemove={remove} />
+          <AssessmentTable rows={filtered} onEdit={openEdit} onRemove={remove} onReport={openNarrativeReport} />
         ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map((a) => {
@@ -827,7 +861,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                   <div className="flex shrink-0 items-center gap-2">
                     {a.status === "VALIDATED" ? <StatusPill status="APPROVED">Validated</StatusPill> : <StatusPill status={a.status} />}
                     <div className="flex items-center overflow-hidden rounded-lg border" style={{ borderColor: "var(--clinical-line)" }}>
-                      {a.status === "VALIDATED" && <button onClick={() => printNarrativeReport(a)} aria-label="Generate narrative report" title="Generate narrative report (PDF)" className="border-r p-1.5 text-[var(--clinical-panel)] transition hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: "var(--clinical-line)" }}><FileText className="h-4 w-4" /></button>}
+                      {a.status === "VALIDATED" && <button onClick={() => openNarrativeReport(a)} aria-label="Generate narrative report" title="Generate narrative report (PDF)" className="border-r p-1.5 text-[var(--clinical-panel)] transition hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: "var(--clinical-line)" }}><FileText className="h-4 w-4" /></button>}
                       <button onClick={() => openEdit(a)} aria-label="Edit assessment" title="Edit assessment" className="p-1.5 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]"><Pencil className="h-4 w-4" /></button>
                       <button onClick={() => remove(a)} aria-label="Delete" title="Delete assessment" className="border-l p-1.5 text-[var(--clinical-coral)] transition hover:bg-[color-mix(in_srgb,var(--clinical-coral)_10%,transparent)]" style={{ borderColor: "var(--clinical-line)" }}><Trash2 className="h-4 w-4" /></button>
                     </div>
@@ -1241,10 +1275,11 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
 }
 
 // ── Table view — the same records as the card grid, in a dense sortable-feel table ──
-function AssessmentTable({ rows, onEdit, onRemove }: {
+function AssessmentTable({ rows, onEdit, onRemove, onReport }: {
   rows: AssessmentV42[];
   onEdit: (a: AssessmentV42, layer?: 1 | 2 | 3) => void;
   onRemove: (a: AssessmentV42) => void;
+  onReport: (a: AssessmentV42) => void;
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
@@ -1301,7 +1336,7 @@ function AssessmentTable({ rows, onEdit, onRemove }: {
                 <td className="px-4 py-3.5">
                   <div className="flex justify-end">
                    <div className="inline-flex items-center overflow-hidden rounded-lg border" style={{ borderColor: "var(--clinical-line)" }}>
-                    {a.status === "VALIDATED" && <button onClick={() => printNarrativeReport(a)} aria-label="Generate narrative report" title="Generate narrative report (PDF)" className="border-r p-1.5 text-[var(--clinical-panel)] transition hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: "var(--clinical-line)" }}><FileText className="h-4 w-4" /></button>}
+                    {a.status === "VALIDATED" && <button onClick={() => onReport(a)} aria-label="Generate narrative report" title="Generate narrative report (PDF)" className="border-r p-1.5 text-[var(--clinical-panel)] transition hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: "var(--clinical-line)" }}><FileText className="h-4 w-4" /></button>}
                     <button onClick={() => onEdit(a)} aria-label="Edit" title="Edit assessment" className="p-1.5 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]"><Pencil className="h-4 w-4" /></button>
                     <button onClick={() => onRemove(a)} aria-label="Delete" title="Delete assessment" className="border-l p-1.5 text-[var(--clinical-coral)] transition hover:bg-[color-mix(in_srgb,var(--clinical-coral)_10%,transparent)]" style={{ borderColor: "var(--clinical-line)" }}><Trash2 className="h-4 w-4" /></button>
                    </div>
