@@ -22,6 +22,11 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const evidenceTagsFor = (scope?: string) =>
   (scope ?? "").split(/,|;|\//).map((s) => cap(s.trim())).filter(Boolean);
 const evidenceTokens = (evidence?: string) => (evidence ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+// A chip lights up when its tag appears as a whole word in the note (typed or
+// inserted), regardless of comma/space separation.
+const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const hasEvidenceWord = (evidence: string | undefined, tag: string) =>
+  !!evidence && new RegExp(`(^|\\W)${escapeRegex(tag)}(\\W|$)`, "i").test(evidence);
 
 // Single-select evidence dropdowns per domain (e.g. transfer assist level). Options
 // live in the same comma-token evidence field; picking one replaces any prior option
@@ -86,12 +91,15 @@ function EvidenceField({ evidence, placeholder, tags, select, onChange, readOnly
       {tags.length > 0 && (
         <div className="mb-1.5 flex flex-wrap items-center gap-1">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--clinical-muted)] mr-0.5">Quick add</span>
-          {tags.map((tag) => (
-            <button key={tag} type="button" disabled={readOnly} onClick={() => insertAtCaret(tag)}
-              className={`px-2 py-1 rounded-md text-[11px] font-medium border transition ${chipOff} ${readOnly ? "cursor-default" : ""}`}>
-              {tag}
-            </button>
-          ))}
+          {tags.map((tag) => {
+            const on = hasEvidenceWord(evidence, tag);
+            return (
+              <button key={tag} type="button" disabled={readOnly} onClick={() => insertAtCaret(tag)}
+                className={`px-2 py-1 rounded-md text-[11px] font-medium border transition ${on ? chipOn : chipOff} ${readOnly ? "cursor-default" : ""}`}>
+                {tag}
+              </button>
+            );
+          })}
         </div>
       )}
       {select && (
