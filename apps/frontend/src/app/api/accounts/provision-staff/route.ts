@@ -1,27 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import { randomInt } from "crypto";
 import type { Role } from "@prisma/client";
 import { requireTenantContext, canManageOrganization } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
-import { createSupabaseUser, SupabaseUserExistsError, isSupabaseAuthConfigured } from "@/lib/supabaseAuth";
 import { normalizeMobile } from "@/lib/mobileAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Provision a working LOGIN for a staff member (nurse / caregiver / care manager):
-// Supabase auth user + first-time password → User (authUserId + bcrypt hash) →
-// org + community membership (their role) → Staff record. Mirrors the resident
+// a password-less User → org + community membership (their role) → Staff record.
+// The staff set their OWN password on first login (company + mobile → first-time
+// setup), matching the Org Admin add-staff flow. Mirrors the resident
 // /accounts/provision flow. Without this, an Add-Staff that only writes a User row
-// has no credential and can't sign in.
-
-// Readable first-time password, e.g. "Care-7K3m-4820" (no ambiguous chars).
-function genPassword(): string {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-  const chunk = (n: number) => Array.from({ length: n }, () => alphabet[randomInt(alphabet.length)]).join("");
-  return `Care-${chunk(4)}-${chunk(4)}`;
-}
+// has no membership/Staff record and can't sign in.
 
 // Every staff role a Super Admin / org admin can appoint (mirrors the org-admin
 // staff-accounts allow-list). Mobile/clinical/facility/support roles all provision
@@ -55,7 +46,6 @@ export async function POST(request: NextRequest) {
 
   const organizationId = context.organizationId;
   const communityId = context.communityId;
-  const password = genPassword();
 
   try {
     // Never overwrite an existing account. Adding a staff whose email (or mobile)
@@ -74,34 +64,13 @@ export async function POST(request: NextRequest) {
         }
       }
     }
-    let authUserId: string | undefined;
-    let passwordSet = false;
-
-    if (isSupabaseAuthConfigured()) {
-      try {
-        const created = await createSupabaseUser(email, password);
-        authUserId = created.id;
-        passwordSet = true;
-      } catch (error) {
-        if (error instanceof SupabaseUserExistsError) {
-          // Auth user already exists — keep their current password (this is an
-          // add, not a reset); we still wire up membership + staff record.
-          passwordSet = false;
-        } else {
-          throw error;
-        }
-      }
-    } else {
-      passwordSet = true; // dev without Supabase — bcrypt-only login accepted
-    }
-
-    const passwordHash = passwordSet ? await bcrypt.hash(password, 10) : undefined;
-
     const result = await prisma.$transaction(async (tx) => {
       // create (not upsert): the email is guaranteed new by the checks above, and the
       // unique constraint is the final guard against a race — it must never overwrite.
+      // Password-less: no authUserId / passwordHash, so the first login prompts the
+      // staff to set their own password (mobile-login → needsFirstPassword).
       const u = await tx.user.create({
-        data: { email, name: name || email.split("@")[0], phone, role, isActive: true, ...(authUserId ? { authUserId } : {}), ...(passwordHash ? { passwordHash } : {}) },
+        data: { email, name: name || email.split("@")[0], phone, role, isActive: true },
       });
       await tx.organizationMembership.upsert({
         where: { userId_organizationId: { userId: u.id, organizationId } },
@@ -125,8 +94,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       email,
       staffId: result.staffId,
-      password: passwordSet ? password : null,
-      status: passwordSet ? "created" : "existing_unchanged",
+      password: null, // password-less — staff sets it on first login
+      status: "created",
     }, { status: 200 });
   } catch (error) {
     console.error("[provision-staff] failed:", error);

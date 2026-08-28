@@ -366,7 +366,9 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
           },
         });
       } else {
-        Swal.fire({ title: "Staff added", text: `${createdName} already had a login; their membership and record were updated (no new password — the email already had an account).`, icon: "success", confirmButtonColor: "#0e7c6b" });
+        // Password-less staff: they set their own password on first login (company
+        // name + mobile → first-time setup), matching the Org Admin add-staff flow.
+        Swal.fire({ title: "Staff account created", text: `${createdName} signs in with your company name + their mobile number, and sets their own password on first login.`, icon: "success", confirmButtonColor: "#047857" });
       }
     } catch (err) {
       Swal.fire({
