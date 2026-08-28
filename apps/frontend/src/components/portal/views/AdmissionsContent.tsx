@@ -302,6 +302,17 @@ const normDOB = (v: unknown) => {
   if (m) return `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
   const d = new Date(t); return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 };
+// Age derived from DOB (YYYY-MM-DD or anything Date parses); "" when unknown/invalid.
+const ageFromDob = (dob?: string): string => {
+  if (!dob) return "";
+  const d = new Date(dob);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  let a = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--;
+  return a >= 0 && a < 130 ? String(a) : "";
+};
 const paLevel = (p: Record<string, unknown>) => Number(p.overrideLevel) || Number((p.scores as Record<string, unknown> | undefined)?.level) || 0;
 
 // v4.2 Level of Care (L1–L5) display names + mapping to the legacy resident
@@ -1352,6 +1363,7 @@ export default function AdmissionsContent() {
                     <Field label="Middle Name (optional)"><input className={inputCls} value={form.middleName} onChange={(e) => set({ middleName: e.target.value })} /></Field>
                     <Field label="Last Name *"><input className={inputCls} value={form.lastName} onChange={(e) => set({ lastName: e.target.value })} /></Field>
                     <Field label="Date of Birth"><input type="date" className={inputCls} value={form.dateOfBirth} onChange={(e) => set({ dateOfBirth: e.target.value })} /></Field>
+                    <Field label="Age"><input className={`${inputCls} bg-black/5 cursor-not-allowed`} value={ageFromDob(form.dateOfBirth)} readOnly placeholder="Auto from DOB" /></Field>
                     <Field label="Date Admitted"><input type="date" className={inputCls} value={form.admissionDate} onChange={(e) => set({ admissionDate: e.target.value })} /></Field>
                     <Field label="Gender"><select className={inputCls} value={form.gender} onChange={(e) => set({ gender: e.target.value })}><option value="">—</option><option>Female</option><option>Male</option><option>Other</option></select></Field>
                     <Field label="Phone"><input className={inputCls} value={form.phone} onChange={(e) => set({ phone: e.target.value })} /></Field>
@@ -1949,6 +1961,7 @@ function AdmissionEditForm({ row, onSave }: {
           <Field label="Middle Name (optional)"><input className={inputCls} value={middleName} onChange={(e) => setMiddleName(e.target.value)} /></Field>
           <Field label="Last Name"><input className={inputCls} value={lastName} onChange={(e) => setLastName(e.target.value)} /></Field>
           <Field label="Date of Birth"><input type="date" className={inputCls} value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} /></Field>
+          <Field label="Age"><input className={`${inputCls} bg-black/5 cursor-not-allowed`} value={ageFromDob(dateOfBirth)} readOnly placeholder="Auto from DOB" /></Field>
           <Field label="Gender"><input className={inputCls} value={gender} onChange={(e) => setGender(e.target.value)} /></Field>
           <Field label="Phone"><input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} /></Field>
           <Field label="Email"><input className={inputCls} value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
