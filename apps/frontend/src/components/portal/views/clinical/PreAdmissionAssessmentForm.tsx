@@ -435,7 +435,7 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <ResidentPicker value={form.residentName} onChange={(v) => set({ residentName: v })} admissions={admissionOpts} linkedId={linkedAdmissionId} onPick={pickAdmission} onUnlink={() => setLinkedAdmissionId("")} />
                   <div className="grid grid-cols-2 gap-3">
-                    <Text label="Age" value={form.age} onChange={() => {}} readOnly placeholder="Auto from DOB" />
+                    <Text label="Age" value={form.age || ageFromDob(form.dateOfBirth)} onChange={() => {}} readOnly placeholder="Auto from DOB" />
                     <Text label="Sex" value={form.sex} onChange={(v) => set({ sex: v })} placeholder="Male / Female" />
                   </div>
                   <Text label="Date of Birth" type="date" value={form.dateOfBirth} onChange={(v) => set({ dateOfBirth: v, age: ageFromDob(v) })} />

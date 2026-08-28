@@ -89,11 +89,11 @@ const chipOff = "bg-[var(--clinical-surface)] text-[var(--clinical-ink-soft)] bo
 const newId = () => `av42-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 // ── Reusable inputs ──────────────────────────────────────────────────────────
-function Text({ label, value, onChange, placeholder, type = "text" }: { label: string; value?: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
+function Text({ label, value, onChange, placeholder, type = "text", readOnly }: { label: string; value?: string; onChange: (v: string) => void; placeholder?: string; type?: string; readOnly?: boolean }) {
   return (
     <label className="block">
       <MicroLabel className="mb-1">{label}</MicroLabel>
-      <input type={type} value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={input} />
+      <input type={type} value={value ?? ""} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} readOnly={readOnly} className={`${input}${readOnly ? " bg-black/5 cursor-not-allowed" : ""}`} />
     </label>
   );
 }
@@ -907,8 +907,8 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                       </div>
                       <div className="sm:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <Text label="Assessment Date" type="date" value={draft.layer1.assessmentDate} onChange={(v) => patchLayer1({ assessmentDate: v })} />
-                        <Text label="Date of Birth" type="date" value={draft.layer1.dateOfBirth} onChange={(v) => patchLayer1({ dateOfBirth: v })} />
-                        <Text label="Age" value={draft.layer1.age} onChange={(v) => patchLayer1({ age: v })} />
+                        <Text label="Date of Birth" type="date" value={draft.layer1.dateOfBirth} onChange={(v) => patchLayer1({ dateOfBirth: v, age: ageFromDob(v) })} />
+                        <Text label="Age" value={draft.layer1.age || ageFromDob(draft.layer1.dateOfBirth)} onChange={() => {}} readOnly placeholder="Auto from DOB" />
                         <Text label="Sex" value={draft.layer1.sex} onChange={(v) => patchLayer1({ sex: v })} placeholder="M / F" />
                       </div>
                       <Text label="Assessment Location" value={draft.layer1.assessmentLocation ?? draft.layer1.location} onChange={(v) => patchLayer1({ assessmentLocation: v })} />
