@@ -4,7 +4,7 @@ import { ROLES, groupSidebarLinks, type Role } from "../src/constants/roleConfig
 
 const EXPECTED_GROUPS: Partial<Record<Role, string[]>> = {
   FACILITY_ADMIN: ["Today", "Operations", "Residents", "Staff", "Quality", "Services", "Reports", "Settings"],
-  CARE_MANAGER: ["Clinical Risk Overview", "Assessment & LOC Governance", "Care Plan Governance", "Care Delivery Reliability", "Safety / Transitions", "Staffing / Team Quality", "Open Decisions"],
+  CARE_MANAGER: ["Clinical Risk Overview", "Admissions & Governance", "Care Delivery Reliability", "Safety / Transitions", "Staffing / Team Quality", "Open Decisions"],
   NURSE: ["Shift Command", "Clinical Triage Queue", "Caregiver Deployment", "Shift Watchlist", "Care Delivery Status", "Assessment & LOC", "Care Plan Governance", "Shift Endorsement"],
   CAREGIVER: ["Facility My Shift", "My Residents", "My Care Now", "Document Care", "Need Nurse / Help", "Assignment Update", "Shift Close"],
   RESIDENT_COORDINATOR: ["Today", "Residents", "Schedule", "Coordination", "Alerts", "Family Contacts", "Endorsement"],
