@@ -59,6 +59,7 @@ export default function LoginPage() {
   // password ("password") or, first-time, sets one ("firstTime").
   const [pwPrompt, setPwPrompt] = useState<null | "password" | "firstTime">(null);
   const [employeeName, setEmployeeName] = useState("");
+  const [remember, setRemember] = useState(true);
 
   // ── Shared state ──
   const [theme, setTheme] = useState<"dark" | "light">(loginConfig.baseTheme);
@@ -72,6 +73,16 @@ export default function LoginPage() {
     const savedTheme = localStorage.getItem("theme") as "dark" | "light" | null;
     const initialTheme = savedTheme || loginConfig.baseTheme;
     setTheme(initialTheme);
+    // Remember the last-used sign-in ID (never the password) so returning
+    // users don't retype it. The browser password manager fills the password.
+    const rememberOn = localStorage.getItem("login_remember") !== "0";
+    setRemember(rememberOn);
+    if (!rememberOn) return;
+    const savedMode = localStorage.getItem("login_mode") as "employee" | "client" | null;
+    if (savedMode) setMode(savedMode);
+    setCompany(localStorage.getItem("login_company") || "");
+    setMobile(localStorage.getItem("login_mobile") || "");
+    setEmail(localStorage.getItem("login_email") || "");
   }, [loginConfig.baseTheme]);
 
   useEffect(() => {
@@ -105,6 +116,20 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    // Save the sign-in ID (not the password) for next time — only if "Remember
+    // me" is on; otherwise clear anything previously saved.
+    localStorage.setItem("login_remember", remember ? "1" : "0");
+    if (remember) {
+      localStorage.setItem("login_mode", mode);
+      if (mode === "client") {
+        localStorage.setItem("login_email", email);
+      } else {
+        localStorage.setItem("login_company", company);
+        localStorage.setItem("login_mobile", mobile);
+      }
+    } else {
+      ["login_mode", "login_email", "login_company", "login_mobile"].forEach((k) => localStorage.removeItem(k));
+    }
     try {
       if (mode === "client") {
         const response = await fetch("/api/auth/session", {
@@ -400,6 +425,17 @@ export default function LoginPage() {
                   </div>
                 </div>
               )}
+
+              {/* Remember me */}
+              <label className="flex items-center gap-2.5 text-sm text-muted-foreground cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="w-4 h-4 rounded border-border accent-[var(--lp-accent)] cursor-pointer"
+                />
+                Remember my {mode === "client" ? "email" : "company & mobile"} on this device
+              </label>
 
               {/* Submit */}
               <button
