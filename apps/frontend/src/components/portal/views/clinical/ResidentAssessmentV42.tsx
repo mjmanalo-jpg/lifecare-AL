@@ -873,9 +873,9 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                   <div className="flex shrink-0 items-center gap-2">
                     {a.status === "VALIDATED" ? <StatusPill status="APPROVED">Validated</StatusPill> : <StatusPill status={a.status} />}
                     <div className="flex items-center overflow-hidden rounded-lg border" style={{ borderColor: "var(--clinical-line)" }}>
-                      {a.status === "VALIDATED" && <button onClick={() => openNarrativeReport(a)} aria-label="Generate narrative report" title="Generate narrative report (PDF)" className="border-r p-1.5 text-[var(--clinical-panel)] transition hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: "var(--clinical-line)" }}><FileText className="h-4 w-4" /></button>}
-                      <button onClick={() => openEdit(a)} aria-label="Edit assessment" title="Edit assessment" className="p-1.5 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]"><Pencil className="h-4 w-4" /></button>
-                      <button onClick={() => remove(a)} aria-label="Delete" title="Delete assessment" className="border-l p-1.5 text-[var(--clinical-coral)] transition hover:bg-[color-mix(in_srgb,var(--clinical-coral)_10%,transparent)]" style={{ borderColor: "var(--clinical-line)" }}><Trash2 className="h-4 w-4" /></button>
+                      {a.status === "VALIDATED" && <button onClick={() => openNarrativeReport(a)} aria-label="Generate narrative report" title="Generate narrative report (PDF)" className="border-r p-1 text-[var(--clinical-panel)] transition hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: "var(--clinical-line)" }}><FileText className="h-3.5 w-3.5" /></button>}
+                      <button onClick={() => openEdit(a)} aria-label="Edit assessment" title="Edit assessment" className="p-1 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]"><Pencil className="h-3.5 w-3.5" /></button>
+                      <button onClick={() => remove(a)} aria-label="Delete" title="Delete assessment" className="border-l p-1 text-[var(--clinical-coral)] transition hover:bg-[color-mix(in_srgb,var(--clinical-coral)_10%,transparent)]" style={{ borderColor: "var(--clinical-line)" }}><Trash2 className="h-3.5 w-3.5" /></button>
                     </div>
                   </div>
                 </div>
@@ -1348,9 +1348,9 @@ function AssessmentTable({ rows, onEdit, onRemove, onReport }: {
                 <td className="px-4 py-3.5">
                   <div className="flex justify-end">
                    <div className="inline-flex items-center overflow-hidden rounded-lg border" style={{ borderColor: "var(--clinical-line)" }}>
-                    {a.status === "VALIDATED" && <button onClick={() => onReport(a)} aria-label="Generate narrative report" title="Generate narrative report (PDF)" className="border-r p-1.5 text-[var(--clinical-panel)] transition hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: "var(--clinical-line)" }}><FileText className="h-4 w-4" /></button>}
-                    <button onClick={() => onEdit(a)} aria-label="Edit" title="Edit assessment" className="p-1.5 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]"><Pencil className="h-4 w-4" /></button>
-                    <button onClick={() => onRemove(a)} aria-label="Delete" title="Delete assessment" className="border-l p-1.5 text-[var(--clinical-coral)] transition hover:bg-[color-mix(in_srgb,var(--clinical-coral)_10%,transparent)]" style={{ borderColor: "var(--clinical-line)" }}><Trash2 className="h-4 w-4" /></button>
+                    {a.status === "VALIDATED" && <button onClick={() => onReport(a)} aria-label="Generate narrative report" title="Generate narrative report (PDF)" className="border-r p-1 text-[var(--clinical-panel)] transition hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: "var(--clinical-line)" }}><FileText className="h-3.5 w-3.5" /></button>}
+                    <button onClick={() => onEdit(a)} aria-label="Edit" title="Edit assessment" className="p-1 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]"><Pencil className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => onRemove(a)} aria-label="Delete" title="Delete assessment" className="border-l p-1 text-[var(--clinical-coral)] transition hover:bg-[color-mix(in_srgb,var(--clinical-coral)_10%,transparent)]" style={{ borderColor: "var(--clinical-line)" }}><Trash2 className="h-3.5 w-3.5" /></button>
                    </div>
                   </div>
                 </td>
