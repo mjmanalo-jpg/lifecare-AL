@@ -14,6 +14,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFacilityConfig } from "@/lib/useFacilityConfig";
 import { ASSESSMENTS_V42_KEY, originOf, classifyAssessment, assessmentRawScore, newAssessment, type AssessmentV42, type DomainEntry } from "@/lib/lifecare/assessment";
 import type { CareLevel, DomainCode } from "@/lib/lifecare/types.ts";
+import { recordLocChange } from "@/lib/lifecare/locHistory";
 import DomainScoreGrid from "@/components/portal/views/clinical/DomainScoreGrid";
 import { CRM_LEADS_KEY, parseLeads, type Lead } from "@/lib/crmLeads";
 import { createRecord, updateRecord, upsertRecord, deleteRecord } from "@/lib/api";
@@ -1139,6 +1140,23 @@ export default function AdmissionsContent() {
       // Link the admission's v4.2 assessment to the new resident so this admission
       // form surfaces in One Care · One Journey (Forms) and the resident timeline.
       if (id) await persistV42(id, residentId);
+
+      // Seed the resident's Level-of-Care history with the nurse/CM-validated Final
+      // LOC (L1..L5), keyed by residentId. This is what the Care Plan (and anything
+      // reading loc_history) treats as the authoritative active level — so the
+      // validated level flows assessment → onboarding → Care Plan without collapsing
+      // through the coarse careLevel enum. Deduped + best-effort (never blocks).
+      if (v42Level) {
+        await recordLocChange({
+          residentId,
+          admissionId: id || undefined,
+          residentName: `${form.firstName} ${form.lastName}`.trim(),
+          level: v42Level,
+          source: "PRE_ADMISSION",
+          assessmentId: id ? `av42-adm-${id}` : undefined,
+          notes: v42Final?.belowFloorReason?.trim() || v42Final?.finalLevelJustification?.trim() || undefined,
+        });
+      }
 
       // Handoff: notify the assigned care team + create an onboarding task.
       const team = parseTeam(form.careTeam);
