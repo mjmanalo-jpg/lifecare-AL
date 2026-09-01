@@ -447,6 +447,20 @@ export default function AdmissionsContent() {
     [settingRows, onboarded]
   );
 
+  // Nurse/CM-validated Final LOC for an admission → legacy careLevel enum. Read
+  // from the admission's own v4.2 record (or the linked screening), so the edit
+  // view reflects the assessment's decision (incl. overrides) instead of a stale
+  // careLevel column. Uses the raw blob — preadmitsV42 hides onboarded people.
+  const assessedCareLevel = (row: Row): string => {
+    const rid = s(row.id);
+    const rname = `${s(row.firstName)} ${s(row.lastName)}`.trim().toLowerCase();
+    const allV42 = parseArr(settingRows.find((r) => (r.key ?? r.id) === ASSESSMENTS_V42_KEY)?.value) as unknown as AssessmentV42[];
+    const own = allV42.find((a) => s(a.id) === `av42-adm-${rid}`);
+    const screening = allV42.find((a) => originOf(a) === "PREADMISSION" && ((s(a.layer1?.convertedAdmissionId) === rid && rid) || (s(a.layer1?.residentName).trim().toLowerCase() === rname && rname)));
+    const fl = own?.layer3?.finalLevel ?? screening?.layer3?.finalLevel;
+    return fl ? v42LevelToEnum(fl) : "";
+  };
+
   const [wizardOpen, setWizardOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedAdmission, setSelectedAdmission] = useState<Row | null>(null);
@@ -1687,7 +1701,7 @@ export default function AdmissionsContent() {
               {/* Body */}
               <div className="p-6 overflow-y-auto flex-1 bg-gray-50 space-y-6">
                 {editView ? (
-                  <AdmissionEditForm row={row} onSave={(d) => saveAdmissionEdit(row, d)} />
+                  <AdmissionEditForm row={row} assessedCareLevel={assessedCareLevel(row)} onSave={(d) => saveAdmissionEdit(row, d)} />
                 ) : (<>
                 {/* Visual Progress Bar */}
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -1972,8 +1986,9 @@ export default function AdmissionsContent() {
 
 // Editable version of the admission detail card. Saving updates the Admission and
 // (via the parent) syncs profile/medical fields + new medications to the resident.
-function AdmissionEditForm({ row, onSave }: {
+function AdmissionEditForm({ row, assessedCareLevel, onSave }: {
   row: Row;
+  assessedCareLevel: string;
   onSave: (data: { admission: Row; residentSync: Row; meds: MedRow[] }) => void;
 }) {
   const g = (k: string) => s(row[k]);
@@ -1996,7 +2011,11 @@ function AdmissionEditForm({ row, onSave }: {
   const [medicalAssessment, setMedicalAssessment] = useState(g("medicalAssessment"));
   const [surgeries, setSurgeries] = useState(ca.surgeries);
   const [hospitalizations, setHospitalizations] = useState(ca.hospitalizations);
-  const [careLevel, setCareLevel] = useState(g("careLevel"));
+  // Care Level is owned by the nurse/CM-validated Resident Assessment — read-only
+  // here (no override). Prefer the validated Final LOC; fall back to the stored
+  // column only when no assessment is on file. Saving syncs it to the resident,
+  // correcting any stale value written before the assessment was validated.
+  const effectiveCareLevel = assessedCareLevel || g("careLevel");
   const [mobility, setMobility] = useState(g("mobility"));
   const [roomNumber, setRoomNumber] = useState(g("roomNumber"));
   const [insuranceProvider, setInsuranceProvider] = useState(g("insuranceProvider"));
@@ -2007,7 +2026,6 @@ function AdmissionEditForm({ row, onSave }: {
   const addM = () => setMeds((l) => [...l, { id: newId(), name: "", dose: "", frequency: "" }]);
   const patchM = (mid: string, patch: Partial<MedRow>) => setMeds((l) => l.map((m) => (m.id === mid ? { ...m, ...patch } : m)));
   const rmM = (mid: string) => setMeds((l) => l.filter((m) => m.id !== mid));
-  const CARE_LEVELS = ["INDEPENDENT", "ASSISTED", "MEMORY", "SKILLED"];
 
   const submit = () => {
     if (!firstName.trim() || !lastName.trim()) { Swal.fire({ title: "First and last name are required", icon: "warning" }); return; }
@@ -2018,7 +2036,7 @@ function AdmissionEditForm({ row, onSave }: {
       emergencyContact: emergencyContact || null, emergencyContactPhone: emergencyContactPhone || null,
       sponsorName: sponsorName || null, sponsorEmail: sponsorEmail || null,
       allergies: allergies || null, medicalHistory: medicalHistory || null, medicalAssessment: medicalAssessment || null,
-      careLevel: careLevel || null, mobility: mobility || null, roomNumber: roomNumber || null,
+      careLevel: effectiveCareLevel || null, mobility: mobility || null, roomNumber: roomNumber || null,
       insuranceProvider: insuranceProvider || null, insurancePolicyNumber: insurancePolicyNumber || null,
       carePlan: carePlan || null, carePlanGoals: carePlanGoals || null,
       careAssessment: serializeClinical(ca.note, ca.domains, ca.wounds, meds, { surgeries, hospitalizations, attachments: ca.attachments, admissionDate: ca.admissionDate }),
@@ -2031,7 +2049,7 @@ function AdmissionEditForm({ row, onSave }: {
       emergencyContact: emergencyContact || null, emergencyContactPhone: emergencyContactPhone || null,
       allergies: allergies || null, medicalHistory: medicalHistory || null,
       surgeries: surgeries || null, hospitalizations: hospitalizations || null,
-      roomNumber: roomNumber || null, careLevel: careLevel || null,
+      roomNumber: roomNumber || null, careLevel: effectiveCareLevel || null,
     };
     onSave({ admission, residentSync, meds });
   };
@@ -2101,7 +2119,7 @@ function AdmissionEditForm({ row, onSave }: {
       <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
         <h3 className="text-sm font-bold text-slate-800 border-b border-gray-100 pb-2">Care &amp; Room</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Care Level"><select className={inputCls} value={careLevel} onChange={(e) => setCareLevel(e.target.value)}><option value="">—</option>{CARE_LEVELS.map((c) => <option key={c} value={c}>{c}</option>)}</select></Field>
+          <Field label="Care Level"><div className={`${inputCls} bg-black/5 cursor-not-allowed`}>{effectiveCareLevel || "—"}</div><p className="mt-1 text-[11px] text-gray-500">Set by the nurse/CM-validated Resident Assessment — not editable here.</p></Field>
           <Field label="Mobility Status"><input className={inputCls} value={mobility} onChange={(e) => setMobility(e.target.value)} /></Field>
           <Field label="Assigned Room"><input className={inputCls} value={roomNumber} onChange={(e) => setRoomNumber(e.target.value)} /></Field>
         </div>
