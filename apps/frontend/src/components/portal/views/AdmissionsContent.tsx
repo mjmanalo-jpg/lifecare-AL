@@ -324,6 +324,20 @@ const paLevel = (p: Record<string, unknown>) => Number(p.overrideLevel) || Numbe
 // v4.2 Level of Care (L1–L5) display names + mapping to the legacy resident
 // careLevel enum kept by downstream billing / care-plan generation.
 const V42_LEVEL_LABEL: Record<string, string> = { L1: "Level 1", L2: "Level 2", L3: "Level 3", L4: "Level 4", L5: "Level 5 (Pathway)" };
+
+// Nurse-confirmed Final LOC carried into the admission wizard (sticky override).
+type Layer3Override = { finalLevel?: CareLevel; finalLevelJustification?: string; belowFloorReason?: string } | null;
+const pickFinal = (l3?: { finalLevel?: CareLevel; finalLevelJustification?: string; belowFloorReason?: string }): Layer3Override =>
+  l3?.finalLevel ? { finalLevel: l3.finalLevel, finalLevelJustification: l3.finalLevelJustification, belowFloorReason: l3.belowFloorReason } : null;
+// Case/whitespace-insensitive full-name key for matching a prefill source
+// against people who already have an admission on file.
+const normName = (x: string): string => x.trim().toLowerCase().replace(/\s+/g, " ");
+// Resident identity used to detect re-onboarding: first given name + last name +
+// room. First-token only, so a stored composed name ("Elma Titong Fabros") and a
+// manual/prefilled "Elma Fabros" resolve to the same person; room lets a genuine
+// transfer (same person, new room) through.
+const admissionIdentity = (first: string, last: string, room: string): string =>
+  `${normName(`${(first.trim().split(/\s+/)[0] ?? "")} ${last}`)}@${normName(room)}`;
 const v42LevelToEnum = (lvl: string): string => {
   const n = Number(String(lvl).match(/([1-5])/)?.[1] || 0);
   return n === 1 ? "INDEPENDENT" : n === 4 ? "MEMORY" : n === 5 ? "SKILLED" : n ? "ASSISTED" : "";
@@ -388,11 +402,26 @@ export default function AdmissionsContent() {
   const { data: userRows } = useLiveQuery<Row>("users", { tables: ["User"] });
   const { data: settingRows } = useLiveQuery<Row>("app-settings", { tables: ["AppSetting"] });
   // Completed pre-admission assessments available to prefill a new admission from.
+  // Names + admission-ids already taken by a LIVE (non-cancelled) admission.
+  // An onboarded resident can't be onboarded again, so they drop out of every
+  // prefill source below — only CRM leads and never-admitted assessments remain.
+  const onboarded = useMemo(() => {
+    const names = new Set<string>();
+    const ids = new Set<string>();
+    for (const a of admissionRows) {
+      if (s(a.status) === "CANCELLED") continue;
+      const nm = normName(`${s(a.firstName)} ${s(a.lastName)}`);
+      if (nm) names.add(nm);
+      if (s(a.id)) ids.add(s(a.id));
+    }
+    return { names, ids };
+  }, [admissionRows]);
   const preadmits = useMemo(
     () => parseArr(settingRows.find((r) => (r.key ?? r.id) === PREADMIT_KEY)?.value)
       .filter((p) => String(p.residentName ?? "").trim())
+      .filter((p) => !onboarded.names.has(normName(s(p.residentName))))
       .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))),
-    [settingRows]
+    [settingRows, onboarded]
   );
   // v4.2 pre-admission assessments (the current instrument). Only PREADMISSION-origin
   // records that are completed/validated are offered as a prefill source.
@@ -401,16 +430,21 @@ export default function AdmissionsContent() {
       .filter((a) => originOf(a) === "PREADMISSION")
       .filter((a) => a.status === "COMPLETED" || a.status === "VALIDATED")
       .filter((a) => String(a.layer1?.residentName ?? "").trim())
+      // Exclude anyone already onboarded (live admission by name, or the linked
+      // admission this screening was converted into) — no re-onboarding.
+      .filter((a) => !onboarded.names.has(normName(s(a.layer1?.residentName)))
+        && !(s(a.layer1?.convertedAdmissionId) && onboarded.ids.has(s(a.layer1?.convertedAdmissionId))))
       .sort((a, b) => String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? ""))),
-    [settingRows]
+    [settingRows, onboarded]
   );
   // Open CRM leads (community-scoped) that don't yet have an admission — offered
   // as a prefill source so an admission can be started straight from a lead.
   const openLeads = useMemo<Lead[]>(
     () => parseLeads(s(settingRows.find((r) => (r.key ?? r.id) === CRM_LEADS_KEY)?.value))
       .filter((l) => !l.convertedAdmissionId && l.stage !== "LOST" && String(l.name ?? "").trim())
+      .filter((l) => !onboarded.names.has(normName(s(l.prospectiveResident || l.name))))
       .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))),
-    [settingRows]
+    [settingRows, onboarded]
   );
 
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -494,10 +528,18 @@ export default function AdmissionsContent() {
   const v42ListRef = useRef<AssessmentV42[] | null>(null);
   const patchV42 = (code: DomainCode, p: Partial<DomainEntry>) =>
     setV42Domains((d) => ({ ...d, [code]: { score: 0, evidence: "", ...d[code], ...p } }));
-  const v42Level = useMemo<CareLevel | null>(() => {
+  // Nurse-confirmed Final LOC override carried from the pre-admission assessment
+  // (layer3.finalLevel). Sticky: the admission inherits + displays it (e.g.
+  // "Level 1 · ovr") so the domain-only engine can't silently revert a below-floor
+  // clinical decision back to the computed level.
+  const [v42Final, setV42Final] = useState<Layer3Override>(null);
+  const v42Computed = useMemo<CareLevel | null>(() => {
     if (!Object.keys(v42Domains).length) return null;
     return classifyAssessment({ domains: v42Domains, context: {} }).suggestedLevel;
   }, [v42Domains]);
+  // Effective Level of Care = nurse override when set, else the engine's level.
+  const v42Level = v42Final?.finalLevel ?? v42Computed;
+  const v42Overridden = !!(v42Final?.finalLevel && v42Computed && v42Final.finalLevel !== v42Computed);
   // Fresh v4.2 write-list per wizard session (avoids carrying one admission's
   // list into the next). Reset in an effect so handlers never touch the ref.
   useEffect(() => { if (wizardOpen) v42ListRef.current = null; }, [wizardOpen]);
@@ -547,6 +589,7 @@ export default function AdmissionsContent() {
     // edits them directly (the careLevel + acuity-seed sync effect derives the rest).
     setV42Domains(a.domains ?? {});
     setV42PriorId(s(a.id));
+    setV42Final(pickFinal(a.layer3));
 
     const meds = s(a.layer1?.medications);
     const medRows: MedRow[] = meds
@@ -709,7 +752,7 @@ export default function AdmissionsContent() {
     [allRooms, roomOccupancy, roomCapacity, form.roomNumber]
   );
 
-  const openNew = () => { setForm({ ...emptyForm }); setClinical({}); setSkinWounds([]); setMedList([]); setAttachments([]); setPrefillTotal(null); setV42Domains({}); setV42PriorId(""); setStep(1); setWizardOpen(true); };
+  const openNew = () => { setForm({ ...emptyForm }); setClinical({}); setSkinWounds([]); setMedList([]); setAttachments([]); setPrefillTotal(null); setV42Domains({}); setV42PriorId(""); setV42Final(null); setStep(1); setWizardOpen(true); };
 
   const openView = (row: Row) => {
     setSelectedAdmission(row);
@@ -804,10 +847,15 @@ export default function AdmissionsContent() {
     if (own) {
       setV42Domains(own.domains ?? {});
       setV42PriorId(s(own.layer3?.priorAssessmentId));
+      // Inherit the admission's own saved Final LOC; if it never captured one,
+      // fall back to the linked screening's validated Final LOC.
+      const screening = allV42.find((a) => originOf(a) === "PREADMISSION" && ((s(a.layer1?.convertedAdmissionId) === rid && rid) || (s(a.layer1?.residentName).trim().toLowerCase() === rname && rname)));
+      setV42Final(pickFinal(own.layer3) ?? pickFinal(screening?.layer3));
     } else {
       const screening = allV42.find((a) => originOf(a) === "PREADMISSION" && ((s(a.layer1?.convertedAdmissionId) === rid && rid) || (s(a.layer1?.residentName).trim().toLowerCase() === rname && rname)));
       setV42Domains(screening?.domains ?? {});
       setV42PriorId(screening ? s(screening.id) : "");
+      setV42Final(pickFinal(screening?.layer3));
     }
     setStep(Math.min(Math.max(Number(row.currentStep) || 1, 1), STEP_COUNT));
     setWizardOpen(true);
@@ -876,7 +924,7 @@ export default function AdmissionsContent() {
       domains: v42Domains,
       updatedAt: now,
       layer1: { ...base.layer1, residentName: residentName || base.layer1?.residentName, convertedAdmissionId: admissionId, ...(residentId ? { residentId } : {}) },
-      layer3: { ...base.layer3, ...(v42PriorId ? { priorAssessmentId: v42PriorId } : {}) },
+      layer3: { ...base.layer3, ...(v42PriorId ? { priorAssessmentId: v42PriorId } : {}), ...(v42Final?.finalLevel ? { finalLevel: v42Final.finalLevel, finalLevelJustification: v42Final.finalLevelJustification, belowFloorReason: v42Final.belowFloorReason } : {}) },
     };
     const next = [rec, ...list.filter((a) => s(a.id) !== recId)];
     v42ListRef.current = next;
@@ -1019,6 +1067,22 @@ export default function AdmissionsContent() {
       return;
     }
     const id = (await saveStep(false)) ?? form.id;
+    // Strict no-re-onboarding guard: a live (non-cancelled) admission for the same
+    // resident identity already on file means this is the same person being
+    // onboarded twice. Confirm rather than hard-block, so two genuinely different
+    // residents who share a name aren't wrongly rejected.
+    const selfId = s(id) || s(form.id);
+    const myIdentity = admissionIdentity(form.firstName, form.lastName, form.roomNumber);
+    const dup = admissionRows.find((a) => s(a.id) !== selfId && s(a.status) !== "CANCELLED"
+      && admissionIdentity(s(a.firstName), s(a.lastName), s(a.roomNumber)) === myIdentity);
+    if (dup) {
+      const proceed = await Swal.fire({
+        title: "Possible duplicate onboarding",
+        html: `An active admission for <b>${form.firstName} ${form.lastName}</b> in room <b>${form.roomNumber}</b> already exists. Onboarding the same person twice creates a duplicate record.<br/><br/>Continue anyway?`,
+        icon: "warning", showCancelButton: true, confirmButtonColor: "#ef4444", confirmButtonText: "Continue anyway", cancelButtonText: "Cancel",
+      });
+      if (!proceed.isConfirmed) return;
+    }
     const confirm = await Swal.fire({
       title: "Complete Admission?",
       text: `This creates the resident record for ${form.firstName} ${form.lastName}.`,
@@ -1472,7 +1536,7 @@ export default function AdmissionsContent() {
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-gray-500">Level of Care:</span>
                       {v42Level
-                        ? <span className="inline-flex items-center rounded-full bg-indigo-600 px-3 py-1 text-xs font-bold text-white">{V42_LEVEL_LABEL[v42Level] ?? v42Level}</span>
+                        ? <span className="inline-flex items-center rounded-full bg-indigo-600 px-3 py-1 text-xs font-bold text-white">{V42_LEVEL_LABEL[v42Level] ?? v42Level}{v42Overridden ? " · ovr" : ""}</span>
                         : <span className="text-xs text-gray-400">Score the domains to compute</span>}
                     </div>
                   </div>
