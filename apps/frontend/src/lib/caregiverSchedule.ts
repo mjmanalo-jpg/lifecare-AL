@@ -147,6 +147,20 @@ export function assigneeForResidentToday(
   return { caregiverStaffId: pick.caregiverStaffId, caregiverName: pick.caregiverName };
 }
 
+/**
+ * The caregiver rostered for a resident on a SPECIFIC shift today, or null when
+ * that shift has no coverage. Unlike {@link assigneeForResidentToday} (which
+ * collapses the day to one caregiver), this routes each frequency occurrence to
+ * the caregiver actually on duty for that occurrence's shift — so a twice-daily
+ * task lands on the AM caregiver and the PM caregiver separately.
+ */
+export function assigneeForResidentShift(
+  schedules: CaregiverSchedule[], residentId: string, shift: ShiftKey, at: Date = new Date(), timeZone?: string,
+): { caregiverStaffId: string; caregiverName?: string } | null {
+  const pick = caregiversForResidentToday(schedules, residentId, at, timeZone).find((c) => c.shift === shift);
+  return pick ? { caregiverStaffId: pick.caregiverStaffId, caregiverName: pick.caregiverName } : null;
+}
+
 // ── Break-glass (emergency off-assignment access) ─────────────────────────────
 export interface BreakGlassGrant {
   id: string;

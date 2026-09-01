@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
-import { CAREGIVER_SCHEDULE_KEY, parseSchedules, assigneeForResidentToday } from "@/lib/caregiverSchedule";
+import { CAREGIVER_SCHEDULE_KEY, parseSchedules, assigneeForResidentShift, caregiversForResidentToday } from "@/lib/caregiverSchedule";
+import { occurrencesFor } from "@/lib/carePlanTaskRouting";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,17 +36,8 @@ const careTaskIdOf = (desc: string | null): string | null => /\[task:([^\]]+)\]/
 const weekdayOf = (dateStr: string) => new Date(dateStr + "T00:00:00Z").getUTCDay();
 const localDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(d);
 
-// How many task cards a frequency yields per day, and when each is due (local hour).
-// BID → 2, TID → 3, "Every shift" → 3 (AM/PM/NOC). Everything else (Daily / Per care
-// plan / Weekly) → a single card. PRN & weekly-anchor are filtered before this.
-type Occurrence = { label: string; hour: number };
-function occurrencesFor(freq: string): Occurrence[] {
-  const f = freq.toLowerCase();
-  if (/every shift/.test(f)) return [{ label: "AM", hour: 8 }, { label: "PM", hour: 16 }, { label: "NOC", hour: 23 }];
-  if (/\btid\b|three times/.test(f)) return [{ label: "Morning", hour: 8 }, { label: "Afternoon", hour: 14 }, { label: "Evening", hour: 20 }];
-  if (/\bbid\b|twice/.test(f)) return [{ label: "AM", hour: 8 }, { label: "PM", hour: 18 }];
-  return [{ label: "", hour: 0 }]; // single card (hour 0 → use end-of-day due)
-}
+// Frequency → per-shift occurrences (how many cards, which shift, what hour) lives
+// in carePlanTaskRouting.occurrencesFor. PRN → none; weekly-anchor filtered below.
 
 async function materializeCommunity(communityId: string, organizationId: string | null): Promise<number> {
   const now = new Date();
@@ -78,26 +70,29 @@ async function materializeCommunity(communityId: string, organizationId: string 
 
   let created = 0;
   for (const plan of plans) {
-    // The caregiver covering this resident today; none → no tasks materialize.
-    const assignee = assigneeForResidentToday(schedules, plan.residentId, now, TZ);
-    if (!assignee?.caregiverStaffId) continue;
+    // Resident must have SOME caregiver rostered today, else no tasks materialize
+    // (unchanged invariant). With coverage, each occurrence routes to the caregiver
+    // on duty for ITS shift; a shift with no caregiver yields an unassigned card
+    // that a manager can hand off from the Board View pool.
+    const coverToday = caregiversForResidentToday(schedules, plan.residentId, now, TZ);
+    if (!coverToday.length) continue;
 
     const startWd = weekdayOf(localDay(new Date(plan.startDate)));
     const dueAt = (hour: number) => new Date(`${todayStr}T${String(hour).padStart(2, "0")}:00:00+08:00`);
     for (const item of plan.carePlanItems) {
       const freq = freqOf(item.description);
-      if (/PRN|as needed/i.test(freq)) continue;                 // on-demand only
       if (/Weekly/i.test(freq) && startWd !== todayWd) continue; // weekly anchor day
       const category = item.title.split(":")[0].trim() || "Care Plan";
       const careTaskId = careTaskIdOf(item.description);
-      // One card per occurrence, each with its own shift-based due time. The occurrence
-      // label is folded into the title so the per-(plan,title) dedup keeps each slot
-      // distinct and idempotent across re-runs.
+      // One card per occurrence, routed to that occurrence's shift caregiver. The
+      // occurrence label is folded into the title so the per-(plan,title) dedup keeps
+      // each shift's slot distinct and idempotent across re-runs. (PRN → no occurrences.)
       for (const occ of occurrencesFor(freq)) {
         const title = occ.label ? `${item.title} · ${occ.label}` : item.title;
         const key = `${plan.id}|${title}`;
         if (seen.has(key)) continue;
         seen.add(key);
+        const shiftAssignee = assigneeForResidentShift(schedules, plan.residentId, occ.shift, now, TZ);
         try {
           await prisma.task.create({
             data: {
@@ -106,8 +101,10 @@ async function materializeCommunity(communityId: string, organizationId: string 
               description: item.description ? `From care plan · ${item.description}` : `From care plan · ${freq}`,
               category,
               status: "PENDING", priority: "MEDIUM",
-              dueDate: occ.label ? dueAt(occ.hour) : dayEnd, generatedFrom: plan.id,
-              assignedToId: assignee.caregiverStaffId,
+              dueDate: dueAt(occ.hour), generatedFrom: plan.id,
+              // The shift's rostered caregiver, or unassigned when that shift has no
+              // coverage today (claimable from the Board View pool).
+              assignedToId: shiftAssignee?.caregiverStaffId,
               // Governed care-event linkage — lets task completion resolve the routine's
               // Care Task Master archetype (doc template + escalation/reassessment).
               recurringPattern: careTaskId ? { careTaskId } : undefined,
