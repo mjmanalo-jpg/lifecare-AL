@@ -226,8 +226,15 @@ function parseAssessments(raw?: string): AssessmentV42[] {
 // Draft working state = the full assessment sans list metadata; we edit it in place.
 type Draft = AssessmentV42;
 
+// Display label for the signing/editing clinician, keyed by the real session role.
+const ROLE_LABELS: Record<string, string> = {
+  SUPERADMIN: "Super Admin", CARE_MANAGER: "Care Manager", NURSE: "Nurse",
+  FACILITY_ADMIN: "Facility Admin", PHYSICIAN: "Physician", CAREGIVER: "Caregiver",
+  BILLING_ADMIN: "Billing Admin",
+};
+
 export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedded = false, modalOnly = false, deepLinkResident = null, deepLinkReason = "", origin = "PREADMISSION", newSignal, openSignal }: { clinicianRole?: string; embedded?: boolean; modalOnly?: boolean; deepLinkResident?: { id: string; name: string } | null; deepLinkReason?: string; origin?: AssessmentOrigin; newSignal?: number; openSignal?: { residentId: string; residentName: string; reason?: string; nonce: number } }) {
-  const roleLabel = clinicianRole === "CARE_MANAGER" || clinicianRole === "FACILITY_ADMIN" ? "Care Manager" : "Nurse";
+  // roleLabel is derived from the session role below (after the session fetch).
 
   const { data: settingRows, loading, error, refetch } = useLiveQuery<SettingRow>("app-settings", { tables: ["AppSetting"] });
   // Scope to this board's own records. Pre-Admission and Care Acuity share the
@@ -306,7 +313,12 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
 
   const [me, setMe] = useState("");
   const [myId, setMyId] = useState("");
-  useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => { if (d?.authenticated) { setMe(d.session?.name ?? ""); setMyId(d.session?.userId ?? ""); } }).catch(() => {}); }, []);
+  const [myRole, setMyRole] = useState("");
+  useEffect(() => { fetch("/api/auth/session").then((r) => r.json()).then((d) => { if (d?.authenticated) { setMe(d.session?.name ?? ""); setMyId(d.session?.userId ?? ""); setMyRole(d.session?.role ?? ""); } }).catch(() => {}); }, []);
+  // Sign-off / editing label follows the actual signed-in user's role. SuperAdmin
+  // routes through FACILITY_ADMIN/CARE_MANAGER for clinical scope, but must still
+  // read as "Super Admin" here; fall back to the passed prop before session load.
+  const roleLabel = ROLE_LABELS[myRole] ?? ROLE_LABELS[clinicianRole] ?? "Clinician";
 
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
