@@ -1,5 +1,5 @@
-import { historyForResident, normalizeLevel, type LocHistoryEntry } from "./locHistory";
-import { careLevelEnumToLevel, clampLevel } from "./carePackage";
+import { historyForResident, normalizeLevel, type LocHistoryEntry } from "./locHistory.ts";
+import { careLevelEnumToLevel, clampLevel } from "./carePackage.ts";
 
 /**
  * A resident's authoritative ACTIVE level of care (1..5).

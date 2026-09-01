@@ -4,8 +4,6 @@
 // Appended (never mutated) whenever a Final LOC is set/changed, so the full
 // trail is preserved for audit and care-continuity.
 
-import { createRecord } from "@/lib/api";
-
 export const LOC_HISTORY_KEY = "loc_history";
 
 export type LocSource = "PRE_ADMISSION" | "REASSESSMENT" | "ACUITY_APPROVAL" | "CLINICAL_OVERRIDE" | "PRIVATE_CAREGIVER";
@@ -126,6 +124,9 @@ export async function recordLocChange(opts: {
       notes: opts.notes,
       at: opts.nowISO ?? new Date().toISOString(),
     };
+    // Client-only dependency, imported lazily so the pure helpers above stay
+    // importable in plain Node (tests) without pulling in the API/alias layer.
+    const { createRecord } = await import("@/lib/api");
     await createRecord("app-settings", { id: LOC_HISTORY_KEY, key: LOC_HISTORY_KEY, value: JSON.stringify([entry, ...items]) });
     return true;
   } catch {
