@@ -26,6 +26,7 @@ const DOMAIN_MODIFIER_IDS: Record<string, string[]> = {
   "AS-03": ["MOD-MOB-01"],                             // high fall risk
   "AS-04": ["MOD-COG-01"],                             // cognitive impairment
   "AS-05": ["MOD-COG-02"],                             // behavioral symptoms
+  "AS-06": ["MOD-CLN-01"],                             // recent hospitalization / acute change
   "AS-07": ["MOD-MED-01"],                             // medication complexity
   "AS-08": ["MOD-NUT-01", "MOD-NUT-02", "MOD-NUT-03"], // dysphagia / poor intake / weight loss
   "AS-10": ["MOD-SKN-02", "MOD-CON-01"],               // continence risk + high-frequency toileting
