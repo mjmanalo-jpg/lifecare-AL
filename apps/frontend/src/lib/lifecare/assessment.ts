@@ -255,6 +255,43 @@ export function finalLevel(a: AssessmentV42): CareLevel | null {
   return classifyAssessment(a).suggestedLevel;
 }
 
+const s = (v: unknown) => (v == null ? "" : String(v));
+
+/** Normalized name token-SET key for tolerant resident↔assessment matching — order
+ *  and duplicate parts don't matter, so "Marina Dacanay Drohman" matches a resident
+ *  record mis-composed as "Marina Dacanay Dacanay Drohman". */
+function nameTokenKey(name: string | undefined | null): string {
+  return [...new Set(String(name ?? "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean))].sort().join(" ");
+}
+
+export interface ResidentKey { residentId?: string; admissionIds?: string[]; residentName?: string }
+
+/**
+ * Does this assessment belong to the given resident? Matches by linked residentId,
+ * linked admission (convertedAdmissionId), OR normalized name token-set. The name
+ * fallback is what links a pre-admission assessment (captured before a Resident
+ * record existed, so residentId is empty) to the resident once admitted.
+ */
+export function assessmentMatchesResident(a: Pick<AssessmentV42, "layer1">, key: ResidentKey): boolean {
+  const rid = key.residentId?.trim();
+  if (rid && s(a.layer1?.residentId) === rid) return true;
+  const adm = s(a.layer1?.convertedAdmissionId);
+  if (adm && (key.admissionIds ?? []).includes(adm)) return true;
+  const nk = nameTokenKey(key.residentName);
+  return !!nk && nameTokenKey(a.layer1?.residentName) === nk;
+}
+
+const STATUS_RANK: Record<AssessmentStatus, number> = { VALIDATED: 3, COMPLETED: 2, DRAFT: 1, SUPERSEDED: 0 };
+
+/** The most authoritative assessment for a resident: VALIDATED first, then COMPLETED,
+ *  then most-recently updated. Null when none match. */
+export function authoritativeAssessmentFor(all: AssessmentV42[], key: ResidentKey): AssessmentV42 | null {
+  const mine = all.filter((a) => assessmentMatchesResident(a, key));
+  if (!mine.length) return null;
+  mine.sort((a, b) => (STATUS_RANK[b.status] ?? 0) - (STATUS_RANK[a.status] ?? 0) || s(b.updatedAt).localeCompare(s(a.updatedAt)));
+  return mine[0];
+}
+
 export function newAssessment(id: string, createdBy: string | undefined, nowISO: string): AssessmentV42 {
   return {
     id,

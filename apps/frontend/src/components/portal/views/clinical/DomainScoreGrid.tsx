@@ -15,6 +15,23 @@ import { ClinicalCard, MicroLabel, controlClass } from "./clinical-ui";
 const chipOn = "bg-[var(--clinical-panel)] text-white border-[var(--clinical-panel)]";
 const chipOff = "bg-[var(--clinical-surface)] text-[var(--clinical-ink-soft)] border-[var(--clinical-line-strong)] hover:border-[var(--clinical-panel)]";
 
+// Which Clinical Modifier flags an assessor can raise under each domain. This is the
+// authoritative AS-code → modifier map — mirrors suggestModifiers() in classification.ts
+// (keep the two in sync). The old approach matched a modifier's `affectedDomains` short
+// codes (COG/SKN/FALL…) against the domain's full-word name as a substring, which silently
+// failed for most domains (e.g. "Behavior/BPSD" never contains "COG") so the chips never
+// showed. Domains not listed here have no modifier flags by design.
+const DOMAIN_MODIFIER_IDS: Record<string, string[]> = {
+  "AS-02": ["MOD-MOB-02"],                             // reduced transfer ability
+  "AS-03": ["MOD-MOB-01"],                             // high fall risk
+  "AS-04": ["MOD-COG-01"],                             // cognitive impairment
+  "AS-05": ["MOD-COG-02"],                             // behavioral symptoms
+  "AS-07": ["MOD-MED-01"],                             // medication complexity
+  "AS-08": ["MOD-NUT-01", "MOD-NUT-02", "MOD-NUT-03"], // dysphagia / poor intake / weight loss
+  "AS-10": ["MOD-SKN-02", "MOD-CON-01"],               // continence risk + high-frequency toileting
+  "AS-11": ["MOD-SKN-01"],                             // skin/wound risk
+};
+
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 // The domain `scope` (e.g. AS-01 "Bathing, dressing, …") doubles as quick-add
 // tags for Supporting Evidence. Chips are insert-at-caret buttons: clicking one
@@ -146,10 +163,9 @@ export default function DomainScoreGrid({
         const entry = domains[code] ?? { score: 0, evidence: "" };
         const evidenceTags = evidenceTagsFor(dom.scope);
         const evidenceSelect = EVIDENCE_SELECTS[code];
-        const relatedMods = CLINICAL_MODIFIERS.filter((m) => {
-          const hay = `${dom.name} ${dom.scope}`.toUpperCase();
-          return m.affectedDomains.some((d) => hay.includes(d));
-        });
+        const relatedMods = (DOMAIN_MODIFIER_IDS[code] ?? [])
+          .map((id) => CLINICAL_MODIFIERS.find((m) => m.id === id))
+          .filter((m): m is (typeof CLINICAL_MODIFIERS)[number] => !!m);
         const flags = entry.modifierFlags ?? [];
         // Pick a score → also pre-fill the goal note from the Domain-Level Map
         // default for that score. Sticky: only fill when the note is empty or is

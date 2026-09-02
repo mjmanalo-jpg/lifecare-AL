@@ -48,7 +48,7 @@ const COLS: { key: string; label: string; icon: LucideIcon }[] = [
 ];
 
 export default function ShiftSummaryBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
-  const { residents, entries, domainsByRes, refetchAll, locHistory } = useCareLogData(clinicianRole);
+  const { residents, entries, domainsByRes, refetchAll, locHistory, assessmentsV42 } = useCareLogData(clinicianRole);
 
   const isDone = (resId: string, col: (typeof COLS)[number]) => {
     const set = domainsByRes.get(resId);
@@ -117,7 +117,7 @@ export default function ShiftSummaryBoard({ clinicianRole = "NURSE" }: { clinici
           <tbody>
             {residents.map((r: Row) => {
               const doneCount = COLS.filter((c) => isDone(s(r.id), c)).length;
-              const lvlN = activeLevel({ residentId: s(r.id), careLevel: s(r.careLevel), locHistory, residentName: s(r.name) });
+              const lvlN = activeLevel({ residentId: s(r.id), careLevel: s(r.careLevel), locHistory, residentName: s(r.name), assessments: assessmentsV42 });
               return (
                 <tr key={s(r.id)} className="border-b border-slate-50 last:border-0">
                   <td className="px-4 py-3 font-semibold text-slate-600">{s(r.room)}</td>

@@ -20,11 +20,11 @@ import { generateCarePlanForResident, releaseCarePlan, materializeTodayTasks, fu
 import { CARE_PLAN_DRAFTS_KEY, parseCarePlanDrafts, upsertDraft, clearDraft, type DraftState, type SavedDomainPlanItem } from "@/lib/carePlanDraft";
 import { taskById, SCORED_DOMAINS, tasksForDomain } from "@/lib/lifecare/dataset";
 import { domainCodeFromLabel } from "@/lib/lifecare/carePackage";
-import { ASSESSMENTS_V42_KEY, type AssessmentV42, type DomainEntry } from "@/lib/lifecare/assessment";
+import { ASSESSMENTS_V42_KEY, authoritativeAssessmentFor, type AssessmentV42, type DomainEntry } from "@/lib/lifecare/assessment";
 import { printCarePlan } from "@/lib/lifecare/carePlanReport";
 import { generateRoutine } from "@/lib/lifecare/carePlanRoutine";
 import RoutineTimeline from "./RoutineTimeline";
-import { duplicateReview, requiresSecondApproval, reviewOutcome, canFinalizeCarePlan, type CarePlanReviewApprovalStatus } from "@/lib/lifecare/carePlanReviewGuards";
+import { duplicateReview, reviewOutcome, canFinalizeCarePlan, type CarePlanReviewApprovalStatus } from "@/lib/lifecare/carePlanReviewGuards";
 import { levelMeta } from "@/lib/lifecare/levelModel";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
@@ -52,9 +52,6 @@ const HOLD_DECISIONS = new Set(["Refer to Physician", "Schedule Family Conferenc
 // Decisions that CREATE or CHANGE the care plan — they require a generated draft to
 // release. "New Plan" is the first-time plan for a newly created resident.
 const PLAN_CHANGE_DECISIONS = new Set(["New Plan", "Update Care Plan", "Escalate Level of Care", "De-escalate Level of Care"]);
-// Roles authorized to countersign a level-of-care change (the "Administrator/Authorized
-// Approver" half of the Step-6 two-person sign-off).
-const AUTHORIZED_APPROVERS = new Set(["CARE_MANAGER", "SUPERADMIN"]);
 const PLAN_STATUS = ["No Change", "Updated", "Under Review", "Escalated", "De-escalated"];
 // Review cadence options (mirrors the assessment Reassessment Interval). "On change
 // of condition" is event-driven — no scheduled date (a 6-month backstop is stored on
@@ -85,15 +82,13 @@ interface Review {
 }
 const parseReviews = (raw: string | null | undefined): Review[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((r) => r && typeof r.id === "string") : []; } catch { return []; } };
 const parseAssessments = (raw: string | null | undefined): AssessmentV42[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? (v as AssessmentV42[]) : []; } catch { return []; } };
-// The resident's most authoritative assessment domains — prefer VALIDATED, then the
-// most recently updated. Drives the assessment-based care plan (Goal / Preference
-// Note + Domain-Level Map interventions).
-const STATUS_RANK: Record<string, number> = { VALIDATED: 3, COMPLETED: 2, DRAFT: 1, SUPERSEDED: 0 };
-const latestAssessmentDomains = (all: AssessmentV42[], residentId: string): Partial<Record<string, DomainEntry>> | null => {
-  const mine = all.filter((a) => s(a.layer1?.residentId) === residentId && a.domains && Object.keys(a.domains).length);
-  if (!mine.length) return null;
-  mine.sort((a, b) => (STATUS_RANK[b.status] ?? 0) - (STATUS_RANK[a.status] ?? 0) || s(b.updatedAt).localeCompare(s(a.updatedAt)));
-  return mine[0].domains;
+// The resident's most authoritative assessment domains — matched by residentId,
+// linked admission, OR normalized name (a pre-admission assessment isn't linked by
+// residentId yet), preferring VALIDATED then most-recent. Drives the assessment-based
+// care plan (Goal / Preference Note + Domain-Level Map interventions).
+const authoritativeDomainsFor = (all: AssessmentV42[], residentId: string, residentName: string): Partial<Record<string, DomainEntry>> | null => {
+  const a = authoritativeAssessmentFor(all, { residentId, residentName });
+  return a && a.domains && Object.keys(a.domains).length ? a.domains : null;
 };
 
 // A stored intervention line ("Title: detail… (Daily)") → title · detail · frequency,
@@ -149,9 +144,12 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
   // levelOf-shaped { n, label } so existing call sites work unchanged.
   const locHistory = useMemo(() => parseLocHistory(settingRows.find((r) => (r.key || r.id) === LOC_HISTORY_KEY)?.value), [settingRows]);
   const resLevel = useCallback((r: Row) => {
-    const n = activeLevel({ residentId: s(r.id), careLevel: s(r.careLevel), locHistory, residentName: s(r.name) });
+    // Prefer the resident's validated Final LOC (matched by id / admission / name) over
+    // the coarse careLevel enum or a stale loc_history entry, so this board always
+    // agrees with Pre-admission. See activeLevel() for the precedence rule.
+    const n = activeLevel({ residentId: s(r.id), careLevel: s(r.careLevel), locHistory, residentName: s(r.name), assessments });
     return { n, label: levelMeta(n).name };
-  }, [locHistory]);
+  }, [locHistory, assessments]);
   const residentsWithPlan = useMemo(() => new Set((cpQ.data || []).filter((p) => s(p.status) !== "DISCONTINUED").map((p) => s(p.residentId))), [cpQ.data]);
   // Held (DRAFT) plans awaiting review approval, keyed by resident.
   const draftPlansByResident = useMemo(() => {
@@ -179,7 +177,11 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
   const [resId, setResId] = useState("");
   // The selected resident's assessment domains (Goal / Preference Notes + scores)
   // — what the CarePlanBuilder builds its per-domain Goal + Interventions from.
-  const builderDomains = useMemo(() => (resId ? latestAssessmentDomains(assessments, resId) : null), [assessments, resId]);
+  const builderDomains = useMemo(() => {
+    if (!resId) return null;
+    const name = s(residents.find((r: Row) => s(r.id) === resId)?.name);
+    return authoritativeDomainsFor(assessments, resId, name);
+  }, [assessments, resId, residents]);
   const [genBusy, setGenBusy] = useState(false);
   const [interventionCount, setInterventionCount] = useState(0);
   const [actingId, setActingId] = useState("");
@@ -347,16 +349,8 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
   // submitted a LOC change cannot self-approve it.
   const approvePending = async (rv: Review) => {
     if (!rv.planId) { Swal.fire("No linked plan", "This review has no draft plan to release.", "error"); return; }
-    if (rv.submittedById && rv.submittedById === clinicianId) {
-      Swal.fire({ icon: "warning", title: "Second approver required", text: "A level-of-care change must be approved by someone other than the reviewer who submitted it." });
-      return;
-    }
-    // Step-6 governance: a level-of-care change must be countersigned by an authorized
-    // approver (Care Manager / Facility Admin / Superadmin), not a second nurse (A6).
-    if (requiresSecondApproval(rv.decision) && !AUTHORIZED_APPROVERS.has(clinicianRole)) {
-      Swal.fire({ icon: "warning", title: "Authorized approver required", text: "A level-of-care change must be countersigned by a Care Manager, Facility Admin, or Superadmin." });
-      return;
-    }
+    // Care-plan approval is a single clinician sign-off: any nurse / care manager /
+    // superadmin (including the reviewer who submitted it) may approve and release.
     if (!(await confirmRelease(rv, "Approve & release"))) return;
     setActingId(rv.id);
     try {
@@ -555,20 +549,15 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
                 return;
               }
 
-              // FAMILY SIGN-OFF GATE — a plan-releasing review is NOT released on submit. It is
-              // held for the resident's family to sign off; once they approve, a Care Manager
-              // finalizes it (which releases the plan and dispatches caregiver tasks).
+              // CLINICIAN APPROVAL GATE — a plan-releasing review is NOT released on submit.
+              // It goes to Pending Approval for a nurse / care manager / superadmin to review
+              // and release (which dispatches caregiver tasks). No family sign-off step.
               if (willRelease) {
                 try { await updateRecord("care-plans", s(targetPlan!.id), { status: "UNDER_REVIEW" }); } catch { /* best-effort */ }
-                await persist([{ ...base, approvalStatus: "PENDING_FAMILY", pendingReason: "Awaiting family sign-off." }, ...reviews]);
+                await persist([{ ...base, approvalStatus: "PENDING", pendingReason: "Awaiting clinician approval (nurse / care manager / superadmin)." }, ...reviews]);
                 await cpQ.refetch?.();
-                if (sponsorId) {
-                  try { await createRecord("notifications", { userId: sponsorId, type: "SYSTEM_ALERT", title: "Care plan needs your sign-off", message: `A care plan review for ${base.residentName || "your relative"} is ready for your approval.`, relatedEntityId: base.id, relatedEntityType: "care_plan_review", severity: "INFO" }); } catch { /* non-critical */ }
-                }
                 setResId(""); setTab("pending");
-                Swal.fire(sponsorId
-                  ? { icon: "info", title: "Sent to family for sign-off", text: "The family sponsor has been notified. Once they approve, a Care Manager or Super Admin can finalize the plan." }
-                  : { icon: "info", title: "Held for family sign-off", text: "No family sponsor is linked to this resident — a Care Manager or Super Admin can finalize it directly from Pending Approval." });
+                Swal.fire({ icon: "info", title: "Submitted for approval", text: "The care plan is in Pending Approval. A nurse, care manager, or superadmin can review and release it." });
                 return;
               }
 
@@ -629,7 +618,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
           error={error}
           empty={pendingQueue.length === 0}
           emptyTitle="Nothing awaiting approval"
-          emptyHint="Plans awaiting family sign-off, family-approved plans ready to finalize, and any pending clinician approvals appear here."
+          emptyHint="Submitted care plans awaiting a nurse / care manager / superadmin approval appear here."
           onRetry={() => void refetch()}
           skeletonRows={3}
         >
@@ -640,7 +629,6 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
               const planLvl = planLevelOf(planRow);       // the level the plan was actually built at
               const curLvl = r ? resLevel(r).n : null;    // the resident's current level of care
               const lvlMismatch = planLvl !== null && curLvl !== null && planLvl !== curLvl;
-              const mine = !!rv.submittedById && rv.submittedById === clinicianId;
               const acting = actingId === rv.id;
               const isReady = rv.approvalStatus === "FAMILY_APPROVED";
               const isAwaitingFamily = rv.approvalStatus === "PENDING_FAMILY";
@@ -654,7 +642,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-bold text-[var(--clinical-ink)]">{s(r?.name) || rv.residentName || "Resident"} <span className="text-xs font-normal text-[var(--clinical-muted)]">Rm {s(r?.room) || rv.room}</span></p>
-                        <StatusPill status={isReady ? "FAMILY APPROVED" : isAwaitingFamily ? "AWAITING FAMILY" : requiresSecondApproval(rv.decision) ? "AWAITING APPROVAL" : "GATES INCOMPLETE"} />
+                        <StatusPill status={isReady ? "FAMILY APPROVED" : isAwaitingFamily ? "AWAITING FAMILY" : "AWAITING APPROVAL"} />
                       </div>
                       <p className="mt-1 text-sm text-[var(--clinical-ink-soft)]"><b>{rv.decision}</b> · Level {planLvl ?? rv.levelAtReview} · {rv.reviewPeriod}</p>
                       {lvlMismatch && <p className="mt-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-bold" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-amber) 18%, transparent)", color: "var(--clinical-amber)" }}><AlertTriangle className="h-3 w-3" /> Plan is Level {planLvl} · resident now Level {curLvl} — regenerate before finalizing</p>}
@@ -675,7 +663,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
                       ) : (
                         <>
                           <ClinicalButton variant="secondary" size="sm" disabled={acting} onClick={() => void rejectPending(rv)}>Reject</ClinicalButton>
-                          <ClinicalButton variant="primary" size="sm" disabled={acting || mine} onClick={() => void approvePending(rv)} title={mine ? "A second authorized approver is required" : undefined}>
+                          <ClinicalButton variant="primary" size="sm" disabled={acting} onClick={() => void approvePending(rv)}>
                             {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />} Approve &amp; release
                           </ClinicalButton>
                         </>
@@ -1248,7 +1236,7 @@ function ReviewForm({ resident, level, recentInc, recentVariances = [], last, re
             <div><FieldLabel htmlFor="cpr-resp">Responsible Person</FieldLabel><input id="cpr-resp" value={responsible} onChange={(e) => setResponsible(e.target.value)} placeholder="Name or role" className={controlClass} /></div>
             <div><FieldLabel htmlFor="cpr-target">Target Completion Date</FieldLabel><input id="cpr-target" type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className={controlClass} /></div>
           </div>
-          <button onClick={submit} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] disabled:opacity-60"><ClipboardList className="h-4 w-4" /> {saving ? "Submitting…" : heldPlanCount > 0 ? "Submit for family sign-off" : "Submit Care Plan Review"}</button>
+          <button onClick={submit} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] disabled:opacity-60"><ClipboardList className="h-4 w-4" /> {saving ? "Submitting…" : heldPlanCount > 0 ? "Submit Care Plan" : "Submit Care Plan Review"}</button>
         </div>
       </Section>
     </>

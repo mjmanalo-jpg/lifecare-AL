@@ -1,5 +1,8 @@
 import { historyForResident, normalizeLevel, type LocHistoryEntry } from "./locHistory.ts";
 import { careLevelEnumToLevel, clampLevel } from "./carePackage.ts";
+import { authoritativeAssessmentFor, finalLevel, type AssessmentV42 } from "./assessment.ts";
+
+const levelNum = (l: string) => Number(normalizeLevel(l).replace(/^L/, ""));
 
 /**
  * A resident's authoritative ACTIVE level of care (1..5).
@@ -20,11 +23,23 @@ export function activeLevel(opts: {
   locHistory: LocHistoryEntry[];
   admissionIds?: string[];
   residentName?: string;
+  /** Validated v4.2 assessments (any scope). When provided, the resident's
+   *  authoritative Final LOC is STRICT — a validated Final LOC (including a clinical
+   *  override / below-floor "-ovr") always wins over loc_history and the coarse
+   *  careLevel enum. A later LOC change is expected to come through a new validated
+   *  (re)assessment, which authoritativeAssessmentFor() then surfaces as the most
+   *  recent one. Omit it and behaviour is unchanged (loc_history → enum). */
+  assessments?: AssessmentV42[];
 }): number {
-  const latest = historyForResident(opts.locHistory, opts.residentId, opts.admissionIds ?? [], opts.residentName ?? "")[0];
-  if (latest) {
-    const n = Number(normalizeLevel(latest.level).replace(/^L/, ""));
-    if (n >= 1 && n <= 5) return n;
+  if (opts.assessments?.length) {
+    const a = authoritativeAssessmentFor(opts.assessments, { residentId: opts.residentId, admissionIds: opts.admissionIds, residentName: opts.residentName });
+    const lvl = a ? finalLevel(a) : null;
+    const aLvl = lvl ? levelNum(lvl) : null;
+    if (aLvl && aLvl >= 1 && aLvl <= 5) return aLvl;
   }
+
+  const latest = historyForResident(opts.locHistory, opts.residentId, opts.admissionIds ?? [], opts.residentName ?? "")[0];
+  const locLvl = latest ? levelNum(latest.level) : null;
+  if (locLvl && locLvl >= 1 && locLvl <= 5) return locLvl;
   return clampLevel(careLevelEnumToLevel(opts.careLevel));
 }

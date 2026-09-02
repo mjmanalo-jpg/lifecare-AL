@@ -42,6 +42,7 @@ import ResidentJourneyBoard from "./ResidentJourneyBoard";
 import { careLevelEnumToLevel, domainInPackage, domainDailyAllowance, DOMAIN_LABEL, recordOutOfPackageService, OVERAGE_EVENTS_KEY, parseOverageEvents, upsertOverageEvent, type OverageEvent } from "@/lib/lifecare/carePackage";
 import { activeLevel } from "@/lib/lifecare/activeLevel";
 import { parseLocHistory, LOC_HISTORY_KEY } from "@/lib/lifecare/locHistory";
+import { ASSESSMENTS_V42_KEY } from "@/lib/lifecare/assessment";
 import { levelMeta } from "@/lib/lifecare/levelModel";
 import ASSESSMENT_DOMAINS from "@/lib/lifecare/data/assessment_domains.json";
 import { CLINICAL_ALERT_RULES } from "@/lib/lifecare/clinicalAlerts";
@@ -303,9 +304,11 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
   const refetchAll = async () => { await Promise.allSettled([roundQ.refetch(), vitQ.refetch(), mealQ.refetch(), bowQ.refetch(), uriQ.refetch(), edeQ.refetch(), conQ.refetch(), moodQ.refetch(), painQ.refetch(), mobQ.refetch(), sleepQ.refetch(), refetchSettings()]); };
   // About Me profiles — for the directory's preferred-name + blocklist glance.
   const aboutStore = useMemo(() => parseAboutMeStore(settingRows.find((r) => (r.key || r.id) === ABOUT_ME_KEY)?.value), [settingRows]);
-  // Authoritative active level of care comes from loc_history (true L1..L5), not the
-  // careLevel enum (which can't distinguish L2 from L3).
+  // Authoritative active level of care comes from the resident's validated Final LOC
+  // (assessments_v42) first, then loc_history (true L1..L5), then the careLevel enum
+  // (which can't distinguish L2 from L3). See activeLevel() for the precedence rule.
   const locHistory = useMemo(() => parseLocHistory(settingRows.find((r) => (r.key || r.id) === LOC_HISTORY_KEY)?.value), [settingRows]);
+  const assessmentsV42 = useMemo(() => { try { const v = JSON.parse(settingRows.find((r) => (r.key || r.id) === ASSESSMENTS_V42_KEY)?.value || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } }, [settingRows]);
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
 
   const roundToRes = useMemo(() => {
@@ -413,7 +416,7 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
 
   const refetchResidents = () => resQ.refetch();
 
-  return { residents, entries, allEntries, byResident, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, refetchResidents, aboutStore, locHistory, loading: resQ.loading };
+  return { residents, entries, allEntries, byResident, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, refetchResidents, aboutStore, locHistory, assessmentsV42, loading: resQ.loading };
 }
 
 // ── Resident drill-down — click a resident → One Care · One Journey ───────────
@@ -434,7 +437,7 @@ function ResidentDetail({ clinicianRole, resident, onBack }: { clinicianRole: Cl
 // so nurse / care-manager / admin keep the full directory; the caregiver view
 // passes false to stay read-only (View + QR) per the role visibility matrix.
 export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = true }: { clinicianRole?: ClinicianRole; canManage?: boolean }) {
-  const { residents, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, ensureRound, saveNote, refetchAll, refetchResidents, bowelRef, saveBowelRef, aboutStore, locHistory, loading } = useCareLogData(clinicianRole);
+  const { residents, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, ensureRound, saveNote, refetchAll, refetchResidents, bowelRef, saveBowelRef, aboutStore, locHistory, assessmentsV42, loading } = useCareLogData(clinicianRole);
 
   const [search, setSearch] = useState("");
   const [careLevelFilter, setCareLevelFilter] = useState("");
@@ -514,7 +517,7 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
       >
         <div className="space-y-3">
           {filtered.map((r: Row) => {
-            const n = activeLevel({ residentId: s(r.id), careLevel: s(r.careLevel), locHistory, residentName: s(r.name) });
+            const n = activeLevel({ residentId: s(r.id), careLevel: s(r.careLevel), locHistory, residentName: s(r.name), assessments: assessmentsV42 });
             const lvl = { n, label: levelMeta(n).name };
             const diet = s(r.dietRestriction) || s(r.raw?.dietType) || "Regular";
             const dot = LEVEL_DOT[lvl.n] ?? "var(--clinical-panel)";
