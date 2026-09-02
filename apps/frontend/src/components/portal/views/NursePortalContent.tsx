@@ -53,6 +53,7 @@ import MedicationInventoryBoard from "@/components/portal/views/clinical/Medicat
 import MiniPharmacyBoard from "@/components/portal/views/clinical/MiniPharmacyBoard";
 import CarePlanReviewsBoard from "@/components/portal/views/clinical/CarePlanReviewsBoard";
 import RoutineGeneratorBoard from "@/components/portal/views/clinical/RoutineGeneratorBoard";
+import MoveInBoard from "@/components/portal/views/clinical/MoveInBoard";
 import CareDeliveryBoard from "@/components/portal/views/clinical/CareDeliveryBoard";
 import PrivateCaregiverBoard from "@/components/portal/views/clinical/PrivateCaregiverBoard";
 import LabsAllergiesBoard from "@/components/portal/views/clinical/LabsAllergiesBoard";
@@ -848,6 +849,9 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   }
   if (tab === "routinegenerator") {
     return <RoutineGeneratorBoard />;
+  }
+  if (tab === "movein") {
+    return <MoveInBoard />;
   }
   if (tab === "caredelivery") {
     return <CareDeliveryBoard clinicianRole="NURSE" />;

@@ -2,6 +2,7 @@
 
 import ResidentCoordinatorDashboard from "@/components/portal/dashboards/resident-coordinator/ResidentCoordinatorDashboard";
 import RoleCommandDashboard from "@/components/portal/dashboards/shared/RoleCommandDashboard";
+import MoveInBoard from "@/components/portal/views/clinical/MoveInBoard";
 
 const COORDINATOR_PAGES = {
   residents: {
@@ -43,6 +44,7 @@ const COORDINATOR_PAGES = {
 
 export default function ResidentCoordinatorPortalContent({ tab }: { tab: string }) {
   if (tab === "dashboard") return <ResidentCoordinatorDashboard />;
+  if (tab === "movein") return <MoveInBoard />;
   const page = COORDINATOR_PAGES[tab as keyof typeof COORDINATOR_PAGES];
   if (!page) return <ResidentCoordinatorDashboard />;
   return (

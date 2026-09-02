@@ -46,6 +46,11 @@ const RESIDENT_SCOPED = new Set([
   "lab-results", "allergies",
 ]);
 
+// The only datasets a Resident Coordinator may reach through the generic gateway
+// (move-in paperwork). Read residents/admissions; read+write resident-documents
+// and the belongings/health app-settings. Everything else stays DENY'd.
+const RC_MOVE_IN_MODELS = new Set(["residents", "admissions", "resident-documents", "app-settings"]);
+
 const ORG_ADMIN_ROLES = new Set(["OWNER", "ADMIN"]);
 const DENY = { id: "__tenant_access_denied__" };
 
@@ -291,9 +296,12 @@ export function tenantWhere(modelKey: string, context: TenantContext): Record<st
   if (!context.organizationId) return DENY;
 
   // Resident Coordinators use dedicated, least-privilege dashboard selectors.
-  // Keep the generic model gateway closed so coordination users cannot pivot
-  // from their dashboard into clinical records or facility-wide datasets.
-  if (context.role === "RESIDENT_COORDINATOR") return DENY;
+  // The generic gateway stays closed EXCEPT for the move-in paperwork datasets:
+  // read residents/admissions and read+write the resident's documents and the
+  // migration-free belongings/health app-settings. Everything else (incidents,
+  // meds, clinical records, users, …) remains blocked, and emergency-contact
+  // profile writes stay governed by canEditResidentProfile (CM/Admin only).
+  if (context.role === "RESIDENT_COORDINATOR" && !RC_MOVE_IN_MODELS.has(modelKey)) return DENY;
 
   if (modelKey === "organizations") return { id: context.organizationId };
   if (modelKey === "communities") return { organizationId: context.organizationId };

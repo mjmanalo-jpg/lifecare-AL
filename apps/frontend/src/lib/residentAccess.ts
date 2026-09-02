@@ -31,8 +31,18 @@ export function canEditResidentProfile(role: string, isPlatform: boolean): boole
   return isPlatform || RESIDENT_PROFILE_EDIT_ROLES.has(role);
 }
 
+// Emergency / family contact — coordination data, not clinical. Move-in roles
+// may edit ONLY these two profile fields (via the Move-in board) without holding
+// full profile-edit rights.
+export const RESIDENT_CONTACT_FIELDS = new Set(["emergencyContact", "emergencyContactPhone"]);
+export const RESIDENT_CONTACT_EDIT_ROLES = new Set(["RESIDENT_COORDINATOR", "NURSE", "FACILITY_ADMIN"]);
+
 /** True when a residents PATCH touches profile fields the role isn't allowed to edit. */
 export function residentProfileEditDenied(role: string, isPlatform: boolean, keys: string[]): boolean {
   if (canEditResidentProfile(role, isPlatform)) return false;
-  return keys.some((k) => RESIDENT_PROFILE_FIELDS.has(k));
+  const touchedProfile = keys.filter((k) => RESIDENT_PROFILE_FIELDS.has(k));
+  if (touchedProfile.length === 0) return false;
+  // Move-in roles may edit the emergency/family contact alone — but nothing else.
+  if (RESIDENT_CONTACT_EDIT_ROLES.has(role) && touchedProfile.every((k) => RESIDENT_CONTACT_FIELDS.has(k))) return false;
+  return true;
 }
