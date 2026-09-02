@@ -14,7 +14,46 @@
     "evidenceRequired": "Specify which ADLs + assistance type + frequency",
     "calibrationNote": "Score resident need regardless of whether LifeCare staff or PCG performs it",
     "scope": "Bathing, dressing, grooming, toileting, eating, continence, transfers",
-    "owner": "Care Manager/Nurse"
+    "owner": "Care Manager/Nurse",
+    "goalDefaults": [
+      "Maintain independence with personal care and respect the resident's preferred routines, timing and choices.",
+      "Maintain independence with self-care, providing occasional setup or cueing as needed while respecting preferred routines and choices.",
+      "Maximize participation in personal care while providing regular hands-on assistance as needed. Maintain privacy, dignity and preferred routines.",
+      "Encourage the resident to participate in personal care to the extent safely possible while providing extensive assistance across needed ADLs. Preserve dignity and personal choices.",
+      "Maintain comfort, dignity and personal preferences during all personal care. Encourage any safe participation despite extensive dependence."
+    ],
+    "interventionDefaults": [
+      [
+        "Allow resident to complete bathing, dressing, grooming, toileting and eating independently.",
+        "Set out preferred toiletries/clothing only if requested.",
+        "Respect usual timing, sequence, privacy and cultural preferences.",
+        "Observe for new difficulty, fatigue, pain or decline during self-care."
+      ],
+      [
+        "Provide setup for selected ADLs (e.g., clothing, toiletries, meal tray).",
+        "Give one-step reminders or verbal cueing only when needed.",
+        "Encourage resident to complete remaining steps independently.",
+        "Document which ADLs needed cueing/setup and any change from baseline."
+      ],
+      [
+        "Provide hands-on help for identified ADLs while allowing resident to perform safe steps.",
+        "Use agreed transfer/body mechanics during bathing, dressing and toileting.",
+        "Offer simple choices for clothing, grooming and timing.",
+        "Check skin and comfort during personal care and report concerns."
+      ],
+      [
+        "Provide extensive hands-on assistance across multiple ADLs using a consistent sequence.",
+        "Prepare all supplies before care and cluster tasks to reduce fatigue.",
+        "Encourage participation in any safe step (face washing, arm through sleeve, self-feeding portions).",
+        "Complete post-care comfort, hygiene and skin checks."
+      ],
+      [
+        "Provide near-total/total assistance for personal care while protecting privacy and dignity.",
+        "Use two-person/mechanical assistance when required by the care plan and trained staff.",
+        "Reposition and provide comfort measures during/after care.",
+        "Offer meaningful choices and observe non-verbal signs of pain or distress."
+      ]
+    ]
   },
   {
     "code": "AS-02",
@@ -31,7 +70,46 @@
     "evidenceRequired": "Transfer method, assist level, device, frequency",
     "calibrationNote": "Wheelchair availability alone does not equal 4",
     "scope": "Ambulation, transfer assistance, gait, balance, assistive devices",
-    "owner": "Nurse/Care Manager"
+    "owner": "Nurse/Care Manager",
+    "goalDefaults": [
+      "Maintain safe, independent mobility and transfers at the resident's preferred pace and routine.",
+      "Maintain safe mobility with appropriate device, setup or intermittent standby assistance while preserving independence.",
+      "Promote safe mobility and transfers with supervision, contact guard or minimal assistance as needed. Encourage active participation and independence.",
+      "Maintain safe mobility and transfers using the established assistance level, technique and equipment while encouraging participation as tolerated.",
+      "Ensure safe and comfortable transfers and mobility with extensive assistance while preserving dignity, comfort and any remaining functional ability."
+    ],
+    "interventionDefaults": [
+      [
+        "Encourage independent walking and transfers at usual pace.",
+        "Keep usual mobility route uncluttered and footwear accessible.",
+        "Ensure commonly used items are within safe reach.",
+        "Observe for new gait, endurance or transfer changes."
+      ],
+      [
+        "Set up prescribed mobility device before ambulation.",
+        "Provide standby assistance for transfers or longer walks as identified.",
+        "Remind resident to use device/handrails and appropriate footwear.",
+        "Document episodes requiring more than standby help."
+      ],
+      [
+        "Provide recurring supervision/contact guard or minimal assist for transfers and ambulation.",
+        "Use the same transfer technique and cue sequence across staff.",
+        "Position mobility device correctly before standing/sitting.",
+        "Monitor gait, balance, fatigue and dizziness during mobility."
+      ],
+      [
+        "Provide substantial physical assistance for transfers and frequent mobility help.",
+        "Use gait belt/device only if approved by policy/care plan and staff are trained.",
+        "Plan toileting/meals to reduce unnecessary high-risk transfers.",
+        "Coordinate mobility technique with nurse/PT/OT and document tolerance."
+      ],
+      [
+        "Provide extensive transfer/mobility support according to the established safe-handling plan.",
+        "Use mechanical/two-person transfer when required and available within capability.",
+        "Reposition regularly and support comfort in bed/chair.",
+        "Check for pain, skin pressure and tolerance after transfers."
+      ]
+    ]
   },
   {
     "code": "AS-03",
@@ -47,7 +125,46 @@
     "evidenceRequired": "Falls/near-falls, risk factors, supervision required",
     "calibrationNote": "Fall risk alone is a modifier; do not use score as automatic LOC floor",
     "scope": "History, gait/balance, medications/risk factors, environmental contributors",
-    "owner": "Nurse"
+    "owner": "Nurse",
+    "goalDefaults": [
+      "Maintain safe independent mobility using routine fall-prevention measures and a safe environment.",
+      "Maintain safe mobility and prevent falls through routine precautions while preserving independence.",
+      "Reduce fall risk through individualized precautions, appropriate assistance and monitoring of gait, balance and contributing factors.",
+      "Prevent falls and injury through regular supervision or assistance during identified risk activities while supporting safe mobility.",
+      "Minimize falls and injury through intensive individualized prevention, close supervision and the least restrictive safety measures appropriate to the resident."
+    ],
+    "interventionDefaults": [
+      [
+        "Maintain clear pathways, adequate lighting and safe footwear.",
+        "Keep call system/personal items within reach.",
+        "Encourage usual safe mobility habits.",
+        "Record any new fall or near-fall."
+      ],
+      [
+        "Complete routine fall-prevention check each shift/day per policy.",
+        "Remind resident to use mobility device and avoid rushing.",
+        "Ensure room/bathroom setup supports safe movement.",
+        "Review any near-fall for contributing factors."
+      ],
+      [
+        "Implement individualized fall precautions documented in the care plan.",
+        "Provide assistance for identified high-risk activities (toileting, transfers, showering).",
+        "Monitor gait, balance, footwear, device use and environmental contributors.",
+        "Review medications/clinical contributors with nurse when risk changes."
+      ],
+      [
+        "Provide regular supervision/assistance during mobility and identified risk periods.",
+        "Schedule proactive toileting and respond promptly to mobility needs.",
+        "Use individualized cues/redirection to prevent unsafe unassisted movement.",
+        "Complete post-fall/near-fall review and update interventions."
+      ],
+      [
+        "Maintain intensive individualized fall-prevention plan using least restrictive measures.",
+        "Provide close supervision during all high-risk mobility/transfers.",
+        "Use team handoff of current triggers, safest techniques and recent events.",
+        "Escalate promptly after falls, head impact, acute change or inability to maintain safety."
+      ]
+    ]
   },
   {
     "code": "AS-04",
@@ -63,7 +180,46 @@
     "evidenceRequired": "Examples of cueing, judgment, orientation and self-direction",
     "calibrationNote": "Diagnosis of dementia alone does not determine score",
     "scope": "Orientation, memory, judgment, ability to follow directions",
-    "owner": "Qualified assessor"
+    "owner": "Qualified assessor",
+    "goalDefaults": [
+      "Maintain autonomy, self-direction and participation in daily decisions and preferred routines.",
+      "Support independence and orientation with occasional reminders or cueing while allowing adequate time for decision-making.",
+      "Maintain participation in daily routines through regular cueing, reorientation and support with decisions while respecting the resident's choices.",
+      "Promote comfort and participation through structured routines, simple choices, familiar approaches and substantial support with daily-care decisions.",
+      "Maintain comfort, dignity and familiarity through consistent routines, simple communication and pervasive support with daily care and decision-making."
+    ],
+    "interventionDefaults": [
+      [
+        "Offer normal choices and involve resident directly in decisions.",
+        "Maintain preferred routine and access to calendar/clock as desired.",
+        "Communicate changes in schedule clearly.",
+        "Observe for acute confusion or new memory difficulty."
+      ],
+      [
+        "Give occasional reminders for appointments, meals or daily routine.",
+        "Use one-step cueing when resident loses track of a task.",
+        "Allow extra processing time before repeating instructions.",
+        "Document new or increasing cueing needs."
+      ],
+      [
+        "Provide regular cueing/reorientation using familiar language and routines.",
+        "Offer limited, simple choices to preserve decision-making.",
+        "Supervise decisions involving safety, medication and high-risk activities as care plan indicates.",
+        "Use consistent staff approaches and document effective cues."
+      ],
+      [
+        "Use structured daily routine and repeated simple cues for most care activities.",
+        "Break tasks into one-step directions and demonstrate when helpful.",
+        "Anticipate needs when resident cannot reliably plan/sequence care.",
+        "Record behavior/cognition patterns that affect care delivery."
+      ],
+      [
+        "Provide pervasive support for daily decisions and care sequencing.",
+        "Use simple language, non-verbal cues and consistent familiar routines.",
+        "Anticipate basic needs while still offering simple choices and seeking assent.",
+        "Monitor non-verbal indicators of pain, fear, hunger or toileting need."
+      ]
+    ]
   },
   {
     "code": "AS-05",
@@ -79,7 +235,46 @@
     "evidenceRequired": "Frequency, triggers, intervention, safety impact",
     "calibrationNote": "Score current care burden, not historical diagnosis alone",
     "scope": "Behavioral symptoms, triggers, distress, sleep, psychosocial needs",
-    "owner": "Nurse/Care Manager"
+    "owner": "Nurse/Care Manager",
+    "goalDefaults": [
+      "Maintain emotional well-being, meaningful relationships, preferred activities and usual routines.",
+      "Maintain emotional comfort with occasional reassurance or redirection while respecting preferences and usual coping strategies.",
+      "Promote emotional stability through predictable routines, reassurance and individualized approaches that reduce known triggers and distress.",
+      "Reduce distress and maintain safety through frequent individualized reassurance, redirection and de-escalation while preserving dignity and choice.",
+      "Maintain safety, comfort and dignity through intensive person-centered behavioral support using individualized triggers, calming strategies and the least restrictive approach."
+    ],
+    "interventionDefaults": [
+      [
+        "Support preferred social activities, hobbies and family contact.",
+        "Respect privacy, coping style and desired level of engagement.",
+        "Offer normal choices without forcing participation.",
+        "Observe for new anxiety, withdrawal, agitation or mood change."
+      ],
+      [
+        "Provide occasional reassurance/redirection during distress.",
+        "Use known calming activities and preferred communication style.",
+        "Identify and document triggers when episodes occur.",
+        "Return resident to preferred activity/routine after distress resolves."
+      ],
+      [
+        "Maintain predictable routine and proactively reduce known triggers.",
+        "Use individualized reassurance, redirection and de-escalation plan.",
+        "Offer meaningful activity matched to ability and preference.",
+        "Document antecedent, behavior, response and effective intervention."
+      ],
+      [
+        "Provide frequent individualized de-escalation/redirection and close follow-through.",
+        "Assign consistent approaches and communicate triggers/effective responses at handoff.",
+        "Modify environment/activity promptly when distress escalates.",
+        "Coordinate clinical review for new or worsening behavior."
+      ],
+      [
+        "Implement intensive person-centered behavior support plan using least restrictive approaches.",
+        "Maintain high consistency of routine, staffing approach and environment.",
+        "Use proactive comfort checks and individualized calming/sensory strategies.",
+        "Escalate urgently when behavior suggests pain, delirium, medication effect or imminent harm."
+      ]
+    ]
   },
   {
     "code": "AS-06",
@@ -95,7 +290,46 @@
     "evidenceRequired": "What is monitored, frequency, thresholds, coordination",
     "calibrationNote": "Acute instability uses change-of-condition/capability pathway, not score inflation",
     "scope": "Chronic conditions, acute issues, frailty, monitoring needs, clinical interventions",
-    "owner": "Nurse/health professional"
+    "owner": "Nurse/health professional",
+    "goalDefaults": [
+      "Maintain current health and wellness through routine observation and healthy daily routines.",
+      "Maintain stability of the identified condition through limited scheduled monitoring and timely reporting of meaningful changes.",
+      "Maintain stability of chronic conditions through regular structured monitoring and timely coordination of care.",
+      "Maintain clinical stability through frequent monitoring of interacting conditions, early recognition of deterioration and timely clinical coordination.",
+      "Maintain safety and clinical stability through very frequent structured monitoring, coordinated management and prompt escalation when needs approach service capability."
+    ],
+    "interventionDefaults": [
+      [
+        "Perform routine wellness observation during normal care.",
+        "Encourage usual hydration, nutrition, activity and rest.",
+        "Record significant change from baseline.",
+        "Follow routine preventive/medical appointments as scheduled."
+      ],
+      [
+        "Complete limited scheduled monitoring for the identified stable condition.",
+        "Record ordered measurements and symptoms in the designated record.",
+        "Reinforce condition-specific self-management instructions within care scope.",
+        "Notify nurse/provider of readings/symptoms outside ordered parameters."
+      ],
+      [
+        "Carry out regular structured monitoring for one or more chronic conditions.",
+        "Trend ordered readings, symptoms, weight or intake where applicable.",
+        "Coordinate appointments/labs and ensure results/orders are communicated.",
+        "Escalate early changes before they become acute."
+      ],
+      [
+        "Perform frequent monitoring across interacting conditions using a documented schedule.",
+        "Compare current findings with resident-specific baseline and ordered parameters.",
+        "Coordinate medication, nutrition, hydration and appointment issues with nurse/provider.",
+        "Provide clear shift-to-shift handoff of active clinical concerns."
+      ],
+      [
+        "Provide very frequent structured clinical observation within service capability.",
+        "Maintain active interdisciplinary coordination and explicit escalation thresholds.",
+        "Document response to interventions and unresolved abnormalities.",
+        "Initiate emergency/transfer process when criteria are met."
+      ]
+    ]
   },
   {
     "code": "AS-07",
@@ -111,7 +345,46 @@
     "evidenceRequired": "MAR burden, high-risk meds, monitoring, changes",
     "calibrationNote": "Medication count alone is insufficient",
     "scope": "Medication complexity, assistance level, monitoring and risks",
-    "owner": "Nurse/authorized role"
+    "owner": "Nurse/authorized role",
+    "goalDefaults": [
+      "Maintain safe and independent medication management according to the prescribed schedule.",
+      "Support medication adherence with reminders or setup as needed while maintaining as much independence as safely possible.",
+      "Ensure safe and consistent medication use with regular supervision or assistance. Monitor adherence, effects and possible side effects.",
+      "Maintain medication safety through structured administration support, close monitoring and coordination for a complex regimen or changing needs.",
+      "Ensure medication safety through intensive support, close observation for therapeutic and adverse effects, and prompt coordination or escalation of concerns."
+    ],
+    "interventionDefaults": [
+      [
+        "Allow resident to self-manage medications when assessed safe and permitted.",
+        "Keep medication routine and storage consistent with policy.",
+        "Encourage use of personal reminder system if preferred.",
+        "Report observed confusion, missed doses or adverse symptoms."
+      ],
+      [
+        "Provide reminders or setup support permitted by policy.",
+        "Confirm resident has taken medication when supervision is part of plan.",
+        "Maintain consistent medication timing around resident routine.",
+        "Document refusals, omissions or unusual effects."
+      ],
+      [
+        "Provide regular medication supervision/assistance according to MAR/orders and scope.",
+        "Check the right resident/medication/time/route per medication policy.",
+        "Monitor for side effects, sedation, dizziness or behavior/cognition change.",
+        "Report refusals, omissions, PRN patterns and concerns to nurse/provider."
+      ],
+      [
+        "Use structured medication administration and reconciliation process for complex regimen.",
+        "Coordinate time-critical medications, monitoring and meals as ordered.",
+        "Track PRN use/response and high-risk side effects.",
+        "Ensure changes after hospital/clinic visits are reconciled before implementation."
+      ],
+      [
+        "Provide intensive medication support within licensed/service capability.",
+        "Maintain close observation for therapeutic response and serious adverse effects.",
+        "Use explicit escalation pathway for missed critical doses, reactions or clinical instability.",
+        "Coordinate promptly with prescriber/pharmacy/nurse for regimen issues."
+      ]
+    ]
   },
   {
     "code": "AS-08",
@@ -128,7 +401,46 @@
     "evidenceRequired": "Diet, feeding assist, intake/weight trend, supplements",
     "calibrationNote": "Dysphagia/aspiration is also a modifier; weight trend must be contextualized",
     "scope": "Dietary needs, intake risk, swallowing concerns, assistance needs",
-    "owner": "Nurse/dietitian where applicable"
+    "owner": "Nurse/dietitian where applicable",
+    "goalDefaults": [
+      "Maintain independent eating and adequate nutrition and hydration while respecting food and beverage preferences.",
+      "Maintain adequate nutrition and hydration with minor setup, cueing or dietary support while encouraging independent intake.",
+      "Maintain adequate nutrition, hydration and healthy weight through regular meal support, intake monitoring and supplementation as indicated.",
+      "Improve or maintain nutritional and hydration status through frequent individualized support for intake, weight or swallowing concerns.",
+      "Maintain adequate nutrition, hydration, comfort and dignity through extensive feeding support and individualized management of significant ongoing nutritional needs."
+    ],
+    "interventionDefaults": [
+      [
+        "Offer balanced meals and fluids while respecting resident preferences.",
+        "Allow independent eating and preferred dining setting.",
+        "Ensure water/beverages are accessible.",
+        "Observe for unexpected weight or appetite change."
+      ],
+      [
+        "Provide meal setup, packaging assistance or cueing as needed.",
+        "Offer preferred fluids regularly and encourage adequate intake.",
+        "Follow prescribed diet texture/diet modifications if present.",
+        "Document persistent poor intake or new food difficulty."
+      ],
+      [
+        "Monitor meal/fluid intake and weight at care-plan frequency.",
+        "Provide regular meal assistance and prescribed nutritional supplements.",
+        "Offer nutrient-dense preferred foods and fluids within diet orders.",
+        "Escalate persistent low intake, weight loss, dehydration or glucose/meal mismatch."
+      ],
+      [
+        "Provide frequent individualized feeding/intake support and close monitoring.",
+        "Follow prescribed texture, positioning and swallowing precautions.",
+        "Track weight/intake/hydration trends and tolerance to supplements.",
+        "Coordinate clinical/dietitian/speech review for unresolved concerns."
+      ],
+      [
+        "Provide extensive feeding assistance while maintaining dignity and preferred pacing.",
+        "Follow all swallowing, texture, positioning and oral-care instructions.",
+        "Monitor tolerance, hydration, weight and signs of aspiration closely.",
+        "Escalate when oral intake cannot safely/adequately meet needs or care exceeds capability."
+      ]
+    ]
   },
   {
     "code": "AS-09",
@@ -144,7 +456,46 @@
     "evidenceRequired": "How resident expresses needs; adaptations required",
     "calibrationNote": "Do not score social withdrawal or dementia diagnosis unless communication itself is impaired",
     "scope": "Hearing, vision, speech/language, communication barriers",
-    "owner": "Care team"
+    "owner": "Care team",
+    "goalDefaults": [
+      "Maintain effective independent communication and participation in decisions using the resident's preferred communication method.",
+      "Support effective communication through occasional cueing, environmental adjustment or use of preferred sensory aids.",
+      "Promote understanding and expression through regular communication support, sensory aids and appropriate adaptation of the environment.",
+      "Maintain meaningful communication through frequent individualized approaches, simplified information and appropriate sensory support.",
+      "Maintain connection, comfort and ability to express basic needs through consistent individualized communication strategies and interpretation of verbal and non-verbal cues."
+    ],
+    "interventionDefaults": [
+      [
+        "Communicate directly with resident using preferred language/method.",
+        "Ensure normal access to glasses/hearing aids.",
+        "Include resident in care discussions and decisions.",
+        "Observe for new hearing, vision, speech or comprehension changes."
+      ],
+      [
+        "Reduce background noise and face resident when speaking.",
+        "Provide occasional repetition, written cue or visual prompt.",
+        "Check that glasses/hearing aids are in place before care instructions.",
+        "Allow extra response time."
+      ],
+      [
+        "Use consistent communication aids/strategies across staff.",
+        "Present information in short phrases and confirm understanding.",
+        "Ensure sensory devices are maintained and available.",
+        "Document effective communication methods and resident preferences."
+      ],
+      [
+        "Use individualized communication plan during most interactions.",
+        "Anticipate needs and confirm through gestures, behavior and context.",
+        "Limit questions to one concept at a time and use visual/tactile cues as appropriate.",
+        "Coordinate speech/hearing/vision evaluation when indicated."
+      ],
+      [
+        "Use consistent individualized verbal and non-verbal communication at all care encounters.",
+        "Interpret behavior/non-verbal cues for pain, fear, hunger, toileting and comfort.",
+        "Offer simple choices using objects, pictures or gestures.",
+        "Share successful signals/cues across all caregivers."
+      ]
+    ]
   },
   {
     "code": "AS-10",
@@ -161,7 +512,46 @@
     "evidenceRequired": "Assist level + episodes/24h + night frequency + hygiene",
     "calibrationNote": "Frequency matters: task + intensity + frequency must be captured",
     "scope": "Continence status, toileting needs, skin risk",
-    "owner": "Nurse/Care team"
+    "owner": "Nurse/Care team",
+    "goalDefaults": [
+      "Maintain independent toileting and continence routines while respecting privacy and personal preferences.",
+      "Maintain independence with toileting through occasional cueing or setup while preserving privacy and dignity.",
+      "Support regular toileting while maintaining dignity and independence. Provide assistance as needed and monitor continence and skin integrity.",
+      "Maintain comfort, hygiene and skin integrity through frequent hands-on toileting or continence care while encouraging participation as able.",
+      "Maintain comfort, dignity, hygiene and skin integrity through comprehensive high-frequency toileting and continence care."
+    ],
+    "interventionDefaults": [
+      [
+        "Allow independent toileting and privacy.",
+        "Keep bathroom route clear and supplies accessible.",
+        "Respect usual toileting schedule and hygiene products.",
+        "Observe for new urgency, accidents, constipation or urinary symptoms."
+      ],
+      [
+        "Provide occasional reminders, setup or standby assistance for toileting.",
+        "Ensure clothing/continence supplies are easy to manage.",
+        "Prompt before outings/bedtime if consistent with preference.",
+        "Document new accidents or increasing cueing need."
+      ],
+      [
+        "Provide regular toileting assistance or continence care on individualized schedule.",
+        "Assist with clothing, transfer, cleansing and product change as needed.",
+        "Monitor continence pattern, urine/stool changes and skin condition.",
+        "Encourage fluids and bowel routine consistent with clinical plan."
+      ],
+      [
+        "Provide frequent hands-on toileting/diaper care and prompt hygiene.",
+        "Use proactive toileting schedule to reduce urgency and unsafe rushing.",
+        "Apply skin barrier/protective care as ordered/policy.",
+        "Track bowel pattern and escalate unresolved constipation/diarrhea."
+      ],
+      [
+        "Provide near-total continence/toileting assistance with high-frequency checks.",
+        "Change soiled products promptly and provide thorough gentle skin care.",
+        "Use safe transfer/repositioning plan for all toileting care.",
+        "Maintain dignity, privacy and comfort at each episode."
+      ]
+    ]
   },
   {
     "code": "AS-11",
@@ -177,7 +567,46 @@
     "evidenceRequired": "Current skin status, risk, frequency, treatment",
     "calibrationNote": "Resolved wound should not be scored as active high burden",
     "scope": "Pressure injury risk, wounds, skin monitoring needs",
-    "owner": "Nurse"
+    "owner": "Nurse",
+    "goalDefaults": [
+      "Maintain healthy, intact skin through routine hygiene, mobility, nutrition and skin care.",
+      "Maintain intact skin through preventive measures and monitoring of identified skin-risk factors.",
+      "Protect skin integrity and promote healing through regular skin care, pressure prevention and monitoring of affected or vulnerable areas.",
+      "Promote healing and prevent further skin breakdown through frequent individualized skin or wound care and pressure-management measures.",
+      "Maintain healing, comfort and prevention of further deterioration through intensive individualized skin/wound management and coordinated clinical care."
+    ],
+    "interventionDefaults": [
+      [
+        "Perform routine skin observation during bathing/dressing.",
+        "Maintain normal hygiene, moisturization and mobility.",
+        "Keep skin clean and dry.",
+        "Report new redness, rash, wound or bruising."
+      ],
+      [
+        "Inspect identified risk areas regularly.",
+        "Use preventive off-loading/position changes as indicated.",
+        "Manage moisture promptly and protect fragile skin.",
+        "Document any persistent redness or skin change."
+      ],
+      [
+        "Provide regular skin/wound care according to written orders.",
+        "Implement pressure prevention and repositioning schedule.",
+        "Track wound/skin appearance and report deterioration.",
+        "Support nutrition/hydration relevant to skin healing."
+      ],
+      [
+        "Provide frequent individualized wound/skin care and pressure management.",
+        "Reposition/off-load at prescribed frequency and document completion.",
+        "Monitor drainage, odor, surrounding skin, pain and systemic symptoms.",
+        "Coordinate wound-clinician/medical review."
+      ],
+      [
+        "Provide intensive skin/wound management within service scope.",
+        "Use strict pressure-relief, positioning and moisture-control plan.",
+        "Maintain comfort/pain observation during care.",
+        "Coordinate urgent review when healing is poor or systemic signs appear."
+      ]
+    ]
   },
   {
     "code": "AS-12",
@@ -193,7 +622,46 @@
     "evidenceRequired": "Night interventions, frequency, duration",
     "calibrationNote": "Insomnia diagnosis alone does not determine score",
     "scope": "Sleep pattern, routines, preferences, night support",
-    "owner": "Care Manager"
+    "owner": "Care Manager",
+    "goalDefaults": [
+      "Maintain the resident's preferred sleep and daily routine with minimal staff intervention.",
+      "Maintain a comfortable sleep routine with occasional reassurance or cueing while respecting preferred bedtime and waking habits.",
+      "Promote restful sleep and a consistent daily routine through regular individualized nighttime or routine support.",
+      "Improve sleep, comfort and day/night routine through frequent individualized interventions while minimizing unnecessary disruption.",
+      "Promote comfort and the most stable day/night pattern achievable through intensive individualized support based on the resident's established preferences and responses."
+    ],
+    "interventionDefaults": [
+      [
+        "Respect resident's preferred bedtime, wake time and sleep environment.",
+        "Minimize unnecessary nighttime interruptions.",
+        "Support usual bedtime routine and comfort items.",
+        "Observe for new sleep disruption or daytime somnolence."
+      ],
+      [
+        "Provide occasional reassurance, cueing or comfort at night.",
+        "Offer toileting or repositioning when requested/indicated.",
+        "Use low-stimulation approach during nighttime awakenings.",
+        "Document recurring pattern if support becomes frequent."
+      ],
+      [
+        "Implement consistent bedtime routine and regular nighttime supports.",
+        "Provide scheduled toileting/repositioning if care plan indicates.",
+        "Reduce evening stimulation and support daytime activity/light exposure.",
+        "Track sleep pattern and effectiveness of interventions."
+      ],
+      [
+        "Provide frequent individualized interventions for sleep disruption.",
+        "Use structured day/night schedule and consistent staff approach.",
+        "Assess common causes of waking: pain, toileting, hunger, anxiety, environment.",
+        "Coordinate clinical review for persistent change."
+      ],
+      [
+        "Provide intensive individualized day/night support while prioritizing comfort.",
+        "Maintain close supervision during unsafe nighttime activity.",
+        "Use non-pharmacologic calming and familiar routines first where appropriate.",
+        "Escalate sudden severe sleep/wake change as possible acute illness/delirium."
+      ]
+    ]
   },
   {
     "code": "AS-13",
@@ -209,7 +677,46 @@
     "evidenceRequired": "When, why, frequency, duration, line-of-sight need",
     "calibrationNote": "This domain is central to LOC vs PCG; document dedicated vs shared supervision",
     "scope": "Wandering, unsafe judgment, supervision needs, environmental risks",
-    "owner": "Nurse/Care Manager"
+    "owner": "Nurse/Care Manager",
+    "goalDefaults": [
+      "Maintain independent and safe participation in daily life with routine environmental safety measures.",
+      "Maintain independence with occasional safety reminders, reassurance or supervision as needed.",
+      "Maintain safety through regular supervision and individualized precautions for identified risks while preserving freedom and independence.",
+      "Prevent injury through frequent supervision, redirection and individualized safety measures while using the least restrictive approach.",
+      "Maintain safety through intensive individualized supervision and risk management while preserving dignity, meaningful activity and the least restrictive environment possible."
+    ],
+    "interventionDefaults": [
+      [
+        "Maintain routine environmental safety checks.",
+        "Keep emergency/call systems accessible.",
+        "Respect resident's normal independence and privacy.",
+        "Document any new safety event or unsafe judgment."
+      ],
+      [
+        "Provide occasional reminders about identified safety risks.",
+        "Check that commonly used equipment is used correctly.",
+        "Offer standby supervision for unfamiliar/high-risk situations.",
+        "Document repeated unsafe choices."
+      ],
+      [
+        "Provide regular supervision and individualized safety precautions.",
+        "Use predictable routine/environment to reduce risk.",
+        "Supervise identified high-risk activities and exits as care plan requires.",
+        "Communicate current risks and effective precautions at handoff."
+      ],
+      [
+        "Provide frequent supervision/redirection during waking hours or identified periods.",
+        "Use least restrictive environmental controls allowed by policy.",
+        "Offer purposeful activity to reduce unsafe wandering/impulsivity.",
+        "Maintain rapid response plan for elopement or serious safety event."
+      ],
+      [
+        "Provide intensive individualized supervision and risk management.",
+        "Maintain team-wide safety plan with known triggers, routes and response steps.",
+        "Use least restrictive measures and preserve meaningful movement/activity.",
+        "Escalate when resident cannot be kept safe within current environment/staffing."
+      ]
+    ]
   },
   {
     "code": "AS-14",
@@ -225,7 +732,46 @@
     "evidenceRequired": "Therapy plan, staff carryover tasks, frequency",
     "calibrationNote": "Score staff/coordination burden—not rehabilitation potential",
     "scope": "Goals, function, therapy needs, maintenance/recovery potential",
-    "owner": "Care team/AHP"
+    "owner": "Care team/AHP",
+    "goalDefaults": [
+      "Maintain current function and independence through normal daily activity; no active therapy carryover is required.",
+      "Maintain mobility, strength and independence through regular activity and simple exercise encouragement or home-program support.",
+      "Improve or maintain function through regular staff carryover of the therapy plan and coordination with therapy providers.",
+      "Maximize functional potential through frequent structured therapy carryover, staff assistance and ongoing coordination with the therapy team.",
+      "Maximize achievable function, comfort and participation through intensive multidisciplinary reablement support integrated into daily care."
+    ],
+    "interventionDefaults": [
+      [
+        "Encourage normal daily activity and self-directed mobility.",
+        "Allow resident to perform functional tasks independently.",
+        "Observe for decline in endurance, strength or function.",
+        "Refer for reassessment if function changes."
+      ],
+      [
+        "Encourage prescribed/simple home exercise or walking program.",
+        "Prompt participation in functional tasks rather than doing them for the resident.",
+        "Record tolerance and reasons for missed activity when relevant.",
+        "Use rest breaks and preferred activity times."
+      ],
+      [
+        "Carry over therapist-prescribed exercises/techniques during daily care.",
+        "Use therapy-recommended transfer, dressing or mobility strategies.",
+        "Document completion/tolerance and barriers.",
+        "Coordinate schedule/progress updates with PT/OT/ST."
+      ],
+      [
+        "Provide frequent structured therapy carryover integrated into multiple daily routines.",
+        "Coordinate goals and technique across caregiving, nursing and therapy.",
+        "Track measurable functional response/tolerance.",
+        "Adjust daily workload/rest based on therapy guidance."
+      ],
+      [
+        "Integrate intensive multidisciplinary reablement support into daily care within capability.",
+        "Use consistent PT/OT/ST-approved techniques across shifts.",
+        "Balance restorative goals with fatigue, safety and comfort.",
+        "Hold/escalate exercises when clinical status changes."
+      ]
+    ]
   },
   {
     "code": "NS-01",

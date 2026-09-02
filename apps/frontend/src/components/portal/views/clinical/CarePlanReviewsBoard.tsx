@@ -12,13 +12,18 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ClipboardList, ListChecks, Loader2, AlertTriangle, Users, ClipboardCheck, FileClock, FilePlus2, CalendarClock, Target } from "lucide-react";
+import { ClipboardList, ListChecks, Loader2, AlertTriangle, Users, ClipboardCheck, FileClock, FilePlus2, CalendarClock, Target, Trash2, Plus, Printer, Clock } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, updateRecord, createRecord } from "@/lib/api";
-import { generateCarePlanForResident, releaseCarePlan, materializeTodayTasks, levelPlan, fullLevelPlan, levelCareTasks, parseAssistanceOptions, type PlanIntervention } from "@/lib/carePlanGen";
-import { CARE_PLAN_DRAFTS_KEY, parseCarePlanDrafts, upsertDraft, clearDraft, mergeSavedIntoTasks, toSavedItems, type DraftState } from "@/lib/carePlanDraft";
-import { taskById } from "@/lib/lifecare/dataset";
+import { generateCarePlanForResident, releaseCarePlan, materializeTodayTasks, fullLevelPlan, levelCareTasks, type PlanIntervention } from "@/lib/carePlanGen";
+import { CARE_PLAN_DRAFTS_KEY, parseCarePlanDrafts, upsertDraft, clearDraft, type DraftState, type SavedDomainPlanItem } from "@/lib/carePlanDraft";
+import { taskById, SCORED_DOMAINS, tasksForDomain } from "@/lib/lifecare/dataset";
+import { domainCodeFromLabel } from "@/lib/lifecare/carePackage";
+import { ASSESSMENTS_V42_KEY, type AssessmentV42, type DomainEntry } from "@/lib/lifecare/assessment";
+import { printCarePlan } from "@/lib/lifecare/carePlanReport";
+import { generateRoutine } from "@/lib/lifecare/carePlanRoutine";
+import RoutineTimeline from "./RoutineTimeline";
 import { duplicateReview, requiresSecondApproval, reviewOutcome, canFinalizeCarePlan, type CarePlanReviewApprovalStatus } from "@/lib/lifecare/carePlanReviewGuards";
 import { levelMeta } from "@/lib/lifecare/levelModel";
 import { adaptResident } from "@/lib/adapters";
@@ -79,6 +84,17 @@ interface Review {
   familyDecidedByName?: string; familyDecidedAt?: string; familyRejectReason?: string;
 }
 const parseReviews = (raw: string | null | undefined): Review[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((r) => r && typeof r.id === "string") : []; } catch { return []; } };
+const parseAssessments = (raw: string | null | undefined): AssessmentV42[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? (v as AssessmentV42[]) : []; } catch { return []; } };
+// The resident's most authoritative assessment domains — prefer VALIDATED, then the
+// most recently updated. Drives the assessment-based care plan (Goal / Preference
+// Note + Domain-Level Map interventions).
+const STATUS_RANK: Record<string, number> = { VALIDATED: 3, COMPLETED: 2, DRAFT: 1, SUPERSEDED: 0 };
+const latestAssessmentDomains = (all: AssessmentV42[], residentId: string): Partial<Record<string, DomainEntry>> | null => {
+  const mine = all.filter((a) => s(a.layer1?.residentId) === residentId && a.domains && Object.keys(a.domains).length);
+  if (!mine.length) return null;
+  mine.sort((a, b) => (STATUS_RANK[b.status] ?? 0) - (STATUS_RANK[a.status] ?? 0) || s(b.updatedAt).localeCompare(s(a.updatedAt)));
+  return mine[0].domains;
+};
 
 // A stored intervention line ("Title: detail… (Daily)") → title · detail · frequency,
 // so the plan view can show the frequency as a pill instead of trailing text.
@@ -121,6 +137,9 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
   // truth the CarePlanBuilder hydrates from and auto-saves to, so a nurse's
   // assistance/frequency/note edits survive navigation and regeneration.
   const drafts = useMemo(() => parseCarePlanDrafts(settingRows.find((r) => (r.key || r.id) === CARE_PLAN_DRAFTS_KEY)?.value), [settingRows]);
+  // Resident assessments (migration-free `assessments_v42`) — the source of the
+  // per-domain Goal / Preference Note + scores the care plan builds from.
+  const assessments = useMemo(() => parseAssessments(settingRows.find((r) => (r.key || r.id) === ASSESSMENTS_V42_KEY)?.value), [settingRows]);
   // Read the latest settings without re-creating the persist callback (a stable
   // callback keeps the builder's debounced auto-save effect from re-firing).
   const settingRowsRef = useRef(settingRows);
@@ -158,6 +177,9 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
   const [tab, setTab] = useState<"plans" | "new" | "due" | "history" | "pending">(tabs?.[0] ?? "plans");
   const [viewPlan, setViewPlan] = useState<{ resident: Row; plan: Row } | null>(null);
   const [resId, setResId] = useState("");
+  // The selected resident's assessment domains (Goal / Preference Notes + scores)
+  // — what the CarePlanBuilder builds its per-domain Goal + Interventions from.
+  const builderDomains = useMemo(() => (resId ? latestAssessmentDomains(assessments, resId) : null), [assessments, resId]);
   const [genBusy, setGenBusy] = useState(false);
   const [interventionCount, setInterventionCount] = useState(0);
   const [actingId, setActingId] = useState("");
@@ -226,7 +248,12 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
   // Open the confirmation modal; the actual generation runs on confirm (runGenerate).
   const genPlan = (plan?: { title?: string; goals: string[]; interventions: PlanIntervention[] }) => {
     if (!resident || genBusy) return;
-    setGenConfirm({ plan, already: residentsWithPlan.has(s(resident.id)) });
+    // Default to the FULL Level-N package (all 37/38 governed tasks the builder shows)
+    // when the nurse hasn't produced live builder edits yet. Without this fallback the
+    // no-plan path collapses to levelPlan's deduped + AS-code-filtered baseline (as few
+    // as 2 interventions), contradicting the "draws from the Level-N package" builder copy.
+    const effective = plan?.interventions?.length ? plan : fullLevelPlan(resLevel(resident).n);
+    setGenConfirm({ plan: effective, already: residentsWithPlan.has(s(resident.id)) });
   };
 
   // Core generation — supersede prior held drafts, then build the DRAFT plan for
@@ -456,9 +483,9 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
                 <div className="flex shrink-0 items-center gap-2">
                   <ClinicalButton variant="primary" onClick={() => genPlan(builderPlan)} disabled={genBusy} className="shrink-0">
                     {genBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />}
-                    Generate individualized draft
+                    Generate Care Plan
                   </ClinicalButton>
-                  {interventionCount > 0 && <span className="text-xs text-[var(--clinical-muted)]">{interventionCount} governed intervention{interventionCount === 1 ? "" : "s"} · held until nursing approval</span>}
+                  {interventionCount > 0 && <span className="text-xs text-[var(--clinical-muted)]">{interventionCount} care domain{interventionCount === 1 ? "" : "s"} · held until nursing approval</span>}
                 </div>
               )}
             </div>
@@ -487,7 +514,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
             </div>
           )}
 
-          {resident && <CarePlanBuilder key={resId} residentId={resId} level={resLevel(resident).n} genBusy={genBusy} saved={drafts[resId]} onPersist={persistDraftState} onGenerate={genPlan} onCountChange={setInterventionCount} onChange={setBuilderPlan} />}
+          {resident && <CarePlanBuilder key={resId} residentId={resId} residentName={s(resident.name)} room={s(resident.room)} level={resLevel(resident).n} assessmentDomains={builderDomains} saved={drafts[resId]} onPersist={persistDraftState} onCountChange={setInterventionCount} onChange={setBuilderPlan} />}
 
           {resident && <ReviewForm resident={resident} level={resLevel(resident).n} recentInc={recentInc} recentVariances={recentVariances} last={latestReview(resId)} reviewedBy={clinicianName} heldPlanCount={(draftPlansByResident.get(resId) || []).length} hasExistingPlan={residentsWithPlan.has(resId)}
             onSubmit={async (rec) => {
@@ -762,12 +789,22 @@ function CurrentPlanView({ plan, nextReviewDate, draft }: { plan: Row; nextRevie
   // freshest, complete individualization) rather than the plan's stored string,
   // which may lag the nurse's latest un-regenerated edits.
   const goals = draft?.goals?.length ? draft.goals : s(plan.careGoals).split("\n").map((x) => x.trim()).filter(Boolean);
-  const ivs = draft
+  const domName = (code: string) => SCORED_DOMAINS.find((d) => d.code === code)?.name || code;
+  const ivs = draft?.domainPlan?.length
+    // v4.2 assessment-domain draft — one line per included domain, its Interventions bundled.
+    ? draft.domainPlan.filter((d) => d.included).map((d) => ({
+        title: `${d.code} · ${domName(d.code)}`,
+        desc: d.interventions.map((x) => x.trim()).filter(Boolean).join(" • "),
+        freq: "",
+      })).filter((iv) => iv.desc)
+    : draft
+    // Legacy level-package draft (taskId-based items).
     ? draft.items.filter((i) => i.included).map((i) => { const t = taskById(i.taskId); return {
         title: t?.name || i.taskId,
         desc: [i.assistance && `Assistance: ${i.assistance}`, i.note.trim() || t?.approvedIntervention || t?.definition || ""].filter(Boolean).join(" · "),
         freq: i.freq,
       }; })
+    // Released plan of record — from the stored interventions string.
     : s(plan.interventions).split("\n").map((x) => x.trim()).filter(Boolean).map(parseIntervention);
   return (
     <div className="space-y-5">
@@ -837,122 +874,137 @@ function TriggerLine({ label, trig }: { label: string; trig: string }) {
   );
 }
 
-// ── Individualized Care Plan editor — the resident's Level-of-Care package ─────
-// Interventions are the governed care_task_master tasks for THIS level only
-// (levelCareTasks) — a Level-N resident's plan covers Level-N package tasks and
-// nothing above/below. Each task is individualized (assistance / frequency / note).
-const FREQ_OPTIONS = ["Every shift", "Daily", "Twice daily (BID)", "Three times daily (TID)", "Weekly", "PRN / as needed", "Per care plan"];
-const ASSISTANCE_LABELS: Record<string, string> = {
-  "SBA": "Standby Assistance",
-  "CGA": "Contact Guard Assistance",
-  "Min": "Minimal Assistance",
-  "Mod": "Moderate Assistance",
-  "Max": "Maximum Assistance",
-  "T": "Total Assistance",
-  "C/S": "Cueing / Standby",
-  "Max/T": "Maximum / Total",
-};
-const assistLabel = (code: string) => ASSISTANCE_LABELS[code] ? `${code} — ${ASSISTANCE_LABELS[code]}` : code;
-
-interface TaskItem {
-  taskId: string; domain: string; name: string; intervention: string; goal: string;
-  assistanceChoices: string[]; freqHint: string; prompt: string; responsibleRole: string;
-  included: boolean; assistance: string; freq: string; note: string;
+// ── Individualized Care Plan editor — assessment-domain Goal + Interventions ────
+// v4.2: the plan is built from the resident's assessment, one card per scored
+// domain. Goal seeds from the Goal / Preference Note (which itself defaults from
+// the Domain-Level Map); Interventions seed from the Domain-Level Map Core Care
+// Tasks for the selected score. Both are freely editable. Each domain still links
+// to its representative governed Level-N task (taskId) so a released plan keeps
+// dispatching caregiver tasks (governance B5) — see buildDomainPlan.
+interface DomainRow {
+  code: string; name: string; score: number;
+  taskId: string;          // representative governed Level-N task for dispatch (may be "")
+  included: boolean;
+  goal: string;            // editable Goal / Preference
+  interventions: string[]; // editable Core Care Tasks — one row each (add/remove)
 }
 
-function CarePlanBuilder({ residentId, level, genBusy, saved, onPersist, onGenerate, onCountChange, onChange }: {
-  residentId: string; level: number; genBusy: boolean;
+// Overlay a saved per-domain snapshot onto the assessment-derived base rows. The
+// assessment stays authoritative for which domains exist + their score; only the
+// nurse-editable fields (included/goal/interventions) are overlaid.
+function mergeSavedDomain(base: DomainRow[], saved?: SavedDomainPlanItem[] | null): DomainRow[] {
+  if (!saved?.length) return base;
+  const by = new Map(saved.map((sv) => [sv.code, sv]));
+  return base.map((r) => { const sv = by.get(r.code); return sv ? { ...r, included: sv.included, goal: sv.goal, interventions: sv.interventions } : r; });
+}
+
+// Rows → the generator's { goals, interventions } contract. Goals carry the domain
+// label so the flattened plan still reads per-domain; each intervention keeps its
+// governed taskId so a released plan still materializes caregiver tasks.
+function buildDomainPlan(rows: DomainRow[]): { goals: string[]; interventions: PlanIntervention[] } {
+  const inc = rows.filter((r) => r.included);
+  return {
+    goals: inc.filter((r) => r.goal.trim()).map((r) => `${r.name}: ${r.goal.trim()}`),
+    interventions: inc.map((r) => ({
+      domain: r.name,
+      title: `${r.code} · ${r.name}`,
+      freq: "Per care plan",
+      taskId: r.taskId || undefined,
+      note: r.interventions.map((x) => x.trim()).filter(Boolean).join(" • ") || "Individualize interventions, assistance and preferences.",
+    })),
+  };
+}
+
+function CarePlanBuilder({ residentId, residentName, room, level, assessmentDomains, saved, onPersist, onCountChange, onChange }: {
+  residentId: string; residentName?: string; room?: string; level: number;
+  assessmentDomains?: Partial<Record<string, DomainEntry>> | null;
   saved?: DraftState | null;
   onPersist?: (residentId: string, state: DraftState) => void;
-  onGenerate: (plan: { title?: string; goals: string[]; interventions: PlanIntervention[] }) => void;
   onCountChange?: (count: number) => void;
   onChange?: (plan: { title?: string; goals: string[]; interventions: PlanIntervention[] }) => void;
 }) {
   const meta = levelMeta(level);
-  const base = useMemo(() => levelPlan(level), [level]);
-  // Hydrate from the saved snapshot (the nurse's prior edits), else level
-  // defaults. The level task list stays authoritative — mergeSavedIntoTasks
-  // overlays only the editable fields and drops any retired governed tasks.
-  const [goals, setGoals] = useState(() => (saved?.goals?.length ? saved.goals.join("\n") : base.goals.join("\n")));
-  const [items, setItems] = useState<TaskItem[]>(() => mergeSavedIntoTasks(levelCareTasks(level).map((t) => ({
-    taskId: t.id, domain: t.domain, name: t.name, intervention: t.approvedIntervention || t.definition || "",
-    goal: t.approvedGoal || "", assistanceChoices: parseAssistanceOptions(t.assistanceOptions), freqHint: t.frequencyOptions || "",
-    prompt: t.residentGoalPrompt || "", responsibleRole: t.responsibleRole || t.primaryRole || "Caregiver",
-    included: true, assistance: "", freq: "Daily", note: "",
-  })), saved));
+  // Representative governed task per domain at this level — for dispatch linkage.
+  const taskIdByCode = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const t of levelCareTasks(level)) {
+      const code = domainCodeFromLabel(t.domain) || domainCodeFromLabel(t.name);
+      if (code && !m[code]) m[code] = t.id;
+    }
+    return m;
+  }, [level]);
 
-  const patch = (id: string, p: Partial<TaskItem>) => setItems((arr) => arr.map((x) => (x.taskId === id ? { ...x, ...p } : x)));
-  const setDomain = (domain: string, on: boolean) => setItems((arr) => arr.map((x) => (x.domain === domain ? { ...x, included: on } : x)));
-  // Bulk-apply across a domain's INCLUDED tasks — set once, tweak exceptions. Frequency is
-  // universal; assistance only lands on tasks that actually offer that governed option.
-  const bulkFreq = (domain: string, freq: string) => setItems((arr) => arr.map((x) => (x.domain === domain && x.included ? { ...x, freq } : x)));
-  const bulkAssist = (domain: string, assistance: string) => setItems((arr) => arr.map((x) => (x.domain === domain && x.included && x.assistanceChoices.includes(assistance) ? { ...x, assistance } : x)));
-  const chosen = items.filter((x) => x.included);
-
-  // Report the intervention count to the parent so it can display it next to the generate button.
-  useEffect(() => { onCountChange?.(chosen.length); }, [chosen.length, onCountChange]);
-
-  // Report the full plan state to the parent so the top-level "Generate" button can pass it.
-  // Depend on the stable `items` state ref (not the `chosen` array, which is a new
-  // reference every render) so this fires only on a real edit — otherwise
-  // setBuilderPlan re-renders the parent, producing a new `chosen`, re-firing the
-  // effect: an infinite render loop.
-  useEffect(() => {
-    onChange?.({
-      goals: goals.split("\n").map((g) => g.trim()).filter(Boolean),
-      interventions: items.filter((x) => x.included).map((it) => ({
-        domain: it.domain,
-        title: it.name,
-        freq: it.freq,
-        taskId: it.taskId,
-        note: [it.assistance && `Assistance: ${it.assistance}`, (it.note.trim() || it.intervention.trim() || "Individualize assistance, technique and preferences."), it.responsibleRole && `Role: ${it.responsibleRole}`].filter(Boolean).join(" · "),
-      })),
+  // One base row per scored domain the assessment actually scored.
+  const baseRows = useMemo<DomainRow[]>(() => {
+    const dm = assessmentDomains || {};
+    return SCORED_DOMAINS.filter((d) => dm[d.code] && typeof dm[d.code]?.score === "number").map((d) => {
+      const entry = dm[d.code]!;
+      const score = Math.max(0, Math.min(4, entry.score ?? 0));
+      return {
+        code: d.code, name: d.name, score, taskId: taskIdByCode[d.code] || "", included: true,
+        goal: entry.goalNote?.trim() || d.goalDefaults?.[score] || "",
+        interventions: (d.interventionDefaults?.[score] || []).map((x) => x.trim()).filter(Boolean),
+      };
     });
-  }, [goals, items, onChange]);
+  }, [assessmentDomains, taskIdByCode]);
 
-  // Auto-save the builder snapshot (debounced) so the nurse's edits are never
-  // lost when they navigate away or regenerate — the resident's plan is a draft
-  // and must be fully preserved. Skips the initial (hydration) render so opening
-  // the builder doesn't overwrite the stored snapshot with itself.
+  const [rows, setRows] = useState<DomainRow[]>(() => mergeSavedDomain(baseRows, saved?.domainPlan));
+  // Re-hydrate only when the assessment's domain/score signature changes (loaded
+  // async, or a reassessment) — never on the nurse's own edits or auto-save echo.
+  const sig = baseRows.map((r) => `${r.code}:${r.score}`).join("|");
+  const sigRef = useRef(sig);
+  useEffect(() => {
+    if (sigRef.current === sig) return;
+    sigRef.current = sig;
+    setRows(mergeSavedDomain(baseRows, saved?.domainPlan));
+  }, [sig, baseRows, saved]);
+
+  const patch = (code: string, p: Partial<DomainRow>) => setRows((arr) => arr.map((x) => (x.code === code ? { ...x, ...p } : x)));
+  // Per-intervention row edits — nurse/CG add, edit or remove individual tasks.
+  const setIvx = (code: string, i: number, v: string) => setRows((arr) => arr.map((x) => (x.code === code ? { ...x, interventions: x.interventions.map((t, j) => (j === i ? v : t)) } : x)));
+  const addIvx = (code: string) => setRows((arr) => arr.map((x) => (x.code === code ? { ...x, interventions: [...x.interventions, ""] } : x)));
+  // Append a specific care task from the Task Library (skip if already present).
+  const addIvxText = (code: string, text: string) => setRows((arr) => arr.map((x) => {
+    if (x.code !== code) return x;
+    const has = x.interventions.some((t) => t.trim().toLowerCase() === text.trim().toLowerCase());
+    return has ? x : { ...x, interventions: [...x.interventions, text] };
+  }));
+  const removeIvx = (code: string, i: number) => setRows((arr) => arr.map((x) => (x.code === code ? { ...x, interventions: x.interventions.filter((_, j) => j !== i) } : x)));
+  const included = rows.filter((r) => r.included);
+  // The 24-hour routine this plan will generate on release — same pure generator
+  // the task materializer uses, so the preview is exactly what gets dispatched.
+  const routine = useMemo(
+    () => generateRoutine(rows.filter((r) => r.included).map((r) => ({ code: r.code, name: r.name, goal: r.goal, interventions: r.interventions, taskId: r.taskId }))),
+    [rows],
+  );
+  const levelName = meta ? `Level ${meta.n} — ${meta.name}` : `Level ${level}`;
+  const doPrint = () => printCarePlan({
+    residentName: residentName || "Resident", room, level, levelName,
+    domains: included.map((r) => ({ code: r.code, name: r.name, score: r.score, goal: r.goal, interventions: r.interventions })),
+  });
+
+  useEffect(() => { onCountChange?.(included.length); }, [included.length, onCountChange]);
+  useEffect(() => { onChange?.(buildDomainPlan(rows)); }, [rows, onChange]);
+
+  // Debounced auto-save of the per-domain snapshot (skip the hydration render).
   const hydrated = useRef(false);
   useEffect(() => {
     if (!hydrated.current) { hydrated.current = true; return; }
     if (!onPersist) return;
     const t = setTimeout(() => {
-      onPersist(residentId, { level, goals: goals.split("\n").map((g) => g.trim()).filter(Boolean), items: toSavedItems(items), updatedAt: new Date().toISOString() });
+      onPersist(residentId, {
+        level,
+        goals: buildDomainPlan(rows).goals,
+        items: [],
+        domainPlan: rows.map((r) => ({ code: r.code, included: r.included, goal: r.goal, interventions: r.interventions })),
+        updatedAt: new Date().toISOString(),
+      });
     }, 700);
     return () => clearTimeout(t);
-  }, [goals, items, level, residentId, onPersist]);
-
-  // Group tasks by domain for a navigable, level-scoped plan.
-  const byDomain = useMemo(() => {
-    const m = new Map<string, TaskItem[]>();
-    for (const it of items) { const g = m.get(it.domain) || []; g.push(it); m.set(it.domain, g); }
-    return Array.from(m.entries());
-  }, [items]);
-
-  const submit = () => {
-    // Blanks are accepted — a task the nurse leaves untouched falls back to its governed
-    // default intervention + responsible role, so the plan still satisfies the finalize
-    // gate. The nurse only fills in what they want to individualize.
-    onGenerate({
-      goals: goals.split("\n").map((g) => g.trim()).filter(Boolean),
-      interventions: chosen.map((it) => {
-        const detail = it.note.trim() || it.intervention.trim() || "Individualize assistance, technique and preferences.";
-        return {
-          domain: it.domain,
-          title: it.name,
-          freq: it.freq,
-          taskId: it.taskId,
-          note: [it.assistance && `Assistance: ${it.assistance}`, detail, it.responsibleRole && `Role: ${it.responsibleRole}`].filter(Boolean).join(" · "),
-        };
-      }),
-    });
-  };
+  }, [rows, level, residentId, onPersist]);
 
   return (
     <Section title="Individualized Care Plan">
-      {/* Level-of-Care rationale — why this package applies */}
       {meta && (
         <div className="-mt-1 mb-4 rounded-xl border p-3.5" style={{ borderColor: "var(--clinical-line-strong)", backgroundColor: "var(--clinical-surface-2)" }}>
           <div className="flex flex-wrap items-center gap-2">
@@ -960,81 +1012,99 @@ function CarePlanBuilder({ residentId, level, genBusy, saved, onPersist, onGener
             <span className="font-bold text-[var(--clinical-ink)]">{meta.name}</span>
             <span className="text-xs text-[var(--clinical-muted)]">· {meta.intensity} intensity</span>
           </div>
-          {meta.needPattern && <p className="mt-1.5 text-xs text-[var(--clinical-ink-soft)]"><span className="font-semibold">Rationale:</span> {meta.needPattern}</p>}
-          {meta.packageSummary && <p className="mt-1 text-xs text-[var(--clinical-muted)]">{meta.packageSummary}</p>}
-          <p className="mt-1.5 text-[11px] text-[var(--clinical-muted)]">This plan draws only from the <b>Level {meta.n} package</b> ({items.length} governed tasks) — tailor each, then generate.</p>
+          <p className="mt-1.5 text-[11px] text-[var(--clinical-muted)]">Built from the resident&apos;s assessment — one line per scored domain. <b>Goal</b> is seeded from the Goal / Preference Note; <b>Interventions</b> from the Domain-Level Map for the selected score. Edit any, then Generate Care Plan.</p>
         </div>
       )}
 
-      <div className="mb-4">
-        <FieldLabel htmlFor="cpb-goals">Care Goals</FieldLabel>
-        <textarea id="cpb-goals" rows={3} value={goals} onChange={(e) => setGoals(e.target.value)} placeholder="One goal per line…" className={controlClass} />
-      </div>
-
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">Package interventions ({chosen.length}/{items.length} included)</p>
-
-      <div className="space-y-3">
-        {byDomain.map(([domain, group]) => {
-          const on = group.filter((g) => g.included).length;
-          const assistUnion = Array.from(new Set(group.flatMap((g) => g.assistanceChoices)));
-          return (
-            <details key={domain} open className="rounded-xl border" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-2.5">
-                <span className="text-sm font-bold text-[var(--clinical-ink)]">{domain} <span className="text-xs font-normal text-[var(--clinical-muted)]">· {on}/{group.length}</span></span>
-                <span className="flex gap-2 text-[11px] font-semibold">
-                  <button type="button" onClick={(e) => { e.preventDefault(); setDomain(domain, true); }} className="text-[var(--clinical-panel)] hover:underline">All</button>
-                  <button type="button" onClick={(e) => { e.preventDefault(); setDomain(domain, false); }} className="text-[var(--clinical-muted)] hover:underline">None</button>
-                </span>
-              </summary>
-              <div className="space-y-2 border-t px-3 py-3" style={{ borderColor: "var(--clinical-line)" }}>
-                {on > 0 && (
-                  <div className="flex flex-wrap items-center gap-2 rounded-lg px-2.5 py-2" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--clinical-muted)]">Apply to all {on} included:</span>
-                    {assistUnion.length > 0 && (
-                      <select value="" onChange={(e) => e.target.value && bulkAssist(domain, e.target.value)} aria-label={`Set assistance for all included ${domain} tasks`}
-                        className="rounded-md border bg-[var(--clinical-surface)] px-2 py-1 text-[11px] text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>
-                        <option value="">Assistance…</option>
-                        {assistUnion.map((a) => <option key={a} value={a}>{assistLabel(a)}</option>)}
-                      </select>
-                    )}
-                    <select value="" onChange={(e) => e.target.value && bulkFreq(domain, e.target.value)} aria-label={`Set frequency for all included ${domain} tasks`}
-                      className="rounded-md border bg-[var(--clinical-surface)] px-2 py-1 text-[11px] text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-line-strong)" }}>
-                      <option value="">Frequency…</option>
-                      {FREQ_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
-                    </select>
-                  </div>
-                )}
-                {group.map((it) => (
-                  <div key={it.taskId} className={`rounded-lg border p-3 transition ${it.included ? "" : "opacity-55"}`} style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: it.included ? "var(--clinical-line-strong)" : "var(--clinical-line)" }}>
-                    <div className="flex items-start gap-3">
-                      <input type="checkbox" checked={it.included} onChange={(e) => patch(it.taskId, { included: e.target.checked })} aria-label={`Include ${it.name}`} className="mt-1 h-4 w-4 shrink-0 accent-[var(--clinical-panel)]" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-[var(--clinical-ink)]">{it.name} <span className="text-[10px] font-normal text-[var(--clinical-muted)]">{it.taskId}</span></p>
-                        {it.intervention && <p className="mt-0.5 text-xs text-[var(--clinical-ink-soft)]">{it.intervention}</p>}
-                        {it.included && (
-                          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                            {it.assistanceChoices.length > 0 && (
-                              <select value={it.assistance} onChange={(e) => patch(it.taskId, { assistance: e.target.value })} aria-label="Assistance level" className={controlClass}>
-                                <option value="">Assistance…</option>
-                                {it.assistanceChoices.map((a) => <option key={a} value={a}>{assistLabel(a)}</option>)}
-                              </select>
-                            )}
-                            <select value={it.freq} onChange={(e) => patch(it.taskId, { freq: e.target.value })} aria-label="Frequency" title={it.freqHint} className={controlClass}>
-                              {FREQ_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
-                            </select>
-                            <input value={it.note} onChange={(e) => patch(it.taskId, { note: e.target.value })} placeholder={it.prompt ? it.prompt.slice(0, 60) : "Individualization…"} title={it.prompt} className={`${controlClass} ${it.assistanceChoices.length > 0 ? "" : "sm:col-span-2"}`} />
+      {rows.length === 0 ? (
+        <div className="rounded-xl border p-4 text-sm text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
+          No scored assessment found for this resident. Complete the 14-domain <b>Resident Assessment</b> first — the care plan builds from those scores and their Goal / Preference Notes.
+        </div>
+      ) : (
+        <>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">Care domains ({included.length}/{rows.length} included)</p>
+            <button type="button" onClick={doPrint} disabled={included.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-[var(--clinical-panel)] transition hover:bg-[var(--clinical-surface-2)] disabled:opacity-50"
+              style={{ borderColor: "var(--clinical-line-strong)" }}>
+              <Printer className="h-3.5 w-3.5" /> Print Care Plan
+            </button>
+          </div>
+          <div className="space-y-3">
+            {rows.map((r) => (
+              <ClinicalCard key={r.code} top="teal" className={`p-4 sm:p-5 transition ${r.included ? "" : "opacity-55"}`}>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <label className="flex min-w-0 items-center gap-2">
+                    <input type="checkbox" checked={r.included} onChange={(e) => patch(r.code, { included: e.target.checked })} aria-label={`Include ${r.name}`} className="h-4 w-4 shrink-0 accent-[var(--clinical-panel)]" />
+                    <h3 className="truncate text-sm font-bold text-[var(--clinical-ink)]"><span className="mr-1.5 text-[var(--clinical-panel)]">{r.code}</span>{r.name}</h3>
+                  </label>
+                  <span className="shrink-0 rounded px-2 py-0.5 text-xs font-bold text-[var(--clinical-panel)]" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)" }}>Score {r.score}<span className="font-medium text-[var(--clinical-muted)]">/4</span></span>
+                </div>
+                {r.included && (
+                  <div className="space-y-3">
+                    <div>
+                      <FieldLabel htmlFor={`goal-${r.code}`}>Goal / Preference</FieldLabel>
+                      <textarea id={`goal-${r.code}`} rows={2} value={r.goal} onChange={(e) => patch(r.code, { goal: e.target.value })} placeholder="Resident-specific goal…" className={controlClass} />
+                    </div>
+                    <div>
+                      <FieldLabel>Interventions</FieldLabel>
+                      <div className="space-y-1.5">
+                        {r.interventions.map((iv, i) => (
+                          <div key={i} className="flex items-start gap-2">
+                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: "var(--clinical-panel)" }} />
+                            <input value={iv} onChange={(e) => setIvx(r.code, i, e.target.value)} placeholder="Care task…" className={`${controlClass} flex-1`} />
+                            <button type="button" onClick={() => removeIvx(r.code, i)} aria-label="Remove intervention"
+                              className="mt-1 shrink-0 rounded-md p-1.5 text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-coral)]">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
-                        )}
+                        ))}
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <button type="button" onClick={() => addIvx(r.code)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-[var(--clinical-panel)] transition hover:bg-[var(--clinical-surface-2)]"
+                          style={{ borderColor: "var(--clinical-line-strong)" }}>
+                          <Plus className="h-3.5 w-3.5" /> Add intervention
+                        </button>
+                        {(() => {
+                          const lib = tasksForDomain(r.code, r.score);
+                          if (!lib.length) return null;
+                          return (
+                            <select value="" aria-label={`Add a ${r.code} task from the library`}
+                              onChange={(e) => { if (e.target.value) addIvxText(r.code, e.target.value); e.currentTarget.selectedIndex = 0; }}
+                              className="rounded-lg border bg-[var(--clinical-surface)] px-2.5 py-1.5 text-xs font-semibold text-[var(--clinical-panel)]" style={{ borderColor: "var(--clinical-line-strong)" }}>
+                              <option value="">＋ Add from library…</option>
+                              <optgroup label="Core tasks">
+                                {lib.filter((t) => t.type === "Core").map((t) => <option key={t.id} value={t.text}>{t.text}</option>)}
+                              </optgroup>
+                              {lib.some((t) => t.type === "Condition") && (
+                                <optgroup label="Condition-specific">
+                                  {lib.filter((t) => t.type === "Condition").map((t) => <option key={t.id} value={t.text}>{t.condition ? `[${t.condition}] ` : ""}{t.text}</option>)}
+                                </optgroup>
+                              )}
+                            </select>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
-            </details>
-          );
-        })}
-      </div>
+                )}
+              </ClinicalCard>
+            ))}
+          </div>
 
+          {routine.length > 0 && (
+            <div className="mt-6">
+              <div className="mb-2 flex items-center gap-2">
+                <Clock className="h-4 w-4 text-[var(--clinical-panel)]" />
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">24-Hour Routine Preview · {routine.length} care event{routine.length === 1 ? "" : "s"}</p>
+              </div>
+              <p className="mb-3 text-[11px] text-[var(--clinical-muted)]">On approval, these window care events become the resident&apos;s daily caregiver tasks, routed to each shift&apos;s rostered caregiver.</p>
+              <RoutineTimeline events={routine} />
+            </div>
+          )}
+        </>
+      )}
     </Section>
   );
 }

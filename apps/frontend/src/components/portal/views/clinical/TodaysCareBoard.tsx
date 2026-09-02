@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   RefreshCw, CheckCircle2, AlertTriangle, ShieldAlert, User2, Stethoscope,
-  ClipboardList, ListChecks,
+  ListChecks,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -13,15 +13,35 @@ import {
 } from "./clinical-ui";
 
 import { ASSESSMENTS_V42_KEY, type AssessmentV42 } from "@/lib/lifecare/assessment.ts";
-import { generateDraftPlan } from "@/lib/lifecare/carePlan.ts";
 import {
-  materialiseShiftView, splitByRole,
-  type ShiftEncounter, type ShiftRole,
-} from "@/lib/lifecare/todaysCare.ts";
+  generateRoutine, domainInputsFromItems,
+  type RoutineRole, type RoutineShift, type RoutineTaskItem,
+} from "@/lib/lifecare/carePlanRoutine.ts";
+import {
+  ROUTINE_COMPLETIONS_KEY, parseRoutineCompletions, upsertRoutineCompletion, careDay,
+} from "@/lib/lifecare/routineCompletions.ts";
 import { type Outcome } from "@/lib/lifecare/careEvents.ts";
 import { MODEL_VERSION } from "@/lib/lifecare/dataset.ts";
-import { domainCodeFromLabel, domainInPackage, DOMAIN_LABEL, recordOutOfPackageService } from "@/lib/lifecare/carePackage";
+import { domainInPackage, DOMAIN_LABEL, recordOutOfPackageService } from "@/lib/lifecare/carePackage";
+import { upsertRecord } from "@/lib/api";
 import { CAREGIVER_SCHEDULE_KEY, parseSchedules, activeResidentIdsFor } from "@/lib/caregiverSchedule";
+
+/** One care window materialised for a resident's shift — a checklist of specific tasks. */
+interface RoutineEncounter {
+  windowId: string;
+  label: string;
+  window: string;
+  shift: RoutineShift;
+  shiftLabel: string;
+  role: RoutineRole;
+  domainCode: string | null;  // primary domain (package gating)
+  careTaskId?: string;        // window's governed Care Task (variance/escalation scope)
+  items: RoutineTaskItem[];   // the specific tasks (checklist rows)
+}
+const splitEncByRole = (encs: RoutineEncounter[]): Record<RoutineRole, RoutineEncounter[]> => ({
+  Caregiver: encs.filter((e) => e.role === "Caregiver"),
+  Nurse: encs.filter((e) => e.role === "Nurse"),
+});
 
 /**
  * Phase 3 — Today's Care shift board (standalone; the parent wires the tab).
@@ -68,8 +88,8 @@ interface MaterialisedResident {
   residentName: string;
   linked: boolean;         // residentId points at a real Resident row (charting needs this)
   finalLevel: string;
-  queues: Record<ShiftRole, ShiftEncounter[]>;
-  total: number;
+  queues: Record<RoutineRole, RoutineEncounter[]>;
+  total: number;           // specific tasks (checklist rows) due this shift
   locked?: boolean;        // no released (ACTIVE) care plan → routines stay locked
 }
 
@@ -81,20 +101,15 @@ function parseAssessments(value: string | undefined): AssessmentV42[] {
   } catch { return []; }
 }
 
-/** Stable key per encounter within a resident (bundle is unique in the view). */
-const encKey = (residentId: string, e: ShiftEncounter) => `${residentId}::${e.bundle}`;
+/** Stable key per checklist item within a resident. */
+const itemKey = (residentId: string, itemId: string) => `${residentId}::${itemId}`;
 
 /** finalLevel ("L1".."L5") → level number 1–5 (defaults to 2 when unparseable). */
 const levelFromFinal = (finalLevel: string): number => Number(/([1-5])/.exec(finalLevel || "")?.[1] || 2);
 
-/** Resolve an encounter's AS-domain (via its bundle label). null = don't gate. */
-const encDomainCode = (e: ShiftEncounter) => domainCodeFromLabel(e.label);
-
 /** Is an encounter out of the resident's Level package? (null domain → never). */
-const encOutOfPackage = (level: number, e: ShiftEncounter): boolean => {
-  const code = encDomainCode(e);
-  return code != null && !domainInPackage(level, code);
-};
+const encOutOfPackage = (level: number, e: RoutineEncounter): boolean =>
+  e.domainCode != null && !domainInPackage(level, e.domainCode);
 
 export default function TodaysCareBoard({ role }: { role?: string }) {
   const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>(
@@ -149,6 +164,19 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
     }
     return m;
   }, [planItemRows]);
+  // Per-domain care reconstructed from each plan's INTERVENTION items — the input to
+  // the 24-hour routine generator (the same reconstruction the task cron uses).
+  const domainInputsByPlan = useMemo(() => {
+    const byPlan = new Map<string, { title?: string | null; description?: string | null }[]>();
+    for (const it of (planItemRows || [])) {
+      if (String(it.category || "") !== "INTERVENTION" || String(it.status || "") !== "ACTIVE") continue;
+      const pid = String(it.carePlanId || ""); if (!pid) continue;
+      (byPlan.get(pid) ?? byPlan.set(pid, []).get(pid)!).push({ title: String(it.title ?? ""), description: String(it.description ?? "") });
+    }
+    const m = new Map<string, ReturnType<typeof domainInputsFromItems>>();
+    for (const [pid, items] of byPlan) m.set(pid, domainInputsFromItems(items));
+    return m;
+  }, [planItemRows]);
   const realResidents = useMemo(() => {
     const byId = new Set<string>();
     const byName = new Map<string, string>();
@@ -179,6 +207,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
 
   const effectiveRole = (sessionRole ?? role ?? "").toUpperCase();
   const showNurseQueue = effectiveRole ? NURSE_ROLES.has(effectiveRole) : true;
+  const curShift = shiftLabel() as RoutineShift;
 
   // ---- Materialise shift views — gated on a RELEASED care plan ---------------
   const residents = useMemo<MaterialisedResident[]>(() => {
@@ -203,35 +232,43 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
           residentName: name,
           linked: !!linkedId,
           finalLevel: String(finalLevel),
-          queues: splitByRole([]),
+          queues: { Caregiver: [], Nurse: [] },
           total: 0,
           locked: true,
         });
         continue;
       }
       try {
-        // Release verified above — the engine view is built from the released
-        // plan's own task selection.
-        const draft = generateDraftPlan({
-          finalLevel,
-          lines: releasedTaskIds.map((taskId) => ({ taskId })),
-        });
-        const view = materialiseShiftView({ ...draft, status: "APPROVED" });
-        if (!view.length) continue;
-        const queues = splitByRole(view);
+        // Release verified above — build the resident's 24-hour routine from the
+        // released plan's per-domain interventions, then keep only the CURRENT
+        // shift's windows (so a caregiver sees only what's due now).
+        const events = generateRoutine(domainInputsByPlan.get(releasedPlanId) || [])
+          .filter((ev) => ev.shift === curShift);
+        const encs: RoutineEncounter[] = events.map((ev) => ({
+          windowId: ev.id,
+          label: ev.label,
+          window: ev.window,
+          shift: ev.shift,
+          shiftLabel: ev.shiftLabel,
+          role: ev.role,
+          domainCode: ev.domainCodes[0] ?? null,
+          careTaskId: ev.careTaskId,
+          items: ev.items,
+        }));
+        if (!encs.length) continue;
         out.push({
           assessmentId: a.id,
           residentId: linkedId,
           residentName: name,
           linked: true,
           finalLevel: String(finalLevel),
-          queues,
-          total: view.length,
+          queues: splitEncByRole(encs),
+          total: encs.reduce((n, e) => n + e.items.length, 0),
         });
       } catch { /* a bad line shouldn't sink the whole board */ }
     }
     return out.sort((x, y) => x.residentName.localeCompare(y.residentName));
-  }, [settingRows, realResidents, activePlanIdByResident, taskIdsByPlan]);
+  }, [settingRows, realResidents, activePlanIdByResident, taskIdsByPlan, domainInputsByPlan, curShift]);
 
   // ---- Schedule routing: a CAREGIVER sees only the residents routed to them
   // today (caregiver_schedules); nurses / care managers keep the full oversight
@@ -268,39 +305,49 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
     [residents, selectedId]
   );
 
-  // ---- Charted state --------------------------------------------------------
-  // Derived from the PERSISTED care events (today) so a card stays "charted"
-  // across refreshes, merged with an optimistic session map for instant feedback
-  // after a tap. Keyed `${residentId}::${bundle}` to match encKey().
+  // ---- Charted state (per specific task) ------------------------------------
+  // Each checklist row's outcome persists in the `routine_completions` app-setting
+  // (keyed care-day|resident|itemId), so a tick survives a refresh; merged with an
+  // optimistic session map for instant feedback after a tap.
   const [charted, setCharted] = useState<Map<string, Outcome>>(new Map());
-  const chartedFromEvents = useMemo(() => {
-    const start = new Date(); start.setHours(0, 0, 0, 0);
-    const startMs = start.getTime();
+  const today = careDay();
+  const chartedPersisted = useMemo(() => {
+    const map = parseRoutineCompletions(settingRows.find((r) => (r.key || r.id) === ROUTINE_COMPLETIONS_KEY)?.value);
     const m = new Map<string, Outcome>();
-    for (const e of (eventRows || [])) {
-      const rid = String(e.residentId || ""); const bundle = String(e.bundle || "");
-      if (!rid || !bundle) continue;
-      const t = new Date(String(e.createdAt || e.occurredAt || "")).getTime();
-      if (isNaN(t) || t < startMs) continue;
-      m.set(`${rid}::${bundle}`, (String(e.outcome || "Completed")) as Outcome);
+    const prefix = `${today}|`;
+    for (const [k, c] of Object.entries(map)) {
+      if (!k.startsWith(prefix)) continue;
+      const rest = k.slice(prefix.length); // `${residentId}|${itemId}`
+      const sep = rest.indexOf("|"); if (sep < 0) continue;
+      m.set(itemKey(rest.slice(0, sep), rest.slice(sep + 1)), c.outcome as Outcome);
     }
     return m;
-  }, [eventRows]);
-  // Session (optimistic) entries win over the persisted snapshot.
+  }, [settingRows, today]);
   const chartedAll = useMemo(() => {
-    const m = new Map(chartedFromEvents);
+    const m = new Map(chartedPersisted);
     for (const [k, v] of charted) m.set(k, v);
     return m;
-  }, [chartedFromEvents, charted]);
+  }, [chartedPersisted, charted]);
+
+  // Latest settings snapshot for a clobber-free per-item completion write.
+  const settingRowsRef = useRef(settingRows);
+  useEffect(() => { settingRowsRef.current = settingRows; }, [settingRows]);
+  const persistCompletion = async (residentId: string, itemId: string, outcome: Outcome) => {
+    const cur = parseRoutineCompletions(settingRowsRef.current.find((r) => (r.key || r.id) === ROUTINE_COMPLETIONS_KEY)?.value);
+    const next = upsertRoutineCompletion(cur, today, residentId, itemId, { outcome, at: new Date().toISOString(), by: me || undefined });
+    await upsertRecord("app-settings", ROUTINE_COMPLETIONS_KEY, { key: ROUTINE_COMPLETIONS_KEY, value: JSON.stringify(next) });
+    await refetch();
+  };
 
   // ---- Exception modal ------------------------------------------------------
-  const [exceptionFor, setExceptionFor] = useState<ShiftEncounter | null>(null);
+  const [exceptionFor, setExceptionFor] = useState<{ enc: RoutineEncounter; item: RoutineTaskItem } | null>(null);
   const [exOutcome, setExOutcome] = useState<Outcome>("Refused");
   const [exObservation, setExObservation] = useState("");
   const [busy, setBusy] = useState(false);
 
   const chartEvent = async (
-    enc: ShiftEncounter,
+    enc: RoutineEncounter,
+    item: RoutineTaskItem,
     outcome: Outcome,
     observation: string,
   ) => {
@@ -329,7 +376,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
     // LOC package gate — charting care outside the resident's Level package is an
     // Additional Clinical Service (DT-014): warn (never block), flag on proceed.
     const level = levelFromFinal(selected.finalLevel);
-    const code = encDomainCode(enc);
+    const code = enc.domainCode;
     const gated = code != null && !domainInPackage(level, code);
     if (gated && code) {
       const proceed = await Swal.fire({
@@ -344,24 +391,27 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
     try {
       // Chart through the GOVERNED care-events route (not the generic /api/db
       // route) so exceptions fire their escalation / nurse-notification /
-      // repeat-variance review server-side. careTaskId scopes the variance count.
+      // repeat-variance review server-side. careTaskId scopes the variance count;
+      // the specific task text rides in the observation so the record names it.
       const res = await fetch("/api/care-events", {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
         body: JSON.stringify({
           residentId: selected.residentId,
-          careTaskId: enc.taskIds[0] || undefined,
+          careTaskId: enc.careTaskId || undefined,
           domain: enc.label,
           outcome,
-          observation: observation.trim() || undefined,
+          observation: (observation.trim() || item.text) || undefined,
           exceptionDetail: outcome === "Completed" ? undefined : observation.trim() || undefined,
-          shift: shiftLabel(),
+          shift: curShift,
           actorName: me || undefined,
         }),
       });
       const json = await res.json().catch(() => ({} as Record<string, unknown>));
       if (!res.ok) throw new Error((json as { error?: string })?.error || "Could not chart the care event.");
       if (gated && code) await recordOutOfPackageService({ residentId: selected.residentId, residentName: selected.residentName, domainCode: code, domainLabel: DOMAIN_LABEL[code] ?? enc.label, level, by: me || undefined, notes: observation.trim() || undefined });
-      setCharted((prev) => new Map(prev).set(encKey(selected.residentId, enc), outcome));
+      // Optimistic tick, then persist the per-item completion (survives refresh).
+      setCharted((prev) => new Map(prev).set(itemKey(selected.residentId, item.id), outcome));
+      void persistCompletion(selected.residentId, item.id, outcome);
       const escalated = !!(json as { escalated?: boolean }).escalated;
       const reviewFlagged = !!(json as { reviewAlertRaised?: boolean }).reviewAlertRaised;
       const notified = !!(json as { notified?: boolean }).notified;
@@ -381,14 +431,14 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
     }
   };
 
-  const openException = (enc: ShiftEncounter) => {
+  const openException = (enc: RoutineEncounter, item: RoutineTaskItem) => {
     setExOutcome("Refused");
     setExObservation("");
-    setExceptionFor(enc);
+    setExceptionFor({ enc, item });
   };
   const submitException = async () => {
     if (!exceptionFor) return;
-    await chartEvent(exceptionFor, exOutcome, exObservation);
+    await chartEvent(exceptionFor.enc, exceptionFor.item, exOutcome, exObservation);
     setExceptionFor(null);
   };
 
@@ -520,7 +570,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
                 level={levelFromFinal(selected.finalLevel)}
                 charted={chartedAll}
                 busy={busy}
-                onComplete={(enc) => chartEvent(enc, "Completed", "")}
+                onComplete={(enc, item) => chartEvent(enc, item, "Completed", "")}
                 onException={openException}
               />
 
@@ -534,7 +584,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
                   level={levelFromFinal(selected.finalLevel)}
                   charted={chartedAll}
                   busy={busy}
-                  onComplete={(enc) => chartEvent(enc, "Completed", "")}
+                  onComplete={(enc, item) => chartEvent(enc, item, "Completed", "")}
                   onException={openException}
                 />
               )}
@@ -584,7 +634,7 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
         open={!!exceptionFor}
         onClose={() => setExceptionFor(null)}
         title="Record an exception"
-        description={exceptionFor ? `${exceptionFor.label} — ${exceptionFor.timing}` : undefined}
+        description={exceptionFor ? `${exceptionFor.item.text} — ${exceptionFor.enc.label}` : undefined}
         size="md"
         footer={
           <>
@@ -622,16 +672,20 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
               })}
             </div>
           </div>
-          <div>
-            <MicroLabel>Observation (optional)</MicroLabel>
-            <textarea
-              value={exObservation}
-              onChange={(e) => setExObservation(e.target.value)}
-              rows={3}
-              placeholder="Short note — what happened, what you did."
-              className="mt-2 w-full resize-y rounded-lg border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface)] px-3 py-2.5 text-sm text-[var(--clinical-ink)] outline-none transition placeholder:text-[var(--clinical-muted)] focus:border-[var(--clinical-panel)] focus:ring-2 focus:ring-[var(--clinical-panel)]/20"
-            />
-          </div>
+          {/* Caregivers chart by structured outcome only — no free-text entry.
+              Nurses/care managers keep an optional observation note. */}
+          {!isCaregiverView && (
+            <div>
+              <MicroLabel>Observation (optional)</MicroLabel>
+              <textarea
+                value={exObservation}
+                onChange={(e) => setExObservation(e.target.value)}
+                rows={3}
+                placeholder="Short note — what happened, what you did."
+                className="mt-2 w-full resize-y rounded-lg border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface)] px-3 py-2.5 text-sm text-[var(--clinical-ink)] outline-none transition placeholder:text-[var(--clinical-muted)] focus:border-[var(--clinical-panel)] focus:ring-2 focus:ring-[var(--clinical-panel)]/20"
+              />
+            </div>
+          )}
         </div>
       </ClinicalModal>
     </ClinicalPage>
@@ -646,21 +700,22 @@ function QueueSection({
 }: {
   title: string;
   icon: React.ReactNode;
-  encounters: ShiftEncounter[];
+  encounters: RoutineEncounter[];
   residentId: string;
   level: number;
   charted: Map<string, Outcome>;
   busy: boolean;
-  onComplete: (enc: ShiftEncounter) => void;
-  onException: (enc: ShiftEncounter) => void;
+  onComplete: (enc: RoutineEncounter, item: RoutineTaskItem) => void;
+  onException: (enc: RoutineEncounter, item: RoutineTaskItem) => void;
 }) {
+  const taskCount = encounters.reduce((n, e) => n + e.items.length, 0);
   return (
     <ClinicalCard className="p-4">
       <div className="flex items-center gap-2">
         <span className="text-[var(--clinical-muted)]">{icon}</span>
         <MicroLabel>{title}</MicroLabel>
         <span className="ml-auto inline-flex h-5 min-w-6 items-center justify-center rounded-full bg-[var(--clinical-surface-2)] px-1.5 text-xs font-semibold text-[var(--clinical-ink)]">
-          {encounters.length}
+          {taskCount}
         </span>
       </div>
       {encounters.length === 0 ? (
@@ -669,14 +724,15 @@ function QueueSection({
         <div className="mt-3 space-y-3">
           {encounters.map((enc) => (
             <EncounterCard
-              key={`${residentId}::${enc.bundle}`}
+              key={`${residentId}::${enc.windowId}`}
               enc={enc}
               outOfPackage={encOutOfPackage(level, enc)}
               level={level}
-              outcome={charted.get(`${residentId}::${enc.bundle}`)}
+              residentId={residentId}
+              charted={charted}
               busy={busy}
-              onComplete={() => onComplete(enc)}
-              onException={() => onException(enc)}
+              onComplete={onComplete}
+              onException={onException}
             />
           ))}
         </div>
@@ -686,81 +742,65 @@ function QueueSection({
 }
 
 // ---------------------------------------------------------------------------
-// Encounter card — bundle label, timing, task ids, precautions, expected
-// events, plus large Complete / Exception tap targets.
+// Encounter card — one care WINDOW as a checklist of specific tasks. Each task
+// is individually completed (1 tap) or excepted (structured picker) and counted.
 // ---------------------------------------------------------------------------
 function EncounterCard({
-  enc, outOfPackage, level, outcome, busy, onComplete, onException,
+  enc, outOfPackage, level, residentId, charted, busy, onComplete, onException,
 }: {
-  enc: ShiftEncounter;
+  enc: RoutineEncounter;
   outOfPackage: boolean;
   level: number;
-  outcome: Outcome | undefined;
+  residentId: string;
+  charted: Map<string, Outcome>;
   busy: boolean;
-  onComplete: () => void;
-  onException: () => void;
+  onComplete: (enc: RoutineEncounter, item: RoutineTaskItem) => void;
+  onException: (enc: RoutineEncounter, item: RoutineTaskItem) => void;
 }) {
-  const done = !!outcome;
+  const doneCount = enc.items.filter((it) => charted.get(itemKey(residentId, it.id))).length;
   return (
     <div
       className="rounded-xl border p-3.5"
       style={{
-        borderColor: enc.temporary ? "var(--clinical-coral)" : outOfPackage ? "var(--clinical-amber)" : "var(--clinical-line)",
+        borderColor: outOfPackage ? "var(--clinical-amber)" : "var(--clinical-line)",
         backgroundColor: "var(--clinical-surface)",
       }}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-[var(--clinical-ink)]">{enc.label}</p>
-          <p className="mt-0.5 text-[11px] text-[var(--clinical-muted)]">{enc.role} · {enc.timing}</p>
+          <p className="mt-0.5 text-[11px] text-[var(--clinical-muted)]">{enc.shiftLabel} · {enc.window} · {enc.role}</p>
         </div>
         <div className="flex items-center gap-1.5">
-          {enc.temporary && <StatusPill status="URGENT">Change of condition</StatusPill>}
           {outOfPackage && (
             <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.03em]" style={{ borderColor: "var(--clinical-amber)", color: "var(--clinical-amber)", backgroundColor: "color-mix(in srgb, var(--clinical-amber) 12%, transparent)" }} title="Additional Clinical Service (DT-014)">Not in L{level} package</span>
           )}
-          {done && (
-            <StatusPill status={outcome === "Completed" ? "COMPLETED" : "REFUSED"}>{outcome}</StatusPill>
-          )}
+          <span className="inline-flex h-5 min-w-8 items-center justify-center rounded-full bg-[var(--clinical-surface-2)] px-1.5 text-[11px] font-semibold text-[var(--clinical-ink)]" title="Tasks completed in this window">{doneCount}/{enc.items.length}</span>
         </div>
       </div>
 
-      {enc.taskIds.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {enc.taskIds.map((t) => (
-            <span key={t} className="inline-flex items-center gap-1 rounded bg-[var(--clinical-surface-2)] px-2 py-0.5 text-[10px] font-medium text-[var(--clinical-ink-soft,var(--clinical-ink))]">
-              <ClipboardList className="h-3 w-3" /> {t}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {enc.precautions.length > 0 && (
-        <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-[var(--clinical-surface-2)] px-2.5 py-1.5">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--clinical-amber)]" />
-          <p className="text-[11px] leading-relaxed text-[var(--clinical-ink)]">{enc.precautions.join(" · ")}</p>
-        </div>
-      )}
-
-      {enc.expectedEvents.length > 0 && (
-        <p className="mt-2 text-[11px] text-[var(--clinical-muted)]">
-          <span className="font-semibold">Expected:</span> {enc.expectedEvents.join(", ")}
-        </p>
-      )}
-
-      <div className="mt-3 flex items-center gap-2">
-        <ClinicalButton
-          variant={done ? "secondary" : "primary"}
-          className="flex-1"
-          onClick={onComplete}
-          disabled={busy || done}
-        >
-          <CheckCircle2 className="h-4 w-4" /> {done ? "Charted" : "Complete"}
-        </ClinicalButton>
-        <ClinicalButton variant="secondary" onClick={onException} disabled={busy}>
-          <AlertTriangle className="h-4 w-4" /> Exception
-        </ClinicalButton>
-      </div>
+      <ul className="mt-3 space-y-2">
+        {enc.items.map((it) => {
+          const outcome = charted.get(itemKey(residentId, it.id));
+          const done = !!outcome;
+          return (
+            <li key={it.id} className="flex items-start gap-2 rounded-lg border p-2.5" style={{ borderColor: "var(--clinical-line)", backgroundColor: done ? "var(--clinical-surface-2)" : "var(--clinical-surface)" }}>
+              <div className="min-w-0 flex-1">
+                <p className={`text-sm ${done ? "text-[var(--clinical-muted)] line-through" : "text-[var(--clinical-ink)]"}`}>{it.text}</p>
+                {done && <span className="mt-1 inline-block"><StatusPill status={outcome === "Completed" ? "COMPLETED" : "REFUSED"}>{outcome}</StatusPill></span>}
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <ClinicalButton size="sm" variant={done ? "secondary" : "primary"} onClick={() => onComplete(enc, it)} disabled={busy || done} aria-label={`Complete ${it.text}`}>
+                  <CheckCircle2 className="h-4 w-4" /> {done ? "Done" : "Complete"}
+                </ClinicalButton>
+                <ClinicalButton size="sm" variant="secondary" onClick={() => onException(enc, it)} disabled={busy} aria-label={`Record an exception for ${it.text}`}>
+                  <AlertTriangle className="h-4 w-4" />
+                </ClinicalButton>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

@@ -16,6 +16,7 @@ import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoar
 import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
 import CarePlanBoard from "@/components/portal/views/clinical/CarePlanBoard";
 import CarePlanReviewsBoard from "@/components/portal/views/clinical/CarePlanReviewsBoard";
+import RoutineGeneratorBoard from "@/components/portal/views/clinical/RoutineGeneratorBoard";
 import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
 import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
 import MARBoard from "@/components/portal/views/clinical/MARBoard";
@@ -34,12 +35,13 @@ import FacilityRooms from "@/components/portal/views/FacilityRooms";
 import StaffProfilesBoard from "@/components/portal/views/clinical/StaffProfilesBoard";
 import FeatureMatrixDashboard from "@/components/portal/views/superadmin/FeatureMatrixDashboard";
 import { Trash2, Search, Eye, Edit, X, XCircle, UserPlus, KeyRound } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptStaff } from "@/lib/adapters";
 import { updateRecord, deleteRecord, upsertRecord } from "@/lib/api";
 import { ROSTER_MAPPING_KEY, type RosterMapping } from "@/lib/rosterBridge";
+import { staffEmailDisplay, staffEmailInput } from "@/lib/staffEmail";
 
 // Every staff role a Super Admin can provision (mirrors the org-admin Add-Staff list).
 const STAFF_ROLE_OPTIONS: [string, string][] = [
@@ -119,6 +121,37 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     approved: "Approved" as "Approved" | "Disapproved",
     experience: "",
   });
+
+  // Assign-to-community (from the staff View modal). The community list is the
+  // current org's communities, read from the session workspaces ("map the org")
+  // since this portal is otherwise community-scoped.
+  const [orgCommunities, setOrgCommunities] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/auth/session", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (cancelled || !d) return;
+      const orgs = (d.workspaces?.organizations || []) as { id: string; communities?: { id: string; name: string }[] }[];
+      const activeOrgId = d.session?.activeOrganizationId;
+      const org = orgs.find((o) => o.id === activeOrgId) || orgs[0];
+      setOrgCommunities((org?.communities || []).map((c) => ({ id: c.id, name: c.name })));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const [assignCommunityId, setAssignCommunityId] = useState("");
+  const [assignBusy, setAssignBusy] = useState(false);
+  const [assignMsg, setAssignMsg] = useState("");
+  // (The picker is reset at the point a staff View is opened, not via an effect.)
+  async function assignViewingToCommunity() {
+    if (!viewingStaff || !assignCommunityId) return;
+    setAssignBusy(true); setAssignMsg("");
+    try {
+      const res = await fetch("/api/organization-admin/staff-accounts/assign-community", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ staffId: viewingStaff.id, communityId: assignCommunityId }) });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) { setAssignMsg(body.alreadyAssigned ? "Already assigned to that community." : "Assigned — they can switch to it (same role). They may need to sign out and back in."); setAssignCommunityId(""); await refetch(); }
+      else setAssignMsg(body.error || "Assignment failed");
+    } catch { setAssignMsg("Assignment failed"); }
+    setAssignBusy(false);
+  }
 
   const filteredStaff = useMemo(() => {
     return staff.filter((s) =>
@@ -215,7 +248,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
       employeeCode: codeByStaffId[member.id] ?? "",
       position: member.position,
       department: member.department,
-      email: member.email,
+      email: staffEmailInput(member.email),
       phone: member.phone,
       active: member.active,
       approved: member.approved,
@@ -482,6 +515,9 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   if (tab === "careplangovernance") {
     return <CarePlanReviewsBoard clinicianRole="SUPERADMIN" tabs={["pending", "history"]} />;
   }
+  if (tab === "routinegenerator") {
+    return <RoutineGeneratorBoard />;
+  }
   if (tab === "tasks") {
     return <DailyDocumentation clinicianRole="FACILITY_ADMIN" />;
   }
@@ -619,7 +655,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                       </td>
                       <td className="px-6 py-4 text-gray-700">{staff.position}</td>
                       <td className="px-6 py-4 text-gray-700">{staff.department}</td>
-                      <td className="px-6 py-4 text-gray-600 text-xs">{staff.email?.endsWith(".slms.local") ? "No email" : staff.email}</td>
+                      <td className="px-6 py-4 text-gray-600 text-xs">{staffEmailDisplay(staff.email)}</td>
                       <td className="px-6 py-4">
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -648,7 +684,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => setViewingStaff(staff)}
+                            onClick={() => { setAssignCommunityId(""); setAssignMsg(""); setViewingStaff(staff); }}
                             className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
                             title="View details"
                           >
@@ -729,7 +765,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                     </div>
                     <p className="text-sm text-gray-600 truncate">{staff.position}</p>
                     <p className="text-xs text-gray-500 truncate">{staff.department}</p>
-                    <p className="text-xs text-gray-500 truncate mt-1">{staff.email?.endsWith(".slms.local") ? "No email" : staff.email}</p>
+                    <p className="text-xs text-gray-500 truncate mt-1">{staffEmailDisplay(staff.email)}</p>
                     <p className={`text-[11px] font-semibold mt-1 ${staff.needsFirstPassword ? "text-amber-600" : "text-gray-400"}`}>{staff.needsFirstPassword ? "First-time password pending" : "Password set"}</p>
                     <div className="flex gap-2 mt-3">
                       <button
@@ -809,7 +845,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-semibold text-gray-600 mb-2">Email</label>
-                    <p className="text-lg text-gray-900">{viewingStaff.email?.endsWith(".slms.local") ? "No email" : viewingStaff.email}</p>
+                    <p className="text-lg text-gray-900">{staffEmailDisplay(viewingStaff.email)}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-600 mb-2">Phone</label>
@@ -852,6 +888,21 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                   <label className="block text-sm font-semibold text-gray-600 mb-2">Start Date</label>
                   <p className="text-gray-900">{viewingStaff.startDate}</p>
                 </div>
+
+                {orgCommunities.length > 1 && (
+                  <div className="bg-indigo-50 p-4 rounded-lg">
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Assign to another community</label>
+                    <p className="text-xs text-gray-600 mb-3">Give {viewingStaff.name} access to another community — <b>same role</b>, so the functions stay the same and only the community&apos;s data changes. They switch communities from the workspace switcher.</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select value={assignCommunityId} onChange={(e) => setAssignCommunityId(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900">
+                        <option value="">Select community…</option>
+                        {orgCommunities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      <button type="button" disabled={assignBusy || !assignCommunityId} onClick={() => void assignViewingToCommunity()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">{assignBusy ? "Assigning…" : "Assign"}</button>
+                    </div>
+                    {assignMsg && <p className="mt-2 text-xs font-medium text-indigo-700">{assignMsg}</p>}
+                  </div>
+                )}
 
                 {viewingStaff.documents.length > 0 && (
                   <div className="bg-gray-50 p-4 rounded-lg">

@@ -35,6 +35,7 @@ import AppointmentCalendar from "@/components/portal/AppointmentCalendar";
 import MedicationInventoryBoard from "@/components/portal/views/clinical/MedicationInventoryBoard";
 import MiniPharmacyBoard from "@/components/portal/views/clinical/MiniPharmacyBoard";
 import CarePlanReviewsBoard from "@/components/portal/views/clinical/CarePlanReviewsBoard";
+import RoutineGeneratorBoard from "@/components/portal/views/clinical/RoutineGeneratorBoard";
 import CareDeliveryBoard from "@/components/portal/views/clinical/CareDeliveryBoard";
 import PrivateCaregiverBoard from "@/components/portal/views/clinical/PrivateCaregiverBoard";
 import LabsAllergiesBoard from "@/components/portal/views/clinical/LabsAllergiesBoard";
@@ -156,6 +157,8 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
       return <CareAcuityBoard clinicianRole="CARE_MANAGER" />;
     case "careplans":
       return <CarePlanReviewsBoard clinicianRole="CARE_MANAGER" />;
+    case "routinegenerator":
+      return <RoutineGeneratorBoard />;
     case "caredelivery":
       return <CareDeliveryBoard clinicianRole="CARE_MANAGER" />;
     case "privatecare":

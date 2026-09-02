@@ -31,10 +31,27 @@ export interface DomainDef {
   /** True for the basic-ADL domains that feed the ADL minimum-level rules. */
   basicAdl?: boolean;
   anchors: string[]; // [0,1,2,3,4]
+  /** Default Goal / Preference text per score [0..4] (Domain-Level Map). Pre-fills the goal note on scoring. */
+  goalDefaults?: string[];
+  /** Core Care Tasks (intervention bullets) per score [0..4] (Domain-Level Map). Seeds the care plan's interventions. */
+  interventionDefaults?: string[][];
   evidenceRequired: string;
   calibrationNote: string;
   scope: string;
   owner: string;
+}
+
+/** One row of the workbook Task Library — a specific care task per domain+score. */
+export interface TaskLibraryItem {
+  id: string;                 // e.g. "AS-01-1-C01"
+  code: string;               // AS-01..AS-14
+  score: number;              // 0-4
+  type: "Core" | "Condition"; // Core = default care task; Condition = optional, condition-gated
+  text: string;               // the care task
+  frequency: string;
+  owner: string;
+  condition: string;          // "Applies when" (Condition-specific only)
+  escalation: string;
 }
 
 export interface MlrRule {

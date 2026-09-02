@@ -257,3 +257,16 @@ export async function materializeTodayTasks(): Promise<number> {
     return Number(j?.created) || 0;
   } catch { return 0; }
 }
+
+/**
+ * Dispatch ONE resident's routine to their caregivers now — materializes today's
+ * window tasks from that resident's ACTIVE care plan only (the nurse/CM "Send
+ * Routine to Caregivers" action). Idempotent: re-sending only fills gaps. Returns
+ * how many tasks were created (0 if the plan isn't active or all tasks exist).
+ */
+export async function dispatchResidentRoutine(residentId: string): Promise<number> {
+  const r = await fetch(`/api/cron/care-plan-tasks?residentId=${encodeURIComponent(residentId)}`, { method: "POST", credentials: "same-origin", cache: "no-store" });
+  if (!r.ok) throw new Error("Could not send the routine.");
+  const j = await r.json();
+  return Number(j?.created) || 0;
+}

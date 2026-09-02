@@ -428,7 +428,7 @@ const parseWeightLogs = (raw: string | null | undefined): Row[] => {
   try { const v = JSON.parse(raw); return Array.isArray(v) ? v : []; } catch { return []; }
 };
 
-export default function VitalsTrendBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
+export default function VitalsTrendBoard({ clinicianRole = "NURSE", residentId: residentIdProp }: { clinicianRole?: ClinicianRole; residentId?: string }) {
   void clinicianRole; // read-only board; role reserved for parity with sibling boards
   // Capture "now" once on mount — the fork's react-hooks/purity rule forbids
   // Date.now()/argless new Date() in the render body (incl. useMemo initializers),
@@ -453,7 +453,7 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE" }: { clinicia
 
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
 
-  const [residentId, setResidentId] = useState("");
+  const [residentId, setResidentId] = useState(residentIdProp || "");
   const [range, setRange] = useState<RangeDays>(14);
 
   // roundId → { residentId, caregiverName, roundDate } across ALL dates.
@@ -633,10 +633,12 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE" }: { clinicia
         subtitle="Track vital sign trends over time per resident"
         right={
           <div className="flex flex-wrap items-center gap-2 print:hidden">
-            <select value={residentId} onChange={(e) => setResidentId(e.target.value)} aria-label="Select resident" className={`${controlClass} w-full sm:w-64`}>
-              <option value="">Select resident…</option>
-              {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>Rm {s(r.room)} — {s(r.name)}</option>)}
-            </select>
+            {!residentIdProp && (
+              <select value={residentId} onChange={(e) => setResidentId(e.target.value)} aria-label="Select resident" className={`${controlClass} w-full sm:w-64`}>
+                <option value="">Select resident…</option>
+                {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>Rm {s(r.room)} — {s(r.name)}</option>)}
+              </select>
+            )}
             <div className="inline-flex overflow-hidden rounded-lg border" style={{ borderColor: "var(--clinical-line-strong)" }}>
               {RANGES.map((d) => (
                 <button key={d} onClick={() => setRange(d)} className={`px-3 py-2 text-sm font-semibold ${range === d ? "bg-[var(--clinical-panel)] text-white" : "text-[var(--clinical-ink-soft)] hover:bg-[var(--clinical-surface-2)]"}`}>{d} days</button>

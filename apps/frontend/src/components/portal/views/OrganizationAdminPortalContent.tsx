@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { Activity, Building2, CheckCircle2, ClipboardCheck, CreditCard, DollarSign, ExternalLink, Gauge, Loader2, Mail, Palette, Plus, Receipt, RefreshCw, Shield, UserPlus, Users, Wallet, XCircle } from "lucide-react";
 import { openGlobalConfirm } from "@/components/ui/global-confirm";
+import { isSyntheticEmail } from "@/lib/staffEmail";
 
 type Community = { id: string; name: string; code?: string | null; timezone: string; isActive: boolean; bedsTotal?: number | null; _count: { residents: number; staff: number; rooms: number } };
 type Member = { id: string; role: string; status: string; user: { id: string; name: string; email: string; isActive: boolean; lastLogin?: string | null; communityMemberships: { id: string; role: string; status: string; community: { id: string; name: string } }[] } };
@@ -45,6 +46,8 @@ export default function OrganizationAdminPortalContent({ tab = "dashboard" }: { 
   const [subBusy, setSubBusy] = useState(false);
   const [editStaff, setEditStaff] = useState<Staff | null>(null);
   const [editStaffRole, setEditStaffRole] = useState("");
+  const [assignStaff, setAssignStaff] = useState<Staff | null>(null);
+  const [assignCommunityId, setAssignCommunityId] = useState("");
 
   async function load(silent = false) {
     if (!silent) setLoading(true);
@@ -69,7 +72,7 @@ export default function OrganizationAdminPortalContent({ tab = "dashboard" }: { 
   const pendingInvitations = (organization?.invitations || []).filter((invitation) => invitation.status === "PENDING");
   // Synthetic fallback emails (staff.<mobile>@<org>.slms.local) are an internal
   // placeholder for the User.email unique key — never show them to the admin.
-  const realEmail = (email?: string | null) => (email && !email.endsWith(".slms.local") ? email : null);
+  const realEmail = (email?: string | null) => (email && !isSyntheticEmail(email) ? email : null);
 
   async function createCommunity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); setBusy(true); setError("");
@@ -86,6 +89,19 @@ export default function OrganizationAdminPortalContent({ tab = "dashboard" }: { 
     event.preventDefault(); if (!editStaff) return; const form = event.currentTarget; const data = new FormData(form); setBusy(true); setError(""); setNotice("");
     const response = await fetch(`/api/organization-admin/staff/${editStaff.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: data.get("name"), phone: data.get("phone"), email: data.get("email"), position: data.get("position"), department: data.get("department"), communityId: data.get("communityId"), role: data.get("role") }) });
     const body = await response.json().catch(() => ({})); if (response.ok) { setEditStaff(null); setNotice("Staff record updated."); await load(); } else setError(body.error || "Update failed"); setBusy(false);
+  }
+  // Communities this person is NOT yet a member of (candidates to assign into).
+  const availableCommunitiesFor = (staff: Staff) => {
+    const inIds = new Set((organization?.staff || []).filter((s) => s.user.id === staff.user.id).map((s) => s.community?.id).filter(Boolean));
+    return (organization?.communities || []).filter((c) => c.isActive && !inIds.has(c.id));
+  };
+  async function assignToCommunity() {
+    if (!assignStaff || !assignCommunityId) return;
+    setBusy(true); setError(""); setNotice("");
+    const response = await fetch(`/api/organization-admin/staff-accounts/assign-community`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ staffId: assignStaff.id, communityId: assignCommunityId }) });
+    const body = await response.json().catch(() => ({}));
+    if (response.ok) { const nm = assignStaff.user.name; setAssignStaff(null); setAssignCommunityId(""); setNotice(`${nm} can now switch to that community (same role). They may need to sign out and back in to see it.`); await load(); } else setError(body.error || "Assignment failed");
+    setBusy(false);
   }
   async function resetStaffPassword(staff: Staff) {
     const { confirmed } = await openGlobalConfirm({ title: `Reset ${staff.user.name}'s password?`, description: "Clears their current password so they set a new one on their next sign-in (company name + mobile number → first-time setup). Use this for accounts created with an auto-generated password.", confirmText: "Reset", cancelText: "Cancel", variant: "warning" });
@@ -204,7 +220,7 @@ export default function OrganizationAdminPortalContent({ tab = "dashboard" }: { 
       )}
     </>
   );
-  const invitations = <div className="space-y-5">{staffAccountForm}<Card title={`All staff accounts${allStaff.length ? ` (${allStaff.length})` : ""}`} subtitle="Every staff member registered for this organization. Their mobile number is their company sign-in." icon={<Users className="h-5 w-5"/>}><div className="overflow-x-auto"><table className="w-full min-w-[860px] text-left text-sm"><thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Person</th><th className="p-3">Role</th><th className="p-3">Mobile (sign-in)</th><th className="p-3">Community</th><th className="p-3">Position</th><th className="p-3">Status</th><th className="p-3">Actions</th></tr></thead><tbody>{allStaff.map((staff) => <tr key={staff.id} className="border-b last:border-0"><td className="p-3"><b className="block">{staff.user.name}</b>{realEmail(staff.user.email) ? <span className="text-xs text-slate-500">{staff.user.email}</span> : <span className="text-xs text-slate-400">No email</span>}</td><td className="p-3">{roleLabel(staff.user.role)}</td><td className="p-3 text-xs font-medium tabular-nums text-slate-700">{fmtMobile(staff.user.phone)}</td><td className="p-3 text-xs">{staff.community?.name || "—"}</td><td className="p-3 text-xs">{staff.position}</td><td className="p-3"><Badge value={staff.isApproved ? (staff.user.isActive ? "ACTIVE" : "SUSPENDED") : "PENDING"}/>{staff.needsFirstPassword ? <span className="mt-1 block text-[10px] font-semibold text-amber-600">First-time pending</span> : <span className="mt-1 block text-[10px] text-slate-400">Password set</span>}</td><td className="p-3"><div className="flex flex-wrap items-center gap-1.5"><button onClick={() => { setError(""); setNotice(""); setEditStaffRole(staff.user.role); setEditStaff(staff); }} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button><button disabled={busy} onClick={() => void toggleStaffActive(staff)} className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${staff.user.isActive ? "border-amber-200 text-amber-700 hover:bg-amber-50" : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"}`}>{staff.user.isActive ? "Deactivate" : "Activate"}</button>{!staff.needsFirstPassword && <button disabled={busy} onClick={() => void resetStaffPassword(staff)} title="Clear their password so they set a new one on next sign-in" className="rounded-lg border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50">Reset password</button>}</div></td></tr>)}</tbody></table>{!allStaff.length && <p className="text-sm text-slate-500">No staff accounts yet.</p>}</div></Card>{editStaff && (
+  const invitations = <div className="space-y-5">{staffAccountForm}<Card title={`All staff accounts${allStaff.length ? ` (${allStaff.length})` : ""}`} subtitle="Every staff member registered for this organization. Their mobile number is their company sign-in." icon={<Users className="h-5 w-5"/>}><div className="overflow-x-auto"><table className="w-full min-w-[860px] text-left text-sm"><thead className="border-b text-xs uppercase text-slate-500"><tr><th className="p-3">Person</th><th className="p-3">Role</th><th className="p-3">Mobile (sign-in)</th><th className="p-3">Community</th><th className="p-3">Position</th><th className="p-3">Status</th><th className="p-3">Actions</th></tr></thead><tbody>{allStaff.map((staff) => <tr key={staff.id} className="border-b last:border-0"><td className="p-3"><b className="block">{staff.user.name}</b>{realEmail(staff.user.email) ? <span className="text-xs text-slate-500">{staff.user.email}</span> : <span className="text-xs text-slate-400">No email</span>}</td><td className="p-3">{roleLabel(staff.user.role)}</td><td className="p-3 text-xs font-medium tabular-nums text-slate-700">{fmtMobile(staff.user.phone)}</td><td className="p-3 text-xs">{staff.community?.name || "—"}</td><td className="p-3 text-xs">{staff.position}</td><td className="p-3"><Badge value={staff.isApproved ? (staff.user.isActive ? "ACTIVE" : "SUSPENDED") : "PENDING"}/>{staff.needsFirstPassword ? <span className="mt-1 block text-[10px] font-semibold text-amber-600">First-time pending</span> : <span className="mt-1 block text-[10px] text-slate-400">Password set</span>}</td><td className="p-3"><div className="flex flex-wrap items-center gap-1.5"><button onClick={() => { setError(""); setNotice(""); setEditStaffRole(staff.user.role); setEditStaff(staff); }} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button><button disabled={busy} onClick={() => void toggleStaffActive(staff)} className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${staff.user.isActive ? "border-amber-200 text-amber-700 hover:bg-amber-50" : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"}`}>{staff.user.isActive ? "Deactivate" : "Activate"}</button>{!staff.needsFirstPassword && <button disabled={busy} onClick={() => void resetStaffPassword(staff)} title="Clear their password so they set a new one on next sign-in" className="rounded-lg border border-blue-200 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50">Reset password</button>}{availableCommunitiesFor(staff).length > 0 && <button disabled={busy} onClick={() => { setError(""); setNotice(""); setAssignCommunityId(""); setAssignStaff(staff); }} title="Give this person access to another community — same role, switchable" className="rounded-lg border border-indigo-200 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50">Assign to community</button>}</div></td></tr>)}</tbody></table>{!allStaff.length && <p className="text-sm text-slate-500">No staff accounts yet.</p>}</div></Card>{editStaff && (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setEditStaff(null)}>
       <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-bold text-slate-900">Edit staff member</h3><button onClick={() => setEditStaff(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><XCircle className="h-5 w-5"/></button></div>
@@ -221,6 +237,18 @@ export default function OrganizationAdminPortalContent({ tab = "dashboard" }: { 
             <button type="submit" disabled={busy} className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">{busy ? "Saving…" : "Save changes"}</button>
           </div>
         </form>
+      </div>
+    </div>
+  )}{assignStaff && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setAssignStaff(null)}>
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-bold text-slate-900">Assign to community</h3><button onClick={() => setAssignStaff(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><XCircle className="h-5 w-5"/></button></div>
+        <p className="text-sm text-slate-600">Add <b>{assignStaff.user.name}</b> to another community. They keep the same role (<b>{roleLabel(assignStaff.user.role)}</b>) and can switch communities from their workspace switcher — only the community&apos;s data changes.</p>
+        <div className="mt-4"><label className={labelCls}>Community</label><select value={assignCommunityId} onChange={(e) => setAssignCommunityId(e.target.value)} className={fieldCls}><option value="">Select community</option>{availableCommunitiesFor(assignStaff).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+        <div className="mt-5 flex gap-2">
+          <button type="button" onClick={() => setAssignStaff(null)} className="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+          <button type="button" disabled={busy || !assignCommunityId} onClick={() => void assignToCommunity()} className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">{busy ? "Assigning…" : "Assign"}</button>
+        </div>
       </div>
     </div>
   )}</div>;

@@ -18,10 +18,11 @@ import locValidationCases from "./data/loc_validation_cases.json" with { type: "
 import scenarioTests from "./data/scenario_tests.json" with { type: "json" };
 import assessmentToCarePlan from "./data/assessment_to_care_plan.json" with { type: "json" };
 import modelVersion from "./data/model_version.json" with { type: "json" };
+import taskLibrary from "./data/task_library.json" with { type: "json" };
 
 import type {
   MlrRule, ClinicalModifier, DomainDef, PcgRule, AcsRule,
-  DecisionTree, CareTask, CareEvent, AtomicRule,
+  DecisionTree, CareTask, CareEvent, AtomicRule, TaskLibraryItem,
 } from "./types.ts";
 
 export const MODEL_VERSION = modelVersion;
@@ -29,6 +30,16 @@ export const MLR_RULES = mlrRules as MlrRule[];
 export const CLINICAL_MODIFIERS = clinicalModifiers as ClinicalModifier[];
 export const ASSESSMENT_DOMAINS = assessmentDomains as DomainDef[];
 export const SCORED_DOMAINS = ASSESSMENT_DOMAINS.filter((d) => d.scored);
+// Workbook Task Library — 420 specific care tasks keyed by domain + score. The
+// catalog nurses/CGs click from (no free-text). Core tasks match the domains'
+// interventionDefaults; Condition tasks are optional condition-gated extras.
+export const TASK_LIBRARY = taskLibrary as TaskLibraryItem[];
+/** The Task Library entries for one domain at a given score (Core first, then Condition). */
+export function tasksForDomain(code: string, score: number): TaskLibraryItem[] {
+  const s = Math.max(0, Math.min(4, Math.round(score) || 0));
+  return TASK_LIBRARY.filter((t) => t.code === code && t.score === s)
+    .sort((a, b) => (a.type === b.type ? 0 : a.type === "Core" ? -1 : 1));
+}
 export const CARE_LEVEL_MODEL = careLevelModel as {
   levels: Array<Record<string, string>>;
   baselineByDomain: Array<Record<string, string>>;

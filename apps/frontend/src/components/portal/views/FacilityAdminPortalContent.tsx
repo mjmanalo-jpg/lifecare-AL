@@ -39,6 +39,7 @@ import CameraRegistryBoard from "@/components/portal/views/CameraRegistryBoard";
 import DietOrdersBoard from "@/components/portal/views/services/DietOrdersBoard";
 import KitchenCookList from "@/components/portal/views/services/KitchenCookList";
 import CareAcuityBoard from "@/components/portal/views/clinical/CareAcuityBoard";
+import { staffEmailDisplay, staffEmailInput } from "@/lib/staffEmail";
 
 interface FacilityAdminPortalContentProps {
   tab: string;
@@ -213,7 +214,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
     setEditingStaff(member);
     setEditForm({
       name: member.name, position: member.position, department: member.department,
-      email: member.email, phone: member.phone,
+      email: staffEmailInput(member.email), phone: member.phone,
       approved: member.approved,
       avatarUrl: member.avatarUrl ?? "",
       experience: member.experience ?? "",
@@ -370,7 +371,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                         </td>
                         <td className="px-6 py-4 text-gray-700">{staff.position}</td>
                         <td className="px-6 py-4 text-gray-700">{staff.department}</td>
-                        <td className="px-6 py-4 text-gray-600 text-xs">{staff.email?.endsWith(".slms.local") ? "No email" : staff.email}</td>
+                        <td className="px-6 py-4 text-gray-600 text-xs">{staffEmailDisplay(staff.email)}</td>
                         <td className="px-6 py-4">
                           <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${isApproved(staff) ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
                             {isApproved(staff) ? <Check className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
@@ -419,7 +420,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                       </div>
                       <p className="text-sm text-gray-600 truncate">{staff.position}</p>
                       <p className="text-xs text-gray-500 truncate">{staff.department}</p>
-                      <p className="text-xs text-gray-500 truncate mt-1">{staff.email?.endsWith(".slms.local") ? "No email" : staff.email}</p>
+                      <p className="text-xs text-gray-500 truncate mt-1">{staffEmailDisplay(staff.email)}</p>
                       <div className="flex gap-2 mt-3">
                         {isApproved(staff) ? (
                           <button onClick={() => handleToggleApproval(staff, false)} className="flex-1 px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded text-sm font-medium transition"><XCircle className="w-4 h-4 inline mr-1" /> Disapprove</button>
@@ -469,7 +470,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div><label className="block text-sm font-semibold text-gray-600 mb-2">Email</label><p className="text-lg text-gray-900">{viewingStaff.email?.endsWith(".slms.local") ? "No email" : viewingStaff.email}</p></div>
+                  <div><label className="block text-sm font-semibold text-gray-600 mb-2">Email</label><p className="text-lg text-gray-900">{staffEmailDisplay(viewingStaff.email)}</p></div>
                   <div><label className="block text-sm font-semibold text-gray-600 mb-2">Phone</label><p className="text-lg text-gray-900">{viewingStaff.phone}</p></div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-600 mb-2">Employment Status</label>

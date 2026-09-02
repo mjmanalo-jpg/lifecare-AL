@@ -151,6 +151,18 @@ export default function DomainScoreGrid({
           return m.affectedDomains.some((d) => hay.includes(d));
         });
         const flags = entry.modifierFlags ?? [];
+        // Pick a score → also pre-fill the goal note from the Domain-Level Map
+        // default for that score. Sticky: only fill when the note is empty or is
+        // still the (unedited) default of the previously-selected score, so a
+        // clinician's own wording is never clobbered by re-scoring.
+        const applyScore = (i: number) => {
+          const patch: Partial<DomainEntry> = { score: i };
+          const def = dom.goalDefaults?.[i];
+          const prevDef = dom.goalDefaults?.[entry.score ?? 0] ?? "";
+          const cur = (entry.goalNote ?? "").trim();
+          if (def && (cur === "" || cur === prevDef.trim())) patch.goalNote = def;
+          onPatch(code, patch);
+        };
         const toggleFlag = (id: string) => {
           if (readOnly) return;
           const set = new Set(flags);
@@ -167,7 +179,7 @@ export default function DomainScoreGrid({
               {dom.anchors.map((anchor, i) => {
                 const on = entry.score === i;
                 return (
-                  <button key={i} type="button" disabled={readOnly} onClick={() => onPatch(code, { score: i })}
+                  <button key={i} type="button" disabled={readOnly} onClick={() => applyScore(i)}
                     className={`text-left px-3 py-2 rounded-lg text-xs border transition flex items-start gap-2 ${on ? chipOn : chipOff} ${readOnly ? "cursor-default" : ""}`}>
                     <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${on ? "bg-white/20" : "bg-[var(--clinical-surface-2)] text-[var(--clinical-muted)]"}`}>{i}</span>
                     <span className="leading-snug">{anchor}</span>

@@ -1,0 +1,293 @@
+[
+  {
+    "id": "W01",
+    "window": "12:00-02:00",
+    "startHour": 0,
+    "shift": "NOC",
+    "shiftLabel": "Night",
+    "label": "Sleep and safety rounds",
+    "domains": [
+      "AS-12",
+      "AS-13"
+    ],
+    "handover": false,
+    "goal": "Promote restful sleep while maintaining safety.",
+    "caregiver": "Complete approved safety check; assist only when awake/needed; record exceptions.",
+    "nurse": "Review repeated waking, unsafe behavior, pain or change from baseline."
+  },
+  {
+    "id": "W02",
+    "window": "02:00-04:00",
+    "startHour": 2,
+    "shift": "NOC",
+    "shiftLabel": "Night",
+    "label": "Repositioning / comfort, if ordered",
+    "domains": [
+      "AS-02",
+      "AS-11"
+    ],
+    "handover": false,
+    "goal": "Maintain comfort and skin integrity.",
+    "caregiver": "Reposition/off-load using approved technique and assistance level; inspect exposed risk areas.",
+    "nurse": "Review pain, redness, skin deterioration or inability to follow plan."
+  },
+  {
+    "id": "W03",
+    "window": "04:00-06:00",
+    "startHour": 4,
+    "shift": "NOC",
+    "shiftLabel": "Night",
+    "label": "Toileting and early-morning support",
+    "domains": [
+      "AS-10",
+      "AS-02"
+    ],
+    "handover": false,
+    "goal": "Maintain continence, dignity and safe mobility.",
+    "caregiver": "Offer/assist toileting according to schedule; use approved transfer method.",
+    "nurse": "Review new incontinence, urinary symptoms, constipation, falls or increased assistance."
+  },
+  {
+    "id": "W04",
+    "window": "06:00-08:00",
+    "startHour": 6,
+    "shift": "AM",
+    "shiftLabel": "Morning",
+    "label": "Wake-up, orientation, hygiene and dressing",
+    "domains": [
+      "AS-01",
+      "AS-04",
+      "AS-09"
+    ],
+    "handover": false,
+    "goal": "Follow preferred morning routine and maximize participation.",
+    "caregiver": "Provide approved setup/cueing/hands-on help; use effective communication approach; observe skin, pain and function.",
+    "nurse": "Review functional/cognitive change, distress, skin concern or increased assistance."
+  },
+  {
+    "id": "W05",
+    "window": "08:00-09:00",
+    "startHour": 8,
+    "shift": "AM",
+    "shiftLabel": "Morning",
+    "label": "Breakfast, hydration and morning medication",
+    "domains": [
+      "AS-07",
+      "AS-08"
+    ],
+    "handover": false,
+    "goal": "Support safe intake and medication adherence.",
+    "caregiver": "Provide approved meal assistance; observe intake/swallowing; medication support only within authorized scope/MAR.",
+    "nurse": "Verify orders/parameters; review poor intake, swallowing concern, omission, refusal or adverse effect.",
+    "baseline": true,
+    "baselineTasks": [
+      "Assist resident to the dining area",
+      "Set up meal tray and utensils",
+      "Encourage and assist with eating and drinking",
+      "Record meal and fluid intake"
+    ]
+  },
+  {
+    "id": "W06",
+    "window": "09:00-10:00",
+    "startHour": 9,
+    "shift": "AM",
+    "shiftLabel": "Morning",
+    "label": "Clinical monitoring, if ordered",
+    "domains": [
+      "AS-06"
+    ],
+    "handover": false,
+    "goal": "Maintain condition within resident-specific parameters.",
+    "caregiver": "Obtain ordered readings using approved technique and report exceptions.",
+    "nurse": "Interpret results/trends and act according to resident-specific parameters and orders."
+  },
+  {
+    "id": "W07",
+    "window": "10:00-11:30",
+    "startHour": 10,
+    "shift": "AM",
+    "shiftLabel": "Morning",
+    "label": "Mobility / therapy carryover / meaningful activity",
+    "domains": [
+      "AS-02",
+      "AS-03",
+      "AS-14"
+    ],
+    "handover": false,
+    "goal": "Maintain safe function and meaningful participation.",
+    "caregiver": "Provide approved mobility assistance and therapy carryover; follow fall precautions and rest needs.",
+    "nurse": "Review tolerance, pain, dizziness, fall/near-fall or functional decline; coordinate therapy.",
+    "baseline": true,
+    "baselineTasks": [
+      "Offer the scheduled activity or light exercise",
+      "Support safe participation and mobility",
+      "Encourage social engagement and interaction"
+    ]
+  },
+  {
+    "id": "W08",
+    "window": "11:30-13:00",
+    "startHour": 11,
+    "shift": "AM",
+    "shiftLabel": "Morning",
+    "label": "Toileting, lunch and hydration",
+    "domains": [
+      "AS-10",
+      "AS-08"
+    ],
+    "handover": false,
+    "goal": "Maintain comfort, continence and adequate intake.",
+    "caregiver": "Assist toileting and meal using approved level, positioning, pacing and texture.",
+    "nurse": "Review poor intake, dehydration, swallowing signs or elimination change.",
+    "baseline": true,
+    "baselineTasks": [
+      "Assist resident to the dining area",
+      "Set up meal tray and utensils",
+      "Encourage and assist with eating and drinking",
+      "Record meal and fluid intake"
+    ]
+  },
+  {
+    "id": "W09",
+    "window": "13:00-14:00",
+    "startHour": 13,
+    "shift": "AM",
+    "shiftLabel": "Morning",
+    "label": "Rest and handover preparation",
+    "domains": [
+      "AS-12",
+      "AS-13"
+    ],
+    "handover": false,
+    "goal": "Balance rest, comfort and safety.",
+    "caregiver": "Support preferred rest; resolve/document incomplete tasks and exceptions.",
+    "nurse": "Review escalations and prepare pending/owner/due handover."
+  },
+  {
+    "id": "W10",
+    "window": "14:00-15:00",
+    "startHour": 14,
+    "shift": "PM",
+    "shiftLabel": "Afternoon",
+    "label": "Shift acceptance and resident check",
+    "domains": [],
+    "handover": true,
+    "goal": "Ensure continuity across shifts.",
+    "caregiver": "Incoming caregiver accepts assigned residents and reviews pending/critical tasks.",
+    "nurse": "Incoming nurse accepts escalations, priorities and time-critical follow-up."
+  },
+  {
+    "id": "W11",
+    "window": "15:00-17:00",
+    "startHour": 15,
+    "shift": "PM",
+    "shiftLabel": "Afternoon",
+    "label": "Activity, mobility, hydration and toileting",
+    "domains": [
+      "AS-02",
+      "AS-03",
+      "AS-05",
+      "AS-10",
+      "AS-14"
+    ],
+    "handover": false,
+    "goal": "Maintain function, comfort and psychosocial well-being.",
+    "caregiver": "Offer individualized activity; assist mobility/toileting; use approved calming and communication approaches.",
+    "nurse": "Review behavior pattern, falls risk, functional tolerance and clinical causes of change.",
+    "baseline": true,
+    "baselineTasks": [
+      "Offer the scheduled activity or light exercise",
+      "Support safe participation and mobility",
+      "Encourage social engagement and interaction"
+    ]
+  },
+  {
+    "id": "W12",
+    "window": "17:00-19:00",
+    "startHour": 17,
+    "shift": "PM",
+    "shiftLabel": "Afternoon",
+    "label": "Dinner, hydration and evening medication",
+    "domains": [
+      "AS-07",
+      "AS-08"
+    ],
+    "handover": false,
+    "goal": "Support safe intake and medication adherence.",
+    "caregiver": "Provide approved meal assistance and medication support within scope/MAR.",
+    "nurse": "Review omissions, refusal, poor intake, swallowing signs or adverse effects.",
+    "baseline": true,
+    "baselineTasks": [
+      "Assist resident to the dining area",
+      "Set up meal tray and utensils",
+      "Encourage and assist with eating and drinking",
+      "Record meal and fluid intake"
+    ]
+  },
+  {
+    "id": "W13",
+    "window": "19:00-20:30",
+    "startHour": 19,
+    "shift": "PM",
+    "shiftLabel": "Afternoon",
+    "label": "Calm evening routine",
+    "domains": [
+      "AS-04",
+      "AS-05",
+      "AS-12"
+    ],
+    "handover": false,
+    "goal": "Reduce distress and support preferred evening routine.",
+    "caregiver": "Use familiar low-stimulation activity, reassurance and effective cueing; address comfort/toileting.",
+    "nurse": "Review new or severe agitation, altered cognition, pain or possible illness/delirium."
+  },
+  {
+    "id": "W14",
+    "window": "20:30-22:00",
+    "startHour": 20,
+    "shift": "PM",
+    "shiftLabel": "Afternoon",
+    "label": "Bedtime care and safety setup",
+    "domains": [
+      "AS-01",
+      "AS-10",
+      "AS-11",
+      "AS-13"
+    ],
+    "handover": false,
+    "goal": "Maintain dignity, comfort, skin integrity and safe sleep.",
+    "caregiver": "Provide hygiene/toileting, skin observation and approved positioning; set least-restrictive safeguards.",
+    "nurse": "Review skin findings, increased assistance, night risks and unresolved exceptions."
+  },
+  {
+    "id": "W15",
+    "window": "22:00-23:00",
+    "startHour": 22,
+    "shift": "NOC",
+    "shiftLabel": "Night",
+    "label": "Shift acceptance and night assessment",
+    "domains": [],
+    "handover": true,
+    "goal": "Maintain continuity and safe overnight care.",
+    "caregiver": "Accept handover; check resident comfort and complete due tasks.",
+    "nurse": "Prioritize new-since-shift events and pending escalations; confirm night plan."
+  },
+  {
+    "id": "W16",
+    "window": "23:00-23:59",
+    "startHour": 23,
+    "shift": "NOC",
+    "shiftLabel": "Night",
+    "label": "Overnight medication/treatment, if ordered",
+    "domains": [
+      "AS-06",
+      "AS-07",
+      "AS-11"
+    ],
+    "handover": false,
+    "goal": "Complete prescribed time-critical care safely.",
+    "caregiver": "Perform only authorized ordered task; document result and exception.",
+    "nurse": "Review result, omission/hold, adverse response and escalation."
+  }
+]

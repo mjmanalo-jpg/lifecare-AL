@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
 import { CAREGIVER_SCHEDULE_KEY, parseSchedules, assigneeForResidentShift, caregiversForResidentToday } from "@/lib/caregiverSchedule";
 import { occurrencesFor } from "@/lib/carePlanTaskRouting";
+import { generateRoutine, domainInputsFromItems } from "@/lib/lifecare/carePlanRoutine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,19 +37,23 @@ const careTaskIdOf = (desc: string | null): string | null => /\[task:([^\]]+)\]/
 const weekdayOf = (dateStr: string) => new Date(dateStr + "T00:00:00Z").getUTCDay();
 const localDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(d);
 
+// Per-domain reconstruction from INTERVENTION items lives in carePlanRoutine
+// (domainInputsFromItems) so the cron and the Today's Care board build the same routine.
+
 // Frequency → per-shift occurrences (how many cards, which shift, what hour) lives
 // in carePlanTaskRouting.occurrencesFor. PRN → none; weekly-anchor filtered below.
 
-async function materializeCommunity(communityId: string, organizationId: string | null): Promise<number> {
+async function materializeCommunity(communityId: string, organizationId: string | null, residentId?: string): Promise<number> {
   const now = new Date();
   const todayStr = localDay(now);
   const dayStart = new Date(`${todayStr}T00:00:00+08:00`);
   const dayEnd = new Date(`${todayStr}T23:59:00+08:00`);
   const todayWd = weekdayOf(todayStr);
 
-  // Active (released) plans + their intervention items.
+  // Active (released) plans + their intervention items. `residentId` scopes the
+  // run to one resident (the "Send Routine to Caregivers" action); omitted = all.
   const plans = await prisma.carePlan.findMany({
-    where: { communityId, status: "ACTIVE" },
+    where: { communityId, status: "ACTIVE", ...(residentId ? { residentId } : {}) },
     select: {
       id: true, residentId: true, startDate: true,
       carePlanItems: { where: { category: "INTERVENTION", status: "ACTIVE" }, select: { title: true, description: true } },
@@ -79,6 +84,38 @@ async function materializeCommunity(communityId: string, organizationId: string 
 
     const startWd = weekdayOf(localDay(new Date(plan.startDate)));
     const dueAt = (hour: number) => new Date(`${todayStr}T${String(hour).padStart(2, "0")}:00:00+08:00`);
+
+    // Assessment-based plan → generate the 24-hour routine: one caregiver task per
+    // care window (bundling the domains active in that window), routed to the
+    // window's shift caregiver. Legacy plans (no AS-coded items) fall through to
+    // the per-intervention frequency routing below.
+    const domainInputs = domainInputsFromItems(plan.carePlanItems);
+    if (domainInputs.length) {
+      for (const ev of generateRoutine(domainInputs)) {
+        const title = `${ev.window} · ${ev.shiftLabel} · ${ev.label}`;
+        const key = `${plan.id}|${title}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const shiftAssignee = assigneeForResidentShift(schedules, plan.residentId, ev.shift, now, TZ);
+        try {
+          await prisma.task.create({
+            data: {
+              organizationId, communityId, residentId: plan.residentId,
+              title,
+              description: `From care plan routine${ev.interventions.length ? ` · ${ev.interventions.join(" • ")}` : ""}`,
+              category: ev.domainNames[0] || "Routine",
+              status: "PENDING", priority: "MEDIUM",
+              dueDate: dueAt(ev.startHour), generatedFrom: plan.id,
+              assignedToId: shiftAssignee?.caregiverStaffId,
+              recurringPattern: ev.careTaskId ? { careTaskId: ev.careTaskId } : undefined,
+            },
+          });
+          created++;
+        } catch { /* FK / transient — skip this task, keep going */ }
+      }
+      continue; // routine generated for this plan — skip the legacy per-item path
+    }
+
     for (const item of plan.carePlanItems) {
       const freq = freqOf(item.description);
       if (/Weekly/i.test(freq) && startWd !== todayWd) continue; // weekly anchor day
@@ -122,7 +159,12 @@ async function run(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
   const isCron = Boolean(secret) && request.headers.get("authorization") === `Bearer ${secret}`;
 
+  // Optional per-resident scope (the nurse/CM "Send Routine to Caregivers" action).
+  // Only honoured on the authenticated path — a cron run always covers everyone.
+  const residentId = new URL(request.url).searchParams.get("residentId") || undefined;
+
   let communities: { id: string; organizationId: string | null }[] = [];
+  let scopedResident: string | undefined;
   if (isCron) {
     communities = await prisma.community.findMany({ where: { isActive: true }, select: { id: true, organizationId: true } });
   } else {
@@ -131,11 +173,12 @@ async function run(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     communities = [{ id: ctx.communityId, organizationId: ctx.organizationId ?? null }];
+    scopedResident = residentId;
   }
 
   let created = 0;
   for (const c of communities) {
-    try { created += await materializeCommunity(c.id, c.organizationId); }
+    try { created += await materializeCommunity(c.id, c.organizationId, scopedResident); }
     catch (e) { console.error("care-plan-tasks materialize failed for community", c.id, e instanceof Error ? e.message : "unknown"); }
   }
   return NextResponse.json({ ok: true, communities: communities.length, created });

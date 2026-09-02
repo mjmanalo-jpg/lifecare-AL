@@ -20,10 +20,23 @@ export interface SavedTaskItem {
   note: string;
 }
 
+/** The nurse-editable fields of one assessment-domain care-plan line (the v4.2
+ * per-domain builder). Domain identity/score come from the assessment; only the
+ * Goal / Interventions text, frequency and include flag are the nurse's edits. */
+export interface SavedDomainPlanItem {
+  code: string;            // AS-01..AS-14
+  included: boolean;
+  goal: string;            // editable Goal / Preference (seeded from the assessment note)
+  interventions: string[]; // editable Core Care Tasks (one bullet each; nurse/CG can add/remove)
+}
+
 export interface DraftState {
   level: number;
   goals: string[];
   items: SavedTaskItem[];
+  /** v4.2 assessment-domain builder snapshot. Present once the nurse edits the
+   * per-domain Goal/Interventions; the level-package `items` above are legacy. */
+  domainPlan?: SavedDomainPlanItem[];
   updatedAt: string;
 }
 
@@ -31,6 +44,9 @@ export type CarePlanDrafts = Record<string, DraftState>;
 
 const isSaved = (v: unknown): v is SavedTaskItem =>
   !!v && typeof (v as SavedTaskItem).taskId === "string";
+
+const isSavedDomain = (v: unknown): v is SavedDomainPlanItem =>
+  !!v && typeof (v as SavedDomainPlanItem).code === "string";
 
 /** Parse the app-setting value into a residentId → DraftState map. Tolerant of
  * bad/legacy JSON — returns {} rather than throwing. */
@@ -53,6 +69,19 @@ export function parseCarePlanDrafts(raw: string | null | undefined): CarePlanDra
           freq: typeof i.freq === "string" && i.freq ? i.freq : "Daily",
           note: typeof i.note === "string" ? i.note : "",
         })),
+        domainPlan: Array.isArray(s.domainPlan)
+          ? s.domainPlan.filter(isSavedDomain).map((i) => ({
+              code: String(i.code),
+              included: i.included !== false,
+              goal: typeof i.goal === "string" ? i.goal : "",
+              // Tolerant of the earlier newline-string shape: split it into rows.
+              interventions: Array.isArray(i.interventions)
+                ? (i.interventions as unknown[]).filter((x): x is string => typeof x === "string")
+                : typeof i.interventions === "string"
+                ? (i.interventions as string).split("\n").map((x) => x.trim()).filter(Boolean)
+                : [],
+            }))
+          : undefined,
         updatedAt: typeof s.updatedAt === "string" ? s.updatedAt : "",
       };
     }
