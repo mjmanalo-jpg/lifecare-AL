@@ -38,12 +38,12 @@ const latestDomains = (all: AssessmentV42[], residentId: string): Partial<Record
   return mine[0].domains;
 };
 
-export default function RoutineGeneratorBoard() {
+export default function RoutineGeneratorBoard({ residentId: residentIdProp }: { residentId?: string } = {}) {
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const { data: settingRows, loading, error } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
   const cpQ = useLiveQuery<Row>("care-plans", { query: "take=300", tables: ["CarePlan"] });
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
-  const [resId, setResId] = useState("");
+  const [resId, setResId] = useState(residentIdProp || "");
   const [sending, setSending] = useState(false);
 
   const assessments = useMemo(() => parseAssessments(settingRows.find((r) => (r.key || r.id) === ASSESSMENTS_V42_KEY)?.value), [settingRows]);
@@ -105,14 +105,16 @@ export default function RoutineGeneratorBoard() {
 
   return (
     <div className="space-y-4">
-      <ClinicalCard className="p-4 sm:p-5">
-        <label htmlFor="rg-res" className="mb-1.5 block text-sm font-semibold text-[var(--clinical-ink)]">Select Resident</label>
-        <select id="rg-res" value={resId} onChange={(e) => setResId(e.target.value)} className={`${controlClass} max-w-md`}>
-          <option value="">Choose a resident…</option>
-          {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)}</option>)}
-        </select>
-        <p className="mt-2 text-[11px] text-[var(--clinical-muted)]">The 24-hour routine is generated from the resident&apos;s care plan and is what caregivers receive each shift once the plan is approved.</p>
-      </ClinicalCard>
+      {!residentIdProp && (
+        <ClinicalCard className="p-4 sm:p-5">
+          <label htmlFor="rg-res" className="mb-1.5 block text-sm font-semibold text-[var(--clinical-ink)]">Select Resident</label>
+          <select id="rg-res" value={resId} onChange={(e) => setResId(e.target.value)} className={`${controlClass} max-w-md`}>
+            <option value="">Choose a resident…</option>
+            {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)}</option>)}
+          </select>
+          <p className="mt-2 text-[11px] text-[var(--clinical-muted)]">The 24-hour routine is generated from the resident&apos;s care plan and is what caregivers receive each shift once the plan is approved.</p>
+        </ClinicalCard>
+      )}
 
       <DataState loading={loading || resQ.loading} error={error ? String(error) : undefined} empty={false}>
         {!resId ? (
