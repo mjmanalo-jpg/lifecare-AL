@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { upsertRecord, createRecord } from "@/lib/api";
+import { createRecord, upsertSettingEntry, deleteSettingEntry } from "@/lib/api";
 import { recordAudit } from "@/lib/auditClient";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
@@ -167,9 +167,15 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
   const [editing, setEditing] = useState<Endorsement | null>(null); // edit an existing endorsement's content
   const active = items.find((e) => e.id === activeId) || null;
 
-  const persist = async (next: Endorsement[]) => { await upsertRecord("app-settings", KEY, { key: KEY, value: JSON.stringify(next) }); await refetch(); };
+  // Per-entry delta writes so concurrent shifts don't clobber each other's
+  // endorsements — the server merges the whole endorsement object into the array
+  // by id under a row lock (see /api/db/[model] POST).
+  const putEndorsement = async (e: Endorsement) => { await upsertSettingEntry(KEY, e as unknown as { id: string } & Record<string, unknown>); await refetch(); };
+  const removeEndorsement = async (id: string) => { await deleteSettingEntry(KEY, id); await refetch(); };
   const update = async (id: string, patch: Partial<Endorsement> | ((e: Endorsement) => Endorsement)) => {
-    await persist(items.map((e) => (e.id === id ? (typeof patch === "function" ? patch(e) : { ...e, ...patch }) : e)));
+    const cur = items.find((e) => e.id === id);
+    if (!cur) return;
+    await putEndorsement(typeof patch === "function" ? patch(cur) : { ...cur, ...patch });
   };
 
   // Snapshot the shift's still-open work at sign-off — a frozen, accountable
@@ -369,9 +375,9 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
   // modal keeps writing to the same draft (no duplicates).
   const saveEndorsement = async (data: EndorsementDraft, id?: string): Promise<string> => {
     const existing = id ? items.find((e) => e.id === id) : undefined;
-    if (existing) { await persist(items.map((e) => (e.id === id ? { ...e, ...data } : e))); return existing.id; }
+    if (existing) { await putEndorsement({ ...existing, ...data }); return existing.id; }
     const rec: Endorsement = { ...data, id: newId(), number: `#${2940000 + items.length + 1}`, date: isoDate(new Date()), outgoingBy: clinicianName, outgoingById: clinicianUserId, authorRole: clinicianRole, incomingBy: "(pending)", signedAt: nowTime(), status: "PENDING", residents: [], carryOvers: [], checklist: {}, createdAt: new Date().toISOString() };
-    await persist([rec, ...items]);
+    await putEndorsement(rec);
     return rec.id;
   };
   // Finalize (PIN-signed "Create Endorsement"): audit + close. The content was
@@ -392,7 +398,7 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
   const deleteEndorsement = async (e: Endorsement) => {
     const c = await Swal.fire({ title: "Delete endorsement?", html: `Delete <b>${e.number}</b> (${e.shiftLabel})? This can't be undone.`, icon: "warning", showCancelButton: true, confirmButtonColor: "#dc2626", confirmButtonText: "Delete" });
     if (!c.isConfirmed) return;
-    await persist(items.filter((x) => x.id !== e.id));
+    await removeEndorsement(e.id);
     recordAudit({ action: "DELETE", entityType: "shift-endorsements", entityId: e.id, reason: `Deleted shift endorsement ${e.number} — ${e.shiftLabel}` });
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Endorsement deleted", showConfirmButton: false, timer: 1500 });
   };

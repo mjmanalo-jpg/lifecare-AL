@@ -18,11 +18,11 @@ import {
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { upsertRecord, createRecord } from "@/lib/api";
+import { upsertSettingEntry, createRecord } from "@/lib/api";
 import { recordAudit } from "@/lib/auditClient";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
-import { PREADMISSION_KEY, parseAssessments, continenceScore, newId, type AdlItem } from "@/lib/preadmissionAssessment";
+import { PREADMISSION_KEY, parseAssessments, continenceScore, type AdlItem } from "@/lib/preadmissionAssessment";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, FieldLabel, SearchInput, controlClass } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -142,15 +142,14 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
     });
   }, [residents, search, statusFilter, documentedResidentIds]);
 
-  const persist = async (next: AdlEntry[]) => { await upsertRecord("app-settings", ADL_KEY, { key: ADL_KEY, value: JSON.stringify(next) }); await refetch(); };
-
   const saveEntry = async (domain: DomainKey, payload: { assistance: string; change: string; flags: Partial<Record<FlagKey, boolean>>; notes: string }) => {
     const now = new Date().toISOString();
     const baseline = baselineFor(domain);
-    const rec: AdlEntry = { id: newId("adl"), residentId: resId, date, shift, domain, assistance: payload.assistance, change: payload.change, flags: payload.flags, notes: payload.notes || undefined, baseline: baseline?.label, by: clinicianName, at: now };
-    // Replace any existing entry for this domain+shift (re-log), else prepend.
-    const rest = logs.filter((l) => !(l.residentId === resId && l.date === date && l.shift === shift && l.domain === domain));
-    await persist([rec, ...rest]);
+    // Unique per (resident,date,shift,domain): a deterministic id upserts a re-log
+    // in place server-side (merge by id) instead of the old whole-array replace.
+    const rec: AdlEntry = { id: `adl-${resId}-${date}-${shift}-${domain}`, residentId: resId, date, shift, domain, assistance: payload.assistance, change: payload.change, flags: payload.flags, notes: payload.notes || undefined, baseline: baseline?.label, by: clinicianName, at: now };
+    await upsertSettingEntry(ADL_KEY, rec);
+    await refetch();
     const label = DOMAINS.find((d) => d.key === domain)?.label || domain;
     recordAudit({
       action: "CREATE",
