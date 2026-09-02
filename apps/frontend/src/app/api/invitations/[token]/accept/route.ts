@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hashInvitationToken } from "@/lib/invitations";
+import { invalidateWorkspaces } from "@/lib/tenant";
 
 const STAFF_COMMUNITY_ROLES = new Set(["FACILITY_ADMIN", "CARE_MANAGER", "RESIDENT_COORDINATOR", "BILLING_ADMIN", "PHYSICIAN", "NURSE", "CAREGIVER", "FLEET_MANAGEMENT", "DRIVER"]);
 const POSITION_BY_ROLE: Record<string, string> = {
@@ -92,5 +93,6 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
     await tx.invitation.update({ where: { id: invitation.id }, data: { status: "ACCEPTED", acceptedAt: new Date() } });
   });
+  invalidateWorkspaces(session.userId!);
   return NextResponse.json({ success: true, organizationId: invitation.organizationId, communityId: invitation.communityId });
 }

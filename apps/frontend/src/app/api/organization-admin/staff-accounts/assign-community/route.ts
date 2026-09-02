@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { canManageOrganization, requireTenantContext } from "@/lib/tenant";
+import { canManageOrganization, requireTenantContext, invalidateWorkspaces } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { invalidatePortalDataPrefix } from "@/lib/dataCache";
 
@@ -76,5 +76,6 @@ export async function POST(request: NextRequest) {
 
   logAudit({ actorId: context.userId, actorRole: context.role, action: "CREATE", entityType: "staff-community-assignment", entityId: staff.userId, organizationId: context.organizationId, communityId, after: { role, community: community.name } });
   invalidatePortalDataPrefix(`org-admin:${context.organizationId}:`);
+  invalidateWorkspaces(staff.userId);
   return NextResponse.json({ success: true });
 }

@@ -91,6 +91,9 @@ function makeIdentityCache<T>() {
       }
       store.set(key, { expires: Date.now() + IDENTITY_TTL_MS, value });
     },
+    delete(key: string) {
+      store.delete(key);
+    },
   };
 }
 
@@ -104,6 +107,10 @@ export async function listWorkspaces(userId: string) {
   const result = await loadWorkspaces(userId);
   if (result) workspaceCache.set(userId, result);
   return result;
+}
+
+export function invalidateWorkspaces(userId: string): void {
+  workspaceCache.delete(userId);
 }
 
 async function loadWorkspaces(userId: string) {

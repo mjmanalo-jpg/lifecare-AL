@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireTenantContext, requiresPrivilegedMfa } from "@/lib/tenant";
+import { requireTenantContext, requiresPrivilegedMfa, invalidateWorkspaces } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { invalidatePortalDataPrefix } from "@/lib/dataCache";
 import { normalizeMobile } from "@/lib/mobileAuth";
@@ -81,5 +81,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   logAudit({ actorId: context!.userId, actorRole: context!.role, action: "UPDATE", entityType: "staff-account", entityId: staff.userId, organizationId, communityId, after: { name, role, position, isActive } });
   invalidatePortalDataPrefix(`org-admin:${organizationId}:`);
+  invalidateWorkspaces(staff.userId);
   return NextResponse.json({ success: true });
 }

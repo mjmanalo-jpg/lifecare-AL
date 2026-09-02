@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Role } from "@prisma/client";
-import { requireTenantContext, canManageOrganization } from "@/lib/tenant";
+import { requireTenantContext, canManageOrganization, invalidateWorkspaces } from "@/lib/tenant";
 import { prisma } from "@/lib/prisma";
 import { normalizeMobile } from "@/lib/mobileAuth";
 
@@ -94,6 +94,7 @@ export async function POST(request: NextRequest) {
       return { userId: u.id, staffId: staff.id };
     });
 
+    invalidateWorkspaces(result.userId);
     return NextResponse.json({
       email,
       staffId: result.staffId,
