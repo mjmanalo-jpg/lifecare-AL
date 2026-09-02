@@ -403,7 +403,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           }
           const value = JSON.stringify(next);
           if (existing) return delegate.update({ where: { id: existing.id }, data: { value } });
-          return delegate.create({ data: { ...settingData, value } });
+          // settingData still carries the delta's `op`/`entry` — sanitizeTenantWrite
+          // only strips organization/community, and AppSetting has no such columns,
+          // so a FIRST-write create({ ...settingData }) throws (unknown args) and the
+          // entry is silently lost. Drop them; the merged array is the value.
+          const { op: _op, entry: _entry, ...rest } = settingData;
+          void _op; void _entry;
+          return delegate.create({ data: { ...rest, value } });
         })
       : await withTenantDb(context, async (tx) => {
           const delegate = transactionDelegate(definition, tx);
