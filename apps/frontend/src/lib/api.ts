@@ -47,7 +47,10 @@ export const deleteRecord = (model: string, id: string) =>
 // concurrent writers no longer clobber each other. Idempotent: a replayed upsert
 // (offline outbox) re-applies the same entry by id. Prefer these over PUTting the
 // whole array via upsertRecord("app-settings", …) for those stores.
-export const upsertSettingEntry = (key: string, entry: { id: string } & Record<string, unknown>): Promise<any> =>
+// Generic over `T extends { id: string }` so nominal clinical types (AdlEntry,
+// WeightLog, NoteRec, Endorsement) pass without an index signature — bolting one
+// onto those domain types would weaken excess-property checks everywhere.
+export const upsertSettingEntry = <T extends { id: string }>(key: string, entry: T): Promise<any> =>
   createRecord("app-settings", { key, op: "upsert", entry });
 
 export const deleteSettingEntry = (key: string, id: string): Promise<any> =>
