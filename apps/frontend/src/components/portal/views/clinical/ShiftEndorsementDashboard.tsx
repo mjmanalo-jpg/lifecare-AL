@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { upsertRecord, createRecord } from "@/lib/api";
+import { createRecord, upsertSettingEntry } from "@/lib/api";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { TASK_NOTES_FIELD } from "@/lib/taskNotes";
@@ -128,13 +128,16 @@ export default function ShiftEndorsementDashboard({ clinicianRole = "FACILITY_AD
     }).sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || "").localeCompare(a.createdAt || ""));
   }, [visibleItems, range]);
 
-  const persist = async (next: Endorsement[]) => { await upsertRecord("app-settings", KEY, { key: KEY, value: JSON.stringify(next) }); await refetch(); };
+  // Single-entry delta so an acknowledge on the Dashboard can't clobber an
+  // endorsement being created/edited concurrently on the Board (same key,
+  // shift_endorsements). Server merges by id under the advisory lock.
+  const putEndorsement = async (e: Endorsement) => { await upsertSettingEntry(KEY, e); await refetch(); };
   // Acknowledge → stamp acceptance AND put the carry-overs on the incoming user's
   // account: a task assigned to them per carry-over item + a notification.
   const doAcknowledge = async () => {
     if (!viewing) return;
     const e = viewing;
-    await persist(items.map((x) => (x.id === e.id ? { ...x, status: "ACKNOWLEDGED", incomingBy: clinicianName, acceptedBy: clinicianName, acceptedById: clinicianUserId, acceptedAt: new Date().toISOString() } : x)));
+    await putEndorsement({ ...e, status: "ACKNOWLEDGED", incomingBy: clinicianName, acceptedBy: clinicianName, acceptedById: clinicianUserId, acceptedAt: new Date().toISOString() });
     if (clinicianStaffId) {
       for (const c of e.carryOvers) {
         await createRecord("tasks", {

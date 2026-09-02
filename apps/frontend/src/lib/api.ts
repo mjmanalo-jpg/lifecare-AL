@@ -40,3 +40,18 @@ export const upsertRecord = async (model: string, id: string, body: unknown) => 
 
 export const deleteRecord = (model: string, id: string) =>
   offlineWrite(model, "DELETE", `/api/db/${model}/${id}`, undefined, id);
+
+// SLICE 1 — single-entry delta writes for the keyed JSON app-settings arrays
+// (care_log_notes, adl_logs, weight_logs, shift_endorsements). The server merges
+// the entry into the array by id under a row lock (see /api/db/[model] POST), so
+// concurrent writers no longer clobber each other. Idempotent: a replayed upsert
+// (offline outbox) re-applies the same entry by id. Prefer these over PUTting the
+// whole array via upsertRecord("app-settings", …) for those stores.
+// Generic over `T extends { id: string }` so nominal clinical types (AdlEntry,
+// WeightLog, NoteRec, Endorsement) pass without an index signature — bolting one
+// onto those domain types would weaken excess-property checks everywhere.
+export const upsertSettingEntry = <T extends { id: string }>(key: string, entry: T): Promise<any> =>
+  createRecord("app-settings", { key, op: "upsert", entry });
+
+export const deleteSettingEntry = (key: string, id: string): Promise<any> =>
+  createRecord("app-settings", { key, op: "delete", entry: { id } });

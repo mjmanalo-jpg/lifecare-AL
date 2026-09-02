@@ -34,7 +34,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { ABOUT_ME_KEY, parseAboutMeStore, profileFor, hasBlocklist } from "@/lib/aboutMe";
-import { createRecord, upsertRecord, updateRecord } from "@/lib/api";
+import { createRecord, upsertRecord, updateRecord, upsertSettingEntry } from "@/lib/api";
 import { qrDataUrl } from "@/lib/qr";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, SearchInput, DataState, controlClass } from "./clinical-ui";
@@ -396,10 +396,11 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
     return out.sort((a, b) => b.at.localeCompare(a.at));
   }, [roundToResAll, vitQ.data, mealQ.data, bowQ.data, uriQ.data, edeQ.data, conQ.data, moodQ.data, painQ.data, mobQ.data, sleepQ.data, noteRecs]);
 
-  // Append a generic quick-log to `care_log_notes` (read-modify-write the array).
+  // Append a generic quick-log to `care_log_notes` — a single-entry delta so
+  // concurrent caregivers don't clobber each other's notes (server merges by id).
   const saveNote = async (rec: Omit<NoteRec, "id" | "at" | "by" | "shift"> & { at?: string }) => {
-    const next: NoteRec[] = [{ id: `cln-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, at: rec.at || new Date().toISOString(), by: clinicianName, shift: shiftNow(), ...rec }, ...noteRecs];
-    await upsertRecord("app-settings", CARE_LOG_NOTES_KEY, { key: CARE_LOG_NOTES_KEY, value: JSON.stringify(next) });
+    const note: NoteRec = { id: `cln-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, at: rec.at || new Date().toISOString(), by: clinicianName, shift: shiftNow(), ...rec };
+    await upsertSettingEntry(CARE_LOG_NOTES_KEY, note);
     await refetchSettings();
   };
 

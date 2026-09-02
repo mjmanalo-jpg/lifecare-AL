@@ -237,6 +237,51 @@ async function notifyFacilityOps(
   }
 }
 
+// SLICE 1 — app-settings keyed-array delta merge helpers.
+// The 4 caregiver blob stores (care_log_notes, adl_logs, weight_logs,
+// shift_endorsements) are a JSON array in one AppSetting row. A whole-array PUT
+// silently drops concurrent writers (lost update). A delta write mutates ONE
+// entry by id, under a row lock, so concurrent writers no longer clobber.
+type SettingEntry = Record<string, unknown>;
+function parseSettingArray(value: unknown): SettingEntry[] {
+  if (typeof value !== "string") return [];
+  try {
+    const v = JSON.parse(value);
+    return Array.isArray(v) ? (v as SettingEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+// Apply a single-entry delta, matching by `id`. upsert replaces an existing entry
+// in place (preserving order) or prepends a new one (matching the clients'
+// [new, ...rest] convention); delete removes it. Pure — unit-checked below.
+function applySettingDelta(arr: SettingEntry[], op: "upsert" | "delete", entry: SettingEntry, id: string): SettingEntry[] {
+  const idx = arr.findIndex((e) => e && typeof e === "object" && String((e as SettingEntry).id ?? "") === id);
+  if (op === "delete") {
+    if (idx >= 0) arr.splice(idx, 1);
+    return arr;
+  }
+  if (idx >= 0) arr[idx] = entry;
+  else arr.unshift(entry);
+  return arr;
+}
+
+// The 4 caregiver blob stores migrated to single-entry deltas. A stale/online
+// client on the old bundle still PUTs the WHOLE array for these keys (bypassing
+// the outbox diff); those writes are merged additively by id under the same lock
+// instead of overwriting, so they can't clobber concurrent writers. This set is
+// deliberately EXACT — every other app-settings key keeps plain overwrite, since
+// many hold scalar/non-array values that an additive merge would corrupt.
+const MERGE_ARRAY_SETTING_KEYS = new Set(["care_log_notes", "adl_logs", "weight_logs", "shift_endorsements"]);
+function isJsonArrayString(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  try {
+    return Array.isArray(JSON.parse(value));
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ model: string }> }) {
   const context = await requireTenantContext({ allowPlatform: true });
   if (!context) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -266,6 +311,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (settingKey === CAREGIVER_SCHEDULE_KEY && !SCHEDULER_ROLES.has(context.role) && !context.isOrganizationAdmin) {
       return NextResponse.json({ error: "Only nursing/care management can set the caregiver schedule." }, { status: 403 });
     }
+  }
+  // SLICE 1 — detect an app-settings single-entry delta ({ key, op, entry:{id} }).
+  // Legacy whole-array `value:` writes carry no `op` and fall through unchanged.
+  const deltaOp = model === "app-settings" ? String((input as Record<string, unknown>).op ?? "").trim() : "";
+  let deltaEntry: Record<string, unknown> | null = null;
+  let deltaEntryId = "";
+  if (deltaOp) {
+    if (deltaOp !== "upsert" && deltaOp !== "delete") return NextResponse.json({ error: "Invalid delta op" }, { status: 400 });
+    const e = (input as Record<string, unknown>).entry;
+    if (!e || typeof e !== "object" || Array.isArray(e)) return NextResponse.json({ error: "A delta write requires an entry object" }, { status: 400 });
+    deltaEntry = e as Record<string, unknown>;
+    deltaEntryId = String(deltaEntry.id ?? "").trim();
+    if (!deltaEntryId) return NextResponse.json({ error: "A delta entry requires a non-empty id" }, { status: 400 });
   }
   const data = sanitizeTenantWrite(model, input, context);
   // A present-but-empty residentId ("") is falsy, so the old truthiness check
@@ -305,31 +363,79 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   try {
     if (context.organizationId) await assertMutationEntitled(context, model);
-    const created = await withTenantDb(context, async (tx) => {
-      const delegate = transactionDelegate(definition, tx);
-      // app-settings are keyed data: a POST means "set this key". Match the
-      // existing row by its tenant-composite (organizationId, communityId, key)
-      // rather than by primary key, then update in place — otherwise a legacy row
-      // saved under a bare-key id (before composite ids) is never found by an
-      // id-based upsert and the create collides on the (org, community, key)
-      // unique. Falls back to create when the key is genuinely new.
-      if (model === "app-settings") {
-        const settingData = data as Record<string, unknown>;
-        const key = String(settingData.key ?? "").trim();
-        if (key) {
-          const existing = await delegate.findFirst({
-            where: { key, organizationId: settingData.organizationId ?? null, communityId: settingData.communityId ?? null },
-          }) as { id: string } | null;
-          if (existing) {
-            const { id: _omitId, ...rest } = settingData;
-            void _omitId;
-            return delegate.update({ where: { id: existing.id }, data: rest });
+    // A stale/online client on the old bundle PUTs the whole array for a migrated
+    // key (no `op`, bypassing the outbox diff). Route it through the same locked
+    // additive merge so it can't blind-overwrite concurrent writers. Scoped to the
+    // 4 array keys only; everything else keeps the untouched legacy path below.
+    const settingKey = model === "app-settings" ? String((data as Record<string, unknown>).key ?? "").trim() : "";
+    const legacyArrayMerge = !deltaOp && MERGE_ARRAY_SETTING_KEYS.has(settingKey) && isJsonArrayString((data as Record<string, unknown>).value);
+    const created = deltaOp || legacyArrayMerge
+      ? await prisma.$transaction(async (tx) => {
+          const delegate = transactionDelegate(definition, tx);
+          const settingData = data as Record<string, unknown>;
+          const key = String(settingData.key ?? "").trim();
+          if (!key) throw new Error("An app-settings write requires a key");
+          const orgId = (settingData.organizationId ?? null) as string | null;
+          const commId = (settingData.communityId ?? null) as string | null;
+          // Serialize every concurrent merge on this (org,comm,key). The xact-scoped
+          // advisory lock releases at commit and also covers the not-yet-created row,
+          // so a first-write race can't collide on the (org,community,key) unique.
+          // withTenantDb is a no-op passthrough unless DB_RLS_GUCS=true, so the merge
+          // MUST run in its own explicit transaction to hold the lock across the RMW.
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`app-settings:${orgId ?? ""}:${commId ?? ""}:${key}`}))`;
+          const existing = await delegate.findFirst({ where: { key, organizationId: orgId, communityId: commId } }) as { id: string; value?: unknown } | null;
+          let next: SettingEntry[];
+          if (deltaOp) {
+            next = applySettingDelta(parseSettingArray(existing?.value), deltaOp as "upsert" | "delete", deltaEntry as Record<string, unknown>, deltaEntryId);
+          } else {
+            // Legacy whole-array write → additive merge: replay each incoming entry
+            // as an upsert-by-id onto the stored array (oldest-first so the newest
+            // lands on top), preserving any stored-only entries the stale client
+            // never saw. A whole-array write can't express a delete without the
+            // client's baseline, so server entries are never dropped here.
+            next = parseSettingArray(existing?.value);
+            const incoming = parseSettingArray(settingData.value);
+            for (let i = incoming.length - 1; i >= 0; i--) {
+              const entry = incoming[i];
+              const id = String((entry as SettingEntry).id ?? "");
+              if (id) next = applySettingDelta(next, "upsert", entry, id);
+            }
           }
-        }
-        return delegate.create({ data });
-      }
-      return delegate.create({ data });
-    });
+          const value = JSON.stringify(next);
+          if (existing) return delegate.update({ where: { id: existing.id }, data: { value } });
+          // settingData still carries the delta's `op`/`entry` — sanitizeTenantWrite
+          // only strips organization/community, and AppSetting has no such columns,
+          // so a FIRST-write create({ ...settingData }) throws (unknown args) and the
+          // entry is silently lost. Drop them; the merged array is the value.
+          const { op: _op, entry: _entry, ...rest } = settingData;
+          void _op; void _entry;
+          return delegate.create({ data: { ...rest, value } });
+        })
+      : await withTenantDb(context, async (tx) => {
+          const delegate = transactionDelegate(definition, tx);
+          // app-settings are keyed data: a POST means "set this key". Match the
+          // existing row by its tenant-composite (organizationId, communityId, key)
+          // rather than by primary key, then update in place — otherwise a legacy row
+          // saved under a bare-key id (before composite ids) is never found by an
+          // id-based upsert and the create collides on the (org, community, key)
+          // unique. Falls back to create when the key is genuinely new.
+          if (model === "app-settings") {
+            const settingData = data as Record<string, unknown>;
+            const key = String(settingData.key ?? "").trim();
+            if (key) {
+              const existing = await delegate.findFirst({
+                where: { key, organizationId: settingData.organizationId ?? null, communityId: settingData.communityId ?? null },
+              }) as { id: string } | null;
+              if (existing) {
+                const { id: _omitId, ...rest } = settingData;
+                void _omitId;
+                return delegate.update({ where: { id: existing.id }, data: rest });
+              }
+            }
+            return delegate.create({ data });
+          }
+          return delegate.create({ data });
+        });
     if (OVERVIEW_COUNT_MODELS.has(model) && context.organizationId) invalidatePortalDataPrefix(`org-admin:${context.organizationId}:`);
     // Audit snapshot. Daily-round sub-records (pain, mood, meal, vitals, …) carry
     // no residentId of their own — the resident lives on the parent DailyRound —

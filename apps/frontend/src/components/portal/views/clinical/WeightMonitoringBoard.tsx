@@ -13,7 +13,7 @@ import { useMemo, useState } from "react";
 import { Plus, Calendar, History, AlertTriangle, ChevronRight, TrendingUp, TrendingDown, Minus, Scale, Check, Clock } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
-import { upsertRecord } from "@/lib/api";
+import { upsertSettingEntry } from "@/lib/api";
 import { recordAudit } from "@/lib/auditClient";
 import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
@@ -126,15 +126,15 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
     });
   }, [rows, search, statusFilter]);
 
-  const persist = async (next: WeightLog[]) => { await upsertRecord("app-settings", WEIGHT_KEY, { key: WEIGHT_KEY, value: JSON.stringify(next) }); await refetch(); };
-
   const saveRecord = async (data: { residentId: string; type: EntryType; date: string; shift?: string; weightKg?: number; unit?: string; unable?: boolean; note?: string }) => {
     const now = new Date().toISOString();
-    // Weekly entries are unique per (resident, date) — re-logging the same day
-    // replaces; the 7-day cadence is derived from this date. Baseline/additional append.
-    const rest = data.type === "weekly" ? logs.filter((l) => !(l.type === "weekly" && l.residentId === data.residentId && l.date === data.date)) : logs;
-    const record: WeightLog = { id: newId(), residentId: data.residentId, type: data.type, weekOf: data.date, date: data.date, shift: data.shift, weightKg: data.weightKg, unit: data.unit, unable: data.unable, note: data.note, by: clinicianName, at: now };
-    await persist([record, ...rest]);
+    // Weekly entries are unique per (resident, date) — a deterministic id makes a
+    // re-log for the same day upsert-in-place server-side (merge by id) rather than
+    // the old whole-array replace; the 7-day cadence is derived from this date.
+    // Baseline/additional keep a random id (append).
+    const record: WeightLog = { id: data.type === "weekly" ? `wk-${data.residentId}-${data.date}` : newId(), residentId: data.residentId, type: data.type, weekOf: data.date, date: data.date, shift: data.shift, weightKg: data.weightKg, unit: data.unit, unable: data.unable, note: data.note, by: clinicianName, at: now };
+    await upsertSettingEntry(WEIGHT_KEY, record);
+    await refetch();
     if (data.weightKg != null) fetch("/api/vitals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ residentId: data.residentId, type: "WEIGHT", value: String(data.weightKg), unit: "kg" }) }).catch(() => null);
     const resName = s(residents.find((x: Row) => s(x.id) === data.residentId)?.name) || "resident";
     recordAudit({
