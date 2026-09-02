@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
         update: { role, status: "ACTIVE" },
       });
       const staff = await tx.staff.upsert({
-        where: { userId: u.id },
+        where: { userId_communityId: { userId: u.id, communityId } },
         create: { userId: u.id, position, department, experience, isActive, isApproved, hireDate: new Date(), communityId, organizationId },
         update: { position, department, experience, isActive, isApproved },
         select: { id: true },

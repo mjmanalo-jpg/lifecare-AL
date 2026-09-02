@@ -37,16 +37,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const activeStaff = await prisma.staff.count({ where: { organizationId: id, isActive: true } });
     if (subscription?.plan.maxStaffSeats && activeStaff >= subscription.plan.maxStaffSeats) return NextResponse.json({ error: `Staff seat limit reached (${subscription.plan.maxStaffSeats})`, code: "STAFF_LIMIT" }, { status: 403 });
     const existingUser = await prisma.user.findUnique({ where: { email }, include: { staff: true } });
-    if (existingUser?.staff?.organizationId && existingUser.staff.organizationId !== id) return NextResponse.json({ error: "This account already has a primary staff profile in another organization" }, { status: 409 });
+    const existingOrgStaff = existingUser?.staff?.find(s => s.organizationId === id);
+    if (!existingOrgStaff && existingUser?.staff?.some(s => s.organizationId && s.organizationId !== id)) {
+      return NextResponse.json({ error: "This account already has a primary staff profile in another organization" }, { status: 409 });
+    }
     const user = await prisma.user.upsert({
       where: { email },
       create: { email, name, phone: body.phone || null, role: communityRole as never },
       update: { name, phone: body.phone || undefined, role: communityRole as never, isActive: true },
     });
     await prisma.staff.upsert({
-      where: { userId: user.id },
-      create: { userId: user.id, organizationId: id, communityId, position, department: body.department || null, hireDate: body.hireDate ? new Date(body.hireDate) : new Date(), isActive: true, isApproved: true },
-      update: { organizationId: id, communityId, position, department: body.department || null, isActive: true, isApproved: true },
+      where: { userId_communityId: { userId: user.id, communityId: communityId! } },
+      create: { userId: user.id, organizationId: id, communityId: communityId!, position, department: body.department || null, hireDate: body.hireDate ? new Date(body.hireDate) : new Date(), isActive: true, isApproved: true },
+      update: { organizationId: id, position, department: body.department || null, isActive: true, isApproved: true },
     });
   }
   await prisma.invitation.updateMany({ where: { email, organizationId: id, status: "PENDING" }, data: { status: "REVOKED" } });

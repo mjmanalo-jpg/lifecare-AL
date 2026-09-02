@@ -1026,9 +1026,9 @@ async function handleShiftRecap(
   const inWindow = { gte: start, lte: end };
   const resSel = { select: { firstName: true, lastName: true, roomNumber: true } };
 
-  const me = await prisma.user.findUnique({ where: { id: ctx.userId }, select: { name: true, staff: { select: { id: true } } } });
+  const me = await prisma.user.findUnique({ where: { id: ctx.userId }, select: { name: true, staff: { where: { communityId }, select: { id: true } } } });
   const myName = me?.name ?? "";
-  const myStaffId = me?.staff?.id ?? null;
+  const myStaffId = me?.staff?.[0]?.id ?? null;
 
   // A caregiver's "unit's open carry-over" is limited to the residents assigned to
   // them today — the same roster the client scopes with — so they never pull other

@@ -531,7 +531,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   // Relations
-  staff             Staff?
+  staff             Staff[]
   sentMessages      Message[] @relation("SentMessages")
   receivedMessages  Message[] @relation("ReceivedMessages")
   notifications     Notification[]
@@ -734,7 +734,7 @@ model Allergy {
 
 model Staff {
   id            String   @id @default(uuid())
-  userId        String   @unique
+  userId        String
   position      String
   department    String?
   hireDate      DateTime
@@ -765,7 +765,7 @@ model Staff {
   staffCompetencies StaffCompetency[]
   staffEquipment    StaffEquipment[]
 
-  @@index([userId])
+  @@unique([userId, communityId])
   @@index([position])
   @@index([isActive])
   @@index([communityId])

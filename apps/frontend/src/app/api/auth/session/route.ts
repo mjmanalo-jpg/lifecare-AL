@@ -143,7 +143,7 @@ export async function GET() {
         // email lets client screens resolve the matching domain record — e.g.
         // the Driver portal matches Driver.email to show the driver's own trips.
         enriched.email = user.email;
-        enriched.staffId = user.staff?.id ?? null;
+        enriched.staffId = user.staff?.[0]?.id ?? null;
       }
     } catch {
       /* fall back to the bare session — non-fatal */

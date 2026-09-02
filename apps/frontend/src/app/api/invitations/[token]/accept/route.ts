@@ -30,8 +30,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   if (!user || user.email.toLowerCase() !== invitation.email.toLowerCase()) return NextResponse.json({ error: "Invitation was issued to a different email" }, { status: 403 });
   if (invitation.organization.status !== "ACTIVE") return NextResponse.json({ error: "Organization is not active" }, { status: 403 });
 
-  const existingStaff = invitation.communityId && invitation.communityRole && STAFF_COMMUNITY_ROLES.has(invitation.communityRole)
-    ? await prisma.staff.findUnique({ where: { userId: session.userId! } })
+    const existingStaff = invitation.communityId && invitation.communityRole && STAFF_COMMUNITY_ROLES.has(invitation.communityRole)
+    ? await prisma.staff.findFirst({ where: { userId: session.userId!, communityId: invitation.communityId } })
     : null;
 
   await prisma.$transaction(async (tx) => {
@@ -77,7 +77,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         ...communityConnector,
       };
       await tx.staff.upsert({
-        where: { userId: session.userId! },
+        where: { userId_communityId: { userId: session.userId!, communityId: invitation.communityId! } },
         create: staffCreate,
         update: staffUpdate,
       });

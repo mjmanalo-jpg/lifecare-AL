@@ -70,8 +70,8 @@ export async function POST(request: NextRequest) {
       }
     });
   } catch (error) {
-    console.error("Assign-community failed", error instanceof Error ? error.message : "unknown");
-    return NextResponse.json({ error: "Could not assign the staff member to that community" }, { status: 400 });
+    console.error("Assign-community failed", error);
+    return NextResponse.json({ error: "Could not assign the staff member to that community", detail: error instanceof Error ? error.message : "unknown" }, { status: 400 });
   }
 
   logAudit({ actorId: context.userId, actorRole: context.role, action: "CREATE", entityType: "staff-community-assignment", entityId: staff.userId, organizationId: context.organizationId, communityId, after: { role, community: community.name } });
