@@ -266,6 +266,22 @@ function applySettingDelta(arr: SettingEntry[], op: "upsert" | "delete", entry: 
   return arr;
 }
 
+// The 4 caregiver blob stores migrated to single-entry deltas. A stale/online
+// client on the old bundle still PUTs the WHOLE array for these keys (bypassing
+// the outbox diff); those writes are merged additively by id under the same lock
+// instead of overwriting, so they can't clobber concurrent writers. This set is
+// deliberately EXACT — every other app-settings key keeps plain overwrite, since
+// many hold scalar/non-array values that an additive merge would corrupt.
+const MERGE_ARRAY_SETTING_KEYS = new Set(["care_log_notes", "adl_logs", "weight_logs", "shift_endorsements"]);
+function isJsonArrayString(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  try {
+    return Array.isArray(JSON.parse(value));
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ model: string }> }) {
   const context = await requireTenantContext({ allowPlatform: true });
   if (!context) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -347,12 +363,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   try {
     if (context.organizationId) await assertMutationEntitled(context, model);
-    const created = deltaOp
+    // A stale/online client on the old bundle PUTs the whole array for a migrated
+    // key (no `op`, bypassing the outbox diff). Route it through the same locked
+    // additive merge so it can't blind-overwrite concurrent writers. Scoped to the
+    // 4 array keys only; everything else keeps the untouched legacy path below.
+    const settingKey = model === "app-settings" ? String((data as Record<string, unknown>).key ?? "").trim() : "";
+    const legacyArrayMerge = !deltaOp && MERGE_ARRAY_SETTING_KEYS.has(settingKey) && isJsonArrayString((data as Record<string, unknown>).value);
+    const created = deltaOp || legacyArrayMerge
       ? await prisma.$transaction(async (tx) => {
           const delegate = transactionDelegate(definition, tx);
           const settingData = data as Record<string, unknown>;
           const key = String(settingData.key ?? "").trim();
-          if (!key) throw new Error("An app-settings delta requires a key");
+          if (!key) throw new Error("An app-settings write requires a key");
           const orgId = (settingData.organizationId ?? null) as string | null;
           const commId = (settingData.communityId ?? null) as string | null;
           // Serialize every concurrent merge on this (org,comm,key). The xact-scoped
@@ -362,7 +384,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           // MUST run in its own explicit transaction to hold the lock across the RMW.
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`app-settings:${orgId ?? ""}:${commId ?? ""}:${key}`}))`;
           const existing = await delegate.findFirst({ where: { key, organizationId: orgId, communityId: commId } }) as { id: string; value?: unknown } | null;
-          const next = applySettingDelta(parseSettingArray(existing?.value), deltaOp as "upsert" | "delete", deltaEntry as Record<string, unknown>, deltaEntryId);
+          let next: SettingEntry[];
+          if (deltaOp) {
+            next = applySettingDelta(parseSettingArray(existing?.value), deltaOp as "upsert" | "delete", deltaEntry as Record<string, unknown>, deltaEntryId);
+          } else {
+            // Legacy whole-array write → additive merge: replay each incoming entry
+            // as an upsert-by-id onto the stored array (oldest-first so the newest
+            // lands on top), preserving any stored-only entries the stale client
+            // never saw. A whole-array write can't express a delete without the
+            // client's baseline, so server entries are never dropped here.
+            next = parseSettingArray(existing?.value);
+            const incoming = parseSettingArray(settingData.value);
+            for (let i = incoming.length - 1; i >= 0; i--) {
+              const entry = incoming[i];
+              const id = String((entry as SettingEntry).id ?? "");
+              if (id) next = applySettingDelta(next, "upsert", entry, id);
+            }
+          }
           const value = JSON.stringify(next);
           if (existing) return delegate.update({ where: { id: existing.id }, data: { value } });
           return delegate.create({ data: { ...settingData, value } });
