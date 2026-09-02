@@ -855,6 +855,34 @@ function CurrentPlanView({ plan, nextReviewDate, draft }: { plan: Row; nextRevie
   );
 }
 
+// Read-only Care Plan tab for the resident hub (One Care · One Journey). Resolves
+// the resident's current plan of record — Active → Under-review → Draft — and
+// reuses CurrentPlanView. Migration-free; no picker, locked to one residentId.
+export function ResidentCarePlanView({ residentId }: { residentId: string }) {
+  const cpQ = useLiveQuery<Row>("care-plans", { query: "take=300", tables: ["CarePlan"] });
+  const { data: settingRows, loading, error } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
+  const drafts = useMemo(() => parseCarePlanDrafts(settingRows.find((r) => (r.key || r.id) === CARE_PLAN_DRAFTS_KEY)?.value), [settingRows]);
+  const reviews = useMemo(() => parseReviews(settingRows.find((r) => (r.key || r.id) === REVIEW_KEY)?.value), [settingRows]);
+  const plan = useMemo(() => {
+    const mine = (cpQ.data || []).filter((p) => s(p.residentId) === residentId && s(p.status) !== "DISCONTINUED");
+    return mine.find((p) => s(p.status) === "ACTIVE") || mine.find((p) => s(p.status) === "UNDER_REVIEW") || mine.find((p) => s(p.status) === "DRAFT") || null;
+  }, [cpQ.data, residentId]);
+  const nextReviewDate = useMemo(() => reviews.filter((r) => r.residentId === residentId).sort((a, b) => (b.reviewDate || "").localeCompare(a.reviewDate || ""))[0]?.nextReviewDate, [reviews, residentId]);
+  return (
+    <ClinicalCard className="p-4 sm:p-5">
+      <DataState
+        loading={(cpQ.loading || loading) && !plan}
+        error={error ? String(error) : undefined}
+        empty={!plan}
+        emptyTitle="No care plan yet"
+        emptyHint="A care plan appears here once one is generated and released in Care Plan Reviews."
+      >
+        {plan && <CurrentPlanView plan={plan} nextReviewDate={nextReviewDate} draft={s(plan.status) === "DRAFT" ? drafts[residentId] : undefined} />}
+      </DataState>
+    </ClinicalCard>
+  );
+}
+
 function Field({ label, value }: { label: string; value: string }) { return <div><p className="text-[11px] uppercase tracking-[0.08em] text-[var(--clinical-muted)]">{label}</p><p className="text-sm font-semibold text-[var(--clinical-ink)]">{value || "—"}</p></div>; }
 function Section({ title, children }: { title: string; children: React.ReactNode }) { return <ClinicalCard className="p-5"><p className="mb-3 font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>{title}</p>{children}</ClinicalCard>; }
 function Toggle({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {

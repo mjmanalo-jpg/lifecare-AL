@@ -36,6 +36,18 @@ import {
   buildJourney, JOURNEY_CATEGORY_META, JOURNEY_CATEGORY_ORDER,
   type JourneyCategory, type JourneyAccent, type JourneyEvent,
 } from "@/lib/residentJourney";
+// Folded-in record boards — each renders locked to a single residentId, giving
+// One Care · One Journey its per-resident record tabs (staff only, not readOnly).
+import ClinicalRecordsBoard from "./ClinicalRecordsBoard";
+import ResidentCareHistory from "./ResidentCareHistory";
+import ResidentProgressReport from "./ResidentProgressReport";
+import VitalsTrendBoard from "./VitalsTrendBoard";
+import RoutineGeneratorBoard from "./RoutineGeneratorBoard";
+import { ResidentCarePlanView } from "./CarePlanReviewsBoard";
+
+// The resident-hub tabs: the two native panels (journey / forms) plus the six
+// folded-in record boards.
+type ResidentView = "journey" | "forms" | "careplan" | "clinical" | "timeline" | "progress" | "vitals" | "routine";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const DOMAIN_NAME: Record<string, string> = Object.fromEntries(ASSESSMENT_DOMAINS.map((d) => [d.code, d.name]));
@@ -118,7 +130,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
   const [resId, setResId] = useState(residentId ?? "");
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState<JourneyCategory | "ALL">("ALL");
-  const [view, setView] = useState<"journey" | "forms">("journey");
+  const [view, setView] = useState<ResidentView>("journey");
 
   const resident = useMemo(() => residents.find((r) => r.id === resId) || null, [residents, resId]);
 
@@ -318,6 +330,20 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       </ClinicalPage>
     );
   }
+  const viewTabs: { v: ResidentView; label: string; count?: number }[] = [
+    { v: "journey", label: "Journey", count: journey.length },
+    { v: "forms", label: "Forms", count: forms.length },
+    // Family (readOnly) keeps just Journey + Forms; staff get the full record set.
+    ...(readOnly ? [] : ([
+      { v: "careplan", label: "Care Plan" },
+      { v: "clinical", label: "Clinical Records" },
+      { v: "timeline", label: "Care Timeline" },
+      { v: "progress", label: "Progress Report" },
+      { v: "vitals", label: "Vital Signs" },
+      { v: "routine", label: "Routine" },
+    ] as { v: ResidentView; label: string; count?: number }[])),
+  ];
+
   return (
     <ClinicalPage>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -331,19 +357,31 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
         <ClinicalButton variant="secondary" size="sm" onClick={() => window.print()}><Printer className="h-4 w-4" /> Print</ClinicalButton>
       </div>
 
-      {/* View tabs — full journey vs. the assessment-form history */}
+      {/* View tabs — journey, assessment forms, and the folded-in record boards */}
       <div className="mb-5 inline-flex flex-wrap gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
-        {([["journey", "Journey", journey.length], ["forms", "Forms", forms.length]] as const).map(([v, label, n]) => (
+        {viewTabs.map(({ v, label, count }) => (
           <button key={v} onClick={() => setView(v)}
             className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors ${view === v ? "bg-[var(--clinical-surface)] shadow-sm text-[var(--clinical-ink)]" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>
             {label}
-            <span className="rounded-full px-1.5 text-[10px] tabular-nums" style={{ backgroundColor: view === v ? "var(--clinical-surface-2)" : "var(--clinical-surface)" }}>{n}</span>
+            {count !== undefined && <span className="rounded-full px-1.5 text-[10px] tabular-nums" style={{ backgroundColor: view === v ? "var(--clinical-surface-2)" : "var(--clinical-surface)" }}>{count}</span>}
           </button>
         ))}
       </div>
 
       {view === "forms" ? (
         <FormsPanel forms={forms} admissions={admissionForms} />
+      ) : view === "careplan" ? (
+        <ResidentCarePlanView residentId={resident.id} />
+      ) : view === "clinical" ? (
+        <ClinicalRecordsBoard key={resident.id} clinicianRole={clinicianRole} residentId={resident.id} />
+      ) : view === "timeline" ? (
+        <ResidentCareHistory key={resident.id} clinicianRole={clinicianRole} residentId={resident.id} />
+      ) : view === "progress" ? (
+        <ResidentProgressReport key={resident.id} clinicianRole={clinicianRole} residentId={resident.id} />
+      ) : view === "vitals" ? (
+        <VitalsTrendBoard key={resident.id} clinicianRole={clinicianRole} residentId={resident.id} />
+      ) : view === "routine" ? (
+        <RoutineGeneratorBoard key={resident.id} residentId={resident.id} />
       ) : (
       <>
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
