@@ -94,12 +94,14 @@ const authoritativeDomainsFor = (all: AssessmentV42[], residentId: string, resid
 // A stored intervention line ("Title: detail… (Daily)") → title · detail · frequency,
 // so the plan view can show the frequency as a pill instead of trailing text.
 const parseIntervention = (line: string): { title: string; desc: string; freq: string } => {
-  // The trailing "(freq)" can itself contain nested parens — e.g. "(Twice daily (BID))".
-  // Capture the last balanced group (one level of nesting) so BID/TID parse into a pill
-  // instead of leaking into the title.
-  const m = line.match(/^(.*?)\s*\(((?:[^()]+|\([^()]*\))*)\)\s*$/);
-  const freq = m ? m[2].trim() : "";
-  const body = (m ? m[1] : line).trim();
+  // Pull a trailing "(freq)" — which may itself contain ONE nested paren level, e.g.
+  // "(Twice daily (BID))" — into a pill instead of leaking into the title. Anchored at
+  // the end with an unrolled inner pattern (no `(x+)*` nesting) so a line with an earlier
+  // parenthetical like "(e.g., clothing, ...)" plus a long body can't trigger catastrophic
+  // regex backtracking (ReDoS) that freezes the render. ponytail: linear, was exponential.
+  const m = line.match(/\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*$/);
+  const freq = m ? m[1].trim() : "";
+  const body = (m ? line.slice(0, m.index) : line).trim();
   const ci = body.indexOf(":");
   return { title: ci > -1 ? body.slice(0, ci).trim() : body, desc: ci > -1 ? body.slice(ci + 1).trim() : "", freq };
 };
