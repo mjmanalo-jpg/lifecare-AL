@@ -378,8 +378,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Medication Management & Inventory", icon: Pill, route: "/superadmin/medications", group: "Clinical" },
       { name: "Medication Administration Record", icon: Pill, route: "/superadmin/mar", group: "Clinical" },
       { name: "Approvals", icon: ClipboardCheck, route: "/superadmin/approvalworkflows", group: "Clinical" },
-      // Vaccinations & Resident Documents relocated into the resident record
-      // (rcard tabs) per nav-audit §03; routes still resolve for deep-links.
+      { name: "Vaccinations", icon: Syringe, route: "/superadmin/vaccinations", group: "Clinical" },
       // ── Operations ────────────────────────────────────────────────────────
       { name: "CRM & Leads", icon: UserPlus, route: "/superadmin/crm", group: "Operations" },
       { name: "Consent & Move-in Forms", icon: ClipboardList, route: "/superadmin/consentforms", group: "Operations" },
@@ -387,6 +386,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Staff Registry", icon: Users, route: "/superadmin/staff", group: "Operations" },
       { name: "Caregiver Schedule", icon: CalendarCheck, route: "/superadmin/caregiverschedule", group: "Operations" },
       { name: "Room Management", icon: DoorOpen, route: "/superadmin/rooms", group: "Operations" },
+      { name: "Resident Documents", icon: FolderOpen, route: "/superadmin/documents", group: "Operations" },
       { name: "Clinical Reports", icon: BarChart3, route: "/superadmin/clinicalreports", group: "Operations" },
       // ── Administration ────────────────────────────────────────────────────
       { name: "Platform Governance", icon: ShieldCheck, route: "/superadmin/governance", group: "Administration" },

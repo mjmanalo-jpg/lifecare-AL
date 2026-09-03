@@ -5,8 +5,7 @@ import { useParams } from "next/navigation";
 import {
   Pill, ClipboardList, ConciergeBell, ShieldAlert,
   UserRound, CalendarClock, Loader2, FileDown, StickyNote, IdCard,
-  Users, Phone, Syringe, Activity, HeartPulse, Gauge, AlertTriangle, Heart, X, Package, FileText,
-  FolderOpen, Stethoscope, Target,
+  Users, Phone, Activity, HeartPulse, Gauge, AlertTriangle, Heart, X, Package, FileText,
 } from "lucide-react";
 import { taskNotesOf } from "@/lib/taskNotes";
 import { patientCode } from "@/lib/patientId";
@@ -17,11 +16,7 @@ import { HEALTH_ASSESSMENT_KEY, parseHealthStore, healthFor, HealthAssessment } 
 import AboutMeProfile from "@/components/portal/views/clinical/AboutMeProfile";
 import HealthAssessmentForm from "@/components/portal/views/clinical/HealthAssessmentForm";
 import DocumentSection from "@/components/portal/views/clinical/DocumentSection";
-import VaccinesPanel from "@/components/portal/views/clinical/VaccinesPanel";
 import BelongingsFormsPanel from "@/components/portal/views/clinical/BelongingsForms";
-import ClinicalRecordsBoard from "@/components/portal/views/clinical/ClinicalRecordsBoard";
-import ResidentMonitoringTabs from "@/components/portal/views/clinical/ResidentMonitoringTabs";
-import CarePlanReviewsBoard from "@/components/portal/views/clinical/CarePlanReviewsBoard";
 import { updateRecord, upsertRecord } from "@/lib/api";
 import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
@@ -70,32 +65,28 @@ const ACUITY_DOMAIN_LABEL: Record<string, string> = {
   elimination: "Elimination", medication: "Medication", medical: "Medical", psychosocial: "Psychosocial", night: "Night Care",
 };
 
-type TabKey = "about" | "belongings" | "documents" | "family" | "emergency" | "vaccines" | "adl" | "medical" | "advance" | "acuity" | "preadmit" | "care" | "clinicalrecords" | "monitoring" | "careplan";
+type TabKey = "about" | "belongings" | "documents" | "family" | "emergency" | "adl" | "medical" | "advance" | "acuity" | "preadmit" | "care";
 type TabGroup = "Overview" | "Clinical" | "Assessment" | "Records";
 const TAB_GROUPS: TabGroup[] = ["Overview", "Clinical", "Assessment", "Records"];
 // Nav-audit §03 — the sidebar's per-resident entries now live here as record
 // tabs (Journey · Clinical Records · Monitoring · Care Plan added), grouped so
 // the growing tab list stays scannable. Routes for the standalone boards stay.
 const TABS: { key: TabKey; label: string; icon: typeof Pill; group: TabGroup }[] = [
-  // Overview
+  // Overview — profile + belongings + documents live together up front.
   { key: "about", label: "About Me", icon: Heart, group: "Overview" },
+  { key: "belongings", label: "Belongings", icon: Package, group: "Overview" },
+  { key: "documents", label: "Documents", icon: FileText, group: "Overview" },
   { key: "family", label: "Family", icon: Users, group: "Overview" },
   { key: "emergency", label: "Emergency", icon: Phone, group: "Overview" },
   // Clinical
-  { key: "clinicalrecords", label: "Clinical Records", icon: FolderOpen, group: "Clinical" },
-  { key: "monitoring", label: "Monitoring", icon: Stethoscope, group: "Clinical" },
   { key: "care", label: "Meds & Tasks", icon: CalendarClock, group: "Clinical" },
   { key: "adl", label: "ADL Baseline", icon: Activity, group: "Clinical" },
   // Assessment & LOC
   { key: "preadmit", label: "Pre-Admission (v4.2)", icon: ClipboardList, group: "Assessment" },
   { key: "acuity", label: "Care Acuity", icon: Gauge, group: "Assessment" },
-  { key: "careplan", label: "Care Plan", icon: Target, group: "Assessment" },
   // Records
   { key: "medical", label: "Medical & Surgical Hx", icon: ClipboardList, group: "Records" },
   { key: "advance", label: "Advance Care", icon: HeartPulse, group: "Records" },
-  { key: "documents", label: "Documents", icon: FileText, group: "Records" },
-  { key: "vaccines", label: "Vaccines", icon: Syringe, group: "Records" },
-  { key: "belongings", label: "Belongings", icon: Package, group: "Records" },
 ];
 
 async function getJson(url: string) {
@@ -559,13 +550,6 @@ export default function ResidentCardPage() {
             </Section>
           )}
 
-          {tab === "vaccines" && (
-            <>
-            <VaccinesPanel residentId={id} vaccines={vaccinations} canEdit={canEditAbout} onChanged={refetchVaccines} />
-            <DocumentSection residentId={id} documentType="VACCINATION_CARD" label="Vaccination Card" canEdit={canEditAbout} docs={docs} onChanged={refetchDocs} uploadedByName={sessionRole} />
-            </>
-          )}
-
           {tab === "adl" && (
             <Section title="ADL Baseline — Admission Assessment" icon={Activity}>
               {baseline?.domains && Object.keys(baseline.domains).length > 0 ? (
@@ -726,23 +710,6 @@ export default function ResidentCardPage() {
             </Section>
           )}
         </div>
-
-        {/* Nav-audit §03 — per-resident boards folded into the record, each locked to this resident. */}
-        {tab === "clinicalrecords" && (
-          <div className="px-3 sm:px-5 py-5">
-            <ClinicalRecordsBoard residentId={id} clinicianRole="NURSE" />
-          </div>
-        )}
-        {tab === "monitoring" && (
-          <div className="px-3 sm:px-5 py-5">
-            <ResidentMonitoringTabs residentId={id} />
-          </div>
-        )}
-        {tab === "careplan" && (
-          <div className="px-3 sm:px-5 py-5">
-            <CarePlanReviewsBoard focusResidentId={id} embedded clinicianRole="NURSE" />
-          </div>
-        )}
 
         {/* Meds & Tasks tab — live care ops (moved out from below the tabs) */}
         {tab === "care" && (
