@@ -569,6 +569,22 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Lock background page scroll while the modal is open, so the wheel/trackpad
+  // always drives the modal body — never the portal page behind it (which has
+  // its own overflow-y-auto and can otherwise "steal" the scroll).
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  // Scroll the modal body back to the top whenever the layer tab changes (or the
+  // modal opens), so each layer opens at its first section instead of inheriting
+  // the previous layer's scroll position.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { bodyRef.current?.scrollTo({ top: 0 }); }, [layer, open]);
+
   // Flush before an explicit close so the final edits are captured pre-debounce.
   const closeModal = () => { flushAutoSave.current(); setOpen(false); };
 
@@ -730,6 +746,9 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
       const belowFloorNote = draft.layer3.belowFloorReason?.trim()
         ? ` [Below-floor override → Final ${draft.layer3.finalLevel} under ${liveResult?.mlrFloor ?? "floor"}: ${draft.layer3.belowFloorReason.trim()}]`
         : "";
+      const overrideNote = draft.layer3.overrideReason?.trim()
+        ? ` [Override → Final ${draft.layer3.finalLevel} vs suggested ${liveResult?.suggestedLevel ?? "band"}: ${draft.layer3.overrideReason.trim()}]`
+        : "";
       const baseNote = openedForPcg ? `Reassessed for a private caregiver request. ${draft.layer3.finalLevelJustification ?? ""}`.trim() : (draft.layer3.finalLevelJustification ?? "");
       void recordLocChange({
         residentId: draft.layer1.residentId,
@@ -741,7 +760,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
         rawScore: assessmentRawScore(draft),
         by: me || "Clinician",
         role: roleLabel,
-        notes: `${baseNote}${belowFloorNote}`.trim() || undefined,
+        notes: `${baseNote}${belowFloorNote}${overrideNote}`.trim() || undefined,
       });
     }
   };
@@ -967,7 +986,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
             </div>
 
             {/* Body */}
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 scrollbar-thin sm:p-5">
+            <div ref={bodyRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 scrollbar-thin sm:p-5">
               {/* Provenance banner — opened from a private-caregiver request (DT-013). */}
               {pcgOpen && (() => {
                 const eff = draft.layer3?.finalLevel ?? liveResult?.suggestedLevel ?? null;
@@ -1200,6 +1219,15 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                       <div className="rounded-lg border p-3" style={{ borderColor: "color-mix(in srgb, var(--clinical-amber) 40%, transparent)", background: "color-mix(in srgb, var(--clinical-amber) 8%, transparent)" }}>
                         <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-[var(--clinical-amber)]"><AlertTriangle className="h-3.5 w-3.5" /> Final {LEVEL_LABEL[draft.layer3.finalLevel]} is below the engine&rsquo;s {LEVEL_LABEL[liveResult.mlrFloor]} minimum-level floor</p>
                         <Area label="Below-floor override reason *" rows={2} value={draft.layer3.belowFloorReason} onChange={(v) => patchLayer3({ belowFloorReason: v })} placeholder="Clinical reason for confirming a Final LOC below the engine's minimum-level floor…" />
+                      </div>
+                    )}
+                    {/* Advisory-band override — the Final LOC differs from the engine's
+                        suggested band but is NOT below the MLR floor (that case uses the
+                        below-floor reason above). Capture why, for the LOC audit trail. */}
+                    {!!liveResult.suggestedLevel && !!draft.layer3.finalLevel && draft.layer3.finalLevel !== liveResult.suggestedLevel && !(!!liveResult.mlrFloor && Number(draft.layer3.finalLevel.slice(1)) < Number(liveResult.mlrFloor.slice(1))) && (
+                      <div className="rounded-lg border p-3" style={{ borderColor: "color-mix(in srgb, var(--clinical-panel) 40%, transparent)", background: "color-mix(in srgb, var(--clinical-panel) 6%, transparent)" }}>
+                        <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-[var(--clinical-panel)]"><AlertTriangle className="h-3.5 w-3.5" /> Final {LEVEL_LABEL[draft.layer3.finalLevel]} overrides the engine&rsquo;s suggested {LEVEL_LABEL[liveResult.suggestedLevel]}</p>
+                        <Area label="Reason for overriding *" rows={2} value={draft.layer3.overrideReason} onChange={(v) => patchLayer3({ overrideReason: v })} placeholder="Clinical reason for confirming a Final LOC different from the engine's suggested band…" />
                       </div>
                     )}
                   </Section>

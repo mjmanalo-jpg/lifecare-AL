@@ -14,7 +14,6 @@ import AlertCenter from "@/components/portal/views/clinical/AlertCenter";
 import FacilityInventory from "@/components/portal/views/FacilityInventory";
 import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoard";
 import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
-import CarePlanBoard from "@/components/portal/views/clinical/CarePlanBoard";
 import CarePlanReviewsBoard from "@/components/portal/views/clinical/CarePlanReviewsBoard";
 import RoutineGeneratorBoard from "@/components/portal/views/clinical/RoutineGeneratorBoard";
 import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
@@ -34,6 +33,7 @@ import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAs
 import FacilityRooms from "@/components/portal/views/FacilityRooms";
 import StaffProfilesBoard from "@/components/portal/views/clinical/StaffProfilesBoard";
 import FeatureMatrixDashboard from "@/components/portal/views/superadmin/FeatureMatrixDashboard";
+import HubTabs from "@/components/portal/HubTabs";
 import { Trash2, Search, Eye, Edit, X, XCircle, UserPlus, KeyRound } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import Swal from "@/lib/swal";
@@ -45,7 +45,7 @@ import { staffEmailDisplay, staffEmailInput } from "@/lib/staffEmail";
 
 // Every staff role a Super Admin can provision (mirrors the org-admin Add-Staff list).
 const STAFF_ROLE_OPTIONS: [string, string][] = [
-  ["CARE_MANAGER", "Care Manager"], ["RESIDENT_COORDINATOR", "Resident Coordinator"], ["NURSE", "Nurse"], ["CAREGIVER", "Caregiver"],
+  ["CARE_MANAGER", "Care Manager"], ["CRM", "CRM Specialist"], ["RESIDENT_COORDINATOR", "Resident Coordinator"], ["NURSE", "Nurse"], ["CAREGIVER", "Caregiver"],
   ["PHYSICIAN", "Physician"], ["FACILITY_ADMIN", "Facility Admin"], ["BILLING_ADMIN", "Billing Admin"],
   ["NUTRITIONIST", "Nutritionist"], ["KITCHEN", "Kitchen"], ["HOUSEKEEPING", "Housekeeping"],
   ["MAINTENANCE", "Maintenance"], ["SECURITY", "Security"], ["FLEET_MANAGEMENT", "Fleet Manager"],
@@ -445,6 +445,55 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     return <AlertCenter />;
   }
 
+  // ── Consolidated hubs (Phase 1 nav simplification) ──────────────────────
+  // Each hub renders the SAME boards that used to be separate sidebar entries,
+  // now as in-page tabs. Legacy per-board routes below are preserved.
+  if (tab === "actionqueue") {
+    return (
+      <HubTabs
+        storageKey="superadmin-actionqueue"
+        tabs={[
+          { key: "alertcenter", label: "Alerts", node: <AlertCenter /> },
+          { key: "escalations", label: "Escalations", node: <EscalationsBoard role="FACILITY_ADMIN" /> },
+        ]}
+      />
+    );
+  }
+  if (tab === "medhub") {
+    return (
+      <HubTabs
+        storageKey="superadmin-medhub"
+        tabs={[
+          { key: "mar", label: "Administer (MAR)", node: <MARBoard /> },
+          { key: "approvalworkflows", label: "Approvals", node: <ApprovalWorkflows /> },
+        ]}
+      />
+    );
+  }
+  if (tab === "assessmenthub") {
+    return (
+      <HubTabs
+        storageKey="superadmin-assessmenthub"
+        tabs={[
+          { key: "prescreen", label: "Pre-Admission (v4.2)", node: <ResidentAssessmentV42 clinicianRole="FACILITY_ADMIN" /> },
+          { key: "rounds", label: "Reassessment / LOC", node: <CareAcuityBoard clinicianRole="FACILITY_ADMIN" /> },
+        ]}
+      />
+    );
+  }
+  if (tab === "careplanhub") {
+    return (
+      <HubTabs
+        storageKey="superadmin-careplanhub"
+        tabs={[
+          { key: "careplans", label: "Plan & Review", node: <CarePlanReviewsBoard clinicianRole="SUPERADMIN" /> },
+          { key: "careplangovernance", label: "Plan Governance", node: <CarePlanReviewsBoard clinicianRole="SUPERADMIN" tabs={["pending", "history"]} /> },
+          { key: "routinegenerator", label: "24-Hour Routine", node: <RoutineGeneratorBoard /> },
+        ]}
+      />
+    );
+  }
+
   if (tab === "crm" || tab === "leads") {
     return <LeadPipelineBoard />;
   }
@@ -497,7 +546,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     // Resident Directory — same room/LOC list used by the Care Manager portal.
     return <CareLogsBoard clinicianRole="FACILITY_ADMIN" />;
   }
-  if (tab === "rounds") {
+  if (tab === "rounds" || tab === "careacuity") {
     return <CareAcuityBoard clinicianRole="FACILITY_ADMIN" />;
   }
   if (tab === "prescreen") {
@@ -510,7 +559,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     return <StaffProfilesBoard clinicianRole="FACILITY_ADMIN" />;
   }
   if (tab === "careplans") {
-    return <CarePlanBoard />;
+    return <CarePlanReviewsBoard clinicianRole="SUPERADMIN" />;
   }
   if (tab === "careplangovernance") {
     return <CarePlanReviewsBoard clinicianRole="SUPERADMIN" tabs={["pending", "history"]} />;

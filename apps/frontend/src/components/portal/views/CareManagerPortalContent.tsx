@@ -53,6 +53,7 @@ import MedSafetyDashboard from "@/components/portal/views/clinical/MedSafetyDash
 import FacilityResidents from "@/components/portal/views/FacilityResidents";
 import LeadPipelineBoard from "@/components/portal/views/LeadPipelineBoard";
 import OnboardingHub from "@/components/portal/views/OnboardingHub";
+import HubTabs from "@/components/portal/HubTabs";
 
 /**
  * Care Manager portal — clinical oversight split out of Facility Operations:
@@ -69,6 +70,92 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
     case "crm":
     case "leads":
       return <LeadPipelineBoard />;
+
+    // ── Consolidated hubs (Phase 1 nav simplification) ──────────────────────
+    // Each hub renders the SAME boards that used to be separate sidebar entries,
+    // now as in-page tabs. Legacy per-board routes below are preserved.
+    case "actionqueue":
+      return (
+        <HubTabs
+          storageKey="care_manager-actionqueue"
+          tabs={[
+            { key: "alertcenter", label: "Alerts", node: <AlertCenter /> },
+            { key: "escalations", label: "Escalations", node: <EscalationsBoard role="CARE_MANAGER" /> },
+            { key: "incidents", label: "Incidents", node: <FacilityIncidents /> },
+          ]}
+        />
+      );
+    case "medhub":
+      return (
+        <HubTabs
+          storageKey="care_manager-medhub"
+          tabs={[
+            { key: "mar", label: "Administer (MAR)", node: <MARDailyBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "medcompliance", label: "Compliance", node: <MedicationComplianceBoard /> },
+            { key: "medinventory", label: "Inventory", node: <MedicationInventoryBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "minipharmacy", label: "Mini Pharmacy", node: <MiniPharmacyBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "approvalworkflows", label: "Approvals", node: <ApprovalWorkflows /> },
+            { key: "medsafety", label: "Med Safety", node: <MedSafetyDashboard /> },
+          ]}
+        />
+      );
+    case "assessmenthub":
+      return (
+        <HubTabs
+          storageKey="care_manager-assessmenthub"
+          tabs={[
+            { key: "prescreen", label: "Pre-Admission (v4.2)", node: <ResidentAssessmentV42 clinicianRole="CARE_MANAGER" /> },
+            { key: "careacuity", label: "Reassessment / LOC", node: <CareAcuityBoard clinicianRole="CARE_MANAGER" /> },
+          ]}
+        />
+      );
+    case "careplanhub":
+      return (
+        <HubTabs
+          storageKey="care_manager-careplanhub"
+          tabs={[
+            { key: "careplans", label: "Plan & Review", node: <CarePlanReviewsBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "routinegenerator", label: "24-Hour Routine", node: <RoutineGeneratorBoard /> },
+          ]}
+        />
+      );
+    case "staffinghub":
+      return (
+        <HubTabs
+          storageKey="care_manager-staffinghub"
+          tabs={[
+            { key: "taskassignment", label: "Assignments", node: <TaskAssignmentBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "caregiverschedule", label: "Schedule", node: <CaregiverScheduleBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "staffroster", label: "Roster", node: <StaffRosterBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "staffprofiles", label: "Profiles", node: <StaffProfilesBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "quality", label: "Quality", node: <QualityMonitoringBoard /> },
+          ]}
+        />
+      );
+    case "monitoringhub":
+      return (
+        <HubTabs
+          storageKey="care_manager-monitoringhub"
+          tabs={[
+            { key: "woundcare", label: "Wound Care", node: <WoundCareBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "vitalstrend", label: "Vitals", node: <VitalsTrendBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "domainmonitoring", label: "Domain", node: <DomainMonitoringBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "adlmonitoring", label: "ADL", node: <ADLMonitoringBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "weightmonitoring", label: "Weight", node: <WeightMonitoringBoard clinicianRole="CARE_MANAGER" /> },
+          ]}
+        />
+      );
+    case "shiftclosehub":
+      return (
+        <HubTabs
+          storageKey="care_manager-shiftclosehub"
+          tabs={[
+            { key: "shiftendorsements", label: "Handover", node: <ShiftEndorsementBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "shiftsummary", label: "What's Charted", node: <ShiftSummaryBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "endorsementdashboard", label: "Status", node: <ShiftEndorsementDashboard clinicianRole="CARE_MANAGER" /> },
+          ]}
+        />
+      );
     case "admissions":
       return <OnboardingHub initialTab="admissions" />;
     case "rooms":

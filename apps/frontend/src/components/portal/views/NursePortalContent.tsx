@@ -64,6 +64,7 @@ import FollowUpTracker from "@/components/portal/views/clinical/FollowUpTracker"
 import ClinicalReports from "@/components/portal/views/clinical/ClinicalReports";
 import AuditLogViewer from "@/components/portal/views/clinical/AuditLogViewer";
 import InventoryAlertsPanel from "@/components/portal/views/clinical/InventoryAlertsPanel";
+import HubTabs from "@/components/portal/HubTabs";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptIncident } from "@/lib/adapters";
 import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
@@ -352,6 +353,98 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
 
   if (tab === "alertcenter") {
     return <AlertCenter />;
+  }
+
+  // ── Consolidated hubs (Phase 1 nav simplification) ──────────────────────
+  // Each hub renders the SAME boards that used to be separate sidebar entries,
+  // now as in-page tabs. Legacy per-board routes below are preserved.
+  if (tab === "actionqueue") {
+    return (
+      <HubTabs
+        storageKey="nurse-actionqueue"
+        tabs={[
+          { key: "alertcenter", label: "Alerts", node: <AlertCenter /> },
+          { key: "callbells", label: "Call Bells", node: <CaregiverCallBells /> },
+          { key: "escalations", label: "Escalations", node: <EscalationsBoard role="NURSE" /> },
+          { key: "incidents", label: "Incidents", node: <FacilityIncidents readOnly canResolve /> },
+        ]}
+      />
+    );
+  }
+  if (tab === "medhub") {
+    return (
+      <HubTabs
+        storageKey="nurse-medhub"
+        tabs={[
+          { key: "mar", label: "Administer (MAR)", node: <MARDailyBoard clinicianRole="NURSE" /> },
+          { key: "medcompliance", label: "Compliance", node: <MedicationComplianceBoard /> },
+          { key: "orders", label: "Orders & Rx", node: <PhysicianOrders /> },
+          { key: "approvalworkflows", label: "Approvals", node: <ApprovalWorkflows /> },
+          { key: "medinventory", label: "Inventory", node: <MedicationInventoryBoard clinicianRole="NURSE" /> },
+          { key: "minipharmacy", label: "Mini Pharmacy", node: <MiniPharmacyBoard clinicianRole="NURSE" /> },
+        ]}
+      />
+    );
+  }
+  if (tab === "assessmenthub") {
+    return (
+      <HubTabs
+        storageKey="nurse-assessmenthub"
+        tabs={[
+          { key: "careacuity", label: "Reassessment / LOC", node: <CareAcuityBoard clinicianRole="NURSE" /> },
+          { key: "prescreen", label: "Pre-Admission (v4.2)", node: <ResidentAssessmentV42 clinicianRole="NURSE" /> },
+        ]}
+      />
+    );
+  }
+  if (tab === "careplanhub") {
+    return (
+      <HubTabs
+        storageKey="nurse-careplanhub"
+        tabs={[
+          { key: "careplans", label: "Plan & Review", node: <CarePlanReviewsBoard clinicianRole="NURSE" /> },
+          { key: "routinegenerator", label: "24-Hour Routine", node: <RoutineGeneratorBoard /> },
+        ]}
+      />
+    );
+  }
+  if (tab === "staffinghub") {
+    return (
+      <HubTabs
+        storageKey="nurse-staffinghub"
+        tabs={[
+          { key: "taskassignment", label: "Assignments", node: <TaskAssignmentBoard clinicianRole="NURSE" /> },
+          { key: "caregiverschedule", label: "Schedule", node: <CaregiverScheduleBoard clinicianRole="NURSE" /> },
+          { key: "staffroster", label: "Roster", node: <StaffRosterBoard clinicianRole="NURSE" /> },
+        ]}
+      />
+    );
+  }
+  if (tab === "monitoringhub") {
+    return (
+      <HubTabs
+        storageKey="nurse-monitoringhub"
+        tabs={[
+          { key: "vitalstrend", label: "Vitals", node: <VitalsTrendBoard clinicianRole="NURSE" /> },
+          { key: "adlmonitoring", label: "ADL", node: <ADLMonitoringBoard clinicianRole="NURSE" /> },
+          { key: "weightmonitoring", label: "Weight", node: <WeightMonitoringBoard clinicianRole="NURSE" /> },
+          { key: "woundcare", label: "Wound Care", node: <WoundCareBoard clinicianRole="NURSE" /> },
+          { key: "domainmonitoring", label: "Domain", node: <DomainMonitoringBoard clinicianRole="NURSE" /> },
+        ]}
+      />
+    );
+  }
+  if (tab === "shiftclosehub") {
+    return (
+      <HubTabs
+        storageKey="nurse-shiftclosehub"
+        tabs={[
+          { key: "shiftendorsements", label: "Handover", node: <ShiftEndorsementBoard clinicianRole="NURSE" /> },
+          { key: "shiftsummary", label: "What's Charted", node: <ShiftSummaryBoard clinicianRole="NURSE" /> },
+          { key: "endorsementdashboard", label: "Status", node: <ShiftEndorsementDashboard clinicianRole="NURSE" /> },
+        ]}
+      />
+    );
   }
 
   if (tab === "monitoring") {

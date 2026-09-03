@@ -1,8 +1,25 @@
+import { CARE_TASK_MASTER } from "@/lib/lifecare/dataset";
+import { domainCodeFromLabel } from "@/lib/lifecare/carePackage";
+
 export interface ReleaseIntervention {
   title?: string | null;
   description?: string | null;
   status?: string | null;
 }
+
+// AS-codes with at least one governed (AUTO-GENERATE) task in the Care Task
+// Master. Four assessment domains — Behavior/BPSD (AS-05), Skin Integrity
+// (AS-11), Sleep/Daily Routine (AS-12) and Safety/Supervision (AS-13) — are not
+// modeled as distinct governed tasks, so their interventions can NEVER carry a
+// [task:] marker. Requiring one there makes any plan touching them (incl. every
+// Level 3–5 plan, where they are in-package) permanently unreleasable. The marker
+// is optional downstream — the materializer treats it as enrichment, not a gate.
+const GOVERNED_TASK_DOMAINS = new Set(
+  CARE_TASK_MASTER
+    .filter((t) => /AUTO-GENERATE/i.test(t.generationStatus || ""))
+    .map((t) => domainCodeFromLabel(t.domain) || domainCodeFromLabel(t.name))
+    .filter((code): code is NonNullable<typeof code> => Boolean(code)),
+);
 
 export interface ReleaseableCarePlan {
   status?: string | null;
@@ -40,7 +57,13 @@ export function carePlanReleaseIssues(plan: ReleaseableCarePlan, input: CarePlan
   for (const item of interventions) {
     const label = item.title?.trim() || "Intervention";
     const description = item.description || "";
-    if (!/\[task:[^\]]+\]/i.test(description)) issues.push(`${label}: governed Care Task ID is missing.`);
+    // Only demand a governed Care Task ID for domains the model actually governs
+    // with a task. Assessment-driven interventions for ungoverned domains (e.g.
+    // Behavior/BPSD, Skin, Sleep, Safety) come from the resident's assessment
+    // goal/preference and can't carry a [task:] marker — don't block on it.
+    const code = domainCodeFromLabel(label);
+    const taskIdRequired = !code || GOVERNED_TASK_DOMAINS.has(code);
+    if (taskIdRequired && !/\[task:[^\]]+\]/i.test(description)) issues.push(`${label}: governed Care Task ID is missing.`);
     if (!/Frequency:\s*[^·[]+/i.test(description)) issues.push(`${label}: individualized frequency/timing is missing.`);
     if (!/Individualized:\s*[^[]+/i.test(description)) issues.push(`${label}: resident-specific assistance, technique/preferences or responsible role is missing.`);
   }

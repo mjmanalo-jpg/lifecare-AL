@@ -85,6 +85,7 @@ export type Role =
   | "SUPERADMIN"
   | "FACILITY_ADMIN"
   | "CARE_MANAGER"
+  | "CRM"
   | "RESIDENT_COORDINATOR"
   | "BILLING_ADMIN"
   | "PHYSICIAN"
@@ -153,6 +154,8 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   matrix: "Portal Matrix",
   crm: "CRM & Leads",
   leads: "CRM & Leads",
+  tours: "Tours",
+  analytics: "CRM Analytics",
   consentforms: "Consent & Move-in Forms",
   forms: "Sign & Upload",
   admissions: "Admissions & Registration",
@@ -252,6 +255,14 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   weightmonitoring: "Weight Monitoring",
   shiftsummary: "Shift Summary",
   careacuity: "Care Acuity & Level of Care",
+  // Phase 1 nav simplification — consolidated hub routes.
+  actionqueue: "Action Queue",
+  medhub: "Medication",
+  assessmenthub: "Assessment & Level of Care",
+  careplanhub: "Care Plan",
+  staffinghub: "Staffing",
+  monitoringhub: "Monitoring",
+  shiftclosehub: "Shift Close",
   woundcare: "Wound Care",
   shiftendorsements: "Shift Endorsements",
   featurematrix: "SLMS Feature Matrix & System Overview",
@@ -280,6 +291,7 @@ export const PATH_TO_ROLE: Record<string, Role> = {
   family: "FAMILY",
   facility_admin: "FACILITY_ADMIN",
   care_manager: "CARE_MANAGER",
+  crm: "CRM",
   resident_coordinator: "RESIDENT_COORDINATOR",
   billing_admin: "BILLING_ADMIN",
   physician: "PHYSICIAN",
@@ -341,43 +353,54 @@ export const ROLES: Record<Role, RoleDetails> = {
     profileName: "Administrator",
     basePath: "/superadmin",
     footerText: "Super Admin Portal",
+    // Phase 1 nav simplification: the previously-flat 34-link menu is grouped into
+    // four collapsible sections. Technical/system tools (geofencing, cameras,
+    // landing studio, AI assistant) move into "System", tucked at the bottom and
+    // out of the routine clinical scan. Grouping/labels only — every route preserved.
+    sidebarGroupOrder: ["Clinical", "Operations", "Administration", "System"],
     sidebarLinks: [
-      { name: "Administrator Dashboard", icon: Grid, route: "/superadmin/dashboard" },
-      { name: "Platform Governance", icon: ShieldCheck, route: "/superadmin/governance" },
-      { name: "SLMS Feature Matrix", icon: ShieldCheck, route: "/superadmin/featurematrix" },
-      { name: "Alert Center", icon: BellRing, route: "/superadmin/alertcenter", group: "Clinical Monitoring" },
-      { name: "Daily Care Logs", icon: NotebookPen, route: "/superadmin/carelogs" },
-      { name: "Camera Activity Log", icon: Activity, route: "/superadmin/cameralogs" },
-      { name: "Camera Registry", icon: Camera, route: "/superadmin/cameras" },
-      { name: "Geofencing", icon: MapPin, route: "/superadmin/geofencing", group: "Administration" },
-      { name: "Staff Profiles & Records", icon: Users, route: "/superadmin/staffprofiles", group: "Administration" },
-      // "Portal Matrix" is merged into "SLMS Feature Matrix" as its Access Control tab.
-      { name: "CRM & Leads", icon: UserPlus, route: "/superadmin/crm" },
-      { name: "Consent & Move-in Forms", icon: ClipboardList, route: "/superadmin/consentforms" },
-      { name: "Admissions & Registration", icon: UserPlus, route: "/superadmin/admissions" },
-      { name: "Staff Registry", icon: Users, route: "/superadmin/staff" },
-      { name: "Caregiver Schedule", icon: CalendarCheck, route: "/superadmin/caregiverschedule" },
-      { name: "AI Assistant", icon: Sparkles, route: "/superadmin/assistant" },
-      { name: "Landing Studio", icon: Palette, route: "/superadmin/appearance" },
-      // Core SLMS Modules Aligned
-      { name: "Residents", icon: Users, route: "/superadmin/records" },
-      { name: "Assessment & Level of Care", icon: ClipboardList, route: "/superadmin/rounds" },
-      { name: "Pre-Admission Assessment (v4.2)", icon: ClipboardList, route: "/superadmin/prescreen", group: "Operations" },
+      // ── Clinical ──────────────────────────────────────────────────────────
+      { name: "Administrator Dashboard", icon: Grid, route: "/superadmin/dashboard", group: "Clinical" },
+      // Action Queue hub — Alerts · Escalations.
+      { name: "Action Queue", icon: BellRing, route: "/superadmin/actionqueue", group: "Clinical" },
+      { name: "Residents", icon: Users, route: "/superadmin/records", group: "Clinical" },
+      { name: "Daily Care Logs", icon: NotebookPen, route: "/superadmin/carelogs", group: "Clinical" },
+      // Assessment hub — Pre-Admission (v4.2) · Reassessment / LOC.
+      // Assessment & LOC — surfaced as explicit entries (both feed the same v4.2
+      // engine): Pre-Admission scoring + the Care Acuity / LOC decision review.
+      // The combined `assessmenthub` route still resolves for deep-links.
+      { name: "Pre-Admission (v4.2)", icon: ClipboardList, route: "/superadmin/prescreen", group: "Clinical" },
+      { name: "Care Acuity & LOC", icon: Gauge, route: "/superadmin/careacuity", group: "Clinical" },
+      // Care Plan hub — Plan · Generator · 24-Hour Routine.
+      { name: "Care Plan", icon: Target, route: "/superadmin/careplanhub", group: "Clinical" },
+      { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/superadmin/tasks", group: "Clinical" },
+      { name: "Shift Endorsement & Continuity", icon: FileText, route: "/superadmin/reports", group: "Clinical" },
+      { name: "Medication Management & Inventory", icon: Pill, route: "/superadmin/medications", group: "Clinical" },
+      { name: "Medication Administration Record", icon: Pill, route: "/superadmin/mar", group: "Clinical" },
+      { name: "Approvals", icon: ClipboardCheck, route: "/superadmin/approvalworkflows", group: "Clinical" },
+      // Vaccinations & Resident Documents relocated into the resident record
+      // (rcard tabs) per nav-audit §03; routes still resolve for deep-links.
+      // ── Operations ────────────────────────────────────────────────────────
+      { name: "CRM & Leads", icon: UserPlus, route: "/superadmin/crm", group: "Operations" },
+      { name: "Consent & Move-in Forms", icon: ClipboardList, route: "/superadmin/consentforms", group: "Operations" },
+      { name: "Admissions & Registration", icon: UserPlus, route: "/superadmin/admissions", group: "Operations" },
+      { name: "Staff Registry", icon: Users, route: "/superadmin/staff", group: "Operations" },
+      { name: "Caregiver Schedule", icon: CalendarCheck, route: "/superadmin/caregiverschedule", group: "Operations" },
       { name: "Room Management", icon: DoorOpen, route: "/superadmin/rooms", group: "Operations" },
-      { name: "Care Planning", icon: Target, route: "/superadmin/careplans" },
-      { name: "Care Plan Generator", icon: ShieldCheck, route: "/superadmin/careplangovernance" },
-      { name: "Routine Generator", icon: Clock, route: "/superadmin/routinegenerator" },
-      { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/superadmin/tasks" },
-      { name: "Shift Endorsement & Continuity", icon: FileText, route: "/superadmin/reports" },
-      { name: "Medication Management & Inventory", icon: Pill, route: "/superadmin/medications" },
-      { name: "Sbar Escalation", icon: Siren, route: "/superadmin/escalations" },
-      { name: "Vaccinations", icon: Syringe, route: "/superadmin/vaccinations" },
-      { name: "Resident Documents", icon: FolderOpen, route: "/superadmin/documents" },
-      { name: "Medication Administration Record", icon: Pill, route: "/superadmin/mar" },
-      { name: "Approvals", icon: ClipboardCheck, route: "/superadmin/approvalworkflows", group: "Medication" },
-      { name: "Audit Log", icon: Shield, route: "/superadmin/auditlog" },
-      { name: "Inventory Alerts", icon: Bell, route: "/superadmin/inventory-alerts" },
-      { name: "Clinical Reports", icon: BarChart3, route: "/superadmin/clinicalreports" },
+      { name: "Clinical Reports", icon: BarChart3, route: "/superadmin/clinicalreports", group: "Operations" },
+      // ── Administration ────────────────────────────────────────────────────
+      { name: "Platform Governance", icon: ShieldCheck, route: "/superadmin/governance", group: "Administration" },
+      // "Portal Matrix" is merged into "SLMS Feature Matrix" as its Access Control tab.
+      { name: "SLMS Feature Matrix", icon: ShieldCheck, route: "/superadmin/featurematrix", group: "Administration" },
+      { name: "Staff Profiles & Records", icon: Users, route: "/superadmin/staffprofiles", group: "Administration" },
+      { name: "Audit Log", icon: Shield, route: "/superadmin/auditlog", group: "Administration" },
+      { name: "Inventory Alerts", icon: Bell, route: "/superadmin/inventory-alerts", group: "Administration" },
+      // ── System (technical tools — collapsed, out of the clinical scan) ─────
+      { name: "Geofencing", icon: MapPin, route: "/superadmin/geofencing", group: "System" },
+      { name: "Camera Registry", icon: Camera, route: "/superadmin/cameras", group: "System" },
+      { name: "Camera Activity Log", icon: Activity, route: "/superadmin/cameralogs", group: "System" },
+      { name: "Landing Studio", icon: Palette, route: "/superadmin/appearance", group: "System" },
+      { name: "AI Assistant", icon: Sparkles, route: "/superadmin/assistant", group: "System" },
     ],
   },
   NURSE: {
@@ -388,45 +411,34 @@ export const ROLES: Record<Role, RoleDetails> = {
     profileName: "Sarah Jenkins, RN",
     basePath: "/nurse",
     footerText: "Nurse Clinical Portal",
-    sidebarGroupOrder: ["Shift Command", "Clinical Triage Queue", "Caregiver Deployment", "Shift Watchlist", "Care Delivery Status", "Assessment & LOC", "Care Plan Generator", "Shift Endorsement"],
+    // Phase 1 nav simplification: 37 entries → 20, consolidating the alerts/
+    // escalations, medication, assessment, care-plan, staffing, monitoring and
+    // shift-close clusters into tabbed hubs (see NursePortalContent hub cases).
+    // Every legacy per-board route is preserved and still resolves.
+    sidebarGroupOrder: ["Shift Command", "Residents & Care", "Clinical Hubs", "Coordination & Close"],
     sidebarLinks: [
-      { name: "Shift Command", icon: LayoutDashboard, route: "/nurse/dashboard", group: "Shift Command" },
+      { name: "Shift Dashboard", icon: LayoutDashboard, route: "/nurse/dashboard", group: "Shift Command" },
       { name: "Time In - Clock In / Out", icon: Fingerprint, route: "/nurse/clockin", group: "Shift Command" },
-      { name: "Clinical Alerts", icon: BellRing, route: "/nurse/alertcenter", group: "Clinical Triage Queue" },
-      { name: "Call Bells", icon: BellRing, route: "/nurse/callbells", group: "Clinical Triage Queue" },
-      { name: "Nurse Review & Escalations", icon: Siren, route: "/nurse/escalations", group: "Clinical Triage Queue" },
-      { name: "Incident Review", icon: AlertTriangle, route: "/nurse/incidents", group: "Clinical Triage Queue" },
-      { name: "Caregiver Deployment", icon: ListTodo, route: "/nurse/taskassignment", group: "Caregiver Deployment" },
-      { name: "Caregiver Schedule", icon: CalendarCheck, route: "/nurse/caregiverschedule", group: "Caregiver Deployment" },
-      { name: "Staff Roster", icon: Users, route: "/nurse/staffroster", group: "Caregiver Deployment" },
-      { name: "Resident Directory", icon: UserRound, route: "/nurse/residents", group: "Shift Watchlist" },
-      { name: "Move-in", icon: Package, route: "/nurse/movein", group: "Shift Watchlist" },
-      { name: "Daily Care Logs", icon: NotebookPen, route: "/nurse/carelogs", group: "Shift Watchlist" },
-      { name: "Daily Living (ADL)", icon: Accessibility, route: "/nurse/adlmonitoring", group: "Shift Watchlist" },
-      { name: "Weight Tracking", icon: Scale, route: "/nurse/weightmonitoring", group: "Shift Watchlist" },
-      { name: "Wound Care", icon: Bandage, route: "/nurse/woundcare", group: "Shift Watchlist" },
-      { name: "Vital Sign Trends", icon: HeartPulse, route: "/nurse/vitalstrend", group: "Shift Watchlist" },
-      { name: "Domain Monitoring", icon: Gauge, route: "/nurse/domainmonitoring", group: "Shift Watchlist" },
-      { name: "Today's Approved Care", icon: CalendarCheck, route: "/nurse/todayscare", group: "Care Delivery Status" },
-      { name: "Care Delivery", icon: Activity, route: "/nurse/caredelivery", group: "Care Delivery Status" },
-      { name: "Medication Administration (MAR)", icon: Syringe, route: "/nurse/mar", group: "Care Delivery Status" },
-      { name: "Medication Compliance", icon: PieChart, route: "/nurse/medcompliance", group: "Care Delivery Status" },
-      { name: "Med Inventory", icon: Package, route: "/nurse/medinventory", group: "Care Delivery Status" },
-      { name: "Mini Pharmacy", icon: Cross, route: "/nurse/minipharmacy", group: "Care Delivery Status" },
-      { name: "Assessment & Level of Care", icon: Gauge, route: "/nurse/careacuity", group: "Assessment & LOC" },
-      { name: "Pre-Admission Assessment (v4.2)", icon: ClipboardList, route: "/nurse/prescreen", group: "Assessment & LOC" },
-      { name: "Care Plan Reviews", icon: Target, route: "/nurse/careplans", group: "Care Plan Generator" },
-      { name: "Routine Generator", icon: Clock, route: "/nurse/routinegenerator", group: "Care Plan Generator" },
-      { name: "Dedicated Staffing / PCG", icon: HeartHandshake, route: "/nurse/privatecare", group: "Care Plan Generator" },
-      { name: "Additional Clinical Services", icon: Cross, route: "/nurse/additionalservices", group: "Care Plan Generator" },
-      { name: "Clinical Approvals", icon: BadgeCheck, route: "/nurse/approvalworkflows", group: "Care Plan Generator" },
-      { name: "Orders & Prescriptions", icon: FileSignature, route: "/nurse/orders", group: "Shift Endorsement" },
-      { name: "Specialist Referrals", icon: Send, route: "/nurse/referrals", group: "Shift Endorsement" },
-      { name: "Physician Communication", icon: PhoneCall, route: "/nurse/physiciancomms", group: "Shift Endorsement" },
-      { name: "Shift Handover", icon: Repeat, route: "/nurse/shiftendorsements", group: "Shift Endorsement" },
-      { name: "Shift Documentation", icon: ClipboardCheck, route: "/nurse/shiftsummary", group: "Shift Endorsement" },
-      { name: "Safeguarding", icon: ShieldCheck, route: "/nurse/safeguarding", group: "Shift Endorsement" },
-      { name: "Infection Control", icon: Activity, route: "/nurse/infectioncontrol", group: "Shift Endorsement" },
+      // Action Queue hub — Alerts · Call Bells · Escalations · Incidents.
+      { name: "Action Queue", icon: BellRing, route: "/nurse/actionqueue", group: "Shift Command" },
+      { name: "Resident Directory", icon: UserRound, route: "/nurse/residents", group: "Residents & Care" },
+      { name: "Move-in", icon: Package, route: "/nurse/movein", group: "Residents & Care" },
+      { name: "Chart Care (Daily Log)", icon: NotebookPen, route: "/nurse/carelogs", group: "Residents & Care" },
+      { name: "Today's Approved Care", icon: CalendarCheck, route: "/nurse/todayscare", group: "Residents & Care" },
+      { name: "Care Delivery", icon: Activity, route: "/nurse/caredelivery", group: "Residents & Care" },
+      // Clinical hubs — each opens a tabbed screen over the existing boards.
+      { name: "Medication", icon: Pill, route: "/nurse/medhub", group: "Clinical Hubs" },
+      { name: "Assessment & LOC", icon: Gauge, route: "/nurse/assessmenthub", group: "Clinical Hubs" },
+      { name: "Care Plan", icon: Target, route: "/nurse/careplanhub", group: "Clinical Hubs" },
+      { name: "Monitoring", icon: HeartPulse, route: "/nurse/monitoringhub", group: "Clinical Hubs" },
+      { name: "Staffing", icon: ListTodo, route: "/nurse/staffinghub", group: "Clinical Hubs" },
+      { name: "Specialist Referrals", icon: Send, route: "/nurse/referrals", group: "Coordination & Close" },
+      { name: "Physician Communication", icon: PhoneCall, route: "/nurse/physiciancomms", group: "Coordination & Close" },
+      { name: "Dedicated Staffing / PCG", icon: HeartHandshake, route: "/nurse/privatecare", group: "Coordination & Close" },
+      { name: "Additional Clinical Services", icon: Cross, route: "/nurse/additionalservices", group: "Coordination & Close" },
+      { name: "Shift Close", icon: Repeat, route: "/nurse/shiftclosehub", group: "Coordination & Close" },
+      { name: "Safeguarding", icon: ShieldCheck, route: "/nurse/safeguarding", group: "Coordination & Close" },
+      { name: "Infection Control", icon: Activity, route: "/nurse/infectioncontrol", group: "Coordination & Close" },
     ],
   },
   CAREGIVER: {
@@ -437,34 +449,30 @@ export const ROLES: Record<Role, RoleDetails> = {
     profileName: "Caleb Randall",
     basePath: "/caregiver",
     footerText: "Caregiver Shift Portal",
-    // Sidebar is grouped by the caregiver's JOB, not by record type. Three rules
-    // hold here: (1) no link shares its group's name — an entry called the same
-    // thing as its heading reads as a duplicate; (2) read-only screens say so, so
-    // nobody hunts for a save button on a review page; (3) no single-item groups.
-    // Every route is preserved — this is naming and grouping only.
-    sidebarGroupOrder: ["My Shift", "My Residents", "Care This Shift", "Chart Care", "Need Nurse / Help", "Shift Close"],
+    // Caregiver nav is scoped to their SHIFT job only: see the shift, chart care,
+    // raise a nurse, hand over. Leveling/care-plan authoring is deliberately absent
+    // — the system assigns Level of Care and a caregiver never sets it. Rules that
+    // hold here: (1) no link shares its group's name; (2) read-only screens say so.
+    // The dropped links (Assigned Care Plans, Care Timeline, What's Charted) and the
+    // dropped router cases (rounds/careplans) remove every CG-facing leveling surface.
+    sidebarGroupOrder: ["My Shift", "Care This Shift", "Need Nurse / Help", "Shift Close"],
     sidebarLinks: [
       { name: "Shift Dashboard", icon: LayoutDashboard, route: "/caregiver/dashboard", group: "My Shift" },
       { name: "Clock In / Out", icon: Fingerprint, route: "/caregiver/clockin", group: "My Shift" },
       // Was its own one-item "Assignment Update" group; it is shift info, so it lives here.
       { name: "My Roster", icon: CalendarCheck, route: "/caregiver/caregiverschedule", group: "My Shift" },
-      { name: "My Assigned Residents", icon: UserRound, route: "/caregiver/residents", group: "My Residents" },
-      { name: "Assigned Care Plans", icon: Target, route: "/caregiver/careplans", group: "My Residents" },
-      { name: "View: Care Timeline", icon: History, route: "/caregiver/carehistory", group: "My Residents" },
-      { name: "Today's Care Checklist", icon: ClipboardCheck, route: "/caregiver/todayscare", group: "Care This Shift" },
+      { name: "My Assigned Residents", icon: UserRound, route: "/caregiver/residents", group: "Care This Shift" },
       { name: "Task Cards", icon: ListTodo, route: "/caregiver/taskassignment", group: "Care This Shift" },
-      // "Document Care" was both a group AND a link. The link is the 14-domain
-      // catch-all log; ADL / Weight / MAR below are the dedicated boards.
-      { name: "Daily Log (All Domains)", icon: NotebookPen, route: "/caregiver/carelogs", group: "Chart Care" },
-      { name: "Daily Living (ADL)", icon: Accessibility, route: "/caregiver/adlmonitoring", group: "Chart Care" },
-      { name: "Weight Tracking", icon: Scale, route: "/caregiver/weightmonitoring", group: "Chart Care" },
-      { name: "MAR (Medications)", icon: Syringe, route: "/caregiver/mar", group: "Chart Care" },
-      // Three ways to raise something; names now say WHICH to pick.
-      { name: "Escalate to Nurse", icon: Siren, route: "/caregiver/escalations", group: "Need Nurse / Help" },
-      { name: "Call Bells", icon: BellRing, route: "/caregiver/callbells", group: "Need Nurse / Help" },
-      { name: "Report an Incident", icon: AlertTriangle, route: "/caregiver/incidents", group: "Need Nurse / Help" },
-      { name: "View: What's Charted", icon: ClipboardCheck, route: "/caregiver/shiftsummary", group: "Shift Close" },
-      { name: "Shift Handover", icon: Repeat, route: "/caregiver/shiftendorsements", group: "Shift Close" },
+      // "Today" (Today's Care) opens in-place from the Shift Dashboard header, so it
+      // is no longer a sidebar item.
+      // Daily Log / ADL / Weight / MAR are no longer sidebar items — they open
+      // in-place from each resident card on the Shift Dashboard (one tap, no page
+      // navigation). Their routes still resolve for deep-links.
+      // Three ways to raise something, now one tabbed hub (Escalate · Call Bell · Incident).
+      { name: "Action Queue", icon: Siren, route: "/caregiver/actionqueue", group: "Need Nurse / Help" },
+      // "View handover" opens in-place from the Shift Dashboard header (Shift
+      // Handover is no longer a sidebar item); Endorsement Status stays for at-a-
+      // glance acknowledgement tracking.
       { name: "Endorsement Status", icon: Inbox, route: "/caregiver/endorsementdashboard", group: "Shift Close" },
     ],
   },
@@ -516,47 +524,54 @@ export const ROLES: Record<Role, RoleDetails> = {
     sidebarGroupOrder: ["Clinical Risk Overview", "Admissions & Governance", "Care Delivery Reliability", "Safety / Transitions", "Staffing / Team Quality", "Open Decisions"],
     sidebarLinks: [
       { name: "Clinical Governance", icon: LayoutDashboard, route: "/care_manager/dashboard", group: "Clinical Risk Overview" },
-      { name: "Clinical Alerts", icon: BellRing, route: "/care_manager/alertcenter", group: "Clinical Risk Overview" },
+      // Action Queue hub — Alerts · Escalations · Incidents.
+      { name: "Action Queue", icon: BellRing, route: "/care_manager/actionqueue", group: "Clinical Risk Overview" },
       { name: "Resident Directory", icon: UserRound, route: "/care_manager/residents", group: "Clinical Risk Overview" },
-      { name: "CRM & Leads", icon: UserPlus, route: "/care_manager/crm", group: "Admissions & Governance" },
-      { name: "Pre-admission", icon: ClipboardList, route: "/care_manager/prescreen", group: "Admissions & Governance" },
+      // CRM is owned by the dedicated CRM role (and Facility Admin / Super Admin).
+      // The Care Manager pulls a lead's name via the Pre-Admission picker, which
+      // reads admissions directly — no CRM sidebar entry needed here.
       { name: "Admission & Onboarding", icon: UserPlus, route: "/care_manager/admissions", group: "Admissions & Governance" },
       { name: "Room Management", icon: DoorOpen, route: "/care_manager/rooms", group: "Admissions & Governance" },
-      { name: "Care Plan Generator", icon: Target, route: "/care_manager/careplans", group: "Admissions & Governance" },
-      { name: "Routine Generator", icon: Clock, route: "/care_manager/routinegenerator", group: "Admissions & Governance" },
-      { name: "LOC Decision Review", icon: Gauge, route: "/care_manager/careacuity", group: "Admissions & Governance" },
+      // Assessment hub — Pre-Admission (v4.2) · Reassessment / LOC Decision Review.
+      { name: "Assessment & LOC", icon: Gauge, route: "/care_manager/assessmenthub", group: "Admissions & Governance" },
+      // Care Plan hub — Plan & Review · 24-Hour Routine.
+      { name: "Care Plan", icon: Target, route: "/care_manager/careplanhub", group: "Admissions & Governance" },
       // Zone D is governance-only per spec (the CM dashboard is not a nurse shift screen):
-      // the aggregate reliability KPI + drill-down, plus the med-compliance report. Bedside
-      // execution (Today's Approved Care, Daily Care Logs, ADL, Weight, MAR) lives in the
-      // Nurse/Caregiver portals and is reached from here via dashboard drill-down.
+      // the aggregate reliability KPI + drill-down, plus the medication hub. Bedside
+      // execution lives in the Nurse/Caregiver portals, reached via dashboard drill-down.
       { name: "Care Delivery Reliability", icon: Activity, route: "/care_manager/caredelivery", group: "Care Delivery Reliability" },
-      { name: "Medication Compliance", icon: PieChart, route: "/care_manager/medcompliance", group: "Care Delivery Reliability" },
-      { name: "Med Inventory", icon: Package, route: "/care_manager/medinventory", group: "Care Delivery Reliability" },
-      { name: "Mini Pharmacy", icon: Cross, route: "/care_manager/minipharmacy", group: "Care Delivery Reliability" },
-      { name: "Clinical Approvals", icon: BadgeCheck, route: "/care_manager/approvalworkflows", group: "Care Delivery Reliability" },
-      { name: "Safety / Transitions", icon: ShieldCheck, route: "/care_manager/safeguarding", group: "Safety / Transitions" },
-      { name: "Incident Reports", icon: AlertTriangle, route: "/care_manager/incidents", group: "Safety / Transitions" },
+      // Medication hub — Compliance · Inventory · Mini Pharmacy · Approvals · Safety.
+      { name: "Medication", icon: Pill, route: "/care_manager/medhub", group: "Care Delivery Reliability" },
+      { name: "Safeguarding", icon: ShieldCheck, route: "/care_manager/safeguarding", group: "Safety / Transitions" },
       { name: "Live Safety Monitoring", icon: Video, route: "/care_manager/monitoring", group: "Safety / Transitions" },
-      { name: "Wound Care", icon: Bandage, route: "/care_manager/woundcare", group: "Safety / Transitions" },
-      { name: "Vital Sign Trends", icon: HeartPulse, route: "/care_manager/vitalstrend", group: "Safety / Transitions" },
-      { name: "Domain Monitoring", icon: Gauge, route: "/care_manager/domainmonitoring", group: "Safety / Transitions" },
+      // Monitoring hub — Wound · Vitals · Domain · ADL · Weight.
+      { name: "Monitoring", icon: HeartPulse, route: "/care_manager/monitoringhub", group: "Safety / Transitions" },
       { name: "Infection Control", icon: Activity, route: "/care_manager/infectioncontrol", group: "Safety / Transitions" },
-      { name: "Task Assignment", icon: ListTodo, route: "/care_manager/taskassignment", group: "Staffing / Team Quality" },
-      { name: "Caregiver Schedule", icon: CalendarCheck, route: "/care_manager/caregiverschedule", group: "Staffing / Team Quality" },
-      { name: "Staff Roster", icon: Users, route: "/care_manager/staffroster", group: "Staffing / Team Quality" },
-      { name: "Staff Profiles & Records", icon: BadgeCheck, route: "/care_manager/staffprofiles", group: "Staffing / Team Quality" },
-      { name: "Quality & Outcomes", icon: TrendingUp, route: "/care_manager/quality", group: "Staffing / Team Quality" },
-      { name: "Open Decisions", icon: Siren, route: "/care_manager/escalations", group: "Open Decisions" },
+      // Staffing hub — Assignments · Schedule · Roster · Profiles · Quality.
+      { name: "Staffing", icon: ListTodo, route: "/care_manager/staffinghub", group: "Staffing / Team Quality" },
       { name: "Dedicated Staffing / PCG", icon: HeartHandshake, route: "/care_manager/privatecare", group: "Open Decisions" },
       { name: "Additional Clinical Services", icon: Cross, route: "/care_manager/additionalservices", group: "Open Decisions" },
-      { name: "Medication Safety", icon: ShieldCheck, route: "/care_manager/medsafety", group: "Open Decisions" },
       { name: "Specialist Referrals", icon: Send, route: "/care_manager/referrals", group: "Open Decisions" },
       { name: "Physician Communication", icon: MessageSquare, route: "/care_manager/physiciancomms", group: "Open Decisions" },
       { name: "Appointments", icon: CalendarDays, route: "/care_manager/appointmentcalendar", group: "Open Decisions" },
-      { name: "Shift Handover", icon: Repeat, route: "/care_manager/shiftendorsements", group: "Open Decisions" },
-      { name: "Endorsement Dashboard", icon: Inbox, route: "/care_manager/endorsementdashboard", group: "Open Decisions" },
-      { name: "Shift Documentation", icon: ClipboardCheck, route: "/care_manager/shiftsummary", group: "Open Decisions" },
+      // Shift Close hub — Handover · What's Charted · Status.
+      { name: "Shift Close", icon: Repeat, route: "/care_manager/shiftclosehub", group: "Open Decisions" },
       { name: "Clinical Audit Trail", icon: ScrollText, route: "/care_manager/auditlog", group: "Open Decisions" },
+    ],
+  },
+  CRM: {
+    name: "CRM Specialist",
+    badge: "Leads & Admissions",
+    desc: "Own the pre-admission lead pipeline and schedule facility tours. Scoped to CRM work only — no clinical or resident records.",
+    icon: UserPlus,
+    profileName: "CRM Specialist",
+    basePath: "/crm",
+    footerText: "CRM Portal",
+    // Single entry — the workspace has its own Pipeline / Follow-ups / Tours /
+    // Analytics tab bar, so the sidebar just opens it. (The /crm/followups etc.
+    // routes still resolve for deep-links.)
+    sidebarLinks: [
+      { name: "Lead Pipeline", icon: LayoutDashboard, route: "/crm/dashboard" },
     ],
   },
   RESIDENT_COORDINATOR: {
@@ -592,6 +607,7 @@ export const ROLES: Record<Role, RoleDetails> = {
     sidebarLinks: [
       { name: "Community at a Glance", icon: LayoutDashboard, route: "/facility_admin/dashboard", group: "Today" },
       { name: "Occupancy & Capacity", icon: BedDouble, route: "/facility_admin/occupancy", group: "Operations" },
+      { name: "CRM & Leads", icon: UserPlus, route: "/facility_admin/crm", group: "Operations" },
       { name: "Rooms", icon: DoorOpen, route: "/facility_admin/rooms", group: "Operations" },
       { name: "Purchase Requests", icon: ShoppingCart, route: "/facility_admin/purchaserequests", group: "Operations" },
       { name: "Front Desk", icon: DoorOpen, route: "/facility_admin/frontdesk", group: "Operations" },
@@ -893,6 +909,13 @@ export const SIDEBAR_GROUP_ORDER = [
   "Fleet & Transport",
   "KPI Reports",
   "Administration",
+  // Phase 1 nav simplification — Administrator regroup buckets.
+  "Clinical",
+  "System",
+  // Phase 1 nav simplification — Nurse hub groups.
+  "Residents & Care",
+  "Clinical Hubs",
+  "Coordination & Close",
 ] as const;
 
 export type SidebarGroup = (typeof SIDEBAR_GROUP_ORDER)[number];

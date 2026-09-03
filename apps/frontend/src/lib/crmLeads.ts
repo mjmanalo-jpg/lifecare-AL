@@ -26,10 +26,28 @@ export const OPEN_STAGES: LeadStage[] = ["NEW", "CONTACTED", "TOUR_SCHEDULED", "
 
 export const LEAD_SOURCES = ["Website", "Referral", "Walk-in", "Phone", "Event", "Social Media", "Other"];
 
+/** Why a lead was lost — captured for win/loss analytics. */
+export const LOST_REASONS = ["Chose competitor", "Cost / budget", "Care needs not a fit", "No longer needed", "Went home / family care", "Unresponsive", "Other"];
+
+export type ActivityType = "note" | "call" | "email" | "stage" | "tour" | "task" | "system";
+export type TaskType = "call" | "email" | "visit" | "todo";
+export const TASK_TYPES: TaskType[] = ["call", "email", "visit", "todo"];
+
 export interface LeadActivity {
   at: string; // ISO
   by: string;
   note: string;
+  type?: ActivityType;
+}
+
+export interface LeadTask {
+  id: string;
+  title: string;
+  type: TaskType;
+  dueDate: string;   // ISO date
+  done: boolean;
+  doneAt?: string;
+  by?: string;
 }
 
 export interface Lead {
@@ -45,8 +63,12 @@ export interface Lead {
   stage: LeadStage;
   assignedTo?: string;
   notes?: string;
-  followUpDate?: string;          // ISO date
+  followUpDate?: string;          // ISO date — legacy single follow-up; superseded by tasks[] but still honoured
   tourDate?: string;              // ISO datetime
+  tourOutcome?: "" | "completed" | "no_show" | "rescheduled";
+  tourNotes?: string;
+  lostReason?: string;
+  tasks?: LeadTask[];
   createdAt: string;
   convertedAdmissionId?: string;
   /** External source key for idempotent ingestion (e.g. SLMS Home care_recipient id). */
@@ -77,4 +99,66 @@ export function followUpDaysLeft(iso?: string): number | null {
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return null;
   return Math.ceil((t - Date.now()) / 86_400_000);
+}
+
+// ── Tasks / follow-ups ────────────────────────────────────────────────────
+export function openTasks(lead: Lead): LeadTask[] {
+  return (lead.tasks ?? []).filter((t) => !t.done);
+}
+
+/** The soonest open task due date, falling back to the legacy followUpDate. */
+export function nextFollowUpDate(lead: Lead): string | undefined {
+  const dues = openTasks(lead).map((t) => t.dueDate).filter(Boolean).sort();
+  return dues[0] ?? (lead.followUpDate || undefined);
+}
+
+export type DueBucket = "overdue" | "today" | "upcoming" | "none";
+export function dueBucket(iso?: string): DueBucket {
+  const d = followUpDaysLeft(iso);
+  if (d == null) return "none";
+  if (d < 0) return "overdue";
+  if (d === 0) return "today";
+  return "upcoming";
+}
+
+/** An open task flattened with its parent lead — the cross-lead work queue. */
+export interface QueueItem { lead: Lead; task: LeadTask; bucket: DueBucket }
+export function followUpQueue(leads: Lead[]): QueueItem[] {
+  const items: QueueItem[] = [];
+  for (const lead of leads) {
+    if (!OPEN_STAGES.includes(lead.stage)) continue; // no chasing won/lost leads
+    for (const task of openTasks(lead)) items.push({ lead, task, bucket: dueBucket(task.dueDate) });
+  }
+  const order: Record<DueBucket, number> = { overdue: 0, today: 1, upcoming: 2, none: 3 };
+  return items.sort((a, b) => order[a.bucket] - order[b.bucket] || (a.task.dueDate || "").localeCompare(b.task.dueDate || ""));
+}
+
+// ── Tours ─────────────────────────────────────────────────────────────────
+export function upcomingTours(leads: Lead[]): Lead[] {
+  return leads
+    .filter((l) => l.tourDate && !l.tourOutcome && new Date(l.tourDate).getTime() >= Date.now() - 86_400_000)
+    .sort((a, b) => (a.tourDate! < b.tourDate! ? -1 : 1));
+}
+
+// ── Velocity / analytics ──────────────────────────────────────────────────
+export function daysBetween(aIso?: string, bIso?: string): number | null {
+  if (!aIso || !bIso) return null;
+  const a = new Date(aIso).getTime(), b = new Date(bIso).getTime();
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  return Math.max(0, Math.round((b - a) / 86_400_000));
+}
+
+/** When a lead first entered a stage, read from its activity trail (type "stage"). */
+export function stageEnteredAt(lead: Lead, label: string): string | undefined {
+  return (lead.activity ?? []).find((a) => a.type === "stage" && a.note.includes(label))?.at;
+}
+
+/** Average days from creation to Move-In across won leads (null if none). */
+export function avgDaysToWin(leads: Lead[]): number | null {
+  const spans = leads
+    .filter((l) => l.stage === "MOVE_IN")
+    .map((l) => daysBetween(l.createdAt, stageEnteredAt(l, STAGE_META.MOVE_IN.label)))
+    .filter((n): n is number => n != null);
+  if (!spans.length) return null;
+  return Math.round(spans.reduce((s, n) => s + n, 0) / spans.length);
 }

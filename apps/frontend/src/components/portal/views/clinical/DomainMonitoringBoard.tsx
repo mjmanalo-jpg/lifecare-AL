@@ -43,7 +43,7 @@ const parseNotes = (raw: string | undefined): CareLogNote[] => {
 interface DomainRow { domain: DomainCode; reasons: string[]; latestScore: number; baseline: number | null; days: number; needsReassess: boolean }
 interface ResidentSummary { id: string; name: string; room: string; rows: DomainRow[]; needsReassessment: boolean }
 
-export default function DomainMonitoringBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
+export default function DomainMonitoringBoard({ clinicianRole = "NURSE", focusResidentId, embedded }: { clinicianRole?: ClinicianRole; focusResidentId?: string; embedded?: boolean }) {
   void useClinician(clinicianRole); // read-only; kept for parity with sibling boards
   const [todayStr] = useState(() => today());
   // In-place assessment modal (no navigation) — bumping nonce pops it open.
@@ -58,7 +58,13 @@ export default function DomainMonitoringBoard({ clinicianRole = "NURSE" }: { cli
   const urineQ = useLiveQuery<Row>("urine-records", { query: "take=2000", tables: ["UrineRecord"] });
   const edemaQ = useLiveQuery<Row>("edema-records", { query: "take=2000", tables: ["EdemaRecord"] });
 
-  const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
+  const allResidents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
+  // Embedded single-resident view: scope the effective residents list to the one
+  // tapped resident so the discrepancy engine + stats operate on that set of 1.
+  const residents = useMemo(
+    () => (focusResidentId ? allResidents.filter((r: Row) => s(r.id) === focusResidentId) : allResidents),
+    [allResidents, focusResidentId],
+  );
   const resNameById = useMemo(() => new Map(residents.map((r: Row) => [s(r.id), s(r.name)])), [residents]);
   const resRoomById = useMemo(() => new Map(residents.map((r: Row) => [s(r.id), s(r.room)])), [residents]);
   const levelByRes = useMemo(() => { const m = new Map<string, number>(); (resQ.data || []).forEach((r) => m.set(s(r.id), careLevelEnumToLevel(s(r.careLevel)))); return m; }, [resQ.data]);
@@ -109,12 +115,14 @@ export default function DomainMonitoringBoard({ clinicianRole = "NURSE" }: { cli
     setAssess((p) => ({ residentId, residentName: resNameById.get(residentId) || "", reason: "locreview", nonce: (p?.nonce ?? 0) + 1 }));
   };
 
-  return (
-    <ClinicalPage>
+  const body = (
+    <>
+      {!embedded && (
       <ClinicalHeader
         title="Domain Monitoring"
         subtitle="Auto-updated from the daily care logs — no scoring here. The engine flags each resident's domain discrepancies from their assessment baseline and who needs a Level of Care review."
       />
+      )}
 
       <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard value={summaries.length} label="Residents with discrepancies" accent={summaries.length > 0 ? "amber" : "ink"} />
@@ -226,6 +234,7 @@ export default function DomainMonitoringBoard({ clinicianRole = "NURSE" }: { cli
 
       {/* Assessment form opens here in place — no navigation to the LOC review page. */}
       <ResidentAssessmentV42 modalOnly embedded origin="ACUITY" clinicianRole={clinicianRole} openSignal={assess ?? undefined} />
-    </ClinicalPage>
+    </>
   );
+  return embedded ? <div>{body}</div> : <ClinicalPage>{body}</ClinicalPage>;
 }

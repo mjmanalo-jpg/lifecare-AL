@@ -85,12 +85,18 @@ function StatusChip({ label, accent }: { label: string; accent: "green" | "teal"
   );
 }
 
-export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
+export default function WeightMonitoringBoard({ clinicianRole = "NURSE", focusResidentId, embedded }: { clinicianRole?: ClinicianRole; focusResidentId?: string; embedded?: boolean }) {
   const { name: clinicianName } = useClinician(clinicianRole);
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
 
-  const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
+  // Embedded single-resident view (caregiver "Open" on My Shift): scope the whole
+  // board to just the tapped resident — everything downstream (rows, counts,
+  // history, concerns) narrows from this list.
+  const residents = useMemo(() => {
+    const all = (resQ.data || []).map(adaptResident);
+    return focusResidentId ? all.filter((r: Row) => s(r.id) === focusResidentId) : all;
+  }, [resQ.data, focusResidentId]);
   const logs = useMemo(() => parseLogs(settingRows.find((r) => (r.key || r.id) === WEIGHT_KEY)?.value), [settingRows]);
 
   const todayIso = todayManila();
@@ -153,8 +159,9 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
   const openRecord = (resident: Row | null, type: EntryType) => setRec({ resident, type });
   const contextType: EntryType = view === "history" ? historyType : "weekly";
 
-  return (
-    <ClinicalPage className="@container">
+  const body = (
+    <>
+      {!embedded && (
       <ClinicalHeader
         title="Weight Tracking"
         subtitle="Manage rolling weekly checks, review resident trends, and identify weight changes that need follow-up."
@@ -165,6 +172,7 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
           </div>
         }
       />
+      )}
       <div className="hidden">
         <div className="min-w-0">
           <p className="text-sm text-slate-500">Rolling weekly checks — each resident is due 7 days after their last weigh-in (Manila time)</p>
@@ -172,7 +180,7 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
         <button onClick={() => openRecord(null, contextType)} className="inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] active:scale-95"><Plus className="h-4 w-4" /> Record Weight</button>
       </div>
 
-      {view === "schedule" && (
+      {!embedded && view === "schedule" && (
         <section className="clinical-summary-band mt-6 overflow-hidden rounded-2xl bg-[var(--clinical-panel)] text-white">
           <div className="grid gap-px bg-white/15 sm:grid-cols-[1.35fr_repeat(3,1fr)]">
             <div className="bg-[var(--clinical-panel)] p-5 sm:p-6">
@@ -190,6 +198,7 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
         </section>
       )}
 
+      {!embedded && (
       <div className="my-5 grid gap-3 rounded-2xl border p-3 lg:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_auto_auto] xl:items-center" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
         {view === "schedule" ? <SearchInput value={search} onChange={setSearch} placeholder="Search resident or room..." className="min-w-0 lg:col-span-2 xl:col-span-1" /> : <div className="min-w-0 text-sm text-[var(--clinical-muted)] lg:col-span-2 xl:col-span-1">{view === "history" ? "Review a resident's recorded weight history and trend." : "Review residents whose weight changes may require follow-up."}</div>}
         <div role="tablist" aria-label="Weight tracking view" className="grid grid-cols-3 gap-1 rounded-xl bg-[var(--clinical-surface-2)] p-1">
@@ -208,6 +217,7 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
           <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-600"><Calendar className="h-4 w-4 text-slate-400" /> Today · {fmtDay(todayIso)}</span>
         )}
       </div>
+      )}
 
       {view === "schedule" && (
         <>
@@ -255,8 +265,9 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE" }: { cli
       {view === "concerns" && <ConcernsView residents={residents} logs={logs} onViewHistory={(id) => { setHistoryResId(id); setView("history"); }} />}
 
       {rec && <RecordModal residents={residents} resident={rec.resident} type={rec.type} defaultDate={todayIso} onClose={() => setRec(null)} onSave={saveRecord} />}
-    </ClinicalPage>
+    </>
   );
+  return embedded ? <div className="@container">{body}</div> : <ClinicalPage className="@container">{body}</ClinicalPage>;
 }
 
 // ── Resident History (Image 20) ──────────────────────────────────────────────

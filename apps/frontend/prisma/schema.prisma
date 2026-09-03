@@ -21,6 +21,7 @@ enum Role {
   SUPERADMIN
   FACILITY_ADMIN
   CARE_MANAGER
+  CRM
   RESIDENT_COORDINATOR
   BILLING_ADMIN
   PHYSICIAN
@@ -673,7 +674,9 @@ model Resident {
 
   @@index([careLevel])
   @@index([roomNumber])
-  @@unique([communityId, roomNumber])
+  // NOTE: no @@unique on (communityId, roomNumber) — residents SHARE rooms
+  // (shared rooms hold 2+ beds). Room-number uniqueness belongs to Room, not
+  // Resident. A unique here blocked a 2nd resident being admitted to a shared room.
   @@index([admissionDate])
   @@index([sponsorId])
   @@index([createdAt])

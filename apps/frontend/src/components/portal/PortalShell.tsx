@@ -85,6 +85,7 @@ const DEFAULT_COLLAPSED_GROUPS: Record<string, boolean> = {
   "Clinical Monitoring": true,
   "Coordination & Comms": true,
   Administration: true,
+  System: true,
   Inventory: true,
   "Billing & Finance": true,
   "Hospitality & Services": true,

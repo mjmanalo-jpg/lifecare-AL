@@ -174,7 +174,7 @@ export default function OrganizationAdminPortalContent({ tab = "dashboard" }: { 
 
   const ACCOUNT_ROLES: [string, string][] = [["FACILITY_ADMIN", "Facility Admin"], ["CARE_MANAGER", "Care Manager"], ["SUPERADMIN", "Super Admin"]];
   // Every staff role an org admin can register (they sign in via company + mobile).
-  const STAFF_ROLES: [string, string][] = [["CARE_MANAGER", "Care Manager"], ["RESIDENT_COORDINATOR", "Resident Coordinator"], ["NURSE", "Nurse"], ["CAREGIVER", "Caregiver"], ["PHYSICIAN", "Physician"], ["FACILITY_ADMIN", "Facility Admin"], ["BILLING_ADMIN", "Billing Admin"], ["NUTRITIONIST", "Nutritionist"], ["KITCHEN", "Kitchen"], ["HOUSEKEEPING", "Housekeeping"], ["MAINTENANCE", "Maintenance"], ["SECURITY", "Security"], ["FLEET_MANAGEMENT", "Fleet Manager"], ["DRIVER", "Driver"], ["SUPERADMIN", "Super Admin"]];
+  const STAFF_ROLES: [string, string][] = [["CARE_MANAGER", "Care Manager"], ["CRM", "CRM Specialist"], ["RESIDENT_COORDINATOR", "Resident Coordinator"], ["NURSE", "Nurse"], ["CAREGIVER", "Caregiver"], ["PHYSICIAN", "Physician"], ["FACILITY_ADMIN", "Facility Admin"], ["BILLING_ADMIN", "Billing Admin"], ["NUTRITIONIST", "Nutritionist"], ["KITCHEN", "Kitchen"], ["HOUSEKEEPING", "Housekeeping"], ["MAINTENANCE", "Maintenance"], ["SECURITY", "Security"], ["FLEET_MANAGEMENT", "Fleet Manager"], ["DRIVER", "Driver"], ["SUPERADMIN", "Super Admin"]];
   const roleLabel = (value: string) => STAFF_ROLES.find(([key]) => key === value)?.[1] || ACCOUNT_ROLES.find(([key]) => key === value)?.[1] || value.replaceAll("_", " ");
   const allStaff = organization?.staff || [];
   // Group staff records by user so each person appears once with all their communities.

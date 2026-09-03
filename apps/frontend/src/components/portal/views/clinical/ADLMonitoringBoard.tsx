@@ -88,12 +88,18 @@ function ChangeChip({ change }: { change: string }) {
   );
 }
 
-export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
+export default function ADLMonitoringBoard({ clinicianRole = "NURSE", focusResidentId, embedded }: { clinicianRole?: ClinicianRole; focusResidentId?: string; embedded?: boolean }) {
   const { name: clinicianName } = useClinician(clinicianRole);
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const { data: settingRows, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
 
-  const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
+  const allResidents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
+  // Embedded single-resident view: scope the effective residents list to the one
+  // tapped resident so search/status filters operate on that set of 1.
+  const residents = useMemo(
+    () => (focusResidentId ? allResidents.filter((r: Row) => s(r.id) === focusResidentId) : allResidents),
+    [allResidents, focusResidentId],
+  );
   const logs = useMemo(() => parseLogs(settingRows.find((r) => (r.key || r.id) === ADL_KEY)?.value), [settingRows]);
   const assessments = useMemo(() => parseAssessments(settingRows.find((r) => (r.key || r.id) === PREADMISSION_KEY)?.value), [settingRows]);
 
@@ -166,10 +172,11 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: "ADL entry logged", showConfirmButton: false, timer: 1500 });
   };
 
-  return (
-    <ClinicalPage>
+  const body = (
+    <>
       {true ? (
         <>
+          {!embedded && (
           <ClinicalHeader
             title="Daily Living (ADL)"
             subtitle="Track assistance, compare each activity with the resident's baseline, and surface meaningful changes during the shift."
@@ -192,7 +199,9 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
               </div>
             }
           />
+          )}
 
+          {!embedded && (
           <section className="clinical-summary-band mt-6 overflow-hidden rounded-2xl bg-[var(--clinical-panel)] text-white">
             <div className="grid gap-px bg-white/15 sm:grid-cols-[1.35fr_repeat(3,1fr)]">
               <div className="bg-[var(--clinical-panel)] p-5 sm:p-6">
@@ -210,7 +219,9 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
               <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Decline flags</p><p className="mt-2 text-2xl font-bold tabular-nums">{shiftDeclines.length}</p></div>
             </div>
           </section>
+          )}
 
+          {!embedded && (
           <div className="my-5 flex flex-col gap-3 rounded-2xl border p-3 lg:flex-row lg:items-center" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
             <SearchInput value={search} onChange={setSearch} placeholder="Search resident or room..." className="min-w-0 flex-1" />
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -224,6 +235,7 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
               <ClinicalButton variant={view === "alerts" ? "primary" : "secondary"} size="sm" onClick={() => setView(view === "alerts" ? "log" : "alerts")}><AlertTriangle className="h-4 w-4" /> Declines {shiftDeclines.length > 0 && `(${shiftDeclines.length})`}</ClinicalButton>
             </div>
           </div>
+          )}
 
           {view === "alerts" ? (
             <div className="space-y-3">
@@ -422,8 +434,9 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE" }: { clinic
           onSave={(p) => saveEntry(logDomain, p)}
         />
       )}
-    </ClinicalPage>
+    </>
   );
+  return embedded ? <div>{body}</div> : <ClinicalPage>{body}</ClinicalPage>;
 }
 
 function LogModal({ domain, resident, baseline, existing, onClose, onSave }: {

@@ -120,7 +120,7 @@ interface Endorsement {
 }
 const parse = (raw: string | null | undefined): Endorsement[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((e) => e && typeof e.id === "string") : []; } catch { return []; } };
 
-export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
+export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedded }: { clinicianRole?: ClinicianRole; embedded?: boolean }) {
   const { name: clinicianName, userId: clinicianUserId, staffId: clinicianStaffId } = useClinician(clinicianRole);
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const incQ = useLiveQuery<Row>("incidents", { query: "take=400", tables: ["Incident"] });
@@ -410,10 +410,10 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE" }: { cli
 
   // ── List view ──────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
+    <div className={embedded ? "" : "min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6"}>
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-        <div><h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Shift Endorsements</h1><p className="text-sm text-slate-500 mt-1">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p></div>
-        <button onClick={() => setNewOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"><Plus className="w-4 h-4" /> New Endorsement</button>
+        {!embedded && <div><h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Shift Endorsements</h1><p className="text-sm text-slate-500 mt-1">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p></div>}
+        <button onClick={() => setNewOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 ml-auto"><Plus className="w-4 h-4" /> New Endorsement</button>
       </div>
 
       {pendingCount > 0 && (

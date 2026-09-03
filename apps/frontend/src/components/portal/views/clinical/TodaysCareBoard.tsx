@@ -111,7 +111,7 @@ const levelFromFinal = (finalLevel: string): number => Number(/([1-5])/.exec(fin
 const encOutOfPackage = (level: number, e: RoutineEncounter): boolean =>
   e.domainCode != null && !domainInPackage(level, e.domainCode);
 
-export default function TodaysCareBoard({ role }: { role?: string }) {
+export default function TodaysCareBoard({ role, focusResidentId, embedded }: { role?: string; focusResidentId?: string; embedded?: boolean }) {
   const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>(
     "app-settings", { tables: ["AppSetting"] }
   );
@@ -280,8 +280,15 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
     return new Set(activeResidentIdsFor(userId, schedules, new Date(), "Asia/Manila"));
   }, [isCaregiverView, userId, settingRows]);
   const visibleResidents = useMemo(
-    () => (myResidentIds ? residents.filter((r) => r.linked && myResidentIds.has(r.residentId)) : residents),
-    [residents, myResidentIds],
+    () => {
+      // Embedded single-resident view (caregiver "Open routine" on the My Shift
+      // dashboard): scope to just the tapped resident. The caller already
+      // authorised this resident, so bypass the caregiver-schedule scope — it uses
+      // a different mechanism and would otherwise hide a validly-assigned resident.
+      if (focusResidentId) return residents.filter((r) => r.residentId === focusResidentId);
+      return myResidentIds ? residents.filter((r) => r.linked && myResidentIds.has(r.residentId)) : residents;
+    },
+    [residents, myResidentIds, focusResidentId],
   );
 
   // ---- Selection + search ---------------------------------------------------
@@ -458,8 +465,9 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
 
   const shift = shiftLabel();
 
-  return (
-    <ClinicalPage>
+  const body = (
+    <>
+      {!embedded && (
       <ClinicalHeader
         title="Today's Care"
         subtitle="Only what must happen now — bundled into the encounters staff perform together, split into caregiver and nurse queues. Chart by exception: one tap to complete, or record a structured exception."
@@ -472,16 +480,21 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
           </div>
         }
       />
+      )}
 
+      {!embedded && (
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label={isCaregiverView ? "My residents today" : "Residents on shift"} value={visibleResidents.length} accent="teal" />
         <StatCard label="Encounters (selected)" value={selected?.total ?? 0} accent="ink" />
         <StatCard label="Charted today" value={chartedToday.length} accent="green" />
         <StatCard label="Model" value={MODEL_VERSION_STRING} accent="amber" />
       </div>
+      )}
 
-      <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr]">
-        {/* ---- Resident selector ---- */}
+      <div className={`${embedded ? "" : "mt-5 "}grid grid-cols-1 gap-5${focusResidentId ? "" : " lg:grid-cols-[300px_1fr]"}`}>
+        {/* ---- Resident selector — hidden only when scoped to a single resident
+             (Open routine); kept for the all-residents "Today" modal. ---- */}
+        {!focusResidentId && (
         <ClinicalCard top="teal" className="p-4">
           <MicroLabel>Residents</MicroLabel>
           <div className="mt-3">
@@ -531,12 +544,13 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
             </DataState>
           </div>
         </ClinicalCard>
+        )}
 
         {/* ---- Selected resident's shift view ---- */}
         <div className="min-w-0 space-y-5">
           {!selected ? (
             <ClinicalCard className="p-10 text-center">
-              <p className="text-sm text-[var(--clinical-muted)]">Select a resident to view their shift care.</p>
+              <p className="text-sm text-[var(--clinical-muted)]">{embedded && focusResidentId ? "No active routine for this resident yet — a routine appears once their v4.2 assessment is validated and their care plan is released (ACTIVE)." : "Select a resident to view their shift care."}</p>
             </ClinicalCard>
           ) : (
             <>
@@ -688,8 +702,9 @@ export default function TodaysCareBoard({ role }: { role?: string }) {
           )}
         </div>
       </ClinicalModal>
-    </ClinicalPage>
+    </>
   );
+  return embedded ? <div>{body}</div> : <ClinicalPage>{body}</ClinicalPage>;
 }
 
 // ---------------------------------------------------------------------------

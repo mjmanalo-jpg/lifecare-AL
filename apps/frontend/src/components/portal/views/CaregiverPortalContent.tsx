@@ -17,7 +17,6 @@ import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoar
 import PhysicianCarePlans from "@/components/portal/views/physician/PhysicianCarePlans";
 import NurseMedications from "@/components/portal/views/NurseMedications";
 import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
-import CarePlanReviewsBoard from "@/components/portal/views/clinical/CarePlanReviewsBoard";
 import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
 import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
 import MARDailyBoard from "@/components/portal/views/clinical/MARDailyBoard";
@@ -28,8 +27,8 @@ import ShiftEndorsementBoard from "@/components/portal/views/clinical/ShiftEndor
 import ShiftEndorsementDashboard from "@/components/portal/views/clinical/ShiftEndorsementDashboard";
 import WeightMonitoringBoard from "@/components/portal/views/clinical/WeightMonitoringBoard";
 import ShiftSummaryBoard from "@/components/portal/views/clinical/ShiftSummaryBoard";
-import CareAcuityBoard from "@/components/portal/views/clinical/CareAcuityBoard";
 import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
+import HubTabs from "@/components/portal/HubTabs";
 
 interface CaregiverPortalContentProps {
   tab: string;
@@ -43,6 +42,17 @@ interface CaregiverPortalContentProps {
  */
 export default function CaregiverPortalContent({ tab }: CaregiverPortalContentProps) {
   switch (tab) {
+    case "actionqueue":
+      return (
+        <HubTabs
+          storageKey="caregiver-actionqueue"
+          tabs={[
+            { key: "escalations", label: "Escalate to Nurse", node: <EscalationsBoard role="CAREGIVER" /> },
+            { key: "callbells", label: "Call Bells", node: <CaregiverCallBells /> },
+            { key: "incidents", label: "Report an Incident", node: <FacilityIncidents readOnly /> },
+          ]}
+        />
+      );
     case "tasks":
     case "taskboard":
       return <CaregiverTasks />;
@@ -88,10 +98,9 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
       return <CaregiverMonitoring />;
     case "escalations":
       return <EscalationsBoard role="CAREGIVER" />;
-    case "rounds":
-      return <CareAcuityBoard clinicianRole="CAREGIVER" />;
-    case "careplans":
-      return <CarePlanReviewsBoard clinicianRole="CAREGIVER" tabs={["plans", "history"]} />;
+    // Leveling surfaces removed for caregivers: the system assigns Level of Care,
+    // a caregiver never sets it. `rounds` (Care Acuity → v4.2 assessment) and
+    // `careplans` (Care Plan Review) no longer resolve and fall through to My Shift.
     case "medications":
       return <NurseMedications />;
     case "documentation":

@@ -41,6 +41,7 @@ import KitchenCookList from "@/components/portal/views/services/KitchenCookList"
 import CareAcuityBoard from "@/components/portal/views/clinical/CareAcuityBoard";
 import { staffEmailDisplay, staffEmailInput } from "@/lib/staffEmail";
 import MoveInBoard from "@/components/portal/views/clinical/MoveInBoard";
+import LeadPipelineBoard from "@/components/portal/views/LeadPipelineBoard";
 
 interface FacilityAdminPortalContentProps {
   tab: string;
@@ -255,6 +256,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
   // CRM & Leads and Admissions moved to the Super Admin portal.
   if (tab === "assistant") return <AIAssistantContent />;
   if (tab === "residents") return <FacilityResidents />;
+  if (tab === "crm" || tab === "leads") return <LeadPipelineBoard />;
   if (tab === "movein") return <MoveInBoard />;
   if (tab === "incidents") return <FacilityIncidents />;
   if (tab === "rounds") return <CareAcuityBoard clinicianRole="FACILITY_ADMIN" />;

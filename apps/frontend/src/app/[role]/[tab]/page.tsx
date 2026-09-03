@@ -14,6 +14,7 @@ import PlatformAdminPortalContent from "@/components/portal/views/PlatformAdminP
 import OrganizationAdminPortalContent from "@/components/portal/views/OrganizationAdminPortalContent";
 import FacilityAdminPortalContent from "@/components/portal/views/FacilityAdminPortalContent";
 import CareManagerPortalContent from "@/components/portal/views/CareManagerPortalContent";
+import CRMPortalContent from "@/components/portal/views/CRMPortalContent";
 import ResidentCoordinatorPortalContent from "@/components/portal/views/ResidentCoordinatorPortalContent";
 import BillingFinancePortalContent from "@/components/portal/views/BillingFinancePortalContent";
 import FleetManagementPortalContent from "@/components/portal/views/FleetManagementPortalContent";
@@ -62,6 +63,8 @@ export default function RolePortalPage() {
       {userRole === "FACILITY_ADMIN" && <FacilityAdminPortalContent tab={tab} />}
       {/* Care Manager — clinical oversight split out of Facility Operations. */}
       {userRole === "CARE_MANAGER" && <CareManagerPortalContent tab={tab} />}
+      {/* Dedicated CRM team — lead pipeline + tour scheduling only. */}
+      {userRole === "CRM" && <CRMPortalContent tab={tab} />}
       {userRole === "RESIDENT_COORDINATOR" && <ResidentCoordinatorPortalContent tab={tab} />}
       {/* Billing & Finance sees the dedicated billing portal. */}
       {userRole === "BILLING_ADMIN" && <BillingFinancePortalContent tab={tab} />}

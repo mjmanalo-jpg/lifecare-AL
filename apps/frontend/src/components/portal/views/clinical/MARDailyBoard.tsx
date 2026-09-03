@@ -86,7 +86,7 @@ const DOSE_OPTS = [
   { v: "HELD" as const, label: "Held", hint: "Withheld this time", icon: PauseCircle, color: "var(--clinical-amber)" },
 ];
 
-export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
+export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId, embedded }: { clinicianRole?: ClinicianRole; focusResidentId?: string; embedded?: boolean }) {
   const { name: clinicianName, userId } = useClinician(clinicianRole);
   // Caregivers only administer doses — they don't manage the medication list.
   // Adding, editing and discontinuing meds stay with nurses / care managers.
@@ -264,7 +264,17 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
   };
 
   const q = search.trim().toLowerCase();
-  const filteredResidents = residents.filter((r: Row) => !q || s(r.name).toLowerCase().includes(q) || s(r.room).toLowerCase().includes(q));
+  const filteredResidents = residents.filter((r: Row) =>
+    (!focusResidentId || s(r.id) === focusResidentId) &&
+    (!q || s(r.name).toLowerCase().includes(q) || s(r.room).toLowerCase().includes(q)));
+
+  // Embedded single-resident view (caregiver "Open MAR" on the My Shift dashboard):
+  // open that resident's MAR detail immediately, no picker. Derived during render
+  // once residents land, so the detail shows on first paint.
+  if (focusResidentId && !openRes) {
+    const focus = residents.find((r: Row) => s(r.id) === focusResidentId);
+    if (focus) setOpenRes(focus);
+  }
 
   // Medication reminders — while the MAR is open, an in-app toast pings staff as
   // each scheduled dose time is reached and the dose is still pending. Fired doses
@@ -327,10 +337,10 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
     // vitals reading recorded today (from Daily Care Logs → VitalsLog).
     const vitalsNeeded = !!doseFor && isVitalsRequired(s(doseFor.m.id)) && !vitalsTodayByResident.has(s(doseFor.m.residentId));
     return (
-      <div className="min-h-full bg-[var(--clinical-ground)] -m-4 sm:-m-6 p-4 sm:p-6">
+      <div className={embedded ? "" : "min-h-full bg-[var(--clinical-ground)] -m-4 sm:-m-6 p-4 sm:p-6"}>
         <div className="flex items-center gap-3 mb-4"><label className="text-sm text-slate-500" htmlFor="mar-date-detail">Date:</label><input id="mar-date-detail" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm" /></div>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-          <div className="flex items-center gap-3"><ClinicalButton variant="secondary" size="sm" onClick={() => setOpenRes(null)}><ChevronLeft className="w-4 h-4" /> Back</ClinicalButton><div><h1 className="text-2xl font-bold text-[var(--clinical-ink)]">{s(openRes.name)}</h1><p className="text-sm text-[var(--clinical-muted)]">Daily MAR — {date}</p></div></div>
+          <div className="flex items-center gap-3">{!focusResidentId && <ClinicalButton variant="secondary" size="sm" onClick={() => setOpenRes(null)}><ChevronLeft className="w-4 h-4" /> Back</ClinicalButton>}<div><h1 className="text-2xl font-bold text-[var(--clinical-ink)]">{s(openRes.name)}</h1><p className="text-sm text-[var(--clinical-muted)]">Daily MAR — {date}</p></div></div>
           {canManageMeds && <ClinicalButton variant="accent" onClick={() => setAddFor(openRes)}><Plus className="w-4 h-4" /> Add Medication</ClinicalButton>}
         </div>
         <div className="space-y-3">
@@ -443,13 +453,15 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
 
   // ── Main (Daily MAR + Medication Summary) ──────────────────────────────────
   return (
-    <div className="min-h-full bg-[var(--clinical-ground)] -m-4 sm:-m-6 p-4 sm:p-6">
-      <ClinicalHeader title="Medication Administration Record" subtitle="Track and document daily medication administration" />
+    <div className={embedded ? "" : "min-h-full bg-[var(--clinical-ground)] -m-4 sm:-m-6 p-4 sm:p-6"}>
+      {!embedded && <ClinicalHeader title="Medication Administration Record" subtitle="Track and document daily medication administration" />}
+      {!embedded && (
       <div className="inline-flex gap-1 rounded-xl p-1 mb-5 mt-5" style={{ backgroundColor: "var(--clinical-surface-2)" }} role="tablist" aria-label="MAR view">
         {([["daily", "Daily MAR"], ["summary", "Medication Summary"]] as const).map(([v, label]) => (
           <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${tab === v ? "shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`} style={tab === v ? { backgroundColor: "var(--clinical-panel)", color: "#ffffff" } : undefined}>{label}</button>
         ))}
       </div>
+      )}
 
       {tab === "daily" ? (<>
         <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -464,13 +476,17 @@ export default function MARDailyBoard({ clinicianRole = "NURSE" }: { clinicianRo
           <span className="flex-1" />
           <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700"><BellRing className="w-3.5 h-3.5" /> Reminders on</span>
         </div>
+        {!embedded && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
           <MarStat value={facility.total} label="Total Doses" accent="ink" />
           <MarStat value={facility.given} label="Given" accent="given" />
           <MarStat value={facility.pending} label="Pending" accent="pending" />
           <MarStat value={facility.refusedHeld} label="Refused / Held" accent="refused" />
         </div>
+        )}
+        {!embedded && (
         <div className="relative mb-5"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or room…" aria-label="Search residents by name or room" className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
+        )}
         <DataState
           loading={resQ.loading && residents.length === 0}
           error={resQ.error}

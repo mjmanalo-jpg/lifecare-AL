@@ -67,17 +67,23 @@ async function toDataUrl(file: File, maxDim = 900, quality = 0.7): Promise<strin
   });
 }
 
-export default function WoundCareBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
+export default function WoundCareBoard({ clinicianRole = "NURSE", focusResidentId, embedded }: { clinicianRole?: ClinicianRole; focusResidentId?: string; embedded?: boolean }) {
   const { name: clinicianName } = useClinician(clinicianRole);
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
 
-  const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
+  const allResidents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
+  // Embedded single-resident view: scope the effective residents list to the one
+  // tapped resident so search/status filters + the resident-filter operate on that set of 1.
+  const residents = useMemo(
+    () => (focusResidentId ? allResidents.filter((r: Row) => s(r.id) === focusResidentId) : allResidents),
+    [allResidents, focusResidentId],
+  );
   const wounds = useMemo(() => parseWounds(settingRows.find((r) => (r.key || r.id) === WOUND_KEY)?.value), [settingRows]);
   const resName = (id: string) => { const r = residents.find((x: Row) => s(x.id) === id); return r ? { name: s(r.name), room: s(r.room) } : { name: "Resident", room: "" }; };
 
   const [statusFilter, setStatusFilter] = useState<string>("");
-  const [resFilter, setResFilter] = useState<string>("");
+  const [resFilter, setResFilter] = useState<string>(focusResidentId || "");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
 
@@ -103,14 +109,17 @@ export default function WoundCareBoard({ clinicianRole = "NURSE" }: { clinicianR
   const setStatus = async (id: string, status: WStatus) => { await persist(wounds.map((w) => (w.id === id ? { ...w, status, updatedAt: new Date().toISOString() } : w))); };
   const remove = async (w: Wound) => { const c = await Swal.fire({ title: "Delete wound record?", icon: "warning", showCancelButton: true, confirmButtonColor: "#dc2626", confirmButtonText: "Delete" }); if (c.isConfirmed) await persist(wounds.filter((x) => x.id !== w.id)); };
 
-  return (
-    <ClinicalPage>
+  const body = (
+    <>
+      {!embedded && (
       <ClinicalHeader
         title="Wound Care"
         subtitle="Coordinate wound assessments, monitor healing status, and keep treatment documentation visible across the care team."
         right={<ClinicalButton variant="accent" onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> New Wound</ClinicalButton>}
       />
+      )}
 
+      {!embedded && (
       <section className="clinical-summary-band mt-6 overflow-hidden rounded-2xl bg-[var(--clinical-panel)] text-white">
         <div className="grid gap-px bg-white/15 sm:grid-cols-[1.35fr_repeat(3,1fr)]">
           <div className="bg-[var(--clinical-panel)] p-5 sm:p-6">
@@ -125,7 +134,9 @@ export default function WoundCareBoard({ clinicianRole = "NURSE" }: { clinicianR
           <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Photo documented</p><p className="mt-2 text-2xl font-bold tabular-nums">{photoCount}</p><p className="mt-1 text-xs text-blue-100">{count("Healing")} healing · {count("Healed")} healed</p></div>
         </div>
       </section>
+      )}
 
+      {!embedded && (
       <div className="my-5 grid gap-3 rounded-2xl border p-3 lg:grid-cols-[minmax(260px,1fr)_auto] xl:grid-cols-[minmax(300px,1fr)_auto_260px] xl:items-center" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
         <SearchInput value={search} onChange={setSearch} placeholder="Search resident, location, type, or stage..." className="min-w-0 lg:col-span-2 xl:col-span-1" />
         <div role="tablist" aria-label="Wound status" className="grid grid-cols-5 gap-1 rounded-xl bg-[var(--clinical-surface-2)] p-1">
@@ -135,6 +146,7 @@ export default function WoundCareBoard({ clinicianRole = "NURSE" }: { clinicianR
         </div>
         <select value={resFilter} onChange={(e) => setResFilter(e.target.value)} aria-label="Filter by resident" className={controlClass}><option value="">All residents</option>{residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Room {s(r.room)}</option>)}</select>
       </div>
+      )}
 
       <div className="hidden">
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status" className={`${controlClass} w-full sm:w-44`}><option value="">All Status</option>{STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}</select>
@@ -218,8 +230,9 @@ export default function WoundCareBoard({ clinicianRole = "NURSE" }: { clinicianR
       </DataState>
 
       <NewWoundModal open={open} residents={residents} discoveredBy={clinicianName} onClose={() => setOpen(false)} onCreate={create} />
-    </ClinicalPage>
+    </>
   );
+  return embedded ? <div>{body}</div> : <ClinicalPage>{body}</ClinicalPage>;
 }
 
 function NewWoundModal({ open, residents, discoveredBy, onClose, onCreate }: {

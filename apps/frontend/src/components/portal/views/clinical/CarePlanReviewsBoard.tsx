@@ -16,7 +16,7 @@ import { ClipboardList, ListChecks, Loader2, AlertTriangle, Users, ClipboardChec
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, updateRecord, createRecord } from "@/lib/api";
-import { generateCarePlanForResident, releaseCarePlan, materializeTodayTasks, fullLevelPlan, levelCareTasks, type PlanIntervention } from "@/lib/carePlanGen";
+import { generateCarePlanForResident, releaseCarePlan, materializeTodayTasks, levelCareTasks, type PlanIntervention } from "@/lib/carePlanGen";
 import { CARE_PLAN_DRAFTS_KEY, parseCarePlanDrafts, upsertDraft, clearDraft, type DraftState, type SavedDomainPlanItem } from "@/lib/carePlanDraft";
 import { taskById, SCORED_DOMAINS, tasksForDomain } from "@/lib/lifecare/dataset";
 import { domainCodeFromLabel } from "@/lib/lifecare/carePackage";
@@ -82,12 +82,12 @@ interface Review {
 }
 const parseReviews = (raw: string | null | undefined): Review[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((r) => r && typeof r.id === "string") : []; } catch { return []; } };
 const parseAssessments = (raw: string | null | undefined): AssessmentV42[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? (v as AssessmentV42[]) : []; } catch { return []; } };
-// The resident's most authoritative assessment domains — matched by residentId,
-// linked admission, OR normalized name (a pre-admission assessment isn't linked by
-// residentId yet), preferring VALIDATED then most-recent. Drives the assessment-based
-// care plan (Goal / Preference Note + Domain-Level Map interventions).
-const authoritativeDomainsFor = (all: AssessmentV42[], residentId: string, residentName: string): Partial<Record<string, DomainEntry>> | null => {
-  const a = authoritativeAssessmentFor(all, { residentId, residentName });
+// The resident's VALIDATED assessment domains — matched by residentId, linked
+// admission, OR normalized name (a pre-admission assessment isn't linked by
+// residentId yet). ONLY a validated assessment drives the care plan (no
+// COMPLETED/DRAFT, no full-package fallback); null when none is validated.
+const validatedDomainsFor = (all: AssessmentV42[], residentId: string, residentName: string): Partial<Record<string, DomainEntry>> | null => {
+  const a = authoritativeAssessmentFor(all.filter((x) => x.status === "VALIDATED"), { residentId, residentName });
   return a && a.domains && Object.keys(a.domains).length ? a.domains : null;
 };
 
@@ -106,7 +106,7 @@ const parseIntervention = (line: string): { title: string; desc: string; freq: s
   return { title: ci > -1 ? body.slice(0, ci).trim() : body, desc: ci > -1 ? body.slice(ci + 1).trim() : "", freq };
 };
 
-export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: { clinicianRole?: ClinicianRole | "SUPERADMIN"; tabs?: Array<"plans" | "new" | "due" | "history" | "pending"> }) {
+export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, focusResidentId, embedded }: { clinicianRole?: ClinicianRole | "SUPERADMIN"; tabs?: Array<"plans" | "new" | "due" | "history" | "pending">; focusResidentId?: string; embedded?: boolean }) {
   // SUPERADMIN isn't a staff-linked clinician role; resolve its display name via the
   // admin path, while the finalize guards below key off the raw "SUPERADMIN" string.
   const { name: clinicianName, userId: clinicianId, staffId: clinicianStaffId } = useClinician(clinicianRole === "SUPERADMIN" ? "FACILITY_ADMIN" : clinicianRole);
@@ -121,14 +121,17 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
 
   const cpQ = useLiveQuery<Row>("care-plans", { query: "take=300", tables: ["CarePlan"] });
   const residents = useMemo(() => {
-    const all = (resQ.data || []).map(adaptResident);
+    let all = (resQ.data || []).map(adaptResident);
+    // Embedded single-resident view: lock the whole board (roster, pickers, Reviews
+    // Due, History, pending) to the one tapped resident by scoping the source list.
+    if (focusResidentId) all = all.filter((r: Row) => s(r.id) === focusResidentId);
     if (clinicianRole !== "CAREGIVER" || !clinicianStaffId) return all;
     // Scope to the residents assigned to this caregiver today (same roster the
     // task materializer + /api/caregiver/my-residents use).
     const schedules = parseSchedules(settingRows.find((r) => (r.key || r.id) === CAREGIVER_SCHEDULE_KEY)?.value);
     const now = new Date();
     return all.filter((r: Row) => assigneeForResidentToday(schedules, s(r.id), now, "Asia/Manila")?.caregiverStaffId === clinicianStaffId);
-  }, [resQ.data, settingRows, clinicianRole, clinicianStaffId]);
+  }, [resQ.data, settingRows, clinicianRole, clinicianStaffId, focusResidentId]);
   const reviews = useMemo(() => parseReviews(settingRows.find((r) => (r.key || r.id) === REVIEW_KEY)?.value), [settingRows]);
   // Editable per-resident builder snapshots (migration-free) — the source of
   // truth the CarePlanBuilder hydrates from and auto-saves to, so a nurse's
@@ -152,6 +155,29 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
     const n = activeLevel({ residentId: s(r.id), careLevel: s(r.careLevel), locHistory, residentName: s(r.name), assessments });
     return { n, label: levelMeta(n).name };
   }, [locHistory, assessments]);
+  // Print/PDF the resident's care plan of record — reuses the SAME printCarePlan
+  // document the builder's "Print Care Plan" produces. Domains come from the
+  // resident's validated assessment overlaid with any individualized draft snapshot;
+  // falls back to the stored plan strings for legacy plans without a snapshot.
+  const printPlan = (res: Row, plan?: Row | null) => {
+    const rid = s(res.id);
+    const rl = resLevel(res);
+    const snap = new Map((drafts[rid]?.domainPlan || []).map((d) => [d.code, d]));
+    let domains = assessmentDomainRows(validatedDomainsFor(assessments, rid, s(res.name)), rl.n)
+      .filter((r) => { const o = snap.get(r.code); return o ? o.included !== false : true; })
+      .map((r) => { const o = snap.get(r.code); return { code: r.code, name: r.name, score: r.score, goal: (o?.goal ?? r.goal) || "", interventions: o?.interventions ?? r.interventions }; });
+    if (!domains.length && plan) {
+      const goals = s(plan.careGoals).split("\n").map((x) => x.trim()).filter(Boolean);
+      const ivs = s(plan.interventions).split("\n").map((x) => x.trim()).filter(Boolean);
+      domains = [{ code: "", name: "Care Plan", score: 0, goal: goals.join("; "), interventions: ivs }];
+    }
+    printCarePlan({
+      residentName: s(res.name) || "Resident", room: s(res.room), level: rl.n,
+      levelName: `Level ${rl.n} — ${rl.label}`,
+      reviewFrequency: plan?.reviewFrequency ? s(plan.reviewFrequency) : undefined,
+      domains,
+    });
+  };
   const residentsWithPlan = useMemo(() => new Set((cpQ.data || []).filter((p) => s(p.status) !== "DISCONTINUED").map((p) => s(p.residentId))), [cpQ.data]);
   // Held (DRAFT) plans awaiting review approval, keyed by resident.
   const draftPlansByResident = useMemo(() => {
@@ -174,15 +200,15 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
     return m;
   }, [cpQ.data]);
 
-  const [tab, setTab] = useState<"plans" | "new" | "due" | "history" | "pending">(tabs?.[0] ?? "plans");
+  const [tab, setTab] = useState<"plans" | "new" | "due" | "history" | "pending">(tabs?.[0] ?? (embedded ? "new" : "plans"));
   const [viewPlan, setViewPlan] = useState<{ resident: Row; plan: Row } | null>(null);
-  const [resId, setResId] = useState("");
+  const [resId, setResId] = useState(focusResidentId ?? "");
   // The selected resident's assessment domains (Goal / Preference Notes + scores)
   // — what the CarePlanBuilder builds its per-domain Goal + Interventions from.
   const builderDomains = useMemo(() => {
     if (!resId) return null;
     const name = s(residents.find((r: Row) => s(r.id) === resId)?.name);
-    return authoritativeDomainsFor(assessments, resId, name);
+    return validatedDomainsFor(assessments, resId, name);
   }, [assessments, resId, residents]);
   const [genBusy, setGenBusy] = useState(false);
   const [interventionCount, setInterventionCount] = useState(0);
@@ -252,12 +278,13 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
   // Open the confirmation modal; the actual generation runs on confirm (runGenerate).
   const genPlan = (plan?: { title?: string; goals: string[]; interventions: PlanIntervention[] }) => {
     if (!resident || genBusy) return;
-    // Default to the FULL Level-N package (all 37/38 governed tasks the builder shows)
-    // when the nurse hasn't produced live builder edits yet. Without this fallback the
-    // no-plan path collapses to levelPlan's deduped + AS-code-filtered baseline (as few
-    // as 2 interventions), contradicting the "draws from the Level-N package" builder copy.
-    const effective = plan?.interventions?.length ? plan : fullLevelPlan(resLevel(resident).n);
-    setGenConfirm({ plan: effective, already: residentsWithPlan.has(s(resident.id)) });
+    // Only a validated assessment produces a plan — no full-package fallback. Block
+    // when the builder has no interventions (resident has no validated assessment).
+    if (!plan?.interventions?.length) {
+      Swal.fire({ icon: "warning", title: "No validated assessment", text: `${s(resident.name)} has no validated assessment. Validate the 14-domain Resident Assessment before generating a care plan.` });
+      return;
+    }
+    setGenConfirm({ plan, already: residentsWithPlan.has(s(resident.id)) });
   };
 
   // Core generation — supersede prior held drafts, then build the DRAFT plan for
@@ -295,13 +322,19 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
     if (genBusy) return;
     const rid = s(res.id);
     const n = resLevel(res).n;
+    // Only a validated assessment produces a plan — no full-package fallback.
+    const rows = assessmentDomainRows(validatedDomainsFor(assessments, rid, s(res.name)), n);
+    if (!rows.length) {
+      Swal.fire({ icon: "warning", title: "No validated assessment", text: `${s(res.name)} has no validated assessment. Validate the 14-domain Resident Assessment before creating a care plan.` });
+      return;
+    }
     setResId(rid);
     setTab("new");
     setGenBusy(true);
     try {
-      const tpl = fullLevelPlan(n);
-      await persistDraftState(rid, { level: n, goals: tpl.goals, items: levelCareTasks(n).map((t) => ({ taskId: t.id, included: true, assistance: "", freq: "Daily", note: "" })), updatedAt: new Date().toISOString() });
-      const interventionCount = await doGenerate(res, tpl);
+      const plan = buildDomainPlan(rows);
+      await persistDraftState(rid, { level: n, goals: plan.goals, items: [], domainPlan: domainSnapshot(rows), updatedAt: new Date().toISOString() });
+      const interventionCount = await doGenerate(res, plan);
       Swal.fire({ icon: "success", title: "Draft care plan created", html: `Level ${n} plan with <b>${interventionCount} intervention${interventionCount === 1 ? "" : "s"}</b> prepared and <b>held</b>. Tailor the package below, then submit the care plan review.`, timer: 3600, showConfirmButton: false });
     } catch (e) { Swal.fire("Couldn't create", e instanceof Error ? e.message : "Please try again.", "error"); }
     finally { setGenBusy(false); }
@@ -388,18 +421,22 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
     return { r, last, due };
   }).filter((x) => x.due), [residents, reviews]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return (
-    <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5" style={{ background: "#F7F8FA" }}>
+  const body = (
+    <>
+      {!embedded && (
       <div className="min-w-0">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem]">Care Plan Reviews</h1>
         <p className="mt-1 text-sm text-slate-500">Review resident indicators, evaluate triggers, and make care plan decisions</p>
       </div>
+      )}
 
+      {!embedded && (
       <div className="flex items-center gap-2" role="tablist" aria-label="Care plan reviews view">
         {([["plans", "Care Plans"], ["new", "New Review"], ["pending", "Pending Approval"], ["due", "Reviews Due"], ["history", "History"]] as const).filter(([v]) => !tabs || tabs.includes(v)).map(([v, label]) => (
           <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${tab === v ? "bg-[#4F46E5] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}{v === "due" && dueList.length ? ` (${dueList.length})` : ""}{v === "pending" && pendingQueue.length ? ` (${pendingQueue.length})` : ""}</button>
         ))}
       </div>
+      )}
 
       {tab === "plans" && (
         <>
@@ -448,7 +485,8 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
-                        {(active || underReview || drafts.length > 0) && <ClinicalButton variant="secondary" size="sm" className="max-sm:flex-1" onClick={() => setViewPlan({ resident: r, plan: (active || underReview || drafts[0]) as Row })}>View</ClinicalButton>}
+                        {(active || underReview || drafts.length > 0) && <ClinicalButton variant="secondary" size="sm" className="max-sm:flex-1" onClick={() => setViewPlan({ resident: r, plan: (drafts[0] || underReview || active) as Row })}>View</ClinicalButton>}
+                        {active && <ClinicalButton variant="secondary" size="sm" className="max-sm:flex-1" onClick={() => printPlan(r, active as Row)}><Printer className="h-3.5 w-3.5" /> Print</ClinicalButton>}
                         {!readOnly && (drafts.length > 0
                           ? <ClinicalButton variant="primary" size="sm" className="max-sm:flex-1" onClick={() => { setResId(rid); setTab("new"); }}>Finalize draft</ClinicalButton>
                           : underReview
@@ -469,12 +507,14 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
       {tab === "new" && (
         <div className="space-y-4">
           <ClinicalCard className="p-5">
-            <FieldLabel htmlFor="cpr-res">Select Resident</FieldLabel>
+            {!embedded && <FieldLabel htmlFor="cpr-res">Select Resident</FieldLabel>}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              {!embedded && (
               <select id="cpr-res" value={resId} onChange={(e) => setResId(e.target.value)} className={`${controlClass} max-w-md`}>
                 <option value="">Choose a resident…</option>
                 {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)} (Level {resLevel(r).n})</option>)}
               </select>
+              )}
               {resident && (
                 <div className="flex shrink-0 items-center gap-2">
                   <ClinicalButton variant="primary" onClick={() => genPlan(builderPlan)} disabled={genBusy} className="shrink-0">
@@ -487,7 +527,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
             </div>
           </ClinicalCard>
 
-          {!resident && (
+          {!embedded && !resident && (
             <div className="@container">
               <p className="mb-3 text-sm text-[var(--clinical-muted)]">Or tap a resident to start their care plan review</p>
               {residents.length === 0 ? (
@@ -755,7 +795,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
       )}
       {viewPlan && (
         <ClinicalModal open onClose={() => setViewPlan(null)} size="lg"
-          title="Current Care Plan"
+          title={s(viewPlan.plan.status) === "DRAFT" ? "Draft Care Plan · pending review" : s(viewPlan.plan.status) === "UNDER_REVIEW" ? "Care Plan · under review" : "Current Care Plan"}
           description={`${s(viewPlan.resident.name)} — Rm ${s(viewPlan.resident.room)} · ${s(viewPlan.plan.title) || `Level ${resLevel(viewPlan.resident).n} plan`}`}
           footer={<ClinicalButton variant="secondary" onClick={() => setViewPlan(null)}>Close</ClinicalButton>}
         >
@@ -768,8 +808,9 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs }: 
           <CurrentPlanView plan={viewPlan.plan} nextReviewDate={latestReview(s(viewPlan.resident.id))?.nextReviewDate} draft={s(viewPlan.plan.status) === "DRAFT" ? drafts[s(viewPlan.resident.id)] : undefined} />
         </ClinicalModal>
       )}
-    </div>
+    </>
   );
+  return embedded ? <div className="space-y-5">{body}</div> : <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5" style={{ background: "#F7F8FA" }}>{body}</div>;
 }
 
 // Read-only view of a resident's active care plan — meta strip, goals, and
@@ -778,24 +819,34 @@ function CurrentPlanView({ plan, nextReviewDate, draft }: { plan: Row; nextRevie
   // For a DRAFT with a live builder snapshot, render from the snapshot (the
   // freshest, complete individualization) rather than the plan's stored string,
   // which may lag the nurse's latest un-regenerated edits.
-  const goals = draft?.goals?.length ? draft.goals : s(plan.careGoals).split("\n").map((x) => x.trim()).filter(Boolean);
+  const goals = (draft?.goals?.length ? draft.goals : s(plan.careGoals).split("\n")).map((x) => String(x ?? "").trim()).filter(Boolean);
   const domName = (code: string) => SCORED_DOMAINS.find((d) => d.code === code)?.name || code;
-  const ivs = draft?.domainPlan?.length
-    // v4.2 assessment-domain draft — one line per included domain, its Interventions bundled.
-    ? draft.domainPlan.filter((d) => d.included).map((d) => ({
-        title: `${d.code} · ${domName(d.code)}`,
-        desc: d.interventions.map((x) => x.trim()).filter(Boolean).join(" • "),
-        freq: "",
-      })).filter((iv) => iv.desc)
-    : draft
-    // Legacy level-package draft (taskId-based items).
-    ? draft.items.filter((i) => i.included).map((i) => { const t = taskById(i.taskId); return {
-        title: t?.name || i.taskId,
-        desc: [i.assistance && `Assistance: ${i.assistance}`, i.note.trim() || t?.approvedIntervention || t?.definition || ""].filter(Boolean).join(" · "),
-        freq: i.freq,
-      }; })
-    // Released plan of record — from the stored interventions string.
-    : s(plan.interventions).split("\n").map((x) => x.trim()).filter(Boolean).map(parseIntervention);
+  // Stored-string interventions (the released plan of record) — also the safe
+  // fallback if a draft snapshot is malformed.
+  const storedIvs = () => s(plan.interventions).split("\n").map((x) => x.trim()).filter(Boolean).map(parseIntervention);
+  // A malformed draft snapshot (a domain with no `interventions`, an item with no
+  // `note`, etc.) must NEVER crash this read-only view — every field is guarded and
+  // the whole derivation is wrapped so any unexpected shape falls back to the stored plan.
+  let ivs: { title: string; desc: string; freq: string }[];
+  try {
+    ivs = draft?.domainPlan?.length
+      // v4.2 assessment-domain draft — one line per included domain, its Interventions bundled.
+      ? draft.domainPlan.filter((d) => d.included).map((d) => ({
+          title: `${d.code} · ${domName(d.code)}`,
+          desc: (d.interventions || []).map((x) => (x || "").trim()).filter(Boolean).join(" • "),
+          freq: "",
+        })).filter((iv) => iv.desc)
+      : draft?.items?.length
+      // Legacy level-package draft (taskId-based items).
+      ? draft.items.filter((i) => i.included).map((i) => { const t = taskById(i.taskId); return {
+          title: t?.name || i.taskId,
+          desc: [i.assistance && `Assistance: ${i.assistance}`, (i.note || "").trim() || t?.approvedIntervention || t?.definition || ""].filter(Boolean).join(" · "),
+          freq: i.freq,
+        }; })
+      : storedIvs();
+  } catch {
+    ivs = storedIvs();
+  }
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -916,6 +967,31 @@ function mergeSavedDomain(base: DomainRow[], saved?: SavedDomainPlanItem[] | nul
   return base.map((r) => { const sv = by.get(r.code); return sv ? { ...r, included: sv.included, goal: sv.goal, interventions: sv.interventions } : r; });
 }
 
+// Assessment-domain rows (one per scored domain) — the individualized plan basis
+// shared by the CarePlanBuilder and the one-click "Create care plan" action, so
+// both generate the SAME per-domain plan (not the full Level-N task package). Each
+// row carries the representative governed Level-N taskId for dispatch linkage.
+function assessmentDomainRows(assessmentDomains: Partial<Record<string, DomainEntry>> | null | undefined, level: number): DomainRow[] {
+  const dm = assessmentDomains || {};
+  const taskIdByCode: Record<string, string> = {};
+  for (const t of levelCareTasks(level)) {
+    const code = domainCodeFromLabel(t.domain) || domainCodeFromLabel(t.name);
+    if (code && !taskIdByCode[code]) taskIdByCode[code] = t.id;
+  }
+  return SCORED_DOMAINS.filter((d) => dm[d.code] && typeof dm[d.code]?.score === "number").map((d) => {
+    const entry = dm[d.code]!;
+    const score = Math.max(0, Math.min(4, entry.score ?? 0));
+    return {
+      code: d.code, name: d.name, score, taskId: taskIdByCode[d.code] || "", included: true,
+      goal: entry.goalNote?.trim() || d.goalDefaults?.[score] || "",
+      interventions: (d.interventionDefaults?.[score] || []).map((x) => x.trim()).filter(Boolean),
+    };
+  });
+}
+// A per-domain builder snapshot from rows — the migration-free draft persisted so
+// the builder re-hydrates the same individualized selections.
+const domainSnapshot = (rows: DomainRow[]): SavedDomainPlanItem[] => rows.map((r) => ({ code: r.code, included: r.included, goal: r.goal, interventions: r.interventions }));
+
 // Rows → the generator's { goals, interventions } contract. Goals carry the domain
 // label so the flattened plan still reads per-domain; each intervention keeps its
 // governed taskId so a released plan still materializes caregiver tasks.
@@ -942,29 +1018,9 @@ function CarePlanBuilder({ residentId, residentName, room, level, assessmentDoma
   onChange?: (plan: { title?: string; goals: string[]; interventions: PlanIntervention[] }) => void;
 }) {
   const meta = levelMeta(level);
-  // Representative governed task per domain at this level — for dispatch linkage.
-  const taskIdByCode = useMemo(() => {
-    const m: Record<string, string> = {};
-    for (const t of levelCareTasks(level)) {
-      const code = domainCodeFromLabel(t.domain) || domainCodeFromLabel(t.name);
-      if (code && !m[code]) m[code] = t.id;
-    }
-    return m;
-  }, [level]);
-
-  // One base row per scored domain the assessment actually scored.
-  const baseRows = useMemo<DomainRow[]>(() => {
-    const dm = assessmentDomains || {};
-    return SCORED_DOMAINS.filter((d) => dm[d.code] && typeof dm[d.code]?.score === "number").map((d) => {
-      const entry = dm[d.code]!;
-      const score = Math.max(0, Math.min(4, entry.score ?? 0));
-      return {
-        code: d.code, name: d.name, score, taskId: taskIdByCode[d.code] || "", included: true,
-        goal: entry.goalNote?.trim() || d.goalDefaults?.[score] || "",
-        interventions: (d.interventionDefaults?.[score] || []).map((x) => x.trim()).filter(Boolean),
-      };
-    });
-  }, [assessmentDomains, taskIdByCode]);
+  // One base row per scored domain the assessment actually scored (representative
+  // governed Level-N taskId attached for dispatch). Shared with createPlanForResident.
+  const baseRows = useMemo<DomainRow[]>(() => assessmentDomainRows(assessmentDomains, level), [assessmentDomains, level]);
 
   const [rows, setRows] = useState<DomainRow[]>(() => mergeSavedDomain(baseRows, saved?.domainPlan));
   // Re-hydrate only when the assessment's domain/score signature changes (loaded
@@ -1014,7 +1070,7 @@ function CarePlanBuilder({ residentId, residentName, room, level, assessmentDoma
         level,
         goals: buildDomainPlan(rows).goals,
         items: [],
-        domainPlan: rows.map((r) => ({ code: r.code, included: r.included, goal: r.goal, interventions: r.interventions })),
+        domainPlan: domainSnapshot(rows),
         updatedAt: new Date().toISOString(),
       });
     }, 700);
@@ -1036,7 +1092,7 @@ function CarePlanBuilder({ residentId, residentName, room, level, assessmentDoma
 
       {rows.length === 0 ? (
         <div className="rounded-xl border p-4 text-sm text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
-          No scored assessment found for this resident. Complete the 14-domain <b>Resident Assessment</b> first — the care plan builds from those scores and their Goal / Preference Notes.
+          No validated assessment found for this resident. <b>Validate</b> the 14-domain <b>Resident Assessment</b> first — the care plan builds only from a validated assessment&apos;s scores and their Goal / Preference Notes.
         </div>
       ) : (
         <>

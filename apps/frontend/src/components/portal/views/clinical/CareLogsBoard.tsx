@@ -173,6 +173,12 @@ const DOMAINS: { key: DomainKey; code: string; label: string; icon: LucideIcon; 
 ];
 const DOMAIN_BY_KEY = new Map(DOMAINS.map((d) => [d.key, d]));
 
+// Resolve a `?focus=` deep-link value to a domain tab. Accepts a raw domain key
+// (e.g. "AS-06") or the legacy eMAR alias "vitals". Used by the caregiver "Quick
+// record" dashboard tiles and the eMAR "Record vitals now" button.
+const focusToDomain = (f: string | null | undefined): DomainKey | null =>
+  !f ? null : f === "vitals" ? "AS-06" : DOMAIN_BY_KEY.has(f as DomainKey) ? (f as DomainKey) : null;
+
 // 0–4 status anchor labels (v4.2 independence / risk scale) for generic quick-logs.
 // The 14 scored assessment domains (AS-01..AS-14). "Pain" is an extra quick-log
 // tile, not one of the scored domains — so the "logged" badge counts against 14.
@@ -573,23 +579,31 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [logFor, setLogFor] = useState<Row | null>(null);
   const [logTab, setLogTab] = useState<DomainKey>("AS-01");
+  const [pendingTab, setPendingTab] = useState<DomainKey | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "needs" | "documented">("all");
 
-  // Deep-link from the eMAR "Record vitals now" button:
-  //   /{role}/carelogs?resident=<id>&focus=vitals
-  // Preselect the resident and open their quick-log on the Vitals (AS-06) domain.
+  // Deep-link entry points:
+  //   /{role}/carelogs?resident=<id>&focus=<AS-code|vitals>  → open that resident's
+  //     log on the focused domain (eMAR "Record vitals now").
+  //   /{role}/carelogs?focus=<AS-code>                        → no resident yet
+  //     (caregiver "Quick record" tile): preselect the domain so opening any
+  //     resident's log starts on that form.
   const searchParams = useSearchParams();
   const deepRef = useRef(false);
   useEffect(() => {
     if (deepRef.current) return;
+    const focusDom = focusToDomain(searchParams?.get("focus"));
     const rid = searchParams?.get("resident");
-    if (!rid) return;
-    if (loading) return; // wait until residents load so we can match the row
-    const row = residents.find((r: Row) => s(r.id) === rid);
-    if (!row) return;
-    deepRef.current = true;
-    const focus = searchParams?.get("focus");
-    void (async () => { setLogTab(focus === "vitals" ? "AS-06" : "AS-01"); setLogFor(row); })();
+    if (rid) {
+      if (loading) return; // wait until residents load so we can match the row
+      const row = residents.find((r: Row) => s(r.id) === rid);
+      if (!row) return;
+      deepRef.current = true;
+      setLogTab(focusDom ?? "AS-01"); setLogFor(row);
+    } else if (focusDom) {
+      deepRef.current = true;
+      setPendingTab(focusDom);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, loading, residents]);
 
@@ -670,6 +684,13 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
         emptyHint={residents.length === 0 ? "Residents appear here once they are admitted to the active roster." : "Clear the search to see all residents."}
         skeletonRows={4}
       >
+        {pendingTab && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold text-[var(--clinical-ink)]" style={{ borderColor: "var(--clinical-panel)", backgroundColor: "var(--clinical-surface-2)" }}>
+            <Plus className="h-4 w-4 text-[var(--clinical-panel)]" />
+            Quick record: {DOMAIN_BY_KEY.get(pendingTab)?.label} — choose a resident to open this log.
+            <button onClick={() => setPendingTab(null)} className="ml-auto rounded-lg px-2 py-1 text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]">Clear</button>
+          </div>
+        )}
         <div className="space-y-3">
           {filtered.map((r: Row) => {
             const list = byResident.get(s(r.id)) || [];
@@ -697,7 +718,7 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
                     <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--clinical-surface-2)]" aria-label={`${domainCount} of 14 care domains documented`}><div className="h-full rounded-full bg-[var(--clinical-green)] transition-[width] duration-500" style={{ width: `${Math.round((domainCount / 14) * 100)}%` }} /></div>
                   </div>
                   <div className="flex items-center justify-end gap-2">
-                    <ClinicalButton variant={list.length ? "secondary" : "primary"} size="sm" onClick={() => { setLogTab("AS-01"); setLogFor(r); }}><Plus className="h-4 w-4" /> {list.length ? "Add entry" : "Start log"}</ClinicalButton>
+                    <ClinicalButton variant={list.length ? "secondary" : "primary"} size="sm" onClick={() => { setLogTab(pendingTab ?? "AS-01"); setLogFor(r); }}><Plus className="h-4 w-4" /> {list.length ? "Add entry" : "Start log"}</ClinicalButton>
                     {list.length > 0 && <button onClick={() => toggle(s(r.id))} aria-label={open ? "Collapse logs" : "Review today's logs"} className="flex h-11 w-11 items-center justify-center rounded-xl text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-ink)]">{open ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}</button>}
                   </div>
                 </div>
@@ -787,6 +808,64 @@ function VitalField({ label, unit, hint, value, onChange }: { label: string; uni
 const APPETITE_BY_INTAKE: Record<string, string> = { "0%": "REFUSED", "25%": "POOR", "50%": "FAIR", "75%": "GOOD", "100%": "GOOD" };
 const MOOD_MAP: Record<string, string> = { Calm: "CALM", Happy: "HAPPY", Anxious: "ANXIOUS", Agitated: "AGITATED", Confused: "CONFUSED", Withdrawn: "WITHDRAWN", Distressed: "SAD", Combative: "AGGRESSIVE" };
 const SLEEP_MAP: Record<string, string> = { Excellent: "RESTFUL", Good: "FAIR", Fair: "RESTLESS", Poor: "POOR", "Very Poor": "INSOMNIA" };
+
+// In-place quick record for the caregiver "My Shift" dashboard: tapping a
+// Quick-record tile opens the log RIGHT THERE — a resident picker, then the exact
+// same LogModal the Daily Care Logs board uses — instead of navigating to the
+// carelogs page. Mounted only when a tile is tapped, so its live queries stay off
+// the dashboard until needed.
+export function QuickRecordFlow({ focus, residentId, clinicianRole = "CAREGIVER", onClose }: { focus?: string; residentId?: string; clinicianRole?: ClinicianRole; onClose: () => void }) {
+  const { residents, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, loading } = useCareLogData(clinicianRole);
+  const initialTab = focusToDomain(focus) ?? "AS-01";
+  const [resident, setResident] = useState<Row | null>(null);
+  const [search, setSearch] = useState("");
+  // When a residentId is supplied (per-resident "Daily Log" from the dashboard
+  // card), skip the picker and open that resident's log directly.
+  const active = resident ?? (residentId ? residents.find((r: Row) => s(r.id) === residentId) ?? null : null);
+
+  if (active) {
+    return (
+      <LogModal
+        resident={active}
+        initialTab={initialTab}
+        loggedDomains={domainsByRes.get(s(active.id)) || new Set()}
+        domainCounts={domainCountsByRes.get(s(active.id))}
+        nurseUserIds={nurseUserIds}
+        recordOverage={recordOverage}
+        ensureRound={ensureRound}
+        saveNote={saveNote}
+        clinicianRole={clinicianRole}
+        bowelRef={bowelRef}
+        saveBowelRef={saveBowelRef}
+        onDone={refetchAll}
+        onClose={onClose}
+      />
+    );
+  }
+
+  const q = search.trim().toLowerCase();
+  const list = residents.filter((r: Row) => !q || s(r.name).toLowerCase().includes(q) || s(r.room).toLowerCase().includes(q));
+  const label = DOMAIN_BY_KEY.get(initialTab)?.label ?? "Quick record";
+  return (
+    <ClinicalModal open onClose={onClose} title={`Quick record — ${label}`} description="Choose the resident to log this entry for.">
+      <SearchInput value={search} onChange={setSearch} placeholder="Search assigned resident or room…" />
+      <DataState loading={loading && residents.length === 0} empty={list.length === 0} emptyTitle="No residents" emptyHint="Assigned residents appear here during your shift." skeletonRows={3}>
+        <div className="mt-3 max-h-[60vh] space-y-2 overflow-y-auto">
+          {list.map((r: Row) => (
+            <button key={s(r.id)} onClick={() => setResident(r)} className="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition hover:border-[var(--clinical-panel)] hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: "var(--clinical-line)" }}>
+              <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg bg-[var(--clinical-surface-2)] leading-none">
+                <span className="text-[9px] font-semibold uppercase tracking-wide text-[var(--clinical-muted)]">Room</span>
+                <span className="mt-0.5 text-sm font-bold text-[var(--clinical-ink)]">{s(r.room) || "—"}</span>
+              </div>
+              <span className="min-w-0 flex-1 truncate font-semibold text-[var(--clinical-ink)]">{s(r.name)}</span>
+              <Plus className="h-4 w-4 text-[var(--clinical-panel)]" />
+            </button>
+          ))}
+        </div>
+      </DataState>
+    </ClinicalModal>
+  );
+}
 
 function LogModal({ resident, initialTab, loggedDomains, domainCounts, nurseUserIds, recordOverage, ensureRound, saveNote, clinicianRole, bowelRef, saveBowelRef, onDone, onClose }: {
   resident: Row; initialTab: DomainKey; loggedDomains: Set<DomainKey>; domainCounts?: Map<DomainKey, number>; nurseUserIds: string[]; recordOverage: (core: { residentId: string; residentName?: string; room?: string; domain: string; domainLabel?: string; level: number; allowance: number; count: number }) => Promise<void>; ensureRound: (id: string) => Promise<string>; saveNote: (rec: { residentId: string; dailyRoundId?: string; domain: string; status?: number; note?: string }) => Promise<void>; clinicianRole: ClinicianRole; bowelRef: string; saveBowelRef: (dataUrl: string | null) => Promise<void>; onDone: () => Promise<void>; onClose: () => void;

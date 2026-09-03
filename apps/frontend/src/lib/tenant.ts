@@ -323,7 +323,16 @@ export function tenantWhere(modelKey: string, context: TenantContext): Record<st
       : { organizationMemberships: { some: { organizationId: context.organizationId, status: "ACTIVE" } } };
   }
   if (modelKey === "messages") return { OR: [{ senderId: context.userId }, { recipientId: context.userId }] };
-  if (modelKey === "notifications") return { userId: context.userId };
+  // Scope a user's alerts/notifications to the community they're viewing. A
+  // multi-community staffer (e.g. a Care Manager over two communities) otherwise
+  // sees the other community's clinical alerts bleed into the selected one. Every
+  // real notification is stamped with its community, so strict scoping is correct;
+  // community-less legacy rows are intentionally hidden once a community is chosen.
+  if (modelKey === "notifications") {
+    return context.communityId
+      ? { userId: context.userId, communityId: context.communityId }
+      : { userId: context.userId };
+  }
   if (modelKey === "audit-logs") return context.communityId ? { communityId: context.communityId } : DENY;
   if (!context.communityId) return DENY;
 

@@ -6,7 +6,7 @@ import { invalidatePortalDataPrefix } from "@/lib/dataCache";
 import { normalizeMobile } from "@/lib/mobileAuth";
 
 // Same leadership roles an org admin may appoint (mirrors staff-accounts POST).
-const ALLOWED_ROLES = new Set(["FACILITY_ADMIN", "CARE_MANAGER", "RESIDENT_COORDINATOR", "SUPERADMIN", "NURSE", "CAREGIVER", "PHYSICIAN", "BILLING_ADMIN", "NUTRITIONIST", "KITCHEN", "HOUSEKEEPING", "MAINTENANCE", "SECURITY", "FLEET_MANAGEMENT", "DRIVER"]);
+const ALLOWED_ROLES = new Set(["FACILITY_ADMIN", "CARE_MANAGER", "CRM", "RESIDENT_COORDINATOR", "SUPERADMIN", "NURSE", "CAREGIVER", "PHYSICIAN", "BILLING_ADMIN", "NUTRITIONIST", "KITCHEN", "HOUSEKEEPING", "MAINTENANCE", "SECURITY", "FLEET_MANAGEMENT", "DRIVER"]);
 
 async function guard(context: Awaited<ReturnType<typeof requireTenantContext>>) {
   if (!context?.organizationId || !["OWNER", "ADMIN"].includes(context.organizationRole || "")) return "Forbidden";
