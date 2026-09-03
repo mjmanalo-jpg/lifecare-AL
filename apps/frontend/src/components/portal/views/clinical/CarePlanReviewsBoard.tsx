@@ -94,12 +94,14 @@ const authoritativeDomainsFor = (all: AssessmentV42[], residentId: string, resid
 // A stored intervention line ("Title: detail… (Daily)") → title · detail · frequency,
 // so the plan view can show the frequency as a pill instead of trailing text.
 const parseIntervention = (line: string): { title: string; desc: string; freq: string } => {
-  // The trailing "(freq)" can itself contain nested parens — e.g. "(Twice daily (BID))".
-  // Capture the last balanced group (one level of nesting) so BID/TID parse into a pill
-  // instead of leaking into the title.
-  const m = line.match(/^(.*?)\s*\(((?:[^()]+|\([^()]*\))*)\)\s*$/);
-  const freq = m ? m[2].trim() : "";
-  const body = (m ? m[1] : line).trim();
+  // Pull a trailing "(freq)" — which may itself contain ONE nested paren level, e.g.
+  // "(Twice daily (BID))" — into a pill instead of leaking into the title. Anchored at
+  // the end with an unrolled inner pattern (no `(x+)*` nesting) so a line with an earlier
+  // parenthetical like "(e.g., clothing, ...)" plus a long body can't trigger catastrophic
+  // regex backtracking (ReDoS) that freezes the render. ponytail: linear, was exponential.
+  const m = line.match(/\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*$/);
+  const freq = m ? m[1].trim() : "";
+  const body = (m ? line.slice(0, m.index) : line).trim();
   const ci = body.indexOf(":");
   return { title: ci > -1 ? body.slice(0, ci).trim() : body, desc: ci > -1 ? body.slice(ci + 1).trim() : "", freq };
 };
@@ -776,24 +778,34 @@ function CurrentPlanView({ plan, nextReviewDate, draft }: { plan: Row; nextRevie
   // For a DRAFT with a live builder snapshot, render from the snapshot (the
   // freshest, complete individualization) rather than the plan's stored string,
   // which may lag the nurse's latest un-regenerated edits.
-  const goals = draft?.goals?.length ? draft.goals : s(plan.careGoals).split("\n").map((x) => x.trim()).filter(Boolean);
+  const goals = (draft?.goals?.length ? draft.goals : s(plan.careGoals).split("\n")).map((x) => String(x ?? "").trim()).filter(Boolean);
   const domName = (code: string) => SCORED_DOMAINS.find((d) => d.code === code)?.name || code;
-  const ivs = draft?.domainPlan?.length
-    // v4.2 assessment-domain draft — one line per included domain, its Interventions bundled.
-    ? draft.domainPlan.filter((d) => d.included).map((d) => ({
-        title: `${d.code} · ${domName(d.code)}`,
-        desc: d.interventions.map((x) => x.trim()).filter(Boolean).join(" • "),
-        freq: "",
-      })).filter((iv) => iv.desc)
-    : draft
-    // Legacy level-package draft (taskId-based items).
-    ? draft.items.filter((i) => i.included).map((i) => { const t = taskById(i.taskId); return {
-        title: t?.name || i.taskId,
-        desc: [i.assistance && `Assistance: ${i.assistance}`, i.note.trim() || t?.approvedIntervention || t?.definition || ""].filter(Boolean).join(" · "),
-        freq: i.freq,
-      }; })
-    // Released plan of record — from the stored interventions string.
-    : s(plan.interventions).split("\n").map((x) => x.trim()).filter(Boolean).map(parseIntervention);
+  // Stored-string interventions (the released plan of record) — also the safe
+  // fallback if a draft snapshot is malformed.
+  const storedIvs = () => s(plan.interventions).split("\n").map((x) => x.trim()).filter(Boolean).map(parseIntervention);
+  // A malformed draft snapshot (a domain with no `interventions`, an item with no
+  // `note`, etc.) must NEVER crash this read-only view — every field is guarded and
+  // the whole derivation is wrapped so any unexpected shape falls back to the stored plan.
+  let ivs: { title: string; desc: string; freq: string }[];
+  try {
+    ivs = draft?.domainPlan?.length
+      // v4.2 assessment-domain draft — one line per included domain, its Interventions bundled.
+      ? draft.domainPlan.filter((d) => d.included).map((d) => ({
+          title: `${d.code} · ${domName(d.code)}`,
+          desc: (d.interventions || []).map((x) => (x || "").trim()).filter(Boolean).join(" • "),
+          freq: "",
+        })).filter((iv) => iv.desc)
+      : draft?.items?.length
+      // Legacy level-package draft (taskId-based items).
+      ? draft.items.filter((i) => i.included).map((i) => { const t = taskById(i.taskId); return {
+          title: t?.name || i.taskId,
+          desc: [i.assistance && `Assistance: ${i.assistance}`, (i.note || "").trim() || t?.approvedIntervention || t?.definition || ""].filter(Boolean).join(" · "),
+          freq: i.freq,
+        }; })
+      : storedIvs();
+  } catch {
+    ivs = storedIvs();
+  }
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
