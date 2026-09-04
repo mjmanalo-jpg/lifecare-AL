@@ -30,6 +30,7 @@ import CameraRegistryBoard from "@/components/portal/views/CameraRegistryBoard";
 import GeofenceSettingsBoard from "@/components/portal/views/clinical/GeofenceSettingsBoard";
 import CareAcuityBoard from "@/components/portal/views/clinical/CareAcuityBoard";
 import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAssessmentV42";
+import MoveInBoard from "@/components/portal/views/clinical/MoveInBoard";
 import FacilityRooms from "@/components/portal/views/FacilityRooms";
 import StaffProfilesBoard from "@/components/portal/views/clinical/StaffProfilesBoard";
 import FeatureMatrixDashboard from "@/components/portal/views/superadmin/FeatureMatrixDashboard";
@@ -502,6 +503,10 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
   }
   if (tab === "admissions") {
     return <OnboardingHub initialTab="admissions" />;
+  }
+
+  if (tab === "movein") {
+    return <MoveInBoard />;
   }
 
   if (tab === "registration") {

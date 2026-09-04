@@ -374,6 +374,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       // Care Plan → Room Management, then the remaining operations tabs.
       { name: "Resident Assessment", icon: ClipboardList, route: "/superadmin/assessmenthub", group: "Operations" },
       { name: "Admissions & Registration", icon: UserPlus, route: "/superadmin/admissions", group: "Operations" },
+      { name: "Move-in", icon: Package, route: "/superadmin/movein", group: "Operations" },
       { name: "Care Plan", icon: Target, route: "/superadmin/careplanhub", group: "Operations" },
       { name: "Room Management", icon: DoorOpen, route: "/superadmin/rooms", group: "Operations" },
       { name: "Approvals", icon: ClipboardCheck, route: "/superadmin/approvalworkflows", group: "Operations" },
@@ -525,6 +526,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       // Resident Assessment hub — Pre-Admission · Reassessment / LOC Decision Review.
       { name: "Resident Assessment", icon: Gauge, route: "/care_manager/assessmenthub", group: "Admissions & Governance" },
       { name: "Admission & Onboarding", icon: UserPlus, route: "/care_manager/admissions", group: "Admissions & Governance" },
+      { name: "Move-in", icon: Package, route: "/care_manager/movein", group: "Admissions & Governance" },
       // Care Plan hub — Plan & Review · 24-Hour Routine.
       { name: "Care Plan", icon: Target, route: "/care_manager/careplanhub", group: "Admissions & Governance" },
       { name: "Room Management", icon: DoorOpen, route: "/care_manager/rooms", group: "Admissions & Governance" },

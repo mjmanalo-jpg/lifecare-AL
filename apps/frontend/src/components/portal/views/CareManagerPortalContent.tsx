@@ -6,6 +6,7 @@ import ApprovalWorkflows from "@/components/portal/views/clinical/ApprovalWorkfl
 import FacilityIncidents from "@/components/portal/views/FacilityIncidents";
 import FacilityRooms from "@/components/portal/views/FacilityRooms";
 import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAssessmentV42";
+import MoveInBoard from "@/components/portal/views/clinical/MoveInBoard";
 import TodaysCareBoard from "@/components/portal/views/clinical/TodaysCareBoard";
 import AdditionalServicesBoard from "@/components/portal/views/clinical/AdditionalServicesBoard";
 import SafeguardingBoard from "@/components/portal/views/clinical/SafeguardingBoard";
@@ -174,6 +175,8 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
       return <OnboardingHub initialTab="admissions" />;
     case "rooms":
       return <FacilityRooms />;
+    case "movein":
+      return <MoveInBoard />;
     case "residents":
       return <CareLogsBoard clinicianRole="CARE_MANAGER" />;
     case "records":
