@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
-import PhysicalExamForm from "./PhysicalExamForm";
+import { PhysicalExamHistory } from "./PhysicalExamForm";
 import { originOf, assessmentRawScore, classifyAssessment } from "@/lib/lifecare/assessment";
 import { ASSESSMENT_DOMAINS } from "@/lib/lifecare/dataset";
 import { DOMAIN_CODES } from "@/lib/lifecare/types";
@@ -373,7 +373,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       {view === "forms" ? (
         <FormsPanel forms={forms} admissions={admissionForms} />
       ) : view === "physexam" ? (
-        <PhysicalExamForm residentId={resident.id} residentName={resident.name} room={resident.room} canEdit={!readOnly} />
+        <PhysicalExamHistory residentId={resident.id} residentName={resident.name} room={resident.room} />
       ) : view === "careplan" ? (
         <ResidentCarePlanView residentId={resident.id} />
       ) : view === "clinical" ? (

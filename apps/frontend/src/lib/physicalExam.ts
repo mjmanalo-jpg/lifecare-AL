@@ -1,7 +1,9 @@
 // Physical Exam — the on-admission "CLINICAL ASSESSMENT" body check, mirroring
-// the paper form exactly: the 11 injury types (a fill-in beside each) plus the
-// front / back / side body diagrams. Migration-free store in the `physical_exams`
-// app-setting, one record per resident.
+// the paper form: the 11 injury types (a fill-in beside each) and the front /
+// back / side body diagrams. Migration-free store in the `physical_exams`
+// app-setting. A resident accumulates MANY exams over time (one per admission /
+// re-check); each has a DRAFT → SUBMITTED lifecycle. A SUBMITTED exam is locked
+// (read-only) and appears on the resident's One Care · One Journey, newest first.
 
 export const PHYSICAL_EXAMS_KEY = "physical_exams";
 
@@ -11,6 +13,8 @@ export const INJURY_TYPES = [
   "Burn", "Sprain", "Fracture", "Edema", "Bed Sore",
 ] as const;
 export type InjuryType = (typeof INJURY_TYPES)[number];
+
+export type PhysicalExamStatus = "DRAFT" | "SUBMITTED";
 
 export interface PhysicalExam {
   id: string;
@@ -22,8 +26,9 @@ export interface PhysicalExam {
   injuries: Partial<Record<InjuryType, string>>;
   bodyNotes?: string;        // free-text observations keyed to the body diagram
   examinedBy?: string;
-  examinedAt?: string;       // stamped when the exam is completed
-  status: "DRAFT" | "COMPLETE";
+  status: PhysicalExamStatus;
+  submittedAt?: string;      // stamped once submitted (locks the exam)
+  createdAt?: string;
   updatedAt?: string;
 }
 
@@ -33,16 +38,21 @@ export const parsePhysicalExams = (raw: string | null | undefined): PhysicalExam
   catch { return []; }
 };
 
-/** The resident's current exam (most recently updated), or null. */
-export const examForResident = (all: PhysicalExam[], residentId: string): PhysicalExam | null =>
-  all.filter((e) => e.residentId === residentId)
-     .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""))[0] ?? null;
+const sortKey = (e: PhysicalExam) => e.submittedAt || e.updatedAt || e.createdAt || "";
+
+/** All of a resident's exams, newest first. */
+export const examsForResident = (all: PhysicalExam[], residentId: string): PhysicalExam[] =>
+  all.filter((e) => e.residentId === residentId).sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
+
+/** The resident's most recent exam (draft or submitted), or null. */
+export const latestExamFor = (all: PhysicalExam[], residentId: string): PhysicalExam | null =>
+  examsForResident(all, residentId)[0] ?? null;
 
 export const emptyExam = (residentId: string): PhysicalExam => ({
   id: (globalThis.crypto?.randomUUID?.() ?? `pe-${residentId}-${Date.now()}`),
   residentId, injuries: {}, status: "DRAFT",
 });
 
-/** True once any injury line has a mark (or "None Apparent" is marked). */
+/** True once any injury line has a mark. Gate for submitting. */
 export const hasAnyMark = (e: Pick<PhysicalExam, "injuries">): boolean =>
   Object.values(e.injuries || {}).some((v) => (v || "").trim() !== "");
