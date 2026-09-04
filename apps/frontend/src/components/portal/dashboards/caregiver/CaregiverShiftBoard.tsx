@@ -8,7 +8,6 @@
 // read model: GET /api/dashboards/caregiver.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import {
   Activity, Utensils, GlassWater, Droplets, Footprints, Moon, Smile, AlertTriangle,
   Calendar, Repeat, RefreshCw, ChevronRight, NotebookPen, Accessibility, Scale, Syringe,
@@ -164,11 +163,14 @@ export default function CaregiverShiftBoard() {
     (filter === "all" || c.status === filter) &&
     (!q || c.name.toLowerCase().includes(q) || c.room.toLowerCase().includes(q)));
 
-  // Metric card values, all from the governed payload.
+  // Metric card values. Due now / Overdue are derived from the SAME per-resident
+  // buckets as the roster below (overdue = my-care-now, due next = my-care-next),
+  // so the tiles can never disagree with each resident's "N overdue · N due next"
+  // badges — previously "Due now" read the my-care-now bucket and duplicated Overdue.
   const completion = data?.metrics.find((m) => m.key === "care_delivery_on_time");
-  const dueNowItems = data ? sectionOf(data, "my-care-now") : [];
-  const dueNowResidents = new Set(dueNowItems.map((i) => i.residentId || i.id)).size;
-  const overdueCount = data?.summary.overdueWork ?? 0;
+  const overdueCount = cards.reduce((sum, c) => sum + c.overdue, 0);
+  const dueNowCount = cards.reduce((sum, c) => sum + c.dueNext, 0);
+  const dueNowResidents = cards.filter((c) => c.dueNext > 0).length;
   const openConcerns = data?.summary.openEscalations ?? 0;
 
   const shiftLine = data
@@ -198,49 +200,49 @@ export default function CaregiverShiftBoard() {
       <DataState loading={loading && !data} error={error && !data ? new Error(error) : null} empty={false} onRetry={() => void load()} skeletonRows={4}>
         {data && (
           <>
-            {/* Metric card — every tile is a shortcut, not a dead number: completion
-                opens Today's Care, Due now / Overdue filter the roster below, and
-                Open concerns jumps to the Action Queue. */}
+            {/* At-a-glance shift metrics — read-only, they refresh live with the
+                payload. Due now / Overdue are derived from the same per-resident
+                buckets as the roster below so the tiles always match the rows. */}
             <section className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-[var(--clinical-line)] xl:grid-cols-4" style={{ borderColor: "var(--clinical-line)" }}>
-              {/* Shift task completion → Today's Care */}
-              <Link href="/caregiver/todayscare" className="bg-[var(--clinical-surface)] p-3 transition hover:bg-[var(--clinical-surface-2)]">
+              {/* Shift task completion */}
+              <div className="bg-[var(--clinical-surface)] p-3">
                 <div className="flex items-center gap-2">
                   <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10 text-[var(--clinical-panel)]"><ListChecks className="h-4 w-4" /></span>
                   <p className="text-2xl font-bold leading-none tabular-nums text-[var(--clinical-ink)]">{completion ? completion.numerator : "—"}{completion ? <span className="text-sm font-semibold text-[var(--clinical-muted)]"> / {completion.denominator}</span> : null}</p>
                 </div>
                 <p className="mt-1.5 text-[12px] font-semibold text-[var(--clinical-ink)]">Tasks done this shift</p>
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--clinical-surface-2)]"><div className="h-full rounded-full bg-[var(--clinical-panel)] transition-[width] duration-500" style={{ width: `${completion && completion.denominator ? Math.round((completion.numerator / completion.denominator) * 100) : 0}%` }} /></div>
-              </Link>
+              </div>
 
-              {/* Due now → filter the roster below */}
-              <button onClick={() => { setFilter("due"); document.getElementById("cg-roster")?.scrollIntoView({ behavior: "smooth" }); }} className="bg-[var(--clinical-surface)] p-3 text-left transition hover:bg-[var(--clinical-surface-2)]">
+              {/* Due now — items coming due this shift (not yet overdue) */}
+              <div className="bg-[var(--clinical-surface)] p-3">
                 <div className="flex items-center gap-2">
                   <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-[var(--clinical-amber)]"><Clock className="h-4 w-4" /></span>
-                  <p className="text-2xl font-bold leading-none tabular-nums text-[var(--clinical-ink)]">{dueNowItems.length}</p>
+                  <p className="text-2xl font-bold leading-none tabular-nums text-[var(--clinical-ink)]">{dueNowCount}</p>
                 </div>
                 <p className="mt-1.5 text-[12px] font-semibold text-[var(--clinical-ink)]">Due now</p>
                 <p className="mt-0.5 text-[10px] text-[var(--clinical-muted)]">Across {dueNowResidents} resident{dueNowResidents === 1 ? "" : "s"}</p>
-              </button>
+              </div>
 
-              {/* Overdue → filter the roster below. The tile flushes red when there is overdue work. */}
-              <button onClick={() => { setFilter("overdue"); document.getElementById("cg-roster")?.scrollIntoView({ behavior: "smooth" }); }} className={`p-3 text-left transition ${overdueCount ? "bg-red-500/[0.06] hover:bg-red-500/10" : "bg-[var(--clinical-surface)] hover:bg-[var(--clinical-surface-2)]"}`}>
+              {/* Overdue — tile flushes red when there is overdue work */}
+              <div className={`p-3 ${overdueCount ? "bg-red-500/[0.06]" : "bg-[var(--clinical-surface)]"}`}>
                 <div className="flex items-center gap-2">
                   <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${overdueCount ? "bg-red-500/15 text-[var(--clinical-danger,#dc2626)]" : "bg-[var(--clinical-surface-2)] text-[var(--clinical-muted)]"}`}><AlertTriangle className="h-4 w-4" /></span>
                   <p className={`text-2xl font-bold leading-none tabular-nums ${overdueCount ? "text-[var(--clinical-danger,#dc2626)]" : "text-[var(--clinical-ink)]"}`}>{overdueCount}</p>
                 </div>
                 <p className="mt-1.5 text-[12px] font-semibold text-[var(--clinical-ink)]">Overdue</p>
                 <p className={`mt-0.5 text-[10px] font-medium ${overdueCount ? "text-[var(--clinical-danger,#dc2626)]" : "text-[var(--clinical-muted)]"}`}>{overdueCount ? "Needs action now" : "All caught up"}</p>
-              </button>
+              </div>
 
-              {/* Open concerns → Action Queue */}
-              <Link href="/caregiver/actionqueue" className="bg-[var(--clinical-surface)] p-3 transition hover:bg-[var(--clinical-surface-2)]">
+              {/* Open concerns */}
+              <div className="bg-[var(--clinical-surface)] p-3">
                 <div className="flex items-center gap-2">
                   <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${openConcerns ? "bg-amber-500/10 text-[var(--clinical-amber)]" : "bg-emerald-500/10 text-emerald-500"}`}>{openConcerns ? <Flag className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}</span>
                   <p className={`text-2xl font-bold leading-none tabular-nums ${openConcerns ? "text-[var(--clinical-amber)]" : "text-[var(--clinical-ink)]"}`}>{openConcerns}</p>
                 </div>
                 <p className="mt-1.5 text-[12px] font-semibold text-[var(--clinical-ink)]">Open concerns</p>
                 <p className={`mt-0.5 text-[10px] ${openConcerns ? "text-[var(--clinical-amber)]" : "text-emerald-500"}`}>{openConcerns ? "Nurse notified" : "None — all clear"}</p>
-              </Link>
+              </div>
             </section>
 
             {/* Quick record */}
