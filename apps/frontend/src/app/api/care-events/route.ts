@@ -52,12 +52,6 @@ export async function POST(request: NextRequest) {
   const residentName = resident ? `${resident.firstName ?? ""} ${resident.lastName ?? ""}`.trim() || undefined : undefined;
   const room = resident?.roomNumber ?? "—";
 
-  const memberships = await prisma.communityMembership.findMany({
-    where: { communityId, status: "ACTIVE", role: { in: ["NURSE", "CARE_MANAGER"] } },
-    select: { userId: true },
-  });
-  const nurseIds = [...new Set(memberships.map((m) => m.userId))];
-
   // Repeat-variance → reassessment review. Count this resident's recent variances
   // (scoped to the same routine when known); this event tips the counter over.
   let reviewAlertRaised = false;
@@ -73,12 +67,15 @@ export async function POST(request: NextRequest) {
   const emergency = c.emergencyPathway;
   const notifyNurse = c.escalationAction !== "none" || reviewAlertRaised;
 
-  // 1) Persist the governed care event.
-  const created = await prisma.careEvent.create({
+  // 1) Persist the governed care event. Surface the real reason on failure —
+  // a bodiless 500 here just shows the caregiver an opaque "Could not chart".
+  let created: { id: string };
+  try {
+    created = await prisma.careEvent.create({
     data: {
       organizationId, communityId, residentId, residentName,
       eventName: c.outcome, domain: str(body.domain), eventType: c.isExpected ? "Expected" : "Exception",
-      archetype: c.archetype, modelVersion: MODEL_VERSION as unknown as string,
+      archetype: c.archetype, modelVersion: `${MODEL_VERSION.assessmentVersion}/${MODEL_VERSION.careModelVersion}`,
       taskId: careTaskId ?? undefined, carePlanId,
       outcome,
       assistanceDelivered: str(body.assistanceDelivered),
@@ -97,7 +94,11 @@ export async function POST(request: NextRequest) {
       actorId: ctx.userId, actorName,
     },
     select: { id: true },
-  });
+    });
+  } catch (err) {
+    console.error("care-events create failed:", err);
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Could not chart the care event." }, { status: 500 });
+  }
 
   // 2) Safety escalation (SBAR) — unsafe/critical events enter the chain of
   //    command. Acute events flagged for the emergency pathway direct the nurse
@@ -118,22 +119,33 @@ export async function POST(request: NextRequest) {
     } catch { /* best-effort */ }
   }
 
-  // 3) Notify the clinical team (exception / escalation / reassessment).
-  if (notifyNurse && nurseIds.length) {
-    const title = escalate ? `Care event — ${outcome}` : reviewAlertRaised ? "Reassessment recommended" : `Care variance — ${outcome}`;
-    const message = reviewAlertRaised
-      ? `${residentName || "A resident"} (Room ${room}) has ${VARIANCE_REVIEW_THRESHOLD}+ material variances in the last 30 days — review the care plan / level of care (no automatic change).`
-      : `${residentName || "A resident"} (Room ${room}): "${outcome}" on a care-plan task, logged by ${actorName}.${observation ? ` ${observation}` : ""}`;
-    try {
-      await prisma.notification.createMany({
-        data: nurseIds.map((userId) => ({
-          userId, type: "SYSTEM_ALERT" as never, title, message,
-          severity: escalate ? "CRITICAL" : "WARNING",
-          relatedEntityId: created.id, relatedEntityType: "careEvent",
-          organizationId, communityId,
-        })),
-      });
-    } catch { /* best-effort */ }
+  // 3) Notify the clinical team (exception / escalation / reassessment). The
+  //    nurse/CM lookup only runs when there's actually something to notify — the
+  //    common "Completed" path skips this round-trip entirely.
+  let notified = false;
+  if (notifyNurse) {
+    const memberships = await prisma.communityMembership.findMany({
+      where: { communityId, status: "ACTIVE", role: { in: ["NURSE", "CARE_MANAGER"] } },
+      select: { userId: true },
+    });
+    const nurseIds = [...new Set(memberships.map((m) => m.userId))];
+    if (nurseIds.length) {
+      const title = escalate ? `Care event — ${outcome}` : reviewAlertRaised ? "Reassessment recommended" : `Care variance — ${outcome}`;
+      const message = reviewAlertRaised
+        ? `${residentName || "A resident"} (Room ${room}) has ${VARIANCE_REVIEW_THRESHOLD}+ material variances in the last 30 days — review the care plan / level of care (no automatic change).`
+        : `${residentName || "A resident"} (Room ${room}): "${outcome}" on a care-plan task, logged by ${actorName}.${observation ? ` ${observation}` : ""}`;
+      try {
+        await prisma.notification.createMany({
+          data: nurseIds.map((userId) => ({
+            userId, type: "SYSTEM_ALERT" as never, title, message,
+            severity: escalate ? "CRITICAL" : "WARNING",
+            relatedEntityId: created.id, relatedEntityType: "careEvent",
+            organizationId, communityId,
+          })),
+        });
+        notified = true;
+      } catch { /* best-effort */ }
+    }
   }
 
   // Audit trail — the caregiver's care delivery (task completion / variance)
@@ -151,5 +163,5 @@ export async function POST(request: NextRequest) {
     reason: `Care delivered${residentName ? ` for ${residentName}` : ""} — "${outcome}"${c.isVariance ? " (variance)" : ""}${observation ? `: ${observation}` : ""}`,
   });
 
-  return NextResponse.json({ ok: true, eventId: created.id, escalated: escalate, emergency, notified: notifyNurse && nurseIds.length > 0, reviewAlertRaised });
+  return NextResponse.json({ ok: true, eventId: created.id, escalated: escalate, emergency, notified, reviewAlertRaised });
 }
