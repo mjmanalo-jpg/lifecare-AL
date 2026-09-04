@@ -727,7 +727,7 @@ async function scanCommunity(communityId: string, organizationId: string | null)
   await runSource("care-plan-review-open", async () => {
     const reviewTeam = idsForRoles(["NURSE", "CARE_MANAGER"]);
     if (!reviewTeam.length) return;
-    const plans = await prisma.carePlan.findMany({ where: { communityId, status: "ACTIVE" }, select: { residentId: true, effectiveDate: true, nextReviewDate: true } });
+    const plans = await prisma.carePlan.findMany({ where: { communityId, status: "ACTIVE" }, select: { residentId: true, createdAt: true, nextReviewDate: true } });
     if (!plans.length) return;
     const aSetting = await prisma.appSetting.findFirst({ where: { communityId, key: "assessments_v42" }, select: { value: true } });
     let assessments: AssessmentV42[] = [];
@@ -743,7 +743,7 @@ async function scanCommunity(communityId: string, organizationId: string | null)
       const r = rmap.get(rid); if (!r) continue;
       const due = dayOf(p.nextReviewDate);
       if (!due || due > todayStr) continue; // review frequency not up yet
-      const planDay = dayOf(p.effectiveDate);
+      const planDay = dayOf(p.createdAt); // active plan's creation = its effective date (no effectiveDate column)
       const a = authoritativeAssessmentFor(validated, { residentId: rid, residentName: rname(r) });
       const aDay = a ? (dayOf(a.validation?.at) || dayOf(a.updatedAt) || dayOf(a.createdAt)) : "";
       if (!aDay || (planDay && aDay <= planDay)) continue; // no validated reassessment after the active plan
