@@ -8,6 +8,7 @@ import {
   BELONGINGS_FORMS_KEY, parseBelongingsForms, formsFor, newInventoryRow, newChecklistItem, rowTotal,
   type BelongingsForms as Forms, type InventoryForm,
 } from "@/lib/belongingsForms";
+import { lifecareLetterhead, LIFECARE_BRAND_CSS } from "@/lib/lifecare/brand";
 
 type InvKey = "assistiveDevices" | "belongings" | "clothing";
 type TabKey = "moveIn" | InvKey;
@@ -52,10 +53,9 @@ export default function BelongingsFormsPanel({ residentId, residentName, room, c
   const printForm = () => {
     const w = window.open("", "_blank", "width=900,height=1000");
     if (!w) return;
+    // Prints itself from <body onload> once the logo image has loaded.
     w.document.write(buildFormHtml(tab, forms, residentName, room));
     w.document.close();
-    w.focus();
-    w.print();
   };
 
   return (
@@ -154,10 +154,10 @@ function InventoryTable({ form, canEdit, onField, onRow, onAdd, onDel }: {
 
 // ── Printable HTML per form ───────────────────────────────────────────────────
 function buildFormHtml(tab: TabKey, forms: Forms, residentName: string, room: string): string {
-  const brand = `<div class="brand"><span class="life">Life</span><span class="care">Care</span> <span class="lv">LIVING</span></div>`;
+  const brand = lifecareLetterhead();
   const style = `<style>
     *{box-sizing:border-box}body{font-family:"Segoe UI",system-ui,Arial,sans-serif;color:#1f2933;margin:0 auto;max-width:800px;padding:32px 36px;font-size:13px}
-    .brand{font-weight:800;font-size:18px}.brand .life{color:#2f9e44}.brand .care{color:#1c7ed6}.brand .lv{font-size:9px;letter-spacing:.2em;color:#1c7ed6}
+    ${LIFECARE_BRAND_CSS}
     h1{font-size:16px;margin:12px 0 2px}.meta{margin:2px 0}.meta b{display:inline-block;min-width:150px}
     table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border:1px solid #adb5bd;padding:5px 7px;text-align:left;font-size:12px}
     th{background:#f1f3f5;font-size:11px;text-transform:uppercase}.c{text-align:center}
@@ -182,5 +182,5 @@ function buildFormHtml(tab: TabKey, forms: Forms, residentName: string, room: st
       <table><thead><tr><th>Particulars</th><th class="c">Beg Qty</th><th class="c">Add</th><th class="c">Less</th><th class="c">Total</th><th class="c">Actual Count</th><th>Remarks</th></tr></thead><tbody>${rows}</tbody></table>
       <div class="sign"><div><div class="l">Prepared By:</div><div class="v">${esc(f.preparedBy)}</div></div><div><div class="l">Checked By:</div><div class="v">${esc(f.checkedBy)}</div></div></div>`;
   }
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(residentName)} — belongings form</title>${style}</head><body>${body}</body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(residentName)} — belongings form</title>${style}</head><body onload="window.focus();window.print()">${body}</body></html>`;
 }

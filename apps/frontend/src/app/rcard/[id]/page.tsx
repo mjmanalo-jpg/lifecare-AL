@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import {
   Pill, ClipboardList, ConciergeBell, ShieldAlert,
   UserRound, CalendarClock, Loader2, FileDown, StickyNote, IdCard,
-  Users, Phone, Activity, HeartPulse, Gauge, AlertTriangle, Heart, X, Package, FileText,
+  Users, Phone, Activity, HeartPulse, Gauge, AlertTriangle, Heart, X, Package, FileText, Printer,
 } from "lucide-react";
 import { taskNotesOf } from "@/lib/taskNotes";
 import { patientCode } from "@/lib/patientId";
@@ -20,6 +20,7 @@ import BelongingsFormsPanel from "@/components/portal/views/clinical/BelongingsF
 import { updateRecord, upsertRecord } from "@/lib/api";
 import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
+import { lifecareLetterhead, LIFECARE_BRAND_CSS } from "@/lib/lifecare/brand";
 
 type Row = Record<string, unknown>;
 const s = (v: unknown) => (v == null ? "" : String(v));
@@ -421,6 +422,53 @@ export default function ResidentCardPage() {
     doc.save(`${residentSlug()}-care-card.pdf`);
   };
 
+  // Printable Medical & Surgical History on the LifeCare letterhead — opens the
+  // browser Print / Save-as-PDF dialog once the logo image has loaded.
+  const printMedicalHistory = () => {
+    if (!resident) return;
+    const w = window.open("", "_blank", "width=840,height=1000");
+    if (!w) return;
+    const esc = (v: unknown) => s(v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
+    const row = (label: string, value: unknown) => (s(value).trim() ? `<div class="row"><div class="l">${esc(label)}</div><div class="v">${esc(value).replace(/\n/g, "<br>")}</div></div>` : "");
+    const allergyHtml = allergyRecs.length
+      ? `<ul class="alg">${allergyRecs.map((a) => `<li><b>${esc(a.allergen)}</b>${a.reaction ? ` — ${esc(a.reaction)}` : ""} <span class="sev">${esc(s(a.severity).replace(/_/g, " "))}</span></li>`).join("")}</ul>`
+      : `<p>${esc(effAllergies || allergies || "None on record.")}</p>`;
+    const name = `${s(resident.firstName)} ${s(resident.lastName)}`.trim() || "Resident";
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(name)} — Medical History</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;color:#1f2933;line-height:1.6;max-width:800px;margin:0 auto;padding:36px 40px;font-size:13px}
+  ${LIFECARE_BRAND_CSS}
+  hr.rule{border:0;border-top:1.5px solid #ced4da;margin:10px 0 14px}
+  .company{font-weight:800;font-size:16px;margin:0 0 1px}
+  .title{font-weight:700;font-size:13px;color:#343a40;margin:0 0 10px}
+  .id{margin:1px 0;font-size:12px}.id b{display:inline-block;min-width:110px}
+  h2{font-size:14px;color:#212529;border-bottom:1.5px solid #dee2e6;padding-bottom:4px;margin:18px 0 8px}
+  .row{display:flex;gap:12px;margin:6px 0;page-break-inside:avoid}.row .l{min-width:170px;font-weight:700;color:#343a40}.row .v{flex:1}
+  ul.alg{margin:4px 0;padding-left:18px}ul.alg li{margin:2px 0}.sev{font-size:10px;font-weight:700;text-transform:uppercase;color:#b45309}
+  .foot{margin-top:24px;border-top:1px solid #e9ecef;padding-top:8px;color:#adb5bd;font-size:11px}
+  @page{margin:0}@media print{body{padding:24px 30px}}
+</style></head><body onload="window.focus();window.print()">
+  ${lifecareLetterhead()}
+  <hr class="rule">
+  <p class="company">LifeCare Living Solutions, Inc.</p>
+  <p class="title">Resident Medical &amp; Surgical History</p>
+  <div class="id"><b>Resident:</b> ${esc(name)}</div>
+  <div class="id"><b>Patient ID:</b> ${esc(patientCode(s(resident.id)))}</div>
+  <div class="id"><b>Room / DOB:</b> ${esc(s(resident.roomNumber) || "—")} · ${esc(fmtDate(resident.dateOfBirth))}${age(resident.dateOfBirth) != null ? ` · ${age(resident.dateOfBirth)} yrs` : ""}</div>
+  <h2>Medical &amp; Surgical History</h2>
+  ${row("Primary Diagnosis", primaryDiagnosis)}
+  ${effAssessment ? row("Clinical Assessment", effAssessment) : ""}
+  ${row("History", effHistory)}
+  ${row("Surgeries", s(resident.surgeries))}
+  ${row("Hospitalizations", s(resident.hospitalizations))}
+  <h2>Allergies</h2>
+  ${allergyHtml}
+  <div class="foot">Generated ${esc(new Date().toLocaleString())} · Confidential — for authorized use only.</div>
+</body></html>`);
+    w.document.close();
+  };
+
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>;
   }
@@ -573,6 +621,9 @@ export default function ResidentCardPage() {
 
           {tab === "medical" && (
             <>
+            <div className="flex justify-end">
+              <button onClick={printMedicalHistory} className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"><Printer className="h-3.5 w-3.5" /> Print Medical History</button>
+            </div>
             <Section title="Medical & Surgical History" icon={ClipboardList}>
               <div className="space-y-3">
                 <KV label="Primary Diagnosis" value={primaryDiagnosis} />
