@@ -230,8 +230,17 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
   const today = new Date();
   const resident = residents.find((r: Row) => s(r.id) === resId) || null;
 
-  // Reset the builder plan when switching residents so stale data doesn't carry over.
-  useEffect(() => { setBuilderPlan(undefined); }, [resId]);
+  // Reset the builder plan the instant the resident changes — DURING RENDER, before
+  // the remounted CarePlanBuilder's onChange effect repopulates it. Doing this in an
+  // effect instead raced with that child effect: in production builds the parent
+  // reset ran last and left builderPlan undefined, so Generate wrongly reported "No
+  // validated assessment" (dev Strict Mode's double-invoked child effect masked it).
+  // Render-phase reset makes the child's populate the deterministic last writer.
+  const builderPlanResId = useRef(resId);
+  if (builderPlanResId.current !== resId) {
+    builderPlanResId.current = resId;
+    setBuilderPlan(undefined);
+  }
 
   const latestReview = (rid: string) => reviews.filter((r) => r.residentId === rid).sort((a, b) => (b.reviewDate || "").localeCompare(a.reviewDate || ""))[0];
 
