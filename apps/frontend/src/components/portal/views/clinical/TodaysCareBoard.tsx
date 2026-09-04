@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   RefreshCw, CheckCircle2, AlertTriangle, ShieldAlert, User2, Stethoscope,
-  ListChecks,
+  ListChecks, Lock,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -110,6 +110,30 @@ const levelFromFinal = (finalLevel: string): number => Number(/([1-5])/.exec(fin
 /** Is an encounter out of the resident's Level package? (null domain → never). */
 const encOutOfPackage = (level: number, e: RoutineEncounter): boolean =>
   e.domainCode != null && !domainInPackage(level, e.domainCode);
+
+// ── Caregiver time-gate ──────────────────────────────────────────────────────
+// A caregiver can only work a window once it's near its time: the window appears
+// 5 min before its start and stays open (charting as "late") after its end. This
+// keeps caregivers charting against the live shift, not hours ahead. Supervisors
+// (Nurse / Care Manager) are never gated.
+const WINDOW_LEAD_MIN = 5;
+/** Parse "HH:MM-HH:MM" → [startMin, endMin] from midnight. null (→ ungated) when
+ * malformed or crossing midnight (end ≤ start), e.g. the NOC "12:00-02:00" window. */
+function windowRange(win: string): [number, number] | null {
+  const m = /(\d{1,2}):(\d{2})\D+(\d{1,2}):(\d{2})/.exec(win || "");
+  if (!m) return null;
+  const start = +m[1] * 60 + +m[2], end = +m[3] * 60 + +m[4];
+  return end > start ? [start, end] : null;
+}
+/** Time-gate state for a window at `nowMin` (minutes from midnight). Ungated
+ * windows are always visible and never late. */
+function windowGate(win: string, nowMin: number): { visible: boolean; late: boolean; opensAt: string } {
+  const r = windowRange(win);
+  if (!r) return { visible: true, late: false, opensAt: "" };
+  const open = r[0] - WINDOW_LEAD_MIN;
+  const opensAt = `${String(Math.floor(open / 60)).padStart(2, "0")}:${String(open % 60).padStart(2, "0")}`;
+  return { visible: nowMin >= open, late: nowMin > r[1], opensAt };
+}
 
 export default function TodaysCareBoard({ role, focusResidentId, embedded }: { role?: string; focusResidentId?: string; embedded?: boolean }) {
   const { data: settingRows, loading, error, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>(
@@ -274,6 +298,11 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
   // today (caregiver_schedules); nurses / care managers keep the full oversight
   // view. Unresolved role/user → unscoped until the session lands. ------------
   const isCaregiverView = effectiveRole === "CAREGIVER";
+  // Re-evaluate the time-gate every 30s so a window appears (5 min before start)
+  // or flips to "late" without the caregiver refreshing.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setNowTick(Date.now()), 30_000); return () => clearInterval(t); }, []);
+  const nowMin = useMemo(() => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); }, [nowTick]);
   const myResidentIds = useMemo(() => {
     if (!isCaregiverView || !userId) return null; // null = unscoped
     const schedules = parseSchedules(settingRows.find((r) => (r.key || r.id) === CAREGIVER_SCHEDULE_KEY)?.value);
@@ -359,6 +388,16 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
     observation: string,
   ) => {
     if (!selected) return;
+    // Time-gate (caregiver view): a window is chartable only from 5 min before its
+    // start. Buttons are disabled when locked, but guard so a stale client can't
+    // chart a window that hasn't opened yet.
+    if (isCaregiverView) {
+      const g = windowGate(enc.window, nowMin);
+      if (!g.visible) {
+        Swal.fire({ title: "Not open yet", text: `This window opens at ${g.opensAt} (5 min before it begins).`, icon: "info" });
+        return;
+      }
+    }
     // Governance gate (CL-13 / B5): charting is only possible against routines
     // that came from a RELEASED care plan. Locked residents have no encounters,
     // but guard anyway so a stale client can never chart around the gate.
@@ -394,7 +433,19 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
       });
       if (!proceed.isConfirmed) return;
     }
+    const key = itemKey(selected.residentId, item.id);
+    // Charted after the window's end (caregiver view only) → mark it late in the
+    // record. No `late` column exists, so it rides in the observation text.
+    // ponytail: observation-encoded late flag; promote to a column if late needs querying.
+    const isLate = isCaregiverView && windowGate(enc.window, nowMin).late;
+    // Optimistic: tick the item immediately so the tap feels instant. Each
+    // round-trip to the remote pooler is ~1s from here; don't make the caregiver
+    // watch a spinner for the persist. We revert the tick if the POST fails.
+    setCharted((prev) => new Map(prev).set(key, outcome));
     setBusy(true);
+    // Out-of-package logging is best-effort (swallows its own errors) — fire it
+    // in the background instead of blocking the tick on 2 extra round-trips.
+    if (gated && code) void recordOutOfPackageService({ residentId: selected.residentId, residentName: selected.residentName, domainCode: code, domainLabel: DOMAIN_LABEL[code] ?? enc.label, level, by: me || undefined, notes: observation.trim() || undefined });
     try {
       // Chart through the GOVERNED care-events route (not the generic /api/db
       // route) so exceptions fire their escalation / nurse-notification /
@@ -407,7 +458,7 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
           careTaskId: enc.careTaskId || undefined,
           domain: enc.label,
           outcome,
-          observation: (observation.trim() || item.text) || undefined,
+          observation: isLate ? `⏰ Late — ${observation.trim() || item.text}` : (observation.trim() || item.text) || undefined,
           exceptionDetail: outcome === "Completed" ? undefined : observation.trim() || undefined,
           shift: curShift,
           actorName: me || undefined,
@@ -415,9 +466,7 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
       });
       const json = await res.json().catch(() => ({} as Record<string, unknown>));
       if (!res.ok) throw new Error((json as { error?: string })?.error || "Could not chart the care event.");
-      if (gated && code) await recordOutOfPackageService({ residentId: selected.residentId, residentName: selected.residentName, domainCode: code, domainLabel: DOMAIN_LABEL[code] ?? enc.label, level, by: me || undefined, notes: observation.trim() || undefined });
-      // Optimistic tick, then persist the per-item completion (survives refresh).
-      setCharted((prev) => new Map(prev).set(itemKey(selected.residentId, item.id), outcome));
+      // Persist the per-item completion (survives refresh).
       void persistCompletion(selected.residentId, item.id, outcome);
       const escalated = !!(json as { escalated?: boolean }).escalated;
       const reviewFlagged = !!(json as { reviewAlertRaised?: boolean }).reviewAlertRaised;
@@ -432,6 +481,8 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
         showConfirmButton: false, timer: escalated || reviewFlagged ? 2400 : 1400,
       });
     } catch (err) {
+      // Persist failed — roll back the optimistic tick so the item is chartable again.
+      setCharted((prev) => { const m = new Map(prev); m.delete(key); return m; });
       Swal.fire({ title: "Could not chart", text: err instanceof Error ? err.message : "Please try again.", icon: "error" });
     } finally {
       setBusy(false);
@@ -584,6 +635,8 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
                 level={levelFromFinal(selected.finalLevel)}
                 charted={chartedAll}
                 busy={busy}
+                gated={isCaregiverView}
+                nowMin={nowMin}
                 onComplete={(enc, item) => chartEvent(enc, item, "Completed", "")}
                 onException={openException}
               />
@@ -598,6 +651,8 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
                   level={levelFromFinal(selected.finalLevel)}
                   charted={chartedAll}
                   busy={busy}
+                  gated={false}
+                  nowMin={nowMin}
                   onComplete={(enc, item) => chartEvent(enc, item, "Completed", "")}
                   onException={openException}
                 />
@@ -711,7 +766,7 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
 // Queue section — a labelled stack of encounter cards for one role.
 // ---------------------------------------------------------------------------
 function QueueSection({
-  title, icon, encounters, residentId, level, charted, busy, onComplete, onException,
+  title, icon, encounters, residentId, level, charted, busy, gated, nowMin, onComplete, onException,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -720,6 +775,8 @@ function QueueSection({
   level: number;
   charted: Map<string, Outcome>;
   busy: boolean;
+  gated: boolean;   // caregiver time-gate on (hide windows until 5 min before start)
+  nowMin: number;   // current minutes-from-midnight (drives the gate)
   onComplete: (enc: RoutineEncounter, item: RoutineTaskItem) => void;
   onException: (enc: RoutineEncounter, item: RoutineTaskItem) => void;
 }) {
@@ -737,19 +794,27 @@ function QueueSection({
         <p className="mt-3 text-sm text-[var(--clinical-muted)]">Nothing due this shift.</p>
       ) : (
         <div className="mt-3 space-y-3">
-          {encounters.map((enc) => (
-            <EncounterCard
-              key={`${residentId}::${enc.windowId}`}
-              enc={enc}
-              outOfPackage={encOutOfPackage(level, enc)}
-              level={level}
-              residentId={residentId}
-              charted={charted}
-              busy={busy}
-              onComplete={onComplete}
-              onException={onException}
-            />
-          ))}
+          {encounters.map((enc) => {
+            // Locked until 5 min before the window's start; unlocks then, and
+            // stays open (charting as late) after its end. Ungated for supervisors.
+            const g = gated ? windowGate(enc.window, nowMin) : null;
+            return (
+              <EncounterCard
+                key={`${residentId}::${enc.windowId}`}
+                enc={enc}
+                outOfPackage={encOutOfPackage(level, enc)}
+                level={level}
+                residentId={residentId}
+                charted={charted}
+                busy={busy}
+                locked={g ? !g.visible : false}
+                lockOpensAt={g?.opensAt}
+                late={g ? g.late : false}
+                onComplete={onComplete}
+                onException={onException}
+              />
+            );
+          })}
         </div>
       )}
     </ClinicalCard>
@@ -761,7 +826,7 @@ function QueueSection({
 // is individually completed (1 tap) or excepted (structured picker) and counted.
 // ---------------------------------------------------------------------------
 function EncounterCard({
-  enc, outOfPackage, level, residentId, charted, busy, onComplete, onException,
+  enc, outOfPackage, level, residentId, charted, busy, locked, lockOpensAt, late, onComplete, onException,
 }: {
   enc: RoutineEncounter;
   outOfPackage: boolean;
@@ -769,6 +834,9 @@ function EncounterCard({
   residentId: string;
   charted: Map<string, Outcome>;
   busy: boolean;
+  locked?: boolean;      // window hasn't opened yet → not chartable until 5 min before start
+  lockOpensAt?: string;  // "HH:MM" the window unlocks (shown on the lock badge)
+  late?: boolean;        // window's end time has passed → completions chart as late
   onComplete: (enc: RoutineEncounter, item: RoutineTaskItem) => void;
   onException: (enc: RoutineEncounter, item: RoutineTaskItem) => void;
 }) {
@@ -779,6 +847,7 @@ function EncounterCard({
       style={{
         borderColor: outOfPackage ? "var(--clinical-amber)" : "var(--clinical-line)",
         backgroundColor: "var(--clinical-surface)",
+        opacity: locked ? 0.6 : 1,
       }}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -789,6 +858,14 @@ function EncounterCard({
         <div className="flex items-center gap-1.5">
           {outOfPackage && (
             <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.03em]" style={{ borderColor: "var(--clinical-amber)", color: "var(--clinical-amber)", backgroundColor: "color-mix(in srgb, var(--clinical-amber) 12%, transparent)" }} title="Additional Clinical Service (DT-014)">Not in L{level} package</span>
+          )}
+          {locked && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface-2)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.03em] text-[var(--clinical-muted)]" title={`This window opens at ${lockOpensAt || "its start time"} (5 min before it begins)`}>
+              <Lock className="h-3 w-3" /> Opens {lockOpensAt}
+            </span>
+          )}
+          {late && !locked && (
+            <span className="inline-flex items-center rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.03em] text-rose-600 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300" title="This window's time has passed — completions chart as late">Ended · late</span>
           )}
           <span className="inline-flex h-5 min-w-8 items-center justify-center rounded-full bg-[var(--clinical-surface-2)] px-1.5 text-[11px] font-semibold text-[var(--clinical-ink)]" title="Tasks completed in this window">{doneCount}/{enc.items.length}</span>
         </div>
@@ -805,10 +882,10 @@ function EncounterCard({
                 {done && <span className="mt-1 inline-block"><StatusPill status={outcome === "Completed" ? "COMPLETED" : "REFUSED"}>{outcome}</StatusPill></span>}
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
-                <ClinicalButton size="sm" variant={done ? "secondary" : "primary"} onClick={() => onComplete(enc, it)} disabled={busy || done} aria-label={`Complete ${it.text}`}>
-                  <CheckCircle2 className="h-4 w-4" /> {done ? "Done" : "Complete"}
+                <ClinicalButton size="sm" variant={done ? "secondary" : "primary"} onClick={() => onComplete(enc, it)} disabled={done || locked} aria-label={`Complete ${it.text}`}>
+                  {locked ? <Lock className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />} {done ? "Done" : "Complete"}
                 </ClinicalButton>
-                <ClinicalButton size="sm" variant="secondary" onClick={() => onException(enc, it)} disabled={busy} aria-label={`Record an exception for ${it.text}`}>
+                <ClinicalButton size="sm" variant="secondary" onClick={() => onException(enc, it)} disabled={done || locked} aria-label={`Record an exception for ${it.text}`}>
                   <AlertTriangle className="h-4 w-4" />
                 </ClinicalButton>
               </div>
