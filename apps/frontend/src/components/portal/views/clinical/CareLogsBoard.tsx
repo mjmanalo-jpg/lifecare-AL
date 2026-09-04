@@ -1055,7 +1055,8 @@ function LogModal({ resident, initialTab, loggedDomains, domainCounts, nurseUser
           {form === "generic" && (<>
             {DOMAIN_META[tab]?.scope && <p className="rounded-lg px-3 py-2 text-[11px] leading-relaxed text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}><span className="font-semibold text-[var(--clinical-ink)]">What to assess: </span>{DOMAIN_META[tab]!.scope}</p>}
             <div>
-              <Label>Status (v4.2 anchor)</Label>
+              <Label>Observed state — this domain, this shift</Label>
+              <p className="mb-1.5 text-[10px] leading-relaxed text-[var(--clinical-muted)]">Your observation of this one domain today. It feeds domain monitoring &amp; drift alerts — the resident&apos;s Level of Care is set by assessment, not assigned here.</p>
               <Chips cols={5} value={s(f.status)} onChange={(v) => set({ status: v === "" ? undefined : Number(v) })} options={STATUS_ANCHORS.map((a) => ({ v: String(a.v), label: `${a.v} · ${a.label}` }))} />
               {f.status != null && DOMAIN_META[tab]?.anchors?.[Number(f.status)] ? (
                 <p className="mt-1.5 rounded-lg px-3 py-2 text-xs leading-relaxed text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}><span className="font-bold text-[var(--clinical-panel)]">{f.status} · {statusLabel(f.status)}: </span>{DOMAIN_META[tab]!.anchors![Number(f.status)]}</p>
