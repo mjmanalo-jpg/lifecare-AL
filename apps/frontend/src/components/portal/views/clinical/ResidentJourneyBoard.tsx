@@ -48,7 +48,7 @@ import { ResidentCarePlanView } from "./CarePlanReviewsBoard";
 
 // The resident-hub tabs: the two native panels (journey / forms) plus the six
 // folded-in record boards.
-type ResidentView = "journey" | "forms" | "careplan" | "clinical" | "timeline" | "progress" | "vitals" | "routine";
+type ResidentView = "journey" | "forms" | "physexam" | "careplan" | "clinical" | "timeline" | "progress" | "vitals" | "routine";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const DOMAIN_NAME: Record<string, string> = Object.fromEntries(ASSESSMENT_DOMAINS.map((d) => [d.code, d.name]));
@@ -334,6 +334,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
   const viewTabs: { v: ResidentView; label: string; count?: number }[] = [
     { v: "journey", label: "Journey", count: journey.length },
     { v: "forms", label: "Forms", count: forms.length },
+    { v: "physexam", label: "Physical Exam" },
     // Family (readOnly) keeps just Journey + Forms; staff get the full record set.
     ...(readOnly ? [] : ([
       { v: "careplan", label: "Care Plan" },
@@ -370,10 +371,9 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       </div>
 
       {view === "forms" ? (
-        <div className="space-y-5">
-          <FormsPanel forms={forms} admissions={admissionForms} />
-          <PhysicalExamForm residentId={resident.id} residentName={resident.name} room={resident.room} canEdit={!readOnly} />
-        </div>
+        <FormsPanel forms={forms} admissions={admissionForms} />
+      ) : view === "physexam" ? (
+        <PhysicalExamForm residentId={resident.id} residentName={resident.name} room={resident.room} canEdit={!readOnly} />
       ) : view === "careplan" ? (
         <ResidentCarePlanView residentId={resident.id} />
       ) : view === "clinical" ? (

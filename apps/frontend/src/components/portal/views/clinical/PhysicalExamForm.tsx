@@ -20,10 +20,11 @@ import {
 
 const esc = (v: unknown) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
 
-// Body silhouettes (front reused for front + back, plus a side profile), drawn
-// to echo the paper form's diagrams. Rendered on screen and in the printout.
-const BODY_FRONT = `<svg viewBox="0 0 120 300" width="72" height="180" fill="none" stroke="#2b5ca8" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><circle cx="60" cy="30" r="22"/><path d="M60 52 C48 52 44 60 44 70 C44 79 31 83 25 93 C18 106 16 141 14 169 C13 179 23 181 25 170 C29 148 35 120 40 104 C40 131 38 177 40 209 C41 237 44 269 46 287 C47 297 57 297 57 287 L59 215 L61 215 L63 287 C63 297 73 297 74 287 C76 269 79 237 80 209 C82 177 80 131 80 104 C85 120 91 148 95 170 C97 181 107 179 106 169 C104 141 102 106 95 93 C89 83 76 79 76 70 C76 60 72 52 60 52 Z"/></svg>`;
-const BODY_SIDE = `<svg viewBox="0 0 100 300" width="58" height="180" fill="none" stroke="#2b5ca8" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M44 10 C58 10 66 21 66 34 C66 45 60 49 55 53 L57 63 C68 67 74 76 74 88 C74 103 69 123 67 143 C66 156 69 170 69 184 L73 254 C74 262 66 264 64 255 L58 192 C51 190 45 190 41 194 L45 254 C46 262 38 264 36 255 L33 150 C32 128 33 100 35 85 C36 71 40 60 45 54 C41 50 37 44 37 34 C37 21 30 10 44 10 Z"/></svg>`;
+// The exact front / back / side body diagrams from the paper CLINICAL ASSESSMENT
+// form, extracted from the source PDF and served from /public. The print window
+// (blank about:blank) needs an absolute URL, so it prefixes window.origin.
+const BODY_IMG = "/physical-exam-body.png";
+const bodyImgUrl = () => (typeof window !== "undefined" ? window.location.origin : "") + BODY_IMG;
 
 const cell = "rounded border border-gray-300 px-2 py-1 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white";
 
@@ -94,8 +95,7 @@ export default function PhysicalExamForm({ residentId, residentName, room, canEd
   table.inj td.ln{width:120px;border-bottom:1px solid #333;text-align:center;font-weight:700}
   table.inj td.n{width:22px;text-align:right;color:#333}table.inj td.t{white-space:nowrap}
   .cols{display:flex;gap:40px}.cols>div{flex:1}
-  .bodies{display:flex;gap:18px;justify-content:flex-start;margin-top:22px}
-  .bodies figure{margin:0;text-align:center}.bodies figcaption{font-size:10px;color:#868e96;margin-top:2px}
+  .bodies{margin-top:22px}.bodies img{max-width:100%;height:auto;max-height:300px}
   .notes{margin-top:16px}.notes .l{font-weight:700}
   .sign{margin-top:28px;display:flex;justify-content:space-between;gap:24px}.sign div{flex:1}.sign .l{font-size:11px;color:#495057}.sign .v{border-bottom:1px solid #495057;min-height:22px;font-weight:600}
   @page{margin:0}@media print{body{padding:22px 30px}}
@@ -110,11 +110,7 @@ export default function PhysicalExamForm({ residentId, residentName, room, canEd
     <div><table class="inj">${rows(0, 5)}</table></div>
     <div><table class="inj">${rows(5, 11)}</table></div>
   </div>
-  <div class="bodies">
-    <figure>${BODY_FRONT}<figcaption>Front</figcaption></figure>
-    <figure>${BODY_FRONT}<figcaption>Back</figcaption></figure>
-    <figure>${BODY_SIDE}<figcaption>Side</figcaption></figure>
-  </div>
+  <div class="bodies"><img src="${bodyImgUrl()}" alt="Body diagram — front, back, side"></div>
   ${bodyNotes ? `<div class="notes"><span class="l">Notes:</span> ${esc(bodyNotes).replace(/\n/g, "<br>")}</div>` : ""}
   <div class="sign"><div><div class="l">Examined By:</div><div class="v">${esc(examinedBy)}</div></div><div><div class="l">Reviewed By:</div><div class="v"></div></div></div>
 </body></html>`);
@@ -150,13 +146,9 @@ export default function PhysicalExamForm({ residentId, residentName, room, canEd
         <div>{INJURY_TYPES.slice(5, 11).map((t, i) => injuryRow(t, i + 6))}</div>
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-5">
-        {[["Front", BODY_FRONT], ["Back", BODY_FRONT], ["Side", BODY_SIDE]].map(([lbl, svg], i) => (
-          <figure key={i} className="m-0 text-center">
-            <span dangerouslySetInnerHTML={{ __html: svg }} />
-            <figcaption className="text-[10px] text-gray-400">{lbl}</figcaption>
-          </figure>
-        ))}
+      <div className="mt-5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={BODY_IMG} alt="Body diagram — front, back, side" className="max-w-full" style={{ maxHeight: 300 }} />
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
