@@ -99,7 +99,12 @@ function shiftContext(now: Date, timeZone: string, assignment?: CaregiverSchedul
 }
 
 function section(key: string, title: string, description: string, items: DashboardQueueItem[], emptyTitle: string, emptyHint?: string): DashboardSection {
-  return { key, title, description, items: [...items].sort(compareQueueItems), emptyTitle, emptyHint };
+  // Dedupe by id: some sections merge overlapping pools (e.g. a task that is both
+  // P2 and unassigned lands in clinicalTriage AND deploymentItems), which would
+  // render two rows with the same React key. Keep the first occurrence.
+  const seen = new Set<string>();
+  const unique = items.filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)));
+  return { key, title, description, items: unique.sort(compareQueueItems), emptyTitle, emptyHint };
 }
 
 type AssessmentSignal = {

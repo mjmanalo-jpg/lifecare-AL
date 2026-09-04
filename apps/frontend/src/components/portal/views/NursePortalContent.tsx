@@ -835,6 +835,21 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
   if (tab === "todayscare") {
     return <TodaysCareBoard role="NURSE" />;
   }
+  if (tab === "clinicalcoordination") {
+    return (
+      <HubTabs
+        storageKey="nurse-clinicalcoordination"
+        tabs={[
+          { key: "additionalservices", label: "Additional Clinical Services", node: <AdditionalServicesBoard clinicianRole="NURSE" /> },
+          { key: "referrals", label: "Specialist Referrals", node: <ReferralsBoard canApprove /> },
+          { key: "physiciancomms", label: "Physician Communication", node: <PhysicianCommsLog /> },
+          { key: "appointmentcalendar", label: "Appointments", node: <AppointmentCalendar title="Appointments Calendar" canSchedule={false} /> },
+          { key: "infectioncontrol", label: "Infection Control", node: <InfectionControlBoard role="NURSE" /> },
+          { key: "safeguarding", label: "Safeguarding", node: <SafeguardingBoard role="NURSE" /> },
+        ]}
+      />
+    );
+  }
   if (tab === "additionalservices") {
     return <AdditionalServicesBoard clinicianRole="NURSE" />;
   }

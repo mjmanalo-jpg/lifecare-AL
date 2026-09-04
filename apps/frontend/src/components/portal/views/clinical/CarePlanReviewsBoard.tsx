@@ -235,6 +235,31 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
 
   const latestReview = (rid: string) => reviews.filter((r) => r.residentId === rid).sort((a, b) => (b.reviewDate || "").localeCompare(a.reviewDate || ""))[0];
 
+  // ── "One active plan" gate for the New Review pickers ───────────────────────
+  // Once a plan is ACTIVE, the resident is removed from the New Review dropdown +
+  // cards. They reappear ONLY when BOTH hold: (a) a VALIDATED reassessment exists
+  // that post-dates the active plan, and (b) the plan's review frequency is up
+  // (next review date has arrived). This enforces "one plan per resident until a
+  // reassessment falls due" — a new plan can't be started otherwise.
+  const planDayOf = (p?: Row) => (s(p?.effectiveDate) || s(p?.createdAt) || "").slice(0, 10);
+  const reassessedAfterPlan = (rid: string, planDay: string) => {
+    const name = s(residents.find((r: Row) => s(r.id) === rid)?.name);
+    const a = authoritativeAssessmentFor(assessments.filter((x) => x.status === "VALIDATED"), { residentId: rid, residentName: name });
+    if (!a) return false;
+    const aDay = (s(a.validation?.at) || s(a.updatedAt) || s(a.createdAt)).slice(0, 10);
+    return !!aDay && aDay > planDay; // validated strictly after the active plan → a reassessment
+  };
+  const frequencyUp = (rid: string, active: Row) => {
+    const nextReview = s(active.nextReviewDate) || latestReview(rid)?.nextReviewDate || "";
+    return !!nextReview && nextReview <= isoDate(today);
+  };
+  const eligibleForNewReview = (rid: string) => {
+    const active = activePlanByResident.get(rid);
+    if (!active) return true; // no active plan → available (first / replacement plan)
+    return frequencyUp(rid, active) && reassessedAfterPlan(rid, planDayOf(active));
+  };
+  const newReviewResidents = residents.filter((r: Row) => eligibleForNewReview(s(r.id)));
+
   // Recent incidents (last 30 days) for the selected resident → indicators + triggers.
   const recentInc = useMemo(() => {
     if (!resId) return [];
@@ -512,7 +537,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
               {!embedded && (
               <select id="cpr-res" value={resId} onChange={(e) => setResId(e.target.value)} className={`${controlClass} max-w-md`}>
                 <option value="">Choose a resident…</option>
-                {residents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)} (Level {resLevel(r).n})</option>)}
+                {newReviewResidents.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)} (Level {resLevel(r).n})</option>)}
               </select>
               )}
               {resident && (
@@ -530,11 +555,11 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
           {!embedded && !resident && (
             <div className="@container">
               <p className="mb-3 text-sm text-[var(--clinical-muted)]">Or tap a resident to start their care plan review</p>
-              {residents.length === 0 ? (
-                <p className="text-sm text-[var(--clinical-muted)]">No residents found.</p>
+              {newReviewResidents.length === 0 ? (
+                <p className="text-sm text-[var(--clinical-muted)]">Every resident has an active care plan. A resident reappears here once a reassessment is validated and their review frequency is up.</p>
               ) : (
                 <div className="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4 @5xl:grid-cols-5">
-                  {residents.map((r: Row, i: number) => { const lv = resLevel(r); return (
+                  {newReviewResidents.map((r: Row, i: number) => { const lv = resLevel(r); return (
                     <button key={s(r.id)} onClick={() => setResId(s(r.id))}
                       className="group flex flex-col items-center gap-2.5 rounded-xl border p-4 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300"
                       style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)", animationDelay: `${i * 40}ms`, animationFillMode: "backwards" }}>

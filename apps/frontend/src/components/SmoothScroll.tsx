@@ -18,8 +18,14 @@ export default function SmoothScroll({ children }: { children: ReactNode }) {
 
     let lenis: { raf: (time: number) => void; destroy: () => void } | null = null;
     let rafId = 0;
+    // The import is async: if this effect is torn down (route change to a portal)
+    // before it resolves, cleanup runs while `lenis` is still null — so it can't
+    // destroy the instance the resolve is about to create. That orphan's wheel
+    // listener then preventDefault()s scroll on the portal. Guard with a flag.
+    let cancelled = false;
 
     import("lenis").then(({ default: Lenis }) => {
+      if (cancelled) return;
       lenis = new Lenis({
         duration: 1.2,
         easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -39,6 +45,7 @@ export default function SmoothScroll({ children }: { children: ReactNode }) {
     });
 
     return () => {
+      cancelled = true;
       cancelAnimationFrame(rafId);
       lenis?.destroy();
     };

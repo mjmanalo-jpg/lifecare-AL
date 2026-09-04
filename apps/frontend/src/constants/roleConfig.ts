@@ -364,35 +364,28 @@ export const ROLES: Record<Role, RoleDetails> = {
       // Action Queue hub — Alerts · Escalations.
       { name: "Action Queue", icon: BellRing, route: "/superadmin/actionqueue", group: "Clinical" },
       { name: "Residents", icon: Users, route: "/superadmin/records", group: "Clinical" },
-      { name: "Daily Care Logs", icon: NotebookPen, route: "/superadmin/carelogs", group: "Clinical" },
-      // Assessment hub — Pre-Admission (v4.2) · Reassessment / LOC.
-      // Assessment & LOC — surfaced as explicit entries (both feed the same v4.2
-      // engine): Pre-Admission scoring + the Care Acuity / LOC decision review.
-      // The combined `assessmenthub` route still resolves for deep-links.
-      { name: "Pre-Admission (v4.2)", icon: ClipboardList, route: "/superadmin/prescreen", group: "Clinical" },
-      { name: "Care Acuity & LOC", icon: Gauge, route: "/superadmin/careacuity", group: "Clinical" },
-      // Care Plan hub — Plan · Generator · 24-Hour Routine.
-      { name: "Care Plan", icon: Target, route: "/superadmin/careplanhub", group: "Clinical" },
       { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/superadmin/tasks", group: "Clinical" },
       { name: "Shift Endorsement & Continuity", icon: FileText, route: "/superadmin/reports", group: "Clinical" },
       { name: "Medication Management & Inventory", icon: Pill, route: "/superadmin/medications", group: "Clinical" },
       { name: "Medication Administration Record", icon: Pill, route: "/superadmin/mar", group: "Clinical" },
-      { name: "Approvals", icon: ClipboardCheck, route: "/superadmin/approvalworkflows", group: "Clinical" },
       { name: "Vaccinations", icon: Syringe, route: "/superadmin/vaccinations", group: "Clinical" },
       // ── Operations ────────────────────────────────────────────────────────
-      { name: "CRM & Leads", icon: UserPlus, route: "/superadmin/crm", group: "Operations" },
-      { name: "Consent & Move-in Forms", icon: ClipboardList, route: "/superadmin/consentforms", group: "Operations" },
+      // Ordered like the Care Manager portal: Resident Assessment → Admissions →
+      // Care Plan → Room Management, then the remaining operations tabs.
+      { name: "Resident Assessment", icon: ClipboardList, route: "/superadmin/assessmenthub", group: "Operations" },
       { name: "Admissions & Registration", icon: UserPlus, route: "/superadmin/admissions", group: "Operations" },
-      { name: "Staff Registry", icon: Users, route: "/superadmin/staff", group: "Operations" },
-      { name: "Caregiver Schedule", icon: CalendarCheck, route: "/superadmin/caregiverschedule", group: "Operations" },
+      { name: "Care Plan", icon: Target, route: "/superadmin/careplanhub", group: "Operations" },
       { name: "Room Management", icon: DoorOpen, route: "/superadmin/rooms", group: "Operations" },
+      { name: "Approvals", icon: ClipboardCheck, route: "/superadmin/approvalworkflows", group: "Operations" },
+      // Staffing hub — Staff Registry · Staff Profiles · Caregiver Schedule. The
+      // standalone staff/staffprofiles/caregiverschedule routes still resolve.
+      { name: "Staffing", icon: Users, route: "/superadmin/staffinghub", group: "Operations" },
       { name: "Resident Documents", icon: FolderOpen, route: "/superadmin/documents", group: "Operations" },
       { name: "Clinical Reports", icon: BarChart3, route: "/superadmin/clinicalreports", group: "Operations" },
       // ── Administration ────────────────────────────────────────────────────
       { name: "Platform Governance", icon: ShieldCheck, route: "/superadmin/governance", group: "Administration" },
       // "Portal Matrix" is merged into "SLMS Feature Matrix" as its Access Control tab.
       { name: "SLMS Feature Matrix", icon: ShieldCheck, route: "/superadmin/featurematrix", group: "Administration" },
-      { name: "Staff Profiles & Records", icon: Users, route: "/superadmin/staffprofiles", group: "Administration" },
       { name: "Audit Log", icon: Shield, route: "/superadmin/auditlog", group: "Administration" },
       { name: "Inventory Alerts", icon: Bell, route: "/superadmin/inventory-alerts", group: "Administration" },
       // ── System (technical tools — collapsed, out of the clinical scan) ─────
@@ -432,13 +425,12 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "Care Plan", icon: Target, route: "/nurse/careplanhub", group: "Clinical Hubs" },
       { name: "Monitoring", icon: HeartPulse, route: "/nurse/monitoringhub", group: "Clinical Hubs" },
       { name: "Staffing", icon: ListTodo, route: "/nurse/staffinghub", group: "Clinical Hubs" },
-      { name: "Specialist Referrals", icon: Send, route: "/nurse/referrals", group: "Coordination & Close" },
-      { name: "Physician Communication", icon: PhoneCall, route: "/nurse/physiciancomms", group: "Coordination & Close" },
-      { name: "Dedicated Staffing / PCG", icon: HeartHandshake, route: "/nurse/privatecare", group: "Coordination & Close" },
-      { name: "Additional Clinical Services", icon: Cross, route: "/nurse/additionalservices", group: "Coordination & Close" },
+      { name: "Dedicated Staffing / PCG", icon: HeartHandshake, route: "/nurse/privatecare", group: "Clinical Hubs" },
+      // Clinical Coordination hub — Additional Services · Specialist Referrals ·
+      // Physician Comms · Appointments · Infection Control · Safeguarding. The
+      // standalone routes still resolve for deep-links.
+      { name: "Clinical Coordination", icon: Cross, route: "/nurse/clinicalcoordination", group: "Coordination & Close" },
       { name: "Shift Close", icon: Repeat, route: "/nurse/shiftclosehub", group: "Coordination & Close" },
-      { name: "Safeguarding", icon: ShieldCheck, route: "/nurse/safeguarding", group: "Coordination & Close" },
-      { name: "Infection Control", icon: Activity, route: "/nurse/infectioncontrol", group: "Coordination & Close" },
     ],
   },
   CAREGIVER: {
@@ -530,30 +522,28 @@ export const ROLES: Record<Role, RoleDetails> = {
       // CRM is owned by the dedicated CRM role (and Facility Admin / Super Admin).
       // The Care Manager pulls a lead's name via the Pre-Admission picker, which
       // reads admissions directly — no CRM sidebar entry needed here.
+      // Resident Assessment hub — Pre-Admission · Reassessment / LOC Decision Review.
+      { name: "Resident Assessment", icon: Gauge, route: "/care_manager/assessmenthub", group: "Admissions & Governance" },
       { name: "Admission & Onboarding", icon: UserPlus, route: "/care_manager/admissions", group: "Admissions & Governance" },
-      { name: "Room Management", icon: DoorOpen, route: "/care_manager/rooms", group: "Admissions & Governance" },
-      // Assessment hub — Pre-Admission (v4.2) · Reassessment / LOC Decision Review.
-      { name: "Assessment & LOC", icon: Gauge, route: "/care_manager/assessmenthub", group: "Admissions & Governance" },
       // Care Plan hub — Plan & Review · 24-Hour Routine.
       { name: "Care Plan", icon: Target, route: "/care_manager/careplanhub", group: "Admissions & Governance" },
+      { name: "Room Management", icon: DoorOpen, route: "/care_manager/rooms", group: "Admissions & Governance" },
       // Zone D is governance-only per spec (the CM dashboard is not a nurse shift screen):
       // the aggregate reliability KPI + drill-down, plus the medication hub. Bedside
       // execution lives in the Nurse/Caregiver portals, reached via dashboard drill-down.
       { name: "Care Delivery Reliability", icon: Activity, route: "/care_manager/caredelivery", group: "Care Delivery Reliability" },
       // Medication hub — Compliance · Inventory · Mini Pharmacy · Approvals · Safety.
       { name: "Medication", icon: Pill, route: "/care_manager/medhub", group: "Care Delivery Reliability" },
-      { name: "Safeguarding", icon: ShieldCheck, route: "/care_manager/safeguarding", group: "Safety / Transitions" },
       { name: "Live Safety Monitoring", icon: Video, route: "/care_manager/monitoring", group: "Safety / Transitions" },
       // Monitoring hub — Wound · Vitals · Domain · ADL · Weight.
       { name: "Monitoring", icon: HeartPulse, route: "/care_manager/monitoringhub", group: "Safety / Transitions" },
-      { name: "Infection Control", icon: Activity, route: "/care_manager/infectioncontrol", group: "Safety / Transitions" },
       // Staffing hub — Assignments · Schedule · Roster · Profiles · Quality.
       { name: "Staffing", icon: ListTodo, route: "/care_manager/staffinghub", group: "Staffing / Team Quality" },
-      { name: "Dedicated Staffing / PCG", icon: HeartHandshake, route: "/care_manager/privatecare", group: "Open Decisions" },
-      { name: "Additional Clinical Services", icon: Cross, route: "/care_manager/additionalservices", group: "Open Decisions" },
-      { name: "Specialist Referrals", icon: Send, route: "/care_manager/referrals", group: "Open Decisions" },
-      { name: "Physician Communication", icon: MessageSquare, route: "/care_manager/physiciancomms", group: "Open Decisions" },
-      { name: "Appointments", icon: CalendarDays, route: "/care_manager/appointmentcalendar", group: "Open Decisions" },
+      { name: "Dedicated Staffing / PCG", icon: HeartHandshake, route: "/care_manager/privatecare", group: "Staffing / Team Quality" },
+      // Clinical Coordination hub — Additional Services · Specialist Referrals ·
+      // Physician Comms · Appointments · Infection Control · Safeguarding. The
+      // standalone routes still resolve for deep-links.
+      { name: "Clinical Coordination", icon: Cross, route: "/care_manager/clinicalcoordination", group: "Open Decisions" },
       // Shift Close hub — Handover · What's Charted · Status.
       { name: "Shift Close", icon: Repeat, route: "/care_manager/shiftclosehub", group: "Open Decisions" },
       { name: "Clinical Audit Trail", icon: ScrollText, route: "/care_manager/auditlog", group: "Open Decisions" },

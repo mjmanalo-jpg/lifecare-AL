@@ -54,7 +54,7 @@ export default function HubTabs({
       <div
         role="tablist"
         aria-label="Section tabs"
-        className="flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-800"
+        className="flex w-fit max-w-full flex-wrap gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-700 dark:bg-slate-800/60"
       >
         {tabs.map((t) => {
           const on = t.key === current?.key;
@@ -65,10 +65,14 @@ export default function HubTabs({
               role="tab"
               aria-selected={on}
               onClick={() => select(t.key)}
-              className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              className={`rounded-lg px-4 py-2 text-sm font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 on
-                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                  : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                  ? "bg-blue-600 text-white shadow-sm"
+                  // Translucent hover overlays, not bg-white/bg-slate-700 — the clinical
+                  // theme layer (globals.css) remaps those solid surfaces to a dark
+                  // colour, which turned the hovered tab dark-on-dark. Opacity variants
+                  // compile to different class names and are left un-remapped.
+                  : "text-slate-600 hover:bg-black/5 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
               }`}
             >
               {t.label}

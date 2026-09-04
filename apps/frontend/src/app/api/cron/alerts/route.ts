@@ -5,6 +5,7 @@ import { slaMinutes } from "@/lib/alertAccess";
 import { scanCameraHealth } from "@/lib/cameraHealth";
 import { isAbnormalVital, vitalSeverity } from "@/lib/vitalThresholds";
 import { reassessmentStatus } from "@/lib/lifecare/reassessment";
+import { authoritativeAssessmentFor, type AssessmentV42 } from "@/lib/lifecare/assessment";
 import type { CareLevel } from "@/lib/lifecare/types";
 import {
   DOMAIN_LOGS_KEY, CARE_LOG_NOTES_KEY, PERSIST_DAYS,
@@ -716,6 +717,37 @@ async function scanCommunity(communityId: string, organizationId: string | null)
       const due = String(rv.nextReviewDate || "").slice(0, 10);
       if (!due || due > todayStr) continue;
       if (await notify("SYSTEM_ALERT", "carePlanReview", `cprdue:${rid}:${due}`, "Care plan review due", `${rname(r)} (Room ${room(r)}) is due for a care-plan review (scheduled ${fmtDate(due)}). Open Care Plan Reviews to complete it.`, "WARNING", reviewTeam)) counts.reassessmentDue++;
+    }
+  });
+
+  // Care-plan review OPEN — a NEW plan can now be created. Fires only when BOTH
+  // hold (mirrors the New Review gate in CarePlanReviewsBoard): the active plan's
+  // review is due AND a VALIDATED reassessment post-dates the plan. Distinct from
+  // "review due" above — it means the resident is unblocked for a new care plan.
+  await runSource("care-plan-review-open", async () => {
+    const reviewTeam = idsForRoles(["NURSE", "CARE_MANAGER"]);
+    if (!reviewTeam.length) return;
+    const plans = await prisma.carePlan.findMany({ where: { communityId, status: "ACTIVE" }, select: { residentId: true, effectiveDate: true, nextReviewDate: true } });
+    if (!plans.length) return;
+    const aSetting = await prisma.appSetting.findFirst({ where: { communityId, key: "assessments_v42" }, select: { value: true } });
+    let assessments: AssessmentV42[] = [];
+    try { const v = JSON.parse(aSetting?.value || "[]"); if (Array.isArray(v)) assessments = v; } catch { /* none */ }
+    const validated = assessments.filter((a) => a?.status === "VALIDATED");
+    const dayOf = (d: unknown): string => { if (!d) return ""; const t = new Date(d as string); return Number.isNaN(t.getTime()) ? "" : t.toISOString().slice(0, 10); };
+    const todayStr = now.toISOString().slice(0, 10);
+    const rids = plans.map((p) => p.residentId).filter(Boolean) as string[];
+    const residents = await prisma.resident.findMany({ where: { communityId, id: { in: rids }, status: { not: "DISCHARGED" } }, select: { id: true, firstName: true, lastName: true, roomNumber: true } });
+    const rmap = new Map(residents.map((r) => [r.id, r]));
+    for (const p of plans) {
+      const rid = p.residentId; if (!rid) continue;
+      const r = rmap.get(rid); if (!r) continue;
+      const due = dayOf(p.nextReviewDate);
+      if (!due || due > todayStr) continue; // review frequency not up yet
+      const planDay = dayOf(p.effectiveDate);
+      const a = authoritativeAssessmentFor(validated, { residentId: rid, residentName: rname(r) });
+      const aDay = a ? (dayOf(a.validation?.at) || dayOf(a.updatedAt) || dayOf(a.createdAt)) : "";
+      if (!aDay || (planDay && aDay <= planDay)) continue; // no validated reassessment after the active plan
+      if (await notify("SYSTEM_ALERT", "carePlanReview", `cpropen:${rid}:${aDay}`, "New care plan can be created", `${rname(r)} (Room ${room(r)}) is ready for a new care plan — reassessment complete and the review is due. Open Care Plan Reviews → New Review.`, "WARNING", reviewTeam)) counts.reassessmentDue++;
     }
   });
 

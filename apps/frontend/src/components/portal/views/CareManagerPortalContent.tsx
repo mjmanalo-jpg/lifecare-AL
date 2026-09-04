@@ -104,8 +104,22 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
         <HubTabs
           storageKey="care_manager-assessmenthub"
           tabs={[
-            { key: "prescreen", label: "Pre-Admission (v4.2)", node: <ResidentAssessmentV42 clinicianRole="CARE_MANAGER" /> },
-            { key: "careacuity", label: "Reassessment / LOC", node: <CareAcuityBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "prescreen", label: "Pre-Admission", node: <ResidentAssessmentV42 clinicianRole="CARE_MANAGER" /> },
+            { key: "careacuity", label: "Reassessment", node: <CareAcuityBoard clinicianRole="CARE_MANAGER" /> },
+          ]}
+        />
+      );
+    case "clinicalcoordination":
+      return (
+        <HubTabs
+          storageKey="care_manager-clinicalcoordination"
+          tabs={[
+            { key: "additionalservices", label: "Additional Clinical Services", node: <AdditionalServicesBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "referrals", label: "Specialist Referrals", node: <ReferralsBoard canApprove /> },
+            { key: "physiciancomms", label: "Physician Communication", node: <PhysicianCommsLog /> },
+            { key: "appointmentcalendar", label: "Appointments", node: <AppointmentCalendar title="Appointments Calendar" canSchedule={false} /> },
+            { key: "infectioncontrol", label: "Infection Control", node: <InfectionControlBoard role="CARE_MANAGER" /> },
+            { key: "safeguarding", label: "Safeguarding", node: <SafeguardingBoard role="CARE_MANAGER" /> },
           ]}
         />
       );

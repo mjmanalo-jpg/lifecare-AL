@@ -475,8 +475,8 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
       <HubTabs
         storageKey="superadmin-assessmenthub"
         tabs={[
-          { key: "prescreen", label: "Pre-Admission (v4.2)", node: <ResidentAssessmentV42 clinicianRole="FACILITY_ADMIN" /> },
-          { key: "rounds", label: "Reassessment / LOC", node: <CareAcuityBoard clinicianRole="FACILITY_ADMIN" /> },
+          { key: "prescreen", label: "Pre-Admission", node: <ResidentAssessmentV42 clinicianRole="FACILITY_ADMIN" /> },
+          { key: "rounds", label: "Reassessment", node: <CareAcuityBoard clinicianRole="FACILITY_ADMIN" /> },
         ]}
       />
     );
@@ -598,8 +598,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
     return <InventoryAlertsPanel />;
   }
 
-  if (tab === "staff") {
-    return (
+  const renderStaffRegistry = () => (
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
@@ -1351,6 +1350,21 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
           </div>
         )}
       </div>
+  );
+
+  if (tab === "staff") return renderStaffRegistry();
+
+  // Staffing hub — Staff Registry · Staff Profiles · Caregiver Schedule.
+  if (tab === "staffinghub") {
+    return (
+      <HubTabs
+        storageKey="superadmin-staffinghub"
+        tabs={[
+          { key: "staff", label: "Staff Registry", node: renderStaffRegistry() },
+          { key: "staffprofiles", label: "Staff Profiles", node: <StaffProfilesBoard clinicianRole="FACILITY_ADMIN" /> },
+          { key: "caregiverschedule", label: "Caregiver Schedule", node: <CaregiverScheduleBoard clinicianRole="FACILITY_ADMIN" /> },
+        ]}
+      />
     );
   }
 
