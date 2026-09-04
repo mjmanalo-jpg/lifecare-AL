@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
+import PhysicalExamForm from "./PhysicalExamForm";
 import { originOf, assessmentRawScore, classifyAssessment } from "@/lib/lifecare/assessment";
 import { ASSESSMENT_DOMAINS } from "@/lib/lifecare/dataset";
 import { DOMAIN_CODES } from "@/lib/lifecare/types";
@@ -86,7 +87,7 @@ const ACCENT_VAR: Record<JourneyAccent, string> = {
   coral: "var(--clinical-coral)", ink: "var(--clinical-ink-soft)",
 };
 const CATEGORY_ICON: Record<JourneyCategory, LucideIcon> = {
-  ADMISSION: UserPlus, ASSESSMENT: ClipboardList, PHYSICAL_EXAM: Stethoscope, LOC: Gauge, CARE_PLAN: ClipboardCheck,
+  ADMISSION: UserPlus, ASSESSMENT: ClipboardList, LOC: Gauge, CARE_PLAN: ClipboardCheck,
   CARE_EVENT: ClipboardCheck, TASK: ListChecks, CALL_BELL: BellRing, REQUEST: ConciergeBell,
   ACUITY: Layers, MEDICATION: Pill, INCIDENT: AlertTriangle, WOUND: Bandage,
   REFERRAL: Stethoscope, CLINICAL_RECORD: FolderOpen, ENDORSEMENT: FileText,
@@ -233,7 +234,6 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       admissionSummary: resident.admissionSummary,
       locHistory: parseArr(settingVal(settingRows, "loc_history")),
       assessmentsV42,
-      physicalExams: parseArr(settingVal(settingRows, "physical_exams")),
       carePlans: cpQ.data || [],
       carePlanReviews: parseArr(settingVal(settingRows, "care_plan_reviews")),
       tasks: taskQ.data || [],
@@ -370,7 +370,10 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       </div>
 
       {view === "forms" ? (
-        <FormsPanel forms={forms} admissions={admissionForms} />
+        <div className="space-y-5">
+          <FormsPanel forms={forms} admissions={admissionForms} />
+          <PhysicalExamForm residentId={resident.id} residentName={resident.name} room={resident.room} canEdit={!readOnly} />
+        </div>
       ) : view === "careplan" ? (
         <ResidentCarePlanView residentId={resident.id} />
       ) : view === "clinical" ? (

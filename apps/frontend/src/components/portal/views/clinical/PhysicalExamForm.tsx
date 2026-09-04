@@ -1,33 +1,34 @@
 "use client";
 
 /**
- * Physical Exam — the on-admission "Clinical Assessment" body check. Documents
- * injuries (11 types from the paper form) against a body location with an
- * optional photo. Self-contained: reads/writes the migration-free
- * `physical_exams` app-setting. Once completed (all-clear or ≥1 finding) it is
- * stamped with examinedAt and surfaces on the resident's One Care · One Journey.
- * Printable on the LifeCare letterhead (body outlines + numbered findings).
+ * Physical Exam — the on-admission CLINICAL ASSESSMENT body check, laid out to
+ * match the paper form: the 11 injury types (a fill-in beside each) and the
+ * front / back / side body diagrams. The whole form is visible on screen and
+ * prints in the same layout (on the LifeCare letterhead). Self-contained: reads
+ * and writes the migration-free `physical_exams` app-setting.
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, Camera, Loader2, ShieldCheck, Printer, Stethoscope, Save } from "lucide-react";
+import { Printer, Loader2, Save } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
 import { lifecareLetterhead, LIFECARE_BRAND_CSS } from "@/lib/lifecare/brand";
 import {
-  PHYSICAL_EXAMS_KEY, parsePhysicalExams, examForResident, emptyExam, newFinding,
-  INJURY_TYPES, BODY_PARTS, BODY_SIDES, sideLabel,
-  type PhysicalExam, type PhysicalExamFinding, type BodySide, type InjuryType,
+  PHYSICAL_EXAMS_KEY, parsePhysicalExams, examForResident, emptyExam, hasAnyMark,
+  INJURY_TYPES, type PhysicalExam, type InjuryType,
 } from "@/lib/physicalExam";
 
-const input = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white";
 const esc = (v: unknown) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
 
-// Simple humanoid silhouette used as the printed reference diagram (front/back/side).
-const BODY_SVG = `<svg viewBox="0 0 120 260" width="78" height="169" fill="none" stroke="#1c7ed6" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"><circle cx="60" cy="26" r="18"/><path d="M42 44 C42 44 34 50 32 62 L24 108 C23 116 31 118 34 111 L40 74 L42 74 C40 120 40 150 44 152 L48 246 C48 253 58 253 58 246 L59 168 L61 168 L62 246 C62 253 72 253 72 246 L76 152 C80 150 80 120 78 74 L80 74 L86 111 C89 118 97 116 96 108 L88 62 C86 50 78 44 78 44 C72 48 66 50 60 50 C54 50 48 48 42 44 Z"/></svg>`;
+// Body silhouettes (front reused for front + back, plus a side profile), drawn
+// to echo the paper form's diagrams. Rendered on screen and in the printout.
+const BODY_FRONT = `<svg viewBox="0 0 120 300" width="72" height="180" fill="none" stroke="#2b5ca8" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><circle cx="60" cy="30" r="22"/><path d="M60 52 C48 52 44 60 44 70 C44 79 31 83 25 93 C18 106 16 141 14 169 C13 179 23 181 25 170 C29 148 35 120 40 104 C40 131 38 177 40 209 C41 237 44 269 46 287 C47 297 57 297 57 287 L59 215 L61 215 L63 287 C63 297 73 297 74 287 C76 269 79 237 80 209 C82 177 80 131 80 104 C85 120 91 148 95 170 C97 181 107 179 106 169 C104 141 102 106 95 93 C89 83 76 79 76 70 C76 60 72 52 60 52 Z"/></svg>`;
+const BODY_SIDE = `<svg viewBox="0 0 100 300" width="58" height="180" fill="none" stroke="#2b5ca8" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M44 10 C58 10 66 21 66 34 C66 45 60 49 55 53 L57 63 C68 67 74 76 74 88 C74 103 69 123 67 143 C66 156 69 170 69 184 L73 254 C74 262 66 264 64 255 L58 192 C51 190 45 190 41 194 L45 254 C46 262 38 264 36 255 L33 150 C32 128 33 100 35 85 C36 71 40 60 45 54 C41 50 37 44 37 34 C37 21 30 10 44 10 Z"/></svg>`;
 
-export default function PhysicalExamForm({ residentId, residentName, room, canEdit = true, examinerName }: {
-  residentId: string; residentName: string; room?: string; canEdit?: boolean; examinerName?: string;
+const cell = "rounded border border-gray-300 px-2 py-1 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white";
+
+export default function PhysicalExamForm({ residentId, residentName, room, canEdit = true }: {
+  residentId: string; residentName: string; room?: string; canEdit?: boolean;
 }) {
   const { data: settingRows, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
   const saved = useMemo(
@@ -35,44 +36,23 @@ export default function PhysicalExamForm({ residentId, residentName, room, canEd
     [settingRows, residentId],
   );
 
-  const [findings, setFindings] = useState<PhysicalExamFinding[]>([]);
-  const [allClear, setAllClear] = useState(false);
+  const [injuries, setInjuries] = useState<Partial<Record<InjuryType, string>>>({});
+  const [bodyNotes, setBodyNotes] = useState("");
   const [examinedBy, setExaminedBy] = useState("");
-  const [notes, setNotes] = useState("");
-  const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
-  // Hydrate once from the saved record when live data first arrives (don't clobber edits).
   useEffect(() => {
     if (hydrated || !saved) return;
-    setFindings(saved.findings || []);
-    setAllClear(saved.status === "NONE_APPARENT");
-    setExaminedBy(saved.examinedBy || examinerName || "");
-    setNotes(saved.generalNotes || "");
+    setInjuries(saved.injuries || {});
+    setBodyNotes(saved.bodyNotes || "");
+    setExaminedBy(saved.examinedBy || "");
     setHydrated(true);
-  }, [saved, hydrated, examinerName]);
+  }, [saved, hydrated]);
 
-  const touch = () => setDirty(true);
-  const patch = (id: string, p: Partial<PhysicalExamFinding>) => { setFindings((fs) => fs.map((f) => (f.id === id ? { ...f, ...p } : f))); touch(); };
-  const addFinding = () => { setAllClear(false); setFindings((fs) => [...fs, newFinding()]); touch(); };
-  const removeFinding = (id: string) => { setFindings((fs) => fs.filter((f) => f.id !== id)); touch(); };
-  const setNoInjuries = () => { setAllClear(true); setFindings([]); touch(); };
-
-  const uploadPhoto = async (id: string, file: File) => {
-    setUploadingId(id);
-    try {
-      const fd = new FormData(); fd.append("file", file); fd.append("folder", "resident-documents");
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const json = await res.json();
-      if (res.ok && json.url) patch(id, { photoUrl: String(json.url) });
-    } catch { /* a finding can be saved without a photo */ }
-    finally { setUploadingId(null); }
-  };
-
-  const status = allClear ? "NONE_APPARENT" : findings.length ? "FINDINGS" : "DRAFT";
-  const completed = status !== "DRAFT";
+  const setInjury = (t: InjuryType, v: string) => { setInjuries((p) => ({ ...p, [t]: v })); setDirty(true); };
+  const completed = hasAnyMark({ injuries });
 
   const save = async () => {
     setSaving(true);
@@ -81,11 +61,10 @@ export default function PhysicalExamForm({ residentId, residentName, room, canEd
       const rec: PhysicalExam = {
         id: saved?.id || emptyExam(residentId).id,
         residentId, residentName, room,
-        status,
-        findings,
+        injuries,
+        bodyNotes: bodyNotes.trim() || undefined,
         examinedBy: examinedBy.trim() || undefined,
-        generalNotes: notes.trim() || undefined,
-        // Stamp completion time once the exam is actually done (kept stable after).
+        status: completed ? "COMPLETE" : "DRAFT",
         examinedAt: completed ? (saved?.examinedAt || new Date().toISOString()) : undefined,
         updatedAt: new Date().toISOString(),
       };
@@ -97,130 +76,105 @@ export default function PhysicalExamForm({ residentId, residentName, room, canEd
   };
 
   const printExam = () => {
-    const w = window.open("", "_blank", "width=880,height=1000");
+    const w = window.open("", "_blank", "width=900,height=1100");
     if (!w) return;
-    const listHtml = allClear || !findings.length
-      ? `<p class="clear">☑ None apparent — no injuries documented on examination.</p>`
-      : `<ol class="findings">${findings.map((f) =>
-          `<li><b>${esc(f.injury)}</b> — ${esc(f.bodyPart)}${f.side !== "NA" ? ` (${esc(sideLabel(f.side))})` : ""}${f.description ? `<div class="d">${esc(f.description)}</div>` : ""}</li>`,
-        ).join("")}</ol>`;
-    const diagram = ["Front", "Back", "Side"].map((lbl) => `<figure>${BODY_SVG}<figcaption>${lbl}</figcaption></figure>`).join("");
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(residentName)} — Physical Exam</title>
+    const rows = (from: number, to: number) => INJURY_TYPES.slice(from, to).map((t, i) =>
+      `<tr><td class="ln">${esc(injuries[t] || "")}</td><td class="n">${from + i + 1}.</td><td class="t">${esc(t)}</td></tr>`).join("");
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Clinical Assessment — ${esc(residentName)}</title>
 <style>
   *{box-sizing:border-box}
-  body{font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;color:#1f2933;line-height:1.55;max-width:800px;margin:0 auto;padding:36px 40px;font-size:13px}
+  body{font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;color:#1f2933;margin:0 auto;max-width:800px;padding:34px 40px;font-size:13px}
   ${LIFECARE_BRAND_CSS}
-  hr.rule{border:0;border-top:1.5px solid #ced4da;margin:10px 0 14px}
-  .company{font-weight:800;font-size:16px;margin:0 0 1px}.title{font-weight:700;font-size:13px;color:#343a40;margin:0 0 10px}
-  .id{margin:1px 0;font-size:12px}.id b{display:inline-block;min-width:110px}
-  h2{font-size:14px;color:#212529;border-bottom:1.5px solid #dee2e6;padding-bottom:4px;margin:16px 0 8px}
-  .grid{display:flex;gap:20px;align-items:flex-start}
-  .diagrams{display:flex;gap:10px;flex:0 0 auto}.diagrams figure{margin:0;text-align:center}.diagrams figcaption{font-size:10px;color:#868e96;margin-top:2px}
-  ol.findings{margin:0;padding-left:20px;flex:1}ol.findings li{margin:4px 0;page-break-inside:avoid}ol.findings .d{color:#495057;font-size:12px}
-  .clear{color:#2f9e44;font-weight:600}
-  .sign{margin-top:26px;display:flex;justify-content:space-between;gap:20px}.sign div{flex:1}.sign .l{font-size:11px;color:#495057}.sign .v{border-bottom:1px solid #495057;min-height:22px;font-weight:600}
-  .foot{margin-top:22px;border-top:1px solid #e9ecef;padding-top:8px;color:#adb5bd;font-size:11px}
-  @page{margin:0}@media print{body{padding:24px 30px}}
+  hr.rule{border:0;border-top:1.5px solid #ced4da;margin:8px 0 16px}
+  h1{text-align:center;font-size:18px;font-weight:800;letter-spacing:.02em;margin:0 0 18px}
+  .id{margin:3px 0;font-size:14px;font-weight:700}.id b{font-weight:800}
+  .section{font-size:13px;letter-spacing:.04em;margin:20px 0 8px;color:#343a40}
+  table.inj{width:100%;border-collapse:collapse}
+  table.inj td{padding:3px 4px;vertical-align:bottom}
+  table.inj td.ln{width:120px;border-bottom:1px solid #333;text-align:center;font-weight:700}
+  table.inj td.n{width:22px;text-align:right;color:#333}table.inj td.t{white-space:nowrap}
+  .cols{display:flex;gap:40px}.cols>div{flex:1}
+  .bodies{display:flex;gap:18px;justify-content:flex-start;margin-top:22px}
+  .bodies figure{margin:0;text-align:center}.bodies figcaption{font-size:10px;color:#868e96;margin-top:2px}
+  .notes{margin-top:16px}.notes .l{font-weight:700}
+  .sign{margin-top:28px;display:flex;justify-content:space-between;gap:24px}.sign div{flex:1}.sign .l{font-size:11px;color:#495057}.sign .v{border-bottom:1px solid #495057;min-height:22px;font-weight:600}
+  @page{margin:0}@media print{body{padding:22px 30px}}
 </style></head><body onload="window.focus();window.print()">
   ${lifecareLetterhead()}
   <hr class="rule">
-  <p class="company">LifeCare Living Solutions, Inc.</p>
-  <p class="title">Clinical Assessment · Physical Exam</p>
-  <div class="id"><b>Resident:</b> ${esc(residentName)}</div>
-  <div class="id"><b>Room No.:</b> ${esc(room || "—")}</div>
-  <div class="id"><b>Examined:</b> ${esc(examinedBy || "—")}${saved?.examinedAt ? ` · ${esc(new Date(saved.examinedAt).toLocaleDateString())}` : ""}</div>
-  <h2>Type of Injury &amp; Location</h2>
-  <div class="grid"><div class="diagrams">${diagram}</div>${listHtml}</div>
-  ${notes ? `<h2>Notes</h2><p>${esc(notes).replace(/\n/g, "<br>")}</p>` : ""}
+  <h1>CLINICAL ASSESSMENT</h1>
+  <div class="id"><b>Name of Resident:</b> ${esc(residentName)}</div>
+  <div class="id"><b>Room No.:</b> ${esc(room || "")}</div>
+  <div class="section">TYPE OF INJURY</div>
+  <div class="cols">
+    <div><table class="inj">${rows(0, 5)}</table></div>
+    <div><table class="inj">${rows(5, 11)}</table></div>
+  </div>
+  <div class="bodies">
+    <figure>${BODY_FRONT}<figcaption>Front</figcaption></figure>
+    <figure>${BODY_FRONT}<figcaption>Back</figcaption></figure>
+    <figure>${BODY_SIDE}<figcaption>Side</figcaption></figure>
+  </div>
+  ${bodyNotes ? `<div class="notes"><span class="l">Notes:</span> ${esc(bodyNotes).replace(/\n/g, "<br>")}</div>` : ""}
   <div class="sign"><div><div class="l">Examined By:</div><div class="v">${esc(examinedBy)}</div></div><div><div class="l">Reviewed By:</div><div class="v"></div></div></div>
-  <div class="foot">Generated ${esc(new Date().toLocaleString())} · Confidential — for authorized use only.</div>
 </body></html>`);
     w.document.close();
   };
 
+  const injuryRow = (t: InjuryType, n: number) => (
+    <div key={t} className="flex items-center gap-2 py-1">
+      <input disabled={!canEdit} value={injuries[t] || ""} onChange={(e) => setInjury(t, e.target.value)}
+        placeholder="—" className={`${cell} w-24 text-center`} title={`Mark / count for ${t}`} />
+      <span className="text-sm text-gray-800"><span className="tabular-nums text-gray-500">{n}.</span> {t}</span>
+    </div>
+  );
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-sm">
-          <Stethoscope className="h-4 w-4 text-[var(--clinical-panel)]" />
-          <span className="font-semibold text-[var(--clinical-ink)]">Physical Exam — On-Admission Body Check</span>
-          {completed && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Completed</span>}
+    <div className="rounded-xl border bg-white p-5 sm:p-6" style={{ borderColor: "var(--clinical-line)" }}>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-center text-lg font-black tracking-wide text-gray-900 sm:text-xl">CLINICAL ASSESSMENT</h2>
+          <p className="mt-0.5 text-center text-[11px] text-gray-400">Physical Exam · on-admission body check</p>
         </div>
-        <button type="button" onClick={printExam} className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"><Printer className="h-3.5 w-3.5" /> Print</button>
+        <button type="button" onClick={printExam} className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"><Printer className="h-3.5 w-3.5" /> Print</button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <button type="button" disabled={!canEdit} onClick={setNoInjuries}
-          className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition disabled:opacity-50 ${allClear ? "border-green-600 bg-green-600 text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}>
-          <ShieldCheck className="h-4 w-4" /> None apparent / all clear
-        </button>
-        <button type="button" disabled={!canEdit} onClick={addFinding}
-          className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition disabled:opacity-50 ${findings.length ? "border-blue-600 bg-blue-600 text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}>
-          <Plus className="h-4 w-4" /> Document injury
-        </button>
+      <div className="space-y-1 border-b border-gray-200 pb-4 text-sm">
+        <div><span className="font-bold">Name of Resident:</span> {residentName || "—"}</div>
+        <div><span className="font-bold">Room No.:</span> {room || "—"}</div>
       </div>
 
-      {findings.length > 0 && (
-        <div className="space-y-3">
-          {findings.map((f, i) => (
-            <div key={f.id} className="space-y-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Injury {i + 1}</span>
-                {canEdit && <button type="button" onClick={() => removeFinding(f.id)} className="rounded p-1 text-red-500 hover:bg-red-50" title="Remove"><Trash2 className="h-4 w-4" /></button>}
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <label className="text-xs font-medium text-gray-600">Type of injury
-                  <select disabled={!canEdit} className={input + " mt-1"} value={f.injury} onChange={(e) => patch(f.id, { injury: e.target.value as InjuryType })}>
-                    {INJURY_TYPES.filter((t) => t !== "None Apparent").map((t) => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </label>
-                <label className="text-xs font-medium text-gray-600">Body part
-                  <select disabled={!canEdit} className={input + " mt-1"} value={f.bodyPart} onChange={(e) => patch(f.id, { bodyPart: e.target.value })}>
-                    {BODY_PARTS.map((b) => <option key={b} value={b}>{b}</option>)}
-                  </select>
-                </label>
-                <label className="text-xs font-medium text-gray-600">Side / view
-                  <select disabled={!canEdit} className={input + " mt-1"} value={f.side} onChange={(e) => patch(f.id, { side: e.target.value as BodySide })}>
-                    {BODY_SIDES.map((sd) => <option key={sd.value} value={sd.value}>{sd.label}</option>)}
-                  </select>
-                </label>
-              </div>
-              <textarea disabled={!canEdit} className={input + " min-h-[52px]"} placeholder="Description — e.g. 2cm laceration, cleaned & dressed…" value={f.description} onChange={(e) => patch(f.id, { description: e.target.value })} />
-              <div className="flex items-center gap-2">
-                {f.photoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={f.photoUrl} alt="" className="h-12 w-12 rounded-md border border-gray-200 object-cover" />
-                ) : null}
-                {canEdit && (
-                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
-                    {uploadingId === f.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-                    {f.photoUrl ? "Replace photo" : "Add photo"}
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadPhoto(f.id, file); e.target.value = ""; }} />
-                  </label>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <p className="mt-4 text-xs font-bold uppercase tracking-[0.08em] text-gray-500">Type of Injury</p>
+      <div className="mt-1 grid grid-cols-1 gap-x-10 sm:grid-cols-2">
+        <div>{INJURY_TYPES.slice(0, 5).map((t, i) => injuryRow(t, i + 1))}</div>
+        <div>{INJURY_TYPES.slice(5, 11).map((t, i) => injuryRow(t, i + 6))}</div>
+      </div>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className="mt-5 flex flex-wrap gap-5">
+        {[["Front", BODY_FRONT], ["Back", BODY_FRONT], ["Side", BODY_SIDE]].map(([lbl, svg], i) => (
+          <figure key={i} className="m-0 text-center">
+            <span dangerouslySetInnerHTML={{ __html: svg }} />
+            <figcaption className="text-[10px] text-gray-400">{lbl}</figcaption>
+          </figure>
+        ))}
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="text-xs font-medium text-gray-600">Examined by
-          <input disabled={!canEdit} className={input + " mt-1"} value={examinedBy} onChange={(e) => { setExaminedBy(e.target.value); touch(); }} placeholder="Staff name" />
+          <input disabled={!canEdit} value={examinedBy} onChange={(e) => { setExaminedBy(e.target.value); setDirty(true); }} placeholder="Staff name" className={`${cell} mt-1 w-full`} />
         </label>
-        <label className="text-xs font-medium text-gray-600">General notes (optional)
-          <input disabled={!canEdit} className={input + " mt-1"} value={notes} onChange={(e) => { setNotes(e.target.value); touch(); }} placeholder="Overall condition on arrival…" />
+        <label className="text-xs font-medium text-gray-600">Notes / body diagram observations
+          <input disabled={!canEdit} value={bodyNotes} onChange={(e) => { setBodyNotes(e.target.value); setDirty(true); }} placeholder="e.g. 2cm laceration, left forearm (front)…" className={`${cell} mt-1 w-full`} />
         </label>
       </div>
 
       {canEdit && (
-        <div className="flex items-center gap-3">
-          <button type="button" onClick={() => void save()} disabled={saving || !completed || !dirty}
+        <div className="mt-4 flex items-center gap-3">
+          <button type="button" onClick={() => void save()} disabled={saving || !dirty}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--clinical-panel)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {saved ? "Save exam" : "Complete exam"}
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save exam
           </button>
-          {!completed && <span className="text-[11px] text-[var(--clinical-muted)]">Mark “None apparent” or add an injury to complete the exam.</span>}
-          {completed && !dirty && saved && <span className="text-[11px] text-[var(--clinical-muted)]">Saved — visible on the resident’s One Care · One Journey.</span>}
+          {saved && !dirty && <span className="text-[11px] text-[var(--clinical-muted)]">Saved{saved.examinedAt ? ` · ${new Date(saved.examinedAt).toLocaleDateString()}` : ""}.</span>}
         </div>
       )}
     </div>
