@@ -12,6 +12,7 @@ import Link from "next/link";
 import {
   Activity, Utensils, GlassWater, Droplets, Footprints, Moon, Smile, AlertTriangle,
   Calendar, Repeat, RefreshCw, ChevronRight, NotebookPen, Accessibility, Scale, Syringe,
+  ListChecks, Clock, Flag, ShieldCheck,
 } from "lucide-react";
 import { ClinicalHeader, ClinicalModal, ClinicalPage, DataState, SearchInput } from "@/components/portal/views/clinical/clinical-ui";
 import { QuickRecordFlow } from "@/components/portal/views/clinical/CareLogsBoard";
@@ -200,30 +201,46 @@ export default function CaregiverShiftBoard() {
             {/* Metric card — every tile is a shortcut, not a dead number: completion
                 opens Today's Care, Due now / Overdue filter the roster below, and
                 Open concerns jumps to the Action Queue. */}
-            <section className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border bg-[var(--clinical-line)]" style={{ borderColor: "var(--clinical-line)" }}>
-              <Link href="/caregiver/todayscare" className="bg-[var(--clinical-surface)] p-4 text-left transition hover:bg-[var(--clinical-surface-2)]">
-                <p className="text-xs font-semibold text-[var(--clinical-muted)]">Shift task completion</p>
-                <p className="mt-1 text-2xl font-bold text-[var(--clinical-ink)] tabular-nums">
-                  {completion ? `${completion.numerator} of ${completion.denominator}` : "—"}
+            <section className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border bg-[var(--clinical-line)] xl:grid-cols-4" style={{ borderColor: "var(--clinical-line)" }}>
+              {/* Shift task completion → Today's Care */}
+              <Link href="/caregiver/todayscare" className="group relative bg-[var(--clinical-surface)] p-4 transition hover:bg-[var(--clinical-surface-2)]">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/10 text-[var(--clinical-panel)]"><ListChecks className="h-5 w-5" /></span>
+                <p className="mt-3 text-3xl font-bold leading-none tabular-nums text-[var(--clinical-ink)]">
+                  {completion ? completion.numerator : "—"}
+                  {completion ? <span className="text-lg font-semibold text-[var(--clinical-muted)]"> / {completion.denominator}</span> : null}
                 </p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--clinical-surface-2)]">
+                <p className="mt-1.5 text-[13px] font-semibold text-[var(--clinical-ink)]">Tasks done this shift</p>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--clinical-surface-2)]">
                   <div className="h-full rounded-full bg-[var(--clinical-panel)] transition-[width] duration-500" style={{ width: `${completion && completion.denominator ? Math.round((completion.numerator / completion.denominator) * 100) : 0}%` }} />
                 </div>
+                <ChevronRight className="absolute right-3 top-4 h-4 w-4 text-[var(--clinical-muted)] opacity-0 transition group-hover:opacity-70" />
               </Link>
-              <button onClick={() => { setFilter("due"); document.getElementById("cg-roster")?.scrollIntoView({ behavior: "smooth" }); }} className="bg-[var(--clinical-surface)] p-4 text-left transition hover:bg-[var(--clinical-surface-2)]">
-                <p className="text-xs font-semibold text-[var(--clinical-muted)]">Due now</p>
-                <p className="mt-1 text-2xl font-bold text-[var(--clinical-ink)] tabular-nums">{dueNowItems.length}</p>
-                <p className="mt-2 text-xs text-[var(--clinical-muted)]">Across {dueNowResidents} resident{dueNowResidents === 1 ? "" : "s"}</p>
+
+              {/* Due now → filter the roster below */}
+              <button onClick={() => { setFilter("due"); document.getElementById("cg-roster")?.scrollIntoView({ behavior: "smooth" }); }} className="group relative bg-[var(--clinical-surface)] p-4 text-left transition hover:bg-[var(--clinical-surface-2)]">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-[var(--clinical-amber)]"><Clock className="h-5 w-5" /></span>
+                <p className="mt-3 text-3xl font-bold leading-none tabular-nums text-[var(--clinical-ink)]">{dueNowItems.length}</p>
+                <p className="mt-1.5 text-[13px] font-semibold text-[var(--clinical-ink)]">Due now</p>
+                <p className="mt-0.5 text-[11px] text-[var(--clinical-muted)]">Across {dueNowResidents} resident{dueNowResidents === 1 ? "" : "s"}</p>
+                <ChevronRight className="absolute right-3 top-4 h-4 w-4 text-[var(--clinical-muted)] opacity-0 transition group-hover:opacity-70" />
               </button>
-              <button onClick={() => { setFilter("overdue"); document.getElementById("cg-roster")?.scrollIntoView({ behavior: "smooth" }); }} className="bg-[var(--clinical-surface)] p-4 text-left transition hover:bg-[var(--clinical-surface-2)]">
-                <p className="text-xs font-semibold text-[var(--clinical-muted)]">Overdue</p>
-                <p className={`mt-1 text-2xl font-bold tabular-nums ${overdueCount ? "text-[var(--clinical-danger,#dc2626)]" : "text-[var(--clinical-ink)]"}`}>{overdueCount}</p>
-                <p className="mt-2 text-xs text-[var(--clinical-muted)]">{overdueCount ? "Needs action" : "None"}</p>
+
+              {/* Overdue → filter the roster below. The whole tile flushes red when there's overdue work. */}
+              <button onClick={() => { setFilter("overdue"); document.getElementById("cg-roster")?.scrollIntoView({ behavior: "smooth" }); }} className={`group relative p-4 text-left transition ${overdueCount ? "bg-red-500/[0.06] hover:bg-red-500/10" : "bg-[var(--clinical-surface)] hover:bg-[var(--clinical-surface-2)]"}`}>
+                <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${overdueCount ? "bg-red-500/15 text-[var(--clinical-danger,#dc2626)]" : "bg-[var(--clinical-surface-2)] text-[var(--clinical-muted)]"}`}><AlertTriangle className="h-5 w-5" /></span>
+                <p className={`mt-3 text-3xl font-bold leading-none tabular-nums ${overdueCount ? "text-[var(--clinical-danger,#dc2626)]" : "text-[var(--clinical-ink)]"}`}>{overdueCount}</p>
+                <p className="mt-1.5 text-[13px] font-semibold text-[var(--clinical-ink)]">Overdue</p>
+                <p className={`mt-0.5 text-[11px] font-medium ${overdueCount ? "text-[var(--clinical-danger,#dc2626)]" : "text-[var(--clinical-muted)]"}`}>{overdueCount ? "Needs action now" : "All caught up"}</p>
+                <ChevronRight className="absolute right-3 top-4 h-4 w-4 text-[var(--clinical-muted)] opacity-0 transition group-hover:opacity-70" />
               </button>
-              <Link href="/caregiver/actionqueue" className="bg-[var(--clinical-surface)] p-4 text-left transition hover:bg-[var(--clinical-surface-2)]">
-                <p className="text-xs font-semibold text-[var(--clinical-muted)]">Open concerns</p>
-                <p className={`mt-1 text-2xl font-bold tabular-nums ${openConcerns ? "text-[var(--clinical-amber)]" : "text-[var(--clinical-ink)]"}`}>{openConcerns}</p>
-                <p className="mt-2 text-xs text-[var(--clinical-muted)]">{openConcerns ? "Nurse notified" : "None"}</p>
+
+              {/* Open concerns → Action Queue */}
+              <Link href="/caregiver/actionqueue" className="group relative bg-[var(--clinical-surface)] p-4 transition hover:bg-[var(--clinical-surface-2)]">
+                <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${openConcerns ? "bg-amber-500/10 text-[var(--clinical-amber)]" : "bg-emerald-500/10 text-emerald-500"}`}>{openConcerns ? <Flag className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}</span>
+                <p className={`mt-3 text-3xl font-bold leading-none tabular-nums ${openConcerns ? "text-[var(--clinical-amber)]" : "text-[var(--clinical-ink)]"}`}>{openConcerns}</p>
+                <p className="mt-1.5 text-[13px] font-semibold text-[var(--clinical-ink)]">Open concerns</p>
+                <p className={`mt-0.5 text-[11px] ${openConcerns ? "text-[var(--clinical-amber)]" : "text-emerald-500"}`}>{openConcerns ? "Nurse notified" : "None — all clear"}</p>
+                <ChevronRight className="absolute right-3 top-4 h-4 w-4 text-[var(--clinical-muted)] opacity-0 transition group-hover:opacity-70" />
               </Link>
             </section>
 
