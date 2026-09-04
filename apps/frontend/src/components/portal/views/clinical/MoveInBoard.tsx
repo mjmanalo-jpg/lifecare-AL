@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Package, FileText, HeartPulse, Users } from "lucide-react";
+import { Package, FileText, HeartPulse, Users, Stethoscope } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, updateRecord } from "@/lib/api";
 import { adaptResident } from "@/lib/adapters";
@@ -21,15 +21,17 @@ import { HEALTH_ASSESSMENT_KEY, parseHealthStore, healthFor, type HealthAssessme
 import BelongingsFormsPanel from "./BelongingsForms";
 import DocumentSection from "./DocumentSection";
 import HealthAssessmentForm from "./HealthAssessmentForm";
+import PhysicalExamForm from "./PhysicalExamForm";
 import { ClinicalCard, DataState, controlClass } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (v: unknown) => (v == null ? "" : String(v));
 
-type TabKey = "belongings" | "medical" | "emergency" | "documents";
+type TabKey = "belongings" | "medical" | "physicalexam" | "emergency" | "documents";
 const TABS: { key: TabKey; label: string; icon: typeof Package }[] = [
   { key: "belongings", label: "Belongings", icon: Package },
   { key: "medical", label: "Medical History", icon: HeartPulse },
+  { key: "physicalexam", label: "Physical Exam", icon: Stethoscope },
   { key: "emergency", label: "Emergency & Family", icon: Users },
   { key: "documents", label: "Documents", icon: FileText },
 ];
@@ -141,6 +143,9 @@ function MoveInDetail({ residentId, name, room, raw, healthStore, canEdit, onHea
       )}
       {tab === "medical" && (
         <HealthAssessmentForm profile={healthProfile} canEdit={canEdit} residentName={name} defaultPhysician={s(raw.primaryPhysician)} defaultAllergies={s(raw.allergies)} onSave={saveHealth} />
+      )}
+      {tab === "physicalexam" && (
+        <PhysicalExamForm residentId={residentId} residentName={name} room={room} canEdit={canEdit} />
       )}
       {tab === "emergency" && (
         <ClinicalCard className="p-4 sm:p-5">

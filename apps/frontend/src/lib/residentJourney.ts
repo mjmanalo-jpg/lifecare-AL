@@ -19,7 +19,7 @@ const pickDate = (r: Row, ...keys: string[]): string => {
 };
 
 export type JourneyCategory =
-  | "ADMISSION" | "ASSESSMENT" | "LOC" | "CARE_PLAN" | "ACUITY" | "CARE_EVENT"
+  | "ADMISSION" | "ASSESSMENT" | "PHYSICAL_EXAM" | "LOC" | "CARE_PLAN" | "ACUITY" | "CARE_EVENT"
   | "TASK" | "CALL_BELL" | "REQUEST"
   | "MEDICATION" | "INCIDENT" | "WOUND" | "REFERRAL" | "CLINICAL_RECORD"
   | "ENDORSEMENT" | "WEIGHT" | "PRIVATE_CARE" | "OVERAGE" | "DOCUMENT" | "NOTE";
@@ -36,6 +36,7 @@ export interface JourneyCategoryMeta {
 export const JOURNEY_CATEGORY_META: Record<JourneyCategory, JourneyCategoryMeta> = {
   ADMISSION: { label: "Admission & Intake", accent: "teal", tab: "residents" },
   ASSESSMENT: { label: "Assessment", accent: "teal", tab: "careacuity" },
+  PHYSICAL_EXAM: { label: "Physical Exam", accent: "teal", tab: "movein" },
   LOC: { label: "Level of Care", accent: "teal", tab: "careacuity" },
   CARE_PLAN: { label: "Care Plan", accent: "green", tab: "careplans" },
   ACUITY: { label: "Care Acuity", accent: "teal", tab: "careacuity" },
@@ -57,7 +58,7 @@ export const JOURNEY_CATEGORY_META: Record<JourneyCategory, JourneyCategoryMeta>
 };
 
 export const JOURNEY_CATEGORY_ORDER: JourneyCategory[] = [
-  "ADMISSION", "ASSESSMENT", "LOC", "ACUITY", "CARE_PLAN", "CARE_EVENT", "TASK",
+  "ADMISSION", "ASSESSMENT", "PHYSICAL_EXAM", "LOC", "ACUITY", "CARE_PLAN", "CARE_EVENT", "TASK",
   "CALL_BELL", "REQUEST", "MEDICATION",
   "INCIDENT", "WOUND", "REFERRAL", "CLINICAL_RECORD", "ENDORSEMENT",
   "WEIGHT", "PRIVATE_CARE", "OVERAGE", "DOCUMENT", "NOTE",
@@ -84,6 +85,7 @@ export interface JourneySources {
   locHistory?: Row[];
   careEvents?: Row[];
   assessmentsV42?: Row[];
+  physicalExams?: Row[];      // on-admission body-check exams (physical_exams app-setting)
   carePlans?: Row[];          // CarePlan rows (the individualized plan document)
   carePlanReviews?: Row[];
   tasks?: Row[];              // Task rows (caregiver assignments, incl. completions)
@@ -140,6 +142,21 @@ export function buildJourney(src: JourneySources): JourneyEvent[] {
       status: titleCase(s(a.status)), by: s(a.createdBy) || undefined,
       date: pickDate(a, "updatedAt", "createdAt"),
       tab: isAcuity ? "careacuity" : "prescreen",
+    });
+  }
+
+  // Physical exams (on-admission body check). Only completed exams appear — a
+  // draft that hasn't been finished carries no examinedAt and stays off the timeline.
+  for (const p of forRes(src.physicalExams, rid)) {
+    if (!p.examinedAt) continue;
+    const findings = Array.isArray(p.findings) ? p.findings : [];
+    const noneApparent = s(p.status) === "NONE_APPARENT" || findings.length === 0;
+    push({
+      id: `physexam:${s(p.id)}`, category: "PHYSICAL_EXAM",
+      title: noneApparent ? "Physical exam — none apparent" : `Physical exam — ${findings.length} injur${findings.length === 1 ? "y" : "ies"} documented`,
+      summary: noneApparent ? undefined : (findings.map((f: Row) => `${s(f.injury)} (${s(f.bodyPart)})`).join(", ").slice(0, 140) || undefined),
+      status: "Completed", by: s(p.examinedBy) || undefined,
+      date: pickDate(p, "examinedAt", "updatedAt"),
     });
   }
 

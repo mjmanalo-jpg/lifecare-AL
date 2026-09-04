@@ -86,7 +86,7 @@ const ACCENT_VAR: Record<JourneyAccent, string> = {
   coral: "var(--clinical-coral)", ink: "var(--clinical-ink-soft)",
 };
 const CATEGORY_ICON: Record<JourneyCategory, LucideIcon> = {
-  ADMISSION: UserPlus, ASSESSMENT: ClipboardList, LOC: Gauge, CARE_PLAN: ClipboardCheck,
+  ADMISSION: UserPlus, ASSESSMENT: ClipboardList, PHYSICAL_EXAM: Stethoscope, LOC: Gauge, CARE_PLAN: ClipboardCheck,
   CARE_EVENT: ClipboardCheck, TASK: ListChecks, CALL_BELL: BellRing, REQUEST: ConciergeBell,
   ACUITY: Layers, MEDICATION: Pill, INCIDENT: AlertTriangle, WOUND: Bandage,
   REFERRAL: Stethoscope, CLINICAL_RECORD: FolderOpen, ENDORSEMENT: FileText,
@@ -233,6 +233,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       admissionSummary: resident.admissionSummary,
       locHistory: parseArr(settingVal(settingRows, "loc_history")),
       assessmentsV42,
+      physicalExams: parseArr(settingVal(settingRows, "physical_exams")),
       carePlans: cpQ.data || [],
       carePlanReviews: parseArr(settingVal(settingRows, "care_plan_reviews")),
       tasks: taskQ.data || [],
