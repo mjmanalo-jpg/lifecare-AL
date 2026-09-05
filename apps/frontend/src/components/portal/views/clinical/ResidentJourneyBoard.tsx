@@ -22,13 +22,14 @@ import {
   Stethoscope, FolderOpen, FileText, Scale, HeartHandshake, StickyNote, ClipboardCheck,
   ListChecks, BellRing, ConciergeBell,
   RefreshCw, ShieldCheck, ShieldAlert, CalendarClock,
-  TrendingUp, TrendingDown, Minus, ArrowRight, GitCompareArrows, Paperclip,
+  TrendingUp, TrendingDown, Minus, ArrowRight, GitCompareArrows, Paperclip, Activity,
   type LucideIcon,
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { PhysicalExamHistory } from "./PhysicalExamForm";
 import { originOf, assessmentRawScore, classifyAssessment } from "@/lib/lifecare/assessment";
+import { lifecareLetterhead, LIFECARE_BRAND_CSS } from "@/lib/lifecare/brand";
 import { ASSESSMENT_DOMAINS } from "@/lib/lifecare/dataset";
 import { DOMAIN_CODES } from "@/lib/lifecare/types";
 import { type ClinicianRole } from "./useClinician";
@@ -54,6 +55,29 @@ type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-exp
 const DOMAIN_NAME: Record<string, string> = Object.fromEntries(ASSESSMENT_DOMAINS.map((d) => [d.code, d.name]));
 interface DomainRow { code: string; name: string; score: number; note: string; evidence: string; flags: string[] }
 interface FormValidation { by: string; role: string; at: string; decision: string; notes: string }
+interface Layer1Snapshot {
+  residentName: string; firstName?: string; middleName?: string; lastName?: string;
+  dob?: string; age?: string; sex?: string;
+  primaryContact?: string; contactNo?: string; referralSource?: string;
+  reasonForAdmission?: string;
+  diagnoses?: string; allergies?: string; medications?: string;
+  medicationList?: { name: string; dose?: string; frequency?: string; instructions?: string; requiresVitals?: boolean }[];
+  medicationListReviewed?: string;
+  hospitalEd12mo?: boolean; hospitalEdReason?: string;
+  significantChange3090?: boolean; significantChangeDescribe?: string;
+  physicianFollowUp?: string;
+  canParticipate?: string; authorizedRepresentative?: string;
+  familyInvolvement?: string[]; advanceDirective?: string;
+  culturalPreferences?: string; overallGoals?: string[]; goalsPreferences?: string;
+  advanceCareContext?: string;
+}
+interface Layer3Snapshot {
+  finalLevel?: string; finalLevelJustification?: string;
+  belowFloorReason?: string; overrideReason?: string;
+  reconciledModifiers?: string[];
+  capabilityReview?: { outcome: string; rationale: string };
+  reassessmentInterval?: string; nextReviewDate?: string;
+}
 interface FormRecord {
   id: string; kind: string; originLabel: string; icon: LucideIcon;
   status: string; level: string; score: number; date: string; by: string; reason: string;
@@ -61,6 +85,7 @@ interface FormRecord {
   justification: string; interval: string; nextReview: string;
   validation: FormValidation | null; completedBy: string; completedAt: string;
   domains: DomainRow[];
+  layer1?: Layer1Snapshot; layer3?: Layer3Snapshot;
 }
 interface AdmissionForm {
   id: string; date: string; residentName: string; room: string; careLevel: string; v42Level: string; status: string;
@@ -194,6 +219,30 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
           completedBy: s(a?.completedBy),
           completedAt: s(a?.completedAt),
           domains: DOMAIN_CODES.map((code) => ({ code, name: DOMAIN_NAME[code] || code, score: Number(a?.domains?.[code]?.score ?? 0), note: s(a?.domains?.[code]?.goalNote), evidence: s(a?.domains?.[code]?.evidence), flags: Array.isArray(a?.domains?.[code]?.modifierFlags) ? a.domains[code].modifierFlags : [] })),
+          layer1: a?.layer1 ? {
+            residentName: s(a.layer1.residentName), firstName: s(a.layer1.firstName), middleName: s(a.layer1.middleName), lastName: s(a.layer1.lastName),
+            dob: s(a.layer1.dateOfBirth), age: s(a.layer1.age), sex: s(a.layer1.sex),
+            primaryContact: s(a.layer1.primaryContact), contactNo: s(a.layer1.contactNo), referralSource: s(a.layer1.referralSource),
+            reasonForAdmission: s(a.layer1.reasonForAdmission),
+            diagnoses: s(a.layer1.diagnoses), allergies: s(a.layer1.allergies), medications: s(a.layer1.medications),
+            medicationList: Array.isArray(a.layer1.medicationList) ? a.layer1.medicationList : undefined,
+            medicationListReviewed: s(a.layer1.medicationListReviewed),
+            hospitalEd12mo: !!a.layer1.hospitalEd12mo, hospitalEdReason: s(a.layer1.hospitalEdReason),
+            significantChange3090: !!a.layer1.significantChange3090, significantChangeDescribe: s(a.layer1.significantChangeDescribe),
+            physicianFollowUp: s(a.layer1.physicianFollowUp),
+            canParticipate: s(a.layer1.canParticipate), authorizedRepresentative: s(a.layer1.authorizedRepresentative),
+            familyInvolvement: Array.isArray(a.layer1.familyInvolvement) ? a.layer1.familyInvolvement : undefined,
+            advanceDirective: s(a.layer1.advanceDirective), culturalPreferences: s(a.layer1.culturalPreferences),
+            overallGoals: Array.isArray(a.layer1.overallGoals) ? a.layer1.overallGoals : undefined,
+            goalsPreferences: s(a.layer1.goalsPreferences), advanceCareContext: s(a.layer1.advanceCareContext),
+          } : undefined,
+          layer3: a?.layer3 ? {
+            finalLevel: s(a.layer3.finalLevel), finalLevelJustification: s(a.layer3.finalLevelJustification),
+            belowFloorReason: s(a.layer3.belowFloorReason), overrideReason: s(a.layer3.overrideReason),
+            reconciledModifiers: Array.isArray(a.layer3.reconciledModifiers) ? a.layer3.reconciledModifiers : undefined,
+            capabilityReview: a.layer3.capabilityReview ? { outcome: s(a.layer3.capabilityReview.outcome), rationale: s(a.layer3.capabilityReview.rationale) } : undefined,
+            reassessmentInterval: s(a.layer3.reassessmentInterval), nextReviewDate: s(a.layer3.nextReviewDate),
+          } : undefined,
         };
       })
       .sort((x, y) => (y.date || "").localeCompare(x.date || ""));
@@ -543,7 +592,12 @@ function FormsPanel({ forms, admissions = [] }: { forms: FormRecord[]; admission
                       {f.by && <span className="text-[11px] text-[var(--clinical-muted)]">· by {f.by}</span>}
                     </div>
                   </div>
-                  <ChevronDown className={`mt-1 h-4 w-4 shrink-0 text-[var(--clinical-muted)] transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button type="button" onClick={(e) => { e.stopPropagation(); printAssessmentForm(f); }} className="rounded-lg p-1.5 text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]" title="Print / Save as PDF">
+                      <Printer className="h-4 w-4" />
+                    </button>
+                    <ChevronDown className={`h-4 w-4 text-[var(--clinical-muted)] transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                  </div>
                 </button>
 
                 {/* read-only result */}
@@ -633,6 +687,132 @@ function AdmissionCard({ a, open, onToggle }: { a: AdmissionForm; open: boolean;
   );
 }
 
+// ── Print assessment as structured PDF ─────────────────────────────────────
+const esc = (v: unknown): string => String(v ?? "").replace(/[&<>\"]|\n/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "\n": "<br>" }[c] as string));
+const has = (v: unknown): boolean => v != null && String(v).trim() !== "";
+const field = (label: string, val: string): string => val ? `<div class="f"><span class="fl">${esc(label)}</span><span class="fv">${esc(val)}</span></div>` : "";
+const section = (title: string, body: string): string => body.trim() ? `<div class="sec"><h3>${esc(title)}</h3>${body}</div>` : "";
+
+function printAssessmentForm(f: FormRecord): void {
+  const l1 = f.layer1;
+  const l3 = f.layer3;
+  const name = l1?.residentName || "Resident";
+  const title = f.kind;
+  const origin = f.originLabel;
+  // ── Layer 1 sections ──
+  const profileFields = [
+    field("Resident", name),
+    field("Date of Birth", l1?.dob || ""),
+    field("Age", l1?.age || ""),
+    field("Sex", l1?.sex || ""),
+    field("Phone", l1?.contactNo || ""),
+    field("Primary Contact", l1?.primaryContact || ""),
+    field("Referral Source", l1?.referralSource || ""),
+  ].join("");
+  const clinicalFields = [
+    field("Diagnoses", l1?.diagnoses || ""),
+    field("Allergies", l1?.allergies || ""),
+    field("Hospital / ED (12 mo)", l1?.hospitalEd12mo ? `Yes${l1.hospitalEdReason ? ` — ${l1.hospitalEdReason}` : ""}` : ""),
+    field("Significant Change (30–90 d)", l1?.significantChange3090 ? `Yes${l1.significantChangeDescribe ? ` — ${l1.significantChangeDescribe}` : ""}` : ""),
+    field("Physician Follow-Up", l1?.physicianFollowUp || ""),
+  ].join("");
+  const meds = l1?.medicationList && l1.medicationList.length > 0
+    ? l1.medicationList.map((m) => `<div class="med">${esc(m.name)}${m.dose ? ` — ${esc(m.dose)}` : ""}${m.frequency ? ` · ${esc(m.frequency)}` : ""}${m.instructions ? `<br><span class="mi">${esc(m.instructions)}</span>` : ""}${m.requiresVitals ? ` <span class="vt">⚠ Vitals required</span>` : ""}</div>`).join("")
+    : (l1?.medications ? `<div class="med">${esc(l1.medications)}</div>` : "");
+  const decisionFields = [
+    field("Participation Level", l1?.canParticipate?.replace(/_/g, " ") || ""),
+    field("Authorized Representative", l1?.authorizedRepresentative || ""),
+    field("Family Involvement", l1?.familyInvolvement?.join(", ") || ""),
+    field("Advance Directive", l1?.advanceDirective?.replace(/_/g, " ") || ""),
+    field("Cultural / Spiritual Preferences", l1?.culturalPreferences || ""),
+    field("Goals & Preferences", l1?.goalsPreferences || ""),
+  ].join("");
+  // ── Layer 2 — domain scores ──
+  const domainRows = f.domains.map((d) => {
+    const bars = [0, 1, 2, 3].map((n) => n < d.score ? "█" : "░").join("");
+    const detail = [d.evidence ? `Evidence: ${d.evidence}` : "", d.note ? `Goal: ${d.note}` : "", d.flags.length ? `Flags: ${d.flags.join(", ")}` : ""].filter(Boolean).join(" · ");
+    return `<tr><td class="dc">${esc(d.code)}</td><td class="dn">${esc(d.name)}</td><td class="ds">${bars}</td><td class="dv">${d.score}/4</td>${detail ? `<td class="dd">${esc(detail)}</td>` : "<td></td>"}</tr>`;
+  }).join("");
+  // ── Layer 3 — evaluation ──
+  const evalFields = [
+    field("Final Level of Care", f.level || ""),
+    field("Engine Suggested", f.suggestedLevel || ""),
+    field("Final LOC Justification", f.justification || ""),
+    field("Below-Floor Reason", l3?.belowFloorReason || ""),
+    field("Override Reason", l3?.overrideReason || ""),
+    field("Reconciled Modifiers", l3?.reconciledModifiers?.join(", ") || ""),
+    field("Capability Review", l3?.capabilityReview ? `${l3.capabilityReview.outcome} — ${l3.capabilityReview.rationale}` : ""),
+    field("Reassessment Interval", l3?.reassessmentInterval || ""),
+    field("Next Review", l3?.nextReviewDate || ""),
+  ].join("");
+  const validationHtml = f.validation
+    ? `<div class="val"><strong>${esc(f.validation.decision)}</strong> — by ${esc(f.validation.by)}${f.validation.role ? ` (${esc(f.validation.role)})` : ""}${f.validation.at ? ` on ${esc(f.validation.at)}` : ""}${f.validation.notes ? `<br>${esc(f.validation.notes)}` : ""}</div>`
+    : f.status === "COMPLETED" ? `<div class="val">Completed${f.completedBy ? ` by ${esc(f.completedBy)}` : ""} — awaiting clinical validation.</div>` : "";
+  const scoreTotal = f.score;
+  const pct = Math.min(100, Math.round((scoreTotal / 56) * 100));
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)} — ${esc(name)}</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;color:#1f2933;line-height:1.6;max-width:820px;margin:0 auto;padding:44px 48px;font-size:14px}
+${LIFECARE_BRAND_CSS}
+.rule{border:0;border-top:1.5px solid #ced4da;margin:10px 0 18px}
+.company{font-weight:800;font-size:17px;margin:0 0 2px}
+.title{font-weight:700;font-size:14px;color:#343a40;margin:0 0 4px}
+.origin{font-size:12px;color:#868e96;margin:0 0 12px}
+.meta{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 18px;font-size:13px}
+.meta .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.pill-status{background:#4263eb;color:#fff}
+.pill-level{background:#e03131;color:#fff}
+.pill-score{background:#f1f3f5;color:#495057}
+.sec{margin-top:22px;page-break-inside:avoid}
+sec h3{font-size:14px;color:#1c7ed6;border-bottom:1px solid #dee2e6;padding-bottom:4px;margin:0 0 10px;page-break-after:avoid}
+h3{font-size:14px;color:#1c7ed6;border-bottom:1px solid #dee2e6;padding-bottom:4px;margin:0 0 10px;page-break-after:avoid}
+.f{display:flex;gap:8px;margin:3px 0;font-size:13px}.fl{font-weight:700;min-width:160px;flex-shrink:0;color:#495057}.fv{color:#212529}
+.med{padding:6px 10px;background:#f8f9fa;border-radius:6px;margin:4px 0;font-size:13px;border-left:3px solid #4263eb}
+.mi{color:#868e96;font-style:italic;font-size:12px}
+.vt{background:#fff3bf;color:#e8590c;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px}
+table{width:100%;border-collapse:collapse;margin:8px 0;font-size:12.5px}
+th{text-align:left;font-size:11px;color:#495057;border-bottom:1.5px solid #dee2e6;padding:6px 4px}
+td{padding:5px 4px;border-bottom:1px solid #f1f3f5}
+.dc{font-weight:700;color:#4263eb;width:60px}.dn{width:180px}.ds{font-family:monospace;letter-spacing:1px;color:#868e96}.dv{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;width:40px}.dd{font-size:11px;color:#868e96;max-width:200px}
+tr,td,.sec,.med,.f{page-break-inside:avoid}
+.val{background:#f1f3f5;border-radius:8px;padding:10px 14px;font-size:13px;margin-top:12px}
+.foot{margin-top:26px;border-top:1px solid #e9ecef;padding-top:10px;color:#adb5bd;font-size:11px}
+@page{margin:0}
+table.sheet{width:100%;border-collapse:collapse}
+table.sheet>thead>tr>td,table.sheet>tfoot>tr>td{padding:0;border:0}
+.vpad{height:0}
+@media print{body{padding:0;max-width:none;margin:0}td.sheet-body{padding:0 44px}.vpad{height:34px}}
+</style></head><body onload="window.focus();window.print()">
+<table class="sheet"><thead><tr><td><div class="vpad"></div></td></tr></thead><tbody><tr><td class="sheet-body">
+${lifecareLetterhead()}
+<hr class="rule">
+<p class="company">LifeCare Living Solutions, Inc.</p>
+<p class="title">${esc(title)}</p>
+<p class="origin">${esc(origin)} · ${esc(f.date)}</p>
+<div class="meta">
+  <span class="pill pill-status">${esc(f.status)}</span>
+  ${f.level ? `<span class="pill pill-level">${esc(f.level)}</span>` : ""}
+  <span class="pill pill-score">Acuity ${scoreTotal} / 56 (${pct}%)</span>
+  ${f.by ? `<span style="color:#868e96;font-size:12px">by ${esc(f.by)}</span>` : ""}
+</div>
+${section("Layer 1 · Profile & History", profileFields)}
+${section("Clinical History", clinicalFields)}
+${meds ? section("Medications", meds) : ""}
+${decisionFields ? section("Decision Support & Person-Centered Care", decisionFields) : ""}
+${section("Layer 2 · Domain Scores (14 domains, max /56)", `<table><thead><tr><th>Code</th><th>Domain</th><th>Score</th><th>Rating</th><th>Details</th></tr></thead><tbody>${domainRows}<tr style="font-weight:800;border-top:1.5px solid #ced4da"><td></td><td>Total</td><td></td><td class="dv">${scoreTotal}/56</td><td></td></tr></tbody></table>`)}
+${section("Layer 3 · Evaluation", evalFields)}
+${validationHtml}
+<div class="foot">Assessment ${esc(f.id)} · Generated ${esc(new Date().toLocaleString())} · Confidential — for authorized use only.</div>
+</td></tr></tbody><tfoot><tr><td><div class="vpad"></div></td></tr></tfoot></table>
+</body></html>`;
+  const w = window.open("", "_blank", "width=840,height=920");
+  if (!w) return;
+  w.document.write(html);
+  w.document.close();
+}
+
 // The read-only outcome of a single assessment form.
 function FormResult({ f, tone, prev, chg }: { f: FormRecord; tone: string; prev?: FormRecord; chg: FormChanges | null }) {
   const scored = f.domains.filter((d) => d.score > 0);
@@ -653,6 +833,69 @@ function FormResult({ f, tone, prev, chg }: { f: FormRecord; tone: string; prev?
           <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.round((f.score / 56) * 100))}%`, background: tone }} />
         </div>
       </div>
+
+      {/* ── Layer 1 · Profile & History ── */}
+      {f.layer1 && (
+        <div className="rounded-lg border p-3 space-y-3" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>
+          <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-[var(--clinical-panel)]"><UserPlus className="h-3.5 w-3.5" /> Layer 1 · Profile &amp; History</p>
+          {/* Resident profile */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+            {f.layer1.dob && <div><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Date of Birth</p><p className="text-sm text-[var(--clinical-ink)]">{f.layer1.dob}</p></div>}
+            {f.layer1.age && <div><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Age</p><p className="text-sm text-[var(--clinical-ink)]">{f.layer1.age}</p></div>}
+            {f.layer1.sex && <div><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Sex</p><p className="text-sm text-[var(--clinical-ink)]">{f.layer1.sex}</p></div>}
+            {f.layer1.contactNo && <div><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Phone</p><p className="text-sm text-[var(--clinical-ink)]">{f.layer1.contactNo}</p></div>}
+            {f.layer1.primaryContact && <div><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Primary Contact</p><p className="text-sm text-[var(--clinical-ink)]">{f.layer1.primaryContact}</p></div>}
+            {f.layer1.referralSource && <div><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Referral Source</p><p className="text-sm text-[var(--clinical-ink)]">{f.layer1.referralSource}</p></div>}
+          </div>
+          {/* Clinical history */}
+          {(f.layer1.diagnoses || f.layer1.allergies || f.layer1.medications) && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {f.layer1.diagnoses && <div><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Diagnoses</p><p className="mt-0.5 whitespace-pre-wrap text-sm text-[var(--clinical-ink)]">{f.layer1.diagnoses}</p></div>}
+              {f.layer1.allergies && <div><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Allergies</p><p className="mt-0.5 whitespace-pre-wrap text-sm text-[var(--clinical-ink)]">{f.layer1.allergies}</p></div>}
+            </div>
+          )}
+          {/* Structured medications */}
+          {f.layer1.medicationList && f.layer1.medicationList.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Medications ({f.layer1.medicationListReviewed === "YES" ? "Reviewed" : f.layer1.medicationListReviewed === "NO" ? "Not reviewed" : "Review status unknown"})</p>
+              <div className="mt-1 space-y-1.5">
+                {f.layer1.medicationList.map((m, i) => (
+                  <div key={i} className="flex items-start gap-2 rounded-md px-2 py-1.5" style={{ backgroundColor: "var(--clinical-surface)" }}>
+                    <Pill className="h-3.5 w-3.5 mt-0.5 shrink-0 text-[var(--clinical-panel)]" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-[var(--clinical-ink)]">{m.name}{m.dose ? <span className="font-normal text-[var(--clinical-ink-soft)]"> — {m.dose}</span> : null}</p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-[var(--clinical-muted)]">
+                        {m.frequency && <span>{m.frequency}</span>}
+                        {m.instructions && <span className="italic">{m.instructions}</span>}
+                      </div>
+                    </div>
+                    {m.requiresVitals && <span className="shrink-0 inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"><Activity className="h-3 w-3" />Vitals</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Decision support */}
+          {(f.layer1.canParticipate || f.layer1.advanceDirective || f.layer1.culturalPreferences || (f.layer1.familyInvolvement && f.layer1.familyInvolvement.length > 0) || f.layer1.goalsPreferences) && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {f.layer1.canParticipate && <div><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Participation Level</p><p className="text-sm text-[var(--clinical-ink)]">{f.layer1.canParticipate.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}</p></div>}
+              {f.layer1.authorizedRepresentative && <div><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Authorized Representative</p><p className="text-sm text-[var(--clinical-ink)]">{f.layer1.authorizedRepresentative}</p></div>}
+              {f.layer1.familyInvolvement && f.layer1.familyInvolvement.length > 0 && <div><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Family Involvement</p><p className="text-sm text-[var(--clinical-ink)]">{f.layer1.familyInvolvement.join(", ")}</p></div>}
+              {f.layer1.advanceDirective && <div><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Advance Directive</p><p className="text-sm text-[var(--clinical-ink)]">{f.layer1.advanceDirective.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}</p></div>}
+              {f.layer1.culturalPreferences && <div><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Cultural / Spiritual Preferences</p><p className="mt-0.5 whitespace-pre-wrap text-sm text-[var(--clinical-ink)]">{f.layer1.culturalPreferences}</p></div>}
+              {f.layer1.goalsPreferences && <div className="sm:col-span-2"><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Goals &amp; Preferences (NS-01)</p><p className="mt-0.5 whitespace-pre-wrap text-sm text-[var(--clinical-ink)]">{f.layer1.goalsPreferences}</p></div>}
+            </div>
+          )}
+          {/* Recent events */}
+          {(f.layer1.hospitalEd12mo || f.layer1.significantChange3090 || f.layer1.physicianFollowUp) && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {f.layer1.hospitalEd12mo && <div><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Hospital / ED (12 mo)</p><p className="text-sm text-[var(--clinical-ink)]">Yes{f.layer1.hospitalEdReason ? `: ${f.layer1.hospitalEdReason}` : ""}</p></div>}
+              {f.layer1.significantChange3090 && <div><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Significant Change (30–90 d)</p><p className="text-sm text-[var(--clinical-ink)]">Yes{f.layer1.significantChangeDescribe ? `: ${f.layer1.significantChangeDescribe}` : ""}</p></div>}
+              {f.layer1.physicianFollowUp && <div><p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Physician Follow-Up</p><p className="text-sm text-[var(--clinical-ink)]">{f.layer1.physicianFollowUp}</p></div>}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* changes since the previous form — the backtrack view */}
       {chg ? (
@@ -779,6 +1022,50 @@ function FormResult({ f, tone, prev, chg }: { f: FormRecord; tone: string; prev?
           })}
         </div>
       </div>
+
+      {/* ── Layer 3 · Evaluation ── */}
+      {f.layer3 && (f.layer3.belowFloorReason || f.layer3.overrideReason || f.layer3.reconciledModifiers?.length || f.layer3.capabilityReview || f.layer3.reassessmentInterval || f.layer3.nextReviewDate) && (
+        <div className="rounded-lg border p-3 space-y-3" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>
+          <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-[var(--clinical-panel)]"><Layers className="h-3.5 w-3.5" /> Layer 3 · Evaluation</p>
+          {f.layer3.belowFloorReason && (
+            <div>
+              <p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Below-Floor Reason</p>
+              <p className="mt-0.5 text-sm text-[var(--clinical-ink)]">{f.layer3.belowFloorReason}</p>
+            </div>
+          )}
+          {f.layer3.overrideReason && (
+            <div>
+              <p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Override Reason</p>
+              <p className="mt-0.5 text-sm text-[var(--clinical-ink)]">{f.layer3.overrideReason}</p>
+            </div>
+          )}
+          {f.layer3.reconciledModifiers && f.layer3.reconciledModifiers.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Reconciled Modifiers</p>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {f.layer3.reconciledModifiers.map((m) => (
+                  <span key={m} className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold" style={{ borderColor: "var(--clinical-panel)", color: "var(--clinical-panel)" }}>{m}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {f.layer3.capabilityReview && (
+            <div>
+              <p className="text-[10px] font-bold uppercase text-[var(--clinical-muted)]">Capability Review</p>
+              <div className="mt-1 flex items-center gap-2">
+                <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold ${f.layer3.capabilityReview.outcome === "WITHIN_CAPABILITY" ? "bg-green-100 text-green-700" : "bg-rose-100 text-rose-700"}`}>{f.layer3.capabilityReview.outcome.replace(/_/g, " ")}</span>
+              </div>
+              {f.layer3.capabilityReview.rationale && <p className="mt-1 text-sm text-[var(--clinical-ink-soft)]">{f.layer3.capabilityReview.rationale}</p>}
+            </div>
+          )}
+          {(f.layer3.reassessmentInterval || f.layer3.nextReviewDate) && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              {f.layer3.reassessmentInterval && <span className="text-xs text-[var(--clinical-muted)]">Reassess: <span className="font-semibold text-[var(--clinical-ink-soft)]">{f.layer3.reassessmentInterval}</span></span>}
+              {f.layer3.nextReviewDate && <span className="text-xs text-[var(--clinical-muted)]">Next review: <span className="font-semibold text-[var(--clinical-ink-soft)]">{fmtDate(f.layer3.nextReviewDate)}</span></span>}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

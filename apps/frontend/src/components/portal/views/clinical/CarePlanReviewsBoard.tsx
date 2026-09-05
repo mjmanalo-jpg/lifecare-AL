@@ -235,12 +235,14 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
   // effect instead raced with that child effect: in production builds the parent
   // reset ran last and left builderPlan undefined, so Generate wrongly reported "No
   // validated assessment" (dev Strict Mode's double-invoked child effect masked it).
-  // Render-phase reset makes the child's populate the deterministic last writer.
+  // Reset builderPlan when resident changes (via effect to satisfy refs lint).
   const builderPlanResId = useRef(resId);
-  if (builderPlanResId.current !== resId) {
-    builderPlanResId.current = resId;
-    setBuilderPlan(undefined);
-  }
+  useEffect(() => {
+    if (builderPlanResId.current !== resId) {
+      builderPlanResId.current = resId;
+      setBuilderPlan(undefined);
+    }
+  }, [resId]);
 
   const latestReview = (rid: string) => reviews.filter((r) => r.residentId === rid).sort((a, b) => (b.reviewDate || "").localeCompare(a.reviewDate || ""))[0];
 
@@ -1082,7 +1084,7 @@ function CarePlanBuilder({ residentId, residentName, room, level, assessmentDoma
   // The 24-hour routine this plan will generate on release — same pure generator
   // the task materializer uses, so the preview is exactly what gets dispatched.
   const routine = useMemo(
-    () => generateRoutine(rows.filter((r) => r.included).map((r) => ({ code: r.code, name: r.name, goal: r.goal, interventions: r.interventions, taskId: r.taskId }))),
+    () => generateRoutine(rows.filter((r) => r.included).map((r) => ({ code: r.code, name: r.name, goal: r.goal, interventions: r.interventions, taskId: r.taskId, score: r.score }))),
     [rows],
   );
   const levelName = meta ? `Level ${meta.n} — ${meta.name}` : `Level ${level}`;

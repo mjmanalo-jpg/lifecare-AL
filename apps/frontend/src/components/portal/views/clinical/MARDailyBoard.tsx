@@ -17,6 +17,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { createRecord, updateRecord, upsertRecord } from "@/lib/api";
 import { planMedConsumption, parseInvItems, parseInvPRs, INV_ITEMS_KEY, INV_PR_KEY, type InvItem } from "@/lib/medInventory";
+import { FREQUENCIES, VITALS_KEY } from "@/lib/lifecare/medConstants";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { ClinicalHeader, ClinicalButton, ClinicalCard, DataState, SERIF, ClinicalModal, controlClass, FieldLabel } from "./clinical-ui";
 import SignatureModal from "@/components/portal/SignatureModal";
@@ -27,11 +28,8 @@ const todayIso = () => new Date().toISOString().split("T")[0];
 const dayOf = (v: unknown) => (v ? new Date(s(v)).toISOString().split("T")[0] : "");
 // Local-calendar day (YYYY-MM-DD) — used for the "vitals recorded today" check.
 const localDay = (v: unknown) => { const d = new Date(s(v)); return isNaN(d.getTime()) ? "" : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
-// app-setting key holding the { [medicationId]: true } vitals-required map.
-const VITALS_KEY = "med_vitals_required";
-
 const ROUTES = ["Oral", "Sublingual", "Topical", "Inhalation", "Subcutaneous", "Intramuscular", "Intravenous", "Rectal", "Ophthalmic", "Otic", "Nasal", "Transdermal"];
-const FREQUENCIES = ["Once daily (OD)", "Twice daily (BID)", "Three times daily (TID)", "Four times daily (QID)", "Every 6 hours (Q6H)", "Every 8 hours (Q8H)", "Every 12 hours (Q12H)", "As needed (PRN)", "Once weekly", "Twice weekly (2x/week)", "Three times weekly (3x/week)", "Alternate days", "Once monthly"];
+// FREQUENCIES + VITALS_KEY are imported from lib/lifecare/medConstants (shared with the meds editor).
 const SLOT_TIME: Record<string, string> = { MORNING: "08:00", NOON: "12:00", EVENING: "18:00", NIGHT: "22:00", PRN: "PRN" };
 const SLOT_HOUR: Record<string, number> = { MORNING: 8, NOON: 12, EVENING: 18, NIGHT: 22, PRN: -1 };
 // Display a 24h "HH:MM" as friendly 12-hour time (18:00 → "6:00 PM"); "PRN" stays.

@@ -54,14 +54,29 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
   );
 
   const { data: residentRows } = useLiveQuery<Record<string, unknown>>("residents", { query: "take=300", tables: ["Resident"] });
-  const residents = useMemo(() => residentRows.map(adaptResident), [residentRows]);
+  const allResidentsCensus = useMemo(() => residentRows.map(adaptResident), [residentRows]);
+  // Only residents with an APPROVED (released → ACTIVE) care plan are assignable —
+  // a resident with no released plan has no routine/tasks to deliver, so they must
+  // not appear in the roster picker or the "no caregiver" list. Same "released"
+  // definition Today's Care uses to activate routines.
+  const { data: carePlanRows } = useLiveQuery<Record<string, unknown>>("care-plans", { query: "take=300", tables: ["CarePlan"] });
+  const residentsWithActivePlan = useMemo(
+    () => new Set(carePlanRows.filter((p) => String(p.status ?? "") === "ACTIVE").map((p) => String(p.residentId ?? "")).filter(Boolean)),
+    [carePlanRows]
+  );
+  const residents = useMemo(
+    () => allResidentsCensus.filter((r) => residentsWithActivePlan.has(r.id)),
+    [allResidentsCensus, residentsWithActivePlan]
+  );
   // Open care tasks — used to carry work forward when a resident moves caregiver.
   const { data: taskRows } = useLiveQuery<Record<string, unknown>>("tasks", { query: "take=1000", tables: ["Task"] });
+  // Name/room lookup uses the FULL census (not the plan-filtered set) so an
+  // already-scheduled resident always resolves its name even if its plan state changes.
   const resById = useMemo(() => {
     const m = new Map<string, { name: string; room: string }>();
-    residents.forEach((r) => m.set(r.id, { name: r.name, room: r.room }));
+    allResidentsCensus.forEach((r) => m.set(r.id, { name: r.name, room: r.room }));
     return m;
-  }, [residents]);
+  }, [allResidentsCensus]);
 
   // ---- Identity: managers roster; caregivers see only their own shifts --------
   const [sessionRole, setSessionRole] = useState<string | null>(null);

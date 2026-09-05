@@ -13,6 +13,7 @@
 // server-side task materializer (dispatch) share one implementation + one test.
 
 import routineWindows from "./data/routine_windows.json" with { type: "json" };
+import { hfConfigFor, isHighFrequency, expandOccurrences } from "./highFrequency.ts";
 
 export type RoutineShift = "AM" | "PM" | "NOC";
 
@@ -44,6 +45,7 @@ export interface RoutineDomainInput {
   goal?: string;
   interventions: string[];
   taskId?: string;         // representative governed Care Task (for completion archetype)
+  score?: number;          // assessed 0-4 — drives high-frequency activation (when supplied)
 }
 
 /**
@@ -73,6 +75,7 @@ export function domainInputsFromItems(items: { title?: string | null; descriptio
 export interface RoutineTaskItem {
   id: string;    // stable within a resident's day, e.g. "W04#2"
   text: string;
+  scheduledMinutes?: number; // high-frequency occurrence's exact time (minutes from midnight); absent = window-timed
 }
 
 export type RoutineRole = "Caregiver" | "Nurse";
@@ -104,25 +107,71 @@ function roleForWindow(w: RoutineWindow): RoutineRole {
     ? "Nurse" : "Caregiver";
 }
 
+/** A window's true start, in minutes from midnight — parsed from its "HH:MM-…"
+ * string so :30 starts (11:30, 20:30) are exact. Falls back to startHour for the
+ * anomalous NOC "12:00-02:00" window whose string disagrees with its startHour. */
+function windowStartMin(w: RoutineWindow): number {
+  const m = /(\d{1,2}):(\d{2})/.exec(w.window);
+  return m && +m[1] === w.startHour ? +m[1] * 60 + +m[2] : w.startHour * 60;
+}
+/** The routine window that contains a minute-of-day (greatest start ≤ time). */
+function windowForMinutes(mins: number): RoutineWindow {
+  const t = (((mins % 1440) + 1440) % 1440);
+  let best = ROUTINE_WINDOWS[0];
+  for (const w of ROUTINE_WINDOWS) if (windowStartMin(w) <= t) best = w; // ordered ascending by start
+  return best;
+}
+
 /**
  * Build the 24-hour routine for a plan's active domains. One event per care
  * window that has at least one of the plan's domains; ordered by window start.
+ *
+ * High-frequency domains (score ≥ the domain's threshold, when `score` is
+ * supplied) expand into multiple timed occurrences placed into the window that
+ * contains each time, instead of one bundled item — see highFrequency.ts.
  */
 export function generateRoutine(domains: RoutineDomainInput[]): RoutineEvent[] {
   const byCode = new Map(domains.filter((d) => d.code).map((d) => [d.code, d]));
+
+  // Collect high-frequency occurrences per window; their domains are excluded
+  // from normal bundling so they aren't double-counted.
+  const hfItemsByWindow = new Map<string, RoutineTaskItem[]>();
+  const hfCodes = new Set<string>();
+  for (const d of domains) {
+    if (!d.code) continue;
+    const cfg = hfConfigFor(d.code);
+    if (!cfg || !isHighFrequency(d.code, d.score)) continue;
+    hfCodes.add(d.code);
+    for (const occ of expandOccurrences(cfg)) {
+      const w = windowForMinutes(occ.minutes);
+      const list = hfItemsByWindow.get(w.id) ?? [];
+      list.push({ id: `${w.id}#hf#${d.code}@${occ.time}`, text: `${cfg.label} · ${occ.time}`, scheduledMinutes: occ.minutes });
+      hfItemsByWindow.set(w.id, list);
+    }
+  }
+
   const events: RoutineEvent[] = [];
   for (const w of ROUTINE_WINDOWS) {
-    if (w.handover) continue; // shift-change admin, not resident care
-    const active = w.domains.map((c) => byCode.get(c)).filter((d): d is RoutineDomainInput => !!d);
+    const hfItems = (hfItemsByWindow.get(w.id) ?? []).sort((a, b) => (a.scheduledMinutes ?? 0) - (b.scheduledMinutes ?? 0));
+    if (w.handover && !hfItems.length) continue; // shift-change admin, unless it hosts HF occurrences
+    const active = w.domains.map((c) => byCode.get(c)).filter((d): d is RoutineDomainInput => !!d && !hfCodes.has(d.code));
     // Baseline windows (meals / activities) always generate; others only when at
-    // least one of their domains is in the plan.
-    if (!active.length && !w.baseline) continue;
+    // least one of their domains is in the plan (or an HF occurrence lands here).
+    if (!active.length && !w.baseline && !hfItems.length) continue;
     // Baseline tasks first, then the plan domains' specific tasks; de-duplicated.
     const raw = [...(w.baseline ? w.baselineTasks ?? [] : []), ...active.flatMap((d) => d.interventions)]
       .map((x) => x.trim()).filter(Boolean);
     const seen = new Set<string>();
     const interventions = raw.filter((t) => { const k = t.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
-    if (!interventions.length) continue;
+    // Order the window's tasks by time — earliest due at the top. Bundled tasks
+    // have no discrete time, so they anchor at the window's start; high-frequency
+    // occurrences sort by their own scheduled time. Stable sort keeps bundled
+    // before an HF occurrence that lands exactly on the window start.
+    const startMin = windowStartMin(w);
+    const bundled: RoutineTaskItem[] = interventions.map((text, i) => ({ id: `${w.id}#${i}`, text }));
+    const items: RoutineTaskItem[] = [...bundled, ...hfItems]
+      .sort((a, b) => (a.scheduledMinutes ?? startMin) - (b.scheduledMinutes ?? startMin));
+    if (!items.length) continue;
     events.push({
       id: w.id,
       window: w.window,
@@ -135,7 +184,7 @@ export function generateRoutine(domains: RoutineDomainInput[]): RoutineEvent[] {
       domainNames: active.map((d) => d.name),
       goals: active.map((d) => d.goal?.trim()).filter((g): g is string => !!g),
       interventions,
-      items: interventions.map((text, i) => ({ id: `${w.id}#${i}`, text })),
+      items,
       caregiver: w.caregiver,
       nurse: w.nurse,
       careTaskId: active.find((d) => d.taskId)?.taskId,

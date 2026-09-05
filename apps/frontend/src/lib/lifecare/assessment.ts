@@ -34,6 +34,16 @@ export type YesNoVerify = "YES" | "NO" | "NEEDS_VERIFICATION";
 export type ParticipationLevel = "INDEPENDENTLY" | "WITH_SUPPORT" | "LIMITED_NO";
 export type AdvanceDirectiveStatus = "AVAILABLE" | "REQUESTED" | "NOT_AVAILABLE" | "NOT_APPLICABLE";
 
+/** A single structured medication captured in the shared Medications editor
+ * (assessment + admission). Flows into each resident's MAR via medSync. */
+export interface MedItem {
+  name: string;
+  dose?: string;
+  frequency?: string;         // one of medConstants.FREQUENCIES
+  instructions?: string;      // special instructions, e.g. "Take with food, monitor BP"
+  requiresVitals?: boolean;   // Vitals First — alert to record vitals before a Given dose
+}
+
 /** Layer 1 — resident profile + clinical history + decision-support baseline. */
 export interface AssessmentLayer1 {
   // Resident profile
@@ -64,7 +74,8 @@ export interface AssessmentLayer1 {
   diagnoses?: string;                // primary/current diagnoses
   surgeries?: string;                // significant history / surgeries
   allergies?: string;
-  medications?: string;
+  medications?: string;              // legacy free-text (parsed by medItemsOf for back-compat)
+  medicationList?: MedItem[];        // structured medications (authoritative)
   medicationListReviewed?: YesNoVerify;
   hospitalEd12mo?: boolean;
   hospitalEdReason?: string;
@@ -270,6 +281,16 @@ export function finalLevel(a: AssessmentV42): CareLevel | null {
 }
 
 const s = (v: unknown) => (v == null ? "" : String(v));
+
+/** The resident's structured medications: the new `medicationList`, or the legacy
+ * free-text `medications` string parsed one-per-line into name-only rows. */
+export function medItemsOf(l1?: Pick<AssessmentLayer1, "medicationList" | "medications"> | null): MedItem[] {
+  const list = l1?.medicationList;
+  if (Array.isArray(list) && list.length) return list.filter((m) => (m?.name || "").trim());
+  const raw = (l1?.medications || "").trim();
+  if (!raw) return [];
+  return raw.split(/\r?\n|;|,/).map((x) => x.trim()).filter(Boolean).map((name) => ({ name }));
+}
 
 /** Normalized name token-SET key for tolerant resident↔assessment matching — order
  *  and duplicate parts don't matter, so "Marina Dacanay Drohman" matches a resident

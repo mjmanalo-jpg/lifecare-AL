@@ -19,6 +19,10 @@ import DomainScoreGrid from "@/components/portal/views/clinical/DomainScoreGrid"
 import { CRM_LEADS_KEY, parseLeads, type Lead } from "@/lib/crmLeads";
 import { createRecord, updateRecord, upsertRecord, deleteRecord } from "@/lib/api";
 import { recordAudit } from "@/lib/auditClient";
+import MedicationsEditor from "@/components/portal/views/clinical/MedicationsEditor";
+import { syncMedicationsToMar } from "@/lib/lifecare/medSync";
+import { VITALS_KEY } from "@/lib/lifecare/medConstants";
+import type { MedItem } from "@/lib/lifecare/assessment";
 import { qrDataUrl } from "@/lib/qr";
 
 // ── Step catalogue (required = blocks completion until satisfied) ──────────────
@@ -80,7 +84,10 @@ const acuityTone = (i: number): string =>
 // Serialize the free-text note + domains into the careAssessment column. Falls
 // back to a plain note (or null) when no structured domain has been captured, so
 // legacy free-text records keep working.
-type MedRow = { id: string; name: string; dose: string; frequency: string };
+type MedRow = { id: string; name: string; dose: string; frequency: string; instructions?: string; requiresVitals?: boolean };
+// Convert an admission MedRow list ↔ the shared MedicationsEditor's MedItem list.
+const toMedItems = (rows: MedRow[]): MedItem[] => rows.map((m) => ({ name: m.name, dose: m.dose, frequency: m.frequency, instructions: m.instructions, requiresVitals: m.requiresVitals }));
+const fromMedItems = (items: MedItem[], prev: MedRow[]): MedRow[] => items.map((it, i) => ({ id: prev[i]?.id ?? `m-${i}-${it.name}`, name: it.name, dose: it.dose ?? "", frequency: it.frequency ?? "", instructions: it.instructions, requiresVitals: it.requiresVitals }));
 const serializeClinical = (
   note: string, domains: ClinicalState, wounds: WoundEntry[] = [],
   meds: MedRow[] = [], extra: { surgeries?: string; hospitalizations?: string; attachments?: Attachment[]; admissionDate?: string } = {},
@@ -810,10 +817,25 @@ export default function AdmissionsContent() {
         const toCreate = data.meds.filter((m) => m.name.trim() && !existing.has(m.name.trim().toLowerCase()));
         if (toCreate.length) {
           const startDate = new Date().toISOString();
-          await Promise.all(toCreate.map((m) => createRecord("medications", {
+          // Add-only (never discontinue here — a med added directly in MAR must not
+          // be removed by an admission edit). Carry special instructions + vitals flag.
+          const created = await Promise.all(toCreate.map((m) => createRecord("medications", {
             residentId: rid, name: m.name.trim(), dosage: m.dose.trim() || "—", frequency: m.frequency.trim() || "—",
-            route: "oral", status: "ACTIVE", startDate, prescribedBy: `${s(data.residentSync.firstName)} ${s(data.residentSync.lastName)} (Admission)`,
+            route: "oral", status: "ACTIVE", startDate, sideEffects: m.instructions?.trim() || null,
+            prescribedBy: `${s(data.residentSync.firstName)} ${s(data.residentSync.lastName)} (Admission)`,
           }).catch(() => null)));
+          const vitalFlags = toCreate
+            .map((m, i) => ({ id: String((created[i] as { data?: { id?: string }; id?: string } | null)?.data?.id ?? (created[i] as { id?: string } | null)?.id ?? ""), req: !!m.requiresVitals }))
+            .filter((x) => x.id && x.req);
+          if (vitalFlags.length) {
+            try {
+              const vr = await fetch(`/api/db/app-settings?f_key=${VITALS_KEY}&take=1`, { credentials: "include", cache: "no-store" });
+              const vj = vr.ok ? await vr.json() : null;
+              const map: Record<string, boolean> = JSON.parse((vj?.data as Array<{ value?: string }> | undefined)?.[0]?.value || "{}");
+              for (const f of vitalFlags) map[f.id] = true;
+              await upsertRecord("app-settings", VITALS_KEY, { key: VITALS_KEY, value: JSON.stringify(map) });
+            } catch { /* best-effort vitals flag */ }
+          }
         }
       }
       await refetch();
@@ -1179,18 +1201,21 @@ export default function AdmissionsContent() {
           assignedToId: team[0]?.id || null,
         }).catch(() => null);
 
-        // Carry current medications forward as ACTIVE Medication records so they
-        // surface on the resident card, the MAR and medication inventory.
+        // Carry current medications forward into the resident's MAR as ACTIVE
+        // records (staff-entered at admission = reviewed), with special instructions
+        // and the vitals-first flag. Reuses the shared idempotent sync.
         const cleanMeds = medList.filter((mm) => mm.name.trim());
         if (cleanMeds.length) {
-          const startDate = new Date().toISOString();
-          await Promise.all(cleanMeds.map((mm) =>
-            createRecord("medications", {
-              residentId, name: mm.name.trim(), dosage: mm.dose.trim() || "—", frequency: mm.frequency.trim() || "—",
-              route: "oral", status: "ACTIVE", startDate,
-              prescribedBy: `${form.firstName} ${form.lastName} (Admission)`,
-            }).catch(() => null)
-          ));
+          let vitalsMap: Record<string, boolean> = {};
+          try {
+            const vr = await fetch(`/api/db/app-settings?f_key=${VITALS_KEY}&take=1`, { credentials: "include", cache: "no-store" });
+            const vj = vr.ok ? await vr.json() : null;
+            vitalsMap = JSON.parse((vj?.data as Array<{ value?: string }> | undefined)?.[0]?.value || "{}");
+          } catch { /* default empty */ }
+          await syncMedicationsToMar({
+            residentId, items: toMedItems(cleanMeds), reviewed: true, existing: [], vitalsMap,
+            actorName: `${form.firstName} ${form.lastName} (Admission)`,
+          }).catch(() => null);
         }
 
         // Carry the 12-domain assessment forward: seed a PENDING_NURSE acuity
@@ -1523,26 +1548,7 @@ export default function AdmissionsContent() {
                   </div>
 
                   {/* Structured current medications → become ACTIVE meds on the resident card + MAR */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5"><Pill className="w-3.5 h-3.5 text-indigo-600" /> Medications</span>
-                      <button type="button" onClick={addMed} className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:text-indigo-800"><Plus className="w-3.5 h-3.5" /> Add medication</button>
-                    </div>
-                    {medList.length === 0 ? (
-                      <p className="text-xs text-gray-500 border border-dashed border-gray-300 rounded-lg px-3 py-2">No medications added. Each one you add becomes an active medication on the resident card & MAR.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {medList.map((m) => (
-                          <div key={m.id} className="flex flex-col sm:flex-row gap-2">
-                            <input className={inputCls + " sm:flex-1"} placeholder="Medication name" value={m.name} onChange={(e) => patchMed(m.id, { name: e.target.value })} />
-                            <input className={inputCls + " sm:w-28"} placeholder="Dose" value={m.dose} onChange={(e) => patchMed(m.id, { dose: e.target.value })} />
-                            <input className={inputCls + " sm:w-40"} placeholder="Frequency" value={m.frequency} onChange={(e) => patchMed(m.id, { frequency: e.target.value })} />
-                            <button type="button" onClick={() => removeMed(m.id)} className="shrink-0 self-start px-2 py-2 rounded-lg border border-gray-300 text-gray-400 hover:text-red-600 hover:border-red-300" aria-label="Remove medication"><Trash2 className="w-4 h-4" /></button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <MedicationsEditor value={toMedItems(medList)} onChange={(items) => setMedList(fromMedItems(items, medList))} />
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field label="Allergies"><input className={inputCls} value={form.allergies} onChange={(e) => set({ allergies: e.target.value })} /></Field>
@@ -2114,24 +2120,8 @@ function AdmissionEditForm({ row, assessedCareLevel, onSave }: {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-          <h3 className="text-sm font-bold text-slate-800">Medications</h3>
-          <button type="button" onClick={addM} className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:text-indigo-800"><Plus className="w-3.5 h-3.5" /> Add medication</button>
-        </div>
-        {meds.length === 0 ? (
-          <p className="text-xs text-gray-500">No medications. New ones you add are created on the resident&apos;s MAR (existing ones aren&apos;t duplicated).</p>
-        ) : (
-          <div className="space-y-2">
-            {meds.map((m) => (
-              <div key={m.id} className="flex flex-col sm:flex-row gap-2">
-                <input className={inputCls + " sm:flex-1"} placeholder="Medication name" value={m.name} onChange={(e) => patchM(m.id, { name: e.target.value })} />
-                <input className={inputCls + " sm:w-28"} placeholder="Dose" value={m.dose} onChange={(e) => patchM(m.id, { dose: e.target.value })} />
-                <input className={inputCls + " sm:w-40"} placeholder="Frequency" value={m.frequency} onChange={(e) => patchM(m.id, { frequency: e.target.value })} />
-                <button type="button" onClick={() => rmM(m.id)} className="shrink-0 self-start px-2 py-2 rounded-lg border border-gray-300 text-gray-400 hover:text-red-600 hover:border-red-300"><Trash2 className="w-4 h-4" /></button>
-              </div>
-            ))}
-          </div>
-        )}
+        <MedicationsEditor value={toMedItems(meds)} onChange={(items) => setMeds(fromMedItems(items, meds))} />
+        <p className="text-xs text-gray-500">New medications you add are created on the resident&apos;s MAR (existing ones aren&apos;t duplicated).</p>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">

@@ -29,10 +29,13 @@ import {
 import SignatureModal from "@/components/portal/SignatureModal";
 import {
   ASSESSMENTS_V42_KEY, newAssessment, cloneForReassessment, originOf,
-  classifyAssessment, assessmentRawScore, requiredModifierIds, assessmentValidationIssues,
+  classifyAssessment, assessmentRawScore, requiredModifierIds, assessmentValidationIssues, medItemsOf,
   type AssessmentV42, type AssessmentLayer1, type DomainEntry, type AssessmentStatus,
   type AssessmentOrigin, type ModifierReconciliationDecision,
 } from "@/lib/lifecare/assessment.ts";
+import MedicationsEditor from "./MedicationsEditor";
+import { syncMedicationsToMar, type MedRow } from "@/lib/lifecare/medSync.ts";
+import { VITALS_KEY } from "@/lib/lifecare/medConstants.ts";
 import {
   ASSESSMENT_DOMAINS, modifierById,
 } from "@/lib/lifecare/dataset.ts";
@@ -533,14 +536,16 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   const contentKey = (d: Draft) => JSON.stringify({ ...d, updatedAt: undefined });
   const autoSaveKeyRef = useRef<string | null>(null);
   const flushAutoSave = useRef<() => void>(() => {});
-  flushAutoSave.current = () => {
-    if (!open || !draft || saving) return;
-    if (draft.status && draft.status !== "DRAFT") return; // never downgrade a finalized record
-    const key = contentKey(draft);
-    if (key === autoSaveKeyRef.current) return;           // nothing new since the last save
-    autoSaveKeyRef.current = key;
-    void save("DRAFT", {}, undefined, true);              // silent: no toast, no audit spam
-  };
+  useEffect(() => {
+    flushAutoSave.current = () => {
+      if (!open || !draft || saving) return;
+      if (draft.status && draft.status !== "DRAFT") return; // never downgrade a finalized record
+      const key = contentKey(draft);
+      if (key === autoSaveKeyRef.current) return;           // nothing new since the last save
+      autoSaveKeyRef.current = key;
+      void save("DRAFT", {}, undefined, true);              // silent: no toast, no audit spam
+    };
+  });
 
   // Debounce while the draft changes; seed a baseline on open so a freshly opened
   // (untouched) record is never written back as a no-op.
@@ -629,6 +634,26 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     }
     const now = new Date().toISOString();
     await save("VALIDATED", { validation: { by: me || "Clinician", role: roleLabel, at: now, decision, notes: notes || undefined } }, "Level of Care validated");
+
+    // Push the resident's structured medications into their MAR (reviewed → ACTIVE,
+    // else PENDING). Runs before the LOC branch below so it isn't skipped when a
+    // level change is held for family sign-off. Best-effort — never blocks validation.
+    const medRid = draft.layer1.residentId ?? "";
+    if (decision === "APPROVED" && medRid) {
+      try {
+        const items = medItemsOf(draft.layer1);
+        if (items.length) {
+          const [medsJson, vitJson] = await Promise.all([
+            fetch(`/api/db/medications?f_residentId=${encodeURIComponent(medRid)}&take=1000`, { credentials: "include", cache: "no-store" }).then((r) => (r.ok ? r.json() : { data: [] })).catch(() => ({ data: [] })),
+            fetch(`/api/db/app-settings?f_key=${VITALS_KEY}&take=1`, { credentials: "include", cache: "no-store" }).then((r) => (r.ok ? r.json() : { data: [] })).catch(() => ({ data: [] })),
+          ]);
+          const existing = ((medsJson?.data ?? []) as MedRow[]);
+          let vitalsMap: Record<string, boolean> = {};
+          try { vitalsMap = JSON.parse((vitJson?.data as Array<{ value?: string }> | undefined)?.[0]?.value || "{}"); } catch { /* default empty */ }
+          await syncMedicationsToMar({ residentId: medRid, items, reviewed: draft.layer1.medicationListReviewed === "YES", existing, vitalsMap, actorName: me || undefined });
+        }
+      } catch { /* meds sync is best-effort; validation is already saved */ }
+    }
 
     // Wire the validated Final LOC into the production flow (engine-A output):
     // set resident.careLevel, post the LOC charge, and generate a care plan.
@@ -1045,7 +1070,10 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                         onChange={(v) => patchLayer1({ medicationListReviewed: v as AssessmentLayer1["medicationListReviewed"] })}
                         options={[{ value: "YES", label: "Yes" }, { value: "NO", label: "No" }, { value: "NEEDS_VERIFICATION", label: "Needs Verification" }]} />
                     </div>
-                    <Area label="Current medications" value={draft.layer1.medications} onChange={(v) => patchLayer1({ medications: v })} />
+                    <MedicationsEditor
+                      value={draft.layer1.medicationList ?? medItemsOf(draft.layer1)}
+                      onChange={(list) => patchLayer1({ medicationList: list })}
+                    />
                     <div className="flex flex-wrap items-end gap-3">
                       <Bool label="Hospital / ED within 12 months?" value={draft.layer1.hospitalEd12mo} onChange={(v) => patchLayer1({ hospitalEd12mo: v })} />
                       {draft.layer1.hospitalEd12mo && <div className="flex-1 min-w-[200px]"><Text label="Reason / date" value={draft.layer1.hospitalEdReason} onChange={(v) => patchLayer1({ hospitalEdReason: v })} /></div>}
