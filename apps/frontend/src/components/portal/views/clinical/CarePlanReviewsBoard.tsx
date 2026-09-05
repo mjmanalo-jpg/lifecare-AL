@@ -232,17 +232,17 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
 
   // Reset the builder plan the instant the resident changes — DURING RENDER, before
   // the remounted CarePlanBuilder's onChange effect repopulates it. Doing this in an
-  // effect instead raced with that child effect: in production builds the parent
-  // reset ran last and left builderPlan undefined, so Generate wrongly reported "No
-  // validated assessment" (dev Strict Mode's double-invoked child effect masked it).
-  // Reset builderPlan when resident changes (via effect to satisfy refs lint).
-  const builderPlanResId = useRef(resId);
-  useEffect(() => {
-    if (builderPlanResId.current !== resId) {
-      builderPlanResId.current = resId;
-      setBuilderPlan(undefined);
-    }
-  }, [resId]);
+  // effect instead races with that child effect: in production builds the parent
+  // reset runs last and leaves builderPlan undefined, so Generate wrongly reports "No
+  // validated assessment" (dev Strict Mode's double-invoked child effect masks it).
+  // Uses React's "adjust state during render" pattern (a state guard, not a ref) so
+  // it stays render-phase — deterministic last writer is the child's populate — while
+  // remaining lint-clean (no ref mutation during render).
+  const [builderPlanResId, setBuilderPlanResId] = useState(resId);
+  if (builderPlanResId !== resId) {
+    setBuilderPlanResId(resId);
+    setBuilderPlan(undefined);
+  }
 
   const latestReview = (rid: string) => reviews.filter((r) => r.residentId === rid).sort((a, b) => (b.reviewDate || "").localeCompare(a.reviewDate || ""))[0];
 
