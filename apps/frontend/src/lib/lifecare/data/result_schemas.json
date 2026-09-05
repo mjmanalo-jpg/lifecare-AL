@@ -1,0 +1,398 @@
+[
+  {
+    "eventType": "ADL / Personal Care",
+    "quickChartCategory": "Personal Care",
+    "requiredFields": [
+      "Care completed",
+      "assistance level",
+      "tolerance"
+    ],
+    "optionalFields": [
+      "Resident preference",
+      "skin/pain observation"
+    ],
+    "completionButton": "Record & Complete",
+    "allowedExceptions": [
+      "Resident declined",
+      "Resident unavailable",
+      "Unsafe to perform",
+      "Clinical hold"
+    ],
+    "autoEscalationExamples": "New hands-on help, repeated incomplete care, pain or skin concern",
+    "units": "Controlled lists + optional note",
+    "countsCompleteWhen": "Required fields recorded and care provided",
+    "developerValidation": "Do not accept blank assistance or outcome",
+    "sourceWorkbookVersion": "SLMS_v4.2_(2)"
+  },
+  {
+    "eventType": "Toileting / Continence",
+    "quickChartCategory": "Toileting",
+    "requiredFields": [
+      "Offered/provided",
+      "continence result",
+      "urine/BM result",
+      "assistance"
+    ],
+    "optionalFields": [
+      "Symptoms",
+      "device used"
+    ],
+    "completionButton": "Record & Complete",
+    "allowedExceptions": [
+      "Resident declined",
+      "Resident unavailable",
+      "Unsafe to perform",
+      "Clinical hold"
+    ],
+    "autoEscalationExamples": "Urinary symptoms, constipation concern, fall/near-fall, new incontinence",
+    "units": "Controlled lists; time",
+    "countsCompleteWhen": "Care provided and required result recorded",
+    "developerValidation": "Declined is an exception, not completion",
+    "sourceWorkbookVersion": "SLMS_v4.2_(2)"
+  },
+  {
+    "eventType": "Meal / Supplement",
+    "quickChartCategory": "Nutrition",
+    "requiredFields": [
+      "Amount or % consumed",
+      "assistance",
+      "positioning",
+      "swallowing concern"
+    ],
+    "optionalFields": [
+      "Food preference",
+      "supplement amount"
+    ],
+    "completionButton": "Record & Complete",
+    "allowedExceptions": [
+      "Resident declined",
+      "Resident unavailable",
+      "Unsafe to perform",
+      "Clinical hold"
+    ],
+    "autoEscalationExamples": "Coughing/choking, intake below target, vomiting",
+    "units": "% or amount with unit",
+    "countsCompleteWhen": "Consumption and safety fields recorded",
+    "developerValidation": "Require unit when amount is used",
+    "sourceWorkbookVersion": "SLMS_v4.2_(2)"
+  },
+  {
+    "eventType": "Hydration",
+    "quickChartCategory": "Hydration",
+    "requiredFields": [
+      "Amount offered",
+      "amount consumed",
+      "tolerance"
+    ],
+    "optionalFields": [
+      "Fluid type"
+    ],
+    "completionButton": "Record & Complete",
+    "allowedExceptions": [
+      "Resident declined",
+      "Resident unavailable",
+      "Unsafe to perform",
+      "Clinical hold"
+    ],
+    "autoEscalationExamples": "Persistent poor intake, dehydration signs, swallowing change",
+    "units": "mL",
+    "countsCompleteWhen": "Offer and intake amount recorded",
+    "developerValidation": "Consumed amount cannot exceed offered amount",
+    "sourceWorkbookVersion": "SLMS_v4.2_(2)"
+  },
+  {
+    "eventType": "Mobility / Walking",
+    "quickChartCategory": "Mobility",
+    "requiredFields": [
+      "Assistance",
+      "device",
+      "activity/distance",
+      "tolerance"
+    ],
+    "optionalFields": [
+      "Rest breaks",
+      "destination"
+    ],
+    "completionButton": "Record & Complete",
+    "allowedExceptions": [
+      "Resident declined",
+      "Resident unavailable",
+      "Unsafe to perform",
+      "Clinical hold"
+    ],
+    "autoEscalationExamples": "Dizziness, buckling, near-fall, new weakness",
+    "units": "Meters/minutes or controlled activity",
+    "countsCompleteWhen": "Approved activity performed and result recorded",
+    "developerValidation": "Require device when plan specifies one",
+    "sourceWorkbookVersion": "SLMS_v4.2_(2)"
+  },
+  {
+    "eventType": "Transfer",
+    "quickChartCategory": "Mobility",
+    "requiredFields": [
+      "From/to",
+      "assistance",
+      "device",
+      "tolerance"
+    ],
+    "optionalFields": [
+      "Cueing used"
+    ],
+    "completionButton": "Record & Complete",
+    "allowedExceptions": [
+      "Resident declined",
+      "Resident unavailable",
+      "Unsafe to perform",
+      "Clinical hold"
+    ],
+    "autoEscalationExamples": "Near-fall, inability to bear weight, new two-person need",
+    "units": "Controlled lists",
+    "countsCompleteWhen": "Transfer completed safely with result",
+    "developerValidation": "Block completion when marked unsafe",
+    "sourceWorkbookVersion": "SLMS_v4.2_(2)"
+  },
+  {
+    "eventType": "Repositioning",
+    "quickChartCategory": "Repositioning",
+    "requiredFields": [
+      "New position",
+      "skin observation",
+      "tolerance",
+      "actual time"
+    ],
+    "optionalFields": [
+      "Off-loading aid"
+    ],
+    "completionButton": "Record & Complete",
+    "allowedExceptions": [
+      "Resident declined",
+      "Resident unavailable",
+      "Unsafe to perform",
+      "Clinical hold"
+    ],
+    "autoEscalationExamples": "Redness, breakdown, pain, inability to reposition",
+    "units": "Position list + timestamp",
+    "countsCompleteWhen": "Position changed and skin/tolerance recorded",
+    "developerValidation": "Each occurrence remains separate",
+    "sourceWorkbookVersion": "SLMS_v4.2_(2)"
+  },
+  {
+    "eventType": "Vital Signs",
+    "quickChartCategory": "Vitals",
+    "requiredFields": [
+      "All ordered readings",
+      "related symptoms"
+    ],
+    "optionalFields": [
+      "Position",
+      "device"
+    ],
+    "completionButton": "Record & Complete",
+    "allowedExceptions": [
+      "Resident declined",
+      "Resident unavailable",
+      "Unsafe to perform",
+      "Clinical hold"
+    ],
+    "autoEscalationExamples": "Outside resident-specific parameter or symptomatic reading",
+    "units": "BP mmHg; pulse bpm; temp °C; RR/min; SpO₂ %",
+    "countsCompleteWhen": "All ordered measurements recorded",
+    "developerValidation": "Use resident-specific parameters; no generic diagnosis",
+    "sourceWorkbookVersion": "SLMS_v4.2_(2)"
+  },
+  {
+    "eventType": "Blood Glucose",
+    "quickChartCategory": "Vitals",
+    "requiredFields": [
+      "Reading",
+      "meal relation",
+      "symptoms"
+    ],
+    "optionalFields": [
+      "Device/strip note"
+    ],
+    "completionButton": "Record & Complete",
+    "allowedExceptions": [
+      "Resident declined",
+      "Resident unavailable",
+      "Unsafe to perform",
+      "Clinical hold"
+    ],
+    "autoEscalationExamples": "Outside ordered parameter or symptoms",
+    "units": "mg/dL",
+    "countsCompleteWhen": "Reading and context recorded within authorized scope",
+    "developerValidation": "Requires active order and authorized role",
+    "sourceWorkbookVersion": "SLMS_v4.2_(2)"
+  },
+  {
+    "eventType": "Medication Support",
+    "quickChartCategory": "Medication",
+    "requiredFields": [
+      "MAR outcome",
+      "actual time"
+    ],
+    "optionalFields": [
+      "Observation / response"
+    ],
+    "completionButton": "Record & Complete",
+    "allowedExceptions": [
+      "Resident declined",
+      "Resident unavailable",
+      "Clinical hold"
+    ],
+    "autoEscalationExamples": "Any omission, refusal, hold or suspected adverse effect",
+    "units": "Dose/unit from current MAR",
+    "countsCompleteWhen": "Authorized outcome recorded in MAR",
+    "developerValidation": "Never use a generic completion without MAR result",
+    "sourceWorkbookVersion": "SLMS_v4.2_(2)"
+  },
+  {
+    "eventType": "Behavior Support",
+    "quickChartCategory": "Behavior",
+    "requiredFields": [
+      "Behavior observed",
+      "trigger",
+      "intervention",
+      "response"
+    ],
+    "optionalFields": [
+      "Duration",
+      "effective cue"
+    ],
+    "completionButton": "Record & Complete",
+    "allowedExceptions": [
+      "Resident declined",
+      "Resident unavailable",
+      "Unsafe to perform",
+      "Clinical hold"
+    ],
+    "autoEscalationExamples": "New/severe behavior, threat, injury risk or acute cognition change",
+    "units": "Controlled lists + short note",
+    "countsCompleteWhen": "Intervention and response recorded",
+    "developerValidation": "Do not label behavior without observable facts",
+    "sourceWorkbookVersion": "SLMS_v4.2_(2)"
+  },
+  {
+    "eventType": "Pain Support",
+    "quickChartCategory": "Pain",
+    "requiredFields": [
+      "Pain score/indicator",
+      "intervention",
+      "reassessment"
+    ],
+    "optionalFields": [
+      "Location",
+      "quality"
+    ],
+    "completionButton": "Record & Complete",
+    "allowedExceptions": [
+      "Resident declined",
+      "Resident unavailable",
+      "Clinical hold"
+    ],
+    "autoEscalationExamples": "Severe/new pain, deterioration or poor response",
+    "units": "0–10 or approved observational scale",
+    "countsCompleteWhen": "Intervention and reassessment recorded",
+    "developerValidation": "Require reassessment time/result",
+    "sourceWorkbookVersion": "SLMS_v4.2_(2)"
+  },
+  {
+    "eventType": "Activity / Engagement",
+    "quickChartCategory": "Activity",
+    "requiredFields": [
+      "Offered",
+      "participated/declined",
+      "duration",
+      "response"
+    ],
+    "optionalFields": [
+      "Preference",
+      "group/individual"
+    ],
+    "completionButton": "Record & Complete",
+    "allowedExceptions": [
+      "Resident declined",
+      "Resident unavailable",
+      "Unsafe to perform",
+      "Clinical hold"
+    ],
+    "autoEscalationExamples": "Marked withdrawal, distress or functional decline",
+    "units": "Minutes",
+    "countsCompleteWhen": "Activity offered and outcome recorded",
+    "developerValidation": "Declined remains an exception but offer is documented",
+    "sourceWorkbookVersion": "SLMS_v4.2_(2)"
+  },
+  {
+    "eventType": "Sleep / Safety Round",
+    "quickChartCategory": "Sleep",
+    "requiredFields": [
+      "Awake/asleep",
+      "location",
+      "comfort",
+      "safety status"
+    ],
+    "optionalFields": [
+      "Intervention provided"
+    ],
+    "completionButton": "Record & Complete",
+    "allowedExceptions": [
+      "Resident unavailable",
+      "Unsafe to perform",
+      "Clinical hold"
+    ],
+    "autoEscalationExamples": "Repeated waking, wandering, pain or acute change",
+    "units": "Timestamp + controlled lists",
+    "countsCompleteWhen": "Observation fields completed",
+    "developerValidation": "Do not wake unless approved night plan requires",
+    "sourceWorkbookVersion": "SLMS_v4.2_(2)"
+  },
+  {
+    "eventType": "Skin Check",
+    "quickChartCategory": "Skin",
+    "requiredFields": [
+      "Area checked",
+      "condition",
+      "new finding yes/no"
+    ],
+    "optionalFields": [
+      "Photo per policy",
+      "comfort"
+    ],
+    "completionButton": "Record & Complete",
+    "allowedExceptions": [
+      "Resident declined",
+      "Resident unavailable",
+      "Unsafe to perform",
+      "Clinical hold"
+    ],
+    "autoEscalationExamples": "Non-blanching redness, open area, drainage or infection sign",
+    "units": "Body area + controlled finding",
+    "countsCompleteWhen": "Required areas and findings recorded",
+    "developerValidation": "New finding creates nurse-review event",
+    "sourceWorkbookVersion": "SLMS_v4.2_(2)"
+  },
+  {
+    "eventType": "General Observation",
+    "quickChartCategory": "Observation",
+    "requiredFields": [
+      "Observation category",
+      "objective finding",
+      "change from baseline"
+    ],
+    "optionalFields": [
+      "Short note"
+    ],
+    "completionButton": "Record & Complete",
+    "allowedExceptions": [
+      "Resident declined",
+      "Resident unavailable",
+      "Unsafe to perform",
+      "Clinical hold"
+    ],
+    "autoEscalationExamples": "Any resident-specific escalation trigger",
+    "units": "Timestamp + controlled category",
+    "countsCompleteWhen": "Finding and baseline comparison recorded",
+    "developerValidation": "Avoid vague entries such as okay or stable",
+    "sourceWorkbookVersion": "SLMS_v4.2_(2)"
+  }
+]
