@@ -437,13 +437,6 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
         <RoutineGeneratorBoard key={resident.id} residentId={resident.id} />
       ) : (
       <>
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard value={journey.length} label="Journey entries" accent="ink" />
-        <StatCard value={counts.size} label="Record types" accent="ink" />
-        <StatCard value={span} label="Span" accent="ink" />
-        <StatCard value={journey[0] ? fmtDate(journey[0].date) : "—"} label="Latest entry" accent="ink" />
-      </div>
-
       {/* Category filter chips */}
       <div className="mb-5 flex flex-wrap gap-2">
         <FilterChip active={cat === "ALL"} label="All" count={journey.length} onClick={() => setCat("ALL")} />
@@ -491,6 +484,14 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
           ))}
         </div>
       )}
+
+      {/* Stats summary at bottom */}
+      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard value={journey.length} label="Journey entries" accent="ink" />
+        <StatCard value={counts.size} label="Record types" accent="ink" />
+        <StatCard value={span} label="Span" accent="ink" />
+        <StatCard value={journey[0] ? fmtDate(journey[0].date) : "—"} label="Latest entry" accent="ink" />
+      </div>
       </>
       )}
     </ClinicalPage>
@@ -574,7 +575,7 @@ function FormsPanel({ forms, admissions = [] }: { forms: FormRecord[]; admission
               <span className="absolute -left-[31px] top-5 flex h-4 w-4 items-center justify-center rounded-full ring-4" style={{ backgroundColor: tone, ["--tw-ring-color" as string]: "var(--clinical-ground)" }} />
               <div className="overflow-hidden rounded-xl border transition" style={{ backgroundColor: "var(--clinical-surface)", borderColor: isOpen ? tone : "var(--clinical-line)", boxShadow: isOpen ? `0 0 0 1px ${tone}` : undefined }}>
                 {/* clickable summary row */}
-                <button onClick={() => setOpenId(isOpen ? null : f.id)} aria-expanded={isOpen} className="flex w-full items-start gap-3 p-4 text-left transition hover:bg-[var(--clinical-surface-2)]">
+                <div role="button" tabIndex={0} onClick={() => setOpenId(isOpen ? null : f.id)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpenId(isOpen ? null : f.id); } }} aria-expanded={isOpen} className="flex w-full items-start gap-3 p-4 text-left transition hover:bg-[var(--clinical-surface-2)]">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `color-mix(in srgb, ${tone} 14%, var(--clinical-surface))`, color: tone }}><Icon className="h-5 w-5" /></span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -598,7 +599,7 @@ function FormsPanel({ forms, admissions = [] }: { forms: FormRecord[]; admission
                     </button>
                     <ChevronDown className={`h-4 w-4 text-[var(--clinical-muted)] transition-transform ${isOpen ? "rotate-180" : ""}`} />
                   </div>
-                </button>
+                </div>
 
                 {/* read-only result */}
                 {isOpen && <FormResult f={f} tone={tone} prev={prev} chg={chg} />}

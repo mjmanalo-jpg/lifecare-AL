@@ -34,7 +34,7 @@ export interface JourneyCategoryMeta {
 }
 
 export const JOURNEY_CATEGORY_META: Record<JourneyCategory, JourneyCategoryMeta> = {
-  ADMISSION: { label: "Admission & Intake", accent: "teal", tab: "residents" },
+  ADMISSION: { label: "Admission & Intake", accent: "teal", tab: "admissions" },
   ASSESSMENT: { label: "Assessment", accent: "teal", tab: "careacuity" },
   LOC: { label: "Level of Care", accent: "teal", tab: "careacuity" },
   CARE_PLAN: { label: "Care Plan", accent: "green", tab: "careplans" },
