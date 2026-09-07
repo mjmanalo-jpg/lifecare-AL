@@ -155,7 +155,14 @@ export default function RoutineDefinitionCard({ def, onChanged, readOnly = false
               <Field label="Equipment"><input defaultValue={s(def.equipment)} onBlur={(e) => e.target.value !== s(def.equipment) && patch({ equipment: e.target.value })} className={controlClass} /></Field>
               <Field label="Technique"><input defaultValue={s(def.technique)} onBlur={(e) => e.target.value !== s(def.technique) && patch({ technique: e.target.value })} className={controlClass} /></Field>
               <Field label="Condition modifier"><input defaultValue={s(def.conditionModifier)} onBlur={(e) => e.target.value !== s(def.conditionModifier) && patch({ conditionModifier: e.target.value })} className={controlClass} /></Field>
-              <Field label="Order ref (clears block)"><input defaultValue={s(def.orderRef)} onBlur={(e) => e.target.value !== s(def.orderRef) && patch({ orderRef: e.target.value })} className={controlClass} placeholder="MAR/TAR/diet id" /></Field>
+              <Field label="Order ref (clears block)"><input defaultValue={s(def.orderRef)} onBlur={(e) => {
+                const val = e.target.value.trim();
+                if (val === s(def.orderRef)) return;
+                // Attaching an order resolves the order-required block: strip that clause
+                // from the persisted blockReason (keeping any other block, e.g. staffing).
+                const remaining = s(def.blockReason).split("; ").filter((r) => r && !/order\s*required|no matching current order/i.test(r)).join("; ");
+                patch({ orderRef: val, blockReason: val ? (remaining || null) : def.blockReason });
+              }} className={controlClass} placeholder="MAR/TAR/diet id" /></Field>
               <Field label="Escalation trigger"><input defaultValue={s(def.escalationTrigger)} onBlur={(e) => e.target.value !== s(def.escalationTrigger) && patch({ escalationTrigger: e.target.value })} className={controlClass} /></Field>
               <Field label="Escalation priority">
                 <select value={s(def.escalationPriority)} onChange={(e) => patch({ escalationPriority: e.target.value })} className={controlClass}>
