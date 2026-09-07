@@ -161,13 +161,13 @@ test("24h template: LOC 5 gets every template row with concrete times + shifts",
 
 // ── Phase 2: tailor the template per Final LOC ───────────────────────────────────
 test("Phase 2: higher LOC includes more rows; repositioning is LOC-4+ only", () => {
-  const n = (loc: string) => assembleRoutine24h(base({ finalLoc: loc })).length;
+  const n = (loc: string) => assembleRoutine24h(base({ finalLoc: loc as AssembleInput["finalLoc"] })).length;
   const [l1, l2, l3, l4, l5] = ["LOC 1", "LOC 2", "LOC 3", "LOC 4", "LOC 5"].map(n);
   assert.ok(l1 < l2 && l2 < l3 && l3 < l4, `monotonic by LOC (got ${l1},${l2},${l3},${l4},${l5})`);
   assert.equal(l4, ROUTINE_24H_TEMPLATE.length, "LOC 4 already has every row");
   assert.equal(l5, ROUTINE_24H_TEMPLATE.length, "LOC 5 has every row");
   assert.equal(templateForLoc("LOC 1").length, l1, "assembler count matches templateForLoc");
-  const has = (loc: string, name: string) => assembleRoutine24h(base({ finalLoc: loc })).some((e) => e.name === name);
+  const has = (loc: string, name: string) => assembleRoutine24h(base({ finalLoc: loc as AssembleInput["finalLoc"] })).some((e) => e.name === name);
   assert.ok(!has("LOC 3", "Repositioning"), "no q2h repositioning below LOC 4");
   assert.ok(has("LOC 4", "Repositioning"), "repositioning appears at LOC 4");
   assert.ok(!has("LOC 1", "Night safety round"), "no night safety round at LOC 1");
