@@ -18,7 +18,7 @@ import { QuickRecordFlow } from "@/components/portal/views/clinical/CareLogsBoar
 import TodaysCareBoard from "@/components/portal/views/clinical/TodaysCareBoard";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { careDay } from "@/lib/lifecare/routineCompletions";
-import { countProgress, deriveState, manilaMinutesNow } from "@/lib/lifecare/occurrenceStatus";
+import { countProgress, deriveState, manilaMinutesNow, manilaDay } from "@/lib/lifecare/occurrenceStatus";
 import ADLMonitoringBoard from "@/components/portal/views/clinical/ADLMonitoringBoard";
 import WeightMonitoringBoard from "@/components/portal/views/clinical/WeightMonitoringBoard";
 import MARDailyBoard from "@/components/portal/views/clinical/MARDailyBoard";
@@ -147,9 +147,8 @@ export default function CaregiverShiftBoard() {
     return () => { cancelled = true; };
   }, [myResidentKey, today, refetchOccs]);
   const myShiftOccs = useMemo(() => {
-    const dayISO = (v: unknown) => { const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(v ?? "")); return m ? m[1] : ""; };
     return (occRows || []).filter((o) =>
-      dayISO((o as { careDate?: unknown }).careDate) === today &&
+      manilaDay((o as { careDate?: unknown }).careDate) === today &&
       o.residentId != null && myResidentIds.has(String(o.residentId)) &&
       shift.inWindow(o.scheduledTime),
     );

@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { deriveState, isChartable, isLate, countProgress, WINDOW_LEAD_MIN, OCCURRENCE_GRACE_MIN } from "../src/lib/lifecare/occurrenceStatus.ts";
+import { deriveState, isChartable, isLate, countProgress, manilaDay, WINDOW_LEAD_MIN, OCCURRENCE_GRACE_MIN } from "../src/lib/lifecare/occurrenceStatus.ts";
 
 const at = "08:00"; // 480 min
 const S = 480;
@@ -13,6 +13,14 @@ test("deriveState: lead/grace boundaries around the scheduled time", () => {
   assert.equal(deriveState({ scheduledTime: at }, S), "Due");
   assert.equal(deriveState({ scheduledTime: at }, S + OCCURRENCE_GRACE_MIN), "Due"); // last Due minute
   assert.equal(deriveState({ scheduledTime: at }, S + OCCURRENCE_GRACE_MIN + 1), "Overdue");
+});
+
+test("manilaDay: careDate stored as Manila midnight resolves to the correct PH care day (not the UTC prev day)", () => {
+  // Manila midnight of 2026-09-07 is 2026-09-06T16:00:00Z — the UTC prefix would wrongly read 09-06.
+  assert.equal(manilaDay("2026-09-06T16:00:00.000Z"), "2026-09-07");
+  assert.equal(manilaDay("2026-09-07T00:00:00+08:00"), "2026-09-07");
+  assert.equal(manilaDay("2026-09-07"), "2026-09-07");
+  assert.equal(manilaDay(null), "");
 });
 
 test("deriveState: persisted Closed/Cancelled always win", () => {

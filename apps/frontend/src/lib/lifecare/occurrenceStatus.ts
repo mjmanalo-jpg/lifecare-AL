@@ -26,6 +26,14 @@ export function manilaMinutesNow(d: Date = new Date()): number {
   return (h % 24) * 60 + mi;
 }
 
+/** The Asia/Manila calendar day (YYYY-MM-DD) of an occurrence's careDate. careDate is
+ * stored as the care day's Manila midnight (an instant at +08:00), so the UTC date
+ * prefix is the PREVIOUS day — always resolve it in Manila to match careDay(). */
+export function manilaDay(v: unknown): string {
+  const d = new Date(String(v ?? ""));
+  return Number.isNaN(d.getTime()) ? "" : new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(d);
+}
+
 export interface OccLike {
   scheduledTime: string;
   workflowState?: string | null;

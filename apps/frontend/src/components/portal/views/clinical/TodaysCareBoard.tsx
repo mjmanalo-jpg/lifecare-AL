@@ -28,7 +28,7 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { careDay } from "@/lib/lifecare/routineCompletions";
 import { ASSISTANCE_DISPLAY, ROLE_ABBR, type Assistance, type Role } from "@/lib/lifecare/assistance";
 import {
-  deriveState, isChartable, isLate, countProgress, manilaMinutesNow, type OccLike,
+  deriveState, isChartable, isLate, countProgress, manilaMinutesNow, manilaDay, type OccLike,
 } from "@/lib/lifecare/occurrenceStatus";
 import { EXCEPTION_REASON, type ExceptionReason, type WorkflowState } from "@/lib/lifecare/vocab";
 import { schemaFor } from "@/lib/lifecare/resultSchema";
@@ -94,14 +94,10 @@ function completionKind(def: DefinitionLite | null | undefined): CompletionKind 
   }
 }
 
-/** Care date (YYYY-MM-DD) from a RoutineOccurrence.careDate (a DateTime at 00:00 +08:00). */
-const rowCareDate = (v: unknown): string => {
-  const s = String(v ?? "");
-  const m = /^(\d{4}-\d{2}-\d{2})/.exec(s);
-  if (m) return m[1];
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? "" : new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(d);
-};
+/** Care date (YYYY-MM-DD, Asia/Manila) from a RoutineOccurrence.careDate (stored as
+ * the care day's Manila midnight, i.e. an instant at +08:00). Must resolve in Manila
+ * — a raw UTC prefix would read the previous day and hide every occurrence. */
+const rowCareDate = (v: unknown): string => manilaDay(v);
 
 const STATE_PILL: Record<WorkflowState, string> = {
   Upcoming: "INFO", Due: "PENDING", Overdue: "OVERDUE", Closed: "COMPLETED", Cancelled: "CANCELLED",
