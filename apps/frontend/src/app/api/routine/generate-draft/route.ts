@@ -4,6 +4,11 @@ import { requireTenantContext } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { assembleRoutine, type AssembleInput } from "@/lib/lifecare/assembleRoutine";
 import { draftEventToDefinitionRow } from "@/lib/lifecare/routineDefinitions";
+import { ASSESSMENTS_V42_KEY } from "@/lib/lifecare/assessment";
+import {
+  careLevelToLoc, domainsFromAssessment, conditionsFromAssessment, ordersFromRecords,
+  type AssessmentLike,
+} from "@/lib/lifecare/routineInputs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,7 +38,6 @@ export async function POST(request: NextRequest) {
 
   const residentId = body.residentId ? String(body.residentId) : "";
   if (!residentId) return NextResponse.json({ error: "residentId required" }, { status: 400 });
-  if (!body.finalLoc) return NextResponse.json({ error: "finalLoc required" }, { status: 400 });
 
   // Guard the resident is in this community (mirrors care-events route).
   const resident = await prisma.resident.findFirst({
@@ -43,19 +47,50 @@ export async function POST(request: NextRequest) {
   if (!resident) return NextResponse.json({ error: "Related resident not found" }, { status: 422 });
   const residentName = `${resident.firstName ?? ""} ${resident.lastName ?? ""}`.trim() || undefined;
 
-  // Default the missing arrays/objects so the pure engine never NPEs on a thin body.
+  // ── Gather the resident's REAL records so order-required events RESOLVE instead
+  //    of blocking: the latest validated v4.2 assessment (domain scores + condition
+  //    context + Final LOC), active medications, and the active diet order. ──────────
+  let assessment: AssessmentLike | null = null;
+  try {
+    const setting = await prisma.appSetting.findFirst({ where: { key: ASSESSMENTS_V42_KEY, communityId } });
+    const raw = setting?.value ? JSON.parse(setting.value) : [];
+    const list = (Array.isArray(raw) ? raw : []) as Array<AssessmentLike & { layer1?: { residentId?: string }; status?: string; updatedAt?: string }>;
+    const mine = list.filter((a) => a?.layer1?.residentId === residentId);
+    const byRecent = (a: { updatedAt?: string }, b: { updatedAt?: string }) => String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? ""));
+    assessment = mine.filter((a) => a.status === "VALIDATED").sort(byRecent)[0] ?? mine.sort(byRecent)[0] ?? null;
+  } catch { assessment = null; }
+
+  const [meds, diet] = await Promise.all([
+    prisma.medication.findMany({
+      where: { residentId, communityId, status: "ACTIVE" },
+      select: { id: true, name: true, dosage: true, frequency: true, route: true, startDate: true, endDate: true, prescribedBy: true },
+    }),
+    prisma.dietOrder.findFirst({
+      where: { residentId, communityId, active: true }, orderBy: { updatedAt: "desc" },
+      select: { id: true, dietType: true, restrictions: true, mealType: true, orderedBy: true },
+    }),
+  ]);
+
+  const derivedCond = assessment ? conditionsFromAssessment(assessment) : { activeConditions: [] as string[], memoryIntensity: undefined };
+  const bodyOrdersHasData = !!(body.orders && (body.orders.medications?.length || body.orders.diet || body.orders.freeText?.length));
+
+  // Body (the nurse's explicit choices from the board) overrides; otherwise the real
+  // records win over the thin board payload.
   const input: AssembleInput = {
     residentId,
-    finalLoc: body.finalLoc,
+    finalLoc: (body.finalLoc ?? careLevelToLoc(assessment?.layer3?.finalLevel))!,
     assessmentVersion: body.assessmentVersion ?? "v4.2",
     approvedBy: body.approvedBy,
-    domains: Array.isArray(body.domains) ? body.domains : [],
-    activeConditions: Array.isArray(body.activeConditions) ? body.activeConditions : [],
-    memoryIntensity: body.memoryIntensity,
-    orders: body.orders ?? {},
+    domains: body.domains?.length ? body.domains : (assessment ? domainsFromAssessment(assessment) : []),
+    activeConditions: body.activeConditions?.length ? body.activeConditions : derivedCond.activeConditions,
+    memoryIntensity: body.memoryIntensity ?? derivedCond.memoryIntensity,
+    orders: bodyOrdersHasData ? body.orders! : ordersFromRecords(meds, diet),
     preferences: body.preferences,
     effectiveDate: body.effectiveDate ?? new Date().toISOString().slice(0, 10),
   };
+  if (!input.finalLoc) {
+    return NextResponse.json({ error: "finalLoc required — none provided and no validated assessment Final LOC found for this resident." }, { status: 400 });
+  }
 
   let count = 0;
   try {
