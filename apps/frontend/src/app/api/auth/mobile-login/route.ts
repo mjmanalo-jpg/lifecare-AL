@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     // 1) Company name → the communities under that org/community.
     const communities = await prisma.community.findMany({
       where: { OR: [{ name: { equals: company, mode: "insensitive" } }, { organization: { name: { equals: company, mode: "insensitive" } } }] },
-      select: { id: true, organizationId: true },
+      select: { id: true, name: true, organizationId: true },
     });
     if (!communities.length) return NextResponse.json({ error: "We couldn't find that company. Check the company name." }, { status: 401 });
     const communityIds = communities.map((c) => c.id);
@@ -46,18 +46,24 @@ export async function POST(request: NextRequest) {
       },
     });
     const matches = memberships.filter((m) => m.user && normalizeMobile(m.user.phone || "") === mobile);
-    // De-dupe to distinct users (someone could be in two communities of the org).
-    const byUser = new Map(matches.map((m) => [m.user!.id, m]));
-    const distinct = [...byUser.values()];
+    // A single user may belong to several communities of the org, so count by
+    // distinct user id — one number must map to exactly one account.
+    const userIds = new Set(matches.map((m) => m.user!.id));
 
-    if (distinct.length === 0) {
+    if (userIds.size === 0) {
       return NextResponse.json({ error: "No account found for that company and number. Contact your administrator." }, { status: 401 });
     }
-    if (distinct.length > 1) {
+    if (userIds.size > 1) {
       return NextResponse.json({ error: "That number matches more than one account — contact your administrator." }, { status: 409 });
     }
 
-    const match = distinct[0];
+    // Communities come back unsorted, so a multi-community user would land on an
+    // arbitrary one. Prefer LifeCare Rizal (mirrors the organization sign-in),
+    // else the first membership.
+    const communityName = new Map(communities.map((c) => [c.id, c.name] as const));
+    const match =
+      matches.find((m) => communityName.get(m.communityId)?.trim().toLowerCase() === "lifecare rizal") ??
+      matches[0];
     const user = match.user!;
     if (!user.isActive) return NextResponse.json({ error: "This account is deactivated. Contact your administrator." }, { status: 403 });
 
