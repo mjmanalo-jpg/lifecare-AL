@@ -92,6 +92,16 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
     return [...SHIFT_ORDER, "Anytime"].filter((k) => groups.has(k)).map((k) => [k, groups.get(k)!] as const);
   }, [reviewDefs]);
 
+  // The live APPROVED routine — shown read-only so the nurse can view what's active
+  // after approval (editing a live event creates a new version via the card).
+  const approvedDefs = useMemo(() => (defsQ.data || []).filter((d) => s(d.status) === "APPROVED"), [defsQ.data]);
+  const groupedApproved = useMemo(() => {
+    const groups = new Map<string, Row[]>();
+    for (const d of approvedDefs) { const g = shiftLabel(d.shiftOwner); (groups.get(g) ?? groups.set(g, []).get(g)!).push(d); }
+    for (const arr of groups.values()) arr.sort((a, b) => schedTimeKey(a).localeCompare(schedTimeKey(b)));
+    return [...SHIFT_ORDER, "Anytime"].filter((k) => groups.has(k)).map((k) => [k, groups.get(k)!] as const);
+  }, [approvedDefs]);
+
   const assessments = useMemo(() => parseAssessments(settingRows.find((r) => (r.key || r.id) === ASSESSMENTS_V42_KEY)?.value), [settingRows]);
   const drafts = useMemo(() => parseCarePlanDrafts(settingRows.find((r) => (r.key || r.id) === CARE_PLAN_DRAFTS_KEY)?.value), [settingRows]);
 
@@ -308,6 +318,24 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
               ))}
             </div>
           </DataState>
+          {approvedDefs.length > 0 && (
+            <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--clinical-line)" }}>
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: "var(--clinical-green)" }}>
+                Approved routine · {approvedDefs.length} event{approvedDefs.length === 1 ? "" : "s"}
+                <span className="font-medium normal-case text-[var(--clinical-muted)]"> — live; caregivers receive this each shift. Editing a live event creates a new version.</span>
+              </p>
+              <div className="space-y-4">
+                {groupedApproved.map(([shift, defs]) => (
+                  <div key={shift}>
+                    <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">{shift} <span className="font-medium normal-case">· {defs.length} event{defs.length === 1 ? "" : "s"}</span></p>
+                    <div className="space-y-2">
+                      {defs.map((d) => <RoutineDefinitionCard key={s(d.id)} def={d} onChanged={() => defsQ.refetch?.()} readOnly />)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {suppressedDefs.length > 0 && (
             <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--clinical-line)" }}>
               <button onClick={() => setShowSuppressed((v) => !v)} className="text-[11px] font-semibold text-[var(--clinical-muted)]">
