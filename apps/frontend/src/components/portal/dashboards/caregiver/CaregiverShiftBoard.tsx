@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity, Utensils, GlassWater, Droplets, Footprints, Moon, Smile, AlertTriangle,
-  Calendar, Repeat, RefreshCw, ChevronRight, Scale, Syringe,
+  Calendar, Repeat, RefreshCw, ChevronRight,
   ListChecks, Clock,
 } from "lucide-react";
 import { ClinicalHeader, ClinicalModal, ClinicalPage, DataState, SearchInput } from "@/components/portal/views/clinical/clinical-ui";
@@ -20,8 +20,6 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { careDay } from "@/lib/lifecare/routineCompletions";
 import { countProgress, deriveState, manilaMinutesNow, manilaDay } from "@/lib/lifecare/occurrenceStatus";
 import ADLMonitoringBoard from "@/components/portal/views/clinical/ADLMonitoringBoard";
-import WeightMonitoringBoard from "@/components/portal/views/clinical/WeightMonitoringBoard";
-import MARDailyBoard from "@/components/portal/views/clinical/MARDailyBoard";
 import ShiftEndorsementBoard from "@/components/portal/views/clinical/ShiftEndorsementBoard";
 import type { DashboardPayload, DashboardQueueItem, DashboardSection } from "@/lib/dashboard/types";
 
@@ -105,7 +103,6 @@ export default function CaregiverShiftBoard() {
   const [quickFocus, setQuickFocus] = useState<string | null>(null);
   const [routineResident, setRoutineResident] = useState<{ id: string; name: string } | null>(null);
   const [routineTab, setRoutineTab] = useState<"routine" | "log" | "adl">("routine");
-  const [cardAction, setCardAction] = useState<{ kind: "weight" | "mar"; id: string; name: string } | null>(null);
   const [showToday, setShowToday] = useState(false);
   const [showHandover, setShowHandover] = useState(false);
 
@@ -420,20 +417,8 @@ export default function CaregiverShiftBoard() {
                         <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">Up to date</span>
                       )}
                     </div>
-                    {/* Weight & MAR stay as direct card shortcuts. Daily Log + ADL
-                        now live as tabs INSIDE the Open Routine hub below. */}
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      {([
-                        ["weight", "Weight", Scale],
-                        ["mar", "MAR", Syringe],
-                      ] as const).map(([kind, label, Icon]) => (
-                        <button key={kind} type="button" onClick={() => setCardAction({ kind, id: c.id, name: c.name })}
-                          className="flex flex-col items-center justify-center gap-1 rounded-lg border border-[var(--clinical-line)] px-2 py-2 text-[11px] font-semibold text-[var(--clinical-ink-soft)] transition hover:border-[var(--clinical-panel)] hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-ink)]">
-                          <Icon className="h-4 w-4 text-[var(--clinical-panel)]" />
-                          {label}
-                        </button>
-                      ))}
-                    </div>
+                    {/* Daily Log + ADL live as tabs inside the Open Routine hub below;
+                        Weight + MAR are now standing caregiver sidebar items. */}
                     <button type="button" onClick={() => openRoutine(c)}
                       className="mt-2 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--clinical-panel)] px-4 text-sm font-semibold text-white transition hover:opacity-90">
                       Open routine <ChevronRight className="h-4 w-4" />
@@ -471,15 +456,6 @@ export default function CaregiverShiftBoard() {
       {showHandover && (
         <ClinicalModal open onClose={() => setShowHandover(false)} size="xl" title="Shift Handover" description="Review and record the shift endorsement.">
           <ShiftEndorsementBoard clinicianRole="CAREGIVER" embedded />
-        </ClinicalModal>
-      )}
-
-      {/* Weight / MAR shortcuts, opened in-place from the card. */}
-      {cardAction && (
-        <ClinicalModal open onClose={() => setCardAction(null)} size="xl"
-          title={`${cardAction.kind === "weight" ? "Weight Tracking" : "MAR"} — ${cardAction.name}`}>
-          {cardAction.kind === "weight" && <WeightMonitoringBoard clinicianRole="CAREGIVER" focusResidentId={cardAction.id} embedded />}
-          {cardAction.kind === "mar" && <MARDailyBoard clinicianRole="CAREGIVER" focusResidentId={cardAction.id} embedded />}
         </ClinicalModal>
       )}
     </ClinicalPage>

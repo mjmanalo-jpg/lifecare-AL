@@ -99,13 +99,15 @@ export async function POST(request: NextRequest) {
   const exceptionIn = str(body.exceptionReason);
   const { outcome, exception, finding, legacyForClassify } = resolveOutcome(str(body.outcome), exceptionIn, clinicalFindingIn);
 
-  // ── Result-field gate (Record & Complete) ────────────────────────────────────
-  // A completed outcome on a schema with required result fields must carry a valid
-  // result payload. An exception (Not completed) never requires the result fields.
+  // ── Result-field gate ─────────────────────────────────────────────────────────
+  // Two-button caregiver execution: DONE is one tap and finished (no result form) —
+  // a bare completion closes without requiring schema fields. We still VALIDATE a
+  // structured result when a caller actually submits one (e.g. a nurse recording
+  // readings), so a provided payload can't be malformed. Exceptions never require it.
   const results = (body.results && typeof body.results === "object" && !Array.isArray(body.results))
     ? (body.results as Record<string, unknown>) : undefined;
-  if (outcome !== "Not completed" && def.resultSchemaKey) {
-    const v = validateResult(def.resultSchemaKey, results ?? {});
+  if (outcome !== "Not completed" && def.resultSchemaKey && results) {
+    const v = validateResult(def.resultSchemaKey, results);
     if (!v.ok) {
       return NextResponse.json({ error: "Result is incomplete.", missing: v.missing, invalid: v.invalid }, { status: 400 });
     }

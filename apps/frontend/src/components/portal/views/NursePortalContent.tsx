@@ -53,6 +53,7 @@ import MedicationInventoryBoard from "@/components/portal/views/clinical/Medicat
 import MiniPharmacyBoard from "@/components/portal/views/clinical/MiniPharmacyBoard";
 import CarePlanReviewsBoard from "@/components/portal/views/clinical/CarePlanReviewsBoard";
 import RoutineGeneratorBoard from "@/components/portal/views/clinical/RoutineGeneratorBoard";
+import RoutineTemplateBoard from "@/components/portal/views/clinical/RoutineTemplateBoard";
 import MoveInBoard from "@/components/portal/views/clinical/MoveInBoard";
 import CareDeliveryBoard from "@/components/portal/views/clinical/CareDeliveryBoard";
 import PrivateCaregiverBoard from "@/components/portal/views/clinical/PrivateCaregiverBoard";
@@ -404,6 +405,9 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
         tabs={[
           { key: "careplans", label: "Plan & Review", node: <CarePlanReviewsBoard clinicianRole="NURSE" /> },
           { key: "routinegenerator", label: "24-Hour Routine", node: <RoutineGeneratorBoard /> },
+          { key: "routinetemplate", label: "Routine Template", node: <RoutineTemplateBoard /> },
+          { key: "caretask", label: "Care Task", node: <RoutineGeneratorBoard view="caretask" /> },
+          { key: "dailyperformance", label: "Resident Daily Performance", node: <RoutineGeneratorBoard view="performance" /> },
         ]}
       />
     );

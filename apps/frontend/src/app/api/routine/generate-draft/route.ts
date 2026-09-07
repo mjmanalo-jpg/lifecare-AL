@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
-import { assembleRoutine, type AssembleInput } from "@/lib/lifecare/assembleRoutine";
+import { assembleRoutine24h, type AssembleInput } from "@/lib/lifecare/assembleRoutine";
 import { draftEventToDefinitionRow } from "@/lib/lifecare/routineDefinitions";
-import { ASSESSMENTS_V42_KEY } from "@/lib/lifecare/assessment";
+import { ASSESSMENTS_V42_KEY, assessmentMatchesResident } from "@/lib/lifecare/assessment";
 import {
   careLevelToLoc, domainsFromAssessment, conditionsFromAssessment, ordersFromRecords,
   type AssessmentLike,
@@ -55,7 +55,10 @@ export async function POST(request: NextRequest) {
     const setting = await prisma.appSetting.findFirst({ where: { key: ASSESSMENTS_V42_KEY, communityId } });
     const raw = setting?.value ? JSON.parse(setting.value) : [];
     const list = (Array.isArray(raw) ? raw : []) as Array<AssessmentLike & { layer1?: { residentId?: string }; status?: string; updatedAt?: string }>;
-    const mine = list.filter((a) => a?.layer1?.residentId === residentId);
+    // Match by residentId, linked admission, OR name (not just an exact residentId) —
+    // otherwise a name/admission-linked validated assessment is missed and the routine
+    // generates with no Final LOC / no domain refinement.
+    const mine = list.filter((a) => assessmentMatchesResident(a as never, { residentId, residentName }));
     const byRecent = (a: { updatedAt?: string }, b: { updatedAt?: string }) => String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? ""));
     assessment = mine.filter((a) => a.status === "VALIDATED").sort(byRecent)[0] ?? mine.sort(byRecent)[0] ?? null;
   } catch { assessment = null; }
@@ -94,11 +97,21 @@ export async function POST(request: NextRequest) {
 
   let count = 0;
   try {
-    const drafted = assembleRoutine(input);
+    // Phase 1: seed the resident's routine from the full 24-Hour Routine template
+    // (all 39 rows, exact times copied from the workbook), refined by assistance-from-
+    // score + order gating. Phase 2 will tailor the set per Final LOC (assembleRoutine).
+    const drafted = assembleRoutine24h(input);
     const rows = drafted.map((e) => draftEventToDefinitionRow(e, residentId, communityId));
     await prisma.$transaction(async (tx) => {
       await tx.routineEventDefinition.deleteMany({
         where: { residentId, communityId, status: { in: ["DRAFT", "RETURNED"] } },
+      });
+      // Drop the legacy LOC-bundle routine (sourceLocBundleId like "LOC3-RT-012") —
+      // that model is retired; the routine is always the 24-Hour Routine template now.
+      // Its events have no clock times and would otherwise linger as APPROVED 00:00 rows.
+      await tx.routineEventDefinition.updateMany({
+        where: { residentId, communityId, status: "APPROVED", sourceLocBundleId: { startsWith: "LOC" } },
+        data: { status: "CANCELLED", revisionReason: "Dropped legacy LOC-bundle routine — replaced by the 24-Hour Routine template", stopDate: new Date() },
       });
       if (rows.length) {
         const res = await tx.routineEventDefinition.createMany({ data: rows as never });

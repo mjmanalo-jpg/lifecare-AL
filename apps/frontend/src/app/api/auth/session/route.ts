@@ -66,7 +66,11 @@ export async function POST(request: NextRequest) {
 
     const workspaces = await listWorkspaces(user.id);
     const organization = workspaces?.organizations[0];
-    const community = organization?.communities[0];
+    // Communities come back sorted by name asc, so "Bambu" would win by default.
+    // Prefer LifeCare Rizal as the landing community; fall back to the first.
+    const community =
+      organization?.communities.find((c) => c.name.trim().toLowerCase() === "lifecare rizal") ??
+      organization?.communities[0];
     const databaseRole = community?.role || user.role;
     const role = (user.platformRole === "PLATFORM_ADMIN"
       ? "PLATFORM_ADMIN"

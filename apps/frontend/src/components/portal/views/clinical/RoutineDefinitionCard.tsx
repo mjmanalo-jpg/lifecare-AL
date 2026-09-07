@@ -11,9 +11,10 @@
  */
 
 import { useState } from "react";
-import { AlertTriangle, Brain, Paperclip, Ban, Loader2 } from "lucide-react";
+import { AlertTriangle, Brain, Paperclip, Loader2 } from "lucide-react";
 import { updateRecord } from "@/lib/api";
 import { ASSISTANCE, ASSISTANCE_DISPLAY, ROLE, ROLE_ABBR, type Assistance, type Role } from "@/lib/lifecare/assistance";
+import { to12h } from "@/lib/lifecare/careTask";
 import { PRIORITY } from "@/lib/lifecare/vocab";
 import { StatusPill, controlClass } from "./clinical-ui";
 
@@ -24,16 +25,16 @@ const s = (v: unknown) => (v == null ? "" : String(v));
  *  engine flagged an unresolved assistance conflict. Kept here so the board and
  *  the card agree on the exact predicate (drives the disabled Approve button). */
 export function blockReasonFor(d: Row): string {
-  if (s(d.blockReason)) return s(d.blockReason);
-  if (d.orderRequired && !s(d.orderRef)) return "Clinical order required — attach an order to enable this event.";
-  return "";
+  // Order gating disabled — a missing order no longer blocks. Only a real engine
+  // blockReason (e.g. an unresolved staffing conflict) keeps an event out of approval.
+  return s(d.blockReason);
 }
 
 /** schedule json → a one-line human summary for the Time/Window column. */
 export function scheduleSummary(sched: any, freq: string): string { // eslint-disable-line @typescript-eslint/no-explicit-any
   if (!sched || typeof sched !== "object") return s(freq) || "—";
-  if (Array.isArray(sched.times) && sched.times.length) return sched.times.join(", ");
-  if (sched.window) return String(sched.window);
+  if (Array.isArray(sched.times) && sched.times.length) return sched.times.map((t: string) => to12h(String(t))).join(", ");
+  if (sched.window) { const [a, b] = String(sched.window).split("-"); return b ? `${to12h(a)}–${to12h(b)}` : to12h(a); }
   if (sched.intervalHours) return `every ${sched.intervalHours}h${sched.wakeStart != null ? " (while awake)" : ""}`;
   if (sched.perShift) return `${sched.perShift}× / shift`;
   if (sched.trigger) return `PRN: ${sched.trigger}`;

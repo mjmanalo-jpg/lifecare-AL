@@ -103,8 +103,10 @@ test("Rule 21: release validation blocks on any critical failure; clean passes",
   const missing = validateRoutineRelease({ occIds: ["a"], definitions: [{ resultSchemaKey: "H" }] });
   assert.ok(missing.criticalFailures.includes("Required-field"));
 
+  // Order gating disabled (per ops): a missing order is a WARNING, not a release blocker.
   const orderGap = validateRoutineRelease({ occIds: ["a"], definitions: [{ resultSchemaKey: "Medication Support", completionControl: "Open MAR", orderRequired: true }] });
-  assert.ok(orderGap.criticalFailures.includes("Order/scope"));
+  assert.ok(!orderGap.criticalFailures.includes("Order/scope"), "order gap no longer blocks release");
+  assert.ok(orderGap.warnings.includes("Order/scope"), "order gap surfaces as a warning");
 
   const badVocab = validateRoutineRelease({ occIds: ["a"], definitions: [{ resultSchemaKey: "H", completionControl: "Complete", exceptionSet: ["Poor intake"] }] });
   assert.ok(badVocab.criticalFailures.includes("Vocabulary validity"));

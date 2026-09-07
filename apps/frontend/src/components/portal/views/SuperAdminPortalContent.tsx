@@ -16,6 +16,7 @@ import EscalationsBoard from "@/components/portal/views/clinical/EscalationsBoar
 import DailyDocumentation from "@/components/portal/views/clinical/DailyDocumentation";
 import CarePlanReviewsBoard from "@/components/portal/views/clinical/CarePlanReviewsBoard";
 import RoutineGeneratorBoard from "@/components/portal/views/clinical/RoutineGeneratorBoard";
+import RoutineTemplateBoard from "@/components/portal/views/clinical/RoutineTemplateBoard";
 import VaccinationTracker from "@/components/portal/views/clinical/VaccinationTracker";
 import ResidentDocuments from "@/components/portal/views/clinical/ResidentDocuments";
 import MARBoard from "@/components/portal/views/clinical/MARBoard";
@@ -490,6 +491,9 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
           { key: "careplans", label: "Plan & Review", node: <CarePlanReviewsBoard clinicianRole="SUPERADMIN" /> },
           { key: "careplangovernance", label: "Plan Governance", node: <CarePlanReviewsBoard clinicianRole="SUPERADMIN" tabs={["pending", "history"]} /> },
           { key: "routinegenerator", label: "24-Hour Routine", node: <RoutineGeneratorBoard /> },
+          { key: "routinetemplate", label: "Routine Template", node: <RoutineTemplateBoard /> },
+          { key: "caretask", label: "Care Task", node: <RoutineGeneratorBoard view="caretask" /> },
+          { key: "dailyperformance", label: "Resident Daily Performance", node: <RoutineGeneratorBoard view="performance" /> },
         ]}
       />
     );

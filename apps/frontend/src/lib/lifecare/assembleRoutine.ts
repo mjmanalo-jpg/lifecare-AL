@@ -12,6 +12,7 @@
 // See docs/superpowers/specs/2026-09-05-slms-routine-assembly-engine-design.md.
 
 import { bundlesForLoc, type LocBundle } from "./locBundles.ts";
+import { templateForLoc, type RoutineTemplateEvent } from "./routineTemplate.ts";
 import { careDeliveryMap, pathwaysForConditions, memoryPathways, type ConditionPathway } from "./conditionPathways.ts";
 import { assistanceForScore, parseSupport, defaultRole, type Assistance, type AsScore, type Role } from "./assistance.ts";
 import { schemaFor } from "./resultSchema.ts";
@@ -487,6 +488,95 @@ export function assembleRoutine(input: AssembleInput): RoutineEventDefinition[] 
     .sort((a, b) =>
       `${a.sourceLocBundleId ?? a.conditionBundleId ?? a.memoryPathwayId ?? ""}${a.name}`
         .localeCompare(`${b.sourceLocBundleId ?? b.conditionBundleId ?? b.memoryPathwayId ?? ""}${b.name}`));
+}
+
+// ── Phase 1: the full 24-Hour Routine template (all 39 rows) ───────────────────────
+//
+// A SEPARATE, simpler assembler for the operational "24-Hour Routine" sheet. Unlike
+// assembleRoutine (the governed per-LOC engine above), this seeds EVERY template row
+// with its exact Time/Window copied verbatim, so a resident's generated day mirrors
+// the workbook sheet 1:1. It applies only two refinements the caregiver actually needs:
+//   • assistance level from the most-dependent linked AS-domain score, and
+//   • Rule 5/11 order gating — medication / ordered-clinical / treatment rows BLOCK
+//     until a current order exists and stay nurse-owned.
+// Phase 2 will tailor this set per Final LOC; that's what the per-LOC engine is for.
+
+const levelDigit = (finalLoc: string): string => /\d/.exec(finalLoc ?? "")?.[0] ?? "";
+const minutesOfSchedule = (s: DaySchedule): number => {
+  const t = s.times?.[0] ?? s.window?.split("-")[0] ?? "00:00";
+  const m = /(\d{1,2}):(\d{2})/.exec(t);
+  return m ? +m[1] * 60 + +m[2] : 0;
+};
+
+function templateToDef(t: RoutineTemplateEvent, input: AssembleInput, scoreOf: Map<string, AsScore>): InternalDraft {
+  const key = resultKeyForText(t.careEvent);
+  // Assistance follows the most-dependent linked AS domain the resident is assessed on.
+  let maxScore: AsScore | undefined;
+  let maxDomain: string | undefined;
+  for (const code of t.asDomains) {
+    const sc = scoreOf.get(code);
+    if (sc != null && (maxScore == null || sc > maxScore)) { maxScore = sc; maxDomain = code; }
+  }
+  const goalIds = t.goalIds.map((g) => g.replace(/\[level\]/g, levelDigit(input.finalLoc)));
+  return {
+    residentId: input.residentId,
+    version: 1,
+    status: "DRAFT",
+    sourceLocBundleId: t.eventId,   // reuse the id-chip column for the RT-0xx event id
+    sourceAsDomain: maxDomain,
+    asScore: maxScore,
+    goalId: goalIds[0],
+    name: t.careEvent,
+    instructions: t.caregiverInstruction,
+    assistanceLevel: maxScore != null ? assistanceForScore(maxScore) : undefined,
+    responsibleRole: defaultRole(t.careEvent, t.orderRequired),
+    frequencyMethod: t.frequencyMethod,
+    schedule: t.schedule,
+    shiftOwner: t.shiftOwner,
+    criticality: t.criticality,
+    completionControl: t.completionControl,
+    resultSchemaKey: key,
+    exceptionSet: exceptionsFor(key),
+    escalationPriority: criticalityToPriority(t.criticality),
+    effectiveDate: input.effectiveDate,
+    originalRecommendation: {
+      finalLoc: input.finalLoc,
+      assessmentVersion: input.assessmentVersion,
+      approvedBy: input.approvedBy,
+      orderRequired: t.orderRequired,
+      eventId: t.eventId,
+      goalIds,
+      requiredResult: t.requiredResult,
+      residentGoal: t.residentGoal,
+      nurseResponsibility: t.nurseResponsibility,
+      frequencyLabel: t.frequencyLabel,
+      source: "routine24h",
+    },
+    _asDomains: t.asDomains,
+  };
+}
+
+export function assembleRoutine24h(input: AssembleInput): RoutineEventDefinition[] {
+  const scoreOf = new Map<string, AsScore>(
+    input.domains.map((d) => [d.code, Math.max(0, Math.min(4, d.score)) as AsScore]),
+  );
+  // Phase 2 — tailor the 39-row template to the resident's Final LOC (higher LOC =
+  // more of the higher-dependency rows). The nurse then adds/suppresses to finalize.
+  const events: InternalDraft[] = templateForLoc(input.finalLoc).map((t) => templateToDef(t, input, scoreOf));
+
+  // Order gating is DISABLED for now (per ops): order-required rows stay OPEN and
+  // approvable. When a current order happens to exist we still attach it, but a
+  // missing order no longer blocks the event.
+  for (const e of events) {
+    if (orderRequiredOf(e)) {
+      const ord = findOrder(e, input.orders);
+      if (ord) { e.orderRef = ord.ref; if (ord.role) e.responsibleRole = ord.role; }
+    }
+  }
+
+  return events
+    .map(({ _asDomains, ...def }) => def as RoutineEventDefinition)
+    .sort((a, b) => minutesOfSchedule(a.schedule) - minutesOfSchedule(b.schedule));
 }
 
 // ── Self-check (smoke) ───────────────────────────────────────────────────────────

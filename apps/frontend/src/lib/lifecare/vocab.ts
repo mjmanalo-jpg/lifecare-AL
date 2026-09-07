@@ -33,7 +33,9 @@ export function countsAsCompleted(o: CareOutcome): boolean {
 /** Legacy flat outcome enum from careEvents.ts (conflates outcome+exception+finding). */
 export type LegacyOutcome =
   | "Completed" | "Not Required" | "Refused" | "Unable" | "Unsafe"
-  | "Increased Assist" | "Frequency Variance" | "Clinical Change";
+  | "Increased Assist" | "Frequency Variance" | "Clinical Change"
+  // Caregiver quick-exception reasons (two-button DONE/EXCEPTION execution).
+  | "Resident Away" | "Condition Changed" | "Other";
 
 /**
  * Bridge the legacy flat outcome onto the separated v4.2 fields, so #5 can migrate
@@ -62,5 +64,14 @@ export function fromLegacyOutcome(o: LegacyOutcome): {
       return { outcome: "Completed with variance", finding: "Frequency variance" };
     case "Clinical Change":
       return { outcome: "Completed with variance", finding: "Change from baseline" };
+    case "Resident Away":
+      return { outcome: "Not completed", exception: "Resident unavailable" };
+    case "Condition Changed":
+      // Care held pending a nurse review of the change. // ponytail: provisional per SOP.
+      return { outcome: "Not completed", exception: "Clinical hold" };
+    case "Other":
+      // Catch-all — the real reason rides the note; "Missed" is the neutral store
+      // value the strict occurrence vocab requires. // ponytail: provisional per SOP.
+      return { outcome: "Not completed", exception: "Missed" };
   }
 }

@@ -187,7 +187,8 @@ export function validateRoutineRelease(cfg: {
       (d.exceptionSet ?? []).every((x) => (EXCEPTION_REASON as readonly string[]).includes(x)) &&
       (!d.escalationPriority || (PRIORITY as readonly string[]).includes(d.escalationPriority))),
     true, "off-vocabulary exceptionSet / priority");
-  push("Order/scope", cfg.definitions.every((d) => !d.orderRequired || !!d.orderRef), true, "orderRequired without an order");
+  // Order gating disabled (per ops) — a missing order is a WARNING, not a release blocker.
+  push("Order/scope", cfg.definitions.every((d) => !d.orderRequired || !!d.orderRef), false, "orderRequired without an order");
   push("Conflict", cfg.definitions.every((d) => !d.blockReason), true, "unresolved block/conflict");
   push("Memory-Care invariant", cfg.definitions.every((d) => !(d.memoryPathwayId && d.memoryPathwayId === d.sourceLocBundleId)), true, "memory equated with an LOC field");
   if (cfg.escalationKeys) {

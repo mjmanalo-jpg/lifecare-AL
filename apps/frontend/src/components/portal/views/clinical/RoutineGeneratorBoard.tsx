@@ -11,38 +11,50 @@
  */
 
 import { useMemo, useState } from "react";
-import { Clock, Send, Loader2, CheckCircle2, Wand2, ShieldCheck, Undo2, Plus } from "lucide-react";
-import Swal from "@/lib/swal";
+import { Clock, Loader2, Wand2, ShieldCheck, Undo2, Plus } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord } from "@/lib/api";
 import { adaptResident } from "@/lib/adapters";
 import { SCORED_DOMAINS } from "@/lib/lifecare/dataset";
-import { ASSESSMENTS_V42_KEY, type AssessmentV42, type DomainEntry } from "@/lib/lifecare/assessment";
+import { ASSESSMENTS_V42_KEY, authoritativeAssessmentFor, finalLevel, type AssessmentV42 } from "@/lib/lifecare/assessment";
 import { CARE_PLAN_DRAFTS_KEY, parseCarePlanDrafts } from "@/lib/carePlanDraft";
-import { generateRoutine, type RoutineDomainInput } from "@/lib/lifecare/carePlanRoutine";
-import { dispatchResidentRoutine } from "@/lib/carePlanGen";
-import { bundlesForLoc } from "@/lib/lifecare/locBundles";
-import { defaultRole, ROLE_ABBR } from "@/lib/lifecare/assistance";
-import { schemaFor } from "@/lib/lifecare/resultSchema";
+import { type RoutineDomainInput } from "@/lib/lifecare/carePlanRoutine";
+import { ASSISTANCE, ASSISTANCE_DISPLAY, ROLE, ROLE_ABBR } from "@/lib/lifecare/assistance";
+import { careDayRank } from "@/lib/lifecare/careTask";
 import { useToast, Toaster } from "@/components/ui/toast";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import SignatureModal from "@/components/portal/SignatureModal";
-import RoutineTimeline from "./RoutineTimeline";
 import ResidentDailyPerformance from "./ResidentDailyPerformance";
+import CareTaskBoard from "./CareTaskBoard";
 import RoutineDefinitionCard, { blockReasonFor } from "./RoutineDefinitionCard";
 import { ClinicalButton, ClinicalCard, DataState, StatusPill, controlClass } from "./clinical-ui";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (v: unknown) => (v == null ? "" : String(v));
 
-// shiftOwner (Night/Morning/Afternoon) grouping order; tolerate the engine's AM/PM/NOC too.
-const SHIFT_ORDER = ["Night", "Morning", "Afternoon"];
+// Care day runs Morning → Afternoon → Night (06:00 → 04:00); tolerate AM/PM/NOC too.
+const SHIFT_ORDER = ["Morning", "Afternoon", "Night"];
 const shiftLabel = (v: unknown): string => {
   const t = s(v).toLowerCase();
   if (t.startsWith("noc") || t.includes("night")) return "Night";
   if (t.startsWith("am") || t.includes("morning")) return "Morning";
   if (t.startsWith("pm") || t.includes("afternoon")) return "Afternoon";
   return "Anytime";
+};
+// Shift owner (AM/PM/NOC) for a 24-hour HH:MM — Night 22:00–06:00 / Morning 06–14 / Afternoon 14–22.
+const ownerFromTime = (hhmm: string): string => {
+  const h = Number(hhmm.split(":")[0]);
+  if (!Number.isFinite(h)) return "";
+  if (h >= 6 && h < 14) return "AM";
+  if (h >= 14 && h < 22) return "PM";
+  return "NOC";
+};
+const normHHMM = (raw: string): string | null => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(raw.trim());
+  if (!m) return null;
+  const h = +m[1], mi = +m[2];
+  if (h > 23 || mi > 59) return null;
+  return `${String(h).padStart(2, "0")}:${m[2]}`;
 };
 const schedTimeKey = (d: Row): string => {
   const sc = d.schedule;
@@ -54,21 +66,12 @@ const parseAssessments = (raw: string | null | undefined): AssessmentV42[] => {
   if (!raw) return [];
   try { const v = JSON.parse(raw); return Array.isArray(v) ? (v as AssessmentV42[]) : []; } catch { return []; }
 };
-const STATUS_RANK: Record<string, number> = { VALIDATED: 3, COMPLETED: 2, DRAFT: 1, SUPERSEDED: 0 };
-const latestDomains = (all: AssessmentV42[], residentId: string): Partial<Record<string, DomainEntry>> | null => {
-  const mine = all.filter((a) => s(a.layer1?.residentId) === residentId && a.domains && Object.keys(a.domains).length);
-  if (!mine.length) return null;
-  mine.sort((a, b) => (STATUS_RANK[b.status] ?? 0) - (STATUS_RANK[a.status] ?? 0) || s(b.updatedAt).localeCompare(s(a.updatedAt)));
-  return mine[0].domains;
-};
 
-export default function RoutineGeneratorBoard({ residentId: residentIdProp, view = "timeline" }: { residentId?: string; view?: "timeline" | "performance" } = {}) {
+export default function RoutineGeneratorBoard({ residentId: residentIdProp, view = "timeline" }: { residentId?: string; view?: "timeline" | "caretask" | "performance" } = {}) {
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
-  const { data: settingRows, loading, error } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
-  const cpQ = useLiveQuery<Row>("care-plans", { query: "take=300", tables: ["CarePlan"] });
+  const { data: settingRows } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
   const [resId, setResId] = useState(residentIdProp || "");
-  const [sending, setSending] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [approving, setApproving] = useState(false);
   const [showPin, setShowPin] = useState(false);
@@ -88,7 +91,7 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
   const groupedDefs = useMemo(() => {
     const groups = new Map<string, Row[]>();
     for (const d of reviewDefs) { const g = shiftLabel(d.shiftOwner); (groups.get(g) ?? groups.set(g, []).get(g)!).push(d); }
-    for (const arr of groups.values()) arr.sort((a, b) => schedTimeKey(a).localeCompare(schedTimeKey(b)));
+    for (const arr of groups.values()) arr.sort((a, b) => careDayRank(schedTimeKey(a)) - careDayRank(schedTimeKey(b)));
     return [...SHIFT_ORDER, "Anytime"].filter((k) => groups.has(k)).map((k) => [k, groups.get(k)!] as const);
   }, [reviewDefs]);
 
@@ -98,18 +101,31 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
   const groupedApproved = useMemo(() => {
     const groups = new Map<string, Row[]>();
     for (const d of approvedDefs) { const g = shiftLabel(d.shiftOwner); (groups.get(g) ?? groups.set(g, []).get(g)!).push(d); }
-    for (const arr of groups.values()) arr.sort((a, b) => schedTimeKey(a).localeCompare(schedTimeKey(b)));
+    for (const arr of groups.values()) arr.sort((a, b) => careDayRank(schedTimeKey(a)) - careDayRank(schedTimeKey(b)));
     return [...SHIFT_ORDER, "Anytime"].filter((k) => groups.has(k)).map((k) => [k, groups.get(k)!] as const);
   }, [approvedDefs]);
 
   const assessments = useMemo(() => parseAssessments(settingRows.find((r) => (r.key || r.id) === ASSESSMENTS_V42_KEY)?.value), [settingRows]);
   const drafts = useMemo(() => parseCarePlanDrafts(settingRows.find((r) => (r.key || r.id) === CARE_PLAN_DRAFTS_KEY)?.value), [settingRows]);
 
-  // Resolve the resident's per-domain care: assessment scores seed Goal +
-  // Interventions; any in-progress builder edits (draft.domainPlan) win.
+  const resident = residents.find((r: Row) => s(r.id) === resId);
+  // Authoritative assessment for this resident — matched by residentId, linked
+  // admission, OR name token-set (not just an exact residentId match). Fixes the
+  // "No Final LOC" block on residents whose validated assessment is keyed by
+  // admission/name (e.g. captured pre-admission) rather than the live resident id.
+  const latestAssessment = useMemo(
+    () => authoritativeAssessmentFor(assessments, { residentId: resId, residentName: s(resident?.name) }),
+    [assessments, resId, resident],
+  );
+  const finalLoc = useMemo(() => {
+    const lvl = s((latestAssessment ? finalLevel(latestAssessment) : "") ?? "").match(/(\d)/)?.[1];
+    return lvl ? `LOC ${lvl}` : "";
+  }, [latestAssessment]);
+
+  // Per-domain care from that same assessment; in-progress builder edits (draft.domainPlan) win.
   const domainInputs = useMemo<RoutineDomainInput[]>(() => {
     if (!resId) return [];
-    const dm = latestDomains(assessments, resId) || {};
+    const dm = latestAssessment?.domains || {};
     const saved = new Map((drafts[resId]?.domainPlan || []).map((d) => [d.code, d]));
     const out: RoutineDomainInput[] = [];
     for (const d of SCORED_DOMAINS) {
@@ -126,56 +142,15 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
       });
     }
     return out;
-  }, [assessments, drafts, resId]);
+  }, [latestAssessment, drafts, resId]);
 
-  const routine = useMemo(() => generateRoutine(domainInputs), [domainInputs]);
   // Per-domain score, to seed the Resident Daily Performance table's assistance column.
   const scoreByCode = useMemo(() => {
-    const dm = resId ? latestDomains(assessments, resId) || {} : {};
+    const dm = latestAssessment?.domains || {};
     const o: Record<string, number> = {};
     for (const d of SCORED_DOMAINS) { const e = dm[d.code]; if (e && typeof e.score === "number") o[d.code] = Math.max(0, Math.min(4, e.score)); }
     return o;
-  }, [assessments, resId]);
-  const resident = residents.find((r: Row) => s(r.id) === resId);
-  // Latest assessment for this resident → Final LOC ("Level 3" → "LOC 3") for generate-draft.
-  const latestAssessment = useMemo(() => {
-    const mine = assessments.filter((a) => s(a.layer1?.residentId) === resId);
-    mine.sort((a, b) => (STATUS_RANK[b.status] ?? 0) - (STATUS_RANK[a.status] ?? 0) || s(b.updatedAt).localeCompare(s(a.updatedAt)));
-    return mine[0];
-  }, [assessments, resId]);
-  const finalLoc = useMemo(() => {
-    const lvl = s(latestAssessment?.layer3?.finalLevel).match(/(\d)/)?.[1];
-    return lvl ? `LOC ${lvl}` : "";
   }, [latestAssessment]);
-  // Governance: the routine may only be SENT once the resident's care plan is
-  // approved/released (ACTIVE). Dispatch materializes from that active plan.
-  const activePlan = useMemo(() => (cpQ.data || []).find((p) => s(p.residentId) === resId && s(p.status) === "ACTIVE"), [cpQ.data, resId]);
-
-  const sendRoutine = async () => {
-    if (!resId || sending) return;
-    const name = s(resident?.name) || "this resident";
-    const ok = await Swal.fire({
-      icon: "question", title: "Send routine to caregivers?",
-      html: `Today's 24-hour routine for <b>${name}</b> will be dispatched to the rostered caregivers for each shift.`,
-      showCancelButton: true, confirmButtonText: "Send routine", cancelButtonText: "Cancel",
-    });
-    if (!ok.isConfirmed) return;
-    setSending(true);
-    try {
-      const created = await dispatchResidentRoutine(resId);
-      await cpQ.refetch?.();
-      Swal.fire({
-        icon: "success", title: created > 0 ? "Routine sent" : "Routine up to date",
-        html: created > 0
-          ? `<b>${created}</b> task${created === 1 ? "" : "s"} dispatched to today's scheduled caregivers.`
-          : "No new tasks — today's routine is already on the caregivers' lists (or no caregiver is scheduled yet).",
-        timer: 3200, showConfirmButton: false,
-      });
-    } catch (e) {
-      Swal.fire("Couldn't send", e instanceof Error ? e.message : "Please try again.", "error");
-    } finally { setSending(false); }
-  };
-
   // ── Draft→Review→Approve (sub-project #3) ────────────────────────────────────
   const post = async (path: string, body: unknown) => {
     const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -228,27 +203,32 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
     catch (e) { toast("error", "Couldn't suppress", e instanceof Error ? e.message : "Please try again."); }
   };
 
-  const addEvent = async () => {
-    if (!finalLoc) { toast("error", "No Final LOC", "Set the resident's Final LOC first."); return; }
-    const bundles = bundlesForLoc(finalLoc);
-    const choices = bundles.map((b, i) => `${i + 1}. ${b.careEvent}`).join("\n");
-    const pick = window.prompt(`Add an event for ${finalLoc}.\nEnter a number, or type a custom event name:\n\n${choices}`);
-    if (!pick) return;
-    const idx = Number(pick) - 1;
-    const b = Number.isInteger(idx) && bundles[idx] ? bundles[idx] : undefined;
-    const name = b ? b.careEvent : pick.trim();
-    const resultSchemaKey = b?.resultSchemaKey || "Care Note";
+  // Add a custom care event via a small form (name · time · assistance · assisted-by).
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState({ activity: "", time: "", assistance: "Setup/Cueing", assistedBy: "Caregiver" });
+  const openAddEvent = () => {
+    if (!resId) { toast("error", "No resident", "Select a resident first."); return; }
+    setAddForm({ activity: "", time: "", assistance: "Setup/Cueing", assistedBy: "Caregiver" });
+    setShowAdd(true);
+  };
+  const submitAddEvent = async () => {
+    const name = addForm.activity.trim();
+    if (!name) { toast("error", "Activity required", "Enter an activity name."); return; }
+    const hhmm = addForm.time ? normHHMM(addForm.time) : null;
+    if (addForm.time && !hhmm) { toast("error", "Invalid time", "Pick a valid time."); return; }
     try {
-      let schemaOk = resultSchemaKey;
-      try { schemaFor(schemaOk); } catch { schemaOk = "Care Note"; }
       await createRecord("routine-definitions", {
-        residentId: resId, status: "DRAFT", version: 1, name, instructions: b?.purpose || "",
-        sourceLocBundleId: b?.bundleEventId || null, frequencyMethod: b?.frequencyMethod || "defined_window",
-        schedule: b?.defaultTimeShift ? { window: b.defaultTimeShift } : {}, shiftOwner: null,
-        criticality: b?.criticality || "Routine", responsibleRole: (defaultRole(b?.category || "", !!b?.orderRequired)).replace(/ /g, "_"),
-        resultSchemaKey: schemaOk, exceptionSet: [], orderRequired: !!b?.orderRequired,
+        residentId: resId, status: "DRAFT", version: 1, name, instructions: "",
+        sourceLocBundleId: null,
+        frequencyMethod: hhmm ? "exact_time" : "defined_window",
+        schedule: hhmm ? { times: [hhmm] } : {},
+        shiftOwner: hhmm ? ownerFromTime(hhmm) : null,
+        criticality: "Routine", assistanceLevel: addForm.assistance,
+        responsibleRole: addForm.assistedBy.replace(/ /g, "_"),
+        resultSchemaKey: "General Observation", exceptionSet: [], orderRequired: false,
       });
       await defsQ.refetch?.();
+      setShowAdd(false);
       toast("success", "Event added", name);
     } catch (e) { toast("error", "Couldn't add event", e instanceof Error ? e.message : "Please try again."); }
   };
@@ -280,7 +260,7 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
               <ClinicalButton variant="secondary" size="sm" onClick={generateDraft} disabled={generating || defsQ.loading}>
                 {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Generate draft
               </ClinicalButton>
-              {reviewDefs.length > 0 && <ClinicalButton variant="secondary" size="sm" onClick={addEvent}><Plus className="h-4 w-4" /> Add event</ClinicalButton>}
+              {reviewDefs.length > 0 && <ClinicalButton variant="secondary" size="sm" onClick={openAddEvent}><Plus className="h-4 w-4" /> Add event</ClinicalButton>}
               {reviewDefs.length > 0 && <ClinicalButton variant="ghost" size="sm" onClick={returnForRevision}><Undo2 className="h-4 w-4" /> Return</ClinicalButton>}
               {reviewDefs.length > 0 && (
                 <ClinicalButton variant="primary" size="sm" onClick={() => setShowPin(true)} disabled={approving || blockedCount > 0}
@@ -356,46 +336,61 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
         </ClinicalCard>
       )}
 
-      <DataState loading={loading || resQ.loading} error={error ? String(error) : undefined} empty={false}>
-        {!resId ? (
-          <p className="px-1 text-sm text-[var(--clinical-muted)]">Choose a resident to generate their 24-hour routine.</p>
-        ) : routine.length === 0 ? (
-          view === "performance" ? (
-            <ClinicalCard className="p-4 text-sm text-[var(--clinical-muted)]">
-              No routine yet for {s(resident?.name) || "this resident"}. Complete their <b>Resident Assessment</b> and build a care plan in the <b>Care Plan Generator</b> first.
-            </ClinicalCard>
-          ) : null
-        ) : (
-          <ClinicalCard className="p-4 sm:p-5">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-[var(--clinical-panel)]" />
-                <h2 className="text-sm font-bold text-[var(--clinical-ink)]">{s(resident?.name)} · {view === "performance" ? "Resident Daily Performance" : "24-Hour Routine (care-plan preview)"}</h2>
-                <span className="text-[11px] font-medium text-[var(--clinical-muted)]">{routine.length} care event{routine.length === 1 ? "" : "s"}</span>
+      {/* Care Task + Resident Daily Performance draw from the APPROVED routine
+          definitions (approvedDefs), not the assessment-derived preview. */}
+      {resId && (view === "caretask" || view === "performance") && (
+        <ClinicalCard className="p-4 sm:p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <Clock className="h-4 w-4 text-[var(--clinical-panel)]" />
+            <h2 className="text-sm font-bold text-[var(--clinical-ink)]">{s(resident?.name)} · {view === "caretask" ? "Care Task" : "Resident Daily Performance"}</h2>
+          </div>
+          {approvedDefs.length === 0 ? (
+            <p className="text-sm text-[var(--clinical-muted)]">No approved 24-hour routine yet. Approve the resident&apos;s routine in <b>24-Hour Routine</b> first{view === "caretask" ? " to seed the Care Task" : " to populate the monthly grid"}.</p>
+          ) : view === "caretask" ? (
+            <CareTaskBoard key={resId} residentId={resId} approvedDefs={approvedDefs} residentName={s(resident?.name)} />
+          ) : (
+            <ResidentDailyPerformance key={resId} residentId={resId} approvedDefs={approvedDefs} residentName={s(resident?.name)} />
+          )}
+        </ClinicalCard>
+      )}
+
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowAdd(false)}>
+          <div className="w-full max-w-md rounded-xl border p-5 shadow-xl" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }} onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-3 text-sm font-bold text-[var(--clinical-ink)]">Add care event</h3>
+            <div className="space-y-3">
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--clinical-muted)]">Activity</span>
+                <input autoFocus value={addForm.activity} onChange={(e) => setAddForm((f) => ({ ...f, activity: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === "Enter") void submitAddEvent(); }}
+                  placeholder="e.g. Physiotherapy" className={controlClass} />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--clinical-muted)]">Time</span>
+                  <input type="time" lang="en-US" value={addForm.time} onChange={(e) => setAddForm((f) => ({ ...f, time: e.target.value }))} className={controlClass} />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--clinical-muted)]">Level of assistance</span>
+                  <select value={addForm.assistance} onChange={(e) => setAddForm((f) => ({ ...f, assistance: e.target.value }))} className={controlClass}>
+                    {ASSISTANCE.map((a) => <option key={a} value={a}>{ASSISTANCE_DISPLAY[a]}</option>)}
+                  </select>
+                </label>
               </div>
-              {view === "timeline" && (
-                <div className="flex items-center gap-2">
-                  {activePlan ? <StatusPill status="ACTIVE" /> : <span className="rounded-full bg-[var(--clinical-surface-2)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--clinical-muted)]">Plan not approved</span>}
-                  <ClinicalButton variant="primary" size="sm" onClick={sendRoutine} disabled={sending || !activePlan}
-                    title={activePlan ? "Dispatch today's routine to the rostered caregivers" : "Approve the care plan in Care Plan Generator to enable sending"}>
-                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    Send Routine to Caregivers
-                  </ClinicalButton>
-                </div>
-              )}
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--clinical-muted)]">Assisted by</span>
+                <select value={addForm.assistedBy} onChange={(e) => setAddForm((f) => ({ ...f, assistedBy: e.target.value }))} className={controlClass}>
+                  {ROLE.map((r) => <option key={r} value={r}>{ROLE_ABBR[r]} — {r}</option>)}
+                </select>
+              </label>
             </div>
-            {view === "timeline" && !activePlan && (
-              <div className="mb-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-[11px] text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--clinical-muted)]" />
-                <span>This is a preview. Approve the resident&apos;s care plan in <b>Care Plan Generator</b> to send the routine to caregivers.</span>
-              </div>
-            )}
-            {view === "performance"
-              ? <ResidentDailyPerformance key={resId} residentId={resId} routine={routine} scoreByCode={scoreByCode} />
-              : <RoutineTimeline events={routine} />}
-          </ClinicalCard>
-        )}
-      </DataState>
+            <div className="mt-4 flex justify-end gap-2">
+              <ClinicalButton variant="ghost" size="sm" onClick={() => setShowAdd(false)}>Cancel</ClinicalButton>
+              <ClinicalButton variant="primary" size="sm" onClick={submitAddEvent}><Plus className="h-4 w-4" /> Add event</ClinicalButton>
+            </div>
+          </div>
+        </div>
+      )}
 
       <SignatureModal open={showPin} onClose={() => setShowPin(false)} onSigned={approve} mode="sign"
         title="Approve 24-hour routine" description={`Enter your 4-digit signing PIN to approve ${s(resident?.name) || "this resident"}'s routine. Approved events become active on their effective date.`} />

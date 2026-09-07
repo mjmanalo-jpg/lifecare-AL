@@ -14,6 +14,8 @@ import { taskById } from "./dataset.ts";
 export const OUTCOMES = [
   "Completed", "Not Required", "Refused", "Unable", "Unsafe",
   "Increased Assist", "Frequency Variance", "Clinical Change",
+  // Caregiver quick-exception reasons (two-button DONE/EXCEPTION execution).
+  "Resident Away", "Condition Changed", "Other",
 ] as const;
 export type Outcome = (typeof OUTCOMES)[number];
 
@@ -86,6 +88,20 @@ export function classifyOutcome(outcome: Outcome): OutcomeClassification {
       // EV-006 Change from baseline → CE-05 · acute deterioration is safety
       // (CEG-05) → change-in-condition (DT-003) + emergency pathway (DT-010).
       return { ...base, isExpected: false, isException: true, isVariance: false, immediateEscalation: true, emergencyPathway: true, escalationAction: "notify_nurse", archetype: "CE-05", linkedDecisionTree: "DT-003", engineRuleId: "CEG-05", emergencyProtocol: "DT-010" };
+    case "Resident Away":
+      // Resident unavailable (out on pass / appointment) — task not delivered; not
+      // a clinical concern, so no nurse alert and no escalation.
+      // ponytail: provisional escalation — confirm against SOP.
+      return { ...base, isExpected: false, isException: true, isVariance: false, immediateEscalation: false, escalationAction: "none" };
+    case "Condition Changed":
+      // Caregiver-flagged change in condition — notify the nurse to review, but do
+      // NOT auto-raise the emergency pathway (reserved for "Clinical Change" acute
+      // deterioration). // ponytail: provisional escalation — confirm against SOP.
+      return { ...base, isExpected: false, isException: true, isVariance: false, immediateEscalation: false, escalationAction: "notify_nurse", linkedDecisionTree: "DT-003" };
+    case "Other":
+      // Unspecified exception — a short note is required; no alert (the nurse sees
+      // it in the care-event log). // ponytail: provisional — confirm against SOP.
+      return { ...base, isExpected: false, isException: true, isVariance: false, immediateEscalation: false, escalationAction: "none" };
   }
 }
 

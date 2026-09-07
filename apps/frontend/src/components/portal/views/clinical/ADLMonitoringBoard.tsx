@@ -103,7 +103,9 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE", focusResid
   const logs = useMemo(() => parseLogs(settingRows.find((r) => (r.key || r.id) === ADL_KEY)?.value), [settingRows]);
   const assessments = useMemo(() => parseAssessments(settingRows.find((r) => (r.key || r.id) === PREADMISSION_KEY)?.value), [settingRows]);
 
-  const [resId, setResId] = useState("");
+  // Embedded (inside the Open Routine hub) is always single-resident: seed the
+  // selection so the 10 domain cards render immediately — no "Start ADL" gate.
+  const [resId, setResId] = useState(embedded && focusResidentId ? focusResidentId : "");
   const [date, setDate] = useState(today());
   const [shift, setShift] = useState(shiftNow());
   const [view, setView] = useState<"log" | "alerts">("log");
@@ -254,6 +256,22 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE", focusResid
                     <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-bold text-[var(--clinical-ink)]">{s(residentRow?.name) || "Resident"}</p><ChangeChip change={entry.change} /></div><p className="mt-1 text-sm text-[var(--clinical-ink-soft)]">{domain?.label} · {entry.assistance}</p>{entry.notes && <p className="mt-2 text-sm text-[var(--clinical-muted)]">{entry.notes}</p>}</div>
                     <span className="shrink-0 text-xs text-[var(--clinical-muted)]">{entry.shift} shift</span>
                   </div>
+                );
+              })}
+            </div>
+          ) : embedded ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              {DOMAINS.map((domain) => {
+                const baseline = baselineFor(domain.key);
+                const logged = loggedByDomain.get(domain.key);
+                const Icon = domain.icon;
+                return (
+                  <button key={domain.key} onClick={() => setLogDomain(domain.key)} className="rounded-xl border p-3 text-left transition hover:border-[var(--clinical-line-strong)] hover:shadow-sm" style={{ backgroundColor: "var(--clinical-surface)", borderColor: logDomain === domain.key ? "var(--clinical-panel)" : "var(--clinical-line)" }}>
+                    <div className="flex items-center justify-between gap-3"><Icon className="h-5 w-5 text-[var(--clinical-panel)]" />{logged ? <Check className="h-4 w-4 text-[var(--clinical-green)]" /> : <Plus className="h-4 w-4 text-[var(--clinical-muted)]" />}</div>
+                    <p className="mt-3 text-sm font-bold text-[var(--clinical-ink)]">{domain.label}</p>
+                    <p className="mt-1 text-[11px] text-[var(--clinical-muted)]">{logged ? logged.assistance : baseline ? `Baseline: ${baseline.label}` : "No baseline recorded"}</p>
+                    {logged && <div className="mt-2"><ChangeChip change={logged.change} /></div>}
+                  </button>
                 );
               })}
             </div>
@@ -426,12 +444,14 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE", focusResid
 
       {logDomain && resident && (
         <LogModal
+          key={logDomain}
           domain={DOMAINS.find((d) => d.key === logDomain)!}
           resident={resident}
           baseline={baselineFor(logDomain)}
           existing={loggedByDomain.get(logDomain)}
           onClose={() => setLogDomain(null)}
           onSave={(p) => saveEntry(logDomain, p)}
+          embedded={embedded}
         />
       )}
     </>
@@ -439,9 +459,9 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE", focusResid
   return embedded ? <div>{body}</div> : <ClinicalPage>{body}</ClinicalPage>;
 }
 
-function LogModal({ domain, resident, baseline, existing, onClose, onSave }: {
+function LogModal({ domain, resident, baseline, existing, onClose, onSave, embedded }: {
   domain: (typeof DOMAINS)[number]; resident: Row; baseline: Baseline; existing?: AdlEntry;
-  onClose: () => void; onSave: (p: { assistance: string; change: string; flags: Partial<Record<FlagKey, boolean>>; notes: string }) => Promise<void>;
+  onClose: () => void; onSave: (p: { assistance: string; change: string; flags: Partial<Record<FlagKey, boolean>>; notes: string }) => Promise<void>; embedded?: boolean;
 }) {
   const [assistance, setAssistance] = useState(existing?.assistance || "");
   const [change, setChange] = useState(existing?.change || "Same as Baseline");
@@ -456,19 +476,12 @@ function LogModal({ domain, resident, baseline, existing, onClose, onSave }: {
     try { await onSave({ assistance, change, flags, notes }); } finally { setSaving(false); }
   };
 
-  return (
-    <ClinicalModal
-      open
-      onClose={onClose}
-      title={`Log ${domain.label}`}
-      description={s(resident.name)}
-      size="md"
-      footer={
-        <ClinicalButton variant="accent" onClick={submit} disabled={saving || !assistance} className="w-full sm:w-auto">
-          <CheckCircle2 className="w-4 h-4" /> {saving ? "Saving…" : "Log ADL Entry"}
-        </ClinicalButton>
-      }
-    >
+  const submitBtn = (
+    <ClinicalButton variant="accent" onClick={submit} disabled={saving || !assistance} className="w-full sm:w-auto">
+      <CheckCircle2 className="w-4 h-4" /> {saving ? "Saving…" : "Log ADL Entry"}
+    </ClinicalButton>
+  );
+  const inner = (
       <div className="space-y-5">
         <div className="rounded-xl border px-3 py-2 text-sm font-medium text-[var(--clinical-ink)]" style={{ backgroundColor: "var(--clinical-surface-2)", borderColor: "var(--clinical-line)" }}>
           Current Baseline: {baseline ? `${baseline.label} (Score: ${baseline.score}/2)` : "Not set"}
@@ -506,6 +519,23 @@ function LogModal({ domain, resident, baseline, existing, onClose, onSave }: {
           <textarea id="adl-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observations, interventions, resident response…" className={controlClass} />
         </div>
       </div>
+  );
+
+  // Embedded (Open Routine hub): render the entry form inline below the ADL cards
+  // — no nested modal. Standalone board keeps the ClinicalModal.
+  if (embedded) return (
+    <div className="mt-4 rounded-2xl border p-4 sm:p-5" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line-strong)" }}>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div><h3 className="text-base font-bold text-[var(--clinical-ink)]">Log {domain.label}</h3><p className="text-xs text-[var(--clinical-muted)]">{s(resident.name)}</p></div>
+        <button onClick={onClose} aria-label="Close" className="-mr-1 rounded-lg p-1.5 text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-ink)]"><X className="h-5 w-5" /></button>
+      </div>
+      {inner}
+      <div className="mt-5">{submitBtn}</div>
+    </div>
+  );
+  return (
+    <ClinicalModal open onClose={onClose} title={`Log ${domain.label}`} description={s(resident.name)} size="md" footer={submitBtn}>
+      {inner}
     </ClinicalModal>
   );
 }

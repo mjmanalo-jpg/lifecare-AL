@@ -22,7 +22,7 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  Activity, Utensils, Droplets, Smile, Zap, Footprints, Moon, Wind,
+  Activity, Utensils, Droplets, Smile, Footprints, Moon, Wind,
   CalendarDays, Sun, Clock,
   ChevronUp, ChevronDown, Plus, QrCode, Eye, Download, Sparkles,
   UserRound, Pill, Check, Camera, Image as ImageIcon, Trash2, Pencil, UserX,
@@ -42,7 +42,7 @@ import ResidentJourneyBoard from "./ResidentJourneyBoard";
 import { careLevelEnumToLevel, domainInPackage, domainDailyAllowance, DOMAIN_LABEL, recordOutOfPackageService, OVERAGE_EVENTS_KEY, parseOverageEvents, upsertOverageEvent, type OverageEvent } from "@/lib/lifecare/carePackage";
 import { activeLevel } from "@/lib/lifecare/activeLevel";
 import { parseLocHistory, LOC_HISTORY_KEY } from "@/lib/lifecare/locHistory";
-import { ASSESSMENTS_V42_KEY } from "@/lib/lifecare/assessment";
+import { ASSESSMENTS_V42_KEY, authoritativeAssessmentFor, domainScores } from "@/lib/lifecare/assessment";
 import { levelMeta } from "@/lib/lifecare/levelModel";
 import ASSESSMENT_DOMAINS from "@/lib/lifecare/data/assessment_domains.json";
 import { CLINICAL_ALERT_RULES } from "@/lib/lifecare/clinicalAlerts";
@@ -169,7 +169,6 @@ const DOMAINS: { key: DomainKey; code: string; label: string; icon: LucideIcon; 
   { key: "AS-12", code: "AS-12", label: "Sleep / Daily Routine", icon: Moon, tint: "text-indigo-500", bg: "bg-indigo-50", pill: "bg-indigo-100 text-indigo-700", form: "sleep", resource: "round-sleep-records" },
   { key: "AS-13", code: "AS-13", label: "Safety / Supervision", icon: ShieldAlert, tint: "text-orange-600", bg: "bg-orange-50", pill: "bg-orange-100 text-orange-700", form: "concerns", resource: "concern-records" },
   { key: "AS-14", code: "AS-14", label: "Reablement / Therapy", icon: Dumbbell, tint: "text-lime-600", bg: "bg-lime-50", pill: "bg-lime-100 text-lime-700", form: "generic" },
-  { key: "pain", code: "Pain", label: "Pain", icon: Zap, tint: "text-orange-500", bg: "bg-orange-50", pill: "bg-orange-100 text-orange-700", form: "pain", resource: "pain-records" },
 ];
 const DOMAIN_BY_KEY = new Map(DOMAINS.map((d) => [d.key, d]));
 
@@ -317,6 +316,19 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
   const assessmentsV42 = useMemo(() => { try { const v = JSON.parse(settingRows.find((r) => (r.key || r.id) === ASSESSMENTS_V42_KEY)?.value || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } }, [settingRows]);
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
 
+  // Each resident's 14 assessment domain scores (AS-01..AS-14, 0–4) — the
+  // pre-defined "assistance level" the Document-care 0–4 chips pre-select from.
+  // Matched with the same robust id/admission/name resolver as activeLevel(), so
+  // a PRE-ADMISSION assessment (empty residentId, linked by name) still seeds it.
+  const baselineByRes = useMemo(() => {
+    const m = new Map<string, Partial<Record<string, number>>>();
+    residents.forEach((r: Row) => {
+      const a = authoritativeAssessmentFor(assessmentsV42, { residentId: s(r.id), residentName: s(r.name) });
+      m.set(s(r.id), a ? domainScores(a) : {});
+    });
+    return m;
+  }, [residents, assessmentsV42]);
+
   const roundToRes = useMemo(() => {
     const m = new Map<string, string>(); const day = todayKey();
     (roundQ.data || []).forEach((r) => { if (s(r.roundDate).slice(0, 10) === day) m.set(s(r.id), s(r.residentId)); });
@@ -422,7 +434,7 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
 
   const refetchResidents = () => resQ.refetch();
 
-  return { residents, entries, allEntries, byResident, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, refetchResidents, aboutStore, locHistory, assessmentsV42, loading: resQ.loading };
+  return { residents, entries, allEntries, byResident, domainsByRes, domainCountsByRes, baselineByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, refetchResidents, aboutStore, locHistory, assessmentsV42, loading: resQ.loading };
 }
 
 // ── Resident drill-down — click a resident → One Care · One Journey ───────────
@@ -443,7 +455,7 @@ function ResidentDetail({ clinicianRole, resident, onBack }: { clinicianRole: Cl
 // so nurse / care-manager / admin keep the full directory; the caregiver view
 // passes false to stay read-only (View + QR) per the role visibility matrix.
 export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = true }: { clinicianRole?: ClinicianRole; canManage?: boolean }) {
-  const { residents, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, ensureRound, saveNote, refetchAll, refetchResidents, bowelRef, saveBowelRef, aboutStore, locHistory, assessmentsV42, loading } = useCareLogData(clinicianRole);
+  const { residents, domainsByRes, domainCountsByRes, baselineByRes, nurseUserIds, recordOverage, ensureRound, saveNote, refetchAll, refetchResidents, bowelRef, saveBowelRef, aboutStore, locHistory, assessmentsV42, loading } = useCareLogData(clinicianRole);
 
   const [search, setSearch] = useState("");
   const [careLevelFilter, setCareLevelFilter] = useState("");
@@ -564,7 +576,7 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
         </div>
       </DataState>
 
-      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} domainCounts={domainCountsByRes.get(s(logFor.id))} nurseUserIds={nurseUserIds} recordOverage={recordOverage} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
+      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} domainCounts={domainCountsByRes.get(s(logFor.id))} baseline={baselineByRes.get(s(logFor.id)) || {}} nurseUserIds={nurseUserIds} recordOverage={recordOverage} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
       {qrFor && <QrModal resident={qrFor} onClose={() => setQrFor(null)} />}
       {viewFor && <ViewModal resident={viewFor} loggedDomains={domainsByRes.get(s(viewFor.id)) || new Set()} canViewFull={canViewProfile} onOpenLog={(t) => { setViewFor(null); openLog(viewFor, t); }} onClose={() => setViewFor(null)} />}
       {editFor && <EditResidentModal resident={editFor} onSaved={refetchResidents} onClose={() => setEditFor(null)} />}
@@ -574,7 +586,7 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
 
 // ── Care Logs tab — today's log timeline (Image 18) ──────────────────────────
 export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
-  const { residents, entries, byResident, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, loading } = useCareLogData(clinicianRole);
+  const { residents, entries, byResident, domainsByRes, domainCountsByRes, baselineByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, loading } = useCareLogData(clinicianRole);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [logFor, setLogFor] = useState<Row | null>(null);
@@ -739,7 +751,7 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
         </div>
       </DataState>
 
-      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} domainCounts={domainCountsByRes.get(s(logFor.id))} nurseUserIds={nurseUserIds} recordOverage={recordOverage} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
+      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} domainCounts={domainCountsByRes.get(s(logFor.id))} baseline={baselineByRes.get(s(logFor.id)) || {}} nurseUserIds={nurseUserIds} recordOverage={recordOverage} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
     </ClinicalPage>
   );
 }
@@ -814,8 +826,8 @@ const SLEEP_MAP: Record<string, string> = { Excellent: "RESTFUL", Good: "FAIR", 
 // same LogModal the Daily Care Logs board uses — instead of navigating to the
 // carelogs page. Mounted only when a tile is tapped, so its live queries stay off
 // the dashboard until needed.
-export function QuickRecordFlow({ focus, residentId, clinicianRole = "CAREGIVER", onClose }: { focus?: string; residentId?: string; clinicianRole?: ClinicianRole; onClose: () => void }) {
-  const { residents, domainsByRes, domainCountsByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, loading } = useCareLogData(clinicianRole);
+export function QuickRecordFlow({ focus, residentId, clinicianRole = "CAREGIVER", onClose, embedded }: { focus?: string; residentId?: string; clinicianRole?: ClinicianRole; onClose: () => void; embedded?: boolean }) {
+  const { residents, domainsByRes, domainCountsByRes, baselineByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, loading } = useCareLogData(clinicianRole);
   const initialTab = focusToDomain(focus) ?? "AS-01";
   const [resident, setResident] = useState<Row | null>(null);
   const [search, setSearch] = useState("");
@@ -830,6 +842,7 @@ export function QuickRecordFlow({ focus, residentId, clinicianRole = "CAREGIVER"
         initialTab={initialTab}
         loggedDomains={domainsByRes.get(s(active.id)) || new Set()}
         domainCounts={domainCountsByRes.get(s(active.id))}
+        baseline={baselineByRes.get(s(active.id)) || {}}
         nurseUserIds={nurseUserIds}
         recordOverage={recordOverage}
         ensureRound={ensureRound}
@@ -839,9 +852,15 @@ export function QuickRecordFlow({ focus, residentId, clinicianRole = "CAREGIVER"
         saveBowelRef={saveBowelRef}
         onDone={refetchAll}
         onClose={onClose}
+        embedded={embedded}
       />
     );
   }
+
+  // Embedded (inside the Open Routine hub): never surface the picker as its own
+  // modal — the hub always supplies a residentId, so this only shows while the
+  // resident list is still loading or if the id can't be resolved.
+  if (embedded) return <div className="py-6 text-center text-sm text-[var(--clinical-muted)]">{loading ? "Loading…" : "Resident not found for logging."}</div>;
 
   const q = search.trim().toLowerCase();
   const list = residents.filter((r: Row) => !q || s(r.name).toLowerCase().includes(q) || s(r.room).toLowerCase().includes(q));
@@ -867,18 +886,29 @@ export function QuickRecordFlow({ focus, residentId, clinicianRole = "CAREGIVER"
   );
 }
 
-function LogModal({ resident, initialTab, loggedDomains, domainCounts, nurseUserIds, recordOverage, ensureRound, saveNote, clinicianRole, bowelRef, saveBowelRef, onDone, onClose }: {
-  resident: Row; initialTab: DomainKey; loggedDomains: Set<DomainKey>; domainCounts?: Map<DomainKey, number>; nurseUserIds: string[]; recordOverage: (core: { residentId: string; residentName?: string; room?: string; domain: string; domainLabel?: string; level: number; allowance: number; count: number }) => Promise<void>; ensureRound: (id: string) => Promise<string>; saveNote: (rec: { residentId: string; dailyRoundId?: string; domain: string; status?: number; note?: string }) => Promise<void>; clinicianRole: ClinicianRole; bowelRef: string; saveBowelRef: (dataUrl: string | null) => Promise<void>; onDone: () => Promise<void>; onClose: () => void;
+function LogModal({ resident, initialTab, loggedDomains, domainCounts, baseline = {}, nurseUserIds, recordOverage, ensureRound, saveNote, clinicianRole, bowelRef, saveBowelRef, onDone, onClose, embedded }: {
+  resident: Row; initialTab: DomainKey; loggedDomains: Set<DomainKey>; domainCounts?: Map<DomainKey, number>; baseline?: Partial<Record<string, number>>; nurseUserIds: string[]; recordOverage: (core: { residentId: string; residentName?: string; room?: string; domain: string; domainLabel?: string; level: number; allowance: number; count: number }) => Promise<void>; ensureRound: (id: string) => Promise<string>; saveNote: (rec: { residentId: string; dailyRoundId?: string; domain: string; status?: number; note?: string }) => Promise<void>; clinicianRole: ClinicianRole; bowelRef: string; saveBowelRef: (dataUrl: string | null) => Promise<void>; onDone: () => Promise<void>; onClose: () => void; embedded?: boolean;
 }) { // rendered only when open (parent gates on logFor); ClinicalModal open is always true here
+  // Pre-fill a generic domain's 0–4 chip from the resident's assessment score for
+  // that domain — the "predefined assistance level". Caregiver adjusts to today.
+  const seedFor = (t: DomainKey): Row => {
+    const b = DOMAIN_BY_KEY.get(t)?.form === "generic" ? baseline[t] : undefined;
+    return typeof b === "number" ? { status: b } : {};
+  };
   const [tab, setTab] = useState<DomainKey>(initialTab);
-  const [f, setF] = useState<Row>({});
+  // Embedded accordion: null → show the 14-domain grid; a key → collapse the grid
+  // to just that domain's form. Unused when not embedded (grid + form always show).
+  // Embedded (Daily Log tab): open the first domain's form immediately — no extra
+  // tap. The domain grid above still switches between domains.
+  const [picked, setPicked] = useState<DomainKey | null>(embedded ? initialTab : null);
+  const [f, setF] = useState<Row>(() => seedFor(initialTab));
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const level = careLevelEnumToLevel(s(resident.careLevel));
   // Domains logged during this modal session (added to the prop set from today).
   const [savedNow, setSavedNow] = useState<Set<DomainKey>>(new Set());
   const set = (patch: Row) => setF((p) => ({ ...p, ...patch }));
-  const switchTab = (t: DomainKey) => { setTab(t); setF({}); setNotes(""); };
+  const switchTab = (t: DomainKey) => { setTab(t); setF(seedFor(t)); setNotes(""); };
   const logged = new Set(loggedDomains);
   const nowT = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const dom = DOMAIN_BY_KEY.get(tab)!;
@@ -900,7 +930,7 @@ function LogModal({ resident, initialTab, loggedDomains, domainCounts, nurseUser
     switch (form) {
       case "vitals": {
         const d: Row = { ...base, temperatureUnit: "°C", weightUnit: "kg" };
-        ["systolic", "diastolic", "heartRate", "respRate", "spo2", "weight", "temperature"].forEach((k) => { if (f[k] !== "" && f[k] != null) d[k] = Number(f[k]); });
+        ["systolic", "diastolic", "heartRate", "respRate", "spo2", "temperature"].forEach((k) => { if (f[k] !== "" && f[k] != null) d[k] = Number(f[k]); });
         if (!(d.systolic == null && d.heartRate == null && d.temperature == null && d.spo2 == null && d.respRate == null && d.weight == null)) out.push({ resource: "vital-signs", data: d, kind: "vitals" });
         break;
       }
@@ -987,7 +1017,7 @@ function LogModal({ resident, initialTab, loggedDomains, domainCounts, nurseUser
         setSavedNow((prev) => new Set(prev).add(tab));
         await onDone();
         Swal.fire({ toast: true, position: "top-end", icon: "success", title: `${dom.label} logged`, showConfirmButton: false, timer: 1500 });
-        setF({}); setNotes("");
+        setF(seedFor(tab)); setNotes("");
         setSaving(false);
         return;
       }
@@ -1023,23 +1053,11 @@ function LogModal({ resident, initialTab, loggedDomains, domainCounts, nurseUser
     finally { setSaving(false); }
   };
 
-  return (
-    <ClinicalModal
-      open
-      onClose={onClose}
-      size="lg"
-      title={`Document care — ${s(resident.name)}`}
-      description={`${dom.label} · Room ${s(resident.room)} · ${nowT}`}
-      footer={
-        <div className="flex flex-1 items-center justify-between">
-          <ClinicalButton variant="ghost" size="sm" onClick={onClose}>Close</ClinicalButton>
-          <span className="text-[11px] text-[var(--clinical-muted)]">{new Set([...logged, ...savedNow].filter((k) => k !== "pain")).size}/14 logged</span>
-        </div>
-      }
-    >
+  const body = (
+    <>
       <div className="mb-5 grid grid-cols-5 gap-1 rounded-2xl bg-[var(--clinical-surface-2)] p-1.5 sm:grid-cols-8 lg:grid-cols-8">
-        {DOMAINS.map((d) => { const on = d.key === tab; const doneD = logged.has(d.key) || savedNow.has(d.key); const Icon = d.icon; return (
-          <button key={d.key} onClick={() => switchTab(d.key)} aria-label={`${d.code} ${d.label}`} title={`${d.code} · ${d.label}`} className={`relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 transition ${on ? "bg-[var(--clinical-surface)] text-[var(--clinical-panel)] shadow-sm" : "text-[var(--clinical-muted)] hover:bg-[var(--clinical-surface)] hover:text-[var(--clinical-ink)]"}`}>
+        {DOMAINS.filter((d) => !embedded || d.key !== "pain").map((d) => { const on = d.key === tab && (!embedded || !!picked); const doneD = logged.has(d.key) || savedNow.has(d.key); const Icon = d.icon; return (
+          <button key={d.key} onClick={() => { switchTab(d.key); setPicked(d.key); }} aria-label={`${d.code} ${d.label}`} title={`${d.code} · ${d.label}`} className={`relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 transition ${on ? "bg-[var(--clinical-surface)] text-[var(--clinical-panel)] shadow-sm" : "text-[var(--clinical-muted)] hover:bg-[var(--clinical-surface)] hover:text-[var(--clinical-ink)]"}`}>
             <Icon className="h-4 w-4 shrink-0" />
             <span className="text-[9px] font-semibold leading-tight text-center line-clamp-2">{d.label}</span>
             {doneD && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--clinical-green)]" aria-label="Already documented" />}
@@ -1047,6 +1065,10 @@ function LogModal({ resident, initialTab, loggedDomains, domainCounts, nurseUser
         ); })}
       </div>
 
+      {embedded && !picked && (
+        <p className="mt-3 text-center text-xs text-[var(--clinical-muted)]">Tap a domain above to record it.</p>
+      )}
+      {(!embedded || picked) && (
       <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>
             <span className="rounded-md bg-[var(--clinical-panel)] px-1.5 py-0.5 text-[10px] font-bold text-white">{dom.code}</span>
@@ -1056,8 +1078,11 @@ function LogModal({ resident, initialTab, loggedDomains, domainCounts, nurseUser
             {DOMAIN_META[tab]?.scope && <p className="rounded-lg px-3 py-2 text-[11px] leading-relaxed text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}><span className="font-semibold text-[var(--clinical-ink)]">What to assess: </span>{DOMAIN_META[tab]!.scope}</p>}
             <div>
               <Label>Observed state — this domain, this shift</Label>
-              <p className="mb-1.5 text-[10px] leading-relaxed text-[var(--clinical-muted)]">Your observation of this one domain today. It feeds domain monitoring &amp; drift alerts — the resident&apos;s Level of Care is set by assessment, not assigned here.</p>
+              <p className="mb-1.5 text-[10px] leading-relaxed text-[var(--clinical-muted)]">This assistance level is based on the resident&apos;s assessment.</p>
               <Chips cols={5} value={s(f.status)} onChange={(v) => set({ status: v === "" ? undefined : Number(v) })} options={STATUS_ANCHORS.map((a) => ({ v: String(a.v), label: `${a.v} · ${a.label}` }))} />
+              {typeof baseline[tab] === "number" && (
+                <p className="mt-1 text-[10px] text-[var(--clinical-muted)]">Pre-filled from assessment (baseline {baseline[tab]} · {statusLabel(baseline[tab])}) — adjust to today&apos;s observation.</p>
+              )}
               {f.status != null && DOMAIN_META[tab]?.anchors?.[Number(f.status)] ? (
                 <p className="mt-1.5 rounded-lg px-3 py-2 text-xs leading-relaxed text-[var(--clinical-ink-soft)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}><span className="font-bold text-[var(--clinical-panel)]">{f.status} · {statusLabel(f.status)}: </span>{DOMAIN_META[tab]!.anchors![Number(f.status)]}</p>
               ) : (
@@ -1075,7 +1100,6 @@ function LogModal({ resident, initialTab, loggedDomains, domainCounts, nurseUser
             <VitalField label="Temperature" unit="°C" hint="36.1–37.2 °C" value={f.temperature} onChange={(v) => set({ temperature: v })} />
             <VitalField label="Oxygen Saturation" unit="%" hint="≥ 95 %" value={f.spo2} onChange={(v) => set({ spo2: v })} />
             <VitalField label="Respiratory Rate" unit="/min" hint="12–20 /min" value={f.respRate} onChange={(v) => set({ respRate: v })} />
-            <VitalField label="Weight" unit="kg" hint="per baseline" value={f.weight} onChange={(v) => set({ weight: v })} />
           </>)}
           {form === "meals" && (<>
             <div><Label>Meal Type</Label><Chips cols={4} value={f.mealType || ""} onChange={(v) => set({ mealType: v })} options={[{ v: "BREAKFAST", label: "Breakfast" }, { v: "LUNCH", label: "Lunch" }, { v: "DINNER", label: "Dinner" }, { v: "SNACK", label: "Snack" }]} /></div>
@@ -1139,6 +1163,26 @@ function LogModal({ resident, initialTab, loggedDomains, domainCounts, nurseUser
           </div>
           <ClinicalButton variant="accent" onClick={save} disabled={saving} className="w-full">{saving ? "Saving…" : `Save ${dom.label} entry`}</ClinicalButton>
       </div>
+      )}
+    </>
+  );
+
+  if (embedded) return <div className="space-y-4">{body}</div>;
+  return (
+    <ClinicalModal
+      open
+      onClose={onClose}
+      size="lg"
+      title={`Document care — ${s(resident.name)}`}
+      description={`${dom.label} · Room ${s(resident.room)} · ${nowT}`}
+      footer={
+        <div className="flex flex-1 items-center justify-between">
+          <ClinicalButton variant="ghost" size="sm" onClick={onClose}>Close</ClinicalButton>
+          <span className="text-[11px] text-[var(--clinical-muted)]">{new Set([...logged, ...savedNow].filter((k) => k !== "pain")).size}/14 logged</span>
+        </div>
+      }
+    >
+      {body}
     </ClinicalModal>
   );
 }

@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LifeCare — Care Continuum Process Flow</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm 16mm; }
+  :root{
+    --ink:#1f2a37; --muted:#5b6b7b; --line:#d8e0e6; --paper:#fff;
+    --sage:#4f7d6b; --sage-bg:#eaf2ee; --sage-line:#bcd6c9;
+    --teal:#2f7d8f; --teal-bg:#e6f2f4; --teal-line:#b6dbe1;
+    --coral:#c15b4c; --coral-bg:#fbecea; --coral-line:#f0c8c1;
+    --amber:#b9822b; --amber-bg:#faf1dd; --amber-line:#ecd6a6;
+    --violet:#6a5aa6; --violet-bg:#eeeaf7; --violet-line:#cfc4ea;
+    --slate:#3f5566; --slate-bg:#eef3f6;
+  }
+  *{box-sizing:border-box;}
+  body{ font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--ink);
+        margin:0; font-size:11px; line-height:1.45; background:var(--paper); }
+  h1,h2,h3{ margin:0; font-weight:700; }
+  .wrap{ max-width:190mm; margin:0 auto; }
+
+  /* ---------- Cover / header ---------- */
+  .cover{ background:linear-gradient(120deg,#123b34,#1f5a4d 60%,#2f7d8f);
+          color:#fff; border-radius:14px; padding:22px 26px; margin-bottom:16px; }
+  .cover .brand{ display:flex; align-items:center; gap:12px; font-size:13px;
+                 letter-spacing:.14em; text-transform:uppercase; opacity:.9; }
+  .cover .dot{ width:26px;height:26px;border-radius:8px;background:#fff;color:#1f5a4d;
+               display:grid;place-items:center;font-weight:800;font-size:14px;}
+  .cover h1{ font-size:24px; margin:10px 0 4px; }
+  .cover p{ margin:0; opacity:.92; font-size:12px; max-width:150mm; }
+  .cover .meta{ margin-top:12px; font-size:10px; opacity:.85; display:flex; gap:18px; flex-wrap:wrap; }
+
+  /* ---------- Legend ---------- */
+  .legend{ display:flex; gap:14px; flex-wrap:wrap; align-items:center;
+           border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin-bottom:18px; background:#fbfdfc;}
+  .legend b{ font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-right:4px;}
+  .chip{ display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:600; }
+  .swatch{ width:12px;height:12px;border-radius:4px; display:inline-block;}
+  .swatch.step{background:var(--sage-bg);border:1.5px solid var(--sage-line);}
+  .swatch.dec{background:var(--amber-bg);border:1.5px solid var(--amber-line); transform:rotate(45deg); border-radius:2px;}
+  .swatch.out{background:var(--teal-bg);border:1.5px solid var(--teal-line);}
+  .swatch.gate{background:var(--coral-bg);border:1.5px solid var(--coral-line);}
+
+  /* ---------- Master pipeline ---------- */
+  .pipeline{ display:flex; align-items:stretch; gap:0; margin:6px 0 22px; }
+  .pnode{ flex:1; text-align:center; border-radius:10px; padding:12px 8px; position:relative;
+          border:1.5px solid; }
+  .pnode .n{ font-size:9px; font-weight:800; opacity:.6; }
+  .pnode h3{ font-size:11.5px; margin:3px 0 2px; }
+  .pnode small{ font-size:9px; color:var(--muted); display:block; }
+  .pnode.p1{background:var(--sage-bg);border-color:var(--sage-line);}
+  .pnode.p2{background:var(--teal-bg);border-color:var(--teal-line);}
+  .pnode.p3{background:var(--violet-bg);border-color:var(--violet-line);}
+  .pnode.p4{background:var(--amber-bg);border-color:var(--amber-line);}
+  .pnode.p5{background:var(--coral-bg);border-color:var(--coral-line);}
+  .parrow{ align-self:center; width:22px; text-align:center; color:var(--muted); font-size:15px; font-weight:800;}
+
+  /* ---------- Phase section ---------- */
+  .phase{ break-inside:avoid; margin-bottom:20px; }
+  .phead{ display:flex; align-items:center; gap:12px; margin-bottom:12px;
+          padding-bottom:8px; border-bottom:2px solid var(--line); }
+  .pbadge{ width:34px;height:34px;border-radius:9px; color:#fff; display:grid;place-items:center;
+           font-weight:800; font-size:16px; flex:none;}
+  .phead h2{ font-size:16px; }
+  .phead .sub{ font-size:10px; color:var(--muted); margin-top:2px; }
+  .b1{background:var(--sage);} .b2{background:var(--teal);} .b3{background:var(--violet);}
+  .b4{background:var(--amber);} .b5{background:var(--coral);}
+
+  /* flow column */
+  .flow{ display:flex; flex-direction:column; align-items:stretch; gap:0; }
+  .node{ border:1.5px solid var(--line); border-radius:10px; padding:9px 12px; background:#fff;
+         position:relative; }
+  .node .role{ font-size:8.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+               padding:1px 7px; border-radius:20px; display:inline-block; margin-bottom:4px;}
+  .node .title{ font-weight:700; font-size:11.5px; }
+  .node .desc{ color:var(--muted); font-size:10px; margin-top:2px; }
+  .node .loc{ font-size:9px; color:var(--slate); margin-top:5px; }
+  .node .loc b{ color:var(--teal); }
+  .conn{ align-self:center; color:var(--muted); font-size:14px; line-height:1; padding:3px 0; }
+
+  .n-step{ border-color:var(--sage-line); background:#fbfdfc; }
+  .n-dec{ background:var(--amber-bg); border-color:var(--amber-line); }
+  .n-out{ background:var(--teal-bg); border-color:var(--teal-line); }
+  .n-gate{ background:var(--coral-bg); border-color:var(--coral-line); }
+
+  .role.r-nurse{background:var(--teal-bg);color:var(--teal);}
+  .role.r-cm{background:var(--violet-bg);color:var(--violet);}
+  .role.r-cg{background:var(--sage-bg);color:var(--sage);}
+  .role.r-adm{background:var(--amber-bg);color:var(--amber);}
+  .role.r-sys{background:var(--slate-bg);color:var(--slate);}
+  .role.r-fam{background:var(--coral-bg);color:var(--coral);}
+
+  /* branch row for decisions */
+  .branches{ display:flex; gap:10px; margin:4px 0; }
+  .branch{ flex:1; border:1px dashed var(--line); border-radius:8px; padding:7px 9px; background:#fcfdfd;}
+  .branch .lbl{ font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; margin-bottom:3px;}
+  .branch.yes .lbl{ color:var(--sage); } .branch.no .lbl{ color:var(--coral); }
+  .branch p{ margin:0; font-size:9.5px; color:var(--muted); }
+
+  .note{ font-size:9.5px; color:var(--muted); background:#fbfdfc; border:1px solid var(--line);
+         border-radius:8px; padding:8px 10px; margin-top:8px;}
+  .note b{ color:var(--ink); }
+
+  .pagebreak{ break-before:page; }
+  footer{ margin-top:18px; padding-top:8px; border-top:1px solid var(--line);
+          font-size:9px; color:var(--muted); display:flex; justify-content:space-between;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="cover">
+    <div class="brand"><span class="dot">L</span> LifeCare Living Solutions · SLMS</div>
+    <h1>Care Continuum — End-to-End Process Flow</h1>
+    <p>From first assessment to a caregiver executing the daily routine. This document maps the five governed
+       stages of the LifeCare Smart Living Management System (SLMS): how a resident is assessed, admitted,
+       assigned a Level of Care, given an individualized Care Plan, and how that plan becomes a scheduled,
+       shift-by-shift task list a caregiver actually completes at the bedside.</p>
+    <div class="meta">
+      <span>■ Prepared for: Facility Leadership & Clinical Staff</span>
+      <span>■ Version 1.0 · 04 Sep 2026</span>
+      <span>■ Roles: Super Admin · Nurse · Care Manager · Caregiver · Admissions · Family</span>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>Legend</b>
+    <span class="chip"><span class="swatch step"></span>Action / Step</span>
+    <span class="chip"><span class="swatch dec"></span>Decision point</span>
+    <span class="chip"><span class="swatch out"></span>System output / record</span>
+    <span class="chip"><span class="swatch gate"></span>Approval gate (sign-off)</span>
+    <span class="chip" style="margin-left:auto;color:var(--muted)">Blue text = where it lives in the app (portal tab)</span>
+  </div>
+
+  <!-- MASTER PIPELINE -->
+  <h3 style="font-size:12px;margin-bottom:8px;color:var(--slate)">The Big Picture — Five Stages</h3>
+  <div class="pipeline">
+    <div class="pnode p1"><div class="n">STAGE 1</div><h3>Pre-Admission Assessment</h3><small>Score → provisional Level of Care</small></div>
+    <div class="parrow">▶</div>
+    <div class="pnode p2"><div class="n">STAGE 2</div><h3>Admission &amp; Onboarding</h3><small>Validate &amp; lock Final LOC</small></div>
+    <div class="parrow">▶</div>
+    <div class="pnode p3"><div class="n">STAGE 3</div><h3>Care Plan Creation</h3><small>LOC → interventions + tasks</small></div>
+    <div class="parrow">▶</div>
+    <div class="pnode p4"><div class="n">STAGE 4</div><h3>Caregiver Schedule</h3><small>Routine + task assignment</small></div>
+    <div class="parrow">▶</div>
+    <div class="pnode p5"><div class="n">STAGE 5</div><h3>Today's Care</h3><small>Execute &amp; document per shift</small></div>
+  </div>
+
+  <!-- STAGE 1 -->
+  <section class="phase">
+    <div class="phead">
+      <div class="pbadge b1">1</div>
+      <div><h2>Pre-Admission Assessment</h2>
+        <div class="sub">Screen the prospective resident and produce a provisional Level of Care (LOC) before admission.</div></div>
+    </div>
+    <div class="flow">
+      <div class="node n-dec"><span class="role r-nurse">Where does the resident come from?</span>
+        <div class="title">Two ways to start an assessment</div>
+        <div class="branches">
+          <div class="branch yes"><div class="lbl">↳ Pre-fill from CRM</div><p>Type in the "Search admitted residents…" box to pull an existing CRM lead / admitted resident — name and profile fields <b>auto-fill</b>, no re-keying.</p></div>
+          <div class="branch no"><div class="lbl">✎ New resident</div><p>Or just type a brand-new person directly into the form — no CRM record needed. The assessment can create the resident from scratch.</p></div>
+        </div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-step"><span class="role r-nurse">Nurse / Care Manager / Super Admin</span>
+        <div class="title">Open Resident Assessment → "New Assessment"</div>
+        <div class="desc">Launch the <b>Resident Assessment v4.2</b> modal. Either path lands in the same form; work through the three layers: <b>Layer 1 · Profile &amp; History</b>, <b>Layer 2 · 14 Domains</b>, <b>Layer 3 · Evaluation</b>.</div>
+        <div class="loc">Location: <b>Resident Assessment</b> (nurse / assessment hub)</div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-step"><span class="role r-nurse">Nurse / Care Manager / Super Admin</span>
+        <div class="title">Score the 14 domains, then Complete Assessment</div>
+        <div class="desc">Layer 2 scores mobility, ADLs, cognition, continence, behaviour, medical and other domains. A live "Running raw acuity" meter totals <b>0 / 56</b>. Save Draft anytime, or Complete Assessment when all items across Layers 1–3 are done.</div>
+        <div class="loc">Engine: <b>lifecare/assessment.ts</b> (governed, unit-tested) — stored migration-free in <i>assessments_v42</i> (origin = PREADMISSION)</div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-out"><span class="role r-sys">System</span>
+        <div class="title">Score maps to a provisional Level of Care (Level 1–5)</div>
+        <div class="desc">The 0–56 total is banded into Level 1 (lowest support) through Level 5 (highest). This is <b>advisory</b> — it recommends, it does not lock the resident's level yet.</div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-dec"><span class="role r-adm">Admissions decision</span>
+        <div class="title">Is the facility able to safely serve this level of need?</div>
+        <div class="branches">
+          <div class="branch yes"><div class="lbl">✓ Suitable</div><p>Proceed to formal Admission &amp; Onboarding (Stage 2), carrying the provisional level forward.</p></div>
+          <div class="branch no"><div class="lbl">✕ Not suitable</div><p>Decline / refer out. Record the reason; the enquiry closes here.</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="note"><b>Why it matters:</b> the pre-admission score sets expectations for staffing, pricing and room fit before anyone signs. It is a screen, not the final ruling — the Final LOC is confirmed during onboarding.</div>
+  </section>
+
+  <!-- STAGE 2 -->
+  <section class="phase">
+    <div class="phead">
+      <div class="pbadge b2">2</div>
+      <div><h2>Admission &amp; Onboarding</h2>
+        <div class="sub">Register the resident, run the full clinical assessment, and validate the Final Level of Care.</div></div>
+    </div>
+    <div class="flow">
+      <div class="node n-step"><span class="role r-adm">Admissions / Care Manager / Super Admin</span>
+        <div class="title">Step 1 · Registration</div>
+        <div class="desc">Capture name, DOB (age auto-fills), date admitted, gender, contact, email and emergency contacts. Add a <b>Family Sponsor</b> — they get a scoped Family-portal login. Creates the resident record.</div>
+        <div class="loc">Location: <b>Admission &amp; Onboarding</b> · "New Admission" wizard (4 steps, 0/4 complete)</div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-step"><span class="role r-nurse">Nurse / Care Manager / Super Admin</span>
+        <div class="title">Step 2 · Medical Assessment &nbsp;→&nbsp; Step 3 · Care Assessment</div>
+        <div class="desc">Record medical history, medications, surgeries and vaccines (Step 2). The <b>Care Assessment</b> step (Step 3) inherits the nurse/CM-validated Level of Care from the v4.2 assessment rather than silently recomputing.</div>
+        <div class="loc">Wizard steps: Registration → Medical Assess. → <b>Care Assess.</b> → Room &amp; QR</div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-gate"><span class="role r-nurse">Nurse / Care Manager / Super Admin sign-off</span>
+        <div class="title">Validate &amp; lock the Final Level of Care</div>
+        <div class="desc">The clinician confirms (or overrides) the recommended level. Once validated, <b>layer3.finalLevel</b> becomes the sticky source of truth — every downstream board reads this, not the coarse enum.</div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-step"><span class="role r-adm">Admissions / Super Admin</span>
+        <div class="title">Step 4 · Room &amp; QR</div>
+        <div class="desc">Assign the room and generate the resident's QR wristband/record link. This completes the "New Admission" wizard.</div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-out"><span class="role r-sys">System</span>
+        <div class="title">Resident is Active with a locked Final LOC</div>
+        <div class="desc">The validated level is recorded in the resident's LOC history and unlocks Care Plan creation. Onboarding is complete.</div>
+      </div>
+    </div>
+    <div class="note"><b>Key rule:</b> validated beats stale. A nurse/CM-validated Final LOC always wins over an older screening score or the coarse care-level enum — this prevents a resident's level from reverting on refresh.</div>
+  </section>
+
+  <!-- STAGE 3 -->
+  <section class="phase pagebreak">
+    <div class="phead">
+      <div class="pbadge b3">3</div>
+      <div><h2>Care Plan Creation</h2>
+        <div class="sub">Turn the approved Level of Care into an individualized plan with concrete interventions and tasks.</div></div>
+    </div>
+    <div class="flow">
+      <div class="node n-dec"><span class="role r-sys">Trigger (New Review)</span>
+        <div class="title">How is the Care Plan started?</div>
+        <div class="branches">
+          <div class="branch yes"><div class="lbl">Automatic</div><p>On LOC <b>approval</b>, a plan generates from the validated level — the resident leaves the "No plan yet" bucket.</p></div>
+          <div class="branch no"><div class="lbl">Manual</div><p>Nurse/CM opens <b>New Review</b> on the Care Plan board, evaluates triggers, and makes the plan decision.</p></div>
+        </div>
+        <div class="loc">Location: <b>Care Plan → Plan &amp; Review</b> · sub-tabs: Care Plans · New Review · Pending Approval · Reviews Due · History</div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-out"><span class="role r-sys">Generator</span>
+        <div class="title">Build the base plan from the Level of Care</div>
+        <div class="desc">The generator maps the Final LOC to a standard set of goals, interventions and care tasks using the LifeCare rule data (the level → care-plan map and the care-task master list).</div>
+        <div class="loc">Engine: <b>carePlanGen.ts / carePlanV42Gen.ts</b> · data: <i>assessment_to_care_plan.json</i>, <i>care_task_master.json</i></div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-step"><span class="role r-nurse">Nurse / Care Manager / Super Admin</span>
+        <div class="title">Individualize the plan (saved as a Draft)</div>
+        <div class="desc">Edit goals and interventions, add resident-specific tasks from the Task Library, and set assistance levels. Edits auto-save to the working <b>Draft</b> ("Awaiting review") as you type.</div>
+        <div class="loc">Editor: <b>Care Plan Builder</b> · draft store: <i>care_plan_drafts</i> · picklist: <i>task_library.json</i></div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-gate"><span class="role r-cm">Care Manager / Super Admin</span>
+        <div class="title">Pending Approval → Release / Activate</div>
+        <div class="desc">The draft moves to <b>Pending Approval</b>; review-guards check it is complete for the level, then it is released and becomes <b>ACTIVE</b>. Each plan shows its Level, "Active since" date, and a "Next review" date, with View / Print.</div>
+        <div class="loc">Guards: <b>carePlanReviewGuards.ts</b> · release: <b>carePlanRelease.ts</b></div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-out"><span class="role r-sys">System</span>
+        <div class="title">ACTIVE plan — "Released &amp; generating tasks"</div>
+        <div class="desc">The plan holds the interventions <i>and</i> the discrete care tasks. It generates the task set that feeds the 24-hour routine, and its review is queued under <b>Reviews Due</b> after the chosen interval.</div>
+      </div>
+    </div>
+    <div class="note"><b>Bridge to scheduling:</b> a Care Plan is not just a document — it emits a concrete task set. Each task carries a target time-of-day window, which is what lets the routine and the caregiver schedule build themselves in the next stage.</div>
+  </section>
+
+  <!-- STAGE 4 -->
+  <section class="phase">
+    <div class="phead">
+      <div class="pbadge b4">4</div>
+      <div><h2>Caregiver Schedule &amp; Routine Assignment</h2>
+        <div class="sub">Turn plan tasks into a 24-hour routine, then roster caregivers to residents per shift.</div></div>
+    </div>
+    <div class="flow">
+      <div class="node n-out"><span class="role r-sys">24-Hour Routine</span>
+        <div class="title">Care Plan tasks fall into a 24-hour routine</div>
+        <div class="desc">On the Care Plan board's <b>24-Hour Routine</b> tab, each active-plan task is placed into its time-of-day window (morning / afternoon / evening / night) — a repeating daily routine per resident.</div>
+        <div class="loc">Location: <b>Care Plan → 24-Hour Routine</b> · engine: <b>lifecare/carePlanRoutine.ts</b> · windows: <i>routine_windows.json</i></div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-step"><span class="role r-nurse">Nurse / Care Manager</span>
+        <div class="title">Create a New Schedule (roster a caregiver to a shift)</div>
+        <div class="desc">On <b>Staffing → Schedule</b>, click <b>New Schedule</b>. Pick the <b>date</b>, the <b>shift</b> (e.g. AM Shift 6:00–14:00), and the <b>caregiver</b>. Dashboard shows Caregivers-on-today, Residents-covered, and Uncovered residents.</div>
+        <div class="loc">Location: <b>Staffing → Schedule</b> tab · lib: <b>caregiverSchedule.ts</b></div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-step"><span class="role r-cm">Nurse / Care Manager</span>
+        <div class="title">Assign the residents that caregiver will cover</div>
+        <div class="desc">In the same modal, tick the <b>residents</b> (e.g. "QA Test — Rm 100"), use Select all / Clear, add an optional note (e.g. "Cover for the AM medication pass"), and <b>Save schedule</b>.</div>
+        <div class="loc">"New schedule" modal · Residents (checkbox list) + Shift + Caregiver</div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-gate"><span class="role r-sys">Scope lock</span>
+        <div class="title">"Access their residents only on days they're scheduled"</div>
+        <div class="desc">Covering a resident on a shift <b>is</b> the assignment: that caregiver — and only that caregiver — receives those residents' routine tasks for that shift. No coverage = the resident shows as "uncovered".</div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-out"><span class="role r-sys">System</span>
+        <div class="title">Each caregiver has a scoped, shift-specific task list</div>
+        <div class="desc">The routine is now live work: time-windowed, tied to covered residents, and visible only to the rostered carer for their shift.</div>
+      </div>
+    </div>
+    <div class="note"><b>Two things meet here:</b> (1) the <b>24-Hour Routine</b> says <i>what</i> and <i>when</i> for the resident; (2) the <b>Schedule</b> says <i>who</i> covers <i>which residents</i> on <i>which shift</i>. Assigning a caregiver to residents on a shift is what hands them that routine.</div>
+  </section>
+
+  <!-- STAGE 5 -->
+  <section class="phase">
+    <div class="phead">
+      <div class="pbadge b5">5</div>
+      <div><h2>Today's Care — Execution &amp; Documentation</h2>
+        <div class="sub">The caregiver completes the assigned routine at the bedside and records what was done.</div></div>
+    </div>
+    <div class="flow">
+      <div class="node n-step"><span class="role r-cg">Caregiver</span>
+        <div class="title">Open the Shift Dashboard</div>
+        <div class="desc">The carer sees only their assigned residents for the shift. Each card shows room, approved assistance level, code status / allergies, the current window (e.g. "15:00–17:00 · Afternoon"), and counts (Overdue / Due next). Filter by All · Due · Overdue · Up to date.</div>
+        <div class="loc">Location: Caregiver → <b>Shift Dashboard</b> (My Shift) · My Roster</div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-step"><span class="role r-cg">Caregiver</span>
+        <div class="title">"Open routine" → the resident's care checklist</div>
+        <div class="desc">Opens "Today's care checklist for this resident" — the <b>Caregiver Queue</b> of routine tasks grouped by time window (e.g. Afternoon 15:00–17:00), each with the resident's Level shown. Bedside quick-logs sit alongside: <b>Daily Log · ADL · Weight · MAR</b>.</div>
+        <div class="loc">"Routine — [resident]" modal · per-task <b>Complete</b> + flag actions</div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-dec"><span class="role r-cg">At each task</span>
+        <div class="title">Was the task completed as planned?</div>
+        <div class="branches">
+          <div class="branch yes"><div class="lbl">✓ Complete</div><p>Tap <b>Complete</b> — the task counts toward the queue (e.g. 0/20 → done) and the resident moves toward "Up to date".</p></div>
+          <div class="branch no"><div class="lbl">⚠ Flag / exception</div><p>Use the flag to record it couldn't be done as planned — it stays Overdue and carries into the shift endorsement.</p></div>
+        </div>
+      </div>
+      <div class="conn">▼</div>
+      <div class="node n-out"><span class="role r-sys">System</span>
+        <div class="title">Completions → history, endorsement &amp; monitoring</div>
+        <div class="desc">Completed and flagged tasks roll up into the resident's care history and the <b>Endorsement Status</b> at shift close, and feed monitoring trends — closing the loop toward the next reassessment.</div>
+        <div class="loc">Shift Close: <b>Endorsement Status</b> · escalations: <b>Action Queue</b> (Need Nurse / Help)</div>
+      </div>
+      <div class="conn">↺</div>
+      <div class="node n-step"><span class="role r-nurse">Nurse / Care Manager</span>
+        <div class="title">Reassess on schedule or on change</div>
+        <div class="desc">A periodic or triggered reassessment re-runs the v4.2 instrument (origin = ACUITY). A new Final LOC regenerates the Care Plan and routine — and the whole cycle repeats.</div>
+        <div class="loc">Back to <b>Stage 1/3</b> via Resident Assessment &amp; Care Plan → New Review</div>
+      </div>
+    </div>
+    <div class="note"><b>The loop closes:</b> execution data is the evidence for the next assessment. Assess → admit → plan → schedule → execute → reassess is a continuous cycle, not a one-way line.</div>
+  </section>
+
+  <footer>
+    <span>LifeCare Living Solutions · SLMS Care Continuum Process Flow</span>
+    <span>Confidential — internal clinical &amp; operations use</span>
+  </footer>
+
+</div>
+</body>
+</html>

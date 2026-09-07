@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ClipboardList, ListChecks, Loader2, AlertTriangle, Users, ClipboardCheck, FileClock, FilePlus2, CalendarClock, Target, Trash2, Plus, Printer, Clock } from "lucide-react";
+import { ClipboardList, ListChecks, Loader2, AlertTriangle, Users, ClipboardCheck, FileClock, FilePlus2, CalendarClock, Target, Trash2, Plus, Printer } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, updateRecord, createRecord } from "@/lib/api";
@@ -22,8 +22,6 @@ import { taskById, SCORED_DOMAINS, tasksForDomain } from "@/lib/lifecare/dataset
 import { domainCodeFromLabel } from "@/lib/lifecare/carePackage";
 import { ASSESSMENTS_V42_KEY, authoritativeAssessmentFor, type AssessmentV42, type DomainEntry } from "@/lib/lifecare/assessment";
 import { printCarePlan } from "@/lib/lifecare/carePlanReport";
-import { generateRoutine } from "@/lib/lifecare/carePlanRoutine";
-import RoutineTimeline from "./RoutineTimeline";
 import { duplicateReview, reviewOutcome, canFinalizeCarePlan, type CarePlanReviewApprovalStatus } from "@/lib/lifecare/carePlanReviewGuards";
 import { levelMeta } from "@/lib/lifecare/levelModel";
 import { adaptResident } from "@/lib/adapters";
@@ -419,9 +417,13 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
   // held plan and mark the review approved. Segregation of duties — the reviewer who
   // submitted a LOC change cannot self-approve it.
   const approvePending = async (rv: Review) => {
+    // Only a Care Manager / Superadmin may approve. The nurse submits the review;
+    // approval (release) is a separate authorized sign-off.
+    if (!canFinalizeCarePlan(clinicianRole)) {
+      Swal.fire({ icon: "warning", title: "Approval not permitted", text: "Only a Care Manager or Superadmin can approve and release a care plan." });
+      return;
+    }
     if (!rv.planId) { Swal.fire("No linked plan", "This review has no draft plan to release.", "error"); return; }
-    // Care-plan approval is a single clinician sign-off: any nurse / care manager /
-    // superadmin (including the reviewer who submitted it) may approve and release.
     if (!(await confirmRelease(rv, "Approve & release"))) return;
     setActingId(rv.id);
     try {
@@ -738,13 +740,15 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
                         </ClinicalButton>
                       ) : isAwaitingFamily ? (
                         <span className="text-xs font-medium text-[var(--clinical-muted)]">Awaiting family</span>
-                      ) : (
+                      ) : canFin ? (
                         <>
                           <ClinicalButton variant="secondary" size="sm" disabled={acting} onClick={() => void rejectPending(rv)}>Reject</ClinicalButton>
                           <ClinicalButton variant="primary" size="sm" disabled={acting} onClick={() => void approvePending(rv)}>
                             {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />} Approve &amp; release
                           </ClinicalButton>
                         </>
+                      ) : (
+                        <span className="text-xs font-medium text-[var(--clinical-muted)]">Awaiting Care Manager / Superadmin approval</span>
                       )}
                     </div>
                   </div>
@@ -1081,12 +1085,6 @@ function CarePlanBuilder({ residentId, residentName, room, level, assessmentDoma
   }));
   const removeIvx = (code: string, i: number) => setRows((arr) => arr.map((x) => (x.code === code ? { ...x, interventions: x.interventions.filter((_, j) => j !== i) } : x)));
   const included = rows.filter((r) => r.included);
-  // The 24-hour routine this plan will generate on release — same pure generator
-  // the task materializer uses, so the preview is exactly what gets dispatched.
-  const routine = useMemo(
-    () => generateRoutine(rows.filter((r) => r.included).map((r) => ({ code: r.code, name: r.name, goal: r.goal, interventions: r.interventions, taskId: r.taskId, score: r.score }))),
-    [rows],
-  );
   const levelName = meta ? `Level ${meta.n} — ${meta.name}` : `Level ${level}`;
   const doPrint = () => printCarePlan({
     residentName: residentName || "Resident", room, level, levelName,
@@ -1203,16 +1201,6 @@ function CarePlanBuilder({ residentId, residentName, room, level, assessmentDoma
             ))}
           </div>
 
-          {routine.length > 0 && (
-            <div className="mt-6">
-              <div className="mb-2 flex items-center gap-2">
-                <Clock className="h-4 w-4 text-[var(--clinical-panel)]" />
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">24-Hour Routine Preview · {routine.length} care event{routine.length === 1 ? "" : "s"}</p>
-              </div>
-              <p className="mb-3 text-[11px] text-[var(--clinical-muted)]">On approval, these window care events become the resident&apos;s daily caregiver tasks, routed to each shift&apos;s rostered caregiver.</p>
-              <RoutineTimeline events={routine} />
-            </div>
-          )}
         </>
       )}
     </Section>
@@ -1314,7 +1302,7 @@ function ReviewForm({ resident, level, recentInc, recentVariances = [], last, re
           {heldPlanCount > 0 && (
             <div className="flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm" style={{ borderColor: "#4F46E5", backgroundColor: "color-mix(in srgb, #4F46E5 8%, transparent)" }}>
               <ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-[#4F46E5]" />
-              <span className="text-[var(--clinical-ink)]"><b>{heldPlanCount} draft care plan{heldPlanCount === 1 ? "" : "s"} held.</b> Submitting a plan-changing review sends it to the resident&apos;s family for sign-off; once they approve, a Care Manager finalizes it and tasks dispatch to caregivers. <i>Refer to Physician</i> and <i>Schedule Family Conference</i> keep the plan on hold instead.</span>
+              <span className="text-[var(--clinical-ink)]"><b>{heldPlanCount} draft care plan{heldPlanCount === 1 ? "" : "s"} held</b> — needs a Care Manager sign-off.</span>
             </div>
           )}
           <div><FieldLabel required htmlFor="cpr-decision">Decision</FieldLabel><select id="cpr-decision" value={decision} onChange={(e) => setDecision(e.target.value)} className={`${controlClass} max-w-xs`}><option value="">Select a decision…</option>{DECISIONS.map((d) => <option key={d} value={d}>{d}</option>)}</select></div>

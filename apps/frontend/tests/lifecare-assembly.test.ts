@@ -3,7 +3,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { assembleRoutine, staffingConflict, demo as assemblyDemo, type AssembleInput } from "../src/lib/lifecare/assembleRoutine.ts";
+import { assembleRoutine, assembleRoutine24h, staffingConflict, demo as assemblyDemo, type AssembleInput } from "../src/lib/lifecare/assembleRoutine.ts";
+import { ROUTINE_24H_TEMPLATE, templateForLoc } from "../src/lib/lifecare/routineTemplate.ts";
 import { occurrencesForDate, demo as hfDemo, type DaySchedule } from "../src/lib/lifecare/highFrequency.ts";
 import { EXCEPTION_REASON } from "../src/lib/lifecare/vocab.ts";
 
@@ -143,6 +144,72 @@ test("Rule 13: freeText threshold overrides the generic escalation trigger", () 
   const vital = out.find((e) => e.resultSchemaKey === "Vital Signs" && e.orderRef === "BP1");
   assert.ok(vital, "HTN-01 vital event bound to the monitoring order");
   assert.equal(vital!.escalationTrigger, "BP > 160", "resident-specific parameter wins");
+});
+
+// ── Phase 1: assembleRoutine24h — the full 24-Hour Routine template ──────────────
+test("24h template: LOC 5 gets every template row with concrete times + shifts", () => {
+  const out = assembleRoutine24h(base({ finalLoc: "LOC 5" }));
+  assert.equal(out.length, ROUTINE_24H_TEMPLATE.length, "one def per template row");
+  // Each carries a real clock time (times[] or a window) — never blank / Anytime.
+  for (const e of out) {
+    const hasTime = (e.schedule.times && e.schedule.times.length > 0) || !!e.schedule.window;
+    assert.ok(hasTime, `${e.name} has a concrete time/window`);
+    assert.ok(["NOC", "AM", "PM"].includes(e.shiftOwner), `${e.name} owned by a real shift`);
+  }
+  assert.deepEqual(out.map((e) => e.sourceLocBundleId).sort(), ROUTINE_24H_TEMPLATE.map((t) => t.eventId).sort());
+});
+
+// ── Phase 2: tailor the template per Final LOC ───────────────────────────────────
+test("Phase 2: higher LOC includes more rows; repositioning is LOC-4+ only", () => {
+  const n = (loc: string) => assembleRoutine24h(base({ finalLoc: loc })).length;
+  const [l1, l2, l3, l4, l5] = ["LOC 1", "LOC 2", "LOC 3", "LOC 4", "LOC 5"].map(n);
+  assert.ok(l1 < l2 && l2 < l3 && l3 < l4, `monotonic by LOC (got ${l1},${l2},${l3},${l4},${l5})`);
+  assert.equal(l4, ROUTINE_24H_TEMPLATE.length, "LOC 4 already has every row");
+  assert.equal(l5, ROUTINE_24H_TEMPLATE.length, "LOC 5 has every row");
+  assert.equal(templateForLoc("LOC 1").length, l1, "assembler count matches templateForLoc");
+  const has = (loc: string, name: string) => assembleRoutine24h(base({ finalLoc: loc })).some((e) => e.name === name);
+  assert.ok(!has("LOC 3", "Repositioning"), "no q2h repositioning below LOC 4");
+  assert.ok(has("LOC 4", "Repositioning"), "repositioning appears at LOC 4");
+  assert.ok(!has("LOC 1", "Night safety round"), "no night safety round at LOC 1");
+  assert.ok(has("LOC 3", "Night safety round"), "night safety round at LOC 3");
+  // Universal ADLs are present at every LOC.
+  for (const loc of ["LOC 1", "LOC 5"]) {
+    assert.ok(has(loc, "Breakfast") && has(loc, "Lunch") && has(loc, "Dinner"), `${loc} keeps all meals`);
+  }
+});
+
+test("24h template: order-required rows stay OPEN without an order (gating off); attach an order when present", () => {
+  const noOrders = assembleRoutine24h(base({ finalLoc: "LOC 3" }));
+  const meds = noOrders.filter((e) => e.resultSchemaKey === "Medication Support");
+  assert.ok(meds.length >= 1, "template has medication events");
+  assert.ok(meds.every((e) => e.status === "DRAFT" && !e.blockReason), "med rows are open (not blocked) without an order");
+
+  const withMed = assembleRoutine24h(base({ finalLoc: "LOC 3", orders: { medications: [{ id: "M1", name: "Amlodipine", dosage: "5mg", frequency: "OD", route: "oral", startDate: "2026-09-01" }] } }));
+  const meds2 = withMed.filter((e) => e.resultSchemaKey === "Medication Support");
+  assert.ok(meds2.every((e) => e.status === "DRAFT" && e.orderRef === "M1"), "an available order still attaches");
+});
+
+test("24h template: assistance level follows the most-dependent linked AS-domain score", () => {
+  // AS-01 (personal care) score 4 → Total Assist on the hygiene/dressing rows.
+  const out = assembleRoutine24h(base({ finalLoc: "LOC 4", domains: [{ code: "AS-01", name: "ADLs", score: 4, activeNeed: true }] }));
+  const hygiene = out.find((e) => e.name === "Morning hygiene");
+  assert.ok(hygiene, "morning hygiene present");
+  assert.equal(hygiene!.assistanceLevel, "Total Assist");
+  assert.equal(hygiene!.asScore, 4);
+});
+
+test("24h template: [level] placeholders in Goal IDs are filled from Final LOC", () => {
+  const out = assembleRoutine24h(base({ finalLoc: "LOC 3" }));
+  const withGoal = out.find((e) => (e.originalRecommendation as any).goalIds?.length);
+  assert.ok(withGoal, "a row carries goal ids");
+  const goals = (withGoal!.originalRecommendation as any).goalIds as string[];
+  assert.ok(goals.every((g) => !g.includes("[level]")), "no unfilled [level] placeholders");
+  assert.ok(goals.some((g) => /-3$/.test(g)), "level substituted with LOC digit");
+});
+
+test("24h template is deterministic (same input → identical output)", () => {
+  const inp = base({ finalLoc: "LOC 3", domains: [{ code: "AS-08", name: "Nutrition", score: 3, activeNeed: true }] });
+  assert.deepEqual(assembleRoutine24h(inp), assembleRoutine24h(inp));
 });
 
 // purity guard

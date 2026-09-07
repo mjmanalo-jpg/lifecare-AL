@@ -96,6 +96,20 @@ export async function POST(request: NextRequest) {
   // version"): stamp the release summary into each approved def's originalRecommendation.
   const releaseCheck = { at: now.toISOString(), ok: release.ok, warnings: release.warnings, results: release.results };
 
+  // Atomic replace (locked design): approving a regenerated routine REPLACES the
+  // resident's prior live routine. Retire any currently-APPROVED definitions so the
+  // Care Task / occurrences / Daily Performance seed ONLY from the newly-approved set.
+  // Without this, stale approved events (e.g. old LOC-bundle rows with no clock time)
+  // linger and show as 00:00. Past occurrences are immutable (pinned by version).
+  let superseded = 0;
+  try {
+    const res = await prisma.routineEventDefinition.updateMany({
+      where: { residentId, communityId, status: "APPROVED" },
+      data: { status: "CANCELLED", revisionReason: "Superseded by regenerated routine", stopDate: now },
+    });
+    superseded = res.count;
+  } catch (err) { console.error("[routine approve] supersede prior approved failed:", err); }
+
   let approved = 0;
   for (const d of approvable) {
     const effectiveDate = overrideDate ?? d.effectiveDate ?? new Date(`${today}T00:00:00+08:00`);
@@ -122,5 +136,5 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ approved, blocked, releaseWarnings: release.warnings });
+  return NextResponse.json({ approved, blocked, superseded, releaseWarnings: release.warnings });
 }

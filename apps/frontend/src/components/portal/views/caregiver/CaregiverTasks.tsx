@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, X, Eye, Trash2, Plus, Clock, CheckCircle2, Undo2, Play, StickyNote } from "lucide-react";
+import { Search, X, Eye, Trash2, Plus, Clock, CheckCircle2, Undo2, AlertTriangle, StickyNote } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -212,6 +212,46 @@ export default function CaregiverTasks() {
     }
   };
 
+  // DONE — one tap, finished. A care-plan task posts a governed "Completed" care
+  // event (SLMS records caregiver/time/resident/task + the plan-prescribed
+  // assistance automatically — the caregiver is never asked to re-select it);
+  // an ad-hoc task just closes. EXCEPTION is the only other state a caregiver
+  // enters; every other status (Pending/Overdue/…) is system-derived.
+  const handleDone = async (task: CaregiverTask) => {
+    const raw = (task.raw ?? {}) as { residentId?: unknown; generatedFrom?: unknown; recurringPattern?: unknown };
+    if (!raw.generatedFrom) { await handleSetStatus(task.id, "COMPLETED"); return; }
+    const rp = (raw.recurringPattern ?? {}) as { careTaskId?: unknown };
+    try {
+      const res = await fetch("/api/care-events", {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
+        body: JSON.stringify({
+          residentId: String(raw.residentId ?? ""), taskId: task.id,
+          careTaskId: rp.careTaskId ? String(rp.careTaskId) : undefined,
+          carePlanId: String(raw.generatedFrom), outcome: "Completed", actorName: sessionName,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || "Could not complete the task.");
+      await updateRecord("tasks", task.id, { status: "COMPLETED", completedAt: new Date().toISOString() });
+      await refetchTasks();
+      Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Done", showConfirmButton: false, timer: 1400 });
+    } catch (err) {
+      Swal.fire({ title: "Couldn't complete", text: err instanceof Error ? err.message : "Try again.", icon: "error" });
+    }
+  };
+
+  // EXCEPTION — one additional quick selection (the reason picker). Works for
+  // care-plan and ad-hoc tasks (careTaskId/carePlanId are null for ad-hoc).
+  const handleException = (task: CaregiverTask) => {
+    const raw = (task.raw ?? {}) as { residentId?: unknown; generatedFrom?: unknown; recurringPattern?: unknown };
+    const rp = (raw.recurringPattern ?? {}) as { careTaskId?: unknown };
+    setCareEventTask({
+      id: task.id, title: task.title, residentId: String(raw.residentId ?? ""), residentName: task.resident,
+      careTaskId: rp.careTaskId ? String(rp.careTaskId) : null,
+      carePlanId: raw.generatedFrom ? String(raw.generatedFrom) : null,
+    });
+  };
+
   const handleDeleteTask = async (id: string) => {
     const result = await Swal.fire({
       title: "Delete Task?",
@@ -255,7 +295,6 @@ export default function CaregiverTasks() {
   /** A single kanban task card. `top` colours the top rule to match its column. */
   const TaskCard = ({ task, top }: { task: CaregiverTask; top: "teal" | "amber" | "green" }) => {
     const raw = task.raw as { completedAt?: string; status?: string } | undefined;
-    const inProgress = !task.completed && String(raw?.status ?? "").toUpperCase() === "IN_PROGRESS";
     // eslint-disable-next-line react-hooks/purity
     const isOverdue = !task.completed && !!task.dueDate && new Date(task.dueDate).getTime() < Date.now();
     const completedTime = raw?.completedAt
@@ -337,29 +376,17 @@ export default function CaregiverTasks() {
               </button>
             ) : (
               <>
-                {inProgress ? (
-                  <button
-                    onClick={() => handleSetStatus(task.id, "PENDING")}
-                    title="Move back to pending"
-                    className="p-1.5 rounded transition text-[#8A8D82] hover:bg-black/5"
-                  >
-                    <Undo2 className="w-4 h-4" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleSetStatus(task.id, "IN_PROGRESS")}
-                    title="Start task"
-                    className="p-1.5 rounded transition text-[#C39A3E] hover:bg-[#C39A3E]/12"
-                  >
-                    <Play className="w-4 h-4" />
-                  </button>
-                )}
                 <button
-                  onClick={() => handleSetStatus(task.id, "COMPLETED", task)}
-                  title="Mark complete"
-                  className="p-1.5 rounded transition text-[#7E9B6F] hover:bg-[#7E9B6F]/12"
+                  onClick={() => void handleDone(task)}
+                  className="inline-flex items-center gap-1 rounded-lg bg-[#7E9B6F] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-[#6E8A5F] active:scale-95"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Done
+                </button>
+                <button
+                  onClick={() => handleException(task)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-[#C39A3E] px-3 py-1.5 text-xs font-bold text-[#9A7A2E] transition hover:bg-[#C39A3E]/10 active:scale-95"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" /> Exception
                 </button>
               </>
             ))}
@@ -677,19 +704,17 @@ export default function CaregiverTasks() {
                     </button>
                   ) : (
                     <>
-                      {String((viewingTask.raw as { status?: string } | undefined)?.status ?? "").toUpperCase() !== "IN_PROGRESS" && (
-                        <button
-                          onClick={() => { handleSetStatus(viewingTask.id, "IN_PROGRESS"); setViewingTask(null); }}
-                          className="px-4 sm:px-6 py-2 font-semibold rounded-lg transition text-sm border border-[#C39A3E] text-[#9A7A2E] hover:bg-[#C39A3E]/10"
-                        >
-                          Start Task
-                        </button>
-                      )}
                       <button
-                        onClick={() => { handleSetStatus(viewingTask.id, "COMPLETED"); setViewingTask(null); }}
-                        className="px-4 sm:px-6 py-2 text-white font-semibold rounded-lg transition text-sm bg-[#7E9B6F] hover:bg-[#6E8A5F]"
+                        onClick={() => { const t = viewingTask; setViewingTask(null); void handleDone(t); }}
+                        className="inline-flex items-center gap-1.5 px-4 sm:px-6 py-2 text-white font-semibold rounded-lg transition text-sm bg-[#7E9B6F] hover:bg-[#6E8A5F]"
                       >
-                        Mark Complete
+                        <CheckCircle2 className="w-4 h-4" /> Done
+                      </button>
+                      <button
+                        onClick={() => { const t = viewingTask; setViewingTask(null); handleException(t); }}
+                        className="inline-flex items-center gap-1.5 px-4 sm:px-6 py-2 font-semibold rounded-lg transition text-sm border border-[#C39A3E] text-[#9A7A2E] hover:bg-[#C39A3E]/10"
+                      >
+                        <AlertTriangle className="w-4 h-4" /> Exception
                       </button>
                     </>
                   )}

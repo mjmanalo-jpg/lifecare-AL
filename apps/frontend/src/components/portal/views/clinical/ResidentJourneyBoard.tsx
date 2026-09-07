@@ -28,7 +28,8 @@ import {
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { PhysicalExamHistory } from "./PhysicalExamForm";
-import { originOf, assessmentRawScore, classifyAssessment } from "@/lib/lifecare/assessment";
+import { originOf, assessmentRawScore, classifyAssessment, type AssessmentV42 } from "@/lib/lifecare/assessment";
+import { printNarrativeReport } from "@/lib/lifecare/narrativeReport";
 import { lifecareLetterhead, LIFECARE_BRAND_CSS } from "@/lib/lifecare/brand";
 import { ASSESSMENT_DOMAINS } from "@/lib/lifecare/dataset";
 import { DOMAIN_CODES } from "@/lib/lifecare/types";
@@ -102,6 +103,24 @@ const parseCareBlob = (raw: string): { meds: { name: string; dose?: string; freq
   if (t.startsWith("{")) { try { const o = JSON.parse(t); return { meds: Array.isArray(o.medications) ? o.medications : [], attachments: Array.isArray(o.attachments) ? o.attachments : [], surgeries: String(o.surgeries ?? ""), hospitalizations: String(o.hospitalizations ?? "") }; } catch { /* not structured */ } }
   return { meds: [], attachments: [], surgeries: "", hospitalizations: "" };
 };
+// Map an Admission record → AdmissionForm (profile, clinical, meds, attachments,
+// and — when a linked v4.2 assessment exists — its 14-domain scores).
+function buildAdmissionForm(a: Row, v42ById: Map<string, Row>): AdmissionForm {
+  const blob = parseCareBlob(s(a.careAssessment));
+  const v42 = v42ById.get(`av42-adm-${s(a.id)}`);
+  const v42Level = v42 ? (s(v42.layer3?.finalLevel) || s(classifyAssessment({ domains: v42.domains ?? {}, context: v42.context ?? {} }).suggestedLevel)) : "";
+  return {
+    id: s(a.id), date: pick(a, "completedAt", "updatedAt", "createdAt"),
+    residentName: `${s(a.firstName)} ${s(a.lastName)}`.trim(), room: s(a.roomNumber),
+    careLevel: s(a.careLevel), v42Level, status: s(a.status).toUpperCase(),
+    dob: s(a.dateOfBirth).slice(0, 10), gender: s(a.gender), phone: s(a.phone), email: s(a.email),
+    emergencyContact: s(a.emergencyContact), emergencyContactPhone: s(a.emergencyContactPhone),
+    medicalAssessment: s(a.medicalAssessment), allergies: s(a.allergies), medicalHistory: s(a.medicalHistory),
+    surgeries: blob.surgeries || s(a.surgeries), hospitalizations: blob.hospitalizations || s(a.hospitalizations),
+    medications: blob.meds, attachments: blob.attachments,
+    domains: v42 ? DOMAIN_CODES.map((code) => ({ code, name: DOMAIN_NAME[code] || code, score: Number(v42.domains?.[code]?.score ?? 0), note: s(v42.domains?.[code]?.goalNote), evidence: s(v42.domains?.[code]?.evidence), flags: Array.isArray(v42.domains?.[code]?.modifierFlags) ? v42.domains[code].modifierFlags : [] })) : [],
+  };
+}
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 const pick = (r: Row, ...keys: string[]) => { for (const k of keys) { const v = r?.[k]; if (v != null && v !== "") return s(v); } return ""; };
 const fmtDate = (iso: string) => { const d = new Date(iso); return isNaN(d.getTime()) ? "—" : d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); };
@@ -251,29 +270,38 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
   // Completed admission intake forms — the full onboarding record (all details),
   // distinct from the screening pre-admission. 14-domain + LOC come from the
   // admission's own ADMISSION-origin assessment (av42-adm-<id>).
-  const admissionForms = useMemo<AdmissionForm[]>(() => {
+  // This resident's admission records (any status), mapped newest-first. The Forms
+  // tab shows only COMPLETED intakes; the Journey "View report" uses the newest of
+  // any status, since a resident can be admitted (moveInDate set) before the
+  // Admission record is marked COMPLETED.
+  const admissionRows = useMemo<AdmissionForm[]>(() => {
     if (!resident) return [];
     const byId = new Map((parseArr(settingVal(settingRows, "assessments_v42")) as Row[]).map((a) => [s(a.id), a]));
     return (admQ.data || [])
-      .filter((a) => s(a.residentId) === resident.id && s(a.status).toUpperCase() === "COMPLETED")
-      .map((a) => {
-        const blob = parseCareBlob(s(a.careAssessment));
-        const v42 = byId.get(`av42-adm-${s(a.id)}`);
-        const v42Level = v42 ? (s(v42.layer3?.finalLevel) || s(classifyAssessment({ domains: v42.domains ?? {}, context: v42.context ?? {} }).suggestedLevel)) : "";
-        return {
-          id: s(a.id), date: pick(a, "completedAt", "updatedAt", "createdAt"),
-          residentName: `${s(a.firstName)} ${s(a.lastName)}`.trim(), room: s(a.roomNumber),
-          careLevel: s(a.careLevel), v42Level, status: s(a.status).toUpperCase(),
-          dob: s(a.dateOfBirth).slice(0, 10), gender: s(a.gender), phone: s(a.phone), email: s(a.email),
-          emergencyContact: s(a.emergencyContact), emergencyContactPhone: s(a.emergencyContactPhone),
-          medicalAssessment: s(a.medicalAssessment), allergies: s(a.allergies), medicalHistory: s(a.medicalHistory),
-          surgeries: blob.surgeries || s(a.surgeries), hospitalizations: blob.hospitalizations || s(a.hospitalizations),
-          medications: blob.meds, attachments: blob.attachments,
-          domains: v42 ? DOMAIN_CODES.map((code) => ({ code, name: DOMAIN_NAME[code] || code, score: Number(v42.domains?.[code]?.score ?? 0), note: s(v42.domains?.[code]?.goalNote), evidence: s(v42.domains?.[code]?.evidence), flags: Array.isArray(v42.domains?.[code]?.modifierFlags) ? v42.domains[code].modifierFlags : [] })) : [],
-        };
-      })
+      .filter((a) => s(a.residentId) === resident.id)
+      .map((a) => buildAdmissionForm(a, byId))
       .sort((x, y) => (y.date || "").localeCompare(x.date || ""));
   }, [resident, admQ.data, settingRows]);
+  const admissionForms = useMemo<AdmissionForm[]>(() => admissionRows.filter((a) => a.status === "COMPLETED"), [admissionRows]);
+  // The report the Journey admission entry prints: prefer a real Admission record,
+  // else synthesize from the Resident row so an admitted resident (moveInDate set,
+  // no Admission record) still has a printable Admission & Onboarding report.
+  const admissionReport = useMemo<AdmissionForm | undefined>(() => {
+    if (admissionRows[0]) return admissionRows[0];
+    if (!resident) return undefined;
+    const r = (resQ.data || []).find((x) => s(x.id) === resident.id);
+    if (!r) return undefined;
+    return {
+      id: `resident-${resident.id}`, date: s(resident.admittedAt),
+      residentName: resident.name, room: s(r.roomNumber) || resident.room,
+      careLevel: s(r.careLevel), v42Level: "", status: s(r.status).toUpperCase() || "ADMITTED",
+      dob: s(r.dateOfBirth).slice(0, 10), gender: s(r.gender), phone: s(r.phone), email: s(r.email),
+      emergencyContact: s(r.emergencyContact), emergencyContactPhone: s(r.emergencyContactPhone),
+      medicalAssessment: s(r.medicalAssessment), allergies: s(r.allergies), medicalHistory: s(r.medicalHistory) || s(r.diagnosis),
+      surgeries: s(r.surgeries), hospitalizations: s(r.hospitalizations),
+      medications: [], attachments: [], domains: [],
+    };
+  }, [admissionRows, resident, resQ.data]);
 
   const journey = useMemo<JourneyEvent[]>(() => {
     if (!resident) return [];
@@ -320,6 +348,14 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
 
   const q = search.trim().toLowerCase();
   const filteredResidents = residents.filter((r) => !q || r.name.toLowerCase().includes(q) || r.room.toLowerCase().includes(q));
+
+  // A Journey ASSESSMENT entry's "View report" opens the prose narrative
+  // (Pre-Admission Resident Assessment Report), not the raw domain-score sheet —
+  // same report the Care Acuity board prints. Sourced from the raw v4.2 record.
+  const viewAssessmentReport = (assessmentId: string) => {
+    const a = assessmentsV42.find((x) => s(x.id) === assessmentId);
+    if (a) printNarrativeReport(a as AssessmentV42);
+  };
 
   // Deep-link to a source board. The assessment board (careacuity) opens straight
   // to this resident via ?resident=; other boards just switch tab.
@@ -459,6 +495,12 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
                   const m = JOURNEY_CATEGORY_META[e.category];
                   const Icon = CATEGORY_ICON[e.category];
                   const color = ACCENT_VAR[m.accent];
+                  // Assessment entries open the prose narrative report (Pre-Admission
+                  // Resident Assessment Report), NOT the Pre-Admission/Acuity editor board.
+                  const asmtId = e.category === "ASSESSMENT" ? e.id.replace(/^assessment:/, "") : "";
+                  // Admission entries open the Admission & Onboarding PDF (all captured
+                  // intake details), falling back to the deep-link if no completed form.
+                  const admReport = e.category === "ADMISSION" ? admissionReport : undefined;
                   return (
                     <div key={e.id} className="flex gap-3 rounded-xl border p-3.5" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `color-mix(in srgb, ${color} 14%, var(--clinical-surface))`, color }}><Icon className="h-4 w-4" /></span>
@@ -473,7 +515,9 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
                         <div className="mt-1 flex flex-wrap items-center gap-3">
                           {e.by ? <span className="text-[11px] text-[var(--clinical-muted)]">by {e.by}</span> : null}
                           {e.href ? <a href={e.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--clinical-panel)] hover:underline">View document <ExternalLink className="h-3 w-3" /></a> : null}
-                          {!readOnly && e.tab ? <button onClick={() => openTab(e.tab)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--clinical-panel)] hover:underline">Open in {m.label} <ChevronRight className="h-3 w-3" /></button> : null}
+                          {!readOnly && asmtId ? <button onClick={() => viewAssessmentReport(asmtId)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--clinical-panel)] hover:underline">View report <Printer className="h-3 w-3" /></button>
+                            : !readOnly && admReport ? <button onClick={() => printAdmissionForm(admReport)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--clinical-panel)] hover:underline">View report <Printer className="h-3 w-3" /></button>
+                            : !readOnly && e.category !== "ASSESSMENT" && e.tab ? <button onClick={() => openTab(e.tab)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--clinical-panel)] hover:underline">Open in {m.label} <ChevronRight className="h-3 w-3" /></button> : null}
                         </div>
                       </div>
                     </div>
@@ -622,7 +666,7 @@ function AdmissionCard({ a, open, onToggle }: { a: AdmissionForm; open: boolean;
   const scored = a.domains.filter((d) => d.score > 0);
   return (
     <div className="overflow-hidden rounded-xl border transition" style={{ backgroundColor: "var(--clinical-surface)", borderColor: open ? "var(--clinical-panel)" : "var(--clinical-line)", boxShadow: open ? "0 0 0 1px var(--clinical-panel)" : undefined }}>
-      <button onClick={onToggle} aria-expanded={open} className="flex w-full items-start gap-3 p-4 text-left transition hover:bg-[var(--clinical-surface-2)]">
+      <div role="button" tabIndex={0} onClick={onToggle} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }} aria-expanded={open} className="flex w-full items-start gap-3 p-4 text-left transition hover:bg-[var(--clinical-surface-2)]">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 14%, var(--clinical-surface))", color: "var(--clinical-panel)" }}><UserPlus className="h-5 w-5" /></span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -636,8 +680,11 @@ function AdmissionCard({ a, open, onToggle }: { a: AdmissionForm; open: boolean;
             {a.room && <span className="text-[11px] text-[var(--clinical-muted)]">Room {a.room}</span>}
           </div>
         </div>
-        <ChevronDown className={`mt-1 h-4 w-4 shrink-0 text-[var(--clinical-muted)] transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button type="button" onClick={(e) => { e.stopPropagation(); printAdmissionForm(a); }} className="rounded-lg p-1.5 text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]" title="Print / Save as PDF"><Printer className="h-4 w-4" /></button>
+          <ChevronDown className={`h-4 w-4 text-[var(--clinical-muted)] transition-transform ${open ? "rotate-180" : ""}`} />
+        </div>
+      </div>
       {open && (
         <div className="space-y-4 border-t p-4 text-sm" style={{ borderColor: "var(--clinical-line)" }}>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -806,6 +853,100 @@ ${section("Layer 2 · Domain Scores (14 domains, max /56)", `<table><thead><tr><
 ${section("Layer 3 · Evaluation", evalFields)}
 ${validationHtml}
 <div class="foot">Assessment ${esc(f.id)} · Generated ${esc(new Date().toLocaleString())} · Confidential — for authorized use only.</div>
+</td></tr></tbody><tfoot><tr><td><div class="vpad"></div></td></tr></tfoot></table>
+</body></html>`;
+  const w = window.open("", "_blank", "width=840,height=920");
+  if (!w) return;
+  w.document.write(html);
+  w.document.close();
+}
+
+// ── Print Admission & Onboarding as structured PDF ─────────────────────────
+// Every captured admission field rendered into the same LifeCare letterhead sheet
+// as the assessment report, so a completed intake has a printable record.
+function printAdmissionForm(a: AdmissionForm): void {
+  const name = a.residentName || "Resident";
+  const profileFields = [
+    field("Resident", name),
+    field("Date of Birth", a.dob),
+    field("Gender", a.gender),
+    field("Phone", a.phone),
+    field("Email", a.email),
+    field("Room", a.room),
+    field("Care Level", a.careLevel),
+    field("Assessed Level (v4.2)", a.v42Level),
+  ].join("");
+  const emergencyFields = [
+    field("Emergency Contact", a.emergencyContact),
+    field("Emergency Phone", a.emergencyContactPhone),
+  ].join("");
+  const clinicalFields = [
+    field("Medical Assessment", a.medicalAssessment),
+    field("Allergies", a.allergies),
+    field("Medical History", a.medicalHistory),
+    field("Previous Surgeries", a.surgeries),
+    field("Hospitalizations", a.hospitalizations),
+  ].join("");
+  const meds = a.medications.length
+    ? a.medications.map((m) => `<div class="med">${esc(m.name)}${m.dose ? ` — ${esc(m.dose)}` : ""}${m.frequency ? ` · ${esc(m.frequency)}` : ""}</div>`).join("")
+    : "";
+  const attach = a.attachments.length
+    ? a.attachments.map((att) => `<div class="f"><span class="fv"><a href="${esc(att.url)}">${esc(att.name || att.url)}</a></span></div>`).join("")
+    : "";
+  const scored = a.domains.filter((d) => d.score > 0 || has(d.evidence));
+  const domainRows = scored.map((d) => {
+    const bars = [0, 1, 2, 3].map((n) => n < d.score ? "█" : "░").join("");
+    const detail = [d.evidence ? `Evidence: ${d.evidence}` : "", d.note ? `Goal: ${d.note}` : "", d.flags.length ? `Flags: ${d.flags.join(", ")}` : ""].filter(Boolean).join(" · ");
+    return `<tr><td class="dc">${esc(d.code)}</td><td class="dn">${esc(d.name)}</td><td class="ds">${bars}</td><td class="dv">${d.score}/4</td>${detail ? `<td class="dd">${esc(detail)}</td>` : "<td></td>"}</tr>`;
+  }).join("");
+  const scoreTotal = a.domains.reduce((sum, d) => sum + d.score, 0);
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Admission &amp; Onboarding — ${esc(name)}</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;color:#1f2933;line-height:1.6;max-width:820px;margin:0 auto;padding:44px 48px;font-size:14px}
+${LIFECARE_BRAND_CSS}
+.rule{border:0;border-top:1.5px solid #ced4da;margin:10px 0 18px}
+.company{font-weight:800;font-size:17px;margin:0 0 2px}
+.title{font-weight:700;font-size:14px;color:#343a40;margin:0 0 4px}
+.origin{font-size:12px;color:#868e96;margin:0 0 12px}
+.meta{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 18px;font-size:13px}
+.meta .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.pill-status{background:#4263eb;color:#fff}
+.pill-level{background:#e03131;color:#fff}
+.sec{margin-top:22px;page-break-inside:avoid}
+h3{font-size:14px;color:#1c7ed6;border-bottom:1px solid #dee2e6;padding-bottom:4px;margin:0 0 10px;page-break-after:avoid}
+.f{display:flex;gap:8px;margin:3px 0;font-size:13px}.fl{font-weight:700;min-width:160px;flex-shrink:0;color:#495057}.fv{color:#212529}
+.med{padding:6px 10px;background:#f8f9fa;border-radius:6px;margin:4px 0;font-size:13px;border-left:3px solid #4263eb}
+table{width:100%;border-collapse:collapse;margin:8px 0;font-size:12.5px}
+th{text-align:left;font-size:11px;color:#495057;border-bottom:1.5px solid #dee2e6;padding:6px 4px}
+td{padding:5px 4px;border-bottom:1px solid #f1f3f5}
+.dc{font-weight:700;color:#4263eb;width:60px}.dn{width:180px}.ds{font-family:monospace;letter-spacing:1px;color:#868e96}.dv{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;width:40px}.dd{font-size:11px;color:#868e96;max-width:200px}
+tr,td,.sec,.med,.f{page-break-inside:avoid}
+.foot{margin-top:26px;border-top:1px solid #e9ecef;padding-top:10px;color:#adb5bd;font-size:11px}
+@page{margin:0}
+table.sheet{width:100%;border-collapse:collapse}
+table.sheet>thead>tr>td,table.sheet>tfoot>tr>td{padding:0;border:0}
+.vpad{height:0}
+@media print{body{padding:0;max-width:none;margin:0}td.sheet-body{padding:0 44px}.vpad{height:34px}}
+</style></head><body onload="window.focus();window.print()">
+<table class="sheet"><thead><tr><td><div class="vpad"></div></td></tr></thead><tbody><tr><td class="sheet-body">
+${lifecareLetterhead()}
+<hr class="rule">
+<p class="company">LifeCare Living Solutions, Inc.</p>
+<p class="title">Admission &amp; Onboarding Report</p>
+<p class="origin">Admission &amp; Intake · ${esc(a.date)}</p>
+<div class="meta">
+  <span class="pill pill-status">${esc(a.status || "COMPLETED")}</span>
+  ${a.v42Level ? `<span class="pill pill-level">${esc(a.v42Level)}</span>` : ""}
+</div>
+${section("Resident Profile", profileFields)}
+${section("Emergency Contact", emergencyFields)}
+${section("Clinical History", clinicalFields)}
+${meds ? section("Medications", meds) : ""}
+${attach ? section("Attachments", attach) : ""}
+${domainRows ? section("Admission Assessment (14 domains, max /56)", `<table><thead><tr><th>Code</th><th>Domain</th><th>Score</th><th>Rating</th><th>Details</th></tr></thead><tbody>${domainRows}<tr style="font-weight:800;border-top:1.5px solid #ced4da"><td></td><td>Total</td><td></td><td class="dv">${scoreTotal}/56</td><td></td></tr></tbody></table>`) : ""}
+<div class="foot">Admission ${esc(a.id)} · Generated ${esc(new Date().toLocaleString())} · Confidential — for authorized use only.</div>
 </td></tr></tbody><tfoot><tr><td><div class="vpad"></div></td></tr></tfoot></table>
 </body></html>`;
   const w = window.open("", "_blank", "width=840,height=920");

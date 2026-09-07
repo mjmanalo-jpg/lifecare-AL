@@ -1,0 +1,1120 @@
+[
+  {
+    "eventId": "RT-001",
+    "careEvent": "Night safety round",
+    "shift": "Night",
+    "shiftOwner": "NOC",
+    "timeText": "12:00 AM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "00:00"
+      ]
+    },
+    "frequencyLabel": "Recurring fixed interval",
+    "asDomains": [
+      "AS-12",
+      "AS-13"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-12-[level]",
+      "G-AS-13-[level]"
+    ],
+    "residentGoal": "Promote restful sleep while maintaining safety.",
+    "caregiverInstruction": "Observe without waking unless the approved night plan requires intervention; confirm comfort, location and safety.",
+    "nurseResponsibility": "Review repeated waking, wandering, pain, unsafe behavior or acute change.",
+    "criticality": "Routine",
+    "requiredResult": "Awake/asleep; location; comfort; safety status",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-002",
+    "careEvent": "Repositioning",
+    "shift": "Night",
+    "shiftOwner": "NOC",
+    "timeText": "2:00 AM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "02:00"
+      ]
+    },
+    "frequencyLabel": "Recurring fixed interval",
+    "asDomains": [
+      "AS-02",
+      "AS-11"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-02-[level]",
+      "G-AS-11-[level]"
+    ],
+    "residentGoal": "Maintain comfort and skin integrity.",
+    "caregiverInstruction": "Reposition/off-load using approved technique and assistance level.",
+    "nurseResponsibility": "Review pain, redness, skin deterioration or inability to reposition safely.",
+    "criticality": "High",
+    "requiredResult": "New position; skin observation; tolerance; actual time",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-003",
+    "careEvent": "Scheduled toileting",
+    "shift": "Night",
+    "shiftOwner": "NOC",
+    "timeText": "4:00 AM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "04:00"
+      ]
+    },
+    "frequencyLabel": "While awake / night plan",
+    "asDomains": [
+      "AS-10",
+      "AS-02"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-10-[level]",
+      "G-AS-02-[level]"
+    ],
+    "residentGoal": "Maintain continence, dignity and safe mobility.",
+    "caregiverInstruction": "Offer/assist toileting according to the approved night plan; use approved transfer method.",
+    "nurseResponsibility": "Review urinary symptoms, constipation, falls or increased assistance.",
+    "criticality": "Routine",
+    "requiredResult": "Offered/provided; continence; urine/BM; assistance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-004",
+    "careEvent": "Morning orientation",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "6:00 AM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "06:00"
+      ]
+    },
+    "frequencyLabel": "Defined time window",
+    "asDomains": [
+      "AS-04",
+      "AS-09"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-04-[level]",
+      "G-AS-09-[level]"
+    ],
+    "residentGoal": "Follow preferred morning routine and support orientation.",
+    "caregiverInstruction": "Use preferred wake-up approach, simple orientation and effective communication method.",
+    "nurseResponsibility": "Review acute cognition or communication change.",
+    "criticality": "Routine",
+    "requiredResult": "Support provided; resident response; variance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-005",
+    "careEvent": "Morning toileting",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "6:15 AM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "06:15"
+      ]
+    },
+    "frequencyLabel": "Exact scheduled time",
+    "asDomains": [
+      "AS-10",
+      "AS-02"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-10-[level]",
+      "G-AS-02-[level]"
+    ],
+    "residentGoal": "Maintain continence, dignity and safe mobility.",
+    "caregiverInstruction": "Offer/assist toileting using approved assistance, device and transfer technique.",
+    "nurseResponsibility": "Review new incontinence, urinary symptoms, fall or increased assistance.",
+    "criticality": "Routine",
+    "requiredResult": "Offered/provided; continence; urine/BM; assistance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-006",
+    "careEvent": "Morning hygiene",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "6:30–7:00 AM",
+    "frequencyMethod": "defined_window",
+    "schedule": {
+      "window": "06:30-07:00"
+    },
+    "frequencyLabel": "Defined time window",
+    "asDomains": [
+      "AS-01",
+      "AS-09"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-01-[level]",
+      "G-AS-09-[level]"
+    ],
+    "residentGoal": "Maximize participation in preferred personal-care routine.",
+    "caregiverInstruction": "Provide approved setup, cueing or hands-on assistance for hygiene; preserve privacy.",
+    "nurseResponsibility": "Review skin, pain, distress or functional change.",
+    "criticality": "Routine",
+    "requiredResult": "Steps completed; assistance level; tolerance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-007",
+    "careEvent": "Dressing",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "7:00–7:20 AM",
+    "frequencyMethod": "defined_window",
+    "schedule": {
+      "window": "07:00-07:20"
+    },
+    "frequencyLabel": "Defined time window",
+    "asDomains": [
+      "AS-01"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-01-[level]"
+    ],
+    "residentGoal": "Support choice, dignity and safe participation in dressing.",
+    "caregiverInstruction": "Offer approved choices and provide the planned assistance while encouraging safe participation.",
+    "nurseResponsibility": "Review increased assistance, pain or inability to participate safely.",
+    "criticality": "Routine",
+    "requiredResult": "Clothing selected; steps completed; assistance; tolerance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-008",
+    "careEvent": "Transfer to dining",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "7:30 AM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "07:30"
+      ]
+    },
+    "frequencyLabel": "Exact scheduled time",
+    "asDomains": [
+      "AS-02",
+      "AS-03"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-02-[level]",
+      "G-AS-03-[level]"
+    ],
+    "residentGoal": "Maintain safe mobility and transfers.",
+    "caregiverInstruction": "Use approved assistance, device, cue sequence and fall precautions.",
+    "nurseResponsibility": "Review dizziness, buckling, near-fall or functional decline.",
+    "criticality": "High",
+    "requiredResult": "From/to; assistance; device; tolerance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-009",
+    "careEvent": "Breakfast",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "8:00 AM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "08:00"
+      ]
+    },
+    "frequencyLabel": "Exact scheduled time",
+    "asDomains": [
+      "AS-08"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-08-[level]"
+    ],
+    "residentGoal": "Support safe, adequate intake and participation.",
+    "caregiverInstruction": "Provide approved meal assistance, positioning, pacing and prescribed texture.",
+    "nurseResponsibility": "Review poor intake, swallowing signs, vomiting or glucose/meal mismatch.",
+    "criticality": "Routine",
+    "requiredResult": "% or amount consumed; assistance; positioning; swallowing concern",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-010",
+    "careEvent": "Morning hydration",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "8:15 AM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "08:15"
+      ]
+    },
+    "frequencyLabel": "Times per shift",
+    "asDomains": [
+      "AS-08"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-08-[level]"
+    ],
+    "residentGoal": "Maintain resident-specific hydration target.",
+    "caregiverInstruction": "Offer approved fluid and record amount offered and consumed.",
+    "nurseResponsibility": "Review persistent poor intake, dehydration signs or swallowing concern.",
+    "criticality": "Routine",
+    "requiredResult": "Amount offered; amount consumed; tolerance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-011",
+    "careEvent": "Morning medication support",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "8:00 AM / prescribed",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "08:00"
+      ]
+    },
+    "frequencyLabel": "Exact scheduled time",
+    "asDomains": [
+      "AS-07"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-07-[level]"
+    ],
+    "residentGoal": "Support safe medication adherence.",
+    "caregiverInstruction": "Perform only authorized medication support according to current MAR/order.",
+    "nurseResponsibility": "Review refusal, omission, hold, adverse response or parameter issue.",
+    "criticality": "Critical",
+    "requiredResult": "MAR outcome; actual time; observed response",
+    "completionControl": "Record & Complete",
+    "orderRequired": true
+  },
+  {
+    "eventId": "RT-012",
+    "careEvent": "Ordered clinical reading",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "9:00 AM / ordered",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "09:00"
+      ]
+    },
+    "frequencyLabel": "Exact time / temporary frequency",
+    "asDomains": [
+      "AS-06"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-06-[level]"
+    ],
+    "residentGoal": "Maintain condition within resident-specific parameters.",
+    "caregiverInstruction": "Obtain only ordered readings using approved technique and report qualifying findings.",
+    "nurseResponsibility": "Interpret results/trends and act according to orders and resident-specific parameters.",
+    "criticality": "Critical",
+    "requiredResult": "All ordered readings with units; related symptoms",
+    "completionControl": "Record & Complete",
+    "orderRequired": true
+  },
+  {
+    "eventId": "RT-013",
+    "careEvent": "Mobility practice",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "10:00 AM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "10:00"
+      ]
+    },
+    "frequencyLabel": "Defined time window",
+    "asDomains": [
+      "AS-02",
+      "AS-03"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-02-[level]",
+      "G-AS-03-[level]"
+    ],
+    "residentGoal": "Maintain safe function and mobility.",
+    "caregiverInstruction": "Provide approved walking or mobility assistance; follow device, precautions and rest needs.",
+    "nurseResponsibility": "Review tolerance, pain, dizziness, near-fall or decline.",
+    "criticality": "Routine",
+    "requiredResult": "Activity/distance; assistance; device; tolerance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-014",
+    "careEvent": "Therapy carryover",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "10:30 AM / plan",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "10:30"
+      ]
+    },
+    "frequencyLabel": "Defined time window",
+    "asDomains": [
+      "AS-02",
+      "AS-14"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-02-[level]",
+      "G-AS-14-[level]"
+    ],
+    "residentGoal": "Maintain function through approved therapy carryover.",
+    "caregiverInstruction": "Complete only the therapy-approved exercise or functional technique.",
+    "nurseResponsibility": "Coordinate therapy plan and review pain, fatigue or functional change.",
+    "criticality": "Routine",
+    "requiredResult": "Exercise/activity; repetitions/duration; tolerance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-015",
+    "careEvent": "Meaningful activity",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "11:00 AM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "11:00"
+      ]
+    },
+    "frequencyLabel": "Defined time window",
+    "asDomains": [
+      "AS-05",
+      "AS-14"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-05-[level]",
+      "G-AS-14-[level]"
+    ],
+    "residentGoal": "Support psychosocial well-being and meaningful participation.",
+    "caregiverInstruction": "Offer the individualized activity and use approved engagement approach.",
+    "nurseResponsibility": "Review distress, withdrawal, behavior pattern or decline.",
+    "criticality": "Routine",
+    "requiredResult": "Offered; participated/declined; duration; response",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-016",
+    "careEvent": "Pre-lunch toileting",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "11:30 AM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "11:30"
+      ]
+    },
+    "frequencyLabel": "Exact scheduled time",
+    "asDomains": [
+      "AS-10",
+      "AS-02"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-10-[level]",
+      "G-AS-02-[level]"
+    ],
+    "residentGoal": "Maintain comfort, continence and safe mobility.",
+    "caregiverInstruction": "Offer/assist toileting using approved assistance and transfer technique.",
+    "nurseResponsibility": "Review urinary symptoms, constipation, fall or increased assistance.",
+    "criticality": "Routine",
+    "requiredResult": "Offered/provided; continence; urine/BM; assistance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-017",
+    "careEvent": "Lunch",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "12:00 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "12:00"
+      ]
+    },
+    "frequencyLabel": "Exact scheduled time",
+    "asDomains": [
+      "AS-08"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-08-[level]"
+    ],
+    "residentGoal": "Support safe, adequate intake and participation.",
+    "caregiverInstruction": "Provide approved meal assistance, positioning, pacing and prescribed texture.",
+    "nurseResponsibility": "Review poor intake, swallowing signs or other clinical concern.",
+    "criticality": "Routine",
+    "requiredResult": "% or amount consumed; assistance; positioning; swallowing concern",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-018",
+    "careEvent": "Midday hydration",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "12:15 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "12:15"
+      ]
+    },
+    "frequencyLabel": "Times per shift",
+    "asDomains": [
+      "AS-08"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-08-[level]"
+    ],
+    "residentGoal": "Maintain resident-specific hydration target.",
+    "caregiverInstruction": "Offer approved fluid and record amount offered and consumed.",
+    "nurseResponsibility": "Review poor intake, dehydration signs or swallowing concern.",
+    "criticality": "Routine",
+    "requiredResult": "Amount offered; amount consumed; tolerance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-019",
+    "careEvent": "Rest support",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "1:00 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "13:00"
+      ]
+    },
+    "frequencyLabel": "Defined time window",
+    "asDomains": [
+      "AS-12"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-12-[level]"
+    ],
+    "residentGoal": "Balance rest, comfort and daily activity.",
+    "caregiverInstruction": "Support the resident’s preferred rest routine and address approved comfort needs.",
+    "nurseResponsibility": "Review pain, new somnolence or sleep-pattern change.",
+    "criticality": "Routine",
+    "requiredResult": "Rest offered; comfort intervention; response",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-020",
+    "careEvent": "Handover preparation",
+    "shift": "Morning",
+    "shiftOwner": "AM",
+    "timeText": "1:30 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "13:30"
+      ]
+    },
+    "frequencyLabel": "Each shift change",
+    "asDomains": [],
+    "asDomainsNote": "All active domains",
+    "goalIds": [
+      "Resident active goals"
+    ],
+    "residentGoal": "Maintain continuity across shifts.",
+    "caregiverInstruction": "Resolve, escalate or formally transfer incomplete items with owner and due time.",
+    "nurseResponsibility": "Review pending escalations and time-critical follow-up.",
+    "criticality": "Critical",
+    "requiredResult": "Pending item; reason; escalation; owner; due time",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-021",
+    "careEvent": "Shift handover acceptance",
+    "shift": "Afternoon",
+    "shiftOwner": "PM",
+    "timeText": "2:00 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "14:00"
+      ]
+    },
+    "frequencyLabel": "Each shift change",
+    "asDomains": [],
+    "asDomainsNote": "All active domains",
+    "goalIds": [
+      "Resident active goals"
+    ],
+    "residentGoal": "Maintain continuity and accountability.",
+    "caregiverInstruction": "Review and accept assigned residents, pending items and time-critical tasks.",
+    "nurseResponsibility": "Accept clinical escalations and priorities.",
+    "criticality": "Critical",
+    "requiredResult": "Items reviewed; accepted owner; due time",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-022",
+    "careEvent": "Initial resident check",
+    "shift": "Afternoon",
+    "shiftOwner": "PM",
+    "timeText": "2:15 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "14:15"
+      ]
+    },
+    "frequencyLabel": "Each shift change",
+    "asDomains": [],
+    "asDomainsNote": "All active domains",
+    "goalIds": [
+      "Resident active goals"
+    ],
+    "residentGoal": "Confirm comfort, safety and change since prior shift.",
+    "caregiverInstruction": "Check resident comfort, location and active priority needs.",
+    "nurseResponsibility": "Review new-since-shift events or change from baseline.",
+    "criticality": "High",
+    "requiredResult": "Resident status; comfort; safety; change/exception",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-023",
+    "careEvent": "Meaningful activity",
+    "shift": "Afternoon",
+    "shiftOwner": "PM",
+    "timeText": "3:00 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "15:00"
+      ]
+    },
+    "frequencyLabel": "Defined time window",
+    "asDomains": [
+      "AS-05",
+      "AS-14"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-05-[level]",
+      "G-AS-14-[level]"
+    ],
+    "residentGoal": "Support psychosocial well-being and meaningful participation.",
+    "caregiverInstruction": "Offer individualized activity using approved communication and calming approach.",
+    "nurseResponsibility": "Review distress, behavior pattern or clinical cause of change.",
+    "criticality": "Routine",
+    "requiredResult": "Offered; participated/declined; duration; response",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-024",
+    "careEvent": "Mobility support",
+    "shift": "Afternoon",
+    "shiftOwner": "PM",
+    "timeText": "4:00 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "16:00"
+      ]
+    },
+    "frequencyLabel": "Defined time window",
+    "asDomains": [
+      "AS-02",
+      "AS-03"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-02-[level]",
+      "G-AS-03-[level]"
+    ],
+    "residentGoal": "Maintain safe mobility and function.",
+    "caregiverInstruction": "Provide approved mobility assistance, device and fall precautions.",
+    "nurseResponsibility": "Review tolerance, pain, dizziness, near-fall or decline.",
+    "criticality": "Routine",
+    "requiredResult": "Activity/distance; assistance; device; tolerance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-025",
+    "careEvent": "Afternoon hydration",
+    "shift": "Afternoon",
+    "shiftOwner": "PM",
+    "timeText": "4:30 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "16:30"
+      ]
+    },
+    "frequencyLabel": "Times per shift",
+    "asDomains": [
+      "AS-08"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-08-[level]"
+    ],
+    "residentGoal": "Maintain resident-specific hydration target.",
+    "caregiverInstruction": "Offer approved fluid and record amount offered and consumed.",
+    "nurseResponsibility": "Review poor intake, dehydration signs or swallowing concern.",
+    "criticality": "Routine",
+    "requiredResult": "Amount offered; amount consumed; tolerance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-026",
+    "careEvent": "Pre-dinner toileting",
+    "shift": "Afternoon",
+    "shiftOwner": "PM",
+    "timeText": "5:00 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "17:00"
+      ]
+    },
+    "frequencyLabel": "Exact scheduled time",
+    "asDomains": [
+      "AS-10",
+      "AS-02"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-10-[level]",
+      "G-AS-02-[level]"
+    ],
+    "residentGoal": "Maintain comfort, continence and safe mobility.",
+    "caregiverInstruction": "Offer/assist toileting using approved assistance and transfer technique.",
+    "nurseResponsibility": "Review urinary symptoms, constipation, fall or increased assistance.",
+    "criticality": "Routine",
+    "requiredResult": "Offered/provided; continence; urine/BM; assistance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-027",
+    "careEvent": "Dinner",
+    "shift": "Afternoon",
+    "shiftOwner": "PM",
+    "timeText": "6:00 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "18:00"
+      ]
+    },
+    "frequencyLabel": "Exact scheduled time",
+    "asDomains": [
+      "AS-08"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-08-[level]"
+    ],
+    "residentGoal": "Support safe, adequate intake and participation.",
+    "caregiverInstruction": "Provide approved meal assistance, positioning, pacing and prescribed texture.",
+    "nurseResponsibility": "Review poor intake, swallowing signs or other clinical concern.",
+    "criticality": "Routine",
+    "requiredResult": "% or amount consumed; assistance; positioning; swallowing concern",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-028",
+    "careEvent": "Evening hydration",
+    "shift": "Afternoon",
+    "shiftOwner": "PM",
+    "timeText": "6:15 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "18:15"
+      ]
+    },
+    "frequencyLabel": "Times per shift",
+    "asDomains": [
+      "AS-08"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-08-[level]"
+    ],
+    "residentGoal": "Maintain resident-specific hydration target.",
+    "caregiverInstruction": "Offer approved fluid and record amount offered and consumed.",
+    "nurseResponsibility": "Review poor intake, dehydration signs or swallowing concern.",
+    "criticality": "Routine",
+    "requiredResult": "Amount offered; amount consumed; tolerance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-029",
+    "careEvent": "Evening medication support",
+    "shift": "Afternoon",
+    "shiftOwner": "PM",
+    "timeText": "6:00 PM / prescribed",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "18:00"
+      ]
+    },
+    "frequencyLabel": "Exact scheduled time",
+    "asDomains": [
+      "AS-07"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-07-[level]"
+    ],
+    "residentGoal": "Support safe medication adherence.",
+    "caregiverInstruction": "Perform only authorized medication support according to current MAR/order.",
+    "nurseResponsibility": "Review refusal, omission, hold, adverse response or parameter issue.",
+    "criticality": "Critical",
+    "requiredResult": "MAR outcome; actual time; observed response",
+    "completionControl": "Record & Complete",
+    "orderRequired": true
+  },
+  {
+    "eventId": "RT-030",
+    "careEvent": "Calm evening routine",
+    "shift": "Afternoon",
+    "shiftOwner": "PM",
+    "timeText": "7:00 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "19:00"
+      ]
+    },
+    "frequencyLabel": "Defined time window",
+    "asDomains": [
+      "AS-04",
+      "AS-05",
+      "AS-12"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-04-[level]",
+      "G-AS-05-[level]",
+      "G-AS-12-[level]"
+    ],
+    "residentGoal": "Reduce distress and support preferred evening routine.",
+    "caregiverInstruction": "Use familiar low-stimulation activity, reassurance and effective cueing.",
+    "nurseResponsibility": "Review severe agitation, acute cognition change, pain or possible illness.",
+    "criticality": "Routine",
+    "requiredResult": "Approach used; participation; response; trigger if present",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-031",
+    "careEvent": "Bedtime hygiene",
+    "shift": "Afternoon",
+    "shiftOwner": "PM",
+    "timeText": "8:30 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "20:30"
+      ]
+    },
+    "frequencyLabel": "Defined time window",
+    "asDomains": [
+      "AS-01"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-01-[level]"
+    ],
+    "residentGoal": "Maintain dignity and preferred bedtime routine.",
+    "caregiverInstruction": "Provide approved oral and personal hygiene assistance; preserve privacy.",
+    "nurseResponsibility": "Review skin, pain, distress or increased assistance.",
+    "criticality": "Routine",
+    "requiredResult": "Steps completed; assistance; tolerance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-032",
+    "careEvent": "Bedtime toileting",
+    "shift": "Afternoon",
+    "shiftOwner": "PM",
+    "timeText": "8:45 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "20:45"
+      ]
+    },
+    "frequencyLabel": "Exact scheduled time",
+    "asDomains": [
+      "AS-10",
+      "AS-02"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-10-[level]",
+      "G-AS-02-[level]"
+    ],
+    "residentGoal": "Maintain comfort, continence and safe mobility.",
+    "caregiverInstruction": "Offer/assist toileting using approved assistance and transfer technique.",
+    "nurseResponsibility": "Review urinary symptoms, constipation, fall or increased assistance.",
+    "criticality": "Routine",
+    "requiredResult": "Offered/provided; continence; urine/BM; assistance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-033",
+    "careEvent": "Skin observation",
+    "shift": "Afternoon",
+    "shiftOwner": "PM",
+    "timeText": "9:00 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "21:00"
+      ]
+    },
+    "frequencyLabel": "Defined time window",
+    "asDomains": [
+      "AS-11"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-11-[level]"
+    ],
+    "residentGoal": "Maintain skin integrity and comfort.",
+    "caregiverInstruction": "Observe approved skin areas during care and document new findings.",
+    "nurseResponsibility": "Review redness, breakdown, drainage, pain or infection sign.",
+    "criticality": "High",
+    "requiredResult": "Area checked; condition; new finding yes/no",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-034",
+    "careEvent": "Bedtime positioning",
+    "shift": "Afternoon",
+    "shiftOwner": "PM",
+    "timeText": "9:15 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "21:15"
+      ]
+    },
+    "frequencyLabel": "Exact scheduled time",
+    "asDomains": [
+      "AS-02",
+      "AS-11"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-02-[level]",
+      "G-AS-11-[level]"
+    ],
+    "residentGoal": "Maintain safe, comfortable positioning.",
+    "caregiverInstruction": "Position using approved technique, assistance and off-loading aids.",
+    "nurseResponsibility": "Review pain, skin finding or inability to position safely.",
+    "criticality": "High",
+    "requiredResult": "Position; assistance; aid; tolerance",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-035",
+    "careEvent": "Night safety setup",
+    "shift": "Afternoon",
+    "shiftOwner": "PM",
+    "timeText": "9:30 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "21:30"
+      ]
+    },
+    "frequencyLabel": "Exact scheduled time",
+    "asDomains": [
+      "AS-03",
+      "AS-13"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-03-[level]",
+      "G-AS-13-[level]"
+    ],
+    "residentGoal": "Maintain safety using least-restrictive safeguards.",
+    "caregiverInstruction": "Set approved environment, device access, lighting and safety precautions.",
+    "nurseResponsibility": "Review new night risk or need beyond current plan.",
+    "criticality": "High",
+    "requiredResult": "Safeguards set; environment status; exception",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-036",
+    "careEvent": "Night-shift handover acceptance",
+    "shift": "Night",
+    "shiftOwner": "NOC",
+    "timeText": "10:00 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "22:00"
+      ]
+    },
+    "frequencyLabel": "Each shift change",
+    "asDomains": [],
+    "asDomainsNote": "All active domains",
+    "goalIds": [
+      "Resident active goals"
+    ],
+    "residentGoal": "Maintain continuity and accountability.",
+    "caregiverInstruction": "Review and accept assigned residents, pending items and night-plan priorities.",
+    "nurseResponsibility": "Accept escalations, time-critical follow-up and night plan.",
+    "criticality": "Critical",
+    "requiredResult": "Items reviewed; accepted owner; due time",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-037",
+    "careEvent": "Night resident check",
+    "shift": "Night",
+    "shiftOwner": "NOC",
+    "timeText": "10:15 PM",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "22:15"
+      ]
+    },
+    "frequencyLabel": "Each shift change",
+    "asDomains": [],
+    "asDomainsNote": "All active domains",
+    "goalIds": [
+      "Resident active goals"
+    ],
+    "residentGoal": "Confirm comfort and safety at start of shift.",
+    "caregiverInstruction": "Check resident comfort, location and due night tasks without unnecessary disruption.",
+    "nurseResponsibility": "Review new-since-shift events and pending escalations.",
+    "criticality": "High",
+    "requiredResult": "Resident status; comfort; safety; change/exception",
+    "completionControl": "Record & Complete",
+    "orderRequired": false
+  },
+  {
+    "eventId": "RT-038",
+    "careEvent": "Overnight medication support",
+    "shift": "Night",
+    "shiftOwner": "NOC",
+    "timeText": "11:00 PM / prescribed",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "23:00"
+      ]
+    },
+    "frequencyLabel": "Exact scheduled time",
+    "asDomains": [
+      "AS-07"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-07-[level]"
+    ],
+    "residentGoal": "Complete prescribed time-critical medication support safely.",
+    "caregiverInstruction": "Perform only authorized medication support according to the current MAR/order.",
+    "nurseResponsibility": "Review refusal, omission, hold, adverse response and escalation.",
+    "criticality": "Critical",
+    "requiredResult": "MAR outcome; actual time; observed response",
+    "completionControl": "Record & Complete",
+    "orderRequired": true
+  },
+  {
+    "eventId": "RT-039",
+    "careEvent": "Overnight treatment",
+    "shift": "Night",
+    "shiftOwner": "NOC",
+    "timeText": "11:00 PM / ordered",
+    "frequencyMethod": "exact_time",
+    "schedule": {
+      "times": [
+        "23:00"
+      ]
+    },
+    "frequencyLabel": "Exact scheduled time",
+    "asDomains": [
+      "AS-06",
+      "AS-11"
+    ],
+    "asDomainsNote": "",
+    "goalIds": [
+      "G-AS-06-[level]",
+      "G-AS-11-[level]"
+    ],
+    "residentGoal": "Complete prescribed time-critical treatment safely.",
+    "caregiverInstruction": "Perform only the authorized ordered treatment using the approved technique.",
+    "nurseResponsibility": "Review result, hold, inability to perform, adverse response and escalation.",
+    "criticality": "Critical",
+    "requiredResult": "Treatment result; actual time; tolerance/response",
+    "completionControl": "Record & Complete",
+    "orderRequired": true
+  }
+]
