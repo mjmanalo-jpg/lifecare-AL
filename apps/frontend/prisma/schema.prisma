@@ -671,6 +671,7 @@ model Resident {
   invitations           Invitation[]
   labResults            LabResult[]
   allergyRecords        Allergy[]
+  routineEventDefinitions RoutineEventDefinition[]
 
   @@index([careLevel])
   @@index([roomNumber])
@@ -1408,6 +1409,7 @@ model Community {
   invitations           Invitation[]
   usageSnapshots        UsageSnapshot[]
   settings              AppSetting[]
+  routineEventDefinitions RoutineEventDefinition[]
 
   @@index([organizationId])
   @@unique([organizationId, code])
@@ -4696,4 +4698,121 @@ model MetricSnapshot {
 
   @@unique([communityId, serviceContext, metricKey, definitionVersion, windowStart, windowEnd])
   @@index([organizationId, communityId, metricKey, recordedAt])
+}
+
+// ── SLMS v4.2 24-Hour Routine Generator (sub-project #3) ────────────────────────
+// Governance-grade routine: versioned event DEFINITIONS (nurse Draft→Approve) and
+// per-care-day OCCURRENCES. Foundations rule tables stay migration-free JSON; this
+// relational data carries approval, versioning, RBAC and immutable audit.
+
+enum RoutineDefinitionStatus {
+  DRAFT
+  APPROVED
+  RETURNED
+  EXPIRED
+  CANCELLED
+}
+
+model RoutineEventDefinition {
+  id                     String   @id @default(uuid())
+  residentId             String
+  resident               Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  communityId            String?
+  community              Community? @relation(fields: [communityId], references: [id], onDelete: SetNull)
+
+  version                Int      @default(1)
+  status                 RoutineDefinitionStatus @default(DRAFT)
+
+  // provenance (Rules 2/3/4/5)
+  sourceLocBundleId      String?
+  sourceAsDomain         String?
+  asScore                Int?
+  goalId                 String?
+  sourceTaskId           String?
+  conditionBundleId      String?
+  memoryPathwayId        String?   // kept SEPARATE from LOC (Rule 20)
+  orderRef               String?
+
+  // atomic event (Rules 7/12)
+  name                   String
+  instructions           String    @db.Text
+  assistanceLevel        String?   // canonical ASSISTANCE (never two-person/mechanical)
+  supervision            String?
+  staffing               String?
+  equipment              String?
+  technique              String?
+  conditionModifier      String?
+  responsibleRole        String    @default("Caregiver") // Caregiver | Nurse | Other authorized
+
+  // schedule (Rule 10)
+  frequencyMethod        String
+  schedule               Json
+  shiftOwner             String?
+  criticality            String    @default("Routine")
+
+  // completion + escalation (Rules 12/13)
+  resultSchemaKey        String
+  exceptionSet           Json
+  escalationTrigger      String?
+  escalationPriority     String?
+  escalationRecipient    String?
+  completionControl      String    @default("Record & Complete")
+
+  // lifecycle (Rules 14/18/19)
+  effectiveDate          DateTime?
+  reviewDate             DateTime?
+  stopDate               DateTime?
+  approvedBy             String?
+  approvedAt             DateTime?
+
+  // versioning
+  supersedesVersion      Int?
+  revisionReason         String?   @db.Text
+  blockReason            String?   @db.Text
+  originalRecommendation Json?
+
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  occurrences            RoutineOccurrence[]
+
+  @@index([residentId, status])
+  @@index([residentId, version])
+  @@index([status])
+  @@index([communityId])
+}
+
+model RoutineOccurrence {
+  id                   String   @id @default(uuid())
+  occId                String   @unique // `${definitionId}@${careDateISO}@${HHMM}`
+  definitionId         String
+  definition           RoutineEventDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  definitionVersion    Int      // PINNED at materialization (Rule 15/18)
+  residentId           String   // denormalized (no FK) for My-Shift/community reads
+  communityId          String?
+
+  careDate             DateTime // Asia/Manila care day (00:00 local)
+  scheduledTime        String   // "HH:MM"
+  actualTime           DateTime?
+  assignedStaffId      String?
+
+  // controlled-vocab fields — stored SEPARATELY (Rule 12)
+  workflowState        String   @default("Upcoming")
+  careDeliveryOutcome  String?
+  results              Json?
+  exceptionReason      String?
+  clinicalFinding      Json?
+  escalationState      String   @default("Not required")
+  escalationId         String?
+
+  completionUserId     String?
+  completionAt         DateTime?
+  corrections          Json?    // append-only (Correction rule; runtime in #5)
+
+  createdAt            DateTime @default(now())
+
+  @@index([residentId, careDate])
+  @@index([definitionId])
+  @@index([careDate])
+  @@index([workflowState])
 }
