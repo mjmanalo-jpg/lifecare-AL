@@ -38,6 +38,7 @@ const CLINICAL_ENTITIES = new Set<string>([
   // /api/db (mostly app-settings) — logged semantically via /api/audit.
   "med-inventory", "pharmacy-inventory", "pharmacy-dispense",
   "shift-endorsements", "admissions", "staff-profiles", "caregiver-schedules",
+  "routine-definitions", "routine-occurrences",
 ]);
 
 // Human-readable labels for entity slugs (used everywhere; falls back to the
@@ -59,6 +60,7 @@ const ENTITY_LABELS: Record<string, string> = {
   "weight-logs": "Weight check", "med-inventory": "Medication inventory", "pharmacy-inventory": "Pharmacy inventory",
   "pharmacy-dispense": "Pharmacy dispense", "shift-endorsements": "Shift endorsement", admissions: "Admission",
   "staff-profiles": "Staff profile", "caregiver-schedules": "Caregiver schedule",
+  "routine-definitions": "Routine event", "routine-occurrences": "Routine occurrence",
 };
 function entityLabel(slug?: string): string {
   if (!slug) return "—";

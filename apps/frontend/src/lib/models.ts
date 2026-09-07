@@ -153,6 +153,12 @@ export const MODELS: Record<string, ModelDef> = {
   "mobility-records": { delegate: prisma.mobilityRecord, table: "MobilityRecord", orderBy: { time: "desc" } },
   "meal-records": { delegate: prisma.mealRecord, table: "MealRecord", orderBy: { time: "desc" } },
   "vital-signs": { delegate: prisma.vitalSigns, table: "VitalSigns", orderBy: { time: "desc" } },
+
+  // SLMS v4.2 — 24-hour routine persistence (sub-project #3). Reads + simple
+  // DRAFT field edits go through the generic gateway; state transitions (approve/
+  // revise/generate/discontinue/materialize) use the dedicated /api/routine routes.
+  "routine-definitions": { delegate: prisma.routineEventDefinition, table: "RoutineEventDefinition", orderBy: { createdAt: "desc" } },
+  "routine-occurrences": { delegate: prisma.routineOccurrence, table: "RoutineOccurrence", orderBy: { scheduledTime: "asc" } },
 };
 
 export function getModel(key: string): ModelDef | undefined {

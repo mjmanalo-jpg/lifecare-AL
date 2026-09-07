@@ -16,7 +16,8 @@ export type ClientAuditEntity =
   | "med-inventory" | "pharmacy-inventory" | "pharmacy-dispense"
   | "shift-endorsements" | "physician-communications"
   | "admissions" | "assessments"
-  | "staff-profiles" | "caregiver-schedules";
+  | "staff-profiles" | "caregiver-schedules"
+  | "routine-definitions" | "routine-occurrences";
 
 export function recordAudit(entry: {
   action: ClientAuditAction;

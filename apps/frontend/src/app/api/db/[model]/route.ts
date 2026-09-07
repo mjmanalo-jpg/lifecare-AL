@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getModel, isDbConfigured } from "@/lib/models";
 import { DEMO } from "@/lib/demoData";
 import { scopeDemoRows } from "@/lib/scope";
-import { requireTenantContext, isDeniedWhere, sanitizeTenantWrite, tenantWhere } from "@/lib/tenant";
+import { requireTenantContext, isDeniedWhere, sanitizeTenantWrite, tenantWhere, isClinicalWriteDenied } from "@/lib/tenant";
 import { assertMutationEntitled, EntitlementError } from "@/lib/entitlements";
 import { logAudit, snapshot } from "@/lib/audit";
 import { transactionDelegate, withTenantDb } from "@/lib/tenantDb";
@@ -291,6 +291,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (EXPLICIT_ADMIN_MODELS.has(model)) return NextResponse.json({ error: "Use the dedicated administration API" }, { status: 403 });
   const selfService = context.role === "FAMILY" || context.role === "RESIDENT";
   if (selfService && !SELF_WRITABLE.has(model)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Clinical routine models: writes are Nurse/CM/SuperAdmin only (reads open).
+  if (isClinicalWriteDenied(model, context)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!context.isPlatform && !context.communityId && model !== "app-settings") return NextResponse.json({ error: "Select a community" }, { status: 409 });
   // Module 01 — admitting a resident creates the master profile, so it is limited
   // to the profile-edit roles (Care Manager / Administrator).

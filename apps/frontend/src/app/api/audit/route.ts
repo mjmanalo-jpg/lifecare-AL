@@ -27,6 +27,7 @@ const ALLOWED_ENTITIES = new Set([
   "shift-endorsements", "physician-communications",
   "admissions", "assessments",
   "staff-profiles", "caregiver-schedules",
+  "routine-definitions", "routine-occurrences",
 ]);
 
 export async function POST(request: NextRequest) {

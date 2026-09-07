@@ -44,6 +44,9 @@ const RESIDENT_SCOPED = new Set([
   "sleep-logs", "mobility-logs", "care-plans", "hospital-referrals", "follow-ups",
   "care-timeline", "medication-administrations", "daily-rounds",
   "lab-results", "allergies",
+  // SLMS v4.2 routine definitions carry a resident FK — scope via the resident
+  // relation (also narrows caregivers to their active-shift residents).
+  "routine-definitions",
 ]);
 
 // The only datasets a Resident Coordinator may reach through the generic gateway
@@ -384,6 +387,14 @@ export function tenantWhere(modelKey: string, context: TenantContext): Record<st
     return { dailyRound: { resident: residentWhere } };
   }
   if (DIRECT_COMMUNITY.has(modelKey)) return { communityId: context.communityId };
+  // SLMS v4.2 routine occurrences are denormalized (residentId + communityId, no
+  // FK, no organizationId column) — scope directly by community, narrowing a
+  // caregiver to their active-shift residents like the resident-scoped models.
+  if (modelKey === "routine-occurrences") {
+    return cgScoped
+      ? { communityId: context.communityId, residentId: { in: cgIds } }
+      : { communityId: context.communityId };
+  }
   // All remaining application models receive direct organization/community
   // ownership columns in the SaaS foundation migration.
   return { communityId: context.communityId, organizationId: context.organizationId };
@@ -405,11 +416,27 @@ export function sanitizeTenantWrite(modelKey: string, body: Record<string, unkno
       data.key = key;
       data.id = `${context.organizationId ?? "_"}:${context.communityId ?? "_"}:${key}`;
     }
+  } else if (modelKey === "routine-definitions" || modelKey === "routine-occurrences") {
+    // These SLMS models have a communityId column but NO organizationId column —
+    // stamp community only (injecting organizationId would be an unknown-arg error).
+    data.communityId = context.communityId;
   } else if (!new Set(["organizations", "communities", "users"]).has(modelKey)) {
     data.organizationId = context.organizationId;
     data.communityId = context.communityId;
   }
   return data;
+}
+
+// Models whose generic-gateway WRITES (create / field-edit / delete) are limited
+// to clinical-authority roles. Reads stay governed by tenantWhere. State-changing
+// routine transitions have their own dedicated /api/routine routes; this only
+// guards the simple DRAFT field edits the board makes via /api/db.
+const CLINICAL_WRITE_ONLY = new Set(["routine-definitions", "routine-occurrences"]);
+const CLINICAL_WRITE_ROLES = new Set(["NURSE", "CARE_MANAGER", "SUPERADMIN"]);
+/** True when this model's generic-gateway write is forbidden for the context's role. */
+export function isClinicalWriteDenied(modelKey: string, context: TenantContext): boolean {
+  if (context.isPlatform) return false;
+  return CLINICAL_WRITE_ONLY.has(modelKey) && !CLINICAL_WRITE_ROLES.has(context.role);
 }
 
 export function canManageOrganization(context: TenantContext): boolean {

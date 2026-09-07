@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getModel, isDbConfigured } from "@/lib/models";
 import { DEMO } from "@/lib/demoData";
-import { requireTenantContext, isDeniedWhere, sanitizeTenantWrite, tenantWhere } from "@/lib/tenant";
+import { requireTenantContext, isDeniedWhere, sanitizeTenantWrite, tenantWhere, isClinicalWriteDenied } from "@/lib/tenant";
 import { SIGN_LOCK } from "@/lib/signingPin";
 import { assertMutationEntitled, EntitlementError } from "@/lib/entitlements";
 import { logAudit, snapshot } from "@/lib/audit";
@@ -61,6 +61,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const definition = getModel(model);
   if (!definition) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (EXPLICIT_ADMIN_MODELS.has(model)) return NextResponse.json({ error: "Use the dedicated administration API" }, { status: 403 });
+  if (isClinicalWriteDenied(model, context)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const existing = await scopedRecord(model, id, context);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -168,6 +169,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const { model, id } = await params;
   const definition = getModel(model);
   if (!definition || EXPLICIT_ADMIN_MODELS.has(model)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (isClinicalWriteDenied(model, context)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   // Module 09 RBAC: resolving an alert removes it from the queue — restricted to
   // full-control roles (Administrator/Care Manager/Nurse). The delete is audit-logged.
   if (model === "notifications" && !canAlertAction(context.role, "resolve")) {
