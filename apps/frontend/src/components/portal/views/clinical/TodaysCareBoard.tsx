@@ -142,6 +142,21 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
 
   const today = careDay();
 
+  // Occurrences are materialized ON-DEMAND (#3 §5): opening a resident's routine
+  // triggers an idempotent GET that creates the day's rows from the APPROVED
+  // definitions, then we refetch the live query so they render. Without this the
+  // board only ever shows rows a prior read already created (→ empty on first open).
+  // ponytail: focus-scoped; the My Shift aggregate materializes each resident as it's opened.
+  useEffect(() => {
+    if (!focusResidentId) return;
+    let cancelled = false;
+    fetch(`/api/routine/occurrences?residentId=${encodeURIComponent(focusResidentId)}&careDate=${today}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((res) => { if (!cancelled && res && res.count > 0) refetch(); })
+      .catch(() => { /* non-fatal — the live query still shows any existing rows */ });
+    return () => { cancelled = true; };
+  }, [focusResidentId, today, refetch]);
+
   // Live tick so the derived state (Due/Overdue) advances without a manual refresh.
   const [, setNowTick] = useState(() => Date.now());
   useEffect(() => { const t = setInterval(() => setNowTick(Date.now()), 30_000); return () => clearInterval(t); }, []);
