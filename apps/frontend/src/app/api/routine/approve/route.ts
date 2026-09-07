@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { careDay } from "@/lib/lifecare/routineCompletions";
+import { validateRoutineRelease, type ReleaseDef } from "@/lib/lifecare/occurrenceLifecycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,10 +56,45 @@ export async function POST(request: NextRequest) {
 
   const drafts = await prisma.routineEventDefinition.findMany({
     where: { residentId, communityId, status: "DRAFT" },
-    select: { id: true, blockReason: true, effectiveDate: true, name: true },
+    select: {
+      id: true, blockReason: true, effectiveDate: true, name: true,
+      resultSchemaKey: true, completionControl: true, orderRef: true,
+      memoryPathwayId: true, sourceLocBundleId: true, escalationTrigger: true,
+      escalationPriority: true, exceptionSet: true, originalRecommendation: true,
+    },
   });
   const blocked = drafts.filter((d) => d.blockReason).length;
   const approvable = drafts.filter((d) => !d.blockReason);
+
+  // Release validation (Rule 21) — the pre-publish suite over the approvable set.
+  // No occurrences exist yet at approve time, so occIds is empty; the def-level
+  // checks (required fields, vocab, order/scope, conflict, memory-vs-LOC) still
+  // run. ANY critical failure blocks publication (409) — nothing is approved.
+  const asBool = (v: unknown) => v === true || v === "true";
+  const orgRec = (d: (typeof approvable)[number]) =>
+    (d.originalRecommendation && typeof d.originalRecommendation === "object" && !Array.isArray(d.originalRecommendation)
+      ? (d.originalRecommendation as Record<string, unknown>)
+      : {});
+  const releaseDefs: ReleaseDef[] = approvable.map((d) => ({
+    resultSchemaKey: d.resultSchemaKey ?? undefined,
+    completionControl: d.completionControl ?? undefined,
+    orderRequired: asBool(orgRec(d).orderRequired),
+    orderRef: d.orderRef ?? undefined,
+    memoryPathwayId: d.memoryPathwayId ?? undefined,
+    sourceLocBundleId: d.sourceLocBundleId ?? undefined,
+    escalationTrigger: d.escalationTrigger ?? undefined,
+    escalationPriority: d.escalationPriority ?? undefined,
+    exceptionSet: Array.isArray(d.exceptionSet) ? (d.exceptionSet as string[]) : [],
+    blockReason: d.blockReason ?? null,
+  }));
+  const release = validateRoutineRelease({ occIds: [], definitions: releaseDefs });
+  if (!release.ok) {
+    logAudit({ actorId: ctx.userId, actorName: approvedBy, actorRole: ctx.role, action: "DENY", entityType: "routine-definitions", entityId: "approve", organizationId: ctx.organizationId, communityId, after: { residentId, residentName }, reason: `Release validation blocked approval: ${release.criticalFailures.join(", ")}` });
+    return NextResponse.json({ error: "Release validation failed — routine not published.", criticalFailures: release.criticalFailures }, { status: 409 });
+  }
+  // Store the test results with the released version ("store test results with released
+  // version"): stamp the release summary into each approved def's originalRecommendation.
+  const releaseCheck = { at: now.toISOString(), ok: release.ok, warnings: release.warnings, results: release.results };
 
   let approved = 0;
   for (const d of approvable) {
@@ -66,7 +102,7 @@ export async function POST(request: NextRequest) {
     try {
       await prisma.routineEventDefinition.update({
         where: { id: d.id },
-        data: { status: "APPROVED", approvedBy, approvedAt: now, effectiveDate },
+        data: { status: "APPROVED", approvedBy, approvedAt: now, effectiveDate, originalRecommendation: { ...orgRec(d), releaseCheck } as never },
       });
       approved += 1;
       logAudit({
@@ -86,5 +122,5 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ approved, blocked });
+  return NextResponse.json({ approved, blocked, releaseWarnings: release.warnings });
 }

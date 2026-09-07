@@ -23,6 +23,7 @@ import { useCareLogData } from "./CareLogsBoard";
 import { TASK_NOTES_FIELD } from "@/lib/taskNotes";
 import { CAREGIVER_SCHEDULE_KEY, parseSchedules, assigneeForResidentToday } from "@/lib/caregiverSchedule";
 import SignatureModal from "@/components/portal/SignatureModal";
+import { canCloseShift, type PendingItem } from "@/lib/lifecare/occurrenceLifecycle";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const KEY = "shift_endorsements";
@@ -104,6 +105,15 @@ const CLOSE_CLS: Record<CloseState, string> = {
   "Action Next Shift": "bg-amber-50 border-amber-200 text-amber-700",
   "Awaiting External Response": "bg-purple-50 border-purple-200 text-purple-700",
 };
+// An unresolved routine occurrence surfaced into the handover (sub-project #5).
+interface OccPending {
+  occId: string; residentId: string; residentName: string; room: string;
+  scheduledTime: string; name: string; reason: string;
+  criticality: string; escalationPriority?: string;
+}
+// How the outgoing shift dispositions an occurrence pending item at sign-off.
+type OccDisposition = "resolve" | "escalate" | "transfer";
+interface OccPendingResolution { disposition?: OccDisposition; owner?: string; dueTime?: string }
 interface EndResident { residentId: string; sections: Record<string, string>; }
 interface HTask { id: string; title: string; resident: string; room: string; priority: string; due: string }
 interface HIncident { id: string; type: string; resident: string; room: string; severity: string }
@@ -131,6 +141,10 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedde
   const escQ = useLiveQuery<Row>("escalations", { query: "take=400", tables: ["Escalation"] });
   const marQ = useLiveQuery<Row>("medication-administrations", { query: "include=medication&take=2000", tables: ["MedicationAdministration"] });
   const refQ = useLiveQuery<Row>("hospital-referrals", { query: "take=400", tables: ["HospitalReferral"] });
+  // Occurrence-driven handover (sub-project #5): the shift's unresolved routine
+  // occurrences + their definitions (for criticality / escalation priority).
+  const occQ = useLiveQuery<Row>("routine-occurrences", { query: "take=2000", tables: ["RoutineOccurrence"] });
+  const defQ = useLiveQuery<Row>("routine-definitions", { query: "take=2000", tables: ["RoutineEventDefinition"] });
   const { allEntries: careEntries } = useCareLogData(clinicianRole);
 
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
@@ -347,6 +361,44 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedde
     };
   };
 
+  // ── Occurrence-driven handover (sub-project #5) ────────────────────────────
+  // The shift's UNRESOLVED routine occurrences: Overdue, OR Not-completed with an
+  // exception, OR an open escalation (Pending acknowledgement / Acknowledged).
+  // Each carries its original due time + reason and joins its definition for the
+  // criticality / escalation priority that the sign-off gate reads. Scoped like
+  // everything else (caregivers see only their assigned residents).
+  const defById = useMemo(() => {
+    const m = new Map<string, Row>();
+    (defQ.data || []).forEach((d) => m.set(s(d.id), d));
+    return m;
+  }, [defQ.data]);
+  const occPending = useMemo<OccPending[]>(() => {
+    const OPEN_ESC = new Set(["Pending acknowledgement", "Acknowledged"]);
+    return (occQ.data || [])
+      .filter((o) => {
+        if (!inScope(s(o.residentId))) return false;
+        const overdue = s(o.workflowState) === "Overdue";
+        const notDone = s(o.careDeliveryOutcome) === "Not completed" && !!s(o.exceptionReason);
+        const escOpen = OPEN_ESC.has(s(o.escalationState));
+        return overdue || notDone || escOpen;
+      })
+      .map((o) => {
+        const def = defById.get(s(o.definitionId));
+        const rn = resName(s(o.residentId));
+        return {
+          occId: s(o.occId),
+          residentId: s(o.residentId),
+          residentName: rn.name,
+          room: rn.room,
+          scheduledTime: s(o.scheduledTime),
+          name: s(def?.name) || "Routine event",
+          reason: s(o.exceptionReason) || (s(o.workflowState) === "Overdue" ? "Overdue — not delivered" : s(o.escalationState)),
+          criticality: s(def?.criticality) || "Routine",
+          escalationPriority: s(def?.escalationPriority) || undefined,
+        };
+      });
+  }, [occQ.data, defById, scopedIds, clinicianRole]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Derived sign-off stats.
   const stats = useMemo(() => ({
     alerts: (incQ.data || []).filter((i) => !i.resolvedAt && inScope(s(i.residentId))).length,
@@ -406,7 +458,7 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedde
   // ── Structured Details view ────────────────────────────────────────────────
   if (view === "details" && active) return <DetailsView e={active} residents={scopedResidents} resName={resName} onBack={() => setView("list")} update={update} buildSections={buildSections} hasActivity={hasActivity} canEdit={active.outgoingById ? clinicianUserId === active.outgoingById : clinicianName === active.outgoingBy} />;
   // ── Carry-Over & Sign-Off view ─────────────────────────────────────────────
-  if (view === "carryover" && active) return <CarryOverView e={active} residents={scopedResidents} resName={resName} stats={stats} by={clinicianName} byId={clinicianUserId} onBack={() => setView("details")} update={update} buildHandover={buildHandover} acceptHandover={acceptHandover} buildCarryOverDraft={buildCarryOverDraft} />;
+  if (view === "carryover" && active) return <CarryOverView e={active} residents={scopedResidents} resName={resName} stats={stats} by={clinicianName} byId={clinicianUserId} onBack={() => setView("details")} update={update} buildHandover={buildHandover} acceptHandover={acceptHandover} buildCarryOverDraft={buildCarryOverDraft} occPending={occPending} />;
 
   // ── List view ──────────────────────────────────────────────────────────────
   return (
@@ -710,8 +762,8 @@ function DetailsView({ e, residents, resName, onBack, update, buildSections, has
 }
 
 // ── Carry-Over & Sign-Off view ───────────────────────────────────────────────
-function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update, buildHandover, acceptHandover, buildCarryOverDraft }: {
-  e: Endorsement; residents: Row[]; resName: (id: string) => { name: string; room: string }; stats: { alerts: number; tasks: number; adl: number; carry: number }; by: string; byId: string; onBack: () => void; update: (id: string, patch: (e: Endorsement) => Endorsement) => Promise<void>; buildHandover: () => Handover; acceptHandover: (e: Endorsement) => Promise<void>; buildCarryOverDraft: (rid: string) => CarryOverDraft;
+function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update, buildHandover, acceptHandover, buildCarryOverDraft, occPending }: {
+  e: Endorsement; residents: Row[]; resName: (id: string) => { name: string; room: string }; stats: { alerts: number; tasks: number; adl: number; carry: number }; by: string; byId: string; onBack: () => void; update: (id: string, patch: (e: Endorsement) => Endorsement) => Promise<void>; buildHandover: () => Handover; acceptHandover: (e: Endorsement) => Promise<void>; buildCarryOverDraft: (rid: string) => CarryOverDraft; occPending: OccPending[];
 }) {
   // Only the user who LOGGED the endorsement may sign it off. Everyone else can
   // only acknowledge — and only once it has been signed off.
@@ -731,6 +783,16 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
   const [seenId, setSeenId] = useState(e.id);
   if (seenId !== e.id) { setSeenId(e.id); setChecklist(e.checklist || {}); }
   const allChecked = CHECKLIST.every((c) => checklist[c.key]);
+  // Local per-occurrence disposition (resolve / escalate / transfer) + follow-up
+  // owner & due-time the outgoing shift assigns before sign-off. Not persisted onto
+  // the frozen occurrence (that stays immutable) — it drives the close-shift gate
+  // and is captured into the handover snapshot narrative.
+  const [occRes, setOccRes] = useState<Record<string, OccPendingResolution>>({});
+  const setOccField = (occId: string, patch: OccPendingResolution) => setOccRes((p) => ({ ...p, [occId]: { ...p[occId], ...patch } }));
+  // Hardened sign-off gate (sub-project #5): a shift cannot close while a Critical
+  // / P1 / P2 occurrence is still without a disposition.
+  const gate = canCloseShift(occPending.map((o) => ({ occId: o.occId, criticality: o.criticality, escalationPriority: o.escalationPriority, disposition: occRes[o.occId]?.disposition ?? null } as PendingItem)));
+  const blockerNames = (ids: string[]) => occPending.filter((o) => ids.includes(o.occId)).map((o) => `${o.residentName} · ${o.name} (${o.scheduledTime})`);
   const addItem = async (c: Omit<CarryOver, "id">) => {
     await update(e.id, (en) => ({ ...en, carryOvers: [...en.carryOvers, { ...c, id: newId() }] }));
     if (c.autoTask) createRecord("tasks", { residentId: c.residentId, title: `Carry-over: ${c.concern.slice(0, 60)}`, description: c.action || c.concern, status: "PENDING", priority: c.priority === "Urgent" ? "HIGH" : "MEDIUM", category: "Observation" }).catch(() => null);
@@ -738,7 +800,12 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
   };
   // Gate the sign-off behind the 4-digit signing PIN; the actual write happens in
   // doSignOff once the PIN is verified.
-  const requestSignOff = () => { if (!allChecked) { Swal.fire({ title: "Complete the checklist", text: "Review all four items before signing off.", icon: "warning" }); return; } setSignOpen(true); };
+  const requestSignOff = () => {
+    if (!allChecked) { Swal.fire({ title: "Complete the checklist", text: "Review all four items before signing off.", icon: "warning" }); return; }
+    // Shift cannot close with unaddressed critical items (sub-project #5).
+    if (!gate.ok) { Swal.fire({ title: "Shift cannot close with unaddressed critical items", html: `Disposition each critical / P1 / P2 item first:<br/><b>${blockerNames(gate.blockers).join("<br/>")}</b>`, icon: "error" }); return; }
+    setSignOpen(true);
+  };
   // Sign-off freezes a handover snapshot (pending tasks + open incidents) onto the endorsement.
   const doSignOff = async () => { await update(e.id, (en) => ({ ...en, status: "SIGNED_OFF", signedAt: nowTime(), outgoingBy: by, handover: buildHandover() })); setSignOpen(false); Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Signed off", showConfirmButton: false, timer: 1500 }); };
   // Acknowledge stamps acceptance AND puts the carry-overs on the incoming user's account.
@@ -791,6 +858,46 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
             </div>
           ); })}</div>}
 
+      {occPending.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 mb-6">
+          <p className="font-bold text-slate-900 flex items-center gap-2 mb-1"><Siren className="w-5 h-5 text-red-500" /> Unresolved Routine Occurrences</p>
+          <p className="text-sm text-slate-500 mb-4">Overdue, not-completed (with exception), or escalated routine events from this shift. Critical / P1 / P2 items must be dispositioned before the shift can close.</p>
+          <div className="space-y-2">
+            {occPending.map((o) => {
+              const r = occRes[o.occId] || {};
+              const critical = o.criticality === "Critical" || o.escalationPriority === "P1" || o.escalationPriority === "P2";
+              const needs = critical && !r.disposition;
+              return (
+                <div key={o.occId} className={`rounded-xl border p-4 ${needs ? "border-red-200 bg-red-50/40" : "border-slate-200 bg-white"}`}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {critical && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">{o.escalationPriority || o.criticality}</span>}
+                    <span className="font-bold text-slate-900">{o.residentName}</span>
+                    <span className="text-xs text-slate-400">Rm {o.room} · {o.name} · due {o.scheduledTime}</span>
+                  </div>
+                  <p className="text-sm text-slate-700 mt-1.5">{o.reason}</p>
+                  {canEdit && (
+                    <div className="flex flex-wrap items-center gap-2 mt-3 pt-2.5 border-t border-slate-100">
+                      <select value={r.disposition || ""} onChange={(ev) => setOccField(o.occId, { disposition: (ev.target.value || undefined) as OccDisposition | undefined })} className={`text-xs font-semibold rounded-lg border px-2 py-1 outline-none focus:ring-2 focus:ring-blue-400/40 ${r.disposition ? "border-emerald-200 text-emerald-700" : needs ? "border-red-300 text-red-600" : "border-slate-200 text-slate-500"}`}>
+                        <option value="">Disposition…</option>
+                        <option value="resolve">Resolve</option>
+                        <option value="escalate">Escalate</option>
+                        <option value="transfer">Transfer to next shift</option>
+                      </select>
+                      <select value={r.owner || ""} onChange={(ev) => setOccField(o.occId, { owner: ev.target.value || undefined })} className="text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 px-2 py-1 outline-none focus:ring-2 focus:ring-blue-400/40">
+                        <option value="">Follow-up owner…</option>
+                        {ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
+                      </select>
+                      <input type="time" value={r.dueTime || ""} onChange={(ev) => setOccField(o.occId, { dueTime: ev.target.value || undefined })} title="Follow-up due time" className="text-xs rounded-lg border border-slate-200 text-slate-600 px-2 py-1 outline-none focus:ring-2 focus:ring-blue-400/40" />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {!gate.ok && <p className="text-sm font-semibold text-red-600 mt-3">Shift cannot close with unaddressed critical items.</p>}
+        </div>
+      )}
+
       <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
         <p className="font-bold text-slate-900 flex items-center gap-2 mb-1"><ShieldCheck className="w-5 h-5 text-green-500" /> Shift Sign-Off Checklist</p>
         <p className="text-sm text-slate-500 mb-4">Before signing off, the outgoing shift must review all pending items. The incoming shift must acknowledge receipt.</p>
@@ -813,7 +920,7 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
             signed ? (
               <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700"><CheckCircle2 className="w-4 h-4" /> You signed off{acknowledged ? " · acknowledged by incoming shift" : " · awaiting incoming acknowledgement"}</span>
             ) : (
-              <button onClick={requestSignOff} disabled={!allChecked} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-40"><CheckCircle2 className="w-4 h-4" /> Sign Off (Outgoing)</button>
+              <button onClick={requestSignOff} disabled={!allChecked || !gate.ok} title={!gate.ok ? "Shift cannot close with unaddressed critical items" : undefined} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-40"><CheckCircle2 className="w-4 h-4" /> Sign Off (Outgoing)</button>
             )
           ) : acknowledged ? (
             <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700"><CheckCircle2 className="w-4 h-4" /> Acknowledged</span>

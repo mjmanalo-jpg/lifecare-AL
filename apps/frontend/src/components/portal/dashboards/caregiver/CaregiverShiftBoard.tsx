@@ -10,12 +10,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity, Utensils, GlassWater, Droplets, Footprints, Moon, Smile, AlertTriangle,
-  Calendar, Repeat, RefreshCw, ChevronRight, NotebookPen, Accessibility, Scale, Syringe,
-  ListChecks, Clock, Flag, ShieldCheck,
+  Calendar, Repeat, RefreshCw, ChevronRight, Scale, Syringe,
+  ListChecks, Clock,
 } from "lucide-react";
 import { ClinicalHeader, ClinicalModal, ClinicalPage, DataState, SearchInput } from "@/components/portal/views/clinical/clinical-ui";
 import { QuickRecordFlow } from "@/components/portal/views/clinical/CareLogsBoard";
 import TodaysCareBoard from "@/components/portal/views/clinical/TodaysCareBoard";
+import { useClinician } from "@/components/portal/views/clinical/useClinician";
+import { useLiveQuery } from "@/lib/useLiveQuery";
+import { careDay } from "@/lib/lifecare/routineCompletions";
+import { countProgress, deriveState, manilaMinutesNow } from "@/lib/lifecare/occurrenceStatus";
 import ADLMonitoringBoard from "@/components/portal/views/clinical/ADLMonitoringBoard";
 import WeightMonitoringBoard from "@/components/portal/views/clinical/WeightMonitoringBoard";
 import MARDailyBoard from "@/components/portal/views/clinical/MARDailyBoard";
@@ -79,6 +83,20 @@ type ResidentCard = {
 
 const STATUS_RANK: Record<ResidentCard["status"], number> = { overdue: 0, due: 1, uptodate: 2 };
 
+// Current shift window by Manila hour (Night 22-06 / Morning 06-14 / Afternoon 14-22).
+// Returns a predicate over a "HH:MM" scheduledTime — Night wraps midnight.
+function currentShift(nowMin: number): { label: string; inWindow: (hhmm: string) => boolean } {
+  const h = Math.floor(nowMin / 60);
+  const toMin = (t: string) => { const m = /(\d{1,2}):(\d{2})/.exec(t || ""); return m ? +m[1] * 60 + +m[2] : 0; };
+  if (h >= 6 && h < 14) return { label: "Morning", inWindow: (t) => { const s = toMin(t); return s >= 360 && s < 840; } };
+  if (h >= 14 && h < 22) return { label: "Afternoon", inWindow: (t) => { const s = toMin(t); return s >= 840 && s < 1320; } };
+  return { label: "Night", inWindow: (t) => { const s = toMin(t); return s >= 1320 || s < 360; } };
+}
+
+// The day a Night shift belongs to spills past midnight; occurrences are keyed to
+// the Manila care day, which already advances at 00:00, so today's careDay covers it.
+type ShiftOcc = { scheduledTime: string; workflowState?: string | null; careDeliveryOutcome?: string | null; escalationState?: string | null; assignedStaffId?: string | null; residentId?: string };
+
 export default function CaregiverShiftBoard() {
   const [data, setData] = useState<DashboardPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,9 +105,49 @@ export default function CaregiverShiftBoard() {
   const [filter, setFilter] = useState<"all" | "due" | "overdue" | "uptodate">("all");
   const [quickFocus, setQuickFocus] = useState<string | null>(null);
   const [routineResident, setRoutineResident] = useState<{ id: string; name: string } | null>(null);
-  const [cardAction, setCardAction] = useState<{ kind: "log" | "adl" | "weight" | "mar"; id: string; name: string } | null>(null);
+  const [routineTab, setRoutineTab] = useState<"routine" | "log" | "adl">("routine");
+  const [cardAction, setCardAction] = useState<{ kind: "weight" | "mar"; id: string; name: string } | null>(null);
   const [showToday, setShowToday] = useState(false);
   const [showHandover, setShowHandover] = useState(false);
+
+  // My-Shift occurrence metrics (SLMS v4.2 #5) — derived from the SAME
+  // RoutineOccurrence rows the Resident Daily Routine charts, scoped to THIS
+  // caregiver (assignedStaffId = my staff/user id) AND the current shift window.
+  const { userId, staffId } = useClinician("CAREGIVER");
+  const { data: occRows } = useLiveQuery<ShiftOcc & { careDate?: unknown }>(
+    "routine-occurrences", { tables: ["RoutineOccurrence"], query: "take=500" },
+  );
+  const [, setShiftTick] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setShiftTick(Date.now()), 30_000); return () => clearInterval(t); }, []);
+  const nowMin = manilaMinutesNow();
+  const today = careDay();
+  const shift = useMemo(() => currentShift(nowMin), [nowMin]);
+  const myShiftOccs = useMemo(() => {
+    const mine = new Set([userId, staffId].filter(Boolean) as string[]);
+    const dayISO = (v: unknown) => { const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(v ?? "")); return m ? m[1] : ""; };
+    return (occRows || []).filter((o) =>
+      dayISO((o as { careDate?: unknown }).careDate) === today &&
+      o.assignedStaffId != null && mine.has(String(o.assignedStaffId)) &&
+      shift.inWindow(o.scheduledTime),
+    );
+  }, [occRows, userId, staffId, today, shift]);
+  const shiftMetrics = useMemo(() => {
+    const p = countProgress(myShiftOccs, nowMin);
+    let dueNow = 0, upcoming = 0;
+    for (const o of myShiftOccs) {
+      const s = deriveState({ scheduledTime: o.scheduledTime, workflowState: o.workflowState }, nowMin);
+      if (s === "Due") dueNow += 1; else if (s === "Upcoming") upcoming += 1;
+    }
+    return { dueNow, overdue: p.overdue, upcoming, completed: p.completed, total: p.total, pendingReview: p.pendingReview };
+  }, [myShiftOccs, nowMin]);
+  // Rows that must ALWAYS surface regardless of state: critical, overdue, pending
+  // exception (a live escalation), or a handover-flagged item.
+  const alwaysShow = useMemo(() =>
+    myShiftOccs.filter((o) => {
+      const s = deriveState({ scheduledTime: o.scheduledTime, workflowState: o.workflowState }, nowMin);
+      return s === "Overdue" || (o.escalationState && o.escalationState !== "Not required");
+    }).length,
+  [myShiftOccs, nowMin]);
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -163,19 +221,18 @@ export default function CaregiverShiftBoard() {
     (filter === "all" || c.status === filter) &&
     (!q || c.name.toLowerCase().includes(q) || c.room.toLowerCase().includes(q)));
 
-  // Metric card values. Due now / Overdue are derived from the SAME per-resident
-  // buckets as the roster below (overdue = my-care-now, due next = my-care-next),
-  // so the tiles can never disagree with each resident's "N overdue · N due next"
-  // badges — previously "Due now" read the my-care-now bucket and duplicated Overdue.
-  const completion = data?.metrics.find((m) => m.key === "care_delivery_on_time");
-  const overdueCount = cards.reduce((sum, c) => sum + c.overdue, 0);
-  const dueNowCount = cards.reduce((sum, c) => sum + c.dueNext, 0);
-  const dueNowResidents = cards.filter((c) => c.dueNext > 0).length;
-  const openConcerns = data?.summary.openEscalations ?? 0;
-
+  // The at-a-glance shift metrics are now derived from THIS caregiver's
+  // RoutineOccurrence rows (shiftMetrics above) — the same rows the Resident Daily
+  // Routine charts — so the tiles and the routine board can never disagree. The
+  // per-resident card badges below keep using the dashboard buckets (c.overdue /
+  // c.dueNext) for who-needs-you routing.
   const shiftLine = data
     ? `${data.shift.label} · ${data.shift.range} · ${data.summary.activeResidents} assigned resident${data.summary.activeResidents === 1 ? "" : "s"}`
     : "Loading shift…";
+
+  // Open the resident's routine hub on the Routine tab (Daily Log / ADL live as
+  // sibling tabs inside the same modal — no separate modal opens from the card).
+  const openRoutine = (c: ResidentCard) => { setRoutineTab("routine"); setRoutineResident({ id: c.id, name: c.name }); };
 
   return (
     <ClinicalPage className="space-y-4">
@@ -204,44 +261,44 @@ export default function CaregiverShiftBoard() {
                 payload. Due now / Overdue are derived from the same per-resident
                 buckets as the roster below so the tiles always match the rows. */}
             <section className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-[var(--clinical-line)] xl:grid-cols-4" style={{ borderColor: "var(--clinical-line)" }}>
-              {/* Shift task completion */}
-              <div className="bg-[var(--clinical-surface)] p-3">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10 text-[var(--clinical-panel)]"><ListChecks className="h-4 w-4" /></span>
-                  <p className="text-2xl font-bold leading-none tabular-nums text-[var(--clinical-ink)]">{completion ? completion.numerator : "—"}{completion ? <span className="text-sm font-semibold text-[var(--clinical-muted)]"> / {completion.denominator}</span> : null}</p>
-                </div>
-                <p className="mt-1.5 text-[12px] font-semibold text-[var(--clinical-ink)]">Tasks done this shift</p>
-                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--clinical-surface-2)]"><div className="h-full rounded-full bg-[var(--clinical-panel)] transition-[width] duration-500" style={{ width: `${completion && completion.denominator ? Math.round((completion.numerator / completion.denominator) * 100) : 0}%` }} /></div>
-              </div>
-
-              {/* Due now — items coming due this shift (not yet overdue) */}
+              {/* Due now — my occurrences derived-Due this shift */}
               <div className="bg-[var(--clinical-surface)] p-3">
                 <div className="flex items-center gap-2">
                   <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-[var(--clinical-amber)]"><Clock className="h-4 w-4" /></span>
-                  <p className="text-2xl font-bold leading-none tabular-nums text-[var(--clinical-ink)]">{dueNowCount}</p>
+                  <p className="text-2xl font-bold leading-none tabular-nums text-[var(--clinical-ink)]">{shiftMetrics.dueNow}</p>
                 </div>
                 <p className="mt-1.5 text-[12px] font-semibold text-[var(--clinical-ink)]">Due now</p>
-                <p className="mt-0.5 text-[10px] text-[var(--clinical-muted)]">Across {dueNowResidents} resident{dueNowResidents === 1 ? "" : "s"}</p>
+                <p className="mt-0.5 text-[10px] text-[var(--clinical-muted)]">{shift.label} shift{alwaysShow ? ` · ${alwaysShow} need attention` : ""}</p>
               </div>
 
               {/* Overdue — tile flushes red when there is overdue work */}
-              <div className={`p-3 ${overdueCount ? "bg-red-500/[0.06]" : "bg-[var(--clinical-surface)]"}`}>
+              <div className={`p-3 ${shiftMetrics.overdue ? "bg-red-500/[0.06]" : "bg-[var(--clinical-surface)]"}`}>
                 <div className="flex items-center gap-2">
-                  <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${overdueCount ? "bg-red-500/15 text-[var(--clinical-danger,#dc2626)]" : "bg-[var(--clinical-surface-2)] text-[var(--clinical-muted)]"}`}><AlertTriangle className="h-4 w-4" /></span>
-                  <p className={`text-2xl font-bold leading-none tabular-nums ${overdueCount ? "text-[var(--clinical-danger,#dc2626)]" : "text-[var(--clinical-ink)]"}`}>{overdueCount}</p>
+                  <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${shiftMetrics.overdue ? "bg-red-500/15 text-[var(--clinical-danger,#dc2626)]" : "bg-[var(--clinical-surface-2)] text-[var(--clinical-muted)]"}`}><AlertTriangle className="h-4 w-4" /></span>
+                  <p className={`text-2xl font-bold leading-none tabular-nums ${shiftMetrics.overdue ? "text-[var(--clinical-danger,#dc2626)]" : "text-[var(--clinical-ink)]"}`}>{shiftMetrics.overdue}</p>
                 </div>
                 <p className="mt-1.5 text-[12px] font-semibold text-[var(--clinical-ink)]">Overdue</p>
-                <p className={`mt-0.5 text-[10px] font-medium ${overdueCount ? "text-[var(--clinical-danger,#dc2626)]" : "text-[var(--clinical-muted)]"}`}>{overdueCount ? "Needs action now" : "All caught up"}</p>
+                <p className={`mt-0.5 text-[10px] font-medium ${shiftMetrics.overdue ? "text-[var(--clinical-danger,#dc2626)]" : "text-[var(--clinical-muted)]"}`}>{shiftMetrics.overdue ? "Needs action now" : "All caught up"}</p>
               </div>
 
-              {/* Open concerns */}
+              {/* Upcoming — my occurrences not yet due this shift */}
               <div className="bg-[var(--clinical-surface)] p-3">
                 <div className="flex items-center gap-2">
-                  <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${openConcerns ? "bg-amber-500/10 text-[var(--clinical-amber)]" : "bg-emerald-500/10 text-emerald-500"}`}>{openConcerns ? <Flag className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}</span>
-                  <p className={`text-2xl font-bold leading-none tabular-nums ${openConcerns ? "text-[var(--clinical-amber)]" : "text-[var(--clinical-ink)]"}`}>{openConcerns}</p>
+                  <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10 text-[var(--clinical-panel)]"><Clock className="h-4 w-4" /></span>
+                  <p className="text-2xl font-bold leading-none tabular-nums text-[var(--clinical-ink)]">{shiftMetrics.upcoming}</p>
                 </div>
-                <p className="mt-1.5 text-[12px] font-semibold text-[var(--clinical-ink)]">Open concerns</p>
-                <p className={`mt-0.5 text-[10px] ${openConcerns ? "text-[var(--clinical-amber)]" : "text-emerald-500"}`}>{openConcerns ? "Nurse notified" : "None — all clear"}</p>
+                <p className="mt-1.5 text-[12px] font-semibold text-[var(--clinical-ink)]">Upcoming</p>
+                <p className="mt-0.5 text-[10px] text-[var(--clinical-muted)]">Later this shift</p>
+              </div>
+
+              {/* Completed — my occurrences charted complete this shift */}
+              <div className="bg-[var(--clinical-surface)] p-3">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500"><ListChecks className="h-4 w-4" /></span>
+                  <p className="text-2xl font-bold leading-none tabular-nums text-[var(--clinical-ink)]">{shiftMetrics.completed}<span className="text-sm font-semibold text-[var(--clinical-muted)]"> / {shiftMetrics.total}</span></p>
+                </div>
+                <p className="mt-1.5 text-[12px] font-semibold text-[var(--clinical-ink)]">Completed</p>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--clinical-surface-2)]"><div className="h-full rounded-full bg-emerald-500 transition-[width] duration-500" style={{ width: `${shiftMetrics.total ? Math.round((shiftMetrics.completed / shiftMetrics.total) * 100) : 0}%` }} /></div>
               </div>
             </section>
 
@@ -326,13 +383,13 @@ export default function CaregiverShiftBoard() {
                     {/* Overdue / due-next are clickable → open this resident's routine. */}
                     <div className="mt-3 flex flex-wrap gap-2">
                       {c.overdue > 0 && (
-                        <button type="button" onClick={() => setRoutineResident({ id: c.id, name: c.name })}
+                        <button type="button" onClick={() => openRoutine(c)}
                           className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300">
                           {c.overdue} overdue
                         </button>
                       )}
                       {c.dueNext > 0 && (
-                        <button type="button" onClick={() => setRoutineResident({ id: c.id, name: c.name })}
+                        <button type="button" onClick={() => openRoutine(c)}
                           className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-300">
                           {c.dueNext} due next
                         </button>
@@ -341,13 +398,10 @@ export default function CaregiverShiftBoard() {
                         <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">Up to date</span>
                       )}
                     </div>
-                    {/* Per-resident chart shortcuts — open in-place (modal), scoped
-                        to this resident. Replaces the Daily Log / ADL / Weight / MAR
-                        sidebar items: one tap, no page navigation. */}
-                    <div className="mt-3 grid grid-cols-4 gap-2">
+                    {/* Weight & MAR stay as direct card shortcuts. Daily Log + ADL
+                        now live as tabs INSIDE the Open Routine hub below. */}
+                    <div className="mt-3 grid grid-cols-2 gap-2">
                       {([
-                        ["log", "Daily Log", NotebookPen],
-                        ["adl", "ADL", Accessibility],
                         ["weight", "Weight", Scale],
                         ["mar", "MAR", Syringe],
                       ] as const).map(([kind, label, Icon]) => (
@@ -358,7 +412,7 @@ export default function CaregiverShiftBoard() {
                         </button>
                       ))}
                     </div>
-                    <button type="button" onClick={() => setRoutineResident({ id: c.id, name: c.name })}
+                    <button type="button" onClick={() => openRoutine(c)}
                       className="mt-2 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--clinical-panel)] px-4 text-sm font-semibold text-white transition hover:opacity-90">
                       Open routine <ChevronRight className="h-4 w-4" />
                     </button>
@@ -372,8 +426,18 @@ export default function CaregiverShiftBoard() {
 
       {quickFocus && <QuickRecordFlow focus={quickFocus} onClose={() => setQuickFocus(null)} />}
       {routineResident && (
-        <ClinicalModal open onClose={() => setRoutineResident(null)} title={`Routine — ${routineResident.name}`} description="Today's care checklist for this resident." size="xl">
-          <TodaysCareBoard role="CAREGIVER" focusResidentId={routineResident.id} embedded />
+        <ClinicalModal open onClose={() => setRoutineResident(null)} title={`Routine — ${routineResident.name}`} description="Checklist, daily log and ADL for this resident." size="xl">
+          <div role="tablist" aria-label="Routine sections" className="mb-4 flex gap-1 rounded-xl bg-[var(--clinical-surface-2)] p-1">
+            {([["routine", "Routine"], ["log", "Daily Log"], ["adl", "ADL"]] as const).map(([value, label]) => (
+              <button key={value} role="tab" aria-selected={routineTab === value} onClick={() => setRoutineTab(value)}
+                className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition ${routineTab === value ? "bg-[var(--clinical-surface)] text-[var(--clinical-panel)] shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {routineTab === "routine" && <TodaysCareBoard role="CAREGIVER" focusResidentId={routineResident.id} embedded />}
+          {routineTab === "log" && <QuickRecordFlow residentId={routineResident.id} embedded onClose={() => {}} />}
+          {routineTab === "adl" && <ADLMonitoringBoard clinicianRole="CAREGIVER" focusResidentId={routineResident.id} embedded />}
         </ClinicalModal>
       )}
 
@@ -388,14 +452,10 @@ export default function CaregiverShiftBoard() {
         </ClinicalModal>
       )}
 
-      {/* Per-resident chart shortcuts, opened in-place from the card. */}
-      {cardAction?.kind === "log" && (
-        <QuickRecordFlow residentId={cardAction.id} onClose={() => setCardAction(null)} />
-      )}
-      {cardAction && cardAction.kind !== "log" && (
+      {/* Weight / MAR shortcuts, opened in-place from the card. */}
+      {cardAction && (
         <ClinicalModal open onClose={() => setCardAction(null)} size="xl"
-          title={`${cardAction.kind === "adl" ? "Daily Living (ADL)" : cardAction.kind === "weight" ? "Weight Tracking" : "MAR"} — ${cardAction.name}`}>
-          {cardAction.kind === "adl" && <ADLMonitoringBoard clinicianRole="CAREGIVER" focusResidentId={cardAction.id} embedded />}
+          title={`${cardAction.kind === "weight" ? "Weight Tracking" : "MAR"} — ${cardAction.name}`}>
           {cardAction.kind === "weight" && <WeightMonitoringBoard clinicianRole="CAREGIVER" focusResidentId={cardAction.id} embedded />}
           {cardAction.kind === "mar" && <MARDailyBoard clinicianRole="CAREGIVER" focusResidentId={cardAction.id} embedded />}
         </ClinicalModal>

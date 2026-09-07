@@ -84,11 +84,13 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 4) Return the day's occurrences.
+    // 4) Return the day's occurrences WITH their pinned definition (#4 caregiver
+    //    card needs name/instructions/assistance/role/schema/criticality on-row).
     const careDate = new Date(`${careDateISO}T00:00:00+08:00`);
     const data = await prisma.routineOccurrence.findMany({
       where: { residentId, communityId, careDate },
       orderBy: { scheduledTime: "asc" },
+      include: { definition: true },
     });
     return NextResponse.json({ data, count: data.length });
   } catch (err) {
