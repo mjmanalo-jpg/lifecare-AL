@@ -231,7 +231,18 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
     return { memory, condition };
   }, [selectedRows]);
 
-  const progress = useMemo(() => countProgress(selectedRows, nowMin), [selectedRows, nowMin]);
+  // A caregiver on shift sees ONLY their current shift's tasks (Night/Morning/
+  // Afternoon by Manila clock); nurses / CM see the full 24-hour routine. The
+  // header counts + shift groups both derive from this so they stay consistent.
+  const currentShiftKey: ShiftKey = (() => {
+    const h = Math.floor(nowMin / 60);
+    return h >= 6 && h < 14 ? "Morning" : h >= 14 && h < 22 ? "Afternoon" : "Night";
+  })();
+  const viewRows = useMemo(
+    () => (isCaregiverView ? selectedRows.filter((r) => shiftOf(r.scheduledTime) === currentShiftKey) : selectedRows),
+    [selectedRows, isCaregiverView, currentShiftKey],
+  );
+  const progress = useMemo(() => countProgress(viewRows, nowMin), [viewRows, nowMin]);
 
   // ---- Optimistic close state ------------------------------------------------
   // occId → optimistic patch (so a tapped row shows Closed instantly). Server rows
@@ -326,16 +337,18 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
   // ---- Render ----------------------------------------------------------------
   const grouped = useMemo(() => {
     const g: Record<ShiftKey, OccurrenceRow[]> = { Night: [], Morning: [], Afternoon: [] };
-    for (const r of selectedRows) g[shiftOf(r.scheduledTime)].push(applyOptimistic(r));
+    for (const r of viewRows) g[shiftOf(r.scheduledTime)].push(applyOptimistic(r));
     return g;
-  }, [selectedRows, optimistic]);
+  }, [viewRows, optimistic]);
 
   const body = (
     <>
       {!embedded && (
         <ClinicalHeader
           title="Resident Daily Routine"
-          subtitle="Every scheduled care occurrence for today, one atomic row per event, grouped by shift. Chart each occurrence on its own: one tap to complete, record a result, open the MAR, or log an exception."
+          subtitle={isCaregiverView
+            ? `Your ${currentShiftKey} shift tasks for this resident — one atomic row per event. Chart each on its own: one tap to complete, record a result, open the MAR, or log an exception.`
+            : "Every scheduled care occurrence for today, one atomic row per event, grouped by shift. Chart each occurrence on its own: one tap to complete, record a result, open the MAR, or log an exception."}
           right={
             <ClinicalButton variant="secondary" size="sm" onClick={() => refetch()} aria-label="Refresh">
               <RefreshCw className="h-4 w-4" /> Refresh
