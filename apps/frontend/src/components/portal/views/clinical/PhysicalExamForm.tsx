@@ -11,14 +11,14 @@
  * write the migration-free `physical_exams` app-setting.
  */
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode, type MouseEvent as ReactMouseEvent } from "react";
 import { Printer, Loader2, Save, Plus, Lock, Send } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
 import { lifecareLetterhead, LIFECARE_BRAND_CSS } from "@/lib/lifecare/brand";
 import {
   PHYSICAL_EXAMS_KEY, parsePhysicalExams, examsForResident, latestExamFor, emptyExam, hasAnyMark,
-  INJURY_TYPES, type PhysicalExam, type InjuryType,
+  INJURY_TYPES, type PhysicalExam, type InjuryType, type BodyMark,
 } from "@/lib/physicalExam";
 
 const esc = (v: unknown) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
@@ -33,6 +33,8 @@ function printExam(exam: PhysicalExam, residentName: string, room?: string) {
   const injuries = exam.injuries || {};
   const rows = (from: number, to: number) => INJURY_TYPES.slice(from, to).map((t, i) =>
     `<tr><td class="ln">${esc(injuries[t] || "")}</td><td class="n">${from + i + 1}.</td><td class="t">${esc(t)}</td></tr>`).join("");
+  const marks = (exam.bodyMarks || []).map((m) =>
+    `<span class="mk" style="left:${m.x}%;top:${m.y}%">${m.n}</span>`).join("");
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Clinical Assessment — ${esc(residentName)}</title>
 <style>
   *{box-sizing:border-box}
@@ -46,7 +48,8 @@ function printExam(exam: PhysicalExam, residentName: string, room?: string) {
   table.inj td.ln{width:120px;border-bottom:1px solid #333;text-align:center;font-weight:700}
   table.inj td.n{width:22px;text-align:right;color:#333}table.inj td.t{white-space:nowrap}
   .cols{display:flex;gap:40px}.cols>div{flex:1}
-  .bodies{margin-top:22px}.bodies img{max-width:100%;height:auto;max-height:300px}
+  .bodies{margin-top:22px}.bodies .wrap{position:relative;display:inline-block}.bodies img{max-width:100%;height:auto;max-height:300px;display:block}
+  .mk{position:absolute;transform:translate(-50%,-50%);width:18px;height:18px;border-radius:50%;background:#1d4ed8;color:#fff;font-size:11px;font-weight:800;line-height:18px;text-align:center;border:1.5px solid #fff;box-shadow:0 0 0 1px #1d4ed8}
   .notes{margin-top:16px}.notes .l{font-weight:700}
   .sign{margin-top:28px;display:flex;justify-content:space-between;gap:24px}.sign div{flex:1}.sign .l{font-size:11px;color:#495057}.sign .v{border-bottom:1px solid #495057;min-height:22px;font-weight:600}
   @page{margin:0}@media print{body{padding:22px 30px}}
@@ -58,11 +61,57 @@ function printExam(exam: PhysicalExam, residentName: string, room?: string) {
   <div class="id"><b>Room No.:</b> ${esc(room || "")}</div>
   <div class="section">TYPE OF INJURY</div>
   <div class="cols"><div><table class="inj">${rows(0, 5)}</table></div><div><table class="inj">${rows(5, 11)}</table></div></div>
-  <div class="bodies"><img src="${bodyImgUrl()}" alt="Body diagram — front, back, side"></div>
+  <div class="bodies"><div class="wrap"><img src="${bodyImgUrl()}" alt="Body diagram — front, back, side">${marks}</div></div>
   ${exam.bodyNotes ? `<div class="notes"><span class="l">Notes:</span> ${esc(exam.bodyNotes).replace(/\n/g, "<br>")}</div>` : ""}
   <div class="sign"><div><div class="l">Examined By:</div><div class="v">${esc(exam.examinedBy || "")}</div></div><div><div class="l">Reviewed By:</div><div class="v"></div></div></div>
 </body></html>`);
   w.document.close();
+}
+
+// ── Clickable body diagram: drop numbered pins where an injury is ───────────
+function BodyDiagram({ marks, editable, onChange }: {
+  marks: BodyMark[]; editable: boolean; onChange?: (next: BodyMark[]) => void;
+}) {
+  const [pen, setPen] = useState(1); // the injury number the next click drops
+
+  const drop = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (!editable) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * 100;
+    const y = ((e.clientY - r.top) / r.height) * 100;
+    const id = globalThis.crypto?.randomUUID?.() ?? `mk-${Date.now()}-${marks.length}`;
+    onChange?.([...marks, { id, n: pen, x, y }]);
+  };
+
+  return (
+    <div>
+      {editable && (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11px] font-semibold text-gray-500">Marking pen:</span>
+          {INJURY_TYPES.map((t, i) => (
+            <button key={t} type="button" onClick={() => setPen(i + 1)} title={t}
+              style={{ width: 28, height: 28, minWidth: 0, minHeight: 0, padding: 0, borderRadius: "50%" }}
+              className={`inline-flex items-center justify-center text-xs font-bold tabular-nums transition ${pen === i + 1 ? "bg-blue-600 text-white ring-2 ring-blue-300" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+              {i + 1}
+            </button>
+          ))}
+          <span className="ml-1 text-[11px] text-gray-400">Click the body to place <b className="text-gray-600">{pen}. {INJURY_TYPES[pen - 1]}</b> · click a pin to remove</span>
+        </div>
+      )}
+      <div className="relative inline-block" onClick={drop} style={{ cursor: editable ? "crosshair" : "default" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={BODY_IMG} alt="Body diagram — front, back, side" className="block max-w-full" style={{ maxHeight: 300 }} />
+        {marks.map((m) => (
+          <button key={m.id} type="button" title={`${m.n}. ${INJURY_TYPES[m.n - 1] ?? ""}`}
+            onClick={(e) => { e.stopPropagation(); if (editable) onChange?.(marks.filter((x) => x.id !== m.id)); }}
+            style={{ left: `${m.x}%`, top: `${m.y}%`, width: 20, height: 20, minWidth: 0, minHeight: 0, padding: 0, borderRadius: "50%" }}
+            className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center border-[1.5px] border-white bg-blue-700 text-[11px] font-extrabold leading-none text-white shadow ring-1 ring-blue-700 tabular-nums hover:bg-red-600 hover:ring-red-600">
+            {m.n}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ── Presentation of ONE exam (editable or read-only) ────────────────────────
@@ -106,8 +155,8 @@ export function PhysicalExamCard({ exam, residentName, room, editable, onChange,
       </div>
 
       <div className="mt-5">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={BODY_IMG} alt="Body diagram — front, back, side" className="max-w-full" style={{ maxHeight: 300 }} />
+        <BodyDiagram marks={exam.bodyMarks || []} editable={editable}
+          onChange={(next) => onChange?.({ ...exam, bodyMarks: next })} />
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
