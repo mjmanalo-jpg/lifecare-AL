@@ -16,7 +16,6 @@ import {
 import { ClinicalHeader, ClinicalModal, ClinicalPage, DataState, SearchInput } from "@/components/portal/views/clinical/clinical-ui";
 import { QuickRecordFlow } from "@/components/portal/views/clinical/CareLogsBoard";
 import TodaysCareBoard from "@/components/portal/views/clinical/TodaysCareBoard";
-import { useClinician } from "@/components/portal/views/clinical/useClinician";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { careDay } from "@/lib/lifecare/routineCompletions";
 import { countProgress, deriveState, manilaMinutesNow } from "@/lib/lifecare/occurrenceStatus";
@@ -110,11 +109,11 @@ export default function CaregiverShiftBoard() {
   const [showToday, setShowToday] = useState(false);
   const [showHandover, setShowHandover] = useState(false);
 
-  // My-Shift occurrence metrics (SLMS v4.2 #5) — derived from the SAME
+  // My-Shift occurrence metrics (SLMS v4.2 #4/#5) — derived from the SAME
   // RoutineOccurrence rows the Resident Daily Routine charts, scoped to THIS
-  // caregiver (assignedStaffId = my staff/user id) AND the current shift window.
-  const { userId, staffId } = useClinician("CAREGIVER");
-  const { data: occRows } = useLiveQuery<ShiftOcc & { careDate?: unknown }>(
+  // caregiver's ASSIGNED RESIDENTS (occurrences are resident-owned; the generic
+  // read is already community/resident-scoped) AND the current shift window.
+  const { data: occRows, refetch: refetchOccs } = useLiveQuery<ShiftOcc & { careDate?: unknown }>(
     "routine-occurrences", { tables: ["RoutineOccurrence"], query: "take=500" },
   );
   const [, setShiftTick] = useState(() => Date.now());
@@ -122,15 +121,39 @@ export default function CaregiverShiftBoard() {
   const nowMin = manilaMinutesNow();
   const today = careDay();
   const shift = useMemo(() => currentShift(nowMin), [nowMin]);
+  // The caregiver's assigned residents for this shift (the dashboard roster).
+  const myResidentIds = useMemo(
+    () => new Set((data ? sectionOf(data, "my-residents") : []).map((r) => r.residentId || r.id).filter(Boolean)),
+    [data],
+  );
+  const myResidentKey = useMemo(() => [...myResidentIds].sort().join(","), [myResidentIds]);
+  // Occurrences are materialized on-demand (#3 §5): ensure each assigned resident's
+  // care day exists so My Shift shows counts on load, then refetch.
+  useEffect(() => {
+    const ids = myResidentKey.split(",").filter(Boolean);
+    if (!ids.length) return;
+    let cancelled = false;
+    (async () => {
+      let created = false;
+      for (const rid of ids) {
+        try {
+          const r = await fetch(`/api/routine/occurrences?residentId=${encodeURIComponent(rid)}&careDate=${today}`);
+          const j = r.ok ? await r.json() : null;
+          if (j && j.count > 0) created = true;
+        } catch { /* non-fatal */ }
+      }
+      if (!cancelled && created) refetchOccs();
+    })();
+    return () => { cancelled = true; };
+  }, [myResidentKey, today, refetchOccs]);
   const myShiftOccs = useMemo(() => {
-    const mine = new Set([userId, staffId].filter(Boolean) as string[]);
     const dayISO = (v: unknown) => { const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(v ?? "")); return m ? m[1] : ""; };
     return (occRows || []).filter((o) =>
       dayISO((o as { careDate?: unknown }).careDate) === today &&
-      o.assignedStaffId != null && mine.has(String(o.assignedStaffId)) &&
+      o.residentId != null && myResidentIds.has(String(o.residentId)) &&
       shift.inWindow(o.scheduledTime),
     );
-  }, [occRows, userId, staffId, today, shift]);
+  }, [occRows, myResidentIds, today, shift]);
   const shiftMetrics = useMemo(() => {
     const p = countProgress(myShiftOccs, nowMin);
     let dueNow = 0, upcoming = 0;
