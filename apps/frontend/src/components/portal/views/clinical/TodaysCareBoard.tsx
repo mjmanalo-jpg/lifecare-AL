@@ -24,6 +24,7 @@ import { pushGlobalToast } from "@/components/ui/global-toast";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 
 import { careDay } from "@/lib/lifecare/routineCompletions";
+import { parseSchedules, CAREGIVER_SCHEDULE_KEY, type ShiftKey as RosterShift } from "@/lib/caregiverSchedule";
 import { to12h } from "@/lib/lifecare/careTask";
 import { ASSISTANCE_DISPLAY, type Assistance } from "@/lib/lifecare/assistance";
 import {
@@ -77,6 +78,10 @@ function shiftOf(hhmm: string): ShiftKey {
   return "Night";
 }
 
+/** Roster shift (AM/PM/NOC) → routine shift group. AM covers the Morning window,
+ *  PM the Afternoon window, NOC the Night window (see SHIFTS in caregiverSchedule). */
+const ROSTER_TO_ROUTINE: Record<RosterShift, ShiftKey> = { AM: "Morning", PM: "Afternoon", NOC: "Night" };
+
 /** Care date (YYYY-MM-DD, Asia/Manila) from a RoutineOccurrence.careDate (stored as
  * the care day's Manila midnight, i.e. an instant at +08:00). Must resolve in Manila
  * — a raw UTC prefix would read the previous day and hide every occurrence. */
@@ -94,11 +99,13 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
   // ---- Identity / role -------------------------------------------------------
   const [me, setMe] = useState("");
   const [sessionRole, setSessionRole] = useState<string | null>(null);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
   useEffect(() => {
     fetch("/api/auth/session").then((r) => r.json()).then((d) => {
       if (!d?.authenticated) return;
       setMe(d.session?.name ?? "");
       setSessionRole(d.session?.role ?? null);
+      setSessionUserId(d.session?.userId ?? null);
     }).catch(() => { /* non-fatal */ });
   }, []);
   const effectiveRole = (sessionRole ?? role ?? "").toUpperCase();
@@ -211,16 +218,40 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
     return { memory, condition };
   }, [selectedRows]);
 
-  // A caregiver on shift sees ONLY their current shift's tasks (Night/Morning/
-  // Afternoon by Manila clock); nurses / CM see the full 24-hour routine. The
-  // header counts + shift groups both derive from this so they stay consistent.
-  const currentShiftKey: ShiftKey = (() => {
+  // A caregiver sees ONLY the tasks for the shift(s) they are ROSTERED to for the
+  // selected resident today (caregiver_schedules) — NOT the wall-clock shift.
+  // Assigned AM only → only Morning tasks; not rostered to this resident → nothing;
+  // rostered a new shift → those tasks appear. Nurses / CM see the full 24h routine.
+  const schedules = useMemo(
+    () => parseSchedules(settingRows.find((r) => (r.key || r.id) === CAREGIVER_SCHEDULE_KEY)?.value),
+    [settingRows],
+  );
+  // null = unrestricted (nurse/CM); a Set = the caregiver's rostered routine shifts
+  // for the selected resident today (empty Set = not rostered → no tasks).
+  const rosterShifts = useMemo<Set<ShiftKey> | null>(() => {
+    if (!isCaregiverView) return null;
+    const set = new Set<ShiftKey>();
+    if (!sessionUserId || !selectedId) return set;
+    for (const s of schedules) {
+      if (s.caregiverUserId === sessionUserId && s.date === today && s.residentIds.includes(selectedId)) {
+        set.add(ROSTER_TO_ROUTINE[s.shift]);
+      }
+    }
+    return set;
+  }, [isCaregiverView, sessionUserId, selectedId, schedules, today]);
+
+  // The shift live RIGHT NOW by Manila clock (Morning 06–14, Afternoon 14–22, else Night).
+  const currentShift: ShiftKey = (() => {
     const h = Math.floor(nowMin / 60);
     return h >= 6 && h < 14 ? "Morning" : h >= 14 && h < 22 ? "Afternoon" : "Night";
   })();
+  // A caregiver sees a shift's tasks only while it is the CURRENT shift AND they are
+  // rostered to it for this resident. So a past shift drops off the moment it ends
+  // (AM tasks gone after 14:00) and a shift they aren't rostered to never appears.
+  const activeShift: ShiftKey | null = rosterShifts && rosterShifts.has(currentShift) ? currentShift : null;
   const viewRows = useMemo(
-    () => (isCaregiverView ? selectedRows.filter((r) => shiftOf(r.scheduledTime) === currentShiftKey) : selectedRows),
-    [selectedRows, isCaregiverView, currentShiftKey],
+    () => (rosterShifts ? (activeShift ? selectedRows.filter((r) => shiftOf(r.scheduledTime) === activeShift) : []) : selectedRows),
+    [selectedRows, rosterShifts, activeShift],
   );
 
   // ---- Optimistic close state ------------------------------------------------
@@ -315,7 +346,11 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
         <ClinicalHeader
           title="Resident Daily Routine"
           subtitle={isCaregiverView
-            ? `Your ${currentShiftKey} shift tasks for this resident — one atomic row per event. Chart each on its own: one tap to complete, record a result, open the MAR, or log an exception.`
+            ? (activeShift
+              ? `Your ${activeShift} shift tasks for this resident — one atomic row per event. Chart each on its own: one tap to complete, record a result, open the MAR, or log an exception.`
+              : (rosterShifts && rosterShifts.size
+                ? "Your rostered shift for this resident isn’t active right now. Tasks show during your scheduled shift and close when it ends."
+                : "You are not rostered to this resident today. Tasks appear once the nursing team assigns you a shift for them."))
             : "Every scheduled care occurrence for today, one atomic row per event, grouped by shift. Chart each occurrence on its own: one tap to complete, record a result, open the MAR, or log an exception."}
           right={
             <ClinicalButton variant="secondary" size="sm" onClick={() => refetch()} aria-label="Refresh">
@@ -397,6 +432,20 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
                       {badges.memory && <StatusPill status="WATCH">Memory Care</StatusPill>}
                     </div>
                   </div>
+                </ClinicalCard>
+              )}
+
+              {/* Caregiver rostered to no shift for this resident (or no tasks left
+                  in their rostered shift) — say so instead of a silent blank. */}
+              {isCaregiverView && viewRows.length === 0 && (
+                <ClinicalCard className="p-8 text-center">
+                  <p className="text-sm text-[var(--clinical-muted)]">
+                    {rosterShifts && rosterShifts.size === 0
+                      ? "You're not rostered to this resident today. Tasks appear when the nursing team assigns you a shift for them."
+                      : activeShift
+                        ? "No tasks in your current shift for this resident."
+                        : "Your rostered shift for this resident isn’t active right now. Tasks show during your scheduled shift, then close when it ends."}
+                  </p>
                 </ClinicalCard>
               )}
 

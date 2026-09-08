@@ -30,6 +30,11 @@ export const SHIFTS: ReadonlyArray<{
 
 export const shiftMeta = (shift: ShiftKey) => SHIFTS.find((s) => s.key === shift) ?? SHIFTS[0];
 
+/** Grace minutes the shift stays live PAST its end so a caregiver can finish late
+ *  tasks and hand over. e.g. 60 → an AM (6–14) caregiver keeps their residents
+ *  until 15:00. Extends only the end; the start is unchanged. */
+export const SHIFT_GRACE_MINUTES = 60;
+
 export interface CaregiverSchedule {
   id: string;
   date: string;            // YYYY-MM-DD (local calendar date the shift starts)
@@ -85,29 +90,63 @@ export function shiftWindow(date: string, shift: ShiftKey): { start: Date; end: 
 }
 
 /**
- * True when the schedule is for the same local calendar day as `at`.
+ * True when `at` falls inside the schedule's SHIFT WINDOW (facility-local).
  *
- * Access is a WHOLE-DAY model: a caregiver can reach their assigned residents
- * anytime on a day they are scheduled (regardless of the shift's exact hours);
- * with no schedule dated today, they see nothing. The AM/PM/NOC shift is kept
- * for rostering/coverage, not for gating access.
+ * Access is shift-scoped: a caregiver reaches their assigned residents only
+ * while the rostered shift is live. The moment the shift ends the residents drop
+ * off (an AM caregiver loses them at 14:00) and reappear only when the nurse /
+ * care manager rosters them a shift whose window is currently active. Off every
+ * rostered window → they see nothing until rescheduled.
+ *
+ * Compared in facility-local time (hour + calendar date), never as server-local
+ * Date objects, so a UTC server still evaluates the window in the facility's zone.
  */
 export function isScheduleActiveAt(s: CaregiverSchedule, at: Date, timeZone?: string): boolean {
-  return s.date === localDateStr(at, timeZone);
+  const day = localDateStr(at, timeZone);
+  const nowMin = localMinutesOfDay(at, timeZone);
+  const m = shiftMeta(s.shift);
+  const startMin = m.startH * 60;
+  const endMin = m.endH * 60 + SHIFT_GRACE_MINUTES; // grace extends the shift end
+  const DAY = 24 * 60;
+  if (!m.nextDay) {
+    // AM (06–14) / PM (14–22): same calendar day. Grace may push the end past
+    // midnight, spilling the overflow into the next calendar day's early hours.
+    if (s.date === day && nowMin >= startMin && nowMin < Math.min(endMin, DAY)) return true;
+    return endMin > DAY && day === addDays(s.date, 1) && nowMin < endMin - DAY;
+  }
+  // NOC (22–06 +grace) spans midnight: the 22:00–23:59 part belongs to s.date;
+  // the 00:00–(06:00+grace) part belongs to the day AFTER s.date.
+  if (s.date === day && nowMin >= startMin) return true;
+  return day === addDays(s.date, 1) && nowMin < endMin;
 }
 
 /**
- * Resident ids a caregiver (by session userId) is assigned to on the day of `at`.
- * This is the authority for Phase 2's access boundary. `timeZone` (IANA, e.g.
- * "Asia/Manila") makes "today" the facility's local day — critical because
- * schedule dates are picked in facility-local time but the server may run in UTC.
+ * Resident ids a caregiver (by session userId) is assigned to AND currently
+ * on-shift for at `at`. This is the authority for the server access boundary.
+ * `timeZone` (IANA, e.g. "Asia/Manila") evaluates the shift window in the
+ * facility's local time — the server may run in UTC.
  */
 export function activeResidentIdsFor(userId: string, schedules: CaregiverSchedule[], at: Date, timeZone?: string): string[] {
-  const today = localDateStr(at, timeZone);
   const ids = new Set<string>();
   for (const s of schedules) {
-    if (s.caregiverUserId && s.caregiverUserId === userId && s.date === today) {
+    if (s.caregiverUserId && s.caregiverUserId === userId && isScheduleActiveAt(s, at, timeZone)) {
       s.residentIds.forEach((r) => ids.add(r));
+    }
+  }
+  return [...ids];
+}
+
+/**
+ * Caregiver userIds whose LIVE shift covers `residentId` at `at` — the people who
+ * can currently see/chart that resident's tasks (shift-window scoped, incl. NOC
+ * after midnight + grace). Empty when no one is on an active shift for them.
+ * Used to route a due-task alert to exactly the caregiver on duty right now.
+ */
+export function activeCaregiverUserIdsForResident(residentId: string, schedules: CaregiverSchedule[], at: Date, timeZone?: string): string[] {
+  const ids = new Set<string>();
+  for (const s of schedules) {
+    if (s.caregiverUserId && s.residentIds.includes(residentId) && isScheduleActiveAt(s, at, timeZone)) {
+      ids.add(s.caregiverUserId);
     }
   }
   return [...ids];
@@ -216,6 +255,26 @@ export function currentShiftEnd(at: Date): Date {
 const pad = (n: number) => String(n).padStart(2, "0");
 export const toDateStr = (d: Date): string => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 export const todayStr = (): string => toDateStr(new Date());
+
+/** Facility-local minutes-of-day (0–1439) of `at`. Server-local without a tz. */
+function localMinutesOfDay(at: Date, timeZone?: string): number {
+  if (!timeZone) return at.getHours() * 60 + at.getMinutes();
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(at);
+    const h = Number(parts.find((p) => p.type === "hour")?.value) % 24;
+    const mi = Number(parts.find((p) => p.type === "minute")?.value);
+    return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(mi) ? mi : 0);
+  } catch {
+    return at.getHours() * 60 + at.getMinutes();
+  }
+}
+
+/** YYYY-MM-DD `n` days after a calendar-date string (UTC math avoids tz drift). */
+function addDays(dateStr: string, n: number): string {
+  const [y, mo, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, (mo || 1) - 1, (d || 1) + n));
+  return `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`;
+}
 
 /** YYYY-MM-DD for `at` in a given IANA time zone (falls back to server-local).
  *  en-CA formats as YYYY-MM-DD. Used server-side so "today" is the facility's

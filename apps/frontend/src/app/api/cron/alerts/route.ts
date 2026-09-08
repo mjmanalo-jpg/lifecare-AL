@@ -12,6 +12,10 @@ import {
   parseDomainLogs, careLogNotesToDomainLogs, baselineFor, evaluateDomainTriggers, discrepancyDayCount,
 } from "@/lib/lifecare/domainMonitoring";
 import { ASSESSMENT_DOMAINS } from "@/lib/lifecare/dataset";
+import { parseSchedules, CAREGIVER_SCHEDULE_KEY, activeCaregiverUserIdsForResident } from "@/lib/caregiverSchedule";
+import { deriveState, manilaMinutesNow, manilaDay } from "@/lib/lifecare/occurrenceStatus";
+import { to12h } from "@/lib/lifecare/careTask";
+import { loadCommunityPushSubs, sendToSubscriptions, prunePushSubs } from "@/lib/push";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,7 +41,7 @@ export const dynamic = "force-dynamic";
 // signed-in NURSE / FACILITY_ADMIN / SUPERADMIN scans only their community.
 // ─────────────────────────────────────────────────────────────
 
-const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "weightReminder", "incident", "slaBreach", "escalation", "assessment", "carePlanReview", "purchaseRequest", "serviceRequest", "maintenance", "diningReservation", "elimination", "referral", "domainDiscrepancy"];
+const RELATED_TYPES = ["vitalsLog", "medicationAdministration", "followUp", "task", "inventoryItem", "dailyDoc", "weightTrend", "weightReminder", "incident", "slaBreach", "escalation", "assessment", "carePlanReview", "purchaseRequest", "serviceRequest", "maintenance", "diningReservation", "elimination", "referral", "domainDiscrepancy", "routineOccurrence"];
 
 // A family-pending appointment (raised with the "Family Notified" toggle) is a
 // HospitalReferral in REQUESTED, not yet decided, carrying this flag in notes.
@@ -88,10 +92,12 @@ interface Scan {
   apptAutoApproved: number;
   reassessmentDue: number;
   domainDiscrepancy: number;
+  routineDue: number;
+  routineOverdue: number;
 }
 
 async function scanCommunity(communityId: string, organizationId: string | null): Promise<Scan> {
-  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0, reassessmentDue: 0, domainDiscrepancy: 0 };
+  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0, reassessmentDue: 0, domainDiscrepancy: 0, routineDue: 0, routineOverdue: 0 };
 
   // Recipient sets by care tier. General alerts go to the on-floor + admin team
   // (nurse + facility admin). SBAR SLA escalations follow the clinical chain of
@@ -122,6 +128,12 @@ async function scanCommunity(communityId: string, organizationId: string | null)
   });
   const seen = new Set(existing.map((e) => `${e.type}|${e.relatedEntityId}`));
 
+  // Web-push fan-out: load this community's device subscriptions ONCE; each new
+  // notification also pushes to its recipients' devices (best-effort). Dead
+  // endpoints (404/410) collect in deadPush and are pruned after the scan.
+  const { id: pushSettingId, subs: pushSubs } = await loadCommunityPushSubs(communityId);
+  const deadPush = new Set<string>();
+
   async function notify(type: string, relatedEntityType: string, relatedEntityId: string, title: string, message: string, severity: string = "WARNING", recipients: string[] = recipientIds): Promise<boolean> {
     const key = `${type}|${relatedEntityId}`;
     if (seen.has(key)) return false;
@@ -130,6 +142,16 @@ async function scanCommunity(communityId: string, organizationId: string | null)
       await prisma.notification.createMany({
         data: recipients.map((userId) => ({ userId, type: type as never, title, message, severity, relatedEntityId, relatedEntityType, organizationId, communityId })),
       });
+      // Also push to the same recipients' registered devices so the alert reaches
+      // them when the app is closed/backgrounded. urgent → OS notification stays
+      // until acknowledged + vibrates; tag collapses repeats of the same entity.
+      if (pushSubs.length) {
+        await sendToSubscriptions(
+          pushSubs, recipients,
+          { title, body: message, url: "/", tag: `${type}:${relatedEntityId}`, urgent: severity === "WARNING" || severity === "CRITICAL" },
+          deadPush,
+        );
+      }
     }
     return true;
   }
@@ -751,6 +773,72 @@ async function scanCommunity(communityId: string, organizationId: string | null)
     }
   });
 
+  // Routine due / overdue — every scheduled care occurrence in today's 24h routine
+  // (meals, hydration, toileting, rounds, …). A frequency task is already
+  // materialized as many occurrences (night rounds every 30 min = one per :00/:30),
+  // so alerting per occurrence gives the client's per-frequency reminders for free.
+  // Reuses the SAME state machine as the caregiver board (deriveState): Due = −5…+30
+  // min, Overdue = past +30. Due → a reminder to the caregiver on the LIVE shift for
+  // that resident; Overdue → a warning to that caregiver PLUS nurse/CM. Keyed by
+  // occId so each occurrence fires once. Already-charted (Closed/Cancelled) never
+  // alerts. Routing is shift-window scoped (activeCaregiverUserIdsForResident) so it
+  // matches exactly who can chart the task right now, incl. NOC after midnight.
+  await runSource("routine-due", async () => {
+    const nurseCm = idsForRoles(["NURSE", "CARE_MANAGER"]);
+    const residents = await prisma.resident.findMany({
+      where: { communityId, status: { not: "DISCHARGED" } },
+      select: { id: true, firstName: true, lastName: true, roomNumber: true },
+    });
+    if (!residents.length) return;
+    const resById = new Map(residents.map((r) => [r.id, r]));
+
+    // Occurrences for today's Manila care day, still open. careDate is stored as the
+    // care day's Manila midnight (an instant), so fetch a ±24h band and filter by the
+    // Manila day to avoid a UTC off-by-one.
+    const todayManila = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(now);
+    const occs = await prisma.routineOccurrence.findMany({
+      where: {
+        careDate: { gte: new Date(nowTs - 24 * 3_600_000), lte: new Date(nowTs + 24 * 3_600_000) },
+        workflowState: { notIn: ["Closed", "Cancelled"] },
+      },
+      select: { occId: true, residentId: true, scheduledTime: true, careDate: true, workflowState: true, definition: { select: { name: true } } },
+      take: 3000,
+    });
+    if (!occs.length) return;
+
+    const tz = process.env.FACILITY_TZ || "Asia/Manila";
+    const schedRaw = (await prisma.appSetting.findFirst({ where: { communityId, key: CAREGIVER_SCHEDULE_KEY }, select: { value: true } }))?.value;
+    const schedules = parseSchedules(schedRaw);
+    const nowMin = manilaMinutesNow(now);
+
+    for (const o of occs) {
+      const r = resById.get(o.residentId);
+      if (!r || manilaDay(o.careDate) !== todayManila) continue; // other community / other care day
+      const state = deriveState({ scheduledTime: o.scheduledTime, workflowState: o.workflowState }, nowMin);
+      if (state !== "Due" && state !== "Overdue") continue; // Upcoming: not yet
+
+      const task = o.definition?.name || "care task";
+      const when = to12h(o.scheduledTime);
+      const covering = activeCaregiverUserIdsForResident(o.residentId, schedules, now, tz);
+
+      if (state === "Due") {
+        // Proactive reminder to the caregiver on duty. No caregiver on a live shift →
+        // no one to remind now (the overdue pass still catches a genuine miss).
+        if (!covering.length) continue;
+        if (await notify("SHIFT_REMINDER", "routineOccurrence", `routinedue:${o.occId}`, "Care task due", `${rname(r)} (Room ${room(r)}) — ${task} is due at ${when}. Please complete and chart it.`, "INFO", covering)) counts.routineDue++;
+      } else {
+        // Overdue safety net: the on-duty caregiver AND nurse/CM (fallback nurse/CM
+        // when the shift is uncovered) so a missed task is never invisible.
+        const recips = [...new Set([...covering, ...nurseCm])];
+        if (!recips.length) continue;
+        if (await notify("SYSTEM_ALERT", "routineOccurrence", `routinelate:${o.occId}`, "Care task overdue", `${rname(r)} (Room ${room(r)}) — ${task} scheduled ${when} is overdue and not yet charted. Complete it now or log an exception.`, "WARNING", recips)) counts.routineOverdue++;
+      }
+    }
+  });
+
+  // Drop any push subscriptions that returned 404/410 during this scan.
+  await prunePushSubs(pushSettingId, pushSubs, deadPush).catch(() => { /* best-effort */ });
+
   return counts;
 }
 
@@ -770,7 +858,7 @@ async function runScan(request: NextRequest) {
     communities = [{ id: ctx.communityId, organizationId: ctx.organizationId ?? null }];
   }
 
-  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0, reassessmentDue: 0, domainDiscrepancy: 0 };
+  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0, reassessmentDue: 0, domainDiscrepancy: 0, routineDue: 0, routineOverdue: 0 };
   for (const c of communities) {
     try {
       const s = await scanCommunity(c.id, c.organizationId);

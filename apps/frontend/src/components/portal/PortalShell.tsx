@@ -42,6 +42,7 @@ import OfflineIndicator from "@/components/OfflineIndicator";
 import ChangePasswordDialog from "@/components/portal/ChangePasswordDialog";
 import LogoutDialog from "@/components/portal/LogoutDialog";
 import SignatureModal from "@/components/portal/SignatureModal";
+import PushEnableButton from "@/components/portal/PushEnableButton";
 import { PortalContentSkeleton } from "@/components/portal/PortalSkeleton";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -250,10 +251,12 @@ export default function PortalShell({
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [language, setLanguage] = useState("en");
 
-  // Supervisor portals nudge the alerts engine (throttled to once / 10 min) so
-  // automated alerts get generated during normal use; Vercel Cron covers prod.
+  // Supervisor AND caregiver portals nudge the alerts engine (throttled to once /
+  // 10 min) so automated alerts — including per-occurrence routine due/overdue —
+  // get generated during normal use; caregivers are the ones online overnight when
+  // night rounds come due. Vercel Cron (every 10 min) covers prod regardless.
   useEffect(() => {
-    if (!["NURSE", "FACILITY_ADMIN", "SUPERADMIN"].includes(userRole)) return;
+    if (!["CAREGIVER", "NURSE", "FACILITY_ADMIN", "SUPERADMIN"].includes(userRole)) return;
     try {
       const KEY = "lcms_alerts_scan_ts";
       const last = Number(localStorage.getItem(KEY) || 0);
@@ -378,6 +381,43 @@ export default function PortalShell({
   });
   const unreadNotifications = visibleNotifications.filter((n) => !n.isRead);
   const unreadCount = unreadNotifications.length;
+
+  // Audible alert: chime + vibrate when a GENUINELY NEW unread notification
+  // arrives (WARNING/CRITICAL → urgent triple tone). Tracks seen ids so it never
+  // sounds for the existing backlog on load, and re-arms an id once it's read so a
+  // re-raised alert can chime again. Gated by the user's notifications toggle.
+  const seenUnreadRef = useRef<Set<string>>(new Set());
+  const soundInitRef = useRef(false);
+  useEffect(() => {
+    const seen = seenUnreadRef.current;
+    if (!soundInitRef.current) { // seed silently on first load
+      unreadNotifications.forEach((n) => seen.add(n.id));
+      soundInitRef.current = true;
+      return;
+    }
+    let hasNew = false, urgent = false;
+    for (const n of unreadNotifications) {
+      if (seen.has(n.id)) continue;
+      hasNew = true;
+      const sev = String(n.severity || "").toUpperCase();
+      if (sev === "WARNING" || sev === "CRITICAL") urgent = true;
+      seen.add(n.id);
+    }
+    if (hasNew && notifications) {
+      import("@/lib/alertSound").then((m) => m.playAlertChime(urgent)).catch(() => { /* non-fatal */ });
+    }
+    const live = new Set(unreadNotifications.map((n) => n.id));
+    seen.forEach((id) => { if (!live.has(id)) seen.delete(id); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notificationsData, notifications]);
+
+  // Unlock the AudioContext on the first user gesture (browsers block audio before
+  // one), so the very next new-alert chime can play.
+  useEffect(() => {
+    const unlock = () => { import("@/lib/alertSound").then((m) => m.unlockAudio()).catch(() => { /* ignore */ }); };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    return () => window.removeEventListener("pointerdown", unlock);
+  }, []);
 
   const handleSnooze = async (id: string) => {
     try {
@@ -1063,6 +1103,11 @@ export default function PortalShell({
                         Mark all as read
                       </button>
                     )}
+                  </div>
+
+                  {/* Per-device push toggle (hidden where web push is unsupported) */}
+                  <div className="border-b border-gray-100 dark:border-gray-800">
+                    <PushEnableButton />
                   </div>
 
                   {/* Dropdown List */}

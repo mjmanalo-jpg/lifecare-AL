@@ -1,3 +1,6 @@
 {
-  "installCommand": "npm install --include=optional && npm rebuild lightningcss"
+  "installCommand": "npm install --include=optional && npm rebuild lightningcss",
+  "crons": [
+    { "path": "/api/cron/alerts", "schedule": "*/10 * * * *" }
+  ]
 }
