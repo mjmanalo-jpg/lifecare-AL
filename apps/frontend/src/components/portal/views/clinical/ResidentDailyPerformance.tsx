@@ -3,7 +3,7 @@
 // Resident Daily Performance — the client's paper "RESIDENTS DAILY PERFORMANCE
 // ROUTINE" as a monthly grid: rows = the resident's APPROVED Care Task activities
 // (Time + Activity), columns = days 1..N of the selected month. A cell auto-checks
-// (solid ●) when the caregiver COMPLETED the matching-time occurrence that day;
+// (green ✓) when the caregiver COMPLETED the matching-time occurrence that day;
 // lifestyle rows with no clinical occurrence can be manually ticked (✓, toggleable).
 // Migration-free (app-settings `care_task_routine` for rows, `resident_performance_ticks`
 // for manual ticks). Asia/Manila throughout.
@@ -93,10 +93,10 @@ export default function ResidentDailyPerformance({ residentId, approvedDefs, res
                     const isAuto = auto.has(cellKey(r.time, d));
                     return (
                       <td key={d} className="border-l px-0 py-0 text-center align-middle" style={{ borderColor: "var(--clinical-line)", minWidth: 26 }}>
-                        <span className="inline-block h-6 w-full text-[13px] leading-6 text-[var(--clinical-green)]"
+                        <span className="inline-block h-6 w-full text-[14px] font-bold leading-6 text-[var(--clinical-green)]"
                           title={isAuto ? "Completed by caregiver" : ""}
                           aria-label={`Day ${d} ${r.activity} ${isAuto ? "completed" : "not completed"}`}>
-                          {isAuto ? "●" : ""}
+                          {isAuto ? "✓" : ""}
                         </span>
                       </td>
                     );
@@ -109,7 +109,7 @@ export default function ResidentDailyPerformance({ residentId, approvedDefs, res
       </DataState>
 
       <p className="mt-2 text-[11px] text-[var(--clinical-muted)]">
-        <span className="text-[var(--clinical-green)]">●</span> completed by caregiver — auto-checks only when the caregiver marks the task complete. This grid is read-only.
+        <span className="font-bold text-[var(--clinical-green)]">✓</span> completed by caregiver — auto-checks only when the caregiver marks the task complete. This grid is read-only.
       </p>
     </div>
   );

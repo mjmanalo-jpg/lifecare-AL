@@ -185,16 +185,18 @@ export async function generateCarePlanForResident(opts: {
   if (!planId) throw new Error("Could not create the care plan.");
 
   // Goals + interventions as CarePlanItem rows (category drives task generation).
-  let order = 0;
-  for (const g of tpl.goals) {
-    await createRecord("care-plan-items", { carePlanId: planId, communityId: community, category: "GOAL", title: g, status: "ACTIVE", sortOrder: order++ }).catch(() => null);
-  }
-  for (const iv of interventions) {
+  // Fired in parallel — items are independent (sortOrder is explicit, not await-order)
+  // so this collapses ~N serial round-trips to the pooler into a few concurrent waves.
+  const goalWrites = tpl.goals.map((g, i) =>
+    createRecord("care-plan-items", { carePlanId: planId, communityId: community, category: "GOAL", title: g, status: "ACTIVE", sortOrder: i }).catch(() => null));
+  const ivBase = tpl.goals.length;
+  const ivWrites = interventions.map((iv, i) => {
     // The [task:TASK-###] marker links the item to its Care Task Master routine so
     // the materialized task can resolve its governed care-event archetype.
     const marker = iv.taskId ? ` [task:${iv.taskId}]` : "";
-    await createRecord("care-plan-items", { carePlanId: planId, communityId: community, category: "INTERVENTION", title: iv.title, description: `${[`Frequency: ${iv.freq}`, iv.note?.trim() ? `Individualized: ${iv.note.trim()}` : ""].filter(Boolean).join(" · ")}${marker}`, status: "ACTIVE", sortOrder: order++ }).catch(() => null);
-  }
+    return createRecord("care-plan-items", { carePlanId: planId, communityId: community, category: "INTERVENTION", title: iv.title, description: `${[`Frequency: ${iv.freq}`, iv.note?.trim() ? `Individualized: ${iv.note.trim()}` : ""].filter(Boolean).join(" · ")}${marker}`, status: "ACTIVE", sortOrder: ivBase + i }).catch(() => null);
+  });
+  await Promise.all([...goalWrites, ...ivWrites]);
 
   // Held plans are TEMPLATES only — no tasks are created here. The daily
   // materializer (/api/cron/care-plan-tasks) spins the interventions into that
@@ -203,19 +205,17 @@ export async function generateCarePlanForResident(opts: {
   let taskCount = 0;
   if (!opts.hold) {
     const due = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    for (const iv of interventions) {
-      try {
-        await createRecord("tasks", {
-          residentId: opts.residentId, communityId: community,
-          title: iv.title, description: [`From care plan · ${iv.freq}`, iv.note?.trim() || ""].filter(Boolean).join(" · "),
-          category: (iv.domain || iv.title.split(":")[0]).trim() || "Personal Care",
-          status: "PENDING", priority: "MEDIUM",
-          dueDate: due, generatedFrom: planId,
-          assignedToId: assignee?.caregiverStaffId || undefined,
-        });
-        taskCount++;
-      } catch { /* best-effort per task */ }
-    }
+    // Parallel — each task create is independent (best-effort per task).
+    const results = await Promise.all(interventions.map((iv) =>
+      createRecord("tasks", {
+        residentId: opts.residentId, communityId: community,
+        title: iv.title, description: [`From care plan · ${iv.freq}`, iv.note?.trim() || ""].filter(Boolean).join(" · "),
+        category: (iv.domain || iv.title.split(":")[0]).trim() || "Personal Care",
+        status: "PENDING", priority: "MEDIUM",
+        dueDate: due, generatedFrom: planId,
+        assignedToId: assignee?.caregiverStaffId || undefined,
+      }).then(() => true).catch(() => false)));
+    taskCount = results.filter(Boolean).length;
   }
   return { planId, taskCount, interventionCount: interventions.length, assignedTo: assignee?.caregiverName };
 }

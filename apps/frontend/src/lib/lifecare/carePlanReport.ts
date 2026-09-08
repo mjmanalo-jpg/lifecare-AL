@@ -14,6 +14,7 @@ export interface CarePlanReportDomain {
   name: string;
   score: number;
   goal: string;
+  evidence?: string;       // Supporting Evidence / Clinical Monitoring captured at assessment
   interventions: string[];
 }
 
@@ -44,9 +45,11 @@ export function buildCarePlanHtml(input: CarePlanReportInput): string {
   const domainSections = input.domains.map((d) => {
     const ivx = d.interventions.map((x) => x.trim()).filter(Boolean);
     const goal = d.goal.trim();
+    const evidence = (d.evidence ?? "").trim();
     return `<div class="block domain">
       <h3>${esc(d.code)} · ${esc(d.name)} <span class="score">Score ${esc(d.score)}/4</span></h3>
       ${goal ? `<p class="goal"><span class="lbl">Goal:</span> ${esc(goal)}</p>` : ""}
+      ${evidence ? `<p class="goal"><span class="lbl">Supporting Evidence / Clinical Monitoring:</span> ${esc(evidence)}</p>` : ""}
       ${ivx.length ? `<p class="lbl">Interventions:</p><ul>${ivx.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>` : ""}
     </div>`;
   }).join("");

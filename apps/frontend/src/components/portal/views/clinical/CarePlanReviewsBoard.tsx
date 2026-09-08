@@ -16,7 +16,7 @@ import { ClipboardList, ListChecks, Loader2, AlertTriangle, Users, ClipboardChec
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, updateRecord, createRecord } from "@/lib/api";
-import { generateCarePlanForResident, releaseCarePlan, materializeTodayTasks, levelCareTasks, type PlanIntervention } from "@/lib/carePlanGen";
+import { generateCarePlanForResident, releaseCarePlan, dispatchResidentRoutine, levelCareTasks, type PlanIntervention } from "@/lib/carePlanGen";
 import { CARE_PLAN_DRAFTS_KEY, parseCarePlanDrafts, upsertDraft, clearDraft, type DraftState, type SavedDomainPlanItem } from "@/lib/carePlanDraft";
 import { taskById, SCORED_DOMAINS, tasksForDomain } from "@/lib/lifecare/dataset";
 import { domainCodeFromLabel } from "@/lib/lifecare/carePackage";
@@ -163,11 +163,11 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
     const snap = new Map((drafts[rid]?.domainPlan || []).map((d) => [d.code, d]));
     let domains = assessmentDomainRows(validatedDomainsFor(assessments, rid, s(res.name)), rl.n)
       .filter((r) => { const o = snap.get(r.code); return o ? o.included !== false : true; })
-      .map((r) => { const o = snap.get(r.code); return { code: r.code, name: r.name, score: r.score, goal: (o?.goal ?? r.goal) || "", interventions: o?.interventions ?? r.interventions }; });
+      .map((r) => { const o = snap.get(r.code); return { code: r.code, name: r.name, score: r.score, goal: (o?.goal ?? r.goal) || "", evidence: (o?.evidence ?? r.evidence) || "", interventions: o?.interventions ?? r.interventions }; });
     if (!domains.length && plan) {
       const goals = s(plan.careGoals).split("\n").map((x) => x.trim()).filter(Boolean);
       const ivs = s(plan.interventions).split("\n").map((x) => x.trim()).filter(Boolean);
-      domains = [{ code: "", name: "Care Plan", score: 0, goal: goals.join("; "), interventions: ivs }];
+      domains = [{ code: "", name: "Care Plan", score: 0, goal: goals.join("; "), evidence: "", interventions: ivs }];
     }
     printCarePlan({
       residentName: s(res.name) || "Resident", room: s(res.room), level: rl.n,
@@ -329,9 +329,9 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
     const raw = (res.raw || {}) as Row;
     // Supersede any prior held DRAFT for this resident so regenerating replaces it
     // instead of leaving orphan drafts (A4). Under-review/active plans are untouched.
-    for (const d of draftPlansByResident.get(s(res.id)) || []) {
-      try { await updateRecord("care-plans", s(d.id), { status: "DISCONTINUED", discontinuedReason: "Superseded by regenerated draft" }); } catch { /* best-effort */ }
-    }
+    // Parallel — supersedes are independent, best-effort each.
+    await Promise.all((draftPlansByResident.get(s(res.id)) || []).map((d) =>
+      updateRecord("care-plans", s(d.id), { status: "DISCONTINUED", discontinuedReason: "Superseded by regenerated draft" }).catch(() => null)));
     const { interventionCount } = await generateCarePlanForResident({ residentId: s(res.id), level: n, communityId: s(raw.communityId) || undefined, createdByName: clinicianName, plan, hold: true });
     await cpQ.refetch?.();
     return interventionCount;
@@ -386,7 +386,11 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
     setActingId(rv.id);
     try {
       await releaseCarePlan(s(rv.planId), { approvedByName: clinicianName, effectiveDate: rv.reviewDate, nextReviewDate: rv.nextReviewDate || "" });
-      const dispatched = await materializeTodayTasks();
+      // Materialize ONLY this resident's tasks (not the whole community) — the plan is
+      // already released, so a dispatch hiccup shouldn't fail the approval; the hourly
+      // cron catches any gap.
+      let dispatched = 0;
+      try { dispatched = await dispatchResidentRoutine(rv.residentId); } catch { /* released; hourly cron will materialize */ }
       await persist(reviews.map((r) => (r.id === rv.id ? { ...r, approvalStatus: "APPROVED" as const, approvedById: clinicianId, approvedByName: clinicianName, approvedAt: new Date().toISOString(), pendingReason: undefined } : r)));
       await cpQ.refetch?.();
       await clearDraftState(rv.residentId); // released — start any future plan clean
@@ -428,7 +432,11 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
     setActingId(rv.id);
     try {
       await releaseCarePlan(s(rv.planId), { approvedByName: clinicianName, effectiveDate: rv.reviewDate, nextReviewDate: rv.nextReviewDate || "" });
-      const dispatched = await materializeTodayTasks();
+      // Materialize ONLY this resident's tasks (not the whole community) — the plan is
+      // already released, so a dispatch hiccup shouldn't fail the approval; the hourly
+      // cron catches any gap.
+      let dispatched = 0;
+      try { dispatched = await dispatchResidentRoutine(rv.residentId); } catch { /* released; hourly cron will materialize */ }
       await persist(reviews.map((r) => (r.id === rv.id ? { ...r, approvalStatus: "APPROVED" as const, approvedById: clinicianId, approvedByName: clinicianName, approvedAt: new Date().toISOString(), pendingReason: undefined } : r)));
       await cpQ.refetch?.();
       await clearDraftState(rv.residentId); // released — start any future plan clean
@@ -995,6 +1003,7 @@ interface DomainRow {
   taskId: string;          // representative governed Level-N task for dispatch (may be "")
   included: boolean;
   goal: string;            // editable Goal / Preference
+  evidence: string;        // editable Supporting Evidence / Clinical Monitoring (seeded from the assessment evidence)
   interventions: string[]; // editable Core Care Tasks — one row each (add/remove)
 }
 
@@ -1004,7 +1013,8 @@ interface DomainRow {
 function mergeSavedDomain(base: DomainRow[], saved?: SavedDomainPlanItem[] | null): DomainRow[] {
   if (!saved?.length) return base;
   const by = new Map(saved.map((sv) => [sv.code, sv]));
-  return base.map((r) => { const sv = by.get(r.code); return sv ? { ...r, included: sv.included, goal: sv.goal, interventions: sv.interventions } : r; });
+  // evidence: undefined on legacy drafts (pre-feature) → fall back to the assessment-seeded value.
+  return base.map((r) => { const sv = by.get(r.code); return sv ? { ...r, included: sv.included, goal: sv.goal, evidence: sv.evidence ?? r.evidence, interventions: sv.interventions } : r; });
 }
 
 // Assessment-domain rows (one per scored domain) — the individualized plan basis
@@ -1024,13 +1034,14 @@ function assessmentDomainRows(assessmentDomains: Partial<Record<string, DomainEn
     return {
       code: d.code, name: d.name, score, taskId: taskIdByCode[d.code] || "", included: true,
       goal: entry.goalNote?.trim() || d.goalDefaults?.[score] || "",
+      evidence: entry.evidence?.trim() || "",
       interventions: (d.interventionDefaults?.[score] || []).map((x) => x.trim()).filter(Boolean),
     };
   });
 }
 // A per-domain builder snapshot from rows — the migration-free draft persisted so
 // the builder re-hydrates the same individualized selections.
-const domainSnapshot = (rows: DomainRow[]): SavedDomainPlanItem[] => rows.map((r) => ({ code: r.code, included: r.included, goal: r.goal, interventions: r.interventions }));
+const domainSnapshot = (rows: DomainRow[]): SavedDomainPlanItem[] => rows.map((r) => ({ code: r.code, included: r.included, goal: r.goal, evidence: r.evidence, interventions: r.interventions }));
 
 // Rows → the generator's { goals, interventions } contract. Goals carry the domain
 // label so the flattened plan still reads per-domain; each intervention keeps its
@@ -1038,7 +1049,15 @@ const domainSnapshot = (rows: DomainRow[]): SavedDomainPlanItem[] => rows.map((r
 function buildDomainPlan(rows: DomainRow[]): { goals: string[]; interventions: PlanIntervention[] } {
   const inc = rows.filter((r) => r.included);
   return {
-    goals: inc.filter((r) => r.goal.trim()).map((r) => `${r.name}: ${r.goal.trim()}`),
+    // Goal line carries the Supporting Evidence / Clinical Monitoring the nurse captured
+    // at assessment, so it persists into the generated CarePlan GOAL item (one line — no
+    // embedded newline, since careGoals joins goals by "\n").
+    goals: inc
+      .map((r) => {
+        const body = [r.goal.trim(), r.evidence.trim() ? `Clinical Monitoring: ${r.evidence.trim()}` : ""].filter(Boolean).join(" — ");
+        return body ? `${r.name}: ${body}` : "";
+      })
+      .filter(Boolean),
     interventions: inc.map((r) => ({
       domain: r.name,
       title: `${r.code} · ${r.name}`,
@@ -1088,7 +1107,7 @@ function CarePlanBuilder({ residentId, residentName, room, level, assessmentDoma
   const levelName = meta ? `Level ${meta.n} — ${meta.name}` : `Level ${level}`;
   const doPrint = () => printCarePlan({
     residentName: residentName || "Resident", room, level, levelName,
-    domains: included.map((r) => ({ code: r.code, name: r.name, score: r.score, goal: r.goal, interventions: r.interventions })),
+    domains: included.map((r) => ({ code: r.code, name: r.name, score: r.score, goal: r.goal, evidence: r.evidence, interventions: r.interventions })),
   });
 
   useEffect(() => { onCountChange?.(included.length); }, [included.length, onCountChange]);
@@ -1153,6 +1172,10 @@ function CarePlanBuilder({ residentId, residentName, room, level, assessmentDoma
                     <div>
                       <FieldLabel htmlFor={`goal-${r.code}`}>Goal / Preference</FieldLabel>
                       <textarea id={`goal-${r.code}`} rows={2} value={r.goal} onChange={(e) => patch(r.code, { goal: e.target.value })} placeholder="Resident-specific goal…" className={controlClass} />
+                    </div>
+                    <div>
+                      <FieldLabel htmlFor={`evidence-${r.code}`}>Supporting Evidence (Clinical Monitoring)</FieldLabel>
+                      <textarea id={`evidence-${r.code}`} rows={2} value={r.evidence} onChange={(e) => patch(r.code, { evidence: e.target.value })} placeholder="What is monitored, frequency, thresholds, coordination — carried from the assessment…" className={controlClass} />
                     </div>
                     <div>
                       <FieldLabel>Interventions</FieldLabel>

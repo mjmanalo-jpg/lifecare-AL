@@ -27,6 +27,7 @@ export interface SavedDomainPlanItem {
   code: string;            // AS-01..AS-14
   included: boolean;
   goal: string;            // editable Goal / Preference (seeded from the assessment note)
+  evidence?: string;       // editable Supporting Evidence / Clinical Monitoring (seeded from the assessment evidence)
   interventions: string[]; // editable Core Care Tasks (one bullet each; nurse/CG can add/remove)
 }
 

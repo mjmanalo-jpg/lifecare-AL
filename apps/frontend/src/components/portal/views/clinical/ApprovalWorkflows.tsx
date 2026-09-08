@@ -5,7 +5,7 @@ import { Check, X, Clock, Pill, CalendarClock, TestTube, ClipboardList, Plus, Lo
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord, upsertRecord } from "@/lib/api";
-import { releaseCarePlan, materializeTodayTasks } from "@/lib/carePlanGen";
+import { releaseCarePlan, dispatchResidentRoutine } from "@/lib/carePlanGen";
 import { requiresSecondApproval, type CarePlanReviewApprovalStatus } from "@/lib/lifecare/carePlanReviewGuards";
 
 type Row = Record<string, unknown>;
@@ -180,7 +180,9 @@ export default function ApprovalWorkflows() {
         await refetchRefs();
       } else if (it.kind === "care-plan") {
         await releaseCarePlan(s(m.planId), { approvedByName: session.name || "Approver", effectiveDate: s(m.reviewDate), nextReviewDate: s(m.nextReviewDate) });
-        await materializeTodayTasks();
+        // Materialize only this resident's tasks (not the whole community); the plan is
+        // already released, so a dispatch hiccup shouldn't fail the approval.
+        try { await dispatchResidentRoutine(s(m.residentId)); } catch { /* released; hourly cron will materialize */ }
         await patchCarePlanReview(it.id, { approvalStatus: "APPROVED", approvedByName: session.name || undefined, approvedById: session.id || undefined, approvedAt: new Date().toISOString(), pendingReason: undefined });
         await notifySubmitter(s(m.submittedById), "Care plan approved", `The ${s(m.decision)} for ${rname(m)} was approved and the plan released.`, it.id, "carePlan");
       } else {
