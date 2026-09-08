@@ -54,7 +54,7 @@ export default function HubTabs({
       <div
         role="tablist"
         aria-label="Section tabs"
-        className="flex w-fit max-w-full flex-wrap gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-700 dark:bg-slate-800/60"
+        className="flex w-fit max-w-full flex-wrap gap-1 p-1"
       >
         {tabs.map((t) => {
           const on = t.key === current?.key;
