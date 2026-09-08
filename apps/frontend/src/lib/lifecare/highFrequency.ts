@@ -24,6 +24,8 @@ export interface HFConfig {
   /** Activation threshold — HF only applies when the domain's assessed score is ≥ this. */
   minScore: number;
   label: string;
+  /** Optional caregiver prompt appended to each occurrence (schedule/hygiene/SOP guidance). */
+  instruction?: string;
   intervalHours?: number; // fixed_interval / while_awake
   wakeStart?: number;     // while_awake, hour 0-24 (default 6)
   wakeEnd?: number;       // while_awake, hour 0-24 (default 22)

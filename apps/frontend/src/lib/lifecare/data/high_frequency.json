@@ -1,5 +1,5 @@
 {
   "AS-11": { "method": "fixed_interval",  "intervalHours": 2, "minScore": 3, "label": "Reposition / off-load" },
-  "AS-10": { "method": "while_awake",     "intervalHours": 2, "wakeStart": 6, "wakeEnd": 22, "minScore": 3, "label": "Toileting" },
+  "AS-10": { "method": "while_awake",     "intervalHours": 2, "wakeStart": 6, "wakeEnd": 22, "minScore": 3, "label": "Toileting", "instruction": "assist on schedule using approved technique, provide perineal & hand hygiene and skin protection, and document continence/skin per SOP" },
   "AS-08": { "method": "times_per_shift", "perShift": 3, "minScore": 3, "label": "Offer hydration" }
 }

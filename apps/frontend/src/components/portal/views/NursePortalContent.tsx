@@ -379,7 +379,6 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
         tabs={[
           { key: "mar", label: "Administer (MAR)", node: <MARDailyBoard clinicianRole="NURSE" /> },
           { key: "medcompliance", label: "Compliance", node: <MedicationComplianceBoard /> },
-          { key: "orders", label: "Orders & Rx", node: <PhysicianOrders /> },
           { key: "approvalworkflows", label: "Approvals", node: <ApprovalWorkflows /> },
           { key: "medinventory", label: "Inventory", node: <MedicationInventoryBoard clinicianRole="NURSE" /> },
           { key: "minipharmacy", label: "Mini Pharmacy", node: <MiniPharmacyBoard clinicianRole="NURSE" /> },

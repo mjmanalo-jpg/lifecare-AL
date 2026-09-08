@@ -18,6 +18,8 @@ import { assistanceForScore, parseSupport, defaultRole, type Assistance, type As
 import { schemaFor } from "./resultSchema.ts";
 import { EXCEPTION_REASON, type Priority } from "./vocab.ts";
 import { type DaySchedule, type HFMethod } from "./highFrequency.ts";
+import { needsDiaper, DIAPER_INTERVAL_HOURS } from "./continence.ts";
+import { needsRepositioning, REPOSITION_INTERVAL_HOURS } from "./skinIntegrity.ts";
 
 export type DefStatus = "DRAFT" | "BLOCKED";
 export type FinalLoc = "LOC 1" | "LOC 2" | "LOC 3" | "LOC 4" | "LOC 5";
@@ -73,6 +75,7 @@ export interface DomainInput {
   activeNeed: boolean;
   goalId?: string;
   taskId?: string;
+  evidence?: string; // supporting-evidence text; AS-10 "Needs diaper" drives a q4h event
 }
 
 export interface OrderInput {
@@ -572,6 +575,84 @@ export function assembleRoutine24h(input: AssembleInput): RoutineEventDefinition
       const ord = findOrder(e, input.orders);
       if (ord) { e.orderRef = ord.ref; if (ord.role) e.responsibleRole = ord.role; }
     }
+  }
+
+  // Client rule: AS-10 supporting evidence flagging a diaper need adds a dedicated
+  // continence / diaper-care event EVERY 4 HOURS (round-the-clock — skin protection
+  // needs night checks), on top of the template's fixed toileting rounds.
+  const as10 = input.domains.find((d) => d.code === "AS-10");
+  if (as10 && needsDiaper(as10.evidence)) {
+    const key = "Toileting / Continence";
+    const score = Math.max(0, Math.min(4, as10.score)) as AsScore;
+    events.push({
+      residentId: input.residentId,
+      version: 1,
+      status: "DRAFT",
+      sourceAsDomain: "AS-10",
+      asScore: score,
+      goalId: as10.goalId,
+      name: "Continence care — diaper check/change",
+      instructions:
+        "Check and change diaper, perform perineal hygiene and apply skin barrier per SOP; document continence, skin condition and any concern.",
+      assistanceLevel: assistanceForScore(score),
+      responsibleRole: defaultRole("Continence toileting diaper care", false),
+      frequencyMethod: "fixed_interval",
+      schedule: { intervalHours: DIAPER_INTERVAL_HOURS },
+      shiftOwner: "varies",
+      criticality: "Routine",
+      completionControl: "Record & Complete",
+      resultSchemaKey: key,
+      exceptionSet: exceptionsFor(key),
+      escalationTrigger: "Skin injury, blood in urine/stool, inability to provide care safely, or care exceeds plan.",
+      escalationPriority: "P3",
+      effectiveDate: input.effectiveDate,
+      originalRecommendation: {
+        source: "diaper-q4h",
+        sourceAsDomain: "AS-10",
+        asScore: score,
+        intervalHours: DIAPER_INTERVAL_HOURS,
+        finalLoc: input.finalLoc,
+      },
+    } as InternalDraft);
+  }
+
+  // Client rule: AS-11 evidence flagging a repositioning need adds a dedicated
+  // pressure off-load / repositioning event EVERY 2 HOURS (pressure-injury
+  // prevention standard, round-the-clock).
+  const as11 = input.domains.find((d) => d.code === "AS-11");
+  if (as11 && needsRepositioning(as11.evidence)) {
+    const key = "Repositioning";
+    const score = Math.max(0, Math.min(4, as11.score)) as AsScore;
+    events.push({
+      residentId: input.residentId,
+      version: 1,
+      status: "DRAFT",
+      sourceAsDomain: "AS-11",
+      asScore: score,
+      goalId: as11.goalId,
+      name: "Repositioning / pressure off-load",
+      instructions:
+        "Reposition and off-load pressure points using the approved technique and assistance level; inspect skin and document new position, skin condition and tolerance.",
+      assistanceLevel: assistanceForScore(score),
+      responsibleRole: defaultRole("Repositioning pressure skin care", false),
+      frequencyMethod: "fixed_interval",
+      schedule: { intervalHours: REPOSITION_INTERVAL_HOURS },
+      shiftOwner: "varies",
+      criticality: "High",
+      completionControl: "Record & Complete",
+      resultSchemaKey: key,
+      exceptionSet: exceptionsFor(key),
+      escalationTrigger: "New redness/skin breakdown, drainage or odor, worsening pain or inability to reposition safely.",
+      escalationPriority: "P2",
+      effectiveDate: input.effectiveDate,
+      originalRecommendation: {
+        source: "reposition-q2h",
+        sourceAsDomain: "AS-11",
+        asScore: score,
+        intervalHours: REPOSITION_INTERVAL_HOURS,
+        finalLoc: input.finalLoc,
+      },
+    } as InternalDraft);
   }
 
   return events

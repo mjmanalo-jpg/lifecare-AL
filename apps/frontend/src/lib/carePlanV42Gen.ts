@@ -1,7 +1,10 @@
 import { createRecord } from "@/lib/api";
 import { generateDraftPlan, suggestTaskIds, type CarePlanLineInput } from "@/lib/lifecare/carePlan";
+import { taskById } from "@/lib/lifecare/dataset";
 import { domainScores, type AssessmentV42 } from "@/lib/lifecare/assessment";
 import { levelRank } from "@/lib/lifecare/downstream";
+import { needsDiaper, DIAPER_FREQUENCY_LABEL } from "@/lib/lifecare/continence";
+import { needsRepositioning, REPOSITION_FREQUENCY_LABEL } from "@/lib/lifecare/skinIntegrity";
 
 /**
  * Assessment-driven Care Plan generator (Phase 2 in production form).
@@ -40,10 +43,31 @@ export async function generateCarePlanFromV42(opts: {
   const community = opts.communityId || undefined;
   const now = new Date().toISOString();
 
-  const inputLines: CarePlanLineInput[] =
+  // Seed each line's frequency from the task's workbook Suggested Frequency /
+  // Trigger (triggerFrequencyLogic) so the plan carries the guidance by default;
+  // the nurse can still edit before release. Explicit opts.lines frequency wins.
+  const baseLines: CarePlanLineInput[] =
     opts.lines && opts.lines.length
       ? opts.lines
       : suggestTaskIds(domainScores(assessment)).map((taskId) => ({ taskId }));
+  const inputLines: CarePlanLineInput[] = baseLines.map((l) => ({
+    ...l,
+    frequency: l.frequency ?? taskById(l.taskId)?.triggerFrequencyLogic,
+  }));
+
+  // Client rule: a flagged AS-10 diaper need defaults the continence-care line
+  // (TASK-SKN-01) to an every-4h schedule with diaper/skin-protection precautions.
+  // Still DRAFT — the nurse individualises before release; nothing is dispatched here.
+  if (needsDiaper(assessment.domains?.["AS-10"]?.evidence)) {
+    const patch = {
+      frequency: DIAPER_FREQUENCY_LABEL,
+      timingTrigger: "Every 4 hours, round the clock",
+      precautions: "Diaper care: check/change q4h, perineal hygiene + skin barrier per SOP",
+    };
+    const line = inputLines.find((l) => l.taskId === "TASK-SKN-01");
+    if (line) Object.assign(line, patch);
+    else inputLines.unshift({ taskId: "TASK-SKN-01", ...patch });
+  }
 
   const draft = generateDraftPlan({
     finalLevel,
@@ -83,6 +107,20 @@ export async function generateCarePlanFromV42(opts: {
       carePlanId: planId, communityId: community, category: "INTERVENTION",
       title: line.approvedIntervention,
       description: `${[line.assistanceLevel, line.frequency, line.precautions].filter(Boolean).join(" · ") || `Task ${line.taskId}`}${line.taskId ? ` [task:${line.taskId}]` : ""}`,
+      status: "ACTIVE", sortOrder: order++,
+    }).catch(() => null);
+  }
+
+  // Client rule: a flagged AS-11 repositioning need adds a dedicated every-2h
+  // pressure off-load intervention. No Care Task Master row is repositioning-
+  // specific (suggestTaskIds only yields skin-observation tasks), so this is a
+  // direct plan item; the caregiver-facing q2h occurrences come from the routine
+  // engine (assembleRoutine24h). Still DRAFT until the nurse releases.
+  if (needsRepositioning(assessment.domains?.["AS-11"]?.evidence)) {
+    await createRecord("care-plan-items", {
+      carePlanId: planId, communityId: community, category: "INTERVENTION",
+      title: "Repositioning / pressure off-load",
+      description: `${REPOSITION_FREQUENCY_LABEL} · Reposition and off-load pressure points per approved technique; inspect skin and document per SOP`,
       status: "ACTIVE", sortOrder: order++,
     }).catch(() => null);
   }

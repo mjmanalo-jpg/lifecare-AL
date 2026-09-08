@@ -3,6 +3,9 @@
 import { useEffect, useRef } from "react";
 import { Info } from "lucide-react";
 import { SCORED_DOMAINS, CLINICAL_MODIFIERS } from "@/lib/lifecare/dataset.ts";
+import { DIAPER_EVIDENCE_TAG } from "@/lib/lifecare/continence.ts";
+import { REPOSITION_EVIDENCE_TAG } from "@/lib/lifecare/skinIntegrity.ts";
+import { careDeliveryMap } from "@/lib/lifecare/conditionPathways.ts";
 import type { DomainEntry } from "@/lib/lifecare/assessment.ts";
 import type { DomainCode } from "@/lib/lifecare/types.ts";
 import { ClinicalCard, MicroLabel, controlClass } from "./clinical-ui";
@@ -51,6 +54,13 @@ const hasEvidenceWord = (evidence: string | undefined, tag: string) =>
 // from the same group. Add a domain code here to give it a dropdown.
 const EVIDENCE_SELECTS: Record<string, { label: string; options: string[] }> = {
   "AS-02": { label: "Assist level", options: ["Independent", "Standby assist", "One-person assist", "Two-person assist", "Mechanical lift / hoist"] },
+};
+// Extra quick-add evidence tags beyond the domain `scope`. AS-10 "Needs diaper"
+// is load-bearing: flagging it drives an every-4h continence/diaper-care event in
+// the generated routine AND the care plan (see lib/lifecare/continence.ts).
+const EVIDENCE_EXTRA_TAGS: Record<string, string[]> = {
+  "AS-10": [DIAPER_EVIDENCE_TAG],
+  "AS-11": [REPOSITION_EVIDENCE_TAG], // flags an every-2h repositioning event
 };
 const currentSelectValue = (evidence: string | undefined, options: string[]) =>
   evidenceTokens(evidence).find((t) => options.some((o) => o.toLowerCase() === t.toLowerCase())) ?? "";
@@ -162,7 +172,7 @@ export default function DomainScoreGrid({
       {SCORED_DOMAINS.map((dom) => {
         const code = dom.code as DomainCode;
         const entry = domains[code] ?? { score: 0, evidence: "" };
-        const evidenceTags = evidenceTagsFor(dom.scope);
+        const evidenceTags = [...evidenceTagsFor(dom.scope), ...(EVIDENCE_EXTRA_TAGS[code] ?? [])];
         const evidenceSelect = EVIDENCE_SELECTS[code];
         const relatedMods = (DOMAIN_MODIFIER_IDS[code] ?? [])
           .map((id) => CLINICAL_MODIFIERS.find((m) => m.id === id))
@@ -204,6 +214,26 @@ export default function DomainScoreGrid({
                 );
               })}
             </div>
+            {(() => {
+              // Workbook "Suggested Frequency / Trigger" guidance (as_care_delivery_map),
+              // shown read-only for the selected score to guide the routine + care plan.
+              const guide = careDeliveryMap(code, entry.score ?? 0);
+              if (!guide || (!guide.suggestedFrequency && !guide.escalationTrigger)) return null;
+              return (
+                <div className="mt-2.5 rounded-md border px-2.5 py-1.5 text-[11px] leading-snug" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)" }}>
+                  {guide.suggestedFrequency && (
+                    <div className="text-[var(--clinical-ink-soft)]">
+                      <span className="font-semibold uppercase tracking-wide text-[10px] text-[var(--clinical-muted)]">Suggested frequency</span> · {guide.suggestedFrequency}
+                    </div>
+                  )}
+                  {guide.escalationTrigger && (
+                    <div className="mt-0.5 text-[var(--clinical-ink-soft)]">
+                      <span className="font-semibold uppercase tracking-wide text-[10px] text-[var(--clinical-muted)]">Escalation trigger</span> · {guide.escalationTrigger}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <EvidenceField
                 evidence={entry.evidence}

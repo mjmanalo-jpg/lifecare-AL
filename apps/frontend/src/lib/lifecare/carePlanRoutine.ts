@@ -145,7 +145,11 @@ export function generateRoutine(domains: RoutineDomainInput[]): RoutineEvent[] {
     for (const occ of expandOccurrences(cfg)) {
       const w = windowForMinutes(occ.minutes);
       const list = hfItemsByWindow.get(w.id) ?? [];
-      list.push({ id: `${w.id}#hf#${d.code}@${occ.time}`, text: `${cfg.label} · ${occ.time}`, scheduledMinutes: occ.minutes });
+      // High-frequency domains are excluded from bundling (below), so their occurrence
+      // text carries the caregiver prompt directly — otherwise a frequent-toileting
+      // resident would see a bare "Toileting · 06:00" with no schedule/hygiene/SOP cue.
+      const text = cfg.instruction ? `${cfg.label} · ${occ.time} — ${cfg.instruction}` : `${cfg.label} · ${occ.time}`;
+      list.push({ id: `${w.id}#hf#${d.code}@${occ.time}`, text, scheduledMinutes: occ.minutes });
       hfItemsByWindow.set(w.id, list);
     }
   }

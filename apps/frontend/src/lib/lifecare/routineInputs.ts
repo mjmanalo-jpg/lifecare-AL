@@ -16,7 +16,7 @@ export function careLevelToLoc(level: string | undefined | null): FinalLoc | und
 }
 
 export interface AssessmentLike {
-  domains?: Record<string, { score?: number } | undefined> | null;
+  domains?: Record<string, { score?: number; evidence?: string } | undefined> | null;
   context?: { dysphagia?: boolean; weightLoss?: boolean; recentHospitalization?: boolean; acuteInstability?: boolean } | null;
   layer1?: { diagnoses?: string } | null;
   layer3?: { finalLevel?: string } | null;
@@ -30,7 +30,7 @@ export function domainsFromAssessment(a: AssessmentLike): DomainInput[] {
     const score = entry?.score;
     if (typeof score !== "number" || !Number.isFinite(score)) continue;
     const s = Math.max(0, Math.min(4, Math.round(score))) as 0 | 1 | 2 | 3 | 4;
-    out.push({ code, name: DOMAIN_NAME[code] ?? code, score: s, activeNeed: s >= 1 });
+    out.push({ code, name: DOMAIN_NAME[code] ?? code, score: s, activeNeed: s >= 1, evidence: entry?.evidence });
   }
   return out;
 }

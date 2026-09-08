@@ -1,0 +1,144 @@
+<style>
+  @page { size: A4 landscape; margin: 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1f2937; margin: 0; font-size: 12px; }
+  .head { border-bottom: 3px solid #0d9488; padding-bottom: 10px; margin-bottom: 14px; }
+  .head h1 { margin: 0; font-size: 22px; color: #0f172a; }
+  .head .sub { color: #64748b; font-size: 13px; margin-top: 3px; }
+  .head .meta { color: #94a3b8; font-size: 11px; margin-top: 4px; }
+  .summary { display: flex; gap: 10px; margin-bottom: 16px; }
+  .card { flex: 1; border: 1px solid #e2e8f0; border-radius: 6px; padding: 9px 12px; background: #f8fafc; }
+  .card .k { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: #64748b; }
+  .card .v { font-size: 15px; font-weight: 700; color: #0f172a; margin-top: 2px; }
+  .card.golive { border-color: #fcd34d; background: #fffbeb; }
+  .card.golive .v { color: #b45309; }
+  table.gantt { width: 100%; border-collapse: collapse; }
+  table.gantt th, table.gantt td { border: 1px solid #e5e7eb; }
+  table.gantt thead th { background: #0f172a; color: #fff; font-size: 10.5px; font-weight: 600; padding: 6px 4px; text-align: center; }
+  table.gantt thead th.lbl { text-align: left; padding-left: 10px; width: 230px; background: #0f172a; }
+  table.gantt th .wk { display: block; font-size: 9px; color: #94a3b8; font-weight: 400; }
+  td.label { padding: 7px 10px; font-weight: 600; font-size: 11.5px; background: #f8fafc; }
+  td.cell { height: 26px; }
+  td.bar { color: #fff; font-size: 9.5px; font-weight: 600; text-align: center; border-radius: 5px; padding: 0 4px; white-space: nowrap; }
+  td.ms { text-align: center; font-size: 15px; }
+  .c-done { background: #16a34a; }
+  .c-verify { background: #2563eb; }
+  .c-uat { background: #7c3aed; }
+  .c-rls { background: #ea580c; }
+  .c-nft { background: #0d9488; }
+  .c-vapt { background: #e11d48; }
+  .c-vapt2 { background: #fb7185; }
+  .ms-uat { color: #7c3aed; }
+  .ms-signoff { color: #0f766e; }
+  .ms-go { color: #b45309; }
+  .legend { margin-top: 14px; font-size: 10.5px; color: #475569; display: flex; flex-wrap: wrap; gap: 14px; }
+  .legend span::before { content: "■ "; }
+  .lg-done::before { color: #16a34a; } .lg-verify::before { color: #2563eb; }
+  .lg-uat::before { color: #7c3aed; } .lg-rls::before { color: #ea580c; }
+  .lg-nft::before { color: #0d9488; } .lg-vapt::before { color: #e11d48; }
+  .note { margin-top: 12px; font-size: 10.5px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 8px; line-height: 1.5; }
+  .note b { color: #334155; }
+</style>
+
+<div class="head">
+  <h1>LifeCare SLMS Care System — Planned Timeline to Go-Live</h1>
+  <div class="sub">UAT, security &amp; non-functional testing, and production go-live schedule</div>
+  <div class="meta">Prepared 8 September 2026 · Target dates (subject to UAT findings)</div>
+</div>
+
+<div class="summary">
+  <div class="card"><div class="k">UAT Start</div><div class="v">Mon, 15 Sep 2026</div></div>
+  <div class="card"><div class="k">Non-functional &amp; Security Tests</div><div class="v">22 Sep – 3 Oct 2026</div></div>
+  <div class="card"><div class="k">Formal VAPT (if in scope)</div><div class="v">6 – 24 Oct 2026</div></div>
+  <div class="card golive"><div class="k">Target Go-Live</div><div class="v">Mon, 27 Oct 2026</div></div>
+</div>
+
+<table class="gantt">
+  <thead>
+    <tr>
+      <th class="lbl">Activity</th>
+      <th>W1<span class="wk">Sep 8</span></th>
+      <th>W2<span class="wk">Sep 15</span></th>
+      <th>W3<span class="wk">Sep 22</span></th>
+      <th>W4<span class="wk">Sep 29</span></th>
+      <th>W5<span class="wk">Oct 6</span></th>
+      <th>W6<span class="wk">Oct 13</span></th>
+      <th>W7<span class="wk">Oct 20</span></th>
+      <th>W8<span class="wk">Oct 27</span></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="label">Security hardening &amp; headers ✓ done</td>
+      <td class="bar c-done">Deployed</td>
+      <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td>
+    </tr>
+    <tr>
+      <td class="label">Internal workflow verification</td>
+      <td class="bar c-verify">Sep 8–12</td>
+      <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td>
+    </tr>
+    <tr>
+      <td class="label">◆ UAT start</td>
+      <td class="cell"></td>
+      <td class="ms ms-uat">◆</td>
+      <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td>
+    </tr>
+    <tr>
+      <td class="label">UAT execution &amp; fix cycles</td>
+      <td class="cell"></td>
+      <td class="bar c-uat" colspan="2">Sep 15 – 26</td>
+      <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td>
+    </tr>
+    <tr>
+      <td class="label">◆ UAT sign-off</td>
+      <td class="cell"></td><td class="cell"></td><td class="cell"></td>
+      <td class="ms ms-signoff">◆</td>
+      <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td>
+    </tr>
+    <tr>
+      <td class="label">DB-level access enforcement (RLS)</td>
+      <td class="cell"></td><td class="cell"></td>
+      <td class="bar c-rls">Sep 22–26</td>
+      <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td>
+    </tr>
+    <tr>
+      <td class="label">Non-functional tests<br><span style="font-weight:400;font-size:9.5px;color:#64748b">perf/load · capacity · backup &amp; DR · vuln scan</span></td>
+      <td class="cell"></td><td class="cell"></td>
+      <td class="bar c-nft" colspan="2">Sep 22 – Oct 3</td>
+      <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td>
+    </tr>
+    <tr>
+      <td class="label">Formal VAPT — external pen test<br><span style="font-weight:400;font-size:9.5px;color:#64748b">if included in scope</span></td>
+      <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td>
+      <td class="bar c-vapt" colspan="2">Oct 6 – 17</td>
+      <td class="cell"></td><td class="cell"></td>
+    </tr>
+    <tr>
+      <td class="label">VAPT remediation &amp; retest</td>
+      <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td>
+      <td class="bar c-vapt2">Oct 20–24</td>
+      <td class="cell"></td>
+    </tr>
+    <tr>
+      <td class="label">★ Target Go-Live</td>
+      <td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td class="cell"></td>
+      <td class="ms ms-go">★</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="legend">
+  <span class="lg-done">Completed</span>
+  <span class="lg-verify">Workflow verification</span>
+  <span class="lg-uat">UAT</span>
+  <span class="lg-rls">Security hardening (RLS)</span>
+  <span class="lg-nft">Non-functional tests</span>
+  <span class="lg-vapt">VAPT</span>
+  <span style="color:#b45309">◆ / ★ Milestone</span>
+</div>
+
+<div class="note">
+  <b>Dependencies &amp; assumptions:</b> Dates are targets and assume internal workflow verification completes the week of Sep 8. UAT sign-off, non-functional test results, and a signed HIPAA BAA with the hosting/database provider are prerequisites for go-live.
+  <br><b>Note on VAPT:</b> The formal third-party penetration test is shown as recommended/optional. If VAPT is required to <i>complete</i> before go-live, the go-live target moves to early November to allow for testing and remediation.
+</div>
