@@ -778,13 +778,13 @@ async function scanCommunity(communityId: string, organizationId: string | null)
   // materialized as many occurrences (night rounds every 30 min = one per :00/:30),
   // so alerting per occurrence gives the client's per-frequency reminders for free.
   // Reuses the SAME state machine as the caregiver board (deriveState): Due = −5…+30
-  // min, Overdue = past +30. Due → a reminder to the caregiver on the LIVE shift for
-  // that resident; Overdue → a warning to that caregiver PLUS nurse/CM. Keyed by
-  // occId so each occurrence fires once. Already-charted (Closed/Cancelled) never
-  // alerts. Routing is shift-window scoped (activeCaregiverUserIdsForResident) so it
-  // matches exactly who can chart the task right now, incl. NOC after midnight.
+  // min, Overdue = past +30. CAREGIVERS ONLY (client rule): both due and overdue go
+  // solely to the caregiver on the LIVE shift for that resident — never nurse/CM. No
+  // on-duty caregiver → no alert. Keyed by occId so each occurrence fires once;
+  // already-charted (Closed/Cancelled) never alerts. Routing is shift-window scoped
+  // (activeCaregiverUserIdsForResident) so it matches exactly who can chart it now,
+  // incl. NOC after midnight.
   await runSource("routine-due", async () => {
-    const nurseCm = idsForRoles(["NURSE", "CARE_MANAGER"]);
     const residents = await prisma.resident.findMany({
       where: { communityId, status: { not: "DISCHARGED" } },
       select: { id: true, firstName: true, lastName: true, roomNumber: true },
@@ -821,17 +821,12 @@ async function scanCommunity(communityId: string, organizationId: string | null)
       const when = to12h(o.scheduledTime);
       const covering = activeCaregiverUserIdsForResident(o.residentId, schedules, now, tz);
 
+      // Caregiver-only: no caregiver on a live shift → no alert at all.
+      if (!covering.length) continue;
       if (state === "Due") {
-        // Proactive reminder to the caregiver on duty. No caregiver on a live shift →
-        // no one to remind now (the overdue pass still catches a genuine miss).
-        if (!covering.length) continue;
         if (await notify("SHIFT_REMINDER", "routineOccurrence", `routinedue:${o.occId}`, "Care task due", `${rname(r)} (Room ${room(r)}) — ${task} is due at ${when}. Please complete and chart it.`, "INFO", covering)) counts.routineDue++;
       } else {
-        // Overdue safety net: the on-duty caregiver AND nurse/CM (fallback nurse/CM
-        // when the shift is uncovered) so a missed task is never invisible.
-        const recips = [...new Set([...covering, ...nurseCm])];
-        if (!recips.length) continue;
-        if (await notify("SYSTEM_ALERT", "routineOccurrence", `routinelate:${o.occId}`, "Care task overdue", `${rname(r)} (Room ${room(r)}) — ${task} scheduled ${when} is overdue and not yet charted. Complete it now or log an exception.`, "WARNING", recips)) counts.routineOverdue++;
+        if (await notify("SYSTEM_ALERT", "routineOccurrence", `routinelate:${o.occId}`, "Care task overdue", `${rname(r)} (Room ${room(r)}) — ${task} scheduled ${when} is overdue and not yet charted. Complete it now or log an exception.`, "WARNING", covering)) counts.routineOverdue++;
       }
     }
   });
