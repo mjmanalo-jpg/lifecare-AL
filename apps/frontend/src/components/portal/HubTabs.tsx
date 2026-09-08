@@ -54,7 +54,7 @@ export default function HubTabs({
       <div
         role="tablist"
         aria-label="Section tabs"
-        className="flex w-fit max-w-full flex-wrap gap-1 p-1"
+        className="flex w-full flex-wrap items-end gap-1 border-b border-slate-200 pb-2 dark:border-slate-700"
       >
         {tabs.map((t) => {
           const on = t.key === current?.key;
@@ -72,7 +72,7 @@ export default function HubTabs({
                   // theme layer (globals.css) remaps those solid surfaces to a dark
                   // colour, which turned the hovered tab dark-on-dark. Opacity variants
                   // compile to different class names and are left un-remapped.
-                  : "text-slate-600 hover:bg-black/5 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+                  : "text-slate-700 hover:bg-black/5 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
               }`}
             >
               {t.label}
