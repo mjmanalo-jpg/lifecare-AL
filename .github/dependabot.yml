@@ -1,21 +1,54 @@
 version: 2
 updates:
+  # Node (repo root)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    groups:
+      npm-root:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # Major bumps are breaking (e.g. Prisma 5 -> 7) — handle those as planned,
+      # tested upgrades, not auto-PRs.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # Node (frontend app)
   - package-ecosystem: "npm"
     directory: "/apps/frontend"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    groups:
+      frontend-deps:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # Python (backend)
   - package-ecosystem: "pip"
     directory: "/apps/backend"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    groups:
+      backend-deps:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions (majors here are low-risk; group them all)
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]
