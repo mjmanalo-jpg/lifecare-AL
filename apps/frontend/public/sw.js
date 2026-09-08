@@ -9,8 +9,8 @@ self.addEventListener("push", (event) => {
   const urgent = !!data.urgent;
   const options = {
     body: data.body || "",
-    icon: "/logo-lifecare.png",
-    badge: "/logo-lifecare.png",
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
     tag: data.tag || undefined,      // collapse duplicates of the same occurrence
     renotify: urgent,                // re-alert even if a same-tag one is showing
     requireInteraction: urgent,      // overdue stays until acknowledged
