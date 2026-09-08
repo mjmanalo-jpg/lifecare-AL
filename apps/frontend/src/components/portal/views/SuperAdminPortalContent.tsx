@@ -489,7 +489,6 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
         storageKey="superadmin-careplanhub"
         tabs={[
           { key: "careplans", label: "Plan & Review", node: <CarePlanReviewsBoard clinicianRole="SUPERADMIN" /> },
-          { key: "careplangovernance", label: "Plan Governance", node: <CarePlanReviewsBoard clinicianRole="SUPERADMIN" tabs={["pending", "history"]} /> },
           { key: "routinegenerator", label: "24-Hour Routine", node: <RoutineGeneratorBoard /> },
           { key: "routinetemplate", label: "Routine Template", node: <RoutineTemplateBoard /> },
           { key: "caretask", label: "Care Task", node: <RoutineGeneratorBoard view="caretask" /> },
