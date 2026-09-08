@@ -131,6 +131,7 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
           storageKey="care_manager-careplanhub"
           tabs={[
             { key: "careplans", label: "Plan & Review", node: <CarePlanReviewsBoard clinicianRole="CARE_MANAGER" /> },
+            { key: "careplangovernance", label: "Plan Governance", node: <CarePlanReviewsBoard clinicianRole="CARE_MANAGER" tabs={["pending", "history"]} /> },
             { key: "routinegenerator", label: "24-Hour Routine", node: <RoutineGeneratorBoard /> },
             { key: "routinetemplate", label: "Routine Template", node: <RoutineTemplateBoard /> },
             { key: "caretask", label: "Care Task", node: <RoutineGeneratorBoard view="caretask" /> },
