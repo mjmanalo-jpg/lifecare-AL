@@ -3,7 +3,7 @@
 // (0917 XXX XXXX) for anyone missing a valid one; the seeded @lifecare.com
 // credentials get their fixed number from seed-auth.mjs.
 //
-// Passwords are NOT touched — existing accounts keep lifecare@2026.
+// Passwords are NOT touched — existing accounts keep their current password.
 //
 // Run from apps/frontend:  node prisma/backfill-ph-phones.mjs
 import nextEnv from "@next/env";
@@ -61,7 +61,7 @@ async function main() {
     changes.push({ email, name: u.name, role: u.role, phone: desired });
   }
 
-  console.log(`\nUpdated ${changes.length} account(s) with PH mobile numbers. Password unchanged (lifecare@2026).\n`);
+  console.log(`\nUpdated ${changes.length} account(s) with PH mobile numbers. Passwords unchanged.\n`);
   for (const c of changes) {
     console.log(`  ${c.phone}  ${c.email.padEnd(32)} ${String(c.role).padEnd(16)} ${c.name || ""}`);
   }

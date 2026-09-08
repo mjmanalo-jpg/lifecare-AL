@@ -15,9 +15,15 @@ nextEnv.loadEnvConfig(process.cwd());
 
 const ORG = { name: "LifeCare Living Solutions Inc.", slug: "life-care-360" };
 const COMMUNITY = { name: "Care360", code: "CARE360", city: "Pasig City", state: "Metro Manila", communityType: "ASSISTED_LIVING", bedsTotal: 60, bedsAvailable: 60 };
-// Sample credential for the Organization Admin portal. orgRole ADMIN is what
-// routes /api/auth/session to role ORGANIZATION_ADMIN → /organization_admin.
-const ADMIN = { email: "orgadmin@care360.com", password: "care360@2026", name: "Care360 Organization Admin", firstName: "Organization", lastName: "Admin", phone: "09181000001", role: "FACILITY_ADMIN", orgRole: "ADMIN" };
+// Organization Admin portal credential. orgRole ADMIN is what routes
+// /api/auth/session to role ORGANIZATION_ADMIN → /organization_admin. The
+// password comes from SEED_PASSWORD — never hardcode it.
+const SEED_PASSWORD = process.env.SEED_PASSWORD;
+if (!SEED_PASSWORD) {
+  console.error("Refusing to run: set SEED_PASSWORD to a strong, non-committed password first.");
+  process.exit(1);
+}
+const ADMIN = { email: "orgadmin@care360.com", password: SEED_PASSWORD, name: "Care360 Organization Admin", firstName: "Organization", lastName: "Admin", phone: "09181000001", role: "FACILITY_ADMIN", orgRole: "ADMIN" };
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;

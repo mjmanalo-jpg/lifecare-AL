@@ -2,11 +2,12 @@
  * One-off rebrand: Golden Hearth → LifeCare Living Solutions.
  *   • Renames the active organization + community (community located in Pasig City).
  *   • Migrates every role login to a clean role-based @lifecare.com email.
- *   • Resets every migrated account's password to "lifecare@2026" (Supabase Auth + bcrypt hash).
+ *   • Resets every migrated account's password to the value of SEED_PASSWORD
+ *     (Supabase Auth + bcrypt hash). Never hardcode the password here.
  *
  * Idempotent: re-running finds accounts by their NEW email if already migrated
  * and simply re-asserts the password. Run from apps/frontend:
- *   node prisma/rebrand-lifecare.mjs
+ *   SEED_PASSWORD='<strong-secret>' node prisma/rebrand-lifecare.mjs
  */
 import nextEnv from "@next/env";
 import { PrismaClient } from "@prisma/client";
@@ -15,7 +16,11 @@ import bcrypt from "bcryptjs";
 
 nextEnv.loadEnvConfig(process.cwd());
 
-const NEW_PASSWORD = "lifecare@2026";
+const NEW_PASSWORD = process.env.SEED_PASSWORD;
+if (!NEW_PASSWORD) {
+  console.error("Refusing to run: set SEED_PASSWORD to a strong, non-committed password first.");
+  process.exit(1);
+}
 
 // Old login → new role-based login. Roles with more than one person keep every
 // account (they are referenced by tasks/assignments) and get numbered suffixes.
@@ -113,7 +118,7 @@ async function main() {
       where: { id: dbUser.id },
       data: { email: newEmail, passwordHash },
     });
-    console.log(`  ${oldEmail} → ${newEmail}  (pw: ${NEW_PASSWORD})`);
+    console.log(`  ${oldEmail} → ${newEmail}  (pw set from SEED_PASSWORD)`);
   }
 
   console.log("\nRebrand complete.");

@@ -1,11 +1,11 @@
 /**
- * One-off: reset the Super Admin "Myla Reyes" password to "lifecare@2026".
+ * One-off: reset the Super Admin "Myla Reyes" password to SEED_PASSWORD.
  *   • Finds the User by email (myla.reyes@gritxl.com), falling back to mobile 09175843059.
  *   • Resets Supabase Auth password (update if the auth user exists, else create) + bcrypt hash.
  *   • Links User.authUserId if it wasn't set (password-less account activating for the first time).
  *
  * Idempotent — re-running just re-asserts the same password. Run from apps/frontend:
- *   node prisma/reset-myla.mjs
+ *   SEED_PASSWORD='<strong-secret>' node prisma/reset-myla.mjs
  */
 import nextEnv from "@next/env";
 import { PrismaClient } from "@prisma/client";
@@ -14,7 +14,11 @@ import bcrypt from "bcryptjs";
 
 nextEnv.loadEnvConfig(process.cwd());
 
-const NEW_PASSWORD = "lifecare@2026";
+const NEW_PASSWORD = process.env.SEED_PASSWORD;
+if (!NEW_PASSWORD) {
+  console.error("Refusing to run: set SEED_PASSWORD to a strong, non-committed password first.");
+  process.exit(1);
+}
 const EMAIL = "myla.reyes@gritxl.com";
 const MOBILE_DIGITS = "09175843059".replace(/\D/g, "");
 
@@ -64,7 +68,7 @@ async function main() {
 
   // 3) Persist bcrypt hash + link authUserId (dev bcrypt path + prod Supabase path both work).
   await prisma.user.update({ where: { id: dbUser.id }, data: { passwordHash, authUserId } });
-  console.log(`\nDone. Login: mobile ${MOBILE_DIGITS} (or ${dbUser.email})  pw: ${NEW_PASSWORD}`);
+  console.log(`\nDone. Login: mobile ${MOBILE_DIGITS} (or ${dbUser.email})  pw set from SEED_PASSWORD`);
 }
 
 main()
