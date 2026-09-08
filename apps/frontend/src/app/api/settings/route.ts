@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isDbConfigured } from "@/lib/models";
 import { canManageOrganization, requireTenantContext } from "@/lib/tenant";
 import { withTenantDb } from "@/lib/tenantDb";
+import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,5 +35,8 @@ export async function POST(request: NextRequest) {
   if (!isDbConfigured()) return NextResponse.json({ data: { key, value: body.value }, demo: true });
   const id = `${context.organizationId}:${context.communityId}:${key}`;
   const data = await withTenantDb(context, (tx) => tx.appSetting.upsert({ where: { id }, update: { value: String(body.value ?? "") }, create: { id, key, value: String(body.value ?? ""), organizationId: context.organizationId, communityId: context.communityId } }));
+  // Audit which setting changed and by whom — never the value (some app-settings
+  // hold clinical data in migration-free designs, so logging it could leak PHI).
+  logAudit({ actorId: context.userId, actorRole: context.role, action: "UPDATE", entityType: "app-settings", entityId: key, organizationId: context.organizationId, communityId: context.communityId, after: { key } });
   return NextResponse.json({ data });
 }

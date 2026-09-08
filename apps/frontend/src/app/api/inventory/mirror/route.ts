@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
+import { logAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest) {
   if (body.remove) {
     if (body.facilityItemId) {
       await prisma.inventoryItem.deleteMany({ where: { id: body.facilityItemId, communityId } });
+      logAudit({ actorId: ctx.userId, actorRole: ctx.role, action: "DELETE", entityType: "inventory-item", entityId: body.facilityItemId, organizationId: ctx.organizationId, communityId, reason: "clinical-inventory mirror removal" });
     }
     return NextResponse.json({ ok: true, facilityItemId: null });
   }
@@ -88,6 +90,7 @@ export async function POST(request: NextRequest) {
     const existing = await prisma.inventoryItem.findFirst({ where: { id: body.facilityItemId, communityId }, select: { id: true } });
     if (existing) {
       await prisma.inventoryItem.update({ where: { id: existing.id }, data });
+      logAudit({ actorId: ctx.userId, actorRole: ctx.role, action: "UPDATE", entityType: "inventory-item", entityId: existing.id, organizationId: ctx.organizationId, communityId, after: { itemName: name } });
       return NextResponse.json({ ok: true, facilityItemId: existing.id });
     }
   }
@@ -96,5 +99,6 @@ export async function POST(request: NextRequest) {
     data: { ...data, organizationId: ctx.organizationId ?? undefined, communityId },
     select: { id: true },
   });
+  logAudit({ actorId: ctx.userId, actorRole: ctx.role, action: "CREATE", entityType: "inventory-item", entityId: created.id, organizationId: ctx.organizationId, communityId, after: { itemName: name } });
   return NextResponse.json({ ok: true, facilityItemId: created.id });
 }
