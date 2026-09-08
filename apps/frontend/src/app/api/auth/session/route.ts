@@ -6,6 +6,7 @@ import { isSupabaseAuthConfigured, signInWithSupabase, signOutSupabase } from "@
 import { listWorkspaces } from "@/lib/tenant";
 import bcrypt from "bcryptjs";
 import { logAudit } from "@/lib/audit";
+import { rateLimit, clientIp } from "@/lib/rateLimit";
 import type { Role as PortalRole } from "@/constants/roleConfig";
 
 export const runtime = "nodejs";
@@ -24,6 +25,16 @@ export async function POST(request: NextRequest) {
     const email = String(body.email || "").toLowerCase().trim();
     const password = String(body.password || "");
     if (!email || !password) return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
+
+    // Throttle credential attempts (brute-force / credential-stuffing protection):
+    // per (ip + account), plus a wider per-ip cap to catch spraying across accounts.
+    const ip = clientIp(request.headers);
+    const rl = rateLimit(`login:${ip}:${email}`, 8, 10 * 60_000);
+    const rlIp = rateLimit(`login-ip:${ip}`, 40, 10 * 60_000);
+    if (!rl.allowed || !rlIp.allowed) {
+      return NextResponse.json({ error: "Too many sign-in attempts. Please wait a few minutes and try again." }, { status: 429, headers: { "Retry-After": String(Math.max(rl.retryAfter, rlIp.retryAfter)) } });
+    }
+
     if (!isDbConfigured()) return NextResponse.json({ error: "Database not configured" }, { status: 503 });
 
     let authUserId: string | undefined;

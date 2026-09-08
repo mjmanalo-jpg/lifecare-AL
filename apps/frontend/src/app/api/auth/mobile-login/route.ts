@@ -5,6 +5,7 @@ import { isDbConfigured } from "@/lib/models";
 import { createSession } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { normalizeMobile } from "@/lib/mobileAuth";
+import { rateLimit, clientIp } from "@/lib/rateLimit";
 import type { Role as PortalRole } from "@/constants/roleConfig";
 
 export const runtime = "nodejs";
@@ -28,6 +29,15 @@ export async function POST(request: NextRequest) {
 
     if (!company || !mobile) return NextResponse.json({ error: "Company and mobile number are required" }, { status: 400 });
     if (mobile.length < 7) return NextResponse.json({ error: "Enter a valid mobile number" }, { status: 400 });
+
+    // Throttle credential attempts (brute-force protection): per (ip + mobile),
+    // plus a wider per-ip cap to catch spraying across numbers.
+    const ip = clientIp(request.headers);
+    const rl = rateLimit(`emp-login:${ip}:${mobile}`, 8, 10 * 60_000);
+    const rlIp = rateLimit(`emp-login-ip:${ip}`, 40, 10 * 60_000);
+    if (!rl.allowed || !rlIp.allowed) {
+      return NextResponse.json({ error: "Too many sign-in attempts. Please wait a few minutes and try again." }, { status: 429, headers: { "Retry-After": String(Math.max(rl.retryAfter, rlIp.retryAfter)) } });
+    }
 
     // 1) Company name → the communities under that org/community.
     const communities = await prisma.community.findMany({
