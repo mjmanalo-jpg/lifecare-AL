@@ -119,21 +119,26 @@ export async function POST(request: NextRequest) {
         data: { status: "APPROVED", approvedBy, approvedAt: now, effectiveDate, originalRecommendation: { ...orgRec(d), releaseCheck } as never },
       });
       approved += 1;
-      logAudit({
-        actorId: ctx.userId,
-        actorName: approvedBy,
-        actorRole: ctx.role,
-        action: "UPDATE",
-        entityType: "routine-definitions",
-        entityId: d.id,
-        organizationId: ctx.organizationId,
-        communityId,
-        after: { residentId, residentName, status: "APPROVED" },
-        reason: `Approved routine event "${d.name}"${residentName ? ` for ${residentName}` : ""}`,
-      });
     } catch (err) {
       console.error("[routine approve] update failed:", err);
     }
+  }
+
+  // One audit entry per approval — not one per event. The Care Activity Log shows
+  // "Care Manager approved the routine (N events)" instead of flooding with a row per care task.
+  if (approved > 0) {
+    logAudit({
+      actorId: ctx.userId,
+      actorName: approvedBy,
+      actorRole: ctx.role,
+      action: "UPDATE",
+      entityType: "routine-definitions",
+      entityId: residentId,
+      organizationId: ctx.organizationId,
+      communityId,
+      after: { residentId, residentName, status: "APPROVED", eventsApproved: approved },
+      reason: `Approved routine${residentName ? ` for ${residentName}` : ""} — ${approved} event${approved === 1 ? "" : "s"}${superseded ? `, superseded ${superseded} prior` : ""}`,
+    });
   }
 
   return NextResponse.json({ approved, blocked, superseded, releaseWarnings: release.warnings });

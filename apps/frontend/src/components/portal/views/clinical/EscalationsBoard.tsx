@@ -211,15 +211,20 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
         </div>
       </div>
 
+      {/* Oversight metrics — nurse/CM only. Caregivers just raise and track their own SBARs. */}
+      {role !== "CAREGIVER" && (
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border bg-[var(--clinical-line)] lg:grid-cols-4" style={{ borderColor: "var(--clinical-line)" }}>
         <Stat label="Open" value={stats.open} icon={ClipboardList} color="#C39A3E" />
         <Stat label="SLA Breached" value={stats.breached} icon={AlertTriangle} color="#DC2626" />
         <Stat label="Emergency" value={stats.emergency} icon={Bell} color="#DC2626" />
         <Stat label="Resolved" value={stats.resolved} icon={CheckCircle2} color="#16A34A" />
       </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col gap-3 rounded-2xl border p-3 lg:flex-row lg:items-center" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+        {/* Status + priority triage filters are nurse/CM oversight — caregivers just search their raised SBARs. */}
+        {role !== "CAREGIVER" && (<>
         <div className="inline-flex items-center self-start rounded-xl bg-[var(--clinical-surface-2)] p-1">
           {["open", "resolved", "all"].map((s) => (
             <button key={s} onClick={() => setStatusFilter(s)}
@@ -236,6 +241,7 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
             </button>
           ))}
         </div>
+        </>)}
         <div className="relative flex-1 lg:ml-auto lg:max-w-sm">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--clinical-muted)]" />
           <input type="text" placeholder="Search resident, situation, or clinician…" value={search} onChange={(e) => setSearch(e.target.value)}

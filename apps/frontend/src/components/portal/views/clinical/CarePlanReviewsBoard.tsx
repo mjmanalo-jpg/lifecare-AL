@@ -41,6 +41,8 @@ const newId = () => globalThis.crypto?.randomUUID?.() ?? `rev-${Date.now()}-${Ma
 const isoDate = (d: Date) => d.toISOString().split("T")[0];
 const addMonths = (d: Date, n: number) => { const x = new Date(d); x.setMonth(x.getMonth() + n); return x; };
 const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+// A plan surfaces under "Reviews Due" once its next-review date is within this lead window (or overdue).
+const REVIEW_LEAD_DAYS = 14;
 const fmt = (isoStr: string) => (isoStr ? new Date(isoStr + (isoStr.length <= 10 ? "T00:00:00" : "")).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—");
 const periodOf = (d: Date) => `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`;
 
@@ -460,12 +462,17 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
     finally { setActingId(""); }
   };
 
-  // Reviews Due: residents whose next review has passed, or who've never been reviewed.
+  // Reviews Due: residents with an ACTIVE care plan of record whose next review is
+  // approaching (within REVIEW_LEAD_DAYS) or already overdue. A newly admitted resident
+  // with no plan yet ("Create care plan") is NOT due — they belong under "No Plan Yet".
   const dueList = useMemo(() => residents.map((r: Row) => {
-    const last = latestReview(s(r.id));
-    const due = !last || (last.nextReviewDate ? last.nextReviewDate <= isoDate(today) : false);
-    return { r, last, due };
-  }).filter((x) => x.due), [residents, reviews]); // eslint-disable-line react-hooks/exhaustive-deps
+    const rid = s(r.id);
+    const active = activePlanByResident.get(rid);
+    const last = latestReview(rid);
+    const nextReview = s(active?.nextReviewDate) || last?.nextReviewDate || "";
+    const due = !!active && !!nextReview && nextReview <= isoDate(addDays(today, REVIEW_LEAD_DAYS));
+    return { r, last, nextReview, due };
+  }).filter((x) => x.due), [residents, reviews, activePlanByResident]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const body = (
     <>
@@ -477,9 +484,9 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
       )}
 
       {!embedded && (
-      <div className="flex items-center gap-2" role="tablist" aria-label="Care plan reviews view">
+      <div className="-mx-1 flex items-center gap-2 overflow-x-auto scrollbar-hide px-1" role="tablist" aria-label="Care plan reviews view">
         {([["plans", "Care Plans"], ["new", "New Review"], ["pending", "Pending Approval"], ["due", "Reviews Due"], ["history", "History"]] as const).filter(([v]) => !tabs || tabs.includes(v)).map(([v, label]) => (
-          <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${tab === v ? "bg-[#4F46E5] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}{v === "due" && dueList.length ? ` (${dueList.length})` : ""}{v === "pending" && pendingQueue.length ? ` (${pendingQueue.length})` : ""}</button>
+          <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`shrink-0 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-semibold transition ${tab === v ? "bg-[#4F46E5] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}{v === "due" && dueList.length ? ` (${dueList.length})` : ""}{v === "pending" && pendingQueue.length ? ` (${pendingQueue.length})` : ""}</button>
         ))}
       </div>
       )}
@@ -677,10 +684,10 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
               skeletonRows={3}
             >
               <div className="space-y-2">
-                {dueList.map(({ r, last }) => {
+                {dueList.map(({ r, last, nextReview }) => {
                   const lastReview = last ? fmt(last.reviewDate) : "Never";
-                  const overdue = !last?.nextReviewDate || last.nextReviewDate <= isoDate(today);
-                  const nextDue = last?.nextReviewDate && last.nextReviewDate > isoDate(today) ? fmt(last.nextReviewDate) : "Overdue";
+                  const overdue = !!nextReview && nextReview <= isoDate(today);
+                  const nextDue = nextReview ? (nextReview > isoDate(today) ? fmt(nextReview) : "Overdue") : "—";
                   return (
                     <div key={s(r.id)} className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
                       <div className="min-w-0">

@@ -19,6 +19,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { jsPDF } from "jspdf";
+import { stampLifecareLogo } from "@/lib/pdfReport";
 import {
   Activity, Heart, Thermometer, Droplets, Wind, Scale, Zap, Moon,
   Utensils, Footprints, Smile, AlertTriangle, CircleDot, Waves,
@@ -241,6 +243,27 @@ function trendDelta(values: (number | null)[]): number | null {
   const first = nn[0], last = nn[nn.length - 1];
   if (first === 0) return null;
   return ((last - first) / Math.abs(first)) * 100;
+}
+
+// Per-domain roll-up for the PDF report (all values ASCII-safe for jsPDF helvetica).
+interface Summary { n: number; latest: string; status: string; delta: string; min: string; max: string; avg: string; }
+function summarize(values: (number | null)[], opts: { digits?: number; fmt?: (v: number) => string; band?: readonly [number, number] } = {}): Summary {
+  const { digits = 0, fmt, band } = opts;
+  const nn = values.filter((v): v is number => v != null);
+  const show = (v: number) => (fmt ? fmt(v) : v.toFixed(digits).replace(/\.0$/, ""));
+  if (!nn.length) return { n: 0, latest: "—", status: "—", delta: "—", min: "—", max: "—", avg: "—" };
+  const latest = nn[nn.length - 1];
+  const d = trendDelta(values);
+  const r = d == null ? null : Math.round(d);
+  return {
+    n: nn.length,
+    latest: show(latest),
+    status: band ? (inRange(latest, band[0], band[1]) ? "Normal" : "Abnormal") : "—",
+    delta: r == null ? "—" : `${r > 0 ? "+" : ""}${r}%`,
+    min: show(Math.min(...nn)),
+    max: show(Math.max(...nn)),
+    avg: fmt ? fmt(nn.reduce((a, b) => a + b, 0) / nn.length) : (nn.reduce((a, b) => a + b, 0) / nn.length).toFixed(Math.max(1, digits)),
+  };
 }
 
 function DeltaChip({ delta }: { delta: number | null }) {
@@ -623,6 +646,104 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE", residentId: 
 
   const lvl = selected ? levelOf(selected) : null;
 
+  // Structured, self-contained PDF (no page chrome) — one summary row per domain
+  // across every trend the board renders, plus flagged domains and raw readings.
+  const downloadVitalsPdf = () => {
+    if (!selected) return;
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const M = 40;
+    let y = 50;
+    const setFont = (size: number, bold = false, color = 60) => doc.setFont("helvetica", bold ? "bold" : "normal").setFontSize(size).setTextColor(color);
+    const ensure = (h: number) => { if (y + h > pageH - M) { doc.addPage(); y = M; return true; } return false; };
+    const heading = (t: string) => { ensure(34); y += 16; setFont(12, true, 20); doc.text(t, M, y); y += 6; doc.setDrawColor(210).line(M, y, pageW - M, y); y += 12; };
+
+    // Summary-table columns: Domain, Latest, Status, Trend, Min, Max, Avg, n.
+    const COLS = [40, 205, 285, 350, 405, 448, 490, 530] as const;
+    const HEADERS = ["Domain", "Latest", "Status", "Trend", "Min", "Max", "Avg", "n"];
+    const headerRow = () => { setFont(8, true, 120); HEADERS.forEach((h, i) => doc.text(h, COLS[i], y)); y += 4; doc.setDrawColor(230).line(M, y, pageW - M, y); y += 11; };
+    const summaryRow = (label: string, sm: Summary) => {
+      setFont(8.5, false, 40); doc.text(label.length > 42 ? label.slice(0, 41) + "…" : label, COLS[0], y);
+      [sm.latest, sm.status, sm.delta, sm.min, sm.max, sm.avg, String(sm.n)].forEach((c, i) => {
+        const bad = i === 1 && c === "Abnormal";
+        setFont(8.5, bad, bad ? 200 : 70); doc.text(c, COLS[i + 1], y);
+      });
+      y += 13;
+    };
+    const table = (title: string, rows: [string, Summary][]) => {
+      heading(title); headerRow();
+      rows.forEach(([label, sm]) => { if (ensure(14)) headerRow(); summaryRow(label, sm); });
+    };
+
+    // Header block.
+    stampLifecareLogo(doc, pageW, M);
+    setFont(16, true, 20); doc.text("Vitals Trend Report", M, y); y += 20;
+    setFont(9, false, 120); doc.text("Senior Living Management System", M, y); y += 18;
+    setFont(13, true, 30); doc.text(s(selected.name), M, y); y += 15;
+    setFont(9.5, false, 70);
+    doc.text(`Room ${s(selected.room)}   -   Care Level ${lvl?.n ?? "—"}   -   ${startLabel} to ${endLabel} (${range} days)`, M, y); y += 13;
+    doc.text(`Readings: ${readings.length}     Abnormal: ${abnormalCount}     Generated ${new Date().toLocaleString()}`, M, y);
+
+    table("Vital Signs", [
+      ["Blood Pressure - Systolic (mmHg)", summarize(readings.map((r) => r.systolic), { band: NORMAL.systolic })],
+      ["Blood Pressure - Diastolic (mmHg)", summarize(readings.map((r) => r.diastolic), { band: NORMAL.diastolic })],
+      ["Heart Rate (bpm)", summarize(readings.map((r) => r.heartRate), { band: NORMAL.heartRate })],
+      ["Temperature (°C)", summarize(readings.map((r) => r.temperature), { digits: 1, band: NORMAL.temperature })],
+      ["SpO2 (%)", summarize(readings.map((r) => r.spo2), { band: NORMAL.spo2 })],
+      ["Respiratory Rate (/min)", summarize(readings.map((r) => r.respRate), { band: NORMAL.respRate })],
+      ["Weight (kg)", summarize(readings.map((r) => r.weight), { digits: 1 })],
+    ]);
+
+    table("Other Care Trends", [
+      ["Pain Score (/10)", summarize(painPoints.map((p) => p.v), { band: [0, 3] })],
+      ["Sleep Hours (h)", summarize(sleepPoints.map((p) => p.v), { digits: 1, band: [6, 8] })],
+      ["Urine Output (mL)", summarize(domain.urine.map((p) => p.v))],
+      ["Meal Intake (%)", summarize(domain.meal.map((p) => p.v), { band: [50, 100] })],
+      ["Mobility Duration (min)", summarize(domain.mobility.map((p) => p.v))],
+      ["Bowel (Bristol type)", summarize(domain.bowel.map((p) => p.v), { band: [3, 5], fmt: fmtBristol })],
+      ["Edema Severity", summarize(domain.edema.map((p) => p.v), { band: [0, 1], fmt: fmtEdema })],
+      ["Mood", summarize(domain.mood.map((p) => p.v), { fmt: fmtMood })],
+      ["Concerns", summarize(domain.concern.map((p) => p.v), { band: [0, 1], fmt: fmtConcern })],
+    ]);
+
+    table("Additional Care Domains (0–4 vs. baseline)", DOMAIN_TREND_CODES.map((code): [string, Summary] => {
+      const base = domainBaseline[code];
+      const label = `${code} ${DOMAIN_NAME[code] || code}` + (typeof base === "number" ? ` (baseline ${base})` : "");
+      return [label, summarize(domainSeries[code].map((p) => p.v), { band: typeof base === "number" ? [0, base] : undefined })];
+    }));
+
+    const flagged = DOMAIN_TREND_CODES.filter((c) => triggerByCode.has(c));
+    if (flagged.length) {
+      heading("Flagged Domains");
+      flagged.forEach((code) => {
+        if (ensure(14)) { /* new page */ }
+        const t = triggerByCode.get(code)!;
+        const cs = caseStatusByCode.get(code);
+        setFont(9, true, 200); doc.text(`${code} ${DOMAIN_NAME[code] || code}`, M, y);
+        setFont(8.5, false, 90); doc.text(`${cs ? CASE_STATUS_LABEL[cs] + " · " : ""}${t.reasons.map((r) => REASON_LABEL[r]).join(", ")}`, M + 170, y);
+        y += 13;
+      });
+    }
+
+    // Raw readings table.
+    const RC = [40, 132, 220, 290, 350, 410, 465, 520] as const;
+    const RH = ["Date", "BP", "HR", "Temp", "SpO2", "RR", "Wt", "By"];
+    const rrHeader = () => { setFont(8, true, 120); RH.forEach((h, i) => doc.text(h, RC[i], y)); y += 4; doc.setDrawColor(230).line(M, y, pageW - M, y); y += 11; };
+    heading("Raw Readings"); rrHeader();
+    if (!readings.length) { setFont(9, false, 120); doc.text("No readings in range.", M, y); y += 12; }
+    [...readings].reverse().forEach((r) => {
+      if (ensure(13)) rrHeader();
+      const bp = r.systolic != null || r.diastolic != null ? `${fmtNum(r.systolic)}/${fmtNum(r.diastolic)}` : "—";
+      const cells = [fmtFullDate(r.at), bp, fmtNum(r.heartRate), fmtNum(r.temperature, 1), fmtNum(r.spo2), fmtNum(r.respRate), r.weight != null ? fmtNum(r.weight, 1) : "—", r.by];
+      setFont(8, false, 60);
+      cells.forEach((c, i) => doc.text(c.length > 16 ? c.slice(0, 15) + "…" : c, RC[i], y));
+      y += 12;
+    });
+
+    doc.save(`vitals-trend-${s(selected.name).toLowerCase().replace(/\s+/g, "-")}-${startLabel}.pdf`);
+  };
+
   const anyLoading = resQ.loading || roundQ.loading || vitQ.loading;
   const anyError = resQ.error || roundQ.error || vitQ.error;
 
@@ -645,7 +766,7 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE", residentId: 
               ))}
             </div>
             {selected && (
-              <ClinicalButton variant="secondary" onClick={() => window.print()}><FileDown className="h-4 w-4" /> Export PDF</ClinicalButton>
+              <ClinicalButton variant="secondary" onClick={downloadVitalsPdf}><FileDown className="h-4 w-4" /> Export PDF</ClinicalButton>
             )}
           </div>
         }

@@ -108,7 +108,25 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
   const vitQ = useLiveQuery<Row>("vitals", { query: "take=1000", tables: ["VitalsLog"] });
   const setQ = useLiveQuery<Row>("app-settings", { tables: ["AppSetting"] });
 
-  const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
+  // Caregivers see ONLY the residents assigned to their shift (same source as the
+  // "My Assigned Residents" page). Nurse/CM/Admin see the whole community. While the
+  // assignment list is loading (or on failure) a caregiver sees none — never everyone.
+  const scopeToAssigned = clinicianRole === "CAREGIVER" && !embedded && !focusResidentId;
+  const [assignedIds, setAssignedIds] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    if (!scopeToAssigned) { setAssignedIds(null); return; }
+    let alive = true;
+    fetch("/api/caregiver/my-residents", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => { if (alive) setAssignedIds(new Set(((b?.assignedIds as string[]) ?? []).map(String))); })
+      .catch(() => { if (alive) setAssignedIds(new Set()); });
+    return () => { alive = false; };
+  }, [scopeToAssigned]);
+  const residents = useMemo(() => {
+    const all = (resQ.data || []).map(adaptResident);
+    if (scopeToAssigned) return assignedIds ? all.filter((r: Row) => assignedIds.has(s(r.id))) : [];
+    return all;
+  }, [resQ.data, scopeToAssigned, assignedIds]);
   const meds = useMemo(() => medQ.data || [], [medQ.data]);
 
   // Meds flagged "vitals required before administration" — stored migration-free
@@ -565,7 +583,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
   return (
     <div className={embedded ? "" : "min-h-full bg-[var(--clinical-ground)] -m-4 sm:-m-6 p-4 sm:p-6"}>
       {!embedded && <ClinicalHeader title="Medication Administration Record" subtitle="Track and document daily medication administration" />}
-      {!embedded && (
+      {!embedded && canManageMeds && (
       <div className="inline-flex gap-1 rounded-xl p-1 mb-5 mt-5" style={{ backgroundColor: "var(--clinical-surface-2)" }} role="tablist" aria-label="MAR view">
         {([["daily", "Daily MAR"], ["summary", "Medication Summary"]] as const).map(([v, label]) => (
           <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition ${tab === v ? "shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`} style={tab === v ? { backgroundColor: "var(--clinical-panel)", color: "#ffffff" } : undefined}>{label}</button>
@@ -574,7 +592,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
       )}
 
       {tab === "daily" ? (<>
-        {!embedded && (
+        {!embedded && canManageMeds && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
           <MarStat value={facility.total} label="Total Doses" accent="ink" />
           <MarStat value={facility.given} label="Given" accent="given" />
@@ -583,6 +601,8 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
         </div>
         )}
         <div className="flex flex-wrap items-center gap-2 mb-4">
+          {/* Caregivers document the current shift only — no date browsing; the rest see the full stepper. */}
+          {canManageMeds && (<>
           <ClinicalButton variant="secondary" size="sm" onClick={() => shiftDate(-1)} aria-label="Previous day" className="!px-2.5"><ChevronLeft className="w-4 h-4" /></ClinicalButton>
           <div className="relative">
             <input id="mar-date-main" aria-label="Viewed date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 rounded-lg border text-sm text-[var(--clinical-ink)] bg-[var(--clinical-surface)]" style={{ borderColor: "var(--clinical-line-strong)" }} />
@@ -591,6 +611,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
           {date !== todayIso() && (
             <ClinicalButton variant="secondary" size="sm" onClick={() => setDate(todayIso())}>Today</ClinicalButton>
           )}
+          </>)}
           <span className="flex-1" />
           <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700"><BellRing className="w-3.5 h-3.5" /> Reminders on</span>
         </div>

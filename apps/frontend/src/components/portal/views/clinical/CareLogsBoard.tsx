@@ -43,6 +43,7 @@ import { careLevelEnumToLevel, domainInPackage, domainDailyAllowance, DOMAIN_LAB
 import { activeLevel } from "@/lib/lifecare/activeLevel";
 import { parseLocHistory, LOC_HISTORY_KEY } from "@/lib/lifecare/locHistory";
 import { ASSESSMENTS_V42_KEY, authoritativeAssessmentFor, domainScores } from "@/lib/lifecare/assessment";
+import { MOBILITY_ASSIST_OPTIONS, mobilityAssistFromEvidence } from "@/lib/lifecare/assistance";
 import { levelMeta } from "@/lib/lifecare/levelModel";
 import ASSESSMENT_DOMAINS from "@/lib/lifecare/data/assessment_domains.json";
 import { CLINICAL_ALERT_RULES } from "@/lib/lifecare/clinicalAlerts";
@@ -320,11 +321,21 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
   // pre-defined "assistance level" the Document-care 0–4 chips pre-select from.
   // Matched with the same robust id/admission/name resolver as activeLevel(), so
   // a PRE-ADMISSION assessment (empty residentId, linked by name) still seeds it.
+  // Also carry each resident's AS-02 assist level chosen in the assessment, so the
+  // Document-care Mobility log pre-fills the same level the assessor selected.
   const baselineByRes = useMemo(() => {
     const m = new Map<string, Partial<Record<string, number>>>();
     residents.forEach((r: Row) => {
       const a = authoritativeAssessmentFor(assessmentsV42, { residentId: s(r.id), residentName: s(r.name) });
       m.set(s(r.id), a ? domainScores(a) : {});
+    });
+    return m;
+  }, [residents, assessmentsV42]);
+  const mobilityAssistByRes = useMemo(() => {
+    const m = new Map<string, string>();
+    residents.forEach((r: Row) => {
+      const a = authoritativeAssessmentFor(assessmentsV42, { residentId: s(r.id), residentName: s(r.name) });
+      m.set(s(r.id), mobilityAssistFromEvidence(a?.domains?.["AS-02"]?.evidence));
     });
     return m;
   }, [residents, assessmentsV42]);
@@ -434,7 +445,7 @@ export function useCareLogData(clinicianRole: ClinicianRole) {
 
   const refetchResidents = () => resQ.refetch();
 
-  return { residents, entries, allEntries, byResident, domainsByRes, domainCountsByRes, baselineByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, refetchResidents, aboutStore, locHistory, assessmentsV42, loading: resQ.loading };
+  return { residents, entries, allEntries, byResident, domainsByRes, domainCountsByRes, baselineByRes, mobilityAssistByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, refetchResidents, aboutStore, locHistory, assessmentsV42, loading: resQ.loading };
 }
 
 // ── Resident drill-down — click a resident → One Care · One Journey ───────────
@@ -455,7 +466,7 @@ function ResidentDetail({ clinicianRole, resident, onBack }: { clinicianRole: Cl
 // so nurse / care-manager / admin keep the full directory; the caregiver view
 // passes false to stay read-only (View + QR) per the role visibility matrix.
 export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = true }: { clinicianRole?: ClinicianRole; canManage?: boolean }) {
-  const { residents, domainsByRes, domainCountsByRes, baselineByRes, nurseUserIds, recordOverage, ensureRound, saveNote, refetchAll, refetchResidents, bowelRef, saveBowelRef, aboutStore, locHistory, assessmentsV42, loading } = useCareLogData(clinicianRole);
+  const { residents, domainsByRes, domainCountsByRes, baselineByRes, mobilityAssistByRes, nurseUserIds, recordOverage, ensureRound, saveNote, refetchAll, refetchResidents, bowelRef, saveBowelRef, aboutStore, locHistory, assessmentsV42, loading } = useCareLogData(clinicianRole);
 
   const [search, setSearch] = useState("");
   const [careLevelFilter, setCareLevelFilter] = useState("");
@@ -576,7 +587,7 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
         </div>
       </DataState>
 
-      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} domainCounts={domainCountsByRes.get(s(logFor.id))} baseline={baselineByRes.get(s(logFor.id)) || {}} nurseUserIds={nurseUserIds} recordOverage={recordOverage} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
+      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} domainCounts={domainCountsByRes.get(s(logFor.id))} baseline={baselineByRes.get(s(logFor.id)) || {}} mobilityAssist={mobilityAssistByRes.get(s(logFor.id))} nurseUserIds={nurseUserIds} recordOverage={recordOverage} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
       {qrFor && <QrModal resident={qrFor} onClose={() => setQrFor(null)} />}
       {viewFor && <ViewModal resident={viewFor} loggedDomains={domainsByRes.get(s(viewFor.id)) || new Set()} canViewFull={canViewProfile} onOpenLog={(t) => { setViewFor(null); openLog(viewFor, t); }} onClose={() => setViewFor(null)} />}
       {editFor && <EditResidentModal resident={editFor} onSaved={refetchResidents} onClose={() => setEditFor(null)} />}
@@ -586,7 +597,7 @@ export default function CareLogsBoard({ clinicianRole = "NURSE", canManage = tru
 
 // ── Care Logs tab — today's log timeline (Image 18) ──────────────────────────
 export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
-  const { residents, entries, byResident, domainsByRes, domainCountsByRes, baselineByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, loading } = useCareLogData(clinicianRole);
+  const { residents, entries, byResident, domainsByRes, domainCountsByRes, baselineByRes, mobilityAssistByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, loading } = useCareLogData(clinicianRole);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [logFor, setLogFor] = useState<Row | null>(null);
@@ -751,7 +762,7 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
         </div>
       </DataState>
 
-      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} domainCounts={domainCountsByRes.get(s(logFor.id))} baseline={baselineByRes.get(s(logFor.id)) || {}} nurseUserIds={nurseUserIds} recordOverage={recordOverage} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
+      {logFor && <LogModal resident={logFor} initialTab={logTab} loggedDomains={domainsByRes.get(s(logFor.id)) || new Set()} domainCounts={domainCountsByRes.get(s(logFor.id))} baseline={baselineByRes.get(s(logFor.id)) || {}} mobilityAssist={mobilityAssistByRes.get(s(logFor.id))} nurseUserIds={nurseUserIds} recordOverage={recordOverage} ensureRound={ensureRound} saveNote={saveNote} clinicianRole={clinicianRole} bowelRef={bowelRef} saveBowelRef={saveBowelRef} onDone={refetchAll} onClose={() => setLogFor(null)} />}
     </ClinicalPage>
   );
 }
@@ -763,8 +774,8 @@ const chipOff = "bg-[var(--clinical-surface)] text-[var(--clinical-ink-soft)] bo
 const num = "w-full px-3 py-2 rounded-lg border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface)] text-base font-semibold text-[var(--clinical-ink)] outline-none focus:border-[var(--clinical-panel)] focus:ring-1 focus:ring-[var(--clinical-panel)]";
 const txt = "w-full px-3 py-2 rounded-lg border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface)] text-sm text-[var(--clinical-ink)] outline-none focus:border-[var(--clinical-panel)] focus:ring-1 focus:ring-[var(--clinical-panel)]";
 
-function Chips({ options, value, onChange, cols = 4 }: { options: { v: string; label: string }[]; value: string; onChange: (v: string) => void; cols?: number }) {
-  return <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}>{options.map((o) => <button key={o.v} type="button" onClick={() => onChange(value === o.v ? "" : o.v)} className={`${chip} ${value === o.v ? chipOn : chipOff}`}>{o.label}</button>)}</div>;
+function Chips({ options, value, onChange, cols = 4 }: { options: { v: string; label: React.ReactNode; aria?: string }[]; value: string; onChange: (v: string) => void; cols?: number }) {
+  return <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}>{options.map((o) => <button key={o.v} type="button" aria-label={o.aria} onClick={() => onChange(value === o.v ? "" : o.v)} className={`${chip} ${value === o.v ? chipOn : chipOff}`}>{o.label}</button>)}</div>;
 }
 function Multi({ options, value, onChange }: { options: string[]; value: string[]; onChange: (v: string[]) => void }) {
   const set = new Set(value);
@@ -827,7 +838,7 @@ const SLEEP_MAP: Record<string, string> = { Excellent: "RESTFUL", Good: "FAIR", 
 // carelogs page. Mounted only when a tile is tapped, so its live queries stay off
 // the dashboard until needed.
 export function QuickRecordFlow({ focus, residentId, clinicianRole = "CAREGIVER", onClose, embedded }: { focus?: string; residentId?: string; clinicianRole?: ClinicianRole; onClose: () => void; embedded?: boolean }) {
-  const { residents, domainsByRes, domainCountsByRes, baselineByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, loading } = useCareLogData(clinicianRole);
+  const { residents, domainsByRes, domainCountsByRes, baselineByRes, mobilityAssistByRes, nurseUserIds, recordOverage, bowelRef, saveBowelRef, ensureRound, saveNote, refetchAll, loading } = useCareLogData(clinicianRole);
   const initialTab = focusToDomain(focus) ?? "AS-01";
   const [resident, setResident] = useState<Row | null>(null);
   const [search, setSearch] = useState("");
@@ -843,6 +854,7 @@ export function QuickRecordFlow({ focus, residentId, clinicianRole = "CAREGIVER"
         loggedDomains={domainsByRes.get(s(active.id)) || new Set()}
         domainCounts={domainCountsByRes.get(s(active.id))}
         baseline={baselineByRes.get(s(active.id)) || {}}
+        mobilityAssist={mobilityAssistByRes.get(s(active.id))}
         nurseUserIds={nurseUserIds}
         recordOverage={recordOverage}
         ensureRound={ensureRound}
@@ -886,12 +898,15 @@ export function QuickRecordFlow({ focus, residentId, clinicianRole = "CAREGIVER"
   );
 }
 
-function LogModal({ resident, initialTab, loggedDomains, domainCounts, baseline = {}, nurseUserIds, recordOverage, ensureRound, saveNote, clinicianRole, bowelRef, saveBowelRef, onDone, onClose, embedded }: {
-  resident: Row; initialTab: DomainKey; loggedDomains: Set<DomainKey>; domainCounts?: Map<DomainKey, number>; baseline?: Partial<Record<string, number>>; nurseUserIds: string[]; recordOverage: (core: { residentId: string; residentName?: string; room?: string; domain: string; domainLabel?: string; level: number; allowance: number; count: number }) => Promise<void>; ensureRound: (id: string) => Promise<string>; saveNote: (rec: { residentId: string; dailyRoundId?: string; domain: string; status?: number; note?: string }) => Promise<void>; clinicianRole: ClinicianRole; bowelRef: string; saveBowelRef: (dataUrl: string | null) => Promise<void>; onDone: () => Promise<void>; onClose: () => void; embedded?: boolean;
+function LogModal({ resident, initialTab, loggedDomains, domainCounts, baseline = {}, mobilityAssist, nurseUserIds, recordOverage, ensureRound, saveNote, clinicianRole, bowelRef, saveBowelRef, onDone, onClose, embedded }: {
+  resident: Row; initialTab: DomainKey; loggedDomains: Set<DomainKey>; domainCounts?: Map<DomainKey, number>; baseline?: Partial<Record<string, number>>; mobilityAssist?: string; nurseUserIds: string[]; recordOverage: (core: { residentId: string; residentName?: string; room?: string; domain: string; domainLabel?: string; level: number; allowance: number; count: number }) => Promise<void>; ensureRound: (id: string) => Promise<string>; saveNote: (rec: { residentId: string; dailyRoundId?: string; domain: string; status?: number; note?: string }) => Promise<void>; clinicianRole: ClinicianRole; bowelRef: string; saveBowelRef: (dataUrl: string | null) => Promise<void>; onDone: () => Promise<void>; onClose: () => void; embedded?: boolean;
 }) { // rendered only when open (parent gates on logFor); ClinicalModal open is always true here
   // Pre-fill a generic domain's 0–4 chip from the resident's assessment score for
   // that domain — the "predefined assistance level". Caregiver adjusts to today.
   const seedFor = (t: DomainKey): Row => {
+    // AS-02 Mobility: pre-fill the assist level the assessor chose in the v4.2
+    // assessment (same option set), so caregiver starts from the documented level.
+    if (t === "AS-02" && mobilityAssist) return { assistanceLevel: mobilityAssist };
     const b = DOMAIN_BY_KEY.get(t)?.form === "generic" ? baseline[t] : undefined;
     return typeof b === "number" ? { status: b } : {};
   };
@@ -1079,7 +1094,8 @@ function LogModal({ resident, initialTab, loggedDomains, domainCounts, baseline 
             <div>
               <Label>Observed state — this domain, this shift</Label>
               <p className="mb-1.5 text-[10px] leading-relaxed text-[var(--clinical-muted)]">This assistance level is based on the resident&apos;s assessment.</p>
-              <Chips cols={5} value={s(f.status)} onChange={(v) => set({ status: v === "" ? undefined : Number(v) })} options={STATUS_ANCHORS.map((a) => ({ v: String(a.v), label: `${a.v} · ${a.label}` }))} />
+              {/* Mobile: number only (labels squeeze 5-across). ≥sm: full "0 · Independent". aria keeps the full level for screen readers. */}
+              <Chips cols={5} value={s(f.status)} onChange={(v) => set({ status: v === "" ? undefined : Number(v) })} options={STATUS_ANCHORS.map((a) => ({ v: String(a.v), aria: `${a.v} · ${a.label}`, label: <><span>{a.v}</span><span className="hidden sm:inline"> · {a.label}</span></> }))} />
               {typeof baseline[tab] === "number" && (
                 <p className="mt-1 text-[10px] text-[var(--clinical-muted)]">Pre-filled from assessment (baseline {baseline[tab]} · {statusLabel(baseline[tab])}) — adjust to today&apos;s observation.</p>
               )}
@@ -1146,7 +1162,8 @@ function LogModal({ resident, initialTab, loggedDomains, domainCounts, baseline 
             <div><Label>Intervention</Label><Multi value={f.interventions || []} onChange={(v) => set({ interventions: v })} options={["Repositioned", "Medication given", "Ice/Heat applied", "Notified nurse", "Family notified"]} /></div>
           </>)}
           {form === "mobility" && (<>
-            <div><Label>Assistance Level</Label><Chips cols={2} value={f.assistanceLevel || ""} onChange={(v) => set({ assistanceLevel: v })} options={[{ v: "SBA", label: "Standby Assistance (SBA)" }, { v: "CGA", label: "Contact Guard Assistance (CGA)" }, { v: "MIN", label: "Minimal Assistance (Min)" }, { v: "MOD", label: "Moderate Assistance (Mod)" }, { v: "MAX", label: "Maximum Assistance (Max)" }, { v: "TOTAL", label: "Total Assistance (T)" }]} /></div>
+            <div><Label>Assistance Level</Label><Chips cols={2} value={f.assistanceLevel || ""} onChange={(v) => set({ assistanceLevel: v })} options={MOBILITY_ASSIST_OPTIONS.map((x) => ({ v: x, label: x }))} />
+              {mobilityAssist && (<p className="mt-1 text-[10px] text-[var(--clinical-muted)]">Pre-filled from assessment ({mobilityAssist}) — adjust to today&apos;s observation.</p>)}</div>
             <div><Label>Mobility Aid</Label><Chips cols={3} value={f.assistiveDevice || ""} onChange={(v) => set({ assistiveDevice: v })} options={["None", "Cane", "Walker", "Wheelchair", "Bed-bound", "Gait belt"].map((x) => ({ v: x, label: x }))} /></div>
             <Toggle label="Did not ambulate" on={f.ambulated === false} onClick={() => set({ ambulated: f.ambulated === false ? undefined : false })} />
             <button type="button" onClick={() => set({ fallOccurred: !f.fallOccurred })} className="w-full py-2 rounded-lg border text-xs font-semibold" style={f.fallOccurred ? { backgroundColor: "var(--clinical-coral)", color: "#fff", borderColor: "var(--clinical-coral)" } : { color: "var(--clinical-coral)", borderColor: "var(--clinical-coral)" }}>⚠ Report Fall Incident</button>

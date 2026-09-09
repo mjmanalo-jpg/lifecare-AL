@@ -6,6 +6,7 @@ import { SCORED_DOMAINS, CLINICAL_MODIFIERS } from "@/lib/lifecare/dataset.ts";
 import { DIAPER_EVIDENCE_TAG } from "@/lib/lifecare/continence.ts";
 import { REPOSITION_EVIDENCE_TAG } from "@/lib/lifecare/skinIntegrity.ts";
 import { careDeliveryMap } from "@/lib/lifecare/conditionPathways.ts";
+import { MOBILITY_ASSIST_OPTIONS } from "@/lib/lifecare/assistance.ts";
 import type { DomainEntry } from "@/lib/lifecare/assessment.ts";
 import type { DomainCode } from "@/lib/lifecare/types.ts";
 import { ClinicalCard, MicroLabel, controlClass } from "./clinical-ui";
@@ -53,7 +54,7 @@ const hasEvidenceWord = (evidence: string | undefined, tag: string) =>
 // live in the same comma-token evidence field; picking one replaces any prior option
 // from the same group. Add a domain code here to give it a dropdown.
 const EVIDENCE_SELECTS: Record<string, { label: string; options: string[] }> = {
-  "AS-02": { label: "Assist level", options: ["Independent", "Standby assist", "One-person assist", "Two-person assist", "Mechanical lift / hoist"] },
+  "AS-02": { label: "Assist level", options: [...MOBILITY_ASSIST_OPTIONS] },
 };
 // Extra quick-add evidence tags beyond the domain `scope`. AS-10 "Needs diaper"
 // is load-bearing: flagging it drives an every-4h continence/diaper-care event in

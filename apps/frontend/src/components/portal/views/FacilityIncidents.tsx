@@ -53,7 +53,7 @@ function relTime(iso: string | null, nowTs: number): string {
   return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h ago` : `${Math.floor(h / 24)}d ago`;
 }
 
-export default function FacilityIncidents({ readOnly = false, canResolve = false }: { readOnly?: boolean; canResolve?: boolean } = {}) {
+export default function FacilityIncidents({ readOnly = false, canResolve = false, compact = false }: { readOnly?: boolean; canResolve?: boolean; compact?: boolean } = {}) {
   const { data: incidentRows, loading, error, refetch } = useLiveQuery<Record<string, unknown>>(
     "incidents", { query: "include=resident&take=500", tables: ["Incident"] }
   );
@@ -277,6 +277,8 @@ export default function FacilityIncidents({ readOnly = false, canResolve = false
         </div>
       </div>
 
+      {/* Overview metrics + charts are oversight analytics — hidden for the caregiver "report only" view. */}
+      {!compact && (<>
       {/* Stat Boxes */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <StatBox label="Total Incidents" value={stats.total} icon={AlertTriangle} color="gray" />
@@ -323,6 +325,7 @@ export default function FacilityIncidents({ readOnly = false, canResolve = false
           </ResponsiveContainer>
         </ChartCard>
       </div>
+      </>)}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
@@ -331,6 +334,8 @@ export default function FacilityIncidents({ readOnly = false, canResolve = false
           <input type="text" placeholder="Search type, resident, room, description…" value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none" />
         </div>
+        {/* Severity/status/type/per-page + sort + view toggle are oversight controls — caregivers keep just the search. */}
+        {!compact && (<>
         <select value={severityFilter} onChange={e => setSeverityFilter(e.target.value)}
           className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none">
           <option value="all">All Severities</option>
@@ -380,6 +385,7 @@ export default function FacilityIncidents({ readOnly = false, canResolve = false
             </button>
           </div>
         </div>
+        </>)}
       </div>
 
       {/* Content */}

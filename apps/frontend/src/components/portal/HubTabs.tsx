@@ -54,7 +54,7 @@ export default function HubTabs({
       <div
         role="tablist"
         aria-label="Section tabs"
-        className="flex w-full flex-wrap items-end gap-1 border-b border-slate-200 pb-2 dark:border-slate-700"
+        className="flex w-full items-end gap-1 overflow-x-auto scrollbar-hide border-b border-slate-200 pb-2 dark:border-slate-700"
       >
         {tabs.map((t) => {
           const on = t.key === current?.key;
@@ -65,7 +65,7 @@ export default function HubTabs({
               role="tab"
               aria-selected={on}
               onClick={() => select(t.key)}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              className={`shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 ${
                 on
                   ? "bg-blue-600 text-white shadow-sm"
                   // Translucent hover overlays, not bg-white/bg-slate-700 — the clinical

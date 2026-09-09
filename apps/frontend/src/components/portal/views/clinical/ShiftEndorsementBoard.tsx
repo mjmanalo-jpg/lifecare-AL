@@ -24,6 +24,7 @@ import { TASK_NOTES_FIELD } from "@/lib/taskNotes";
 import { CAREGIVER_SCHEDULE_KEY, parseSchedules, assigneeForResidentToday } from "@/lib/caregiverSchedule";
 import SignatureModal from "@/components/portal/SignatureModal";
 import { canCloseShift, type PendingItem } from "@/lib/lifecare/occurrenceLifecycle";
+import { manilaDay } from "@/lib/lifecare/occurrenceStatus";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const KEY = "shift_endorsements";
@@ -130,6 +131,36 @@ interface Endorsement {
 }
 const parse = (raw: string | null | undefined): Endorsement[] => { if (!raw) return []; try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((e) => e && typeof e.id === "string") : []; } catch { return []; } };
 
+// General Notes as a scannable list instead of a truncated blob: one line per
+// entry, any leading "Label:" (General/Incidents/Tasks/Carry-over) bolded, and a
+// show-more toggle past 4 lines so a caregiver sees the shift at a glance.
+function NotesBlock({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return null;
+  const shown = open || lines.length <= 4 ? lines : lines.slice(0, 4);
+  return (
+    <div className="mt-2">
+      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">General Notes</p>
+      <ul className="mt-1 space-y-0.5">
+        {shown.map((l, i) => {
+          const m = l.match(/^([A-Z][\w &/-]{1,20}):\s*(.*)$/);
+          return (
+            <li key={i} className="text-sm text-slate-600 whitespace-pre-line">
+              {m ? (<><span className="font-semibold text-slate-700">{m[1]}: </span>{m[2]}</>) : l}
+            </li>
+          );
+        })}
+      </ul>
+      {lines.length > 4 && (
+        <button onClick={() => setOpen((v) => !v)} className="mt-1 text-xs font-semibold text-blue-600 hover:underline">
+          {open ? "Show less" : `Show ${lines.length - 4} more`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedded }: { clinicianRole?: ClinicianRole; embedded?: boolean }) {
   const { name: clinicianName, userId: clinicianUserId, staffId: clinicianStaffId } = useClinician(clinicianRole);
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
@@ -179,6 +210,7 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedde
   const [range, setRange] = useState<"today" | "week" | "month">("today");
   const [newOpen, setNewOpen] = useState(false);
   const [editing, setEditing] = useState<Endorsement | null>(null); // edit an existing endorsement's content
+  const [ackFor, setAckFor] = useState<Endorsement | null>(null); // inline acknowledge (incoming shift) — PIN-signed
   const active = items.find((e) => e.id === activeId) || null;
 
   // Per-entry delta writes so concurrent shifts don't clobber each other's
@@ -328,35 +360,43 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedde
   // remaining (pending / in-progress) tasks, open incidents & escalations, and any
   // ADL declines. Same scoping as everything else (only assigned residents for a
   // caregiver, since the picker is already scoped). Everything stays editable.
-  const buildCarryOverDraft = (rid: string): CarryOverDraft => {
+  const buildCarryOverDraft = (rid: string, shiftLabel?: string): CarryOverDraft => {
     const up = (v: unknown) => s(v).toUpperCase();
     const cap = (x: string) => (x ? x[0].toUpperCase() + x.slice(1) : x);
     const uniq = (a: string[]) => [...new Set(a.map((x) => x.trim()).filter(Boolean))];
     const CAP = 8; // keep lists readable; care-plan tasks can number in the dozens
     const bullets = (a: string[]) => { const shown = a.slice(0, CAP); const more = a.length - shown.length; return shown.map((x) => `• ${x}`).join("\n") + (more > 0 ? `\n• +${more} more` : ""); };
-    const tasks = (taskQ.data || []).filter((t) => s(t.residentId) === rid && ["PENDING", "IN_PROGRESS"].includes(up(t.status)));
+    // Carry-over pulls this shift's UNCOMPLETED ROUTINE OCCURRENCES (the resident's open
+    // routine — the "Routine" tab), NOT ad-hoc Task Cards. Charted = "Completed as
+    // planned/with variance"; anything else that isn't Cancelled is still outstanding.
+    // Scoped to today's Manila care day + the endorsement's shift-hour window.
+    const DONE = ["Completed as planned", "Completed with variance"];
+    const slotShift = (hhmm: string): string => { const h = Number(/(\d{1,2}):/.exec(hhmm)?.[1] ?? 0); return h >= 6 && h < 14 ? "Morning" : h >= 14 && h < 22 ? "Afternoon" : "Night"; };
+    const SHIFT_INCLUDES: Record<string, string[]> = { "Morning": ["Morning"], "Afternoon": ["Afternoon"], "Night": ["Night"], "Morning 12h": ["Morning", "Afternoon"], "Night 12h": ["Afternoon", "Night"] };
+    const wantShifts = shiftLabel ? SHIFT_INCLUDES[shiftLabel] : undefined;
+    const today = manilaDay(new Date());
+    const routineName = (defId: string) => s((defQ.data || []).find((d) => s(d.id) === defId)?.name) || "Routine event";
+    const occs = (occQ.data || [])
+      .filter((o) => s(o.residentId) === rid && manilaDay(o.careDate) === today && !DONE.includes(s(o.careDeliveryOutcome)) && s(o.workflowState) !== "Cancelled" && (!wantShifts || wantShifts.includes(slotShift(s(o.scheduledTime)))))
+      .sort((a, b) => s(a.scheduledTime).localeCompare(s(b.scheduledTime)));
     const incidents = (incQ.data || []).filter((i) => s(i.residentId) === rid && !i.resolvedAt);
     const escs = (escQ.data || []).filter((x) => s(x.residentId) === rid && !["RESOLVED", "CANCELLED"].includes(up(x.status)));
     const adlChanges = uniq(adlLogs.filter((l: Row) => s(l.residentId) === rid && (l.change === "Declined" || l.change === "Significant Decline")).map((l: Row) => `${cap(s(l.domain))} ${s(l.change).toLowerCase()}`));
-    // Care-plan tasks repeat across shifts/AM-PM-NOC — collapse to distinct titles.
-    const taskTitles = uniq(tasks.map((t) => s(t.title)));
-    // Headline concern: notable clinical items first, then a concise task summary —
-    // never a wall of every task/intervention (that lives in the care plan).
+    const routineTitles = uniq(occs.map((o) => `${s(o.scheduledTime)} · ${routineName(s(o.definitionId))}`));
+    // Headline concern: notable clinical items first, then the outstanding routine.
     const head: string[] = [];
     incidents.forEach((i) => head.push(`Open incident: ${(s(i.incidentType).replace(/_/g, " ") || "event")}${up(i.severity) ? ` (${cap(s(i.severity).toLowerCase())})` : ""}`));
     escs.forEach((x) => head.push(`Open escalation: ${s(x.situation).slice(0, 80)}`));
     if (adlChanges.length) head.push(`ADL change: ${adlChanges.join(", ")}`);
-    if (taskTitles.length) head.push(`${taskTitles.length} pending care task${taskTitles.length === 1 ? "" : "s"} to continue`);
+    if (routineTitles.length) head.push(`Uncompleted routine to continue:\n${bullets(routineTitles)}`);
     const critical = escs.length > 0 || incidents.some((i) => ["CRITICAL", "SEVERE", "HIGH"].includes(up(i.severity)));
     return {
       concern: head.join("\n") || "No outstanding items this shift.",
-      // Auto-fill leaves the specific handover action for the clinician — the care
-      // plan holds the full intervention detail; a dump of it here is just noise.
       action: "",
-      priority: critical ? "Urgent" : (tasks.some((t) => up(t.priority) === "HIGH") || incidents.length) ? "Important" : "Routine",
-      status: escs.length ? "Escalated" : (tasks.length || incidents.length) ? "Watch" : "Stable",
+      priority: critical ? "Urgent" : (occs.length || incidents.length) ? "Important" : "Routine",
+      status: escs.length ? "Escalated" : (occs.length || incidents.length) ? "Watch" : "Stable",
       whatChanged: adlChanges.join("; "),
-      pending: taskTitles.length ? bullets(taskTitles) : "",
+      pending: routineTitles.length ? bullets(routineTitles) : "",
       watchNext: uniq(escs.map((x) => s(x.situation).slice(0, 60))).join("; "),
     };
   };
@@ -447,6 +487,17 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedde
   // Only the author (the nurse or caregiver who logged it) may edit/delete. The
   // Care Manager is oversight-only here — sees everything, modifies nothing.
   const canModify = (e: Endorsement) => clinicianRole !== "CARE_MANAGER" && (e.outgoingById ? clinicianUserId === e.outgoingById : clinicianName === e.outgoingBy);
+  const isAuthor = (e: Endorsement) => (e.outgoingById ? clinicianUserId === e.outgoingById : clinicianName === e.outgoingBy);
+  // Incoming shift acknowledges a signed-off handover right from the card — same
+  // effect as the Carry-Over view's Acknowledge: stamp acceptance + push carry-overs
+  // onto the acknowledger's task list. PIN-gated via the board SignatureModal.
+  const acknowledgeInline = async () => {
+    const e = ackFor; if (!e) return;
+    await update(e.id, (en) => ({ ...en, status: "ACKNOWLEDGED", incomingBy: clinicianName, acceptedBy: clinicianName, acceptedById: clinicianUserId, acceptedAt: new Date().toISOString() }));
+    await acceptHandover(e);
+    setAckFor(null);
+    Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Acknowledged — carry-overs added to your tasks", showConfirmButton: false, timer: 1800 });
+  };
   const deleteEndorsement = async (e: Endorsement) => {
     const c = await Swal.fire({ title: "Delete endorsement?", html: `Delete <b>${e.number}</b> (${e.shiftLabel})? This can't be undone.`, icon: "warning", showCancelButton: true, confirmButtonColor: "#dc2626", confirmButtonText: "Delete" });
     if (!c.isConfirmed) return;
@@ -463,15 +514,17 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedde
   // ── List view ──────────────────────────────────────────────────────────────
   return (
     <div className={embedded ? "" : "min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6"}>
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+      {/* Embedded (Shift Handover modal): title is hidden, so the button goes full-width
+          instead of floating right over empty space. Standalone page keeps the title row. */}
+      <div className={`flex flex-wrap items-start justify-between gap-3 ${embedded ? "mb-3" : "mb-4"}`}>
         {!embedded && <div><h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Shift Endorsements</h1><p className="text-sm text-slate-500 mt-1">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p></div>}
-        <button onClick={() => setNewOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 ml-auto"><Plus className="w-4 h-4" /> New Endorsement</button>
+        <button onClick={() => setNewOpen(true)} className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 ${embedded ? "w-full" : "ml-auto"}`}><Plus className="w-4 h-4" /> New Endorsement</button>
       </div>
 
       {pendingCount > 0 && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 mb-5 flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5" />
-          <div><p className="font-bold text-amber-800">{pendingCount} Pending Endorsement{pendingCount === 1 ? "" : "s"}</p><p className="text-sm text-amber-700">Awaiting incoming nurse acknowledgment</p></div>
+          <div><p className="font-bold text-amber-800">{pendingCount} Pending {clinicianRole === "CAREGIVER" ? "Handover" : "Endorsement"}{pendingCount === 1 ? "" : "s"}</p><p className="text-sm text-amber-700">Awaiting {clinicianRole === "CAREGIVER" ? "next caregiver" : "incoming nurse"} acknowledgment</p></div>
         </div>
       )}
 
@@ -494,12 +547,31 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedde
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-slate-200 text-slate-600">{e.shiftLabel} · {e.shiftRange}</span>
                       </div>
                       <p className="text-sm font-semibold text-slate-800 mt-2 flex items-center gap-1.5"><User className="w-4 h-4 text-slate-400" />{e.outgoingBy} → {e.incomingBy} <span className="font-normal text-slate-400 inline-flex items-center gap-1 ml-1"><Clock className="w-3.5 h-3.5" /> Signed {e.signedAt}</span></p>
-                      {e.generalNotes && <div className="mt-2"><p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">General Notes</p><p className="text-sm text-slate-600 whitespace-pre-line line-clamp-4">{e.generalNotes}</p></div>}
-                      <div className="flex flex-wrap items-center gap-2 mt-3">
-                        <button onClick={() => { setActiveId(e.id); setView("details"); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"><FileText className="w-4 h-4" /> Structured Details</button>
-                        <button onClick={() => { setActiveId(e.id); setView("carryover"); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"><ArrowLeftRight className="w-4 h-4" /> Carry-Over & Sign-Off</button>
-                        {canModify(e) && e.status !== "ACKNOWLEDGED" && <button onClick={() => setEditing(e)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Pencil className="w-4 h-4" /> Edit</button>}
-                        {canModify(e) && <button onClick={() => deleteEndorsement(e)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-sm font-semibold text-red-600 hover:bg-red-50"><Trash2 className="w-4 h-4" /> Delete</button>}
+                      {(() => {
+                        const cos = e.carryOvers || [];
+                        const esc = cos.filter((c) => c.status === "Escalated" || c.priority === "Urgent").length;
+                        const chips = [
+                          e.residents?.length ? `${e.residents.length} resident${e.residents.length === 1 ? "" : "s"}` : "",
+                          cos.length ? `${cos.length} carry-over${cos.length === 1 ? "" : "s"}` : "",
+                          e.handover?.pendingTasks?.length ? `${e.handover.pendingTasks.length} task${e.handover.pendingTasks.length === 1 ? "" : "s"} open` : "",
+                          e.handover?.openIncidents?.length ? `${e.handover.openIncidents.length} incident${e.handover.openIncidents.length === 1 ? "" : "s"}` : "",
+                        ].filter(Boolean);
+                        if (!esc && !chips.length) return null;
+                        return (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                            {esc > 0 && <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700"><AlertTriangle className="w-3 h-3" />{esc} escalated</span>}
+                            {chips.map((c, i) => <span key={i} className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{c}</span>)}
+                          </div>
+                        );
+                      })()}
+                      {e.generalNotes && <NotesBlock text={e.generalNotes} />}
+                      {/* 2-col grid on mobile (even alignment) → compact inline row from sm up. */}
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+                        {e.status === "SIGNED_OFF" && !isAuthor(e) && <button onClick={() => setAckFor(e)} className="col-span-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 sm:w-auto sm:justify-start"><Check className="w-4 h-4" /> Acknowledge</button>}
+                        <button onClick={() => { setActiveId(e.id); setView("details"); }} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto sm:justify-start"><FileText className="w-4 h-4" /> Structured Details</button>
+                        <button onClick={() => { setActiveId(e.id); setView("carryover"); }} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto sm:justify-start"><ArrowLeftRight className="w-4 h-4" /> Carry-Over & Sign-Off</button>
+                        {canModify(e) && e.status !== "ACKNOWLEDGED" && <button onClick={() => setEditing(e)} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto sm:justify-start"><Pencil className="w-4 h-4" /> Edit</button>}
+                        {canModify(e) && <button onClick={() => deleteEndorsement(e)} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50 sm:w-auto sm:justify-start"><Trash2 className="w-4 h-4" /> Delete</button>}
                       </div>
                     </div>
                   ))}
@@ -509,6 +581,7 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedde
           </div>}
 
       {(newOpen || editing) && <NewEndorsementModal existing={editing ?? undefined} onClose={() => { setNewOpen(false); setEditing(null); }} onSave={saveEndorsement} onDone={finalizeEndorsement} />}
+      <SignatureModal open={!!ackFor} onClose={() => setAckFor(null)} onSigned={acknowledgeInline} title="Acknowledge shift handover" description="Enter your 4-digit signing PIN to acknowledge receipt of this shift handover." />
     </div>
   );
 }
@@ -683,15 +756,13 @@ function DetailsView({ e, residents, resName, onBack, update, buildSections, has
 
   return (
     <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
-        <div className="flex items-start gap-3">
-          <button onClick={onBack} className="inline-flex items-center gap-1 text-sm font-semibold text-slate-600 hover:text-slate-900 mt-1"><ArrowLeft className="w-4 h-4" /> Back</button>
-          <div><h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">Structured Endorsement Details{!canEdit && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 align-middle">View only</span>}</h1><p className="text-sm text-slate-500">Endorsement {e.number} — Per-resident clinical sections</p></div>
-        </div>
+      <div className="mb-5">
+        <button onClick={onBack} className="inline-flex items-center gap-1 text-sm font-semibold text-slate-600 hover:text-slate-900 mb-2"><ArrowLeft className="w-4 h-4" /> Back</button>
+        <div className="mb-3"><h1 className="flex flex-wrap items-center gap-2 text-xl sm:text-2xl font-bold tracking-tight text-slate-900">Structured Endorsement Details{!canEdit && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">View only</span>}</h1><p className="text-sm text-slate-500 mt-0.5">Endorsement {e.number} — Per-resident clinical sections</p></div>
         {canEdit ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={autoFillAll} disabled={filling} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-blue-200 bg-white text-blue-700 text-sm font-semibold hover:bg-blue-50 disabled:opacity-60"><Sparkles className="w-4 h-4" /> {filling ? "Filling…" : "Auto-fill from shift data"}</button>
-            <button onClick={addResident} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"><Plus className="w-4 h-4" /> Add Resident</button>
+          <div className="flex items-center gap-2">
+            <button onClick={autoFillAll} disabled={filling} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-60"><Sparkles className="w-4 h-4 shrink-0" /> {filling ? "Filling…" : "Auto-fill from shift data"}</button>
+            <button onClick={addResident} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-600 px-2.5 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"><Plus className="w-4 h-4 shrink-0" /> Add Resident</button>
           </div>
         ) : (
           <span className="text-xs text-slate-400">Only {e.outgoingBy || "the logging clinician"} can edit this endorsement.</span>
@@ -763,7 +834,7 @@ function DetailsView({ e, residents, resName, onBack, update, buildSections, has
 
 // ── Carry-Over & Sign-Off view ───────────────────────────────────────────────
 function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update, buildHandover, acceptHandover, buildCarryOverDraft, occPending }: {
-  e: Endorsement; residents: Row[]; resName: (id: string) => { name: string; room: string }; stats: { alerts: number; tasks: number; adl: number; carry: number }; by: string; byId: string; onBack: () => void; update: (id: string, patch: (e: Endorsement) => Endorsement) => Promise<void>; buildHandover: () => Handover; acceptHandover: (e: Endorsement) => Promise<void>; buildCarryOverDraft: (rid: string) => CarryOverDraft; occPending: OccPending[];
+  e: Endorsement; residents: Row[]; resName: (id: string) => { name: string; room: string }; stats: { alerts: number; tasks: number; adl: number; carry: number }; by: string; byId: string; onBack: () => void; update: (id: string, patch: (e: Endorsement) => Endorsement) => Promise<void>; buildHandover: () => Handover; acceptHandover: (e: Endorsement) => Promise<void>; buildCarryOverDraft: (rid: string, shiftLabel?: string) => CarryOverDraft; occPending: OccPending[];
 }) {
   // Only the user who LOGGED the endorsement may sign it off. Everyone else can
   // only acknowledge — and only once it has been signed off.
@@ -798,6 +869,28 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
     if (c.autoTask) createRecord("tasks", { residentId: c.residentId, title: `Carry-over: ${c.concern.slice(0, 60)}`, description: c.action || c.concern, status: "PENDING", priority: c.priority === "Urgent" ? "HIGH" : "MEDIUM", category: "Observation" }).catch(() => null);
     setAddOpen(false);
   };
+  // One-tap carry-over for the WHOLE assigned roster — so a caregiver doesn't add each
+  // resident by hand. Drafts one labelled item per assigned resident that has uncompleted
+  // routine / open items this shift, skipping residents already carried over.
+  const [autoFilling, setAutoFilling] = useState(false);
+  const autoFillAllResidents = async () => {
+    setAutoFilling(true);
+    try {
+      const existing = new Set(e.carryOvers.map((c) => c.residentId));
+      const drafts = residents
+        .map((r) => ({ rid: s(r.id), d: buildCarryOverDraft(s(r.id), e.shiftLabel) }))
+        .filter(({ rid, d }) => !existing.has(rid) && d.concern && d.concern !== "No outstanding items this shift.");
+      if (!drafts.length) { Swal.fire({ title: "Nothing to add", text: "Every assigned resident is already carried over or has no uncompleted routine / open items this shift.", icon: "info" }); return; }
+      await update(e.id, (en) => ({
+        ...en,
+        carryOvers: [
+          ...en.carryOvers,
+          ...drafts.map(({ rid, d }) => ({ id: newId(), residentId: rid, concern: d.concern, action: d.action || undefined, priority: d.priority, role: "Nurse", status: d.status, whatChanged: d.whatChanged || undefined, pending: d.pending || undefined, watchNext: d.watchNext || undefined } as CarryOver)),
+        ],
+      }));
+      Swal.fire({ toast: true, position: "top-end", icon: "success", title: `Added carry-over for ${drafts.length} resident(s)`, showConfirmButton: false, timer: 2200 });
+    } finally { setAutoFilling(false); }
+  };
   // Gate the sign-off behind the 4-digit signing PIN; the actual write happens in
   // doSignOff once the PIN is verified.
   const requestSignOff = () => {
@@ -820,12 +913,15 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
 
   return (
     <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
-      <div className="flex items-start gap-3 mb-5">
-        <button onClick={onBack} className="inline-flex items-center gap-1 text-sm font-semibold text-slate-600 hover:text-slate-900 mt-1"><ArrowLeft className="w-4 h-4" /> Back to Details</button>
-        <div><h1 className="text-2xl font-bold text-slate-900">Carry-Over &amp; Sign-Off</h1><p className="text-sm text-slate-500">Endorsement {e.number}</p></div>
+      <div className="mb-5">
+        <button onClick={onBack} className="inline-flex items-center gap-1 text-sm font-semibold text-slate-600 hover:text-slate-900 mb-2"><ArrowLeft className="w-4 h-4" /> Back to Details</button>
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">Carry-Over &amp; Sign-Off</h1><p className="text-sm text-slate-500 mt-0.5">Endorsement {e.number}</p>
       </div>
 
-      <div className="flex items-center justify-between mb-3"><p className="font-bold text-slate-900 flex items-center gap-2"><ArrowLeftRight className="w-5 h-5 text-blue-500" /> Carry-Over to Next Shift</p>{canEdit && <button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"><Plus className="w-4 h-4" /> Add Item</button>}</div>
+      <div className="mb-3">
+        <p className="font-bold text-slate-900 flex items-center gap-2 mb-2"><ArrowLeftRight className="w-5 h-5 text-blue-500" /> Carry-Over to Next Shift</p>
+        {canEdit && (<div className="flex flex-wrap items-center gap-2"><button onClick={autoFillAllResidents} disabled={autoFilling} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-60"><Sparkles className="w-4 h-4" /> {autoFilling ? "Filling…" : "Auto-fill all my residents"}</button><button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"><Plus className="w-4 h-4" /> Add Item</button></div>)}
+      </div>
       {e.carryOvers.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center mb-6">
           <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50"><ClipboardList className="h-5 w-5 text-blue-500" /></span>
@@ -933,7 +1029,7 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
         </div>
       </div>
 
-      {addOpen && <AddCarryOverModal residents={residents} onClose={() => setAddOpen(false)} onAdd={addItem} buildDraft={buildCarryOverDraft} />}
+      {addOpen && <AddCarryOverModal residents={residents} onClose={() => setAddOpen(false)} onAdd={addItem} buildDraft={buildCarryOverDraft} shiftLabel={e.shiftLabel} />}
       <SignatureModal open={signOpen} onClose={() => setSignOpen(false)} onSigned={doSignOff} title="Sign off shift endorsement" description="Enter your 4-digit signing PIN to sign off this shift." />
       <SignatureModal open={ackOpen} onClose={() => setAckOpen(false)} onSigned={doAcknowledge} title="Acknowledge shift endorsement" description="Enter your 4-digit signing PIN to acknowledge receipt of this shift endorsement." />
     </div>
@@ -944,7 +1040,7 @@ function EndStat({ n, label, cls, color }: { n: number; label: string; cls: stri
   return <div className={`rounded-2xl border p-5 text-center ${cls}`}><p className={`text-3xl font-bold ${color}`}>{n}</p><p className={`text-sm mt-1 ${color}`}>{label}</p></div>;
 }
 
-function AddCarryOverModal({ residents, onClose, onAdd, buildDraft }: { residents: Row[]; onClose: () => void; onAdd: (c: Omit<CarryOver, "id">) => Promise<void>; buildDraft: (rid: string) => CarryOverDraft }) {
+function AddCarryOverModal({ residents, onClose, onAdd, buildDraft, shiftLabel }: { residents: Row[]; onClose: () => void; onAdd: (c: Omit<CarryOver, "id">) => Promise<void>; buildDraft: (rid: string, shiftLabel?: string) => CarryOverDraft; shiftLabel?: string }) {
   const [residentId, setResidentId] = useState("");
   const [concern, setConcern] = useState("");
   const [priority, setPriority] = useState("Routine");
@@ -965,7 +1061,7 @@ function AddCarryOverModal({ residents, onClose, onAdd, buildDraft }: { resident
   // fields, so it never clobbers what the caregiver typed) and re-runs on demand.
   const applyDraft = (rid: string, force = false) => {
     if (!rid) return;
-    const d = buildDraft(rid);
+    const d = buildDraft(rid, shiftLabel);
     if (force || !concern.trim()) setConcern(d.concern);
     if (force || !action.trim()) setAction(d.action);
     if (force || !whatChanged.trim()) setWhatChanged(d.whatChanged);

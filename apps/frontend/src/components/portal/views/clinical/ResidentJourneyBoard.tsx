@@ -50,7 +50,7 @@ import { ResidentCarePlanView } from "./CarePlanReviewsBoard";
 
 // The resident-hub tabs: the two native panels (journey / forms) plus the six
 // folded-in record boards.
-type ResidentView = "journey" | "forms" | "physexam" | "careplan" | "clinical" | "timeline" | "progress" | "vitals" | "routine";
+type ResidentView = "journey" | "forms" | "physexam" | "careplan" | "clinical" | "timeline" | "progress" | "vitals" | "routine" | "caretask";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const DOMAIN_NAME: Record<string, string> = Object.fromEntries(ASSESSMENT_DOMAINS.map((d) => [d.code, d.name]));
@@ -428,6 +428,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       { v: "progress", label: "Progress Report" },
       { v: "vitals", label: "Vital Signs" },
       { v: "routine", label: "Routine" },
+      { v: "caretask", label: "Care Task" },
     ] as { v: ResidentView; label: string; count?: number }[])),
   ];
 
@@ -441,7 +442,6 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
             <p className="text-sm text-[var(--clinical-muted)]">One Care · One Journey{resident.room ? ` — Room ${resident.room}` : ""}</p>
           </div>
         </div>
-        <ClinicalButton variant="secondary" size="sm" onClick={() => window.print()}><Printer className="h-4 w-4" /> Print</ClinicalButton>
       </div>
 
       {/* View tabs — journey, assessment forms, and the folded-in record boards */}
@@ -470,7 +470,9 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       ) : view === "vitals" ? (
         <VitalsTrendBoard key={resident.id} clinicianRole={clinicianRole} residentId={resident.id} />
       ) : view === "routine" ? (
-        <RoutineGeneratorBoard key={resident.id} residentId={resident.id} />
+        <RoutineGeneratorBoard key={resident.id} residentId={resident.id} approvedOnly />
+      ) : view === "caretask" ? (
+        <RoutineGeneratorBoard key={`ct-${resident.id}`} residentId={resident.id} view="caretask" approvedOnly />
       ) : (
       <>
       {/* Category filter chips */}

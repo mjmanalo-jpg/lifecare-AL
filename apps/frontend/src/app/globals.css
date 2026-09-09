@@ -229,6 +229,16 @@ html.theme-light:not(.light) .custom-bg-scrim {
   }
 }
 
+/* Hidden scrollbar for horizontal tab/nav rails — still scrollable/swipeable,
+   just no visible bar. A half-cut tab at the edge is the "more" affordance. */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Modern text-wrap for headings and paragraphs */
 h1, h2, h3, h4, h5, h6 {
   text-wrap: balance;

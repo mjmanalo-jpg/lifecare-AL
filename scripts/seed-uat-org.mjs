@@ -5,8 +5,8 @@
 //
 // Creates, all scoped to a NEW isolated org (never touches Rizal/Bambu):
 //   • 1 org + community + owner (Facility Admin / org admin)  — register/organization
-//   • 5 staff logins, each with the SAME known password       — organization-admin/staff-accounts
-//       Nurse · Care Manager · Caregiver · Resident Coordinator · System Admin (SUPERADMIN)
+//   • 6 staff logins, each with the SAME known password       — organization-admin/staff-accounts
+//       Nurse · Care Manager · Caregiver · Resident Coordinator · System Admin (SUPERADMIN) · CRM Specialist
 //   • 10 synthetic residents (family kept as emergency-contact DATA, no family login)
 //   • Level-of-Care history incl. CLINICAL_OVERRIDE entries (the override LOC)
 //
@@ -41,6 +41,7 @@ const STAFF = [
   { role: "CAREGIVER",            name: "UAT Caregiver",            slug: "caregiver",   position: "Caregiver" },
   { role: "RESIDENT_COORDINATOR", name: "UAT Resident Coordinator", slug: "coordinator", position: "Resident Coordinator" },
   { role: "SUPERADMIN",           name: "UAT System Admin",         slug: "systemadmin", position: "System Administrator" },
+  { role: "CRM",                  name: "UAT CRM Specialist",       slug: "crm",         position: "CRM Specialist" },
 ];
 const CM_INDEX = STAFF.findIndex((s) => s.role === "CARE_MANAGER"); // admits residents
 
@@ -106,6 +107,9 @@ async function main() {
     if (r.ok || r.status === 409) { creds.push({ who: s.position, login: "Employee login", id: `${ORG_NAME} + ${mobile}`, password: SHARED_PASSWORD }); console.log(`${r.ok ? "✓" : "•"} ${s.position.padEnd(22)} ${email}  ${mobile}${r.ok ? "" : " (exists)"}`); }
     else console.error(`✗ ${s.role} failed (${r.status}): ${r.data?.error || "unknown"}`);
   }
+
+  // --staff-only: adding/refreshing logins without re-seeding residents (residents POST is not idempotent).
+  if (has("--staff-only")) { console.log("• --staff-only: skipping resident + LOC seeding\n"); printCreds(creds); return; }
 
   // 3) Switch to the Care Manager (Employee login) — the role permitted to admit residents.
   const cm = await empLogin(ORG_NAME, staffMobile(CM_INDEX), SHARED_PASSWORD);

@@ -33,6 +33,7 @@ import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { upsertRecord } from "@/lib/api";
+import { createReport } from "@/lib/pdfReport";
 import { useClinician, type ClinicianRole } from "./useClinician";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -246,6 +247,83 @@ export default function ResidentProgressReport({ clinicianRole = "NURSE", reside
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Submitted for approval", showConfirmButton: false, timer: 1600 });
   };
 
+  // Structured, self-contained PDF (no page chrome) mirroring the 13 report sections.
+  const downloadPdf = () => {
+    if (!resident) return;
+    const r = createReport();
+    r.header("Resident Progress Report", "LifeCare Living Solutions — Confidential Clinical Record", [
+      s(resident.name),
+      `Room ${s(resident.room)} · Care Level ${s(resident.raw?.careLevel) || s(resident.careLevel)}${resident.age != null ? ` · Age ${resident.age}` : ""}`,
+      `${periodLabel}: ${isoDay(start)} to ${isoDay(end)} · Generated ${fmtDT(generatedAt)}`,
+    ]);
+    const none = (t: string) => r.text(t, { size: 9, color: 140 });
+    const bullet = (t: string) => r.wrapped(`• ${t}`, { size: 9, color: 70 });
+
+    r.heading("1. Vitals Average");
+    r.metrics([
+      ["Avg Systolic (mmHg)", fmt1(vitalsSummary.sys)], ["Avg Diastolic (mmHg)", fmt1(vitalsSummary.dia)],
+      ["Avg Heart Rate (bpm)", fmt1(vitalsSummary.hr)], ["Avg Temp (°C)", fmt1(vitalsSummary.temp)],
+      ["Avg SpO2 (%)", fmt1(vitalsSummary.spo2)], ["Total Readings", String(vitalsSummary.total)],
+    ]);
+
+    r.heading("2. Medication Compliance (MAR)");
+    r.metrics([
+      ["Compliance Rate", marSummary.rate == null ? "—" : `${marSummary.rate.toFixed(1)}%`],
+      ["Doses Given", String(marSummary.given)], ["Missed", String(marSummary.missed)],
+      ["Refused", String(marSummary.refused)], ["Held", String(marSummary.held)], ["Total Doses", String(marSummary.total)],
+    ]);
+
+    r.heading(`3. New and Discontinued Medications (${medChanges.length})`);
+    if (!medChanges.length) none("No medication changes recorded in this period.");
+    else medChanges.forEach((m) => bullet(`${m.name} — ${m.kind === "new" ? "New" : "Discontinued"} · ${m.when}`));
+
+    r.heading("4. Therapy Sessions");
+    none("No therapy sessions recorded in this period.");
+
+    r.heading(`5. Lab Results (${labs.length})`);
+    if (!labs.length) none("No lab results recorded in this period.");
+    else labs.forEach((l) => bullet(`${s(l.testName)} — ${dayOf(l.resultedAt || l.collectedAt || l.createdAt)}${s(l.orderingProvider) ? ` · ${s(l.orderingProvider)}` : ""}${s(l.category) ? ` · ${s(l.category)}` : ""} · ${s(l.status) || "resulted"}`));
+
+    r.heading(`6. Medical Referrals (${referrals.length})`);
+    if (!referrals.length) none("No referrals recorded in this period.");
+    else referrals.forEach((rf) => bullet(`${s(rf.specialist) || s(rf.facilityName) || "Referral"} — ${dayOf(rf.scheduledDate || rf.createdAt)}${s(rf.reason) ? ` · ${s(rf.reason)}` : ""} · ${s(rf.status).toLowerCase()}`));
+
+    r.heading("7. Physician Orders");
+    none("No physician orders recorded in this period.");
+
+    r.heading(`8. Diagnoses and Conditions (${diagnoses.length})`);
+    if (!diagnoses.length) none("No diagnoses recorded in this period.");
+    else r.wrapped(diagnoses.join(", "), { size: 9, color: 70 });
+
+    r.heading(`9. Important Shift Endorsements (${endorsements.length})`);
+    if (!endorsements.length) none("No shift endorsements recorded in this period.");
+    else endorsements.slice(0, 20).forEach((e) => bullet(`${e.shift || "shift"} · ${e.date} · ${e.from || "—"} -> ${e.to}${e.note ? ` — ${e.note}` : ""}`));
+
+    r.heading(`10. Behavioral Concerns (${moodObs.length})`);
+    if (!moodObs.length) none("No behavioral observations recorded in this period.");
+    else moodObs.slice(0, 20).forEach((o) => bullet(`${o.day} — ${o.author}${o.note ? `: ${o.note}` : ""}`));
+
+    r.heading(`11. Care Log Summaries (${careTotal})`);
+    if (!careTotal) none("No care logs recorded in this period.");
+    else CARE_GROUP_ORDER.forEach((g) => {
+      const arr = recsByGroup.get(g) || [];
+      if (!arr.length) return;
+      r.text(`${g} (${arr.length})`, { size: 9.5, bold: true, color: 40 });
+      arr.slice(0, 8).forEach((rec) => bullet(`${rec.day} — ${rec.author}${rec.note ? `: ${rec.note}` : ""}`));
+      if (arr.length > 8) r.text(`+${arr.length - 8} more`, { size: 8, color: 150 });
+    });
+
+    r.heading(`12. Physician Communications (${comms.length})`);
+    if (!comms.length) none("No physician communications recorded in this period.");
+    else comms.forEach((c) => bullet(`${s(c.physicianName) || "Physician"} · ${s(c.method).toLowerCase().replace("_", " ")} — ${dayOf(c.occurredAt || c.createdAt)}${s(c.reason) ? ` · ${s(c.reason)}` : ""}`));
+
+    r.heading(`13. Appointments (${appointments.length})`);
+    if (!appointments.length) none("No appointments recorded in this period.");
+    else appointments.forEach((v) => bullet(`${s(v.purpose).replace(/^\[[A-Z_]+\]\s*/, "") || "Appointment"} — ${dayOf(v.checkInTime || v.createdAt)}${s(v.visitorName) ? ` · ${s(v.visitorName)}` : ""}`));
+
+    r.save(`progress-report-${s(resident.name).toLowerCase().replace(/\s+/g, "-")}-${period}.pdf`);
+  };
+
   const selCls = "px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
 
   return (
@@ -259,7 +337,7 @@ export default function ResidentProgressReport({ clinicianRole = "NURSE", reside
         {resident && (
           <div className="flex items-center gap-2">
             <button onClick={submitForApproval} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50"><ShieldCheck className="w-4 h-4" /> Submit for Approval</button>
-            <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-500 text-white text-sm font-semibold hover:bg-blue-600"><Printer className="w-4 h-4" /> Print / Save PDF</button>
+            <button onClick={downloadPdf} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-500 text-white text-sm font-semibold hover:bg-blue-600"><Printer className="w-4 h-4" /> Export PDF</button>
           </div>
         )}
       </div>

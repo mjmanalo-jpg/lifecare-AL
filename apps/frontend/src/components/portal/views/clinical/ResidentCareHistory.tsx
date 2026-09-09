@@ -34,6 +34,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { createReport } from "@/lib/pdfReport";
 import { type ClinicianRole } from "./useClinician";
 import { useCareLogData } from "./CareLogsBoard";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalCard, StatCard, controlClass, SERIF } from "./clinical-ui";
@@ -194,6 +195,39 @@ export default function ResidentCareHistory({ clinicianRole = "NURSE", residentI
 
   const canPageForward = endIso < todayIso;
 
+  // Structured, self-contained PDF (no page chrome): per-domain completion, notes, weights.
+  const downloadPdf = () => {
+    if (!resident) return;
+    const rep = createReport();
+    rep.header("Care History Report", "Senior Living Management System", [
+      s(resident.name),
+      `Room ${s(resident.room)} · ${startIso} to ${endIso}`,
+      `Completion ${stats.completion}% · Logged ${stats.logged} · Escalated ${stats.escalated} · Missing ${stats.missing} · Generated ${new Date().toLocaleString()}`,
+    ]);
+
+    const domainRows = GRID_DOMAINS.map((d) => {
+      let logged = 0, escalated = 0, missing = 0;
+      days.forEach((day) => { const st = grid[d.key][day]; if (st === "logged") logged++; else if (st === "escalated") escalated++; else missing++; });
+      const pct = days.length ? Math.round(((logged + escalated) / days.length) * 100) : 0;
+      return [d.label, String(logged), String(escalated), String(missing), `${pct}%`];
+    });
+    rep.heading(`Domain Completion (${fmtRange(startIso, endIso)})`);
+    rep.table([40, 250, 330, 415, 495], ["Domain", "Logged", "Escalated", "Missing", "Completion"], domainRows);
+
+    rep.heading(`Caregiver Notes (${notes.length})`);
+    if (!notes.length) rep.text("No notes recorded in this period.", { size: 9, color: 140 });
+    else notes.forEach((e) => {
+      const dom = GRID_DOMAINS.find((g) => g.sources.includes(e.domain as HookDomain));
+      rep.wrapped(`• ${new Date(e.at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · ${dom?.label ?? "Concern"}: ${e.summary}`, { size: 9, color: 70 });
+    });
+
+    rep.heading(`Weight Entries (${weightLogs.length})`);
+    if (!weightLogs.length) rep.text("No weight entries in this period.", { size: 9, color: 140 });
+    else rep.table([40, 170, 290, 410], ["Date", "Weight (kg)", "Type", "By"], weightLogs.map((l) => [dayKey(l.date), kg(l.weightKg!), WEIGHT_BADGE[l.type] ?? l.type, l.by || "—"]));
+
+    rep.save(`care-history-${s(resident.name).toLowerCase().replace(/\s+/g, "-")}-${startIso}.pdf`);
+  };
+
   return (
     <ClinicalPage className="print:bg-white print:m-0">
       <ClinicalHeader
@@ -202,7 +236,7 @@ export default function ResidentCareHistory({ clinicianRole = "NURSE", residentI
         right={
           <div className="flex flex-wrap items-center gap-2 print:hidden">
             {resident && (
-              <ClinicalButton variant="secondary" size="sm" onClick={() => window.print()}><Printer className="h-4 w-4" /> Export PDF</ClinicalButton>
+              <ClinicalButton variant="secondary" size="sm" onClick={downloadPdf}><Printer className="h-4 w-4" /> Export PDF</ClinicalButton>
             )}
             {!residentIdProp && (
               <select value={resId} onChange={(e) => { setResId(e.target.value); setWindowEnd(todayIso); }} aria-label="Select resident" className={`${controlClass} w-full sm:w-64`}>

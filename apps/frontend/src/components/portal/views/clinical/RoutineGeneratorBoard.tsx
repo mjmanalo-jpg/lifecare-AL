@@ -11,9 +11,10 @@
  */
 
 import { useMemo, useState } from "react";
-import { Clock, Loader2, Wand2, ShieldCheck, Undo2, Plus } from "lucide-react";
+import { Clock, Loader2, Wand2, ShieldCheck, Undo2, Plus, FileDown } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord } from "@/lib/api";
+import { createReport } from "@/lib/pdfReport";
 import { adaptResident } from "@/lib/adapters";
 import { SCORED_DOMAINS } from "@/lib/lifecare/dataset";
 import { ASSESSMENTS_V42_KEY, authoritativeAssessmentFor, finalLevel, type AssessmentV42 } from "@/lib/lifecare/assessment";
@@ -67,7 +68,7 @@ const parseAssessments = (raw: string | null | undefined): AssessmentV42[] => {
   try { const v = JSON.parse(raw); return Array.isArray(v) ? (v as AssessmentV42[]) : []; } catch { return []; }
 };
 
-export default function RoutineGeneratorBoard({ residentId: residentIdProp, view = "timeline" }: { residentId?: string; view?: "timeline" | "caretask" | "performance" } = {}) {
+export default function RoutineGeneratorBoard({ residentId: residentIdProp, view = "timeline", approvedOnly = false }: { residentId?: string; view?: "timeline" | "caretask" | "performance"; approvedOnly?: boolean } = {}) {
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const { data: settingRows } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
   const residents = useMemo(() => (resQ.data || []).map(adaptResident), [resQ.data]);
@@ -233,6 +234,27 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
     } catch (e) { toast("error", "Couldn't add event", e instanceof Error ? e.message : "Please try again."); }
   };
 
+  // Structured, self-contained PDF of the APPROVED routine, grouped by shift.
+  const timeText = (d: Row) => { const t = schedTimeKey(d); return t === "99:99" ? "Anytime" : t; };
+  const downloadRoutinePdf = () => {
+    if (!resident) return;
+    const rep = createReport();
+    rep.header("24-Hour Routine", "Senior Living Management System", [
+      s(resident.name),
+      `${finalLoc ? finalLoc + " · " : ""}Room ${s(resident.room)}`,
+      `Approved routine · ${approvedDefs.length} event${approvedDefs.length === 1 ? "" : "s"} · Generated ${new Date().toLocaleString()}`,
+    ]);
+    if (!approvedDefs.length) rep.text("No approved routine yet.", { size: 9, color: 140 });
+    else groupedApproved.forEach(([shift, defs]) => {
+      rep.heading(`${shift} (${defs.length})`);
+      rep.table([40, 110, 330, 440], ["Time", "Activity", "Assistance", "Assisted By"], defs.map((d) => {
+        const role = s(d.responsibleRole).replace(/_/g, " ");
+        return [timeText(d), s(d.name), ASSISTANCE_DISPLAY[d.assistanceLevel as keyof typeof ASSISTANCE_DISPLAY] ?? s(d.assistanceLevel), ROLE_ABBR[role as keyof typeof ROLE_ABBR] ?? role];
+      }));
+    });
+    rep.save(`routine-${s(resident.name).toLowerCase().replace(/\s+/g, "-")}.pdf`);
+  };
+
   return (
     <div className="space-y-4">
       {!residentIdProp && (
@@ -252,52 +274,61 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Wand2 className="h-4 w-4 text-[var(--clinical-panel)]" />
-              <h2 className="text-sm font-bold text-[var(--clinical-ink)]">{s(resident?.name)} · Routine Review</h2>
-              <span className="text-[11px] font-medium text-[var(--clinical-muted)]">{reviewDefs.length} draft event{reviewDefs.length === 1 ? "" : "s"}{finalLoc ? ` · ${finalLoc}` : ""}</span>
-              {blockedCount > 0 && <StatusPill status="CRITICAL">{blockedCount} blocked</StatusPill>}
+              <h2 className="text-sm font-bold text-[var(--clinical-ink)]">{s(resident?.name)} · {approvedOnly ? "24-Hour Routine" : "Routine Review"}</h2>
+              <span className="text-[11px] font-medium text-[var(--clinical-muted)]">{approvedOnly ? `${approvedDefs.length} event${approvedDefs.length === 1 ? "" : "s"}` : `${reviewDefs.length} draft event${reviewDefs.length === 1 ? "" : "s"}`}{finalLoc ? ` · ${finalLoc}` : ""}</span>
+              {!approvedOnly && blockedCount > 0 && <StatusPill status="CRITICAL">{blockedCount} blocked</StatusPill>}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <ClinicalButton variant="secondary" size="sm" onClick={generateDraft} disabled={generating || defsQ.loading}>
-                {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Generate draft
-              </ClinicalButton>
-              {reviewDefs.length > 0 && <ClinicalButton variant="secondary" size="sm" onClick={openAddEvent}><Plus className="h-4 w-4" /> Add event</ClinicalButton>}
-              {reviewDefs.length > 0 && <ClinicalButton variant="ghost" size="sm" onClick={returnForRevision}><Undo2 className="h-4 w-4" /> Return</ClinicalButton>}
-              {reviewDefs.length > 0 && (
-                <ClinicalButton variant="primary" size="sm" onClick={() => setShowPin(true)} disabled={approving || blockedCount > 0}
-                  title={blockedCount > 0 ? "Resolve all blocked events before approving (Rule 21)" : "PIN-sign to approve this routine"}>
-                  {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Approve routine
-                </ClinicalButton>
+              {!approvedOnly && (
+                <>
+                  <ClinicalButton variant="secondary" size="sm" onClick={generateDraft} disabled={generating || defsQ.loading}>
+                    {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Generate draft
+                  </ClinicalButton>
+                  {reviewDefs.length > 0 && <ClinicalButton variant="secondary" size="sm" onClick={openAddEvent}><Plus className="h-4 w-4" /> Add event</ClinicalButton>}
+                  {reviewDefs.length > 0 && <ClinicalButton variant="ghost" size="sm" onClick={returnForRevision}><Undo2 className="h-4 w-4" /> Return</ClinicalButton>}
+                  {reviewDefs.length > 0 && (
+                    <ClinicalButton variant="primary" size="sm" onClick={() => setShowPin(true)} disabled={approving || blockedCount > 0}
+                      title={blockedCount > 0 ? "Resolve all blocked events before approving (Rule 21)" : "PIN-sign to approve this routine"}>
+                      {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Approve routine
+                    </ClinicalButton>
+                  )}
+                </>
               )}
+              {approvedDefs.length > 0 && <ClinicalButton variant="secondary" size="sm" onClick={downloadRoutinePdf}><FileDown className="h-4 w-4" /> Export PDF</ClinicalButton>}
             </div>
           </div>
-          {blockedCount > 0 && (
-            <div className="mb-3 rounded-lg px-3 py-2 text-[11px] font-semibold text-white" style={{ backgroundColor: "var(--clinical-coral)" }}>
-              {blockedCount} event{blockedCount === 1 ? "" : "s"} blocked — attach the required order(s) or resolve the assistance conflict before approving.
-            </div>
-          )}
-          <DataState
-            loading={defsQ.loading && !defsQ.data.length}
-            empty={reviewDefs.length === 0}
-            emptyTitle={modelMissing ? "Routine tables not ready" : "No draft routine yet"}
-            emptyHint={modelMissing ? "The routine definition tables aren't set up yet. Once the database is migrated, generate a draft here." : "Generate a draft from the resident's approved Final LOC to review and approve their 24-hour routine."}
-            emptyAction={!modelMissing && <ClinicalButton variant="primary" size="sm" onClick={generateDraft} disabled={generating}><Wand2 className="h-4 w-4" /> Generate draft</ClinicalButton>}
-          >
-            <div className="space-y-4">
-              {groupedDefs.map(([shift, defs]) => (
-                <div key={shift}>
-                  <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">{shift} <span className="font-medium normal-case">· {defs.length} event{defs.length === 1 ? "" : "s"}</span></p>
-                  <div className="space-y-2">
-                    {defs.map((d) => (
-                      <div key={s(d.id)}>
-                        <RoutineDefinitionCard def={d} onChanged={() => defsQ.refetch?.()} />
-                        <button onClick={() => suppress(d)} className="mt-1 text-[11px] font-semibold text-[var(--clinical-coral)]">Suppress</button>
-                      </div>
-                    ))}
-                  </div>
+          {!approvedOnly && (
+            <>
+              {blockedCount > 0 && (
+                <div className="mb-3 rounded-lg px-3 py-2 text-[11px] font-semibold text-white" style={{ backgroundColor: "var(--clinical-coral)" }}>
+                  {blockedCount} event{blockedCount === 1 ? "" : "s"} blocked — attach the required order(s) or resolve the assistance conflict before approving.
                 </div>
-              ))}
-            </div>
-          </DataState>
+              )}
+              <DataState
+                loading={defsQ.loading && !defsQ.data.length}
+                empty={reviewDefs.length === 0}
+                emptyTitle={modelMissing ? "Routine tables not ready" : "No draft routine yet"}
+                emptyHint={modelMissing ? "The routine definition tables aren't set up yet. Once the database is migrated, generate a draft here." : "Generate a draft from the resident's approved Final LOC to review and approve their 24-hour routine."}
+                emptyAction={!modelMissing && <ClinicalButton variant="primary" size="sm" onClick={generateDraft} disabled={generating}><Wand2 className="h-4 w-4" /> Generate draft</ClinicalButton>}
+              >
+                <div className="space-y-4">
+                  {groupedDefs.map(([shift, defs]) => (
+                    <div key={shift}>
+                      <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">{shift} <span className="font-medium normal-case">· {defs.length} event{defs.length === 1 ? "" : "s"}</span></p>
+                      <div className="space-y-2">
+                        {defs.map((d) => (
+                          <div key={s(d.id)}>
+                            <RoutineDefinitionCard def={d} onChanged={() => defsQ.refetch?.()} />
+                            <button onClick={() => suppress(d)} className="mt-1 text-[11px] font-semibold text-[var(--clinical-coral)]">Suppress</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </DataState>
+            </>
+          )}
           {approvedDefs.length > 0 && (
             <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--clinical-line)" }}>
               <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: "var(--clinical-green)" }}>
@@ -316,7 +347,7 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
               </div>
             </div>
           )}
-          {suppressedDefs.length > 0 && (
+          {!approvedOnly && suppressedDefs.length > 0 && (
             <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--clinical-line)" }}>
               <button onClick={() => setShowSuppressed((v) => !v)} className="text-[11px] font-semibold text-[var(--clinical-muted)]">
                 {showSuppressed ? "Hide" : "Show"} suppressed ({suppressedDefs.length})
@@ -347,7 +378,7 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
           {approvedDefs.length === 0 ? (
             <p className="text-sm text-[var(--clinical-muted)]">No approved 24-hour routine yet. Approve the resident&apos;s routine in <b>24-Hour Routine</b> first{view === "caretask" ? " to seed the Care Task" : " to populate the monthly grid"}.</p>
           ) : view === "caretask" ? (
-            <CareTaskBoard key={resId} residentId={resId} approvedDefs={approvedDefs} residentName={s(resident?.name)} />
+            <CareTaskBoard key={resId} residentId={resId} approvedDefs={approvedDefs} residentName={s(resident?.name)} readOnly={approvedOnly} />
           ) : (
             <ResidentDailyPerformance key={resId} residentId={resId} approvedDefs={approvedDefs} residentName={s(resident?.name)} />
           )}

@@ -6,7 +6,7 @@ import { useMemo, useState, useEffect } from "react";
 import {
   Bell, BellRing, Search, X, Plus, RefreshCw, BarChart3,
   CheckCircle2, AlertTriangle, Clock, Trash2, UserRound, HandHelping,
-  History, Ban, Loader2, type LucideIcon,
+  Ban, Loader2, type LucideIcon,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import {
@@ -97,7 +97,8 @@ export default function CaregiverCallBells() {
     return () => clearInterval(t);
   }, []);
 
-  const [view, setView] = useState<ViewKey>("queue");
+  // Caregivers only work the live queue; History/Analytics are nurse/CM oversight views.
+  const [view] = useState<ViewKey>("queue");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | BellStatus>("all");
   const [perPage, setPerPage] = useState(10);
@@ -261,17 +262,6 @@ export default function CaregiverCallBells() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
-            {([["queue", Bell, "Queue"], ["history", History, "History"], ["analytics", BarChart3, "Analytics"]] as [ViewKey, LucideIcon, string][]).map(([key, Icon, label], i) => (
-              <button key={key} onClick={() => setView(key)}
-                className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition ${i > 0 ? "border-l border-gray-300" : ""} ${view === key ? "bg-yellow-400 text-black" : "bg-white text-gray-700 hover:bg-gray-50"}`}>
-                <Icon className="w-4 h-4" /> {label}
-                {key === "queue" && queue.length > 0 && (
-                  <span className="ml-0.5 px-1.5 py-0.5 bg-red-500 text-white rounded-full text-[10px] font-bold">{queue.length}</span>
-                )}
-              </button>
-            ))}
-          </div>
           <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           <button onClick={() => setCreating(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
             <Plus className="w-4 h-4" /> New Call Bell
@@ -279,13 +269,6 @@ export default function CaregiverCallBells() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Stat label="Pending" value={stats.pending} icon={AlertTriangle} tone="red" />
-        <Stat label="Responding" value={stats.responding} icon={HandHelping} tone="amber" />
-        <Stat label="Resolved Today" value={stats.resolvedToday} icon={CheckCircle2} tone="green" />
-        <Stat label="Avg Response (min)" value={stats.avgResponse} icon={Clock} tone="blue" />
-      </div>
 
       {/* ── Live queue ── */}
       {view === "queue" && (

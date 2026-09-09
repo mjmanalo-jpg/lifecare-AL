@@ -6,6 +6,7 @@ import { getSession } from "@/lib/auth";
 import { requireTenantContext } from "@/lib/tenant";
 import { withTenantDb } from "@/lib/tenantDb";
 import { CAREGIVER_SCHEDULE_KEY, parseSchedules, assigneeForResidentToday } from "@/lib/caregiverSchedule";
+import { manilaDay } from "@/lib/lifecare/occurrenceStatus";
 import { getEntitlements } from "@/lib/entitlements";
 import {
   ASSISTANT_CONFIG_KEY,
@@ -1033,30 +1034,49 @@ async function handleShiftRecap(
   // A caregiver's "unit's open carry-over" is limited to the residents assigned to
   // them today — the same roster the client scopes with — so they never pull other
   // residents' data. Nurses / Care Managers keep the whole-community view.
+  // Resident name map (routine occurrences store residentId denormalized, with no
+  // relation to select a name through) + the caregiver's assigned-resident scope.
+  const [communityResidents, rosterSetting] = await Promise.all([
+    prisma.resident.findMany({ where: { communityId }, select: { id: true, firstName: true, lastName: true, roomNumber: true } }),
+    ctx.role === "CAREGIVER" && myStaffId
+      ? prisma.appSetting.findFirst({ where: { communityId, key: CAREGIVER_SCHEDULE_KEY }, select: { value: true } })
+      : Promise.resolve(null),
+  ]);
+  const resNameById = new Map(communityResidents.map((r) => [r.id, rn(r)]));
+  let assignedIds: string[] | null = null;
   let openResidentWhere: { communityId: string } | { communityId: string; id: { in: string[] } } = { communityId };
   if (ctx.role === "CAREGIVER" && myStaffId) {
-    const [communityResidents, rosterSetting] = await Promise.all([
-      prisma.resident.findMany({ where: { communityId }, select: { id: true } }),
-      prisma.appSetting.findFirst({ where: { communityId, key: CAREGIVER_SCHEDULE_KEY }, select: { value: true } }),
-    ]);
     const schedules = parseSchedules(rosterSetting?.value);
     const now = new Date();
-    const assignedIds = communityResidents
+    assignedIds = communityResidents
       .filter((r) => assigneeForResidentToday(schedules, r.id, now, "Asia/Manila")?.caregiverStaffId === myStaffId)
       .map((r) => r.id);
     openResidentWhere = { communityId, id: { in: assignedIds } };
   }
+  // Routine occurrences (the resident's open routine) power the handover's completed +
+  // uncompleted lists — NOT ad-hoc Task Cards. Scope by careDate window, then filter to
+  // the exact Manila care day + shift hour band in JS.
+  const [bandStart, bandEnd] = SHIFT_WINDOWS[shiftType.toUpperCase()] ?? [0, 24];
+  const careDayStr = manilaDay(new Date(String(body.date ?? new Date().toISOString())));
+  const occDayLo = new Date(start.getTime() - 86400000), occDayHi = new Date(end.getTime() + 86400000);
 
-  const [meds, incidents, escMine, comms, tasksDone, openEsc, pendingTasks, dueFollowups] = await Promise.all([
+  const [meds, incidents, escMine, comms, occRows, openEsc, dueFollowups] = await Promise.all([
     prisma.medicationAdministration.findMany({ where: { recordedById: ctx.userId, actualTime: inWindow, resident: { communityId } }, select: { status: true, dosage: true, route: true, reasonForRefusal: true, heldReason: true, medication: { select: { name: true } }, resident: resSel } }),
     prisma.incident.findMany({ where: { reportedById: ctx.userId, createdAt: inWindow }, select: { incidentType: true, severity: true, description: true, resident: resSel } }),
     myName ? prisma.escalation.findMany({ where: { raisedBy: myName, createdAt: inWindow }, select: { situation: true, priority: true, status: true, resident: resSel } }) : Promise.resolve([]),
     prisma.physicianCommunication.findMany({ where: { loggedById: ctx.userId, occurredAt: inWindow }, select: { physicianName: true, method: true, reason: true, resident: resSel } }),
-    myStaffId ? prisma.task.findMany({ where: { assignedToId: myStaffId, status: "COMPLETED", completedAt: inWindow }, select: { title: true, resident: resSel } }) : Promise.resolve([]),
+    prisma.routineOccurrence.findMany({ where: { communityId, careDate: { gte: occDayLo, lte: occDayHi }, ...(assignedIds ? { residentId: { in: assignedIds } } : {}) }, select: { residentId: true, scheduledTime: true, careDate: true, careDeliveryOutcome: true, workflowState: true, definition: { select: { name: true } } } }),
     prisma.escalation.findMany({ where: { resident: openResidentWhere, status: { notIn: ["RESOLVED", "CANCELLED"] } }, select: { situation: true, resident: resSel }, take: 20 }),
-    prisma.task.count({ where: { resident: openResidentWhere, status: { in: ["PENDING", "IN_PROGRESS"] } } }),
     prisma.followUp.count({ where: { resident: openResidentWhere, status: { in: ["PENDING", "SCHEDULED", "OVERDUE"] } } }),
   ]);
+  // Split the shift's routine occurrences into completed (charted) vs still-open.
+  const inBand = (t: string) => { const h = Number(/(\d{1,2}):/.exec(t)?.[1] ?? 0); return bandStart <= bandEnd ? (h >= bandStart && h < bandEnd) : (h >= bandStart || h < bandEnd); };
+  const DONE_OUTCOMES = ["Completed as planned", "Completed with variance"];
+  const isCharted = (o: (typeof occRows)[number]) => !!o.careDeliveryOutcome && DONE_OUTCOMES.includes(o.careDeliveryOutcome);
+  const occLine = (o: (typeof occRows)[number]) => `${o.scheduledTime} · ${o.definition?.name ?? "Routine event"} — ${resNameById.get(o.residentId) ?? "a resident"}`;
+  const dayOccs = occRows.filter((o) => manilaDay(o.careDate) === careDayStr && inBand(o.scheduledTime)).sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
+  const occDone = dayOccs.filter(isCharted);
+  const occOpen = dayOccs.filter((o) => !isCharted(o) && o.workflowState !== "Cancelled");
 
   // ── Deterministic structured fields (real records, nothing invented) ──
   const medLine = (m: (typeof meds)[number]) => `${m.medication?.name ?? "medication"}${m.dosage ? ` ${m.dosage}` : ""}${m.route ? ` ${m.route}` : ""} — ${rn(m.resident)}`;
@@ -1072,7 +1092,7 @@ async function handleShiftRecap(
   ];
   const medicationsAdministered = medRows.map((l) => `• ${l}`).join("\n");
 
-  const taskCompleted = tasksDone.map((t) => `• ${t.title} — ${rn(t.resident)}`).join("\n");
+  const taskCompleted = [...occDone.slice(0, 15).map((o) => `• ${occLine(o)}`), ...(occDone.length > 15 ? [`• …and ${occDone.length - 15} more completed`] : [])].join("\n");
   const incidentsOccurred = incidents.length > 0;
   const incidentDetails = incidents.map((i) => `${String(i.severity)} ${String(i.incidentType).replace(/_/g, " ").toLowerCase()} — ${rn(i.resident)}: ${i.description}`).join(" | ");
 
@@ -1086,7 +1106,8 @@ async function handleShiftRecap(
   const carry: string[] = [];
   for (const e of openEsc.slice(0, 8)) carry.push(`Open escalation — ${rn(e.resident)}: ${e.situation}`);
   if (openEsc.length > 8) carry.push(`…and ${openEsc.length - 8} more open escalation(s)`);
-  if (pendingTasks) carry.push(`${pendingTasks} pending task(s)`);
+  for (const o of occOpen.slice(0, 10)) carry.push(`Routine not completed — ${occLine(o)}`);
+  if (occOpen.length > 10) carry.push(`…and ${occOpen.length - 10} more uncompleted routine`);
   if (dueFollowups) carry.push(`${dueFollowups} follow-up(s) due`);
   const handoverNotes = carry.map((c) => `• ${c}`).join("\n");
 

@@ -7,9 +7,10 @@
 // Performance grid. Migration-free (app-setting `care_task_routine`).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Trash2, RotateCcw, ShieldCheck, CheckCircle2, Loader2 } from "lucide-react";
+import { Plus, Trash2, RotateCcw, ShieldCheck, CheckCircle2, Loader2, FileDown } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord } from "@/lib/api";
+import { createReport } from "@/lib/pdfReport";
 import { activityRows, type ActivityRow } from "@/lib/lifecare/monthlyPerformance";
 import { careDay } from "@/lib/lifecare/routineCompletions";
 import { ASSISTANCE_DISPLAY, ROLE_ABBR } from "@/lib/lifecare/assistance";
@@ -37,11 +38,12 @@ const seedRow = (a: ActivityRow): CareTaskRow => ({
   id: a.key, time: a.time, activity: a.activity, assistance: a.assistance, assistedBy: a.assistedBy,
 });
 
-export default function CareTaskBoard({ residentId, approvedDefs, residentName, approverName }: {
+export default function CareTaskBoard({ residentId, approvedDefs, residentName, approverName, readOnly = false }: {
   residentId: string;
   approvedDefs: DefRow[];
   residentName?: string;
   approverName?: string;
+  readOnly?: boolean;
 }) {
   const { data: settingRows, refetch } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
   const savedMap = useMemo(() => parseCareTask(settingRows.find((r) => (r.key || r.id) === CARE_TASK_KEY)?.value), [settingRows]);
@@ -123,6 +125,20 @@ export default function CareTaskBoard({ residentId, approvedDefs, residentName, 
     finally { setSaving(false); }
   };
 
+  // Structured, self-contained PDF of the Care Task table.
+  const downloadPdf = () => {
+    const rep = createReport();
+    rep.header("Care Task", "Senior Living Management System", [
+      residentName || "Resident",
+      approved ? `Approved${approvedAt ? " · " + new Date(approvedAt).toLocaleDateString() : ""}` : "Draft",
+      `${rows.length} task${rows.length === 1 ? "" : "s"} · Generated ${new Date().toLocaleString()}`,
+    ]);
+    const sorted = [...rows].sort((a, b) => careDayRank(a.time) - careDayRank(b.time));
+    rep.table([40, 120, 340, 460], ["Time", "Activity", "Level of Assistance", "Assisted By"],
+      sorted.map((r) => [r.time || "—", r.activity || "—", r.assistance || "—", r.assistedBy || "—"]));
+    rep.save(`care-task-${(residentName || "resident").toLowerCase().replace(/\s+/g, "-")}.pdf`);
+  };
+
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -130,18 +146,23 @@ export default function CareTaskBoard({ residentId, approvedDefs, residentName, 
           {approved
             ? <StatusPill status="APPROVED">Approved{approvedAt ? ` · ${new Date(approvedAt).toLocaleDateString()}` : ""}</StatusPill>
             : <span className="rounded-full bg-[var(--clinical-surface-2)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-[var(--clinical-muted)]">Draft</span>}
-          <p className="text-[11px] text-[var(--clinical-muted)]">Seeded from the approved 24-hour routine. Edit or add lifestyle rows; approve to send to caregivers.</p>
+          <p className="text-[11px] text-[var(--clinical-muted)]">{readOnly ? "The approved Care Task sent to caregivers, seeded from the 24-hour routine." : "Seeded from the approved 24-hour routine. Edit or add lifestyle rows; approve to send to caregivers."}</p>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => void reseed()} disabled={seed.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-[var(--clinical-panel)] transition hover:bg-[var(--clinical-surface-2)] disabled:opacity-50"
-            style={{ borderColor: "var(--clinical-line-strong)" }}>
-            <RotateCcw className="h-3.5 w-3.5" /> {rows.length ? "Re-seed" : "Seed from routine"}
-          </button>
-          <ClinicalButton variant="primary" size="sm" onClick={() => void approve()} disabled={saving || approved || rows.length === 0}
-            title={rows.length === 0 ? "Add or seed rows first" : "Approve this Care Task"}>
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : approved ? <CheckCircle2 className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />} {approved ? "Approved" : "Approve Care Task"}
-          </ClinicalButton>
+          <ClinicalButton variant="secondary" size="sm" onClick={downloadPdf} disabled={rows.length === 0}><FileDown className="h-3.5 w-3.5" /> Export PDF</ClinicalButton>
+          {!readOnly && (
+            <>
+              <button type="button" onClick={() => void reseed()} disabled={seed.length === 0}
+                className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-[var(--clinical-panel)] transition hover:bg-[var(--clinical-surface-2)] disabled:opacity-50"
+                style={{ borderColor: "var(--clinical-line-strong)" }}>
+                <RotateCcw className="h-3.5 w-3.5" /> {rows.length ? "Re-seed" : "Seed from routine"}
+              </button>
+              <ClinicalButton variant="primary" size="sm" onClick={() => void approve()} disabled={saving || approved || rows.length === 0}
+                title={rows.length === 0 ? "Add or seed rows first" : "Approve this Care Task"}>
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : approved ? <CheckCircle2 className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />} {approved ? "Approved" : "Approve Care Task"}
+              </ClinicalButton>
+            </>
+          )}
         </div>
       </div>
 
@@ -160,28 +181,30 @@ export default function CareTaskBoard({ residentId, approvedDefs, residentName, 
             {[...rows].sort((a, b) => careDayRank(a.time) - careDayRank(b.time)).map((r) => (
               <tr key={r.id} className="border-t" style={{ borderColor: "var(--clinical-line)" }}>
                 <td className="px-2 py-1.5 align-top" style={{ width: 132 }}>
-                  <input type="time" lang="en-US" value={toTimeInput(r.time)} onChange={(e) => setCell(r.id, { time: e.target.value })} className={`${cell} text-center`} style={{ borderColor: "var(--clinical-line)" }} aria-label="Time" />
+                  <input type="time" lang="en-US" value={toTimeInput(r.time)} onChange={(e) => setCell(r.id, { time: e.target.value })} disabled={readOnly} className={`${cell} text-center disabled:opacity-100`} style={{ borderColor: "var(--clinical-line)" }} aria-label="Time" />
                 </td>
                 <td className="px-2 py-1.5 align-top">
-                  <input value={r.activity} onChange={(e) => setCell(r.id, { activity: e.target.value })} placeholder="Activity…" className={cell} style={{ borderColor: "var(--clinical-line)" }} aria-label="Activity" />
+                  <input value={r.activity} onChange={(e) => setCell(r.id, { activity: e.target.value })} disabled={readOnly} placeholder="Activity…" className={`${cell} disabled:opacity-100`} style={{ borderColor: "var(--clinical-line)" }} aria-label="Activity" />
                 </td>
                 <td className="px-2 py-1.5 align-top" style={{ width: 168 }}>
-                  <select value={r.assistance} onChange={(e) => setCell(r.id, { assistance: e.target.value })} className={cell} style={{ borderColor: "var(--clinical-line)" }} aria-label="Level of assistance">
+                  <select value={r.assistance} onChange={(e) => setCell(r.id, { assistance: e.target.value })} disabled={readOnly} className={`${cell} disabled:opacity-100`} style={{ borderColor: "var(--clinical-line)" }} aria-label="Level of assistance">
                     {ASSISTANCE_OPTS.includes(r.assistance) ? null : <option value={r.assistance}>{r.assistance || "—"}</option>}
                     {ASSISTANCE_OPTS.map((a) => <option key={a} value={a}>{a}</option>)}
                   </select>
                 </td>
                 <td className="px-2 py-1.5 align-top" style={{ width: 118 }}>
-                  <select value={r.assistedBy} onChange={(e) => setCell(r.id, { assistedBy: e.target.value })} className={cell} style={{ borderColor: "var(--clinical-line)" }} aria-label="Assisted by">
+                  <select value={r.assistedBy} onChange={(e) => setCell(r.id, { assistedBy: e.target.value })} disabled={readOnly} className={`${cell} disabled:opacity-100`} style={{ borderColor: "var(--clinical-line)" }} aria-label="Assisted by">
                     {ASSISTED_BY_OPTS.includes(r.assistedBy) ? null : <option value={r.assistedBy}>{r.assistedBy || "—"}</option>}
                     {ASSISTED_BY_OPTS.map((a) => <option key={a} value={a}>{a}</option>)}
                   </select>
                 </td>
                 <td className="px-2 py-1.5 align-top">
-                  <button type="button" onClick={() => removeRow(r.id)} aria-label="Remove row"
-                    className="mt-1 rounded-md p-1.5 text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-coral)]">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {!readOnly && (
+                    <button type="button" onClick={() => removeRow(r.id)} aria-label="Remove row"
+                      className="mt-1 rounded-md p-1.5 text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-coral)]">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -192,9 +215,11 @@ export default function CareTaskBoard({ residentId, approvedDefs, residentName, 
         </table>
       </div>
 
-      <div className="mt-3">
-        <ClinicalButton variant="secondary" size="sm" onClick={addRow}><Plus className="h-3.5 w-3.5" /> Add row</ClinicalButton>
-      </div>
+      {!readOnly && (
+        <div className="mt-3">
+          <ClinicalButton variant="secondary" size="sm" onClick={addRow}><Plus className="h-3.5 w-3.5" /> Add row</ClinicalButton>
+        </div>
+      )}
       {residentName && <p className="mt-2 text-[11px] text-[var(--clinical-muted)]">Care Task for {residentName}.</p>}
       {confirmDialog}
       <Toaster toasts={toasts} onDismiss={dismiss} />

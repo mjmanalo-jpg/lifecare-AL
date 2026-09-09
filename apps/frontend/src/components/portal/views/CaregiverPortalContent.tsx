@@ -49,7 +49,7 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
           tabs={[
             { key: "escalations", label: "Escalate to Nurse", node: <EscalationsBoard role="CAREGIVER" /> },
             { key: "callbells", label: "Call Bells", node: <CaregiverCallBells /> },
-            { key: "incidents", label: "Report an Incident", node: <FacilityIncidents readOnly /> },
+            { key: "incidents", label: "Report an Incident", node: <FacilityIncidents readOnly compact /> },
           ]}
         />
       );
@@ -114,7 +114,7 @@ export default function CaregiverPortalContent({ tab }: CaregiverPortalContentPr
     case "followups":
       return <FollowUpTracker />;
     case "incidents":
-      return <FacilityIncidents readOnly />;
+      return <FacilityIncidents readOnly compact />;
     default:
       return <CaregiverMyShift />;
   }

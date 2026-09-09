@@ -180,7 +180,7 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE", focusRe
         <button onClick={() => openRecord(null, contextType)} className="inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] active:scale-95"><Plus className="h-4 w-4" /> Record Weight</button>
       </div>
 
-      {!embedded && view === "schedule" && (
+      {!embedded && view === "schedule" && clinicianRole !== "CAREGIVER" && (
         <section className="clinical-summary-band mt-6 overflow-hidden rounded-2xl bg-[var(--clinical-panel)] text-white">
           <div className="grid gap-px bg-white/15 sm:grid-cols-[1.35fr_repeat(3,1fr)]">
             <div className="bg-[var(--clinical-panel)] p-5 sm:p-6">
@@ -201,12 +201,15 @@ export default function WeightMonitoringBoard({ clinicianRole = "NURSE", focusRe
       {!embedded && (
       <div className="my-5 grid gap-3 rounded-2xl border p-3 lg:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_auto_auto] xl:items-center" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
         {view === "schedule" ? <SearchInput value={search} onChange={setSearch} placeholder="Search resident or room..." className="min-w-0 lg:col-span-2 xl:col-span-1" /> : <div className="min-w-0 text-sm text-[var(--clinical-muted)] lg:col-span-2 xl:col-span-1">{view === "history" ? "Review a resident's recorded weight history and trend." : "Review residents whose weight changes may require follow-up."}</div>}
+        {/* View switcher + status filter are nurse/CM analytics — caregivers only record the schedule list. */}
+        {clinicianRole !== "CAREGIVER" && (
         <div role="tablist" aria-label="Weight tracking view" className="grid grid-cols-3 gap-1 rounded-xl bg-[var(--clinical-surface-2)] p-1">
           {([["schedule", "Weekly Schedule", Calendar], ["history", "Resident History", History], ["concerns", "Weight Concerns", AlertTriangle]] as const).map(([v, label, Icon]) => (
             <button key={v} role="tab" onClick={() => setView(v)} aria-selected={view === v} className={`inline-flex min-h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition ${view === v ? "bg-[var(--clinical-surface-raised,var(--clinical-surface))] text-[var(--clinical-ink)] shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}><Icon className="h-4 w-4" /> <span className="hidden sm:inline">{label}</span><span className="sm:hidden">{v === "schedule" ? "Schedule" : v === "history" ? "History" : "Concerns"}</span></button>
           ))}
         </div>
-        {view === "schedule" && (
+        )}
+        {clinicianRole !== "CAREGIVER" && view === "schedule" && (
           <div role="tablist" aria-label="Weight schedule status" className="grid grid-cols-3 gap-1 rounded-xl bg-[var(--clinical-surface-2)] p-1">
             {([["all", "All", rows.length], ["action", "Needs action", attentionCount], ["completed", "Completed", counts.completed]] as const).map(([value, label, count]) => (
               <button key={value} role="tab" aria-selected={statusFilter === value} onClick={() => setStatusFilter(value)} className={`min-h-10 whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition ${statusFilter === value ? "bg-[var(--clinical-surface-raised,var(--clinical-surface))] text-[var(--clinical-ink)] shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>{label} <span className="ml-1 tabular-nums opacity-70">{count}</span></button>

@@ -10,6 +10,22 @@ export const ASSISTANCE = [
   "Independent", "Setup/Cueing", "Minimal Assist", "Extensive Assist", "Total Assist",
 ] as const;
 export type Assistance = (typeof ASSISTANCE)[number];
+
+/** Facility AS-02 Mobility/Transfers assist-level options. Single source shared by
+ *  the v4.2 assessment (DomainScoreGrid EVIDENCE_SELECTS) and the caregiver
+ *  Document-care log (CareLogsBoard), so the assessment's selected level auto-fills
+ *  the daily log 1:1. Stored/read verbatim as an AS-02 evidence token. */
+export const MOBILITY_ASSIST_OPTIONS = [
+  "Independent", "Standby assist", "One-person assist", "Two-person assist", "Mechanical lift / hoist",
+] as const;
+
+/** The AS-02 assist level chosen in an assessment: the evidence token matching one
+ *  of MOBILITY_ASSIST_OPTIONS. "" when none was selected. */
+export function mobilityAssistFromEvidence(evidence: string | undefined): string {
+  const opts = MOBILITY_ASSIST_OPTIONS.map((o) => o.toLowerCase());
+  return (evidence ?? "").split(",").map((t) => t.trim())
+    .find((t) => opts.includes(t.toLowerCase())) ?? "";
+}
 export type AsScore = 0 | 1 | 2 | 3 | 4;
 
 /** AS 0..4 → canonical assistance level. */
