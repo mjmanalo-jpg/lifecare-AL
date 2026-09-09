@@ -372,6 +372,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       // ── Operations ────────────────────────────────────────────────────────
       // Ordered like the Care Manager portal: Resident Assessment → Admissions →
       // Care Plan → Room Management, then the remaining operations tabs.
+      { name: "CRM Workspace", icon: UserPlus, route: "/superadmin/crm", group: "Operations" },
       { name: "Resident Assessment", icon: ClipboardList, route: "/superadmin/assessmenthub", group: "Operations" },
       { name: "Admissions & Registration", icon: UserPlus, route: "/superadmin/admissions", group: "Operations" },
       { name: "Move-in", icon: Package, route: "/superadmin/movein", group: "Operations" },
