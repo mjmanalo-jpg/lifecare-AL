@@ -19,6 +19,7 @@ import TodaysCareBoard from "@/components/portal/views/clinical/TodaysCareBoard"
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { careDay } from "@/lib/lifecare/routineCompletions";
 import { countProgress, deriveState, manilaMinutesNow, manilaDay } from "@/lib/lifecare/occurrenceStatus";
+import { firstCareWindowForShift, type RoutineShift } from "@/lib/lifecare/carePlanRoutine";
 import ADLMonitoringBoard from "@/components/portal/views/clinical/ADLMonitoringBoard";
 import ShiftEndorsementBoard from "@/components/portal/views/clinical/ShiftEndorsementBoard";
 import type { DashboardPayload, DashboardQueueItem, DashboardSection } from "@/lib/dashboard/types";
@@ -168,6 +169,39 @@ export default function CaregiverShiftBoard() {
     }).length,
   [myShiftOccs, nowMin]);
 
+  // Real-time per-resident routine buckets (SLMS v4.2 #4): overdue / due-now derived
+  // from THIS resident's RoutineOccurrence rows in the current shift window via the
+  // same deriveState (lead 5m / grace 30m) that drives the modal + shift tiles.
+  // Recomputes with nowMin (30s tick), so the card chips stay live instead of showing
+  // the stale legacy-Task counts the dashboard payload carries.
+  const occByResident = useMemo(() => {
+    const m = new Map<string, { overdue: number; dueNext: number }>();
+    for (const o of myShiftOccs) {
+      if (o.residentId == null) continue;
+      const s = deriveState({ scheduledTime: o.scheduledTime, workflowState: o.workflowState }, nowMin);
+      if (s !== "Overdue" && s !== "Due") continue;
+      const rid = String(o.residentId);
+      const e = m.get(rid) ?? { overdue: 0, dueNext: 0 };
+      if (s === "Overdue") e.overdue += 1; else e.dueNext += 1;
+      m.set(rid, e);
+    }
+    return m;
+  }, [myShiftOccs, nowMin]);
+
+  // Shift-wide "Next priority": the first resident-care window of the CURRENT shift
+  // (Morning 06:00 wake-up / Afternoon 15:00 activity / Night 00:00 sleep & safety),
+  // the same "start here" anchor shown on every resident card. Openers always start
+  // on the hour, so startHour → the range/12h label.
+  const nextPriority = useMemo(() => {
+    const code: RoutineShift = shift.label === "Morning" ? "AM" : shift.label === "Afternoon" ? "PM" : "NOC";
+    const w = firstCareWindowForShift(code);
+    if (!w) return null;
+    const start24 = `${String(w.startHour).padStart(2, "0")}:00`;
+    const end24 = (w.window.split("-")[1] || "").trim();
+    const h = w.startHour % 24;
+    return { time: `${h % 12 || 12}:00 ${h < 12 ? "AM" : "PM"}`, title: `${start24}-${end24} · ${w.shiftLabel} · ${w.label}` };
+  }, [shift.label]);
+
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
@@ -209,7 +243,9 @@ export default function CaregiverShiftBoard() {
       const nowItems = nowByRes.get(id) ?? [];
       const nextItems = nextByRes.get(id) ?? [];
       const nextItem = nowItems[0] ?? nextItems[0];
-      const status: ResidentCard["status"] = nowItems.length ? "overdue" : nextItems.length ? "due" : "uptodate";
+      // Chips + status come from the live routine occurrences, not the payload's Task counts.
+      const occ = occByResident.get(String(id)) ?? { overdue: 0, dueNext: 0 };
+      const status: ResidentCard["status"] = occ.overdue ? "overdue" : occ.dueNext ? "due" : "uptodate";
       return {
         id,
         name: r.residentLabel || r.title,
@@ -218,15 +254,15 @@ export default function CaregiverShiftBoard() {
         nextTime: fmtTime(nextItem?.dueAt),
         nextAt: nextItem?.dueAt || "",
         nextTitle: nextItem?.title || "",
-        overdue: nowItems.length,
-        dueNext: nextItems.length,
+        overdue: occ.overdue,
+        dueNext: occ.dueNext,
         status,
       };
     });
     // Most urgent first: overdue → due → up to date, then by soonest due time.
     // A caregiver should never have to hunt for who needs them next.
     return list.sort((a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status] || a.nextAt.localeCompare(b.nextAt));
-  }, [data]);
+  }, [data, occByResident]);
 
   const counts = useMemo(() => ({
     all: cards.length,
@@ -393,10 +429,10 @@ export default function CaregiverShiftBoard() {
                         })()}
                       </div>
                     </div>
-                    {c.nextTitle && (
+                    {nextPriority && (
                       <div className="mt-3">
-                        <p className="text-xs text-[var(--clinical-muted)]">{c.nextTime ? `${c.nextTime} · ` : ""}Next priority</p>
-                        <p className="font-semibold text-[var(--clinical-ink)]">{c.nextTitle}</p>
+                        <p className="text-xs text-[var(--clinical-muted)]">{nextPriority.time} · Next priority</p>
+                        <p className="font-semibold text-[var(--clinical-ink)]">{nextPriority.title}</p>
                       </div>
                     )}
                     {/* Overdue / due-next are clickable → open this resident's routine. */}

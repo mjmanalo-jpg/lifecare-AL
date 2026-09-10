@@ -366,7 +366,11 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
    *  resident/date/assignee filter controls. Personal scoping lives on "My Tasks". */
   const visibleTasks = useMemo(() => {
     return tasks.filter((t) => {
-      const raw = t.raw as { assignedToId?: string } | undefined;
+      const raw = t.raw as { assignedToId?: string; generatedFrom?: string | null } | undefined;
+      // Caregivers see ONLY nurse-assigned tasks on this board — routine/care-plan
+      // tasks (materialized with generatedFrom = the care plan id) are executed from
+      // the Resident Routine modal, not here. Managers keep full visibility.
+      if (isWorker && raw?.generatedFrom) return false;
       const assignedTo = raw?.assignedToId ?? null;
       if (filterAssignee !== "all" && assignedTo !== filterAssignee) return false;
       if (filterResident !== "all") {

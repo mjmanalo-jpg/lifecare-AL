@@ -123,6 +123,18 @@ function windowForMinutes(mins: number): RoutineWindow {
 }
 
 /**
+ * A shift's first resident-care window — the caregiver's "start here" priority for the
+ * first ~2 hours of the shift, skipping the shift-acceptance handover and the
+ * conditional overnight-med window: Morning 06:00 (wake-up/hygiene), Afternoon 15:00
+ * (activity/mobility), Night 00:00 (sleep & safety). Pinned by window id because the
+ * opener is a care-flow decision, not something a time/role heuristic derives cleanly.
+ */
+const SHIFT_OPENER_ID: Record<RoutineShift, string> = { AM: "W04", PM: "W11", NOC: "W01" };
+export function firstCareWindowForShift(shift: RoutineShift): RoutineWindow | undefined {
+  return ROUTINE_WINDOWS.find((w) => w.id === SHIFT_OPENER_ID[shift]);
+}
+
+/**
  * Build the 24-hour routine for a plan's active domains. One event per care
  * window that has at least one of the plan's domains; ordered by window start.
  *
