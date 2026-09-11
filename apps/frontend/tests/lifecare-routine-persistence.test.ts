@@ -6,8 +6,9 @@ import assert from "node:assert/strict";
 import {
   makeOccId, isEligibleForCareDay, eligibleForCareDay, expandDefinitionOccurrences,
   materializeCareDay, applyRevision, assertAssistanceLevel, draftEventToDefinitionRow,
+  routineFamily, routineFamilyKey, sharedRoutineFields,
 } from "../src/lib/lifecare/routineDefinitions.ts";
-import { assembleRoutine } from "../src/lib/lifecare/assembleRoutine.ts";
+import { assembleRoutine, assembleRoutine24h } from "../src/lib/lifecare/assembleRoutine.ts";
 
 test("occId keying: stable, colon-stripped, unique per HH:MM", () => {
   assert.equal(makeOccId("def1", "2026-09-05", "08:00"), "def1@2026-09-05@0800");
@@ -93,4 +94,58 @@ test("draft mapper: #2 BLOCKED event persists as DRAFT + blockReason (no BLOCKED
   assert.ok(row.blockReason, "carries the block reason for the board");
   assert.equal(row.version, 1);
   assert.equal(row.residentId, "R1");
+});
+
+// ── Recurring-event families: a nurse edit to one occurrence lands on its siblings ──
+test("routine family: same-kind events at other times group; catch-all does not", () => {
+  const defs = [
+    { id: "a", name: "Morning toileting", resultSchemaKey: "Toileting / Continence", status: "DRAFT" },
+    { id: "b", name: "Pre-lunch toileting", resultSchemaKey: "Toileting / Continence", status: "DRAFT" },
+    { id: "c", name: "Bedtime toileting", resultSchemaKey: "Toileting / Continence", status: "APPROVED" },
+    { id: "d", name: "Meal", resultSchemaKey: "Meal / Supplement", status: "DRAFT" },
+    { id: "e", name: "Handover preparation", resultSchemaKey: "General Observation", status: "DRAFT" },
+    { id: "f", name: "Rest support", resultSchemaKey: "General Observation", status: "DRAFT" },
+  ];
+  assert.deepEqual(routineFamily(defs[0], defs).map((d) => d.id), ["b"]); // not "c" — different status
+  assert.deepEqual(routineFamily(defs[3], defs).map((d) => d.id), []);    // only meal in the draft
+  assert.deepEqual(routineFamily(defs[4], defs).map((d) => d.id), []);    // catch-all never groups
+  assert.equal(routineFamilyKey(defs[4]), "");
+});
+
+test("edit propagation carries the decision, never the per-occurrence schedule", () => {
+  const shared = sharedRoutineFields({
+    assistanceLevel: "Total Assist", responsibleRole: "Nurse", staffing: "Two-person",
+    revisionReason: "MD order", orderRef: "DIET-1",
+    schedule: { times: ["06:15"] }, frequencyMethod: "exact_time", shiftOwner: "AM",
+    name: "Morning toileting", status: "DRAFT", blockReason: null, id: "a",
+  });
+  assert.deepEqual(Object.keys(shared).sort(),
+    ["assistanceLevel", "orderRef", "responsibleRole", "revisionReason", "staffing"]);
+});
+
+test("Breakfast / Lunch / Dinner generate as one recurring 'Meal' event", () => {
+  const out = assembleRoutine24h({
+    residentId: "R1", finalLoc: "LOC 3", assessmentVersion: "v4.2", domains: [],
+    activeConditions: [], orders: {}, effectiveDate: "2026-09-11",
+  });
+  const meals = out.filter((e) => e.resultSchemaKey === "Meal / Supplement");
+  assert.equal(meals.length, 3, "three meals a day");
+  assert.ok(meals.every((e) => e.name === "Meal"), "all named Meal");
+  assert.deepEqual(meals.map((e) => e.schedule.times?.[0]).sort(), ["08:00", "12:00", "18:00"]);
+  assert.equal(out.filter((e) => /^(breakfast|lunch|dinner)$/i.test(e.name)).length, 0);
+});
+
+test("client renames: meals collapse to 'Meal', ordered reading is 'Vital Signs'", () => {
+  const out = assembleRoutine24h({
+    residentId: "R1", finalLoc: "LOC 3", assessmentVersion: "v4.2", domains: [],
+    activeConditions: [], orders: {}, effectiveDate: "2026-09-11",
+  });
+  const byId = (rt: string) => out.find((e) => e.sourceLocBundleId === rt);
+  assert.equal(byId("RT-012")?.name, "Vital Signs");
+  assert.equal(byId("RT-012")?.resultSchemaKey, "Vital Signs");
+  // Every renamed row keeps a family key consistent with its new name.
+  for (const rt of ["RT-009", "RT-017", "RT-027"]) assert.equal(byId(rt)?.name, "Meal");
+  // Pre-lunch / pre-dinner toileting are continence events, not meals.
+  for (const rt of ["RT-016", "RT-026"]) assert.equal(byId(rt)?.resultSchemaKey, "Toileting / Continence");
+  assert.equal(out.filter((e) => e.name === "Ordered clinical reading").length, 0);
 });

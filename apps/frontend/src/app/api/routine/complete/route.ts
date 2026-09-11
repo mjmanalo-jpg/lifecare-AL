@@ -10,8 +10,10 @@ import {
   type CareOutcome, type ExceptionReason, type ClinicalFinding, type LegacyOutcome,
 } from "@/lib/lifecare/vocab";
 import { applyOccurrenceState, escalationStateFromStatus, type OccurrenceState } from "@/lib/lifecare/occurrenceLifecycle";
-import { isChartable, manilaMinutesNow } from "@/lib/lifecare/occurrenceStatus";
+import { isChartable, manilaMinutesNow, toMin } from "@/lib/lifecare/occurrenceStatus";
 import { validateResult } from "@/lib/lifecare/resultSchema";
+import { clearEntityAlerts } from "@/lib/alertResolve";
+import { routineAlertKeys } from "@/lib/alertAccess";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -179,6 +181,50 @@ export async function POST(request: NextRequest) {
     console.error("[routine complete] occurrence update failed:", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Could not close the occurrence." }, { status: 500 });
   }
+
+  // ── Close the dispatched Care Task copy of this same care ────────────────────
+  // The nurse's "Send Care Task to caregivers" action writes a Task row per care-task
+  // row (/api/routine/dispatch-care-task). That Task is a SECOND record of the care
+  // this occurrence represents, and closing the occurrence never touched it — so once
+  // a caregiver charted here, the duplicate sat PENDING forever and kept reappearing
+  // in the nurse's triage queue as permanently past-due.
+  //
+  // No id links the two (dispatch stores only `{ careTaskRow, time }`), so match on
+  // two independent keys that must BOTH agree: the exact due instant (care day +
+  // HH:MM, which is how dispatch computed dueDate) and the activity title. A miss
+  // just leaves the old behaviour; requiring both keys makes closing the WRONG task
+  // implausible. Best-effort: the occurrence is already closed and authoritative.
+  try {
+    const scheduledMinutes = toMin(occ.scheduledTime);
+    const expectedDue = new Date(occ.careDate.getTime() + scheduledMinutes * 60_000);
+    if (def.name) {
+      const copies = await prisma.task.findMany({
+        where: {
+          communityId,
+          residentId: occ.residentId,
+          generatedFrom: `caretask:${occ.residentId}`,
+          title: def.name,
+          dueDate: expectedDue,
+          status: { in: ["PENDING", "IN_PROGRESS"] },
+        },
+        select: { id: true },
+      });
+      if (copies.length) {
+        // Every copy closes: the care happened once, however many caregivers it was
+        // dispatched to.
+        await prisma.task.updateMany({
+          where: { id: { in: copies.map((t) => t.id) } },
+          data: { status: "COMPLETED", completedAt: now },
+        });
+        await clearEntityAlerts("task", copies.map((t) => t.id), communityId);
+      }
+    }
+  } catch (err) {
+    console.error("[routine complete] care-task copy close failed:", err);
+  }
+
+  // The occurrence is Closed, so its own due/overdue reminders are stale too.
+  await clearEntityAlerts("routineOccurrence", routineAlertKeys(occId), communityId);
 
   // ── Governed CareEvent ───────────────────────────────────────────────────────
   let eventId: string | undefined;

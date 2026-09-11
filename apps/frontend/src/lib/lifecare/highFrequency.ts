@@ -10,6 +10,7 @@
 
 import hfData from "./data/high_frequency.json" with { type: "json" };
 import type { RoutineShift } from "./carePlanRoutine.ts";
+import { shiftForMinutes } from "./occurrenceStatus.ts";
 
 // The 3 original methods drive the migration-free high_frequency.json domain path
 // (expandOccurrences, date-free). The full workbook set is used by the assembly
@@ -49,14 +50,6 @@ export interface HFOccurrence {
   minutes: number;      // minutes from midnight (0-1439)
   time: string;         // "HH:MM"
   shift: RoutineShift;  // AM | PM | NOC
-}
-
-/** Shift for a minute-of-day (spec Shift Rules: Night 22-06 / Morning 06-14 / Afternoon 14-22). */
-function shiftForMinutes(m: number): RoutineShift {
-  const h = Math.floor((((m % 1440) + 1440) % 1440) / 60);
-  if (h >= 6 && h < 14) return "AM";
-  if (h >= 14 && h < 22) return "PM";
-  return "NOC";
 }
 
 function hm(m: number): string {

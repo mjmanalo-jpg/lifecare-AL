@@ -17,6 +17,16 @@ import type {
   DashboardAction, DashboardHuddle, DashboardMetric, DashboardPayload, DashboardQueueItem, DashboardRole, DashboardWindowKey,
 } from "@/lib/dashboard/types";
 import { NURSE_COMMAND_SHORTCUTS } from "@/lib/dashboard/nurseZones";
+import { getTenantRealtime } from "@/lib/supabaseClient";
+import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
+
+/** Tables the dashboard read model is derived from — a write to any of them changes
+ *  what a nurse sees, so each one triggers an immediate quiet reload. AppSetting
+ *  covers the clock log and the caregiver roster (both migration-free JSON stores). */
+const LIVE_TABLES = [
+  "RoutineOccurrence", "CareEvent", "Task", "Escalation", "Incident",
+  "CallBell", "TimeTracking", "AppSetting", "Resident",
+] as const;
 
 type DrilldownData = {
   metricKey: string; asOf: string; numerator: number; denominator: number; truncated: boolean;
@@ -58,6 +68,9 @@ const SECTION_ICONS: Record<string, typeof Activity> = {
   "admissions-returns": UserRoundCheck, "open-coordination": ClipboardCheck,
   "family-preferences": UsersRound, "alerts-for-action": BellRing, "endorsement-notes": ClipboardCheck,
 };
+
+/** Sections a nurse triages by PERSON, so they roll up to one row per resident. */
+const PER_RESIDENT_SECTIONS = new Set(["clinical-triage"]);
 
 const PRIORITY_CLASS = {
   P1: "bg-[var(--clinical-coral)] text-white",
@@ -173,8 +186,36 @@ export default function RoleCommandDashboard({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
     const refresh = window.setInterval(() => void load(true), 30_000);
-    return () => window.clearInterval(refresh);
-  }, [load]);
+
+    // Realtime on top of the poll: a caregiver clocking in or charting care shows up
+    // at once instead of up to 30s later. Charting a routine fires a burst of row
+    // changes, so coalesce them into one reload. Polling stays as the fallback for
+    // when realtime is unavailable.
+    let cancelled = false;
+    let debounce = 0;
+    let client: SupabaseClient | null = null;
+    let channel: RealtimeChannel | null = null;
+    void getTenantRealtime().then((realtime) => {
+      if (!realtime || cancelled) return;
+      client = realtime.client;
+      channel = realtime.client.channel(`dashboard:${role}:${Date.now()}`);
+      const onChange = () => {
+        window.clearTimeout(debounce);
+        debounce = window.setTimeout(() => { if (!cancelled) void load(true); }, 600);
+      };
+      for (const table of LIVE_TABLES) {
+        channel.on("postgres_changes", { event: "*", schema: "public", table, filter: `communityId=eq.${realtime.communityId}` }, onChange);
+      }
+      channel.subscribe();
+    });
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(refresh);
+      window.clearTimeout(debounce);
+      if (client && channel) client.removeChannel(channel);
+    };
+  }, [load, role]);
 
   const runAction = async (action: DashboardAction) => {
     setActingId(action.entityId);
@@ -263,9 +304,9 @@ export default function RoleCommandDashboard({
             {showMetrics && selectedMetric && <MetricDefinition metric={selectedMetric} onDrilldown={() => void openDrilldown(selectedMetric)} />}
 
             <div className="space-y-4">
-              {primarySections.map((item) => <QueueSection key={item.key} section={item} actingId={actingId} onAction={runAction} prominent />)}
+              {primarySections.map((item) => <QueueSection key={item.key} section={item} actingId={actingId} onAction={runAction} prominent perResident={PER_RESIDENT_SECTIONS.has(item.key)} />)}
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                {otherSections.map((item) => <QueueSection key={item.key} section={item} actingId={actingId} onAction={runAction} />)}
+                {otherSections.map((item) => <QueueSection key={item.key} section={item} actingId={actingId} onAction={runAction} perResident={PER_RESIDENT_SECTIONS.has(item.key)} />)}
               </div>
             </div>
           </>
@@ -646,16 +687,148 @@ function DefinitionCell({ label, value }: { label: string; value: string }) {
   return <div><dt className="font-semibold uppercase tracking-[0.06em] text-[var(--clinical-muted)]">{label}</dt><dd className="mt-1 text-[var(--clinical-ink-soft)]">{value}</dd></div>;
 }
 
+const PRIORITY_RANK: Record<string, number> = { P1: 0, P2: 1, P3: 2, P4: 3 };
+const initialsOf = (name: string) =>
+  name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
+
+interface ResidentGroup {
+  key: string;
+  label: string;
+  roomLabel?: string;
+  residentId?: string;
+  items: DashboardQueueItem[];
+  worst: string;
+  href: string;
+}
+
+/**
+ * Roll a flat queue up into one row per resident.
+ *
+ * A nurse triages by PERSON, not by ticket: fifteen separate rows for one resident's
+ * morning routine is noise, while "QA Test 66 — 15 concerns" is a decision. Items
+ * that belong to no resident (facility-wide work) keep their own group rather than
+ * being dropped.
+ */
+function groupByResident(items: DashboardQueueItem[]): ResidentGroup[] {
+  const groups = new Map<string, ResidentGroup>();
+  for (const item of items) {
+    const key = item.residentId || "__facility__";
+    const existing = groups.get(key);
+    if (existing) {
+      existing.items.push(item);
+      if (PRIORITY_RANK[item.priority] < PRIORITY_RANK[existing.worst]) existing.worst = item.priority;
+      continue;
+    }
+    groups.set(key, {
+      key,
+      label: item.residentLabel || item.title || "Facility-wide",
+      roomLabel: item.roomLabel,
+      residentId: item.residentId,
+      items: [item],
+      worst: item.priority,
+      href: item.sourceHref || "#",
+    });
+  }
+  // Facility-wide last; otherwise worst priority first, then the biggest workload.
+  return [...groups.values()].sort((a, b) => {
+    if ((a.key === "__facility__") !== (b.key === "__facility__")) return a.key === "__facility__" ? 1 : -1;
+    return (PRIORITY_RANK[a.worst] - PRIORITY_RANK[b.worst]) || (b.items.length - a.items.length);
+  });
+}
+
+function ResidentGroupRow({
+  group, actingId, onAction,
+}: { group: ResidentGroup; actingId: string; onAction: (action: DashboardAction) => void }) {
+  const [open, setOpen] = useState(false);
+  const kinds = [...new Set(group.items.map((item) => item.kind))];
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full min-h-11 items-start gap-3 px-4 py-3 text-left transition hover:bg-[var(--clinical-surface-2)]"
+      >
+        <span className={`mt-0.5 inline-flex min-w-8 items-center justify-center rounded-md px-1.5 py-1 text-[11px] font-bold ${PRIORITY_CLASS[group.worst as keyof typeof PRIORITY_CLASS]}`}>{group.worst}</span>
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--clinical-surface-2)] text-[11px] font-bold text-[var(--clinical-ink-soft)]">
+          {initialsOf(group.label)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-bold text-[var(--clinical-ink)]">{group.label}</span>
+            {group.roomLabel && <span className="text-xs text-[var(--clinical-muted)]">Room {group.roomLabel}</span>}
+          </span>
+          <span className="mt-0.5 block text-xs text-[var(--clinical-muted)]">
+            {group.items.length} concern{group.items.length === 1 ? "" : "s"} · {kinds.slice(0, 3).join(" · ")}
+          </span>
+        </span>
+        <ChevronDown className={`mt-1 h-4 w-4 shrink-0 text-[var(--clinical-muted)] transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="divide-y divide-[var(--clinical-line)] border-t border-[var(--clinical-line)] bg-[var(--clinical-surface-2)]/40">
+          {group.items.map((item) => (
+            <QueueRow key={item.id} item={item} acting={actingId === item.sourceId} onAction={onAction} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function QueueSection({
-  section, actingId, onAction, prominent = false,
+  section, actingId, onAction, prominent = false, perResident = false,
 }: {
   section: DashboardPayload["sections"][number];
   actingId: string;
   onAction: (action: DashboardAction) => void;
   prominent?: boolean;
+  /** Roll the queue up to one row per resident, expandable to their concerns. */
+  perResident?: boolean;
 }) {
   const Icon = SECTION_ICONS[section.key] || Activity;
+  const groups = useMemo(() => (perResident ? groupByResident(section.items) : []), [perResident, section.items]);
+  // Truncation applies to what is actually listed — residents when grouped, so a
+  // resident's concerns are never split across the cut.
+  const visibleGroups = groups.slice(0, prominent ? 12 : 7);
   const visible = section.items.slice(0, prominent ? 12 : 7);
+  if (perResident) {
+    return (
+      <ClinicalCard id={section.key} top={prominent && section.items.some((item) => item.priority === "P1") ? "coral" : "none"} className="scroll-mt-24 overflow-hidden">
+        <div className="flex items-start justify-between gap-3 border-b border-[var(--clinical-line)] px-4 py-3.5">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="mt-0.5 rounded-lg bg-[var(--clinical-surface-2)] p-2 text-[var(--clinical-panel)]"><Icon className="h-4 w-4" /></span>
+            <div className="min-w-0">
+              <h2 className="font-bold text-[var(--clinical-ink)]">{section.title}</h2>
+              <p className="mt-0.5 text-xs leading-5 text-[var(--clinical-muted)]">
+                One row per resident — open a resident to see their concerns.
+              </p>
+            </div>
+          </div>
+          <span className="rounded-md bg-[var(--clinical-surface-2)] px-2 py-1 text-xs font-bold tabular-nums text-[var(--clinical-ink-soft)]">
+            {groups.length} resident{groups.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        {visibleGroups.length === 0 ? (
+          <div className="px-5 py-8 text-center">
+            <CheckCircle2 className="mx-auto h-5 w-5 text-emerald-600" />
+            <p className="mt-2 text-sm font-semibold text-[var(--clinical-ink)]">{section.emptyTitle}</p>
+            {section.emptyHint && <p className="mt-1 text-xs text-[var(--clinical-muted)]">{section.emptyHint}</p>}
+          </div>
+        ) : (
+          <div className="divide-y divide-[var(--clinical-line)]">
+            {visibleGroups.map((group) => (
+              <ResidentGroupRow key={group.key} group={group} actingId={actingId} onAction={onAction} />
+            ))}
+          </div>
+        )}
+        {groups.length > visibleGroups.length && (
+          <Link href={visibleGroups[0]?.href || "#"} className="flex min-h-11 items-center justify-center gap-1 border-t border-[var(--clinical-line)] px-4 py-2 text-sm font-semibold text-[var(--clinical-panel)] hover:bg-[var(--clinical-surface-2)]">
+            View all {groups.length} residents <ChevronRight className="h-4 w-4" />
+          </Link>
+        )}
+      </ClinicalCard>
+    );
+  }
   return (
     <ClinicalCard id={section.key} top={prominent && section.items.some((item) => item.priority === "P1") ? "coral" : "none"} className="scroll-mt-24 overflow-hidden">
       <div className="flex items-start justify-between gap-3 border-b border-[var(--clinical-line)] px-4 py-3.5">

@@ -12,10 +12,11 @@ import {
   parseDomainLogs, careLogNotesToDomainLogs, baselineFor, evaluateDomainTriggers, discrepancyDayCount,
 } from "@/lib/lifecare/domainMonitoring";
 import { ASSESSMENT_DOMAINS } from "@/lib/lifecare/dataset";
-import { parseSchedules, CAREGIVER_SCHEDULE_KEY, activeCaregiverUserIdsForResident } from "@/lib/caregiverSchedule";
+import { parseSchedules, CAREGIVER_SCHEDULE_KEY, activeCaregiverUserIdsForResident, assigneeForResidentShift, currentShiftKey } from "@/lib/caregiverSchedule";
 import { deriveState, manilaMinutesNow, manilaDay } from "@/lib/lifecare/occurrenceStatus";
 import { to12h } from "@/lib/lifecare/careTask";
 import { loadCommunityPushSubs, sendToSubscriptions, prunePushSubs } from "@/lib/push";
+import { reconcileStaleAlerts } from "@/lib/alertResolve";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -94,10 +95,12 @@ interface Scan {
   domainDiscrepancy: number;
   routineDue: number;
   routineOverdue: number;
+  /** Stale alerts removed because their source condition already resolved. */
+  alertsCleared: number;
 }
 
 async function scanCommunity(communityId: string, organizationId: string | null): Promise<Scan> {
-  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0, reassessmentDue: 0, domainDiscrepancy: 0, routineDue: 0, routineOverdue: 0 };
+  const counts: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0, reassessmentDue: 0, domainDiscrepancy: 0, routineDue: 0, routineOverdue: 0, alertsCleared: 0 };
 
   // Recipient sets by care tier. General alerts go to the on-floor + admin team
   // (nurse + facility admin). SBAR SLA escalations follow the clinical chain of
@@ -166,6 +169,15 @@ async function scanCommunity(communityId: string, organizationId: string | null)
       console.error(`alerts source '${label}' failed for community ${communityId}:`, e instanceof Error ? e.message : "unknown");
     }
   };
+
+  // 0) Self-heal FIRST: clear alerts whose work is already done (task completed /
+  //    occurrence closed). The write paths clear their own alert the moment they
+  //    settle; this is the backstop for alerts raised before that existed and for
+  //    out-of-band state changes. Runs before the raise sources so a stale card
+  //    never survives a scan.
+  await runSource("reconcile", async () => {
+    counts.alertsCleared += await reconcileStaleAlerts(communityId);
+  });
 
   // 1) Abnormal vitals (last 6h). Alerts the bedside + clinical team (caregiver,
   //    nurse, care manager, physician). A CRITICAL vital ALSO auto-raises an SBAR
@@ -269,10 +281,32 @@ async function scanCommunity(communityId: string, organizationId: string | null)
   await runSource("tasks", async () => {
     const tasks = await prisma.task.findMany({
       where: { resident: { communityId }, status: "PENDING", dueDate: { lt: now } },
-      select: { id: true, title: true, dueDate: true, resident: { select: { firstName: true, lastName: true, roomNumber: true } } },
+      select: {
+        id: true, title: true, dueDate: true, residentId: true,
+        resident: { select: { firstName: true, lastName: true, roomNumber: true } },
+        assignedTo: { select: { user: { select: { firstName: true, lastName: true } } } },
+      },
     });
+    if (!tasks.length) return;
+    // Name the accountable caregiver so the nurse knows who to chase. Prefer the
+    // task's own assignee; when it was generated unassigned, fall back to whoever
+    // was rostered for that resident on the shift the task was due in.
+    const tz = process.env.FACILITY_TZ || "Asia/Manila";
+    const schedules = parseSchedules(
+      (await prisma.appSetting.findFirst({ where: { communityId, key: CAREGIVER_SCHEDULE_KEY }, select: { value: true } }))?.value,
+    );
     for (const t of tasks) {
-      if (await notify("SYSTEM_ALERT", "task", t.id, "Overdue task", `Task "${t.title}" for ${rname(t.resident)} (Room ${room(t.resident)}) was due ${fmtDate(t.dueDate)}.`)) counts.overdueTasks++;
+      const u = t.assignedTo?.user;
+      const assignee = u ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() : "";
+      const rostered = assignee
+        ? null
+        : assigneeForResidentShift(schedules, t.residentId, currentShiftKey(t.dueDate, tz), t.dueDate, tz);
+      const who = assignee
+        ? `Assigned to ${assignee}.`
+        : rostered?.caregiverName
+          ? `Unassigned — caregiver on duty was ${rostered.caregiverName}.`
+          : "Unassigned — no caregiver was rostered.";
+      if (await notify("SYSTEM_ALERT", "task", t.id, "Overdue task", `Task "${t.title}" for ${rname(t.resident)} (Room ${room(t.resident)}) was due ${fmtDate(t.dueDate)}. ${who}`)) counts.overdueTasks++;
     }
   });
 
@@ -853,7 +887,7 @@ async function runScan(request: NextRequest) {
     communities = [{ id: ctx.communityId, organizationId: ctx.organizationId ?? null }];
   }
 
-  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0, reassessmentDue: 0, domainDiscrepancy: 0, routineDue: 0, routineOverdue: 0 };
+  const totals: Scan = { abnormalVitals: 0, missedMeds: 0, overdueFollowups: 0, overdueTasks: 0, lowStock: 0, missedDocs: 0, weightLoss: 0, weightDue: 0, incidents: 0, sbarEscalations: 0, missedElimination: 0, apptAutoApproved: 0, reassessmentDue: 0, domainDiscrepancy: 0, routineDue: 0, routineOverdue: 0, alertsCleared: 0 };
   for (const c of communities) {
     try {
       const s = await scanCommunity(c.id, c.organizationId);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
 
 export interface HubTab {
   /** Stable key — also the legacy tab route this pane used to live at. */
@@ -30,7 +31,14 @@ export default function HubTabs({
   /** Remembers the last-open tab per hub, per browser. */
   storageKey?: string;
 }) {
+  // `?hub=<key>` wins over the remembered tab: a deep link (e.g. a dashboard queue
+  // row sending the nurse to Staffing → Schedule) must land on the pane it names,
+  // not on whichever pane this browser happened to leave open last.
+  const searchParams = useSearchParams();
+  const requested = searchParams.get("hub") || "";
+
   const [active, setActive] = useState<string>(() => {
+    if (requested && tabs.some((t) => t.key === requested)) return requested;
     if (storageKey && typeof window !== "undefined") {
       try {
         const saved = localStorage.getItem(`lcms_hub_${storageKey}`);
@@ -39,6 +47,15 @@ export default function HubTabs({
     }
     return tabs[0]?.key ?? "";
   });
+
+  // Following a second deep link while already on the hub must still move the pane —
+  // the initializer above only runs on first mount. Guarded on `requested` changing,
+  // so a manual tab choice afterwards is never yanked back.
+  const [prevRequested, setPrevRequested] = useState(requested);
+  if (requested !== prevRequested) {
+    setPrevRequested(requested);
+    if (requested && tabs.some((t) => t.key === requested)) setActive(requested);
+  }
 
   const select = (key: string) => {
     setActive(key);

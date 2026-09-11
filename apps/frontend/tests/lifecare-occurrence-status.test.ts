@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { deriveState, isChartable, isLate, countProgress, manilaDay, WINDOW_LEAD_MIN, OCCURRENCE_GRACE_MIN } from "../src/lib/lifecare/occurrenceStatus.ts";
+import { deriveState, isChartable, isLate, isMissed, countProgress, manilaDay, shiftOfTime, WINDOW_LEAD_MIN, OCCURRENCE_GRACE_MIN } from "../src/lib/lifecare/occurrenceStatus.ts";
 
 const at = "08:00"; // 480 min
 const S = 480;
@@ -33,6 +33,30 @@ test("isChartable / isLate", () => {
   assert.equal(isChartable({ scheduledTime: at }, S - 60), false); // too early
   assert.equal(isLate({ scheduledTime: at }, S + OCCURRENCE_GRACE_MIN + 5), true);
   assert.equal(isLate({ scheduledTime: at, workflowState: "Closed" }, 9999), false);
+});
+
+// ── Care Delivery roll-up primitives ────────────────────────────────────────
+// isMissed backs the board's completion denominator across a MULTI-DAY period, where
+// deriveState alone is wrong (it compares every row to today's clock).
+test("isMissed: a past care day's open row is missed regardless of the clock", () => {
+  const open = { scheduledTime: "23:00" };
+  assert.equal(isMissed(open, 0, -1), true, "yesterday 23:00, still open at 00:00 today");
+  assert.equal(isMissed(open, 1439, 1), false, "a future care day is never missed");
+  assert.equal(isMissed({ ...open, workflowState: "Closed" }, 0, -1), false, "charted, so not a miss");
+  assert.equal(isMissed({ ...open, workflowState: "Cancelled" }, 0, -1), false, "withdrawn from the plan");
+});
+
+test("isMissed: today only counts as missed past the grace window", () => {
+  assert.equal(isMissed({ scheduledTime: at }, S, 0), false, "inside the window");
+  assert.equal(isMissed({ scheduledTime: at }, S + OCCURRENCE_GRACE_MIN, 0), false, "last grace minute");
+  assert.equal(isMissed({ scheduledTime: at }, S + OCCURRENCE_GRACE_MIN + 1, 0), true);
+  assert.equal(isMissed({ scheduledTime: at }, S - 120, 0), false, "not yet due");
+});
+
+test("shiftOfTime: spec shift rules (AM 06-14 / PM 14-22 / NOC 22-06)", () => {
+  assert.deepEqual(["05:59", "06:00", "13:59"].map(shiftOfTime), ["NOC", "AM", "AM"]);
+  assert.deepEqual(["14:00", "21:59"].map(shiftOfTime), ["PM", "PM"]);
+  assert.deepEqual(["22:00", "00:00", "03:30"].map(shiftOfTime), ["NOC", "NOC", "NOC"]);
 });
 
 test("countProgress: exceptions never raise completed; Cancelled excluded from total", () => {

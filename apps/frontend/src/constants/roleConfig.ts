@@ -432,7 +432,7 @@ export const ROLES: Record<Role, RoleDetails> = {
       // Physician Comms · Appointments · Infection Control · Safeguarding. The
       // standalone routes still resolve for deep-links.
       { name: "Clinical Coordination", icon: Cross, route: "/nurse/clinicalcoordination", group: "Coordination & Close" },
-      { name: "Shift Close", icon: Repeat, route: "/nurse/shiftclosehub", group: "Coordination & Close" },
+      { name: "Shift Endorsement", icon: Repeat, route: "/nurse/shiftclosehub", group: "Coordination & Close" },
     ],
   },
   CAREGIVER: {
@@ -458,11 +458,10 @@ export const ROLES: Record<Role, RoleDetails> = {
       { name: "My Assigned Residents", icon: UserRound, route: "/caregiver/residents", group: "Care This Shift" },
       { name: "Task Cards", icon: ListTodo, route: "/caregiver/taskassignment", group: "Care This Shift" },
       { name: "Weight", icon: Scale, route: "/caregiver/weightmonitoring", group: "Care This Shift" },
-      { name: "MAR", icon: Pill, route: "/caregiver/mar", group: "Care This Shift" },
       // "Today" (Today's Care) opens in-place from the Shift Dashboard header, so it
       // is no longer a sidebar item.
-      // Daily Log / ADL open in-place from each resident card on the Shift Dashboard
-      // (one tap, no page navigation). Weight / MAR are standing sidebar items.
+      // Daily Log / ADL / MAR open in-place from each resident card on the Shift
+      // Dashboard (one tap, no page navigation). Weight is a standing sidebar item.
       // The remaining in-place routes still resolve for deep-links.
       // Three ways to raise something, now one tabbed hub (Escalate · Call Bell · Incident).
       { name: "Action Queue", icon: Siren, route: "/caregiver/actionqueue", group: "Need Nurse / Help" },

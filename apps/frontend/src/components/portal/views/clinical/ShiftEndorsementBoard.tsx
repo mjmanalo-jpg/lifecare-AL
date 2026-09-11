@@ -79,7 +79,6 @@ const ROLES = ["Nurse", "Caregiver", "Care Manager", "Physician"];
 const ITEM_STATUSES = ["Stable", "Watch", "Escalated"] as const;
 type ItemStatus = typeof ITEM_STATUSES[number];
 // Pre-drafted carry-over fields pulled from a resident's live shift data.
-type CarryOverDraft = { concern: string; action: string; priority: string; status: ItemStatus; whatChanged: string; pending: string; watchNext: string };
 // How an incoming shift disposes of a carry-over item (§12 close states).
 const CLOSE_STATES = ["Resolved", "Continue Monitoring", "Action Next Shift", "Awaiting External Response"] as const;
 type CloseState = typeof CLOSE_STATES[number];
@@ -356,51 +355,6 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedde
     return false;
   };
 
-  // Pre-draft a carry-over item for a resident from their live shift data — the
-  // remaining (pending / in-progress) tasks, open incidents & escalations, and any
-  // ADL declines. Same scoping as everything else (only assigned residents for a
-  // caregiver, since the picker is already scoped). Everything stays editable.
-  const buildCarryOverDraft = (rid: string, shiftLabel?: string): CarryOverDraft => {
-    const up = (v: unknown) => s(v).toUpperCase();
-    const cap = (x: string) => (x ? x[0].toUpperCase() + x.slice(1) : x);
-    const uniq = (a: string[]) => [...new Set(a.map((x) => x.trim()).filter(Boolean))];
-    const CAP = 8; // keep lists readable; care-plan tasks can number in the dozens
-    const bullets = (a: string[]) => { const shown = a.slice(0, CAP); const more = a.length - shown.length; return shown.map((x) => `• ${x}`).join("\n") + (more > 0 ? `\n• +${more} more` : ""); };
-    // Carry-over pulls this shift's UNCOMPLETED ROUTINE OCCURRENCES (the resident's open
-    // routine — the "Routine" tab), NOT ad-hoc Task Cards. Charted = "Completed as
-    // planned/with variance"; anything else that isn't Cancelled is still outstanding.
-    // Scoped to today's Manila care day + the endorsement's shift-hour window.
-    const DONE = ["Completed as planned", "Completed with variance"];
-    const slotShift = (hhmm: string): string => { const h = Number(/(\d{1,2}):/.exec(hhmm)?.[1] ?? 0); return h >= 6 && h < 14 ? "Morning" : h >= 14 && h < 22 ? "Afternoon" : "Night"; };
-    const SHIFT_INCLUDES: Record<string, string[]> = { "Morning": ["Morning"], "Afternoon": ["Afternoon"], "Night": ["Night"], "Morning 12h": ["Morning", "Afternoon"], "Night 12h": ["Afternoon", "Night"] };
-    const wantShifts = shiftLabel ? SHIFT_INCLUDES[shiftLabel] : undefined;
-    const today = manilaDay(new Date());
-    const routineName = (defId: string) => s((defQ.data || []).find((d) => s(d.id) === defId)?.name) || "Routine event";
-    const occs = (occQ.data || [])
-      .filter((o) => s(o.residentId) === rid && manilaDay(o.careDate) === today && !DONE.includes(s(o.careDeliveryOutcome)) && s(o.workflowState) !== "Cancelled" && (!wantShifts || wantShifts.includes(slotShift(s(o.scheduledTime)))))
-      .sort((a, b) => s(a.scheduledTime).localeCompare(s(b.scheduledTime)));
-    const incidents = (incQ.data || []).filter((i) => s(i.residentId) === rid && !i.resolvedAt);
-    const escs = (escQ.data || []).filter((x) => s(x.residentId) === rid && !["RESOLVED", "CANCELLED"].includes(up(x.status)));
-    const adlChanges = uniq(adlLogs.filter((l: Row) => s(l.residentId) === rid && (l.change === "Declined" || l.change === "Significant Decline")).map((l: Row) => `${cap(s(l.domain))} ${s(l.change).toLowerCase()}`));
-    const routineTitles = uniq(occs.map((o) => `${s(o.scheduledTime)} · ${routineName(s(o.definitionId))}`));
-    // Headline concern: notable clinical items first, then the outstanding routine.
-    const head: string[] = [];
-    incidents.forEach((i) => head.push(`Open incident: ${(s(i.incidentType).replace(/_/g, " ") || "event")}${up(i.severity) ? ` (${cap(s(i.severity).toLowerCase())})` : ""}`));
-    escs.forEach((x) => head.push(`Open escalation: ${s(x.situation).slice(0, 80)}`));
-    if (adlChanges.length) head.push(`ADL change: ${adlChanges.join(", ")}`);
-    if (routineTitles.length) head.push(`Uncompleted routine to continue:\n${bullets(routineTitles)}`);
-    const critical = escs.length > 0 || incidents.some((i) => ["CRITICAL", "SEVERE", "HIGH"].includes(up(i.severity)));
-    return {
-      concern: head.join("\n") || "No outstanding items this shift.",
-      action: "",
-      priority: critical ? "Urgent" : (occs.length || incidents.length) ? "Important" : "Routine",
-      status: escs.length ? "Escalated" : (occs.length || incidents.length) ? "Watch" : "Stable",
-      whatChanged: adlChanges.join("; "),
-      pending: routineTitles.length ? bullets(routineTitles) : "",
-      watchNext: uniq(escs.map((x) => s(x.situation).slice(0, 60))).join("; "),
-    };
-  };
-
   // ── Occurrence-driven handover (sub-project #5) ────────────────────────────
   // The shift's UNRESOLVED routine occurrences: Overdue, OR Not-completed with an
   // exception, OR an open escalation (Pending acknowledgement / Acknowledged).
@@ -509,7 +463,7 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedde
   // ── Structured Details view ────────────────────────────────────────────────
   if (view === "details" && active) return <DetailsView e={active} residents={scopedResidents} resName={resName} onBack={() => setView("list")} update={update} buildSections={buildSections} hasActivity={hasActivity} canEdit={active.outgoingById ? clinicianUserId === active.outgoingById : clinicianName === active.outgoingBy} />;
   // ── Carry-Over & Sign-Off view ─────────────────────────────────────────────
-  if (view === "carryover" && active) return <CarryOverView e={active} residents={scopedResidents} resName={resName} stats={stats} by={clinicianName} byId={clinicianUserId} onBack={() => setView("details")} update={update} buildHandover={buildHandover} acceptHandover={acceptHandover} buildCarryOverDraft={buildCarryOverDraft} occPending={occPending} />;
+  if (view === "carryover" && active) return <CarryOverView e={active} residents={scopedResidents} resName={resName} stats={stats} by={clinicianName} byId={clinicianUserId} onBack={() => setView("details")} update={update} buildHandover={buildHandover} acceptHandover={acceptHandover} occPending={occPending} />;
 
   // ── List view ──────────────────────────────────────────────────────────────
   return (
@@ -596,7 +550,6 @@ function NewEndorsementModal({ existing, onClose, onSave, onDone }: { existing?:
   const [saving, setSaving] = useState(false);
   const [savedTick, setSavedTick] = useState(false); // brief "Draft saved" confirmation
   const [aiLoading, setAiLoading] = useState(false);
-  const [recapLoading, setRecapLoading] = useState(false);
   const [signOpen, setSignOpen] = useState(false);
   const sh = SHIFT_TYPES[shiftIdx];
   // Id of the draft record once first saved — auto-save + Save Draft write to it.
@@ -629,25 +582,7 @@ function NewEndorsementModal({ existing, onClose, onSave, onDone }: { existing?:
   };
   const closeModal = () => { if (hasContent()) void persistDraft(); onClose(); };
 
-  // Auto-fill the whole endorsement from what actually happened this shift — the
-  // meds given, incidents filed, escalations raised, tasks completed, plus open
-  // carry-over — then let Gemini draft the narrative. Reviewed before saving.
-  const autofill = async () => {
-    setRecapLoading(true);
-    try {
-      const res = await fetch("/api/ai-assistant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "shift-recap", shiftType: sh.label.toUpperCase().split(" ")[0], date: new Date().toISOString() }) });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { Swal.fire({ title: "Couldn't pull your shift", text: data?.error || "Fill the endorsement manually or try again.", icon: "info" }); return; }
-      const f = (data.fields ?? {}) as Record<string, unknown>;
-      const gen = [f.residentUpdates, f.incidentsOccurred ? `Incidents: ${f.incidentDetails || "see incident log"}` : "", f.taskCompleted ? `Tasks: ${f.taskCompleted}` : "", f.handoverNotes ? `Carry-over: ${f.handoverNotes}` : ""].filter(Boolean).join("\n");
-      if (gen) setGeneral(gen);
-      if (f.medicationsAdministered) setMed(String(f.medicationsAdministered));
-      if (data.summary) setAi(String(data.summary));
-      Swal.fire({ toast: true, position: "top-end", icon: data.empty ? "info" : "success", showConfirmButton: false, timer: 3600, timerProgressBar: true, title: data.empty ? "No logged activity found for this shift — fill in anything manual." : "Pulled your shift activity — review and edit before saving." });
-    } catch { Swal.fire({ title: "Couldn't pull your shift", text: "Network error — fill the endorsement manually.", icon: "info" }); }
-    finally { setRecapLoading(false); }
-  };
-  const compose = () => `${sh.label} shift (${sh.range}) endorsement. ${general ? `Overall: ${general} ` : ""}${med ? `Medications: ${med} ` : ""}Handover completed; incoming shift to acknowledge outstanding items.`.trim();
+  const compose =() => `${sh.label} shift (${sh.range}) endorsement. ${general ? `Overall: ${general} ` : ""}${med ? `Medications: ${med} ` : ""}Handover completed; incoming shift to acknowledge outstanding items.`.trim();
   // Auto-fill the narrative with Gemini via the same /api/ai-assistant endpoint
   // the shift reports use; falls back to an editable local draft when AI is off.
   const generate = async () => {
@@ -668,10 +603,6 @@ function NewEndorsementModal({ existing, onClose, onSave, onDone }: { existing?:
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"><h2 className="font-bold text-slate-900 text-lg flex items-center gap-2"><FileText className="w-5 h-5" /> {isEdit ? "Edit Shift Endorsement" : "New Shift Endorsement"}</h2><button onClick={closeModal} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button></div>
         <div className="p-5 overflow-y-auto flex-1 space-y-4">
-          <div>
-            <button onClick={autofill} disabled={recapLoading} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold hover:opacity-95 disabled:opacity-60"><Sparkles className="w-4 h-4" /> {recapLoading ? "Pulling your shift…" : "Auto-fill from my shift activity"}</button>
-            <p className="text-xs text-slate-400 text-center mt-1.5">Pulls the meds you gave, incidents you filed, escalations you raised, tasks you completed &amp; open carry-over for this shift — then drafts the summary. Review before saving.</p>
-          </div>
           <div><span className={lbl}>Shift Type</span>
             <div className="grid grid-cols-3 gap-2">
               {SHIFT_TYPES.map((t, i) => <button key={t.label} onClick={() => setShiftIdx(i)} className={`px-2 py-2.5 rounded-xl text-center border ${shiftIdx === i ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"}`}><span className="block text-sm font-semibold">{t.label}</span><span className={`block text-[11px] ${shiftIdx === i ? "text-white/80" : "text-slate-400"}`}>{t.range}</span></button>)}
@@ -833,8 +764,8 @@ function DetailsView({ e, residents, resName, onBack, update, buildSections, has
 }
 
 // ── Carry-Over & Sign-Off view ───────────────────────────────────────────────
-function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update, buildHandover, acceptHandover, buildCarryOverDraft, occPending }: {
-  e: Endorsement; residents: Row[]; resName: (id: string) => { name: string; room: string }; stats: { alerts: number; tasks: number; adl: number; carry: number }; by: string; byId: string; onBack: () => void; update: (id: string, patch: (e: Endorsement) => Endorsement) => Promise<void>; buildHandover: () => Handover; acceptHandover: (e: Endorsement) => Promise<void>; buildCarryOverDraft: (rid: string, shiftLabel?: string) => CarryOverDraft; occPending: OccPending[];
+function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update, buildHandover, acceptHandover, occPending }: {
+  e: Endorsement; residents: Row[]; resName: (id: string) => { name: string; room: string }; stats: { alerts: number; tasks: number; adl: number; carry: number }; by: string; byId: string; onBack: () => void; update: (id: string, patch: (e: Endorsement) => Endorsement) => Promise<void>; buildHandover: () => Handover; acceptHandover: (e: Endorsement) => Promise<void>; occPending: OccPending[];
 }) {
   // Only the user who LOGGED the endorsement may sign it off. Everyone else can
   // only acknowledge — and only once it has been signed off.
@@ -869,28 +800,6 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
     if (c.autoTask) createRecord("tasks", { residentId: c.residentId, title: `Carry-over: ${c.concern.slice(0, 60)}`, description: c.action || c.concern, status: "PENDING", priority: c.priority === "Urgent" ? "HIGH" : "MEDIUM", category: "Observation" }).catch(() => null);
     setAddOpen(false);
   };
-  // One-tap carry-over for the WHOLE assigned roster — so a caregiver doesn't add each
-  // resident by hand. Drafts one labelled item per assigned resident that has uncompleted
-  // routine / open items this shift, skipping residents already carried over.
-  const [autoFilling, setAutoFilling] = useState(false);
-  const autoFillAllResidents = async () => {
-    setAutoFilling(true);
-    try {
-      const existing = new Set(e.carryOvers.map((c) => c.residentId));
-      const drafts = residents
-        .map((r) => ({ rid: s(r.id), d: buildCarryOverDraft(s(r.id), e.shiftLabel) }))
-        .filter(({ rid, d }) => !existing.has(rid) && d.concern && d.concern !== "No outstanding items this shift.");
-      if (!drafts.length) { Swal.fire({ title: "Nothing to add", text: "Every assigned resident is already carried over or has no uncompleted routine / open items this shift.", icon: "info" }); return; }
-      await update(e.id, (en) => ({
-        ...en,
-        carryOvers: [
-          ...en.carryOvers,
-          ...drafts.map(({ rid, d }) => ({ id: newId(), residentId: rid, concern: d.concern, action: d.action || undefined, priority: d.priority, role: "Nurse", status: d.status, whatChanged: d.whatChanged || undefined, pending: d.pending || undefined, watchNext: d.watchNext || undefined } as CarryOver)),
-        ],
-      }));
-      Swal.fire({ toast: true, position: "top-end", icon: "success", title: `Added carry-over for ${drafts.length} resident(s)`, showConfirmButton: false, timer: 2200 });
-    } finally { setAutoFilling(false); }
-  };
   // Gate the sign-off behind the 4-digit signing PIN; the actual write happens in
   // doSignOff once the PIN is verified.
   const requestSignOff = () => {
@@ -920,7 +829,7 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
 
       <div className="mb-3">
         <p className="font-bold text-slate-900 flex items-center gap-2 mb-2"><ArrowLeftRight className="w-5 h-5 text-blue-500" /> Carry-Over to Next Shift</p>
-        {canEdit && (<div className="flex flex-wrap items-center gap-2"><button onClick={autoFillAllResidents} disabled={autoFilling} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-60"><Sparkles className="w-4 h-4" /> {autoFilling ? "Filling…" : "Auto-fill all my residents"}</button><button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"><Plus className="w-4 h-4" /> Add Item</button></div>)}
+        {canEdit && (<div className="flex flex-wrap items-center gap-2"><button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"><Plus className="w-4 h-4" /> Add Item</button></div>)}
       </div>
       {e.carryOvers.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center mb-6">
@@ -1029,7 +938,7 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
         </div>
       </div>
 
-      {addOpen && <AddCarryOverModal residents={residents} onClose={() => setAddOpen(false)} onAdd={addItem} buildDraft={buildCarryOverDraft} shiftLabel={e.shiftLabel} />}
+      {addOpen && <AddCarryOverModal residents={residents} onClose={() => setAddOpen(false)} onAdd={addItem} />}
       <SignatureModal open={signOpen} onClose={() => setSignOpen(false)} onSigned={doSignOff} title="Sign off shift endorsement" description="Enter your 4-digit signing PIN to sign off this shift." />
       <SignatureModal open={ackOpen} onClose={() => setAckOpen(false)} onSigned={doAcknowledge} title="Acknowledge shift endorsement" description="Enter your 4-digit signing PIN to acknowledge receipt of this shift endorsement." />
     </div>
@@ -1040,7 +949,7 @@ function EndStat({ n, label, cls, color }: { n: number; label: string; cls: stri
   return <div className={`rounded-2xl border p-5 text-center ${cls}`}><p className={`text-3xl font-bold ${color}`}>{n}</p><p className={`text-sm mt-1 ${color}`}>{label}</p></div>;
 }
 
-function AddCarryOverModal({ residents, onClose, onAdd, buildDraft, shiftLabel }: { residents: Row[]; onClose: () => void; onAdd: (c: Omit<CarryOver, "id">) => Promise<void>; buildDraft: (rid: string, shiftLabel?: string) => CarryOverDraft; shiftLabel?: string }) {
+function AddCarryOverModal({ residents, onClose, onAdd }: { residents: Row[]; onClose: () => void; onAdd: (c: Omit<CarryOver, "id">) => Promise<void> }) {
   const [residentId, setResidentId] = useState("");
   const [concern, setConcern] = useState("");
   const [priority, setPriority] = useState("Routine");
@@ -1056,34 +965,14 @@ function AddCarryOverModal({ residents, onClose, onAdd, buildDraft, shiftLabel }
   const [autoAlert, setAutoAlert] = useState(false);
   const [saving, setSaving] = useState(false);
   const submit = async () => { if (!residentId || !concern.trim()) { Swal.fire({ title: "Resident and concern are required", icon: "warning" }); return; } setSaving(true); try { await onAdd({ residentId, concern: concern.trim(), priority, role, dueTime: dueTime || undefined, action: action || undefined, status, whatChanged: whatChanged.trim() || undefined, pending: pending.trim() || undefined, watchNext: watchNext.trim() || undefined, coverageNote: coverageNote.trim() || undefined, autoTask, autoAlert }); } finally { setSaving(false); } };
-  // Pull the resident's remaining tasks + open incidents/escalations + ADL changes
-  // into the form. Auto-runs the first time a resident is picked (only fills blank
-  // fields, so it never clobbers what the caregiver typed) and re-runs on demand.
-  const applyDraft = (rid: string, force = false) => {
-    if (!rid) return;
-    const d = buildDraft(rid, shiftLabel);
-    if (force || !concern.trim()) setConcern(d.concern);
-    if (force || !action.trim()) setAction(d.action);
-    if (force || !whatChanged.trim()) setWhatChanged(d.whatChanged);
-    if (force || !pending.trim()) setPending(d.pending);
-    if (force || !watchNext.trim()) setWatchNext(d.watchNext);
-    if (force) { setPriority(d.priority); setStatus(d.status); }
-    else { if (priority === "Routine") setPriority(d.priority); if (status === "Watch") setStatus(d.status); }
-    if (d.concern || d.action) Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Pulled from shift data — review and edit.", showConfirmButton: false, timer: 2200 });
-    else Swal.fire({ toast: true, position: "top-end", icon: "info", title: "No open tasks or events for this resident.", showConfirmButton: false, timer: 2200 });
-  };
-  const inp = "w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
+  const inp ="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
   const lbl = "text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block";
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100"><h2 className="font-bold text-slate-900 text-lg">Add Carry-Over Item</h2><button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X className="w-5 h-5" /></button></div>
         <div className="p-5 overflow-y-auto flex-1 space-y-4">
-          <div>
-            <button onClick={() => residentId ? applyDraft(residentId, true) : Swal.fire({ title: "Select a resident first", icon: "info" })} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold hover:opacity-95"><Sparkles className="w-4 h-4" /> Auto-fill from shift data</button>
-            <p className="text-xs text-slate-400 text-center mt-1.5">Pulls the resident&apos;s remaining tasks, open incidents &amp; escalations, and ADL changes into the form. Review before saving.</p>
-          </div>
-          <div><span className={lbl}>Resident</span><select value={residentId} onChange={(e) => { const v = e.target.value; setResidentId(v); applyDraft(v); }} className={inp}><option value="">Select resident…</option>{residents.map((r) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)}</option>)}</select></div>
+          <div><span className={lbl}>Resident</span><select value={residentId} onChange={(e) => setResidentId(e.target.value)} className={inp}><option value="">Select resident…</option>{residents.map((r) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)}</option>)}</select></div>
           <div><span className={lbl}>Concern / Task to Carry Over</span><textarea rows={2} value={concern} onChange={(e) => setConcern(e.target.value)} placeholder="Describe what needs to continue into the next shift…" className={inp} /></div>
           <div className="grid grid-cols-2 gap-3">
             <div><span className={lbl}>Priority</span><select value={priority} onChange={(e) => setPriority(e.target.value)} className={inp}>{PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}</select></div>

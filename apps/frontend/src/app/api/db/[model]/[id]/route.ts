@@ -7,10 +7,11 @@ import { assertMutationEntitled, EntitlementError } from "@/lib/entitlements";
 import { logAudit, snapshot } from "@/lib/audit";
 import { transactionDelegate, withTenantDb } from "@/lib/tenantDb";
 import { prisma } from "@/lib/prisma";
-import { canAlertAction } from "@/lib/alertAccess";
+import { canAlertAction, SETTLED_TASK_STATUS } from "@/lib/alertAccess";
 import { residentProfileEditDenied } from "@/lib/residentAccess";
 import { invalidatePortalDataPrefix } from "@/lib/dataCache";
 import { syncMarFromCompletedTask, deleteMedTaskForSchedule } from "@/lib/medTaskSync";
+import { clearEntityAlerts } from "@/lib/alertResolve";
 import { assignmentCompetencyIssues, assignmentEquipmentIssues, assignmentGateMessage } from "@/lib/assignmentGate";
 
 export const runtime = "nodejs";
@@ -151,6 +152,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // the MAR (`existing` is the pre-update task, carrying category + generatedFrom).
     if (model === "tasks" && data.status === "COMPLETED") {
       await syncMarFromCompletedTask(context, existing as Record<string, unknown>, context.userId);
+    }
+
+    // A task that's done (or cancelled) is no longer overdue — drop its "Overdue
+    // task" alert so the Alert Center stops queueing care that's already delivered.
+    if (model === "tasks" && SETTLED_TASK_STATUS.has(String(data.status))) {
+      await clearEntityAlerts("task", [id], context.communityId);
     }
 
     logAudit({ actorId: context.userId, actorRole: context.role, action: "UPDATE", entityType: model, entityId: id, organizationId: context.organizationId, communityId: context.communityId, before: snapshot(existing), after: snapshot(updated) });

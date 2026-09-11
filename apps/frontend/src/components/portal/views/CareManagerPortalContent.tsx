@@ -15,6 +15,7 @@ import EmergencyProtocolBoard from "@/components/portal/views/clinical/Emergency
 import ClinicalProtocolsBoard from "@/components/portal/views/clinical/ClinicalProtocolsBoard";
 import CareLogsBoard, { CareLogsTimeline } from "@/components/portal/views/clinical/CareLogsBoard";
 import ADLMonitoringBoard from "@/components/portal/views/clinical/ADLMonitoringBoard";
+import MonitoringHub from "@/components/portal/views/clinical/MonitoringHub";
 import WeightMonitoringBoard from "@/components/portal/views/clinical/WeightMonitoringBoard";
 import ShiftSummaryBoard from "@/components/portal/views/clinical/ShiftSummaryBoard";
 import CareAcuityBoard from "@/components/portal/views/clinical/CareAcuityBoard";
@@ -152,18 +153,7 @@ export default function CareManagerPortalContent({ tab }: { tab: string }) {
         />
       );
     case "monitoringhub":
-      return (
-        <HubTabs
-          storageKey="care_manager-monitoringhub"
-          tabs={[
-            { key: "woundcare", label: "Wound Care", node: <WoundCareBoard clinicianRole="CARE_MANAGER" /> },
-            { key: "vitalstrend", label: "Vitals", node: <VitalsTrendBoard clinicianRole="CARE_MANAGER" /> },
-            { key: "domainmonitoring", label: "Domain", node: <DomainMonitoringBoard clinicianRole="CARE_MANAGER" /> },
-            { key: "adlmonitoring", label: "ADL", node: <ADLMonitoringBoard clinicianRole="CARE_MANAGER" /> },
-            { key: "weightmonitoring", label: "Weight", node: <WeightMonitoringBoard clinicianRole="CARE_MANAGER" /> },
-          ]}
-        />
-      );
+      return <MonitoringHub clinicianRole="CARE_MANAGER" />;
     case "shiftclosehub":
       return (
         <HubTabs

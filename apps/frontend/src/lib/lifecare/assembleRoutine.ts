@@ -12,7 +12,7 @@
 // See docs/superpowers/specs/2026-09-05-slms-routine-assembly-engine-design.md.
 
 import { bundlesForLoc, type LocBundle } from "./locBundles.ts";
-import { templateForLoc, type RoutineTemplateEvent } from "./routineTemplate.ts";
+import { templateForLoc, renameCareEvent, type RoutineTemplateEvent } from "./routineTemplate.ts";
 import { careDeliveryMap, pathwaysForConditions, memoryPathways, type ConditionPathway } from "./conditionPathways.ts";
 import { assistanceForScore, parseSupport, defaultRole, type Assistance, type AsScore, type Role } from "./assistance.ts";
 import { schemaFor } from "./resultSchema.ts";
@@ -166,9 +166,11 @@ function resultKeyForText(text: string): string {
   if (/glucose/.test(t)) return "Blood Glucose";
   if (/\bbp\b|pulse|vital|reading|ordered monitoring|clinical monitoring/.test(t)) return "Vital Signs";
   if (/medication/.test(t)) return "Medication Support";
+  // Toileting BEFORE meals: "Pre-lunch toileting" / "Pre-dinner toileting" name the
+  // meal only to place the round in the day — they are continence events.
+  if (/toilet|contin/.test(t)) return "Toileting / Continence";
   if (/swallow|meal|intake|feeding|nutrition|breakfast|lunch|dinner/.test(t)) return "Meal / Supplement";
   if (/hydration|fluid/.test(t)) return "Hydration";
-  if (/toilet|contin/.test(t)) return "Toileting / Continence";
   if (/transfer/.test(t)) return "Transfer";
   if (/mobility|walk|ambulat/.test(t)) return "Mobility / Walking";
   if (/reposition|positioning/.test(t)) return "Repositioning";
@@ -512,6 +514,10 @@ const minutesOfSchedule = (s: DaySchedule): number => {
 };
 
 function templateToDef(t: RoutineTemplateEvent, input: AssembleInput, scoreOf: Map<string, AsScore>): InternalDraft {
+  // Client display naming (EVENT_RENAMES: the three meals → "Meal", "Ordered clinical
+  // reading" → "Vital Signs"). Classification and role inference still read the sheet's
+  // original wording, which is richer than the display name.
+  const name = renameCareEvent(t.careEvent);
   const key = resultKeyForText(t.careEvent);
   // Assistance follows the most-dependent linked AS domain the resident is assessed on.
   let maxScore: AsScore | undefined;
@@ -529,7 +535,7 @@ function templateToDef(t: RoutineTemplateEvent, input: AssembleInput, scoreOf: M
     sourceAsDomain: maxDomain,
     asScore: maxScore,
     goalId: goalIds[0],
-    name: t.careEvent,
+    name,
     instructions: t.caregiverInstruction,
     assistanceLevel: maxScore != null ? assistanceForScore(maxScore) : undefined,
     responsibleRole: defaultRole(t.careEvent, t.orderRequired),

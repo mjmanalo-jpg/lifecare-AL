@@ -354,7 +354,7 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
                       <div className="space-y-2">
                         {defs.map((d) => (
                           <div key={s(d.id)}>
-                            <RoutineDefinitionCard def={d} onChanged={() => defsQ.refetch?.()} />
+                            <RoutineDefinitionCard def={d} siblings={reviewDefs} onChanged={() => defsQ.refetch?.()} />
                             <button onClick={() => suppress(d)} className="mt-1 text-[11px] font-semibold text-[var(--clinical-coral)]">Suppress</button>
                           </div>
                         ))}

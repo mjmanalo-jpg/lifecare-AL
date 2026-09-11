@@ -47,6 +47,33 @@ export function isOnDuty(events: ClockEvent[], userId: string): boolean {
   return lastEventFor(events, userId)?.type === "IN";
 }
 
+/**
+ * Everyone currently on the floor, for a shift-bounded attendance window.
+ *
+ * `isOnDuty` answers "is this user's latest event an IN?" — correct for the staffer's
+ * own view, but it also reports someone who clocked in days ago and never clocked out
+ * as present. A shift dashboard needs presence bounded to the active window, so an IN
+ * older than `windowStart` is treated as stale rather than staffing.
+ *
+ * Latest-event-wins per user, computed without assuming array order. Returns the
+ * winning IN event per user so callers can read the recorded name/role too.
+ */
+export function onDutyFromClockLog(events: ClockEvent[], windowStart: Date): Map<string, ClockEvent> {
+  const latest = new Map<string, ClockEvent>();
+  for (const e of events) {
+    if (!e?.userId || (e.type !== "IN" && e.type !== "OUT")) continue;
+    if (Number.isNaN(new Date(e.at || "").getTime())) continue;
+    const prev = latest.get(e.userId);
+    if (!prev || (e.at || "") > (prev.at || "")) latest.set(e.userId, e);
+  }
+  const onDuty = new Map<string, ClockEvent>();
+  const floor = windowStart.getTime();
+  for (const [userId, e] of latest) {
+    if (e.type === "IN" && new Date(e.at).getTime() >= floor) onDuty.set(userId, e);
+  }
+  return onDuty;
+}
+
 /** A user's events on a given local day (YYYY-MM-DD). */
 export function eventsOnDay(events: ClockEvent[], userId: string, dayISO: string): ClockEvent[] {
   return eventsFor(events, userId).filter((e) => localDay(e.at) === dayISO);

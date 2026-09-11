@@ -10,9 +10,10 @@
  * with a truthy blockReason shows a red banner and is excluded from approvable.
  */
 
-import { useState } from "react";
-import { AlertTriangle, Brain, Paperclip, Loader2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { AlertTriangle, Brain, Paperclip, Loader2, Repeat } from "lucide-react";
 import { updateRecord } from "@/lib/api";
+import { routineFamily, sharedRoutineFields } from "@/lib/lifecare/routineDefinitions";
 import { ASSISTANCE, ASSISTANCE_DISPLAY, ROLE, ROLE_ABBR, type Assistance, type Role } from "@/lib/lifecare/assistance";
 import { to12h } from "@/lib/lifecare/careTask";
 import { PRIORITY } from "@/lib/lifecare/vocab";
@@ -64,22 +65,40 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export default function RoutineDefinitionCard({ def, onChanged, readOnly = false }: { def: Row; onChanged: () => void; readOnly?: boolean }) {
+export default function RoutineDefinitionCard({ def, onChanged, readOnly = false, siblings = [] }: { def: Row; onChanged: () => void; readOnly?: boolean; siblings?: Row[] }) {
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [applyToFamily, setApplyToFamily] = useState(true);
   const id = s(def.id);
   const sched = parseSchedule(def.schedule);
   const block = blockReasonFor(def);
   const assist = (s(def.assistanceLevel) || "Setup/Cueing") as Assistance;
   const role = (s(def.responsibleRole).replace(/_/g, " ") || "Caregiver") as Role;
 
+  // The same care event at its other clock times (toileting ×4, meals ×3, …). An
+  // edit here is a decision about the event, so it lands on all of them.
+  const family = useMemo(() => (readOnly ? [] : routineFamily(def, siblings)), [def, siblings, readOnly]);
+  const familyTimes = useMemo(
+    () => [def, ...family]
+      .map((d) => scheduleSummary(parseSchedule(d.schedule), s(d.frequencyMethod)))
+      .sort()
+      .join(" · "),
+    [def, family],
+  );
+
   // Every edit routes through this: patch the row, refetch. On assistance/role
-  // changes the caller passes a revisionReason so the override is captured.
+  // changes the caller passes a revisionReason so the override is captured. Fields
+  // that aren't per-occurrence (see PER_OCCURRENCE_FIELDS) fan out to the family.
   const patch = async (body: Record<string, unknown>) => {
     if (readOnly || saving) return;
     setSaving(true);
-    try { await updateRecord("routine-definitions", id, body); onChanged(); }
-    finally { setSaving(false); }
+    try {
+      await updateRecord("routine-definitions", id, body);
+      const shared = sharedRoutineFields(body);
+      if (applyToFamily && family.length && Object.keys(shared).length)
+        await Promise.all(family.map((f) => updateRecord("routine-definitions", s(f.id), shared)));
+      onChanged();
+    } finally { setSaving(false); }
   };
 
   const changeAssistance = async (next: string) => {
@@ -113,6 +132,7 @@ export default function RoutineDefinitionCard({ def, onChanged, readOnly = false
       {/* provenance + staffing chips */}
       <div className="flex flex-wrap items-center gap-1.5 px-3 pb-2">
         {s(def.sourceLocBundleId) && <Chip>{s(def.sourceLocBundleId)}</Chip>}
+        {family.length > 0 && <Chip><Repeat className="h-3 w-3" /> repeats {family.length + 1}×/day <span className="font-medium normal-case opacity-80">· {familyTimes}</span></Chip>}
         {s(def.sourceAsDomain) && <Chip>{s(def.sourceAsDomain)}{def.asScore != null ? ` · ${def.asScore}` : ""}</Chip>}
         {s(def.conditionBundleId) && <Chip>{s(def.conditionBundleId)}</Chip>}
         {s(def.memoryPathwayId) && <Chip tone="memory"><Brain className="h-3 w-3" /> {s(def.memoryPathwayId)}</Chip>}
@@ -130,6 +150,16 @@ export default function RoutineDefinitionCard({ def, onChanged, readOnly = false
           <button onClick={() => setExpanded((v) => !v)} className="text-[11px] font-semibold text-[var(--clinical-panel)]">
             {saving ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Saving…</span> : expanded ? "Hide edits" : "Edit event"}
           </button>
+          {expanded && family.length > 0 && (
+            <label className="mt-3 flex items-start gap-2 rounded-md border px-2.5 py-2 text-[11px] text-[var(--clinical-ink)]"
+              style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>
+              <input type="checkbox" checked={applyToFamily} onChange={(e) => setApplyToFamily(e.target.checked)} className="mt-0.5" />
+              <span>
+                Apply these edits to all <b>{family.length + 1}</b> {s(def.resultSchemaKey).toLowerCase()} events in the day ({familyTimes}).
+                <span className="text-[var(--clinical-muted)]"> Window, exact times, frequency method and shift stay per event.</span>
+              </span>
+            </label>
+          )}
           {expanded && (
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Field label="Window (HH:MM-HH:MM)">

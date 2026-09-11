@@ -45,6 +45,16 @@ function buildQuery(url: URL, defaultOrderBy?: Record<string, unknown>) {
   params.forEach((value, key) => {
     if (!key.startsWith("f_")) return;
     const field = key.slice(2);
+    // `f_<field>__startsWith=` filters by prefix instead of equality. Needed where a
+    // column encodes a namespaced value whose suffix varies per row — e.g. selecting
+    // Task.generatedFrom = "caretask:<residentId>" without knowing every resident id.
+    // Filtering server-side matters: doing it after the fetch lets excluded rows eat
+    // the `take` budget and silently truncate the rows the caller actually wanted.
+    if (field.endsWith("__startsWith")) {
+      const base = field.slice(0, -"__startsWith".length);
+      if (base) where[base] = { startsWith: value };
+      return;
+    }
     where[field] = value === "true" ? true : value === "false" ? false : value === "null" ? null : value;
   });
   const includeParam = params.get("include");

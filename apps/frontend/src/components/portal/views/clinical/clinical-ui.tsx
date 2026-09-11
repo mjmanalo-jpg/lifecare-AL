@@ -232,6 +232,46 @@ export function SearchInput({ value, onChange, placeholder = "Search…", classN
   );
 }
 
+const pickerInitials = (name: string) =>
+  name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
+
+/** Tap-a-resident card grid used as the landing state of the per-resident
+ *  boards and of the Monitoring hub, so choosing a resident looks identical
+ *  wherever it happens. Container-query sized (needs an `@container` ancestor
+ *  — one is provided here). */
+export function ResidentPickerGrid({ residents, onPick, title, hint }: {
+  residents: { id: string; name: string; room: string }[];
+  onPick: (id: string) => void;
+  title: string;
+  hint?: string;
+}) {
+  return (
+    <div className="@container">
+      <div className="mb-4">
+        <p className="text-base font-bold text-[var(--clinical-ink)]">{title}</p>
+        {hint && <p className="text-sm text-[var(--clinical-muted)]">{hint}</p>}
+      </div>
+      {residents.length === 0 ? (
+        <p className="text-sm text-[var(--clinical-muted)]">No residents found.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4 @5xl:grid-cols-5">
+          {residents.map((r, i) => (
+            <button key={r.id} onClick={() => onPick(r.id)}
+              className="group flex flex-col items-center gap-2.5 rounded-xl border p-4 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300"
+              style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)", animationDelay: `${i * 40}ms`, animationFillMode: "backwards" }}>
+              <span className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold" style={{ backgroundColor: "var(--clinical-surface-2)", color: "var(--clinical-panel)" }}>{pickerInitials(r.name)}</span>
+              <span className="block w-full min-w-0">
+                <span className="block truncate text-sm font-semibold text-[var(--clinical-ink)]">{r.name}</span>
+                <span className="block text-xs text-[var(--clinical-muted)]">Room {r.room}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 type StatAccent = "ink" | "teal" | "coral" | "amber" | "green";
 /** Modern KPI card — uppercase micro-label over a large bold numeral, soft depth.
  *  Optional `icon` renders a tinted chip in the corner; `hint` adds a sub-label. */

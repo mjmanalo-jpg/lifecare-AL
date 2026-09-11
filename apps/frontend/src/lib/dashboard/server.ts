@@ -5,10 +5,14 @@ import {
   ASSESSMENTS_V42_KEY, assessmentValidationIssues, classifyAssessment, type AssessmentV42,
 } from "@/lib/lifecare/assessment";
 import {
-  CAREGIVER_SCHEDULE_KEY, currentShiftKey, localDateStr, parseSchedules,
+  CAREGIVER_SCHEDULE_KEY, currentShiftKey, localDateStr, localMinutesOfDay, parseSchedules,
   shiftMeta, shiftWindow, type CaregiverSchedule,
 } from "@/lib/caregiverSchedule";
 import type { TenantContext } from "@/lib/tenant";
+import { STAFF_CLOCK_KEY, onDutyFromClockLog, parseClockEvents } from "@/lib/staffClock";
+import { resolveOnDuty, isCaregiver, isNurse } from "./presence";
+import { countsAsCompleted, type CareOutcome } from "@/lib/lifecare/vocab";
+import { isMissed, toMin } from "@/lib/lifecare/occurrenceStatus";
 import { metric } from "./metrics";
 import { compareQueueItems, priorityForEscalation, priorityForIncident, priorityForTask, stateForPriority } from "./priority";
 import {
@@ -34,6 +38,10 @@ import {
 import type { ClinicalState, DashboardHuddle, DashboardMetric, DashboardPayload, DashboardPriority, DashboardQueueItem, DashboardRole, DashboardSection, DashboardSummary, DashboardWindowKey } from "./types";
 
 const ENDORSEMENT_KEY = "shift_endorsements";
+/** Task.generatedFrom prefix used by /api/routine/dispatch-care-task — a nurse
+ *  explicitly sending an approved Care Task to today's caregivers. Distinguishes
+ *  those from the auto-materialised care-plan duplicates, which are hidden. */
+export const DISPATCHED_CARE_TASK_PREFIX = "caretask:";
 const OPEN_ESCALATIONS: EscalationStatus[] = ["OPEN", "ACKNOWLEDGED", "IN_PROGRESS", "ESCALATED"];
 /** §10 — aggregate KPI windows. Shift-first screens ignore the selector; care-manager/administrator honor it. */
 const WINDOW_LABELS: Record<DashboardWindowKey, string> = {
@@ -347,7 +355,14 @@ function taskItem(task: any, now: Date, path: string, isNew = false): DashboardQ
     residentLabel: residentLabel(task.resident), roomLabel: task.resident?.roomNumber || undefined,
     ownerLabel: task.assignedTo?.user?.name || "Unassigned", dueAt: dueAt.toISOString(),
     reason: dueAt < now ? "Past its documented due time." : "Scheduled care due in this shift window.",
-    sourceType: "Task", sourceId: task.id, sourceHref: path === "caregiver" ? "/caregiver/todayscare" : moduleHref(path, "taskassignment"), isNew,
+    // Care work opens Today's Approved Care — the routine board is where a resident's
+    // day is charted now, for every role. It used to send clinicians to the Task
+    // Assignment card, which is a dispatch screen, not somewhere care gets recorded.
+    // `?resident=` focuses that resident so the nurse lands on their routine rather
+    // than on a facility-wide list they then have to search.
+    sourceType: "Task", sourceId: task.id,
+    sourceHref: `${moduleHref(path, "todayscare")}${task.residentId ? `?resident=${encodeURIComponent(String(task.residentId))}` : ""}`,
+    isNew,
   };
 }
 
@@ -442,7 +457,7 @@ export async function buildDashboard(
   const residentScope = role === "caregiver" ? (context.caregiverResidentIds ?? []) : undefined;
 
   const settings = await prisma.appSetting.findMany({
-    where: { ...tenant, key: { in: [CAREGIVER_SCHEDULE_KEY, ENDORSEMENT_KEY, ASSESSMENTS_V42_KEY] } },
+    where: { ...tenant, key: { in: [CAREGIVER_SCHEDULE_KEY, ENDORSEMENT_KEY, ASSESSMENTS_V42_KEY, STAFF_CLOCK_KEY] } },
     select: { key: true, value: true, updatedAt: true },
   });
   const schedules = parseSchedules(settings.find((item) => item.key === CAREGIVER_SCHEDULE_KEY)?.value);
@@ -467,13 +482,36 @@ export async function buildDashboard(
   const taskWhere: Prisma.TaskWhereInput = {
     ...tenant,
     ...(residentScope ? { residentId: { in: residentScope }, assignedToId: staffRecord?.id || "__none__" } : {}),
-    OR: [
-      { status: { in: [TaskStatus.PENDING, TaskStatus.IN_PROGRESS] } },
-      { dueDate: { gte: previousShiftStart, lt: shiftEnd } },
+    AND: [
+      {
+        OR: [
+          { status: { in: [TaskStatus.PENDING, TaskStatus.IN_PROGRESS] } },
+          { dueDate: { gte: previousShiftStart, lt: shiftEnd } },
+        ],
+      },
+      // Care-plan-derived Tasks are EXCLUDED. The routine engine (RoutineOccurrence,
+      // charted in Today's Approved Care) is the system of record for planned care, and
+      // cron/care-plan-tasks writes a second Task copy of the same work — which is what
+      // flooded this queue with hundreds of duplicated, permanently-overdue rows.
+      // Filtered in the query, not after, so the duplicates don't consume the `take`
+      // budget and crowd out real manual tasks.
+      //
+      // Kept visible: manually assigned tasks (generatedFrom null) and nurse-dispatched
+      // Care Tasks (`caretask:<residentId>`) — both are deliberate acts, not duplicates.
+      { OR: [{ generatedFrom: null }, { generatedFrom: { startsWith: DISPATCHED_CARE_TASK_PREFIX } }] },
+      // Assigned work only. An unassigned card is a staffing/dispatch matter, not a
+      // clinical action a nurse can take from this queue — those belong in the Task
+      // Assignment pool where a manager claims or hands them off. Kept in the AND
+      // array so it composes with (never overwrites) the caregiver's own
+      // assignedToId scope applied above.
+      { assignedToId: { not: null } },
     ],
   };
 
-  const [residents, tasks, incidents, bells, events, escalations, attendance, carePlans, physicianCommunications, activeAdmissions] = await Promise.all([
+  // Shift-scoped governed occurrences (care actually charted through the routine
+  // engine) + the staff roster that bridges clock-log userIds to Staff ids.
+  const occurrenceFrom = new Date(previousShiftStart.getTime() - 86400_000);
+  const [residents, tasks, incidents, bells, events, escalations, attendance, carePlans, physicianCommunications, activeAdmissions, staffRoster, shiftOccurrences, routineDefCounts] = await Promise.all([
     prisma.resident.findMany({ where: residentWhere, orderBy: { roomNumber: "asc" }, select: { id: true, firstName: true, lastName: true, roomNumber: true, careLevel: true, allergies: true, dietRestriction: true, careDependencyLevel: true, codeStatus: true, notes: true, photoUrl: true, updatedAt: true } }),
     prisma.task.findMany({ where: taskWhere, take: 1000, orderBy: { dueDate: "asc" }, include: { resident: { select: { firstName: true, lastName: true, roomNumber: true } }, assignedTo: { include: { user: { select: { name: true } } } } } }),
     prisma.incident.findMany({ where: { ...tenant, ...(residentScope ? { residentId: { in: residentScope } } : {}), resolvedAt: null }, take: 500, orderBy: { incidentDate: "desc" }, include: { resident: { select: { firstName: true, lastName: true, roomNumber: true } } } }),
@@ -505,6 +543,28 @@ export async function buildDashboard(
           select: { id: true, firstName: true, lastName: true, currentStep: true, updatedAt: true },
         })
       : Promise.resolve([]),
+    prisma.staff.findMany({
+      where: tenant,
+      take: 500,
+      select: { id: true, userId: true, position: true, user: { select: { name: true, role: true } } },
+    }),
+    prisma.routineOccurrence.findMany({
+      where: {
+        communityId: tenant.communityId,
+        careDate: { gte: occurrenceFrom },
+        ...(residentScope ? { residentId: { in: residentScope } } : {}),
+      },
+      take: 5000,
+      select: { residentId: true, careDate: true, scheduledTime: true, workflowState: true, careDeliveryOutcome: true, completionUserId: true, completionAt: true },
+    }),
+    // Routine coverage. Occurrences only materialise from APPROVED definitions, so a
+    // resident on an active care plan with none has NO planned care in the routine
+    // engine at all. Grouped rather than fetched so this stays one cheap aggregate.
+    prisma.routineEventDefinition.groupBy({
+      by: ["residentId", "status"],
+      where: { communityId: tenant.communityId, ...(residentScope ? { residentId: { in: residentScope } } : {}) },
+      _count: { _all: true },
+    }),
   ]);
 
   const endorsements = parseJsonArray<Endorsement>(settings.find((item) => item.key === ENDORSEMENT_KEY)?.value)
@@ -517,7 +577,55 @@ export async function buildDashboard(
   const completedShift = dueShift.filter((item) => item.status === "COMPLETED");
   const previousDue = tasks.filter((item) => item.status !== "CANCELLED" && item.dueDate >= previousShiftStart && item.dueDate < shiftStart);
   const previousCompleted = previousDue.filter((item) => item.status === "COMPLETED");
+  // ── Governed care delivery ─────────────────────────────────────────────────
+  // Care reaches the record by two paths: Task completion (CaregiverTasks) and
+  // RoutineOccurrence closes (Today's Care, the v4.2 routine engine). Counting Tasks
+  // alone reported "Care delivered this shift 0%" for any facility running its care
+  // off the routine, which is the governed path. Count both.
+  //
+  // An occurrence belongs to a shift by its scheduled INSTANT (care day + HH:MM), and
+  // counts toward the denominator only once owed — window passed, or already closed.
+  // A task later this shift is not yet a failure.
+  // careDate is stored as the care day's FACILITY midnight (an instant), so its UTC
+  // date prefix is the previous day — always resolve the day in the facility zone
+  // (localDateStr), then rebuild the scheduled instant the same way shiftWindow does
+  // (date parts + wall-clock hour). Using raw local getters on careDate would land a
+  // day early on a UTC server.
+  const nowMinutes = localMinutesOfDay(now, timeZone);
+  const occurrenceSlot = (careDay: string, scheduledTime: string) => {
+    const [y, mo, d] = careDay.split("-").map(Number);
+    const mins = toMin(scheduledTime);
+    return new Date(y, (mo || 1) - 1, d || 1, Math.floor(mins / 60), mins % 60, 0, 0).getTime();
+  };
+  const occurrenceDelivery = (from: Date, to: Date) => {
+    let due = 0, completed = 0;
+    for (const o of shiftOccurrences) {
+      if (o.workflowState === "Cancelled") continue;
+      const careDay = localDateStr(o.careDate, timeZone);
+      const slot = occurrenceSlot(careDay, o.scheduledTime);
+      if (slot < from.getTime() || slot >= to.getTime()) continue;
+      // Owed only: window passed (or already charted). Day comparison is a plain
+      // string compare of facility calendar days — no clock arithmetic to drift.
+      const dayCmp = careDay === today ? 0 : careDay < today ? -1 : 1;
+      const owed = isMissed(o, nowMinutes, dayCmp) || o.workflowState === "Closed";
+      if (!owed) continue;
+      due += 1;
+      if (o.careDeliveryOutcome && countsAsCompleted(o.careDeliveryOutcome as CareOutcome)) completed += 1;
+    }
+    return { due, completed };
+  };
+  const shiftOccDelivery = occurrenceDelivery(shiftStart, shiftEnd);
+  const previousOccDelivery = occurrenceDelivery(previousShiftStart, shiftStart);
   const shiftEvents = events.filter((item) => item.occurredAt >= shiftStart && item.occurredAt < shiftEnd);
+  // Who has actually charted something this shift. With clock-in optional, this is
+  // the real signal that a rostered caregiver has started work — far more useful
+  // than an attendance flag nobody is required to set.
+  const chartedThisShift = new Set<string>();
+  for (const item of shiftEvents) if (item.actorId) chartedThisShift.add(item.actorId);
+  for (const o of shiftOccurrences) {
+    if (!o.completionUserId || !o.completionAt) continue;
+    if (o.completionAt >= shiftStart && o.completionAt < shiftEnd) chartedThisShift.add(o.completionUserId);
+  }
   const varianceEvents = shiftEvents.filter((item) => item.isVariance || item.isException);
   const previousEvents = events.filter((item) => item.occurredAt >= previousShiftStart && item.occurredAt < shiftStart);
   const previousVariances = previousEvents.filter((item) => item.isVariance || item.isException);
@@ -530,6 +638,44 @@ export async function buildDashboard(
   const assessmentSignals = buildAssessmentSignals(assessmentRecords);
   const planReviews = carePlans.filter((item) => item.status !== "ACTIVE" || (item.nextReviewDate && item.nextReviewDate <= new Date(now.getTime() + 7 * 86400_000)));
 
+  // ── Routine coverage gaps ──────────────────────────────────────────────────
+  // A resident on an ACTIVE care plan whose routine is not APPROVED has no planned
+  // care in the routine engine — nothing materialises into Today's Approved Care.
+  // Two distinct fixes, so they are reported distinctly: never generated (generate
+  // the routine) vs generated but unapproved (approve it).
+  const approvedDefs = new Map<string, number>();
+  const totalDefs = new Map<string, number>();
+  for (const row of routineDefCounts) {
+    const n = row._count._all;
+    totalDefs.set(row.residentId, (totalDefs.get(row.residentId) || 0) + n);
+    if (row.status === "APPROVED") approvedDefs.set(row.residentId, (approvedDefs.get(row.residentId) || 0) + n);
+  }
+  const activePlanResidentIds = new Set(carePlans.filter((p) => p.status === "ACTIVE").map((p) => p.residentId));
+  const routineGaps: DashboardQueueItem[] = residents
+    .filter((resident) => activePlanResidentIds.has(resident.id) && !(approvedDefs.get(resident.id) ?? 0))
+    .map((resident) => {
+      const drafted = totalDefs.get(resident.id) ?? 0;
+      return {
+        id: `routine-gap:${resident.id}`,
+        kind: "Routine coverage gap",
+        priority: "P2" as DashboardPriority,
+        state: "WATCH" as ClinicalState,
+        title: residentLabel(resident),
+        residentId: resident.id,
+        residentLabel: residentLabel(resident),
+        roomLabel: resident.roomNumber || undefined,
+        detail: drafted
+          ? `${drafted} routine event${drafted === 1 ? "" : "s"} drafted · none approved`
+          : "No routine has been generated from the care plan",
+        reason: drafted
+          ? "The care plan is active but its routine is not approved, so no care occurrences are generated. Approve the routine to put it into effect."
+          : "The care plan is active but no routine has been generated from it, so no care occurrences exist for this resident.",
+        sourceType: "RoutineEventDefinition",
+        sourceId: resident.id,
+        sourceHref: moduleHref(path, "routinegenerator"),
+      };
+    });
+
   const taskItems = openTasks.map((item) => taskItem(item, now, path, item.createdAt >= shiftStart));
   const incidentItems = incidents.map((item) => incidentItem(item, path, shiftStart));
   const escalationItems = escalations.map((item) => escalationItem(item, path, shiftStart, role === "nurse"));
@@ -540,7 +686,7 @@ export async function buildDashboard(
   const activeAttendance = attendance.filter((item) => !item.endTime && item.status !== "ABSENT");
 
   const commonMetrics: DashboardMetric[] = [
-    metric({ key: "care_delivery_on_time", label: "Care delivered this shift", numerator: completedShift.length, denominator: dueShift.length, numeratorLabel: "completed governed tasks", denominatorLabel: "tasks due in the active shift", definition: "Governed care tasks completed during the active shift divided by all governed tasks due in that shift.", window: shift.label, baseline: "Previous shift: " + percentageLabel(previousCompleted.length, previousDue.length), exclusions: ["Cancelled tasks"], sourceModels: ["Task"], href: moduleHref(path, "caredelivery") }),
+    metric({ key: "care_delivery_on_time", label: "Care delivered this shift", numerator: completedShift.length + shiftOccDelivery.completed, denominator: dueShift.length + shiftOccDelivery.due, numeratorLabel: "completed governed tasks + routine occurrences", denominatorLabel: "tasks and routine occurrences owed in the active shift", definition: "Care completed during the active shift divided by all care owed in that shift, across both charting paths: assigned Tasks and RoutineOccurrence closes from Today's Care. An occurrence whose window has not opened yet is not counted as owed.", window: shift.label, baseline: "Previous shift: " + percentageLabel(previousCompleted.length + previousOccDelivery.completed, previousDue.length + previousOccDelivery.due), exclusions: ["Cancelled tasks and occurrences", "Occurrences not yet due"], sourceModels: ["Task", "RoutineOccurrence"], href: moduleHref(path, "caredelivery") }),
     metric({ key: "variance_free_delivery", label: "Variance-free delivery", numerator: Math.max(0, shiftEvents.length - varianceEvents.length), denominator: shiftEvents.length, numeratorLabel: "care events without variance", denominatorLabel: "documented care events", definition: "Documented care events without an exception or delivery variance.", window: shift.label, baseline: "Previous shift: " + percentageLabel(Math.max(0, previousEvents.length - previousVariances.length), previousEvents.length), sourceModels: ["CareEvent"], href: moduleHref(path, "caredelivery") }),
     metric({ key: "assignment_coverage", label: "Resident assignment coverage", numerator: Math.min(coveredIds.size, residents.length), denominator: residents.length, numeratorLabel: "residents with a current-shift caregiver", denominatorLabel: "active residents", definition: "Active residents with at least one caregiver assignment in the current shift.", window: shift.label, baseline: "Previous shift: " + percentageLabel(Math.min(previousCovered.size, residents.length), residents.length), sourceModels: ["AppSetting", "Resident"], href: moduleHref(path, "caregiverschedule") }),
     metric({ key: "escalation_acknowledgement", label: "Escalations acknowledged", numerator: escalations.filter((item) => item.acknowledgedAt).length, denominator: escalations.length, numeratorLabel: "acknowledged open escalations", denominatorLabel: "open escalations", definition: "Open escalations explicitly acknowledged by the receiving role.", window: "Current open queue", baseline: "No historical snapshot available", sourceModels: ["Escalation"], href: moduleHref(path, "escalations") }),
@@ -558,20 +704,26 @@ export async function buildDashboard(
   const warnings: string[] = [];
   if (!settings.find((item) => item.key === CAREGIVER_SCHEDULE_KEY)) warnings.push("No caregiver roster has been published for this community.");
   if (!latestHandover) warnings.push("No shift handover has been started.");
-  // Identify a clocked-in staffer's discipline by their authoritative User.role
-  // first, falling back to the free-text position title. Matching position alone
-  // undercounted caregivers whose title isn't literally "Caregiver" (e.g. "Daily
-  // Assistance"), so a clocked-in caregiver showed as CG Present = 0.
-  const isCaregiverAtt = (item: (typeof activeAttendance)[number]) =>
-    item.staff.user?.role === "CAREGIVER" || /caregiver|care aide|care assistant/i.test(item.staff.position || "");
-  const isNurseAtt = (item: (typeof activeAttendance)[number]) =>
-    item.staff.user?.role === "NURSE" || /nurse|clinical/i.test(item.staff.position || "");
+
+  // ── Who is on duty ─────────────────────────────────────────────────────────
+  // Roster-first, clock-in as a bonus signal — see lib/dashboard/presence.ts for why.
+  const clockEvents = parseClockEvents(settings.find((item) => item.key === STAFF_CLOCK_KEY)?.value);
+  const staffById = new Map(staffRoster.map((s) => [s.id, s]));
+  const onDutyByUserId = onDutyFromClockLog(clockEvents, previousShiftStart);
+  const presentList = resolveOnDuty({
+    rostered: shiftSchedules,
+    timeTracking: activeAttendance.map((item) => ({
+      staffId: item.staffId, name: item.staff.user?.name, role: item.staff.user?.role, position: item.staff.position,
+    })),
+    clockedIn: [...onDutyByUserId.entries()].map(([userId, ev]) => ({ userId, name: ev.name, role: ev.role })),
+    staff: staffRoster,
+  });
   const summary = {
-    activeResidents: residents.length, staffedNow: new Set(activeAttendance.map((item) => item.staffId)).size,
-    caregiversPresent: new Set(activeAttendance.filter(isCaregiverAtt).map((item) => item.staffId)).size,
+    activeResidents: residents.length, staffedNow: presentList.length,
+    caregiversPresent: presentList.filter(isCaregiver).length,
     pcgAssignments: shiftSchedules.filter((item) => item.private).length,
     newOrReturningResidents: activeAdmissions.length,
-    nurseOnDuty: activeAttendance.find(isNurseAtt)?.staff.user?.name,
+    nurseOnDuty: presentList.find(isNurse)?.name ?? undefined,
     residentsCovered: Math.min(coveredIds.size, residents.length), residentsUncovered: Math.max(0, residents.length - coveredIds.size),
     openEscalations: escalations.length, overdueWork: overdueTasks.length,
     handoverStatus: latestHandover?.status || "NOT_STARTED", handoverId: latestHandover?.id, handoverLabel: latestHandover?.number,
@@ -587,17 +739,26 @@ export async function buildDashboard(
       const copy = nurseDashboardZone(key);
       return section(copy.key, copy.title, copy.description, items, copy.emptyTitle, copy.emptyHint);
     };
-    const presentStaffIds = new Set(activeAttendance.map((item) => item.staffId));
     const deploymentAssignments: DashboardQueueItem[] = shiftSchedules.map((assignment) => {
-      const present = presentStaffIds.has(assignment.caregiverStaffId);
+      // Being rostered IS the duty authority here, so presence is not the question —
+      // whether they have started charting is. A rostered caregiver with no
+      // documentation once the shift is underway is the real thing to chase.
+      const assignmentUserId = assignment.caregiverUserId
+        || staffById.get(assignment.caregiverStaffId)?.userId
+        || undefined;
+      const hasCharted = !!assignmentUserId && chartedThisShift.has(assignmentUserId);
+      // Grace before "nothing charted yet" is meaningful — a caregiver an hour into
+      // an 8-hour shift may legitimately have nothing recorded.
+      const shiftUnderway = now.getTime() - shiftStart.getTime() > 2 * 3600_000;
+      const idle = shiftUnderway && !hasCharted;
       const highCaseload = !assignment.private && assignment.residentIds.length > 6;
       const residentPreview = (assignment.residents || []).slice(0, 4).map((resident) =>
         resident.room ? `${resident.name} (Room ${resident.room})` : resident.name);
       const remaining = Math.max(0, assignment.residentIds.length - residentPreview.length);
       return {
         id: `deployment:${assignment.id}`, kind: assignment.private ? "Dedicated caregiver assignment" : "Caregiver assignment",
-        priority: !present || highCaseload ? "P2" : "P3",
-        state: !present || highCaseload ? "WATCH" : "STABLE",
+        priority: idle || highCaseload ? "P2" : "P3",
+        state: idle || highCaseload ? "WATCH" : "STABLE",
         title: assignment.caregiverName || "Assigned caregiver",
         detail: [
           residentPreview.join(", "),
@@ -605,13 +766,15 @@ export async function buildDashboard(
           assignment.private ? "PCG / dedicated" : "Shared assignment",
         ].filter(Boolean).join(" · "),
         ownerLabel: assignment.caregiverName || "Assigned caregiver",
-        reason: !present
-          ? "The assigned caregiver is not confirmed present in the active attendance window."
+        reason: idle
+          ? "On the roster for this shift but nothing documented yet — confirm they have started."
           : highCaseload
             ? "The shared assignment exceeds the 1:6 reference and requires nurse review."
-            : "Caregiver is present with an active resident assignment.",
+            : hasCharted
+              ? "On duty for this shift and documenting care."
+              : "On duty for this shift with an active resident assignment.",
         sourceType: "CaregiverSchedule", sourceId: assignment.id,
-        sourceHref: "/nurse/caregiverschedule",
+        sourceHref: `${moduleHref(path, "staffinghub")}?hub=caregiverschedule`,
       };
     });
     const uncoveredResidents: DashboardQueueItem[] = residents
@@ -622,7 +785,11 @@ export async function buildDashboard(
         roomLabel: resident.roomNumber || undefined,
         reason: "No primary caregiver assignment covers this resident in the active shift roster.",
         sourceType: "CaregiverSchedule", sourceId: CAREGIVER_SCHEDULE_KEY,
-        sourceHref: "/nurse/caregiverschedule",
+        // Staffing → Schedule: the roster is the only place a coverage gap is fixed.
+        // Caregiver Schedule now lives inside the Staffing hub, so link to the hub and
+        // name the pane; the bare /nurse/caregiverschedule route still resolves but
+        // drops the nurse in without the hub's tab bar.
+        sourceHref: `${moduleHref(path, "staffinghub")}?hub=caregiverschedule`,
       }));
     const caregiverHelpIds = new Set(escalations
       .filter((item) => item.raisedByRole === "CAREGIVER" && item.assignedToRole === "NURSE")
@@ -641,7 +808,10 @@ export async function buildDashboard(
         residentLabel: assessment.layer1?.residentName || "Resident",
         detail: "Recent hospitalization — post-return monitoring required",
         reason: "Resident returned from hospital/ED and remains under post-return monitoring.",
-        sourceType: "Assessment", sourceId: assessment.id, sourceHref: moduleHref(path, "residentjourney"),
+        // Monitoring, not the journey timeline: post-return surveillance is an action
+        // (observations, vitals, domain scoring), and the journey is read-only history.
+        sourceType: "Assessment", sourceId: assessment.id,
+        sourceHref: `${moduleHref(path, "monitoringhub")}?resident=${encodeURIComponent(assessment.layer1!.residentId as string)}`,
       }));
     const dedicatedSupportWatch: DashboardQueueItem[] = assessmentSignals
       .filter(({ classification, assessment }) => (classification?.dt013?.recommendReview || classification?.dt014?.recommendReview) && assessment.layer1?.residentId && activeResidentIds.has(assessment.layer1.residentId as string))
@@ -655,7 +825,10 @@ export async function buildDashboard(
             ? "Dedicated-support and additional-service review indicated"
             : classification?.dt013?.recommendReview ? "Dedicated-support review indicated (DT-013)" : "Additional-service review indicated (DT-014)",
           reason: "A governed dedicated-staffing or additional-service review is indicated for this resident.",
-          sourceType: "Assessment", sourceId: assessment.id, sourceHref: moduleHref(path, "residentjourney"),
+          // DT-013 / DT-014 are resolved on the Dedicated Staffing / PCG board — that
+          // is where the recommendation is assessed and a 1:1 assignment authorised.
+          sourceType: "Assessment", sourceId: assessment.id,
+          sourceHref: `${moduleHref(path, "privatecare")}?resident=${encodeURIComponent(assessment.layer1!.residentId as string)}`,
         };
       });
     const admissionWatchItems: DashboardQueueItem[] = activeAdmissions.map((admission) => ({
@@ -664,7 +837,11 @@ export async function buildDashboard(
       occurredAt: admission.updatedAt.toISOString(),
       detail: `Move-in workflow step ${admission.currentStep} of 8`,
       reason: "A new admission or return remains in progress and requires shift awareness.",
-      sourceType: "Admission", sourceId: admission.id, sourceHref: "/nurse/prescreen",
+      // Move-in, not Pre-Admission: the detail reads "Move-in workflow step N of 8",
+      // and that 8-step wizard is the Move-in board. `prescreen` is the separate
+      // Stage-2 Pre-Admission Assessment, so this row used to land on the wrong form.
+      sourceType: "Admission", sourceId: admission.id,
+      sourceHref: `${moduleHref(path, "movein")}?admission=${encodeURIComponent(admission.id)}`,
     }));
     const nurseFollowUps: DashboardQueueItem[] = physicianCommunications.map((communication) => {
       const overdue = Boolean(communication.followUpDeadline && communication.followUpDeadline < now);
@@ -690,6 +867,9 @@ export async function buildDashboard(
       ...bellItems, ...incidentItems, ...escalationItems, ...nurseVarianceItems, ...taskItems, ...nurseFollowUps,
     ];
     const careDeliveryItems = [
+      // Coverage gaps lead: a resident with no approved routine has no care being
+      // delivered at all, which outranks any individual task in this zone.
+      ...routineGaps,
       ...taskItems.filter((item) => item.dueAt && new Date(item.dueAt) <= shiftEnd),
       ...nurseVarianceItems,
     ];
@@ -713,6 +893,10 @@ export async function buildDashboard(
     // staffing notes.
     const priorityTriage = clinicalTriage.filter((item) => ["P1", "P2"].includes(item.priority));
     const unacknowledgedCritical = escalationItems.filter((item) => ["P1", "P2"].includes(item.priority) && !item.action);
+    const presentCaregiverNames = presentList.filter(isCaregiver).map((d) => d.name).filter((n): n is string => !!n);
+    const assignedCaregiverNotes = shiftSchedules.map((assignment) =>
+      `${assignment.caregiverName || "Assigned caregiver"} — ${assignment.residentIds.length} resident${assignment.residentIds.length === 1 ? "" : "s"}`
+      + `${assignment.private ? " (dedicated)" : ""}`);
     huddle = {
       headline: `${residents.length} residents · ${priorityTriage.length} priority item${priorityTriage.length === 1 ? "" : "s"} · ${uncoveredResidents.length} uncovered`,
       generatedAt: now.toISOString(),
@@ -728,9 +912,15 @@ export async function buildDashboard(
         ...(bellItems.length ? [`${bellItems.length} active call bell${bellItems.length === 1 ? "" : "s"}`] : []),
         ...(unacknowledgedCritical.length ? [`${unacknowledgedCritical.length} P1/P2 escalation${unacknowledgedCritical.length === 1 ? "" : "s"} awaiting acknowledgement`] : []),
         ...(overdueTasks.length ? [`${overdueTasks.length} overdue care task${overdueTasks.length === 1 ? "" : "s"}`] : []),
+        ...(routineGaps.length ? [`${routineGaps.length} resident${routineGaps.length === 1 ? "" : "s"} on an active care plan with no approved routine — no care occurrences are being generated`] : []),
       ],
       staffingNotes: [
-        `${summary.caregiversPresent ?? 0} caregiver(s) present · ${shiftSchedules.length} assignment${shiftSchedules.length === 1 ? "" : "s"} published this shift`,
+        // Name who is on duty and who holds residents — the two things a nurse
+        // taking the shift actually needs, rather than a bare count.
+        presentCaregiverNames.length
+          ? `On duty: ${presentCaregiverNames.slice(0, 4).join(", ")}${presentCaregiverNames.length > 4 ? ` +${presentCaregiverNames.length - 4} more` : ""}`
+          : "No caregiver is rostered to this shift.",
+        ...(assignedCaregiverNotes.length ? assignedCaregiverNotes.slice(0, 4) : [`${shiftSchedules.length} assignment${shiftSchedules.length === 1 ? "" : "s"} published this shift`]),
         ...deploymentAssignments.filter((item) => item.state === "WATCH").slice(0, 3).map((item) => `${item.ownerLabel}: ${item.reason}`),
         ...(uncoveredResidents.length ? [`${uncoveredResidents.length} resident${uncoveredResidents.length === 1 ? "" : "s"} without a current-shift caregiver`] : []),
         ...(unassigned.length ? [`${unassigned.length} open task${unassigned.length === 1 ? "" : "s"} still unassigned`] : []),

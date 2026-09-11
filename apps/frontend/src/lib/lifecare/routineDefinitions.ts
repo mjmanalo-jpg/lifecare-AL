@@ -70,6 +70,38 @@ export function draftEventToDefinitionRow(
   };
 }
 
+// ── Recurring-event families (nurse edit propagation) ─────────────────────────────
+//
+// A care event that repeats through the day — toileting (06:15 / 11:30 / 17:00 /
+// 20:45), meals, hydration, mobility support — is ONE clinical decision rendered at
+// several clock times. When the nurse edits one of them in Routine Review the same
+// decision has to land on its siblings; only the scheduling fields stay per-event.
+// Family = resultSchemaKey (the engine's canonical care-event kind, already stored on
+// every row) + status. "General Observation" is the catch-all bucket (handovers,
+// therapy carryover and rest support all fall in), so it never forms a family.
+
+/** Edit fields that describe ONE occurrence and must never propagate to siblings. */
+export const PER_OCCURRENCE_FIELDS = new Set([
+  "id", "residentId", "schedule", "frequencyMethod", "shiftOwner", "name", "status", "version", "blockReason",
+]);
+
+export function routineFamilyKey(d: { resultSchemaKey?: string | null; status?: string | null }): string {
+  const key = String(d.resultSchemaKey ?? "");
+  return key && key !== "General Observation" ? `${key}|${String(d.status ?? "")}` : "";
+}
+
+/** The other rows in `all` that are the same recurring event at a different time. */
+export function routineFamily<T extends { id?: unknown; resultSchemaKey?: string | null; status?: string | null }>(def: T, all: T[]): T[] {
+  const k = routineFamilyKey(def);
+  if (!k) return [];
+  return all.filter((d) => String(d.id) !== String(def.id) && routineFamilyKey(d) === k);
+}
+
+/** The part of an edit that is a decision about the event, not about one of its times. */
+export function sharedRoutineFields(body: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(body).filter(([k]) => !PER_OCCURRENCE_FIELDS.has(k)));
+}
+
 // ── Eligibility gate (Rule 14/19) ─────────────────────────────────────────────────
 
 export interface DefLifecycle {

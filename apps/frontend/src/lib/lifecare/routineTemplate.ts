@@ -34,6 +34,25 @@ export interface RoutineTemplateEvent {
 export const ROUTINE_24H_TEMPLATE = raw as RoutineTemplateEvent[];
 
 /**
+ * Client renames applied after the workbook was authored. Breakfast / Lunch /
+ * Dinner are ONE recurring "Meal" event at three times, and "Ordered clinical
+ * reading" is the vital-signs round. Kept here (not hand-edited into
+ * data/routine_24h.json, which is regenerated from the .xlsx) and applied both at
+ * generation and as a sweep over already-generated rows, so the routine, the Care
+ * Task table and the caregiver tasks dispatched from it all read the same name.
+ */
+export const EVENT_RENAMES: Record<string, string> = {
+  "Breakfast": "Meal",
+  "Lunch": "Meal",
+  "Dinner": "Meal",
+  "Supper": "Meal",
+  "Ordered clinical reading": "Vital Signs",
+};
+
+export const renameCareEvent = (careEvent: string): string =>
+  EVENT_RENAMES[String(careEvent ?? "").trim()] ?? careEvent;
+
+/**
  * Phase 2 tailoring — the minimum Final LOC at which a template row is included by
  * default. A row not listed here defaults to LOC 1 (universal: meals, hydration,
  * hygiene, activities, handovers, meds/treatment which are order-gated anyway).

@@ -4,6 +4,7 @@ import { requireTenantContext } from "@/lib/tenant";
 import { logAudit } from "@/lib/audit";
 import { assembleRoutine24h, type AssembleInput } from "@/lib/lifecare/assembleRoutine";
 import { draftEventToDefinitionRow } from "@/lib/lifecare/routineDefinitions";
+import { EVENT_RENAMES } from "@/lib/lifecare/routineTemplate";
 import { ASSESSMENTS_V42_KEY, assessmentMatchesResident } from "@/lib/lifecare/assessment";
 import {
   careLevelToLoc, domainsFromAssessment, conditionsFromAssessment, ordersFromRecords,
@@ -112,6 +113,20 @@ export async function POST(request: NextRequest) {
       await tx.routineEventDefinition.updateMany({
         where: { residentId, communityId, status: "APPROVED", sourceLocBundleId: { startsWith: "LOC" } },
         data: { status: "CANCELLED", revisionReason: "Dropped legacy LOC-bundle routine — replaced by the 24-Hour Routine template", stopDate: new Date() },
+      });
+      // Bring rows generated BEFORE the client renames up to date. Fresh drafts already
+      // carry them; this reaches the APPROVED rows this transaction leaves alone, so the
+      // live routine, the Care Task table seeded from it and the caregiver tasks
+      // dispatched from that all read one name.
+      for (const [from, to] of Object.entries(EVENT_RENAMES)) {
+        await tx.routineEventDefinition.updateMany({ where: { residentId, communityId, name: from }, data: { name: to } });
+      }
+      // Same vintage: "Pre-lunch/Pre-dinner toileting" were classified Meal / Supplement
+      // (the meal regex matched "lunch"/"dinner" first), so caregivers got a meal result
+      // form for a continence event.
+      await tx.routineEventDefinition.updateMany({
+        where: { residentId, communityId, resultSchemaKey: "Meal / Supplement", name: { contains: "toileting", mode: "insensitive" } },
+        data: { resultSchemaKey: "Toileting / Continence" },
       });
       if (rows.length) {
         const res = await tx.routineEventDefinition.createMany({ data: rows as never });

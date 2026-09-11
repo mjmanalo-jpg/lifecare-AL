@@ -172,9 +172,11 @@ test("Phase 2: higher LOC includes more rows; repositioning is LOC-4+ only", () 
   assert.ok(has("LOC 4", "Repositioning"), "repositioning appears at LOC 4");
   assert.ok(!has("LOC 1", "Night safety round"), "no night safety round at LOC 1");
   assert.ok(has("LOC 3", "Night safety round"), "night safety round at LOC 3");
-  // Universal ADLs are present at every LOC.
+  // Universal ADLs are present at every LOC. Breakfast/Lunch/Dinner generate as one
+  // recurring "Meal" event at three times, so count them rather than name them.
   for (const loc of ["LOC 1", "LOC 5"]) {
-    assert.ok(has(loc, "Breakfast") && has(loc, "Lunch") && has(loc, "Dinner"), `${loc} keeps all meals`);
+    const meals = assembleRoutine24h(base({ finalLoc: loc as AssembleInput["finalLoc"] })).filter((e) => e.name === "Meal");
+    assert.equal(meals.length, 3, `${loc} keeps all meals`);
   }
 });
 

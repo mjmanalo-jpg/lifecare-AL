@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { RefreshCw, Plus, X, CheckCircle2, Play, Undo2, StickyNote, ArrowLeftRight, Repeat, CalendarCheck } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -256,9 +256,28 @@ function HandoverCard({ e, resName, onOpenTasks, onOpenIncidents }: { e: Handove
 
 export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clinicianRole?: ClinicianRole }) {
   // ---- Data -----------------------------------------------------------------
-  const { data: taskRows, loading, error, refetch } = useLiveQuery(
-    "tasks", { query: "include=resident&take=300", tables: ["Task", "Resident"] }
+  // Care-plan-derived Tasks are EXCLUDED from this board. The routine engine
+  // (RoutineOccurrence, charted in Today's Approved Care) is the system of record for
+  // planned care, and cron/care-plan-tasks writes a duplicate Task per routine window
+  // — which buried this board under hundreds of permanently-overdue copies.
+  //
+  // Two precise server-side queries rather than one broad fetch + client filter: the
+  // duplicates outnumber real tasks ~35:1, so filtering after the fetch would let them
+  // consume the `take` budget and silently hide the tasks a nurse needs to see.
+  //   • generatedFrom null           → manually assigned tasks
+  //   • generatedFrom "caretask:…"   → a nurse's dispatched approved Care Task
+  const manualQ = useLiveQuery(
+    "tasks", { query: "include=resident&take=500&f_generatedFrom=null", tables: ["Task", "Resident"] }
   );
+  const dispatchedQ = useLiveQuery(
+    "tasks", { query: "include=resident&take=500&f_generatedFrom__startsWith=caretask:", tables: ["Task", "Resident"] }
+  );
+  const taskRows = useMemo(() => [...manualQ.data, ...dispatchedQ.data], [manualQ.data, dispatchedQ.data]);
+  const loading = manualQ.loading || dispatchedQ.loading;
+  const error = manualQ.error || dispatchedQ.error;
+  const refetch = useCallback(async () => {
+    await Promise.all([manualQ.refetch(), dispatchedQ.refetch()]);
+  }, [manualQ.refetch, dispatchedQ.refetch]);
   // Optimistic status overlay: a tapped task moves columns instantly (before the
   // save + refetch round-trip lands), keyed by task id → its new status.
   const [optimistic, setOptimistic] = useState<Map<string, string>>(new Map());

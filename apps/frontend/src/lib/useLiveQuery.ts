@@ -61,6 +61,9 @@ interface LiveQueryOptions {
   pollMs?: number;
   /** Skip fetching entirely when false. */
   enabled?: boolean;
+  /** Route prefix, for a purpose-built reader that still returns the `{ data: [...] }`
+   *  envelope (e.g. "/api/care-events" for the server-side roll-up). Default "/api/db". */
+  basePath?: string;
 }
 
 interface LiveQueryResult<T> {
@@ -82,8 +85,8 @@ export function useLiveQuery<T = Record<string, unknown>>(
   model: string,
   options: LiveQueryOptions = {}
 ): LiveQueryResult<T> {
-  const { query, tables, pollMs = 20000, enabled = true } = options;
-  const url = `/api/db/${model}${query ? `?${query}` : ""}`;
+  const { query, tables, pollMs = 20000, enabled = true, basePath = "/api/db" } = options;
+  const url = `${basePath}/${model}${query ? `?${query}` : ""}`;
   const tablesKey = (tables ?? []).join(",");
 
   // Seed from the SWR cache so a re-mounted hook paints instantly (no skeleton).

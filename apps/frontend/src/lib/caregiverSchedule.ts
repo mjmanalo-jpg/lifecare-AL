@@ -35,6 +35,11 @@ export const shiftMeta = (shift: ShiftKey) => SHIFTS.find((s) => s.key === shift
  *  until 15:00. Extends only the end; the start is unchanged. */
 export const SHIFT_GRACE_MINUTES = 60;
 
+/** Lead-in minutes the shift goes live BEFORE its start so a caregiver who clocks
+ *  in early sees their assignment and routine. e.g. 15 → a PM (14–22) caregiver
+ *  reaches their residents from 13:45. Extends only the start; the end is unchanged. */
+export const SHIFT_LEAD_MINUTES = 15;
+
 export interface CaregiverSchedule {
   id: string;
   date: string;            // YYYY-MM-DD (local calendar date the shift starts)
@@ -105,8 +110,8 @@ export function isScheduleActiveAt(s: CaregiverSchedule, at: Date, timeZone?: st
   const day = localDateStr(at, timeZone);
   const nowMin = localMinutesOfDay(at, timeZone);
   const m = shiftMeta(s.shift);
-  const startMin = m.startH * 60;
-  const endMin = m.endH * 60 + SHIFT_GRACE_MINUTES; // grace extends the shift end
+  const startMin = m.startH * 60 - SHIFT_LEAD_MINUTES; // lead-in opens the shift early
+  const endMin = m.endH * 60 + SHIFT_GRACE_MINUTES;    // grace extends the shift end
   const DAY = 24 * 60;
   if (!m.nextDay) {
     // AM (06–14) / PM (14–22): same calendar day. Grace may push the end past
@@ -152,11 +157,13 @@ export function activeCaregiverUserIdsForResident(residentId: string, schedules:
   return [...ids];
 }
 
-/** The AM/PM/NOC shift `at` falls in (AM 06–14, PM 14–22, else NOC). */
-export function currentShiftKey(at: Date = new Date()): ShiftKey {
-  const h = at.getHours();
-  if (h >= 6 && h < 14) return "AM";
-  if (h >= 14 && h < 22) return "PM";
+/** The AM/PM/NOC shift `at` falls in (AM 06–14, PM 14–22, else NOC), rolled
+ *  forward by {@link SHIFT_LEAD_MINUTES} so the last minutes before a shift start
+ *  already report the incoming shift (13:50 → PM). */
+export function currentShiftKey(at: Date = new Date(), timeZone?: string): ShiftKey {
+  const min = (localMinutesOfDay(at, timeZone) + SHIFT_LEAD_MINUTES) % (24 * 60);
+  if (min >= 6 * 60 && min < 14 * 60) return "AM";
+  if (min >= 14 * 60 && min < 22 * 60) return "PM";
   return "NOC";
 }
 
@@ -257,7 +264,7 @@ export const toDateStr = (d: Date): string => `${d.getFullYear()}-${pad(d.getMon
 export const todayStr = (): string => toDateStr(new Date());
 
 /** Facility-local minutes-of-day (0–1439) of `at`. Server-local without a tz. */
-function localMinutesOfDay(at: Date, timeZone?: string): number {
+export function localMinutesOfDay(at: Date, timeZone?: string): number {
   if (!timeZone) return at.getHours() * 60 + at.getMinutes();
   try {
     const parts = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(at);

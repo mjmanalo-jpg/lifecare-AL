@@ -30,7 +30,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { levelOf } from "./CareLogsBoard";
 import type { ClinicianRole } from "./useClinician";
-import { ClinicalPage, ClinicalHeader, ClinicalButton, StatCard, DataState, controlClass, SERIF } from "./clinical-ui";
+import { ClinicalPage, ClinicalHeader, ClinicalButton, StatCard, DataState, ResidentPickerGrid, controlClass, SERIF } from "./clinical-ui";
 import { DOMAIN_CODES } from "@/lib/lifecare/types";
 import type { DomainCode } from "@/lib/lifecare/types";
 import { ASSESSMENTS_V42_KEY } from "@/lib/lifecare/assessment";
@@ -55,7 +55,6 @@ const DOMAIN_TREND_CODES: DomainCode[] = ["AS-01", "AS-03", "AS-04", "AS-07", "A
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (v: unknown) => (v == null ? "" : String(v));
-const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 const num = (v: unknown): number | null => {
   if (v === "" || v == null) return null;
   const n = Number(v);
@@ -451,7 +450,7 @@ const parseWeightLogs = (raw: string | null | undefined): Row[] => {
   try { const v = JSON.parse(raw); return Array.isArray(v) ? v : []; } catch { return []; }
 };
 
-export default function VitalsTrendBoard({ clinicianRole = "NURSE", residentId: residentIdProp }: { clinicianRole?: ClinicianRole; residentId?: string }) {
+export default function VitalsTrendBoard({ clinicianRole = "NURSE", residentId: residentIdProp, embedded }: { clinicianRole?: ClinicianRole; residentId?: string; embedded?: boolean }) {
   void clinicianRole; // read-only board; role reserved for parity with sibling boards
   // Capture "now" once on mount — the fork's react-hooks/purity rule forbids
   // Date.now()/argless new Date() in the render body (incl. useMemo initializers),
@@ -747,8 +746,8 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE", residentId: 
   const anyLoading = resQ.loading || roundQ.loading || vitQ.loading;
   const anyError = resQ.error || roundQ.error || vitQ.error;
 
-  return (
-    <ClinicalPage className="print:bg-white">
+  const body = (
+    <>
       <ClinicalHeader
         title="Vitals Trend"
         subtitle="Track vital sign trends over time per resident"
@@ -774,29 +773,12 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE", residentId: 
 
       <div className="mt-5">
         {!selected && !anyLoading && !anyError && (
-          <div className="@container">
-            <div className="mb-4">
-              <p className="text-base font-bold text-[var(--clinical-ink)]">Select a resident to view vitals trends</p>
-              <p className="text-sm text-[var(--clinical-muted)]">Tap a resident to see their vital sign history</p>
-            </div>
-            {residents.length === 0 ? (
-              <p className="text-sm text-[var(--clinical-muted)]">No residents found.</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4 @5xl:grid-cols-5">
-                {residents.map((r: Row, i: number) => (
-                  <button key={s(r.id)} onClick={() => setResidentId(s(r.id))}
-                    className="group flex flex-col items-center gap-2.5 rounded-xl border p-4 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300"
-                    style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface)", animationDelay: `${i * 40}ms`, animationFillMode: "backwards" }}>
-                    <span className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold" style={{ backgroundColor: "var(--clinical-surface-2)", color: "var(--clinical-panel)" }}>{initials(s(r.name))}</span>
-                    <span className="block w-full min-w-0">
-                      <span className="block truncate text-sm font-semibold text-[var(--clinical-ink)]">{s(r.name)}</span>
-                      <span className="block text-xs text-[var(--clinical-muted)]">Room {s(r.room)}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <ResidentPickerGrid
+            residents={residents.map((r: Row) => ({ id: s(r.id), name: s(r.name), room: s(r.room) }))}
+            onPick={setResidentId}
+            title="Select a resident to view vitals trends"
+            hint="Tap a resident to see their vital sign history"
+          />
         )}
         <DataState loading={anyLoading} error={anyError} empty={false}>
           {selected && (
@@ -894,6 +876,10 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE", residentId: 
           )}
         </DataState>
       </div>
-    </ClinicalPage>
+    </>
   );
+
+  return embedded
+    ? <div className="print:bg-white">{body}</div>
+    : <ClinicalPage className="print:bg-white">{body}</ClinicalPage>;
 }

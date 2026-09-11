@@ -5,15 +5,27 @@
 // persisted Closed/Cancelled state (written by #3/#5) always wins.
 
 import { countsAsCompleted, type WorkflowState, type CareOutcome } from "./vocab.ts";
+import type { RoutineShift } from "./carePlanRoutine.ts";
 
 // Reused from TodaysCareBoard. ponytail: flat grace; criticality-scaled grace is a #5 knob.
 export const WINDOW_LEAD_MIN = 5;
 export const OCCURRENCE_GRACE_MIN = 30;
 
-const toMin = (hhmm: string): number => {
+export const toMin = (hhmm: string): number => {
   const m = /(\d{1,2}):(\d{2})/.exec(hhmm || "");
   return m ? +m[1] * 60 + +m[2] : 0;
 };
+
+/** Shift for a minute-of-day (spec Shift Rules: Night 22–06 / Morning 06–14 / Afternoon 14–22). */
+export function shiftForMinutes(m: number): RoutineShift {
+  const h = Math.floor((((m % 1440) + 1440) % 1440) / 60);
+  if (h >= 6 && h < 14) return "AM";
+  if (h >= 14 && h < 22) return "PM";
+  return "NOC";
+}
+
+/** Shift owning an "HH:MM" scheduled time. */
+export const shiftOfTime = (hhmm: string): RoutineShift => shiftForMinutes(toMin(hhmm));
 
 /** Minutes-from-midnight for "now" in Asia/Manila (fixed +08:00, no DST). Impure —
  * the UI calls this; pure logic takes nowMin so tests are deterministic. */
@@ -54,6 +66,18 @@ export function deriveState(occ: OccLike, nowMin: number): WorkflowState {
 export function isChartable(occ: OccLike, nowMin: number): boolean {
   const s = deriveState(occ, nowMin);
   return s === "Due" || s === "Overdue";
+}
+
+/**
+ * A MISSED occurrence: still open (never Closed, not Cancelled) and its window has
+ * gone. `dayCmp` compares the occurrence's care day to today (<0 past, 0 today, >0
+ * future) — on a past day the window is gone regardless of the clock, and a future
+ * day is never missed. Unlike deriveState this is safe across a multi-day period.
+ */
+export function isMissed(occ: OccLike, nowMin: number, dayCmp: number): boolean {
+  if (occ.workflowState === "Closed" || occ.workflowState === "Cancelled") return false;
+  if (dayCmp !== 0) return dayCmp < 0;
+  return nowMin > toMin(occ.scheduledTime) + OCCURRENCE_GRACE_MIN;
 }
 
 /** True when charting now would be past the grace window (a "late" completion). */

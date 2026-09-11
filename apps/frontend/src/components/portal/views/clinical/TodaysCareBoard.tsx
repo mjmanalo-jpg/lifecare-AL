@@ -12,6 +12,7 @@
 // is replaced — every consumer now sees per-occurrence rows.
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   RefreshCw, CheckCircle2, AlertTriangle, ShieldAlert, User2,
 } from "lucide-react";
@@ -95,6 +96,12 @@ function parseAssessments(value: string | undefined): AssessmentV42[] {
 
 export default function TodaysCareBoard({ role, focusResidentId, embedded }: { role?: string; focusResidentId?: string; embedded?: boolean }) {
   const { confirmDialog } = useConfirm();
+  // `?resident=<id>` deep-link (dashboard queue rows land here). It PRE-SELECTS that
+  // resident rather than scoping the board to them: the nurse still gets the full
+  // resident list to move through, just opened on the one they clicked. Read here so
+  // every portal rendering this board honours it without threading a prop through.
+  const searchParams = useSearchParams();
+  const deepLinkResidentId = searchParams.get("resident") || "";
 
   // ---- Identity / role -------------------------------------------------------
   const [me, setMe] = useState("");
@@ -130,15 +137,19 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
   // definitions, then we refetch the live query so they render. Without this the
   // board only ever shows rows a prior read already created (→ empty on first open).
   // ponytail: focus-scoped; the My Shift aggregate materializes each resident as it's opened.
+  // A deep-linked resident is materialized too — otherwise arriving from a dashboard
+  // queue row shows an empty routine purely because nobody had opened that resident
+  // today yet.
+  const materializeFor = focusResidentId || deepLinkResidentId;
   useEffect(() => {
-    if (!focusResidentId) return;
+    if (!materializeFor) return;
     let cancelled = false;
-    fetch(`/api/routine/occurrences?residentId=${encodeURIComponent(focusResidentId)}&careDate=${today}`)
+    fetch(`/api/routine/occurrences?residentId=${encodeURIComponent(materializeFor)}&careDate=${today}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((res) => { if (!cancelled && res && res.count > 0) refetch(); })
       .catch(() => { /* non-fatal — the live query still shows any existing rows */ });
     return () => { cancelled = true; };
-  }, [focusResidentId, today, refetch]);
+  }, [materializeFor, today, refetch]);
 
   // Live tick so the derived state (Due/Overdue) advances without a manual refresh.
   const [, setNowTick] = useState(() => Date.now());
@@ -192,7 +203,7 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
   }, [todaysByResident, residentsById, focusResidentId]);
 
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(deepLinkResidentId || null);
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return q ? residentList.filter((r) => r.name.toLowerCase().includes(q)) : residentList;

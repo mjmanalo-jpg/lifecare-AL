@@ -55,6 +55,20 @@ export function slaState(createdAt: string | Date, severity: string | null | und
   return { dueAt, remainingMs, breached: remainingMs <= 0, windowMs };
 }
 
+// ── Alert identity: how a raised alert points back at its source ──────────────
+// An alert is keyed by (relatedEntityType, relatedEntityId) — the same key the
+// engine dedupes on and `lib/alertResolve` clears on. Raise and clear MUST agree
+// on this encoding, so it lives here with the rest of the shared vocabulary.
+
+/** Alert keys /api/cron/alerts raises for one routine occurrence. */
+export const routineAlertKeys = (occId: string) => [`routinedue:${occId}`, `routinelate:${occId}`];
+
+/** Inverse of {@link routineAlertKeys} — recovers the occId from an alert key. */
+export const occIdFromRoutineAlertKey = (key: string) => key.replace(/^routine(due|late):/, "");
+
+/** Task states that mean "no longer outstanding" — an alert for one is stale. */
+export const SETTLED_TASK_STATUS = new Set(["COMPLETED", "CANCELLED"]);
+
 /** The notification types that count as "automatic alerts" in the Alert Center. */
 export const ALERT_NOTIFICATION_TYPES = new Set([
   "VITAL_ALERT",
