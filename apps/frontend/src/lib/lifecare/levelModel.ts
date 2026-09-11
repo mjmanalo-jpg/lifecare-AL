@@ -45,6 +45,7 @@ export const levelName = (n: number): string => levelMeta(n)?.name || `Level ${n
 export interface DomainBaseline { domain: string; byLevel: Record<number, string>; modifierRule?: string }
 export const DOMAIN_BASELINE: DomainBaseline[] = RAW.baselineByDomain.map((d) => ({
   domain: d.domain,
-  byLevel: { 1: d.L1 || "", 2: d.L2 || "", 3: d.L3 || "", 4: d.L4 || "" },
+  // L5 delivers the L4 baselines within a comfort-focused pathway (per the model).
+  byLevel: { 1: d.L1 || "", 2: d.L2 || "", 3: d.L3 || "", 4: d.L4 || "", 5: d.L4 || "" },
   modifierRule: d.modifierRule,
 }));

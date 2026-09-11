@@ -31,14 +31,24 @@ export function activeLevel(opts: {
    *  recent one. Omit it and behaviour is unchanged (loc_history → enum). */
   assessments?: AssessmentV42[];
 }): number {
+  const history = historyForResident(opts.locHistory, opts.residentId, opts.admissionIds ?? [], opts.residentName ?? "");
   if (opts.assessments?.length) {
     const a = authoritativeAssessmentFor(opts.assessments, { residentId: opts.residentId, admissionIds: opts.admissionIds, residentName: opts.residentName });
-    const lvl = a ? finalLevel(a) : null;
-    const aLvl = lvl ? levelNum(lvl) : null;
-    if (aLvl && aLvl >= 1 && aLvl <= 5) return aLvl;
+    // A validated Final LOC is authoritative ONLY once it has been APPLIED — i.e. it
+    // appears in loc_history (written on direct apply or on CM/Superadmin approval). A
+    // validated reassessment still AWAITING approval is not in loc_history yet, so it
+    // must NOT move the active level (the prior approved level stays in effect). When
+    // there is no matching history at all (first record, or an id/admission/name-keyed
+    // pre-admission entry), trust the validated assessment.
+    // ponytail: membership-by-assessmentId; legacy history lacking ids falls back to loc_history[0], which already carries the applied level.
+    if (a && (!history.length || history.some((e) => e.assessmentId === a.id))) {
+      const lvl = finalLevel(a);
+      const aLvl = lvl ? levelNum(lvl) : null;
+      if (aLvl && aLvl >= 1 && aLvl <= 5) return aLvl;
+    }
   }
 
-  const latest = historyForResident(opts.locHistory, opts.residentId, opts.admissionIds ?? [], opts.residentName ?? "")[0];
+  const latest = history[0];
   const locLvl = latest ? levelNum(latest.level) : null;
   if (locLvl && locLvl >= 1 && locLvl <= 5) return locLvl;
   return clampLevel(careLevelEnumToLevel(opts.careLevel));

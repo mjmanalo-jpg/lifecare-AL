@@ -25,6 +25,7 @@ import { adaptResident } from "@/lib/adapters";
 import type { ClinicianRole } from "./useClinician";
 import ResidentAssessmentV42 from "./ResidentAssessmentV42";
 import LocSignoffApprovals from "./LocSignoffApprovals";
+import { LOC_SIGNOFF_KEY, parseLocSignoffs } from "@/lib/lifecare/locSignoff";
 import {
   ClinicalPage, ClinicalHeader, ClinicalCard, ClinicalModal, ClinicalButton,
   StatCard, controlClass, SERIF,
@@ -180,6 +181,14 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
   // Map the board's role to a valid v4.2 clinician role.
   const roleForV42 = clinicianRole === "FACILITY_ADMIN" ? "CARE_MANAGER" : clinicianRole;
 
+  // Live count of LOC changes awaiting Care Manager / Superadmin approval — badges
+  // the Pending Approval tab so approvers see there's something waiting (settingRows
+  // is already realtime via useLiveQuery).
+  const pendingApprovals = useMemo(() =>
+    parseLocSignoffs(settingRows.find((r) => (r.key || r.id) === LOC_SIGNOFF_KEY)?.value)
+      .filter((x) => x.status === "PENDING_FAMILY" || x.status === "FAMILY_APPROVED").length,
+    [settingRows]);
+
   return (
     <ClinicalPage>
       <ClinicalHeader
@@ -201,9 +210,15 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
 
       {/* Tabs */}
       <div className="mb-5 inline-flex flex-wrap gap-1 rounded-xl p-1" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
-        {([["queue", "Assessments"], ["approvals", "Pending Approval"], ["packages", "Service Packages"], ["activities", "Care Activities"], ["history", "Level History"]] as const).map(([v, label]) => (
-          <button key={v} onClick={() => setTab(v)} className={`rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors ${tab === v ? "bg-[var(--clinical-surface)] shadow-sm text-[var(--clinical-ink)]" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>{label}</button>
-        ))}
+        {([["queue", "Assessments"], ["approvals", "Pending Approval"], ["packages", "Service Packages"], ["activities", "Care Activities"], ["history", "Level History"]] as const).map(([v, label]) => {
+          const badge = v === "approvals" ? pendingApprovals : 0;
+          return (
+            <button key={v} onClick={() => setTab(v)} className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors ${tab === v ? "bg-[var(--clinical-surface)] shadow-sm text-[var(--clinical-ink)]" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>
+              {label}
+              {badge > 0 && <span className="inline-flex min-w-[18px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white tabular-nums" style={{ backgroundColor: "var(--clinical-coral)" }}>{badge}</span>}
+            </button>
+          );
+        })}
       </div>
 
       {/* Assessments — the single v4.2 3-layer instrument, embedded. New → complete
@@ -238,18 +253,18 @@ export default function CareAcuityBoard({ clinicianRole = "NURSE" }: { clinician
 // activity/frequency catalog.
 function CareActivitiesView() {
   const [lvl, setLvl] = useState<number | "">("");
-  const cols = lvl === "" ? [1, 2, 3, 4] : [Number(lvl)];
+  const cols = lvl === "" ? [1, 2, 3, 4, 5] : [Number(lvl)];
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <select value={lvl} onChange={(e) => setLvl(e.target.value === "" ? "" : Number(e.target.value))} aria-label="Filter by level" className={`${controlClass} max-w-xs`}>
-          <option value="">All Levels (L1–L4)</option>
-          {LEVELS.filter((l) => l.n <= 4).map((l) => <option key={l.n} value={l.n}>Level {l.n} — {l.name}</option>)}
+          <option value="">All Levels (L1–L5)</option>
+          {LEVELS.map((l) => <option key={l.n} value={l.n}>Level {l.n} — {l.name}</option>)}
         </select>
         <span className="text-xs text-[var(--clinical-muted)]">Baseline care by domain per Level of Care. L5 delivers L4 baselines within a comfort-focused pathway.</span>
       </div>
       <div className="overflow-x-auto rounded-xl border" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
-        <table className="w-full min-w-[720px] text-sm">
+        <table className="w-full min-w-[900px] text-sm">
           <thead><tr className="border-b text-left text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line)" }}>
             <th className="px-4 py-2.5 font-semibold">Domain</th>
             {cols.map((c) => <th key={c} className="px-4 py-2.5 font-semibold">L{c}</th>)}

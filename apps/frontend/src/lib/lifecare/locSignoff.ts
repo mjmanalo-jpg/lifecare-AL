@@ -41,10 +41,10 @@ export function parseLocSignoffs(raw?: string | null): LocSignoff[] {
   try { const v = JSON.parse(raw); return Array.isArray(v) ? v.filter((x) => x && typeof x.id === "string") : []; } catch { return []; }
 }
 
-// Only clinical staff finalize a family-approved LOC change (per the client:
-// nurse or Care Manager, plus Superadmin).
+// Only a Care Manager or Superadmin approves a LOC change (per the client: the
+// nurse cannot approve a reassessment; no family sign-off is required).
 export function canFinalizeLoc(role: string | null | undefined): boolean {
-  return role === "NURSE" || role === "CARE_MANAGER" || role === "SUPERADMIN";
+  return role === "CARE_MANAGER" || role === "SUPERADMIN";
 }
 
 let seq = 0;

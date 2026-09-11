@@ -573,6 +573,14 @@ function OccurrenceRowView({
     : (def?.assistanceLevel || "—");
   const critical = def?.criticality === "Critical" || def?.escalationPriority === "P1";
 
+  // Execution detail chips the nurse set on the event (supervision/staffing/
+  // equipment/technique/condition modifier + any attached order). Same fields the
+  // Routine Review card shows, so the caregiver's open routine reflects them too.
+  const detailChips = [
+    def?.supervision, def?.staffing, def?.equipment, def?.technique, def?.conditionModifier,
+    def?.orderRef ? `Order ${def.orderRef}` : null,
+  ].map((v) => (v == null ? "" : String(v).trim())).filter(Boolean);
+
   const locked = !chartable && !closed;
 
   return (
@@ -583,6 +591,14 @@ function OccurrenceRowView({
           {critical && <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-[var(--clinical-coral)]" aria-label="Critical" />}
           <span className={`font-medium ${closed ? "text-[var(--clinical-muted)] line-through" : "text-[var(--clinical-ink)]"}`}>{def?.name || "Care task"}</span>
         </div>
+        {def?.instructions && <p className="mt-0.5 text-[11px] text-[var(--clinical-muted)]">{def.instructions}</p>}
+        {detailChips.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {detailChips.map((c) => (
+              <span key={c} className="inline-flex items-center rounded-full border border-[var(--clinical-line-strong)] bg-[var(--clinical-surface-2)] px-2 py-0.5 text-[10px] font-semibold text-[var(--clinical-muted)]">{c}</span>
+            ))}
+          </div>
+        )}
       </td>
       <td className="px-2 py-2.5 text-[var(--clinical-ink-soft)]">{assist}</td>
       <td className="px-2 py-2.5">

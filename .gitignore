@@ -91,3 +91,11 @@ Care360_*.pdf
 
 # Local one-off migration/scratch SQL
 migrate_*.sql
+
+# Agent skills & workflow scratch
+.agents/skills/
+.github/workflows/
+
+# Tutorial recordings & screenshots
+SLMS-Care-Workflow-Tutorial.mp4
+shots/

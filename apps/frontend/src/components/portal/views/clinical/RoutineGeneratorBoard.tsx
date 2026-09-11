@@ -11,6 +11,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Clock, Loader2, Wand2, ShieldCheck, Undo2, Plus, FileDown } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { createRecord, updateRecord } from "@/lib/api";
@@ -79,6 +80,11 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
   const [showSuppressed, setShowSuppressed] = useState(false);
   const { toasts, toast, dismiss } = useToast();
   const { confirm, confirmDialog } = useConfirm();
+  const router = useRouter();
+  const pathname = usePathname();
+  // Role base segment (nurse / care_manager / superadmin) — all share the same
+  // `assessmenthub` tab, so a regenerate redirect works from any of them.
+  const roleBase = (pathname || "").split("/").filter(Boolean)[0] || "nurse";
 
   // Draft→Review→Approve definitions (sub-project #3). Fetch by resident only and
   // filter status client-side: the generic /api/db f_ filter is exact-equals, so
@@ -123,6 +129,20 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
     return lvl ? `LOC ${lvl}` : "";
   }, [latestAssessment]);
 
+  // Regenerate gate (only relevant once a routine is APPROVED). approvedAt /
+  // updatedAt are ISO-8601 UTC strings, so `>` is a chronological compare.
+  const lastApprovedAt = useMemo(() => approvedDefs.reduce((m, d) => { const t = s(d.approvedAt); return t > m ? t : m; }, ""), [approvedDefs]);
+  // Prereq 1 — an approved reassessment: a VALIDATED assessment newer than the last approval.
+  const hasReassessment = useMemo(() => !!lastApprovedAt && s(latestAssessment?.status) === "VALIDATED" && s(latestAssessment?.updatedAt) > lastApprovedAt, [latestAssessment, lastApprovedAt]);
+  // Prereq 2 — the care plan is built for the reassessed Final LOC. LOC unchanged
+  // ⇒ the existing plan already matches (regenerate proceeds); LOC changed ⇒ a plan
+  // for the new level must exist first. (Recency is intentionally NOT required: a
+  // same-level reassessment keeps the same plan.)
+  const carePlanReadyForLoc = useMemo(() => {
+    const reLoc = Number(finalLoc.match(/\d/)?.[0] || 0);
+    return reLoc > 0 && Number(drafts[resId]?.level || 0) === reLoc;
+  }, [finalLoc, drafts, resId]);
+
   // Per-domain care from that same assessment; in-progress builder edits (draft.domainPlan) win.
   const domainInputs = useMemo<RoutineDomainInput[]>(() => {
     if (!resId) return [];
@@ -164,6 +184,22 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
     if (!resId || generating) return;
     if (!finalLoc) { toast("error", "No Final LOC", "Complete and validate the resident's assessment first (Final LOC is required to generate a routine)."); return; }
     if (reviewDefs.length && !(await confirm({ title: "Regenerate draft?", description: "This replaces the current unapproved draft. Approved events are untouched.", confirmText: "Regenerate", destructive: true }))) return;
+    // Already approved (and no draft in review) — regenerating is gated on a fresh
+    // clinical basis: (1) an approved/validated reassessment and (2) an updated care
+    // plan, both newer than the last approval. Without a reassessment, offer to jump
+    // straight to the Assessment & LOC form (fresh reassessment for this resident).
+    if (!reviewDefs.length && approvedDefs.length) {
+      if (!hasReassessment) {
+        if (await confirm({ title: "Reassessment required", description: `${s(resident?.name) || "This resident"} has no approved reassessment since their routine was last approved. Complete and validate a new assessment, then update the care plan before regenerating.`, confirmText: "Go to Assessment & LOC", cancelText: "Cancel" }))
+          router.push(`/${roleBase}/assessmenthub?resident=${encodeURIComponent(resId)}&reason=locreview`);
+        return;
+      }
+      if (!carePlanReadyForLoc) {
+        toast("error", "Care plan not ready for the new level", `${s(resident?.name) || "This resident"}'s care plan isn't built for ${finalLoc || "the reassessed level"}. Update the care plan (Plan & Review) for the new level, then regenerate.`);
+        return;
+      }
+      if (!(await confirm({ title: "Regenerate approved routine?", description: "A new reassessment and updated care plan were detected. Regenerate the 24-hour routine from them? A new draft is created for review; the current routine stays live until you approve it — Care Tasks reseed from the newly-approved routine.", confirmText: "Regenerate", destructive: true }))) return;
+    }
     setGenerating(true);
     try {
       // v1: send Final LOC + the resident's validated domains (score-only). The
@@ -226,7 +262,7 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
         shiftOwner: hhmm ? ownerFromTime(hhmm) : null,
         criticality: "Routine", assistanceLevel: addForm.assistance,
         responsibleRole: addForm.assistedBy.replace(/ /g, "_"),
-        resultSchemaKey: "General Observation", exceptionSet: [], orderRequired: false,
+        resultSchemaKey: "General Observation", exceptionSet: [],
       });
       await defsQ.refetch?.();
       setShowAdd(false);
@@ -282,7 +318,7 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
               {!approvedOnly && (
                 <>
                   <ClinicalButton variant="secondary" size="sm" onClick={generateDraft} disabled={generating || defsQ.loading}>
-                    {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} Generate draft
+                    {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />} {approvedDefs.length > 0 && reviewDefs.length === 0 ? "Regenerate" : "Generate draft"}
                   </ClinicalButton>
                   {reviewDefs.length > 0 && <ClinicalButton variant="secondary" size="sm" onClick={openAddEvent}><Plus className="h-4 w-4" /> Add event</ClinicalButton>}
                   {reviewDefs.length > 0 && <ClinicalButton variant="ghost" size="sm" onClick={returnForRevision}><Undo2 className="h-4 w-4" /> Return</ClinicalButton>}
@@ -307,9 +343,9 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
               <DataState
                 loading={defsQ.loading && !defsQ.data.length}
                 empty={reviewDefs.length === 0}
-                emptyTitle={modelMissing ? "Routine tables not ready" : "No draft routine yet"}
-                emptyHint={modelMissing ? "The routine definition tables aren't set up yet. Once the database is migrated, generate a draft here." : "Generate a draft from the resident's approved Final LOC to review and approve their 24-hour routine."}
-                emptyAction={!modelMissing && <ClinicalButton variant="primary" size="sm" onClick={generateDraft} disabled={generating}><Wand2 className="h-4 w-4" /> Generate draft</ClinicalButton>}
+                emptyTitle={modelMissing ? "Routine tables not ready" : approvedDefs.length ? "Routine approved" : "No draft routine yet"}
+                emptyHint={modelMissing ? "The routine definition tables aren't set up yet. Once the database is migrated, generate a draft here." : approvedDefs.length ? "This resident's 24-hour routine is approved and live below. To regenerate, complete a validated reassessment (Assessment & LOC); if it changes the level, update the care plan for the new level first." : "Generate a draft from the resident's approved Final LOC to review and approve their 24-hour routine."}
+                emptyAction={!modelMissing && approvedDefs.length === 0 && <ClinicalButton variant="primary" size="sm" onClick={generateDraft} disabled={generating}><Wand2 className="h-4 w-4" /> Generate draft</ClinicalButton>}
               >
                 <div className="space-y-4">
                   {groupedDefs.map(([shift, defs]) => (

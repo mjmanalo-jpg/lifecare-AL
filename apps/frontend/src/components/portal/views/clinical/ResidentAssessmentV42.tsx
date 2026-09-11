@@ -7,7 +7,7 @@
 // the deterministic MLR-floor + modifier + override + L5-pathway engine drives
 // the suggested Level of Care (GAP-001: banding not yet calibrated).
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   Plus, X, Trash2, Pencil, CheckCircle2, Gauge, AlertTriangle,
@@ -16,7 +16,7 @@ import {
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { upsertRecord, updateRecord, createRecord } from "@/lib/api";
-import { recordLocSignoff } from "@/lib/lifecare/locSignoff";
+import { recordLocSignoff, LOC_SIGNOFF_KEY, parseLocSignoffs } from "@/lib/lifecare/locSignoff";
 import { levelMeta } from "@/lib/lifecare/levelModel";
 import { recordAudit } from "@/lib/auditClient";
 import { generateCarePlanFromV42 } from "@/lib/carePlanV42Gen";
@@ -254,6 +254,22 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   // Records owned by the *other* board — never shown here, but must survive every
   // write (persist rewrites the whole store, so we re-append these each time).
   const foreignRecords = useMemo(() => allStored.filter((a) => originOf(a) !== origin), [allStored, origin]);
+
+  // LOC-change approval state per assessment (from loc_signoffs) — badges each card
+  // so the clinician sees a reassessment is awaiting CM/Superadmin approval, or was
+  // approved. Newest-first store ⇒ the first match for an assessmentId is the latest.
+  const signoffByAssessment = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const sg of parseLocSignoffs(settingRows.find((r) => (r.key || r.id) === LOC_SIGNOFF_KEY)?.value))
+      if (sg.assessmentId && !m.has(sg.assessmentId)) m.set(sg.assessmentId, sg.status);
+    return m;
+  }, [settingRows]);
+  const locBadge = (assessmentId: string) => {
+    const st = signoffByAssessment.get(assessmentId);
+    if (st === "PENDING_FAMILY" || st === "FAMILY_APPROVED") return <StatusPill status="PENDING">Pending approval</StatusPill>;
+    if (st === "APPLIED") return <StatusPill status="COMPLETED">LOC approved</StatusPill>;
+    return null;
+  };
 
   // Referral source lives on the CRM lead (not the Admission), linked by
   // convertedAdmissionId. Read it from the same app-settings rows we already load.
@@ -701,37 +717,30 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
         Swal.fire({ title: "Level of Care not applied", text: ds.blockedReason, icon: "warning" });
       }
 
-      // FAMILY SIGN-OFF GATE — an applicable LOC change that actually MOVES the level
-      // for an existing resident changes the monthly care fee, so it is NOT applied
-      // now. Hold it for the family to sign off; a nurse/Care Manager then finalizes
-      // it (which applies careLevel + billing + the draft plan + the loc_history
-      // entry). Pre-admission (no resident) and no-change re-affirmations apply as
-      // before. Note: the assessment is already saved VALIDATED above.
+      // APPROVAL GATE — a validated reassessment of a resident who ALREADY has an
+      // approved level is held for CM/Superadmin approval; the active LOC does NOT
+      // change until approved. This covers a same-level reaffirmation too (all LOC
+      // needs approval). Approval applies careLevel + billing + the draft plan + the
+      // loc_history entry. No family sign-off; the nurse cannot approve. A first
+      // assessment (no prior level) and pre-admission apply directly below. The
+      // assessment is already saved VALIDATED above.
       const rid = draft.layer1.residentId ?? "";
       const newLevelNorm = normalizeLevel(draft.layer3.finalLevel);
-      const levelChanged = !!priorLevel && newLevelNorm !== priorLevel;
-      if (ds && ds.apply && rid && levelChanged) {
-        let sponsorId = "";
-        try {
-          const rr = await fetch(`/api/db/residents/${rid}`, { credentials: "include", cache: "no-store" });
-          const rj = rr.ok ? await rr.json() : null;
-          sponsorId = String((rj?.data as { sponsorId?: string } | undefined)?.sponsorId ?? "");
-        } catch { /* no sponsor resolved */ }
-        const sg = await recordLocSignoff({
-          residentId: rid, residentName: draft.layer1.residentName, sponsorId: sponsorId || undefined,
+      if (ds && ds.apply && rid && priorLevel) {
+        const sameLevel = newLevelNorm === priorLevel;
+        await recordLocSignoff({
+          residentId: rid, residentName: draft.layer1.residentName,
           oldLevel: priorLevel, newLevel: newLevelNorm,
           careLevelEnum: ds.careLevelEnum, numericLevel: ds.numericLevel,
-          postLocCharge: ds.postLocCharge, generatePlan: ds.generatePlan,
+          // Same-level reaffirmation → no new LOC charge; a real change bills on approval.
+          postLocCharge: sameLevel ? false : ds.postLocCharge, generatePlan: ds.generatePlan,
           assessmentId: draft.id, justification: draft.layer3.finalLevelJustification,
           submittedById: myId || undefined, submittedByName: me || undefined, role: roleLabel,
         });
-        if (sg && sponsorId) {
-          try { await createRecord("notifications", { userId: sponsorId, type: "SYSTEM_ALERT", title: "Level of care change needs your sign-off", message: `${draft.layer1.residentName || "Your relative"}'s care level is proposed to change to Level ${newLevelNorm.replace(/^L/, "")}. Please review and approve.`, relatedEntityId: sg.id, relatedEntityType: "loc_signoff", severity: "INFO" }); } catch { /* non-critical */ }
-        }
-        Swal.fire(sponsorId
-          ? { icon: "info", title: "Sent to family for sign-off", text: "This level-of-care change is held until the resident's family approves it. A nurse or Care Manager can then finalize and apply it." }
-          : { icon: "info", title: "Held for family sign-off", text: "No family sponsor is linked — a nurse or Care Manager can finalize this level-of-care change from the assessment board." });
-        return; // defer careLevel/billing/plan/loc-history to Finalize
+        Swal.fire({ icon: "info", title: "Held for approval", text: sameLevel
+          ? "This reassessment keeps the resident at their current level and is held for a Care Manager or Superadmin to approve from the Pending Approval board — the level stays unchanged until then."
+          : "This level-of-care change is held for a Care Manager or Superadmin to approve and apply from the Pending Approval board — the current level stays in effect until then." });
+        return; // defer careLevel/billing/plan/loc-history to Approve & apply
       }
 
       if (ds && ds.apply) {
@@ -894,7 +903,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
         skeletonRows={3}
       >
         {viewMode === "table" ? (
-          <AssessmentTable rows={filtered} onEdit={openEdit} onRemove={remove} onReport={openNarrativeReport} />
+          <AssessmentTable rows={filtered} onEdit={openEdit} onRemove={remove} onReport={openNarrativeReport} locBadge={locBadge} />
         ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map((a) => {
@@ -914,8 +923,9 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
                     <h3 className="truncate font-bold text-[var(--clinical-ink)]">{a.layer1?.residentName || "Unnamed resident"}</h3>
                     <p className="mt-0.5 text-xs text-[var(--clinical-muted)]">{a.layer1?.assessmentDate || (a.updatedAt || "").slice(0, 10)} · {a.modelVersion}</p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                     {a.status === "VALIDATED" ? <StatusPill status="APPROVED">Validated</StatusPill> : <StatusPill status={a.status} />}
+                    {locBadge(a.id)}
                     <div className="flex items-center gap-1">
                       {a.status === "VALIDATED" && <button onClick={() => openNarrativeReport(a)} aria-label="Generate narrative report" title="Generate narrative report (PDF)" className="rounded-md p-1 text-[var(--clinical-panel)] transition hover:bg-[var(--clinical-surface-2)]"><FileText className="h-3.5 w-3.5" /></button>}
                       <button onClick={() => openEdit(a)} aria-label="Edit assessment" title="Edit assessment" className="rounded-md p-1 text-[var(--clinical-ink-soft)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]"><Pencil className="h-3.5 w-3.5" /></button>
@@ -1343,11 +1353,12 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
 }
 
 // ── Table view — the same records as the card grid, in a dense sortable-feel table ──
-function AssessmentTable({ rows, onEdit, onRemove, onReport }: {
+function AssessmentTable({ rows, onEdit, onRemove, onReport, locBadge }: {
   rows: AssessmentV42[];
   onEdit: (a: AssessmentV42, layer?: 1 | 2 | 3) => void;
   onRemove: (a: AssessmentV42) => void;
   onReport: (a: AssessmentV42) => void;
+  locBadge: (assessmentId: string) => ReactNode;
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
@@ -1379,7 +1390,7 @@ function AssessmentTable({ rows, onEdit, onRemove, onReport }: {
                     </button>
                   </div>
                 </td>
-                <td className="px-4 py-3.5">{a.status === "VALIDATED" ? <StatusPill status="APPROVED">Validated</StatusPill> : <StatusPill status={a.status} />}</td>
+                <td className="px-4 py-3.5"><div className="flex flex-wrap items-center gap-1.5">{a.status === "VALIDATED" ? <StatusPill status="APPROVED">Validated</StatusPill> : <StatusPill status={a.status} />}{locBadge(a.id)}</div></td>
                 <td className="px-4 py-3.5">
                   {(a.status === "COMPLETED" || (res && res.capabilityGate) || a.layer3?.priorAssessmentId) ? (
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
