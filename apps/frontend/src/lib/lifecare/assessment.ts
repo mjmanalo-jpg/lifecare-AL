@@ -327,6 +327,36 @@ export function authoritativeAssessmentFor(all: AssessmentV42[], key: ResidentKe
   return mine[0];
 }
 
+/**
+ * One assessment per resident: each resident's CURRENT record, by the same ranking
+ * {@link authoritativeAssessmentFor} uses.
+ *
+ * The store is append-only — a reassessment leaves the superseded draft behind, and a
+ * pre-admission record captured before the Resident existed sits alongside the admitted
+ * one. Governance reads must start here, or a resident whose assessment is validated
+ * keeps reappearing on the board because of a draft nobody is working on any more.
+ *
+ * ponytail: O(n²) grouping — n is one community's assessments (tens). Swap in an
+ * identity map if that ever reaches thousands.
+ */
+export function authoritativeAssessments(all: AssessmentV42[]): AssessmentV42[] {
+  const groups: AssessmentV42[][] = [];
+  for (const a of all) {
+    // Identity is fuzzy (residentId, admission, or name), so compare against every
+    // member: a name-only pre-admission record and an id-bearing one must collapse.
+    const group = groups.find((members) => members.some((m) => assessmentMatchesResident(a, {
+      residentId: s(m.layer1?.residentId) || undefined,
+      admissionIds: [s(m.layer1?.convertedAdmissionId)].filter(Boolean),
+      residentName: m.layer1?.residentName,
+    })));
+    if (group) group.push(a);
+    else groups.push([a]);
+  }
+  return groups.map((members) => [...members].sort((a, b) =>
+    (STATUS_RANK[b.status] ?? 0) - (STATUS_RANK[a.status] ?? 0)
+    || s(b.updatedAt).localeCompare(s(a.updatedAt)))[0]);
+}
+
 export function newAssessment(id: string, createdBy: string | undefined, nowISO: string): AssessmentV42 {
   return {
     id,

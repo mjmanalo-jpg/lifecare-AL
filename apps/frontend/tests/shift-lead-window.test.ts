@@ -31,11 +31,13 @@ test("assigned residents resolve during the lead-in", () => {
 });
 
 test("currentShiftKey rolls forward into the incoming shift", () => {
-  assert.equal(currentShiftKey(at("13:30")), "AM");
-  assert.equal(currentShiftKey(at("13:50")), "PM");
-  assert.equal(currentShiftKey(at("21:50")), "NOC");
-  assert.equal(currentShiftKey(at("05:50")), "AM");
-  assert.equal(currentShiftKey(at("23:50")), "NOC"); // no midnight wrap into AM
+  // `at()` builds Manila instants, so the zone must be passed — without it the
+  // assertion silently re-reads the SERVER's clock and only held on a PH machine.
+  assert.equal(currentShiftKey(at("13:30"), TZ), "AM");
+  assert.equal(currentShiftKey(at("13:50"), TZ), "PM");
+  assert.equal(currentShiftKey(at("21:50"), TZ), "NOC");
+  assert.equal(currentShiftKey(at("05:50"), TZ), "AM");
+  assert.equal(currentShiftKey(at("23:50"), TZ), "NOC"); // no midnight wrap into AM
 });
 
 test("currentShiftKey buckets in the FACILITY zone, not the server's", () => {

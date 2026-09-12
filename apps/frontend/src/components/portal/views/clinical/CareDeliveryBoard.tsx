@@ -34,7 +34,9 @@ type ShiftKey = (typeof SHIFT_KEYS)[number];
 /** One row of the roll-up — the server fills both the plan-side and the actor-side counts. */
 interface Bucket {
   id: string; name: string;
-  scheduled: number; due: number; completed: number; missed: number;
+  /** Resident rows: nobody rostered today, which is why the row may read 0%. */
+  uncoveredToday?: boolean;
+  scheduled: number; due: number; dueNow: number; completed: number; missed: number;
   exceptions: number; escalations: number; reassess: boolean;
   onTime: number; timed: number; charted: number; last: string;
   shifts: Record<ShiftKey, number>;
@@ -187,8 +189,22 @@ export default function CareDeliveryBoard({ clinicianRole = "NURSE" }: { clinici
                               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold" style={{ backgroundColor: "var(--clinical-surface-2)", color: "var(--clinical-ink-soft)" }}>{initials(r.name)}</span>
                               <div>
                                 <span className="font-semibold text-[var(--clinical-ink)]">{r.name}</span>
+                                {groupBy === "resident" && r.uncoveredToday && (
+                                  // Why this resident sits at 0%: planned care with nobody
+                                  // rostered to deliver it. Shown, never filtered out —
+                                  // hiding the row would inflate the completion rate.
+                                  <span className="ml-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                                    style={{ backgroundColor: "color-mix(in srgb, var(--clinical-amber) 16%, transparent)", color: "var(--clinical-amber)" }}
+                                    title="No caregiver is rostered to this resident today — assign one in Caregiver Schedule">
+                                    No caregiver today
+                                  </span>
+                                )}
                                 {shiftFilter === "ALL" && (
+                                  // Labelled "Scheduled": this is the whole day's plan, not the
+                                  // work due so far. Unlabelled, "AM 14" next to a 6/6 ratio
+                                  // reads as a contradiction rather than two different figures.
                                   <p className="mt-0.5 text-[11px] tabular-nums text-[var(--clinical-muted)]">
+                                    {groupBy === "resident" ? "Scheduled · " : ""}
                                     {SHIFT_KEYS.filter((sk) => r.shifts[sk] > 0).map((sk) => `${sk} ${r.shifts[sk]}`).join(" · ") || "—"}
                                   </p>
                                 )}
@@ -199,6 +215,21 @@ export default function CareDeliveryBoard({ clinicianRole = "NURSE" }: { clinici
                             <span className="font-semibold" style={{ color: groupBy === "resident" ? `var(--clinical-${rateAccent(pct(done, of))})` : "var(--clinical-ink)" }}>{done}</span>
                             <span className="text-[var(--clinical-muted)]">/{of}</span>
                             <span className="ml-1.5 text-[11px] text-[var(--clinical-muted)]">{pct(done, of)}%</span>
+                            {groupBy === "resident" && r.dueNow > 0 && (
+                              // Care in its window right now. It is not a miss yet, so it is
+                              // absent from the ratio — but a 100% row with live work waiting
+                              // is exactly what a manager must not be reassured by.
+                              <p className="mt-0.5 text-[11px] font-semibold" style={{ color: "var(--clinical-amber)" }}>
+                                {r.dueNow} due now
+                              </p>
+                            )}
+                            {groupBy === "resident" && r.scheduled > r.due + r.dueNow && (
+                              // The gap between the plan and what is owed yet. Without it a
+                              // morning row looks like 21 tasks went missing.
+                              <p className="mt-0.5 text-[11px] font-normal text-[var(--clinical-muted)]">
+                                {r.scheduled - r.due - r.dueNow} not due yet
+                              </p>
+                            )}
                           </td>
                           <td className="px-3 py-3 text-right tabular-nums">
                             {groupBy === "resident" ? (

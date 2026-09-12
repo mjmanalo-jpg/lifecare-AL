@@ -21,18 +21,23 @@ export interface MetricInput {
 
 export function metric(input: MetricInput): DashboardMetric {
   const format = input.format ?? "PERCENT";
-  const ratio = input.denominator > 0 ? input.numerator / input.denominator : 0;
+  // Nothing owed yet is not a failure. A 0/0 ratio has no measurement behind it, so it
+  // stays out of the attention band and shows "—" — an unmeasured shift must never be
+  // reported as "none completed", which put red ACT NOW cards on an idle board.
+  const measured = input.denominator > 0;
+  const ratio = measured ? input.numerator / input.denominator : 0;
   const display = format === "COUNT"
     ? String(input.numerator)
     : format === "DURATION"
       ? (input.numerator > 0 ? `${Math.round(input.numerator)}m` : "—")
-      : (input.denominator > 0 ? `${Math.round(ratio * 100)}%` : "—");
+      : (measured ? `${Math.round(ratio * 100)}%` : "—");
   return {
     ...input,
     display,
     definitionVersion: input.definitionVersion ?? "1.0",
     threshold: input.threshold ?? (format === "PERCENT" ? "Good = complete; Watch = partial; Action = none completed" : "Informational count"),
     exclusions: input.exclusions ?? [],
-    state: input.state ?? (format === "PERCENT" ? (ratio >= 1 ? "GOOD" : ratio > 0 ? "WATCH" : "ACTION") : "GOOD"),
+    state: input.state
+      ?? (format === "PERCENT" && measured ? (ratio >= 1 ? "GOOD" : ratio > 0 ? "WATCH" : "ACTION") : "GOOD"),
   };
 }

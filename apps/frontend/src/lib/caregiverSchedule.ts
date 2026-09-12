@@ -85,13 +85,69 @@ export function newScheduleId(): string {
   return `cs_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Local Date range [start, end) a schedule's shift occupies. */
-export function shiftWindow(date: string, shift: ShiftKey): { start: Date; end: Date } {
-  const m = shiftMeta(shift);
+/** Milliseconds `timeZone` is ahead of UTC at the given instant (DST-aware). */
+function zoneOffsetMs(at: Date, timeZone: string): number {
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+    }).formatToParts(at);
+    const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+    const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute"), get("second"));
+    return Number.isFinite(asUtc) ? asUtc - at.getTime() : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * A facility wall-clock time (`YYYY-MM-DD` + hour) as the TRUE instant it happens.
+ *
+ * Without this, `new Date(y, m, d, 6)` means 06:00 *on the server*, which on a UTC
+ * host is 14:00 in Manila — so every comparison against a stored timestamp lands a
+ * whole shift away. Pass no `timeZone` to keep the old server-local behaviour.
+ */
+export function zonedInstant(date: string, hour: number, timeZone?: string): Date {
   const [y, mo, d] = date.split("-").map(Number);
-  const start = new Date(y, (mo || 1) - 1, d || 1, m.startH, 0, 0, 0);
-  const end = new Date(y, (mo || 1) - 1, (d || 1) + (m.nextDay ? 1 : 0), m.endH, 0, 0, 0);
-  return { start, end };
+  if (!timeZone) return new Date(y, (mo || 1) - 1, d || 1, hour, 0, 0, 0);
+  const naive = Date.UTC(y, (mo || 1) - 1, d || 1, hour, 0, 0, 0);
+  // Sample the offset at the guessed instant, then re-sample at the corrected one so
+  // a wall time sitting on a DST boundary still resolves to the right instant.
+  const first = naive - zoneOffsetMs(new Date(naive), timeZone);
+  return new Date(naive - zoneOffsetMs(new Date(first), timeZone));
+}
+
+/** Instant range [start, end) a schedule's shift occupies in the facility's zone. */
+export function shiftWindow(date: string, shift: ShiftKey, timeZone?: string): { start: Date; end: Date } {
+  const m = shiftMeta(shift);
+  return {
+    start: zonedInstant(date, m.startH, timeZone),
+    end: zonedInstant(addDays(date, m.nextDay ? 1 : 0), m.endH, timeZone),
+  };
+}
+
+/**
+ * The shift a moment belongs to, as the roster records it: which AM/PM/NOC key, the
+ * calendar date the shift STARTED on (a NOC shift read at 01:00 belongs to yesterday's
+ * roster row), and the true instant window. One resolver so the dashboard read model
+ * and its metric drill-downs cannot drift apart.
+ */
+export function resolveShift(at: Date = new Date(), timeZone?: string): {
+  key: ShiftKey; date: string; start: Date; end: Date;
+} {
+  const key = currentShiftKey(at, timeZone);
+  const day = localDateStr(at, timeZone);
+  const date = key === "NOC" && localMinutesOfDay(at, timeZone) < shiftMeta("NOC").endH * 60
+    ? addDays(day, -1)
+    : day;
+  return { key, date, ...shiftWindow(date, key, timeZone) };
+}
+
+/** Roster rows covering a resolved shift — the authority for "who is covered now". */
+export function schedulesForShift(
+  schedules: CaregiverSchedule[], shift: { date: string; key: ShiftKey },
+): CaregiverSchedule[] {
+  return schedules.filter((s) => s.date === shift.date && s.shift === shift.key);
 }
 
 /**
@@ -188,7 +244,7 @@ export function assigneeForResidentToday(
 ): { caregiverStaffId: string; caregiverName?: string } | null {
   const list = caregiversForResidentToday(schedules, residentId, at, timeZone);
   if (!list.length) return null;
-  const cur = currentShiftKey(at);
+  const cur = currentShiftKey(at, timeZone);
   const pick = list.find((c) => c.shift === cur) ?? list[0];
   return { caregiverStaffId: pick.caregiverStaffId, caregiverName: pick.caregiverName };
 }

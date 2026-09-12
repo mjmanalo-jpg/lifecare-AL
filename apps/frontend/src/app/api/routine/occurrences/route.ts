@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
 import { careDay } from "@/lib/lifecare/routineCompletions";
-import { eligibleForCareDay, materializeCareDay } from "@/lib/lifecare/routineDefinitions";
+import { materializeResidentDay } from "@/lib/lifecare/materializeRoutine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,50 +41,12 @@ export async function GET(request: NextRequest) {
   if (!resident) return NextResponse.json({ error: "Related resident not found" }, { status: 422 });
 
   try {
-    // 1) APPROVED defs eligible for this care day (Rule 14/19).
-    const approved = await prisma.routineEventDefinition.findMany({
-      where: { residentId, communityId, status: "APPROVED" },
-      select: {
-        id: true, version: true, residentId: true, communityId: true,
-        frequencyMethod: true, schedule: true, effectiveDate: true, stopDate: true, status: true,
-      },
-    });
-    const eligible = eligibleForCareDay(approved, careDateISO);
+    // Approved + eligible defs → concrete occurrences, idempotently. Shared with the
+    // scheduled community sweep so a resident's care day is identical whether it was
+    // created by someone opening this board or by the cron.
+    await materializeResidentDay(communityId, residentId, careDateISO);
 
-    // 2) Expand → concrete occurrence rows (deterministic HH:MM; version pinned).
-    const rows = materializeCareDay(
-      eligible.map((d) => ({
-        id: d.id,
-        version: d.version,
-        residentId: d.residentId,
-        communityId: d.communityId,
-        frequencyMethod: d.frequencyMethod,
-        schedule: d.schedule as never,
-      })),
-      careDateISO,
-    );
-
-    // 3) Idempotent insert — never overwrite an existing occurrence (skipDuplicates
-    //    on the unique occId; a completed row is preserved).
-    if (rows.length) {
-      const careDate = new Date(`${careDateISO}T00:00:00+08:00`);
-      await prisma.routineOccurrence.createMany({
-        data: rows.map((o) => ({
-          occId: o.occId,
-          definitionId: o.definitionId,
-          definitionVersion: o.definitionVersion,
-          residentId: o.residentId,
-          communityId: o.communityId,
-          careDate,
-          scheduledTime: o.scheduledTime,
-          workflowState: o.workflowState,
-          escalationState: o.escalationState,
-        })),
-        skipDuplicates: true,
-      });
-    }
-
-    // 4) Return the day's occurrences WITH their pinned definition (#4 caregiver
+    // Return the day's occurrences WITH their pinned definition (#4 caregiver
     //    card needs name/instructions/assistance/role/schema/criticality on-row).
     const careDate = new Date(`${careDateISO}T00:00:00+08:00`);
     const data = await prisma.routineOccurrence.findMany({

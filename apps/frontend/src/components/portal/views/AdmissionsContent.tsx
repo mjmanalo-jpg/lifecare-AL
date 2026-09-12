@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Swal from "@/lib/swal";
 import { composeName, nameParts } from "@/lib/names";
+import { ADMISSION_STEP_COUNT } from "@/lib/admissionSteps";
 import {
   UserPlus, Stethoscope, ClipboardList, ShieldCheck, BedDouble,
   Users, HeartPulse, Check, ChevronLeft, ChevronRight, X, Plus, Search,
@@ -32,7 +33,9 @@ const STEPS = [
   { n: 3, key: "care",         label: "Care Assess.",        icon: ClipboardList, required: true  },
   { n: 4, key: "room",         label: "Room & QR",           icon: BedDouble,     required: true  },
 ] as const;
-const STEP_COUNT = STEPS.length; // 4
+// Shared with the dashboard read models, which report "step N of M" progress — so
+// changing the wizard's length can never leave them reporting the old count.
+const STEP_COUNT = ADMISSION_STEP_COUNT;
 
 // ── v4.2 14-domain clinical assessment (Care Assess step) ─────────────────────
 // Stored migration-free as JSON inside the existing free-text `careAssessment`

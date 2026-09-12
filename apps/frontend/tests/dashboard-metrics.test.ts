@@ -23,3 +23,18 @@ test("zero denominator is explicit and never reports a false percentage", () => 
   assert.equal(value.display.includes("%"), false);
   assert.equal(value.denominator, 0);
 });
+
+test("nothing owed yet is not an alarm", () => {
+  // Early in a shift no care is owed and no event is charted, so the ratio is 0/0.
+  // Treating that as ACTION put three red "ACT NOW" cards on the board with a dash
+  // for a value — the care manager was being paged about the absence of measurement.
+  const value = metric({ ...base, numerator: 0, denominator: 0 });
+  assert.equal(value.state, "GOOD");
+  assert.equal(value.display, "—");
+});
+
+test("measured failure is still an alarm", () => {
+  const value = metric({ ...base, numerator: 0, denominator: 12 });
+  assert.equal(value.state, "ACTION");
+  assert.equal(value.display, "0%");
+});

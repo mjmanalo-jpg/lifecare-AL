@@ -11,6 +11,7 @@ import {
 } from "@/lib/lifecare/vocab";
 import { applyOccurrenceState, escalationStateFromStatus, type OccurrenceState } from "@/lib/lifecare/occurrenceLifecycle";
 import { isChartable, manilaMinutesNow, toMin } from "@/lib/lifecare/occurrenceStatus";
+import { assistedByLabel, canChartOccurrence } from "@/lib/lifecare/chartingAuthority";
 import { validateResult } from "@/lib/lifecare/resultSchema";
 import { clearEntityAlerts } from "@/lib/alertResolve";
 import { routineAlertKeys } from "@/lib/alertAccess";
@@ -87,6 +88,16 @@ export async function POST(request: NextRequest) {
   });
   if (!occ) return NextResponse.json({ error: "Occurrence not found" }, { status: 404 });
   const def = occ.definition;
+
+  // Care is charted by the role that DELIVERS it (definition.responsibleRole — the
+  // "Assisted By" column). A nurse charts nurse-owned (NOD) work such as medication and
+  // vitals; clinical oversight roles read the record and never sign for care they did
+  // not give. Enforced here, not just in the UI — hiding a button is not authorization.
+  if (!canChartOccurrence(ctx.role, def?.responsibleRole)) {
+    return NextResponse.json({
+      error: `This care is charted by ${assistedByLabel(def?.responsibleRole)}. Your role has read-only access to it.`,
+    }, { status: 403 });
+  }
 
   // Caregivers may only chart a chartable (Due/Overdue) occurrence — same gate the
   // UI enforces, re-checked server-side so a stale client can't chart ahead of time.

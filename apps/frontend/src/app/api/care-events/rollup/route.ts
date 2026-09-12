@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
 import { countsAsCompleted, type CareOutcome } from "@/lib/lifecare/vocab";
-import { isMissed, manilaMinutesNow, shiftOfTime, toMin, OCCURRENCE_GRACE_MIN } from "@/lib/lifecare/occurrenceStatus";
+import { deriveState, isMissed, manilaMinutesNow, shiftOfTime, toMin, OCCURRENCE_GRACE_MIN } from "@/lib/lifecare/occurrenceStatus";
+import { CAREGIVER_SCHEDULE_KEY, localDateStr, parseSchedules } from "@/lib/caregiverSchedule";
 import type { RoutineShift } from "@/lib/lifecare/carePlanRoutine";
 
 export const runtime = "nodejs";
@@ -26,6 +27,7 @@ export const dynamic = "force-dynamic";
 // ─────────────────────────────────────────────────────────────
 
 const READ_ROLES = new Set(["NURSE", "CARE_MANAGER", "SUPERADMIN", "FACILITY_ADMIN"]);
+const FACILITY_TZ = process.env.FACILITY_TZ || "Asia/Manila";
 const MANILA_OFFSET_MS = 8 * 3_600_000;
 const DAY_MS = 86_400_000;
 const SHIFTS: RoutineShift[] = ["AM", "PM", "NOC"];
@@ -50,8 +52,14 @@ const zeroShifts = (): ShiftCounts => ({ AM: 0, PM: 0, NOC: 0 });
 interface Bucket {
   id: string;
   name: string;
+  /** Resident buckets only: nobody is rostered to this resident today, so their
+   *  scheduled care has no one to deliver it. Explains a 0% row. */
+  uncoveredToday?: boolean;
   scheduled: number;
   due: number;
+  /** In its window RIGHT NOW and not charted. Not yet `due` (the grace has not run
+   *  out), so a 100% row can still have live work a manager should see. */
+  dueNow: number;
   completed: number;
   missed: number;
   exceptions: number;
@@ -65,7 +73,7 @@ interface Bucket {
 }
 
 const bucket = (id: string, name: string): Bucket => ({
-  id, name, scheduled: 0, due: 0, completed: 0, missed: 0, exceptions: 0,
+  id, name, scheduled: 0, due: 0, dueNow: 0, completed: 0, missed: 0, exceptions: 0,
   escalations: 0, reassess: false, onTime: 0, timed: 0, charted: 0, last: "", shifts: zeroShifts(),
 });
 
@@ -101,7 +109,7 @@ export async function GET(request: NextRequest) {
   const start = new Date(startMs);
   const nowMin = manilaMinutesNow(new Date(nowMs));
 
-  const [occurrences, events, residents] = await Promise.all([
+  const [occurrences, events, residents, rosterSetting] = await Promise.all([
     // `lte` today matters: the materialiser pre-creates future care days, and counting
     // them as scheduled-in-this-period would pad the denominator with work not yet owed.
     prisma.routineOccurrence.findMany({
@@ -123,7 +131,18 @@ export async function GET(request: NextRequest) {
       where: { communityId },
       select: { id: true, firstName: true, lastName: true },
     }),
+    // Today's roster, so a resident sitting at 0% can say WHY: scheduled care with
+    // nobody rostered to deliver it. The uncovered resident is never filtered out —
+    // dropping them would inflate completion by hiding the failure.
+    prisma.appSetting.findFirst({
+      where: { communityId, key: CAREGIVER_SCHEDULE_KEY },
+      select: { value: true },
+    }),
   ]);
+  const todayStr = localDateStr(new Date(nowMs), FACILITY_TZ);
+  const coveredToday = new Set(
+    parseSchedules(rosterSetting?.value).filter((s) => s.date === todayStr).flatMap((s) => s.residentIds),
+  );
 
   // Name lookups. Residents come from the roster; caregivers from the CareEvent actor
   // (RoutineOccurrence stores only completionUserId) — the two are written together by
@@ -163,10 +182,16 @@ export async function GET(request: NextRequest) {
     const label = o.careDeliveryOutcome || (gone ? "Not documented" : "Still open");
     outcomes.set(label, (outcomes.get(label) || 0) + 1);
 
+    // Live work: inside its window today and still open. It is deliberately NOT in
+    // `due` (the grace has not expired, so it is not a miss) — but a row reading 100%
+    // while care is actively waiting needs to say so.
+    const liveNow = dayCmp === 0 && o.workflowState !== "Closed" && deriveState(o, nowMin) === "Due";
+
     const r = take(byResident, o.residentId, residentName.get(o.residentId) || "Resident");
     r.scheduled += 1;
     r.shifts[shift] += 1;
     if (owed) r.due += 1;
+    if (liveNow) r.dueNow += 1;
     if (done) r.completed += 1;
     if (gone) r.missed += 1;
     if (o.completionAt) bumpLast(r, o.completionAt.toISOString());
@@ -231,7 +256,9 @@ export async function GET(request: NextRequest) {
     reassessResidents: reassessResidents.size,
     charted,
     outcomes: [...outcomes.entries()].map(([outcome, n]) => ({ outcome, n })).sort((a, b) => b.n - a.n),
-    byResident: [...byResident.values()].sort(rank),
+    byResident: [...byResident.values()]
+      .map((b) => ({ ...b, uncoveredToday: !coveredToday.has(b.id) }))
+      .sort(rank),
     byCaregiver: [...byCaregiver.values()].sort(rank),
   };
 

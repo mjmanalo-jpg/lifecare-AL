@@ -28,6 +28,7 @@ import { careDay } from "@/lib/lifecare/routineCompletions";
 import { parseSchedules, CAREGIVER_SCHEDULE_KEY, type ShiftKey as RosterShift } from "@/lib/caregiverSchedule";
 import { to12h } from "@/lib/lifecare/careTask";
 import { ASSISTANCE_DISPLAY, type Assistance } from "@/lib/lifecare/assistance";
+import { assistedByLabel, canChartOccurrence } from "@/lib/lifecare/chartingAuthority";
 import {
   deriveState, isChartable, manilaMinutesNow, manilaDay, type OccLike,
 } from "@/lib/lifecare/occurrenceStatus";
@@ -67,7 +68,6 @@ interface OccurrenceRow {
   definition?: DefinitionLite | null;
 }
 
-const NURSE_ROLES = new Set(["NURSE", "CARE_MANAGER", "FACILITY_ADMIN", "SUPERADMIN", "ORGANIZATION_ADMIN"]);
 
 /** scheduledTime "HH:MM" → shift group. Night 22:00-05:59, Morning 06:00-13:59, Afternoon 14:00-21:59. */
 type ShiftKey = "Night" | "Morning" | "Afternoon";
@@ -337,8 +337,12 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
 
   const openException = (row: OccurrenceRow) => { setExReason(EXCEPTION_REASONS[0].label); setExObservation(""); setExceptionFor(row); };
 
-  // Chartable guard (caregiver time-lock; nurses/CM ungated). Also warns on a row
-  // outside its schema's allowed window via isLate.
+  // TWO gates. Role: care is charted by the role that delivers it, so a nurse only
+  // charts nurse-owned (NOD) rows and the Care Manager charts nothing — oversight reads
+  // the record, it does not sign for care it did not give. Time: the caregiver's
+  // window-lock, unchanged.
+  const mayAct = (row: OccurrenceRow): boolean =>
+    canChartOccurrence(effectiveRole, row.definition?.responsibleRole);
   const canChart = (row: OccurrenceRow): boolean => {
     if (!isCaregiverView) return true;
     return isChartable({ scheduledTime: row.scheduledTime, workflowState: row.workflowState } as OccLike, nowMin);
@@ -488,7 +492,7 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
                               nowMin={nowMin}
                               busy={busy}
                               chartable={canChart(row)}
-                              showNurseControls={!isCaregiverView && NURSE_ROLES.has(effectiveRole)}
+                              mayAct={mayAct(row)}
                               onDone={doComplete}
                               onException={openException}
                             />
@@ -566,13 +570,14 @@ const EXCEPTION_REASONS: { label: string; outcome: string; care: "Not completed"
 
 // ── One occurrence row ───────────────────────────────────────────────────────
 function OccurrenceRowView({
-  row, nowMin, busy, chartable, showNurseControls, onDone, onException,
+  row, nowMin, busy, chartable, mayAct, onDone, onException,
 }: {
   row: OccurrenceRow;
   nowMin: number;
   busy: boolean;
   chartable: boolean;
-  showNurseControls: boolean;
+  /** Role is permitted to chart this row at all (separate from the time window). */
+  mayAct: boolean;
   onDone: (row: OccurrenceRow) => void;
   onException: (row: OccurrenceRow) => void;
 }) {
@@ -616,7 +621,7 @@ function OccurrenceRowView({
         <div className="flex items-center justify-end gap-1.5">
           {closed ? (
             <span className="text-[11px] font-semibold text-[var(--clinical-muted)]">Charted</span>
-          ) : (
+          ) : mayAct ? (
             <>
               <ClinicalButton size="sm" variant="primary" disabled={busy || locked} onClick={() => onDone(row)} aria-label={`Done — ${def?.name || "care"}`}>
                 <CheckCircle2 className="h-4 w-4" /> Done
@@ -625,8 +630,14 @@ function OccurrenceRowView({
                 <AlertTriangle className="h-4 w-4" /> Exception
               </ClinicalButton>
             </>
+          ) : (
+            // Read-only for this role. Naming the owner explains WHY there is no button
+            // — the row is waiting on CGs or NOD, not on the person reading it.
+            <span className="text-[11px] font-semibold text-[var(--clinical-muted)]"
+              title={`Charted by ${assistedByLabel(def?.responsibleRole)} — this view is read-only`}>
+              {assistedByLabel(def?.responsibleRole)}
+            </span>
           )}
-          {showNurseControls && !closed && <span className="sr-only">nurse controls available</span>}
         </div>
         {locked && <p className="mt-0.5 text-right text-[10px] text-[var(--clinical-muted)]">Opens near its time</p>}
       </td>

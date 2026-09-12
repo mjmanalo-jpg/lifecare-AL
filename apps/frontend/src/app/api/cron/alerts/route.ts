@@ -12,7 +12,8 @@ import {
   parseDomainLogs, careLogNotesToDomainLogs, baselineFor, evaluateDomainTriggers, discrepancyDayCount,
 } from "@/lib/lifecare/domainMonitoring";
 import { ASSESSMENT_DOMAINS } from "@/lib/lifecare/dataset";
-import { parseSchedules, CAREGIVER_SCHEDULE_KEY, activeCaregiverUserIdsForResident, assigneeForResidentShift, currentShiftKey } from "@/lib/caregiverSchedule";
+import { parseSchedules, CAREGIVER_SCHEDULE_KEY, activeCaregiverUserIdsForResident, assigneeForResidentShift, currentShiftKey, localDateStr } from "@/lib/caregiverSchedule";
+import { materializeCommunityDay } from "@/lib/lifecare/materializeRoutine";
 import { deriveState, manilaMinutesNow, manilaDay } from "@/lib/lifecare/occurrenceStatus";
 import { to12h } from "@/lib/lifecare/careTask";
 import { loadCommunityPushSubs, sendToSubscriptions, prunePushSubs } from "@/lib/push";
@@ -169,6 +170,18 @@ async function scanCommunity(communityId: string, organizationId: string | null)
       console.error(`alerts source '${label}' failed for community ${communityId}:`, e instanceof Error ? e.message : "unknown");
     }
   };
+
+  // 0a) Materialize today's care day for the whole community BEFORE anything reads
+  //     occurrences. Materialization used to happen only when a human opened a
+  //     resident's board, so routine-due alerts and every facility-wide completion
+  //     figure silently omitted residents nobody had viewed yet. Idempotent
+  //     (skipDuplicates on occId), so re-running each scan never disturbs charted care.
+  await runSource("materialize-routines", async () => {
+    const { residents, created } = await materializeCommunityDay(
+      communityId, localDateStr(new Date(nowTs), process.env.FACILITY_TZ || "Asia/Manila"),
+    );
+    if (created) console.warn(`[cron] materialized ${created} occurrence(s) across ${residents} resident(s) in ${communityId}`);
+  });
 
   // 0) Self-heal FIRST: clear alerts whose work is already done (task completed /
   //    occurrence closed). The write paths clear their own alert the moment they

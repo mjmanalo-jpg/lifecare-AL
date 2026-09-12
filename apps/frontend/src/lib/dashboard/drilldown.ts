@@ -1,16 +1,23 @@
 import { prisma } from "@/lib/prisma";
 import {
-  CAREGIVER_SCHEDULE_KEY, currentShiftKey, localDateStr, parseSchedules, shiftWindow,
+  CAREGIVER_SCHEDULE_KEY, parseSchedules, resolveShift, schedulesForShift,
 } from "@/lib/caregiverSchedule";
 import {
-  ASSESSMENTS_V42_KEY, assessmentValidationIssues, classifyAssessment, type AssessmentV42,
+  ASSESSMENTS_V42_KEY, assessmentMatchesResident, assessmentValidationIssues,
+  authoritativeAssessments, classifyAssessment, type AssessmentV42,
 } from "@/lib/lifecare/assessment";
 import type { TenantContext } from "@/lib/tenant";
+import { owedOccurrences } from "./delivery";
 import type { DashboardRole } from "./types";
 
+/** Each resident's CURRENT assessment — the append-only store keeps superseded drafts,
+ *  and a drill-down that counted them would not reconcile with its card. */
 const parseAssessments = (raw?: string | null): AssessmentV42[] => {
   if (!raw) return [];
-  try { const value = JSON.parse(raw); return Array.isArray(value) ? value : []; } catch { return []; }
+  try {
+    const value = JSON.parse(raw);
+    return Array.isArray(value) ? authoritativeAssessments(value) : [];
+  } catch { return []; }
 };
 
 type AssessmentSignalMeta = {
@@ -40,6 +47,9 @@ export interface DrilldownRecord {
   occurredAt?: string;
   href: string;
   inNumerator: boolean;
+  /** Who the record is about, so the list can roll up per resident instead of
+   *  presenting one flat wall of every task and occurrence in the window. */
+  residentLabel?: string;
 }
 
 export interface DashboardDrilldown {
@@ -72,14 +82,9 @@ export async function buildMetricDrilldown(
   if (!context.organizationId || !context.communityId) return null;
   const now = new Date();
   const timeZone = process.env.FACILITY_TZ || "Asia/Manila";
-  const shiftKey = currentShiftKey(now);
-  const today = localDateStr(now, timeZone);
-  let shiftDate = today;
-  if (shiftKey === "NOC" && now.getHours() < 6) {
-    const previous = new Date(now); previous.setDate(previous.getDate() - 1);
-    shiftDate = localDateStr(previous, timeZone);
-  }
-  const window = shiftWindow(shiftDate, shiftKey);
+  // Same facility-zone resolver the dashboard read model uses, so a drill-down always
+  // reconciles against the very shift the card counted.
+  const window = resolveShift(now, timeZone);
   const tenant = { organizationId: context.organizationId, communityId: context.communityId };
   const path = pathFor(role);
   const residentScope = role === "caregiver" ? (context.caregiverResidentIds ?? []) : undefined;
@@ -97,19 +102,56 @@ export async function buildMetricDrilldown(
       take: 1000, orderBy: { dueDate: "asc" },
       include: { resident: { select: { firstName: true, lastName: true } } },
     });
-    records = tasks.map((task) => ({
-      id: task.id, label: `${residentName(task.resident)} · ${task.title}`,
-      detail: `Due ${task.dueDate.toISOString()} · ${String(task.status).toLowerCase().replaceAll("_", " ")}`,
-      occurredAt: task.completedAt?.toISOString(), href: path === "caregiver" ? "/caregiver/todayscare" : sourceBoard(path, "caredelivery"),
-      inNumerator: task.status === "COMPLETED",
-    }));
+    // The card counts BOTH charting paths, so the drill-down must list both or it
+    // cannot reconcile with the number it was opened from.
+    const occurrences = await prisma.routineOccurrence.findMany({
+      where: {
+        communityId: context.communityId,
+        careDate: { gte: new Date(window.start.getTime() - 86400_000) },
+        ...(residentScope ? { residentId: { in: residentScope } } : {}),
+      },
+      take: 2000,
+      select: {
+        // occId is unique per definition+day+time. Keying on residentId+slot collided
+        // whenever a resident has two events at the same time (medication AND meal at
+        // 08:00), which React surfaces as a duplicate-key warning.
+        occId: true,
+        residentId: true, careDate: true, scheduledTime: true, workflowState: true,
+        careDeliveryOutcome: true, definition: { select: { name: true } },
+      },
+    });
+    const owed = owedOccurrences(occurrences, { from: window.start, to: window.end, now, timeZone });
+    const residentNames = new Map(
+      (await prisma.resident.findMany({
+        where: { ...tenant, id: { in: [...new Set(owed.map((row) => row.occurrence.residentId))] } },
+        select: { id: true, firstName: true, lastName: true },
+      })).map((resident) => [resident.id, residentName(resident)]),
+    );
+    records = [
+      ...tasks.map((task) => ({
+        id: task.id, label: task.title, residentLabel: residentName(task.resident),
+        detail: `Due ${task.dueDate.toISOString()} · ${String(task.status).toLowerCase().replaceAll("_", " ")}`,
+        occurredAt: task.completedAt?.toISOString(), href: path === "caregiver" ? "/caregiver/todayscare" : sourceBoard(path, "caredelivery"),
+        inNumerator: task.status === "COMPLETED",
+      })),
+      ...owed.map(({ occurrence, slot, delivered }) => ({
+        id: `occurrence:${occurrence.occId}`,
+        label: occurrence.definition?.name || "Routine care",
+        residentLabel: residentNames.get(occurrence.residentId) || "Resident",
+        detail: `Scheduled ${occurrence.scheduledTime} · ${occurrence.careDeliveryOutcome || "not charted"}`,
+        occurredAt: new Date(slot).toISOString(),
+        href: path === "caregiver" ? "/caregiver/todayscare" : sourceBoard(path, "caredelivery"),
+        inNumerator: delivered,
+      })),
+    ];
   } else if (metricKey === "variance_free_delivery") {
     const events = await prisma.careEvent.findMany({
       where: { ...tenant, occurredAt: { gte: window.start, lt: window.end }, ...(residentScope ? { residentId: { in: residentScope } } : {}) },
       take: 1000, orderBy: { occurredAt: "desc" },
     });
     records = events.map((event) => ({
-      id: event.id, label: `${event.residentName || "Resident"} · ${event.eventName || event.taskId || "Care event"}`,
+      id: event.id, label: event.eventName || event.taskId || "Care event",
+      residentLabel: event.residentName || "Resident",
       detail: event.outcome, occurredAt: event.occurredAt.toISOString(), href: sourceBoard(path, "caredelivery"),
       inNumerator: !event.isVariance && !event.isException,
     }));
@@ -118,7 +160,7 @@ export async function buildMetricDrilldown(
       prisma.resident.findMany({ where: { ...tenant, status: "ACTIVE" }, take: 1000, orderBy: { roomNumber: "asc" }, select: { id: true, firstName: true, lastName: true, roomNumber: true } }),
       prisma.appSetting.findFirst({ where: { ...tenant, key: CAREGIVER_SCHEDULE_KEY }, select: { value: true } }),
     ]);
-    const covered = new Set(parseSchedules(setting?.value).filter((item) => item.date === today && item.shift === shiftKey).flatMap((item) => item.residentIds));
+    const covered = new Set(schedulesForShift(parseSchedules(setting?.value), window).flatMap((item) => item.residentIds));
     records = residents.map((resident) => ({
       id: resident.id, label: residentName(resident), detail: resident.roomNumber ? `Room ${resident.roomNumber}` : undefined,
       href: sourceBoard(path, "caregiverschedule"), inNumerator: covered.has(resident.id),
@@ -173,9 +215,18 @@ export async function buildMetricDrilldown(
     const signals = buildSignals(parseAssessments(setting?.value));
     const board = path === "facility_admin" ? "/facility_admin/rounds" : sourceBoard(path, "prescreen");
     if (metricKey === "assessment_current") {
-      const validated = new Set(signals
-        .filter(({ assessment }) => assessment.status === "VALIDATED" && assessment.layer1?.residentId)
-        .map(({ assessment }) => assessment.layer1!.residentId as string));
+      // Same matcher the metric uses. A bare residentId equality missed every resident
+      // whose assessment was captured before admission (it links by name), so the card
+      // and this reconciliation both reported 1 of 8 when 7 were assessed.
+      const validatedAssessments = signals.filter(({ assessment }) => assessment.status === "VALIDATED");
+      const validated = new Set(
+        residents
+          .filter((resident) => validatedAssessments.some(({ assessment }) => assessmentMatchesResident(assessment, {
+            residentId: resident.id,
+            residentName: residentName(resident),
+          })))
+          .map((resident) => resident.id),
+      );
       records = residents.map((resident) => ({
         id: resident.id, label: residentName(resident),
         detail: [resident.roomNumber ? `Room ${resident.roomNumber}` : "", validated.has(resident.id) ? "Validated v4.2 assessment on file" : "No current validated assessment"].filter(Boolean).join(" · "),
@@ -228,7 +279,7 @@ export async function buildMetricDrilldown(
       ? tasks.filter((task) => !task.assignedTo?.user?.name)
       : tasks;
     records = rows.map((task) => ({
-      id: task.id, label: `${residentName(task.resident)} · ${task.title}`,
+      id: task.id, label: task.title, residentLabel: residentName(task.resident),
       detail: [`Owner ${task.assignedTo?.user?.name || "Unassigned"}`, `Due ${task.dueDate.toISOString()}`, String(task.status).toLowerCase().replaceAll("_", " ")].join(" · "),
       occurredAt: task.dueDate.toISOString(), href: sourceBoard(path, "caredelivery"),
       inNumerator: metricKey === "overdue_care_rate" ? task.dueDate < now : true,
@@ -238,7 +289,8 @@ export async function buildMetricDrilldown(
       where: { ...tenant, occurredAt: { gte: window.start, lt: window.end } }, take: 1000, orderBy: { occurredAt: "desc" },
     });
     records = events.map((event) => ({
-      id: event.id, label: `${event.residentName || "Resident"} · ${event.eventName || event.taskId || "Care event"}`,
+      id: event.id, label: event.eventName || event.taskId || "Care event",
+      residentLabel: event.residentName || "Resident",
       detail: event.exceptionDetail || event.observation || undefined, occurredAt: event.occurredAt.toISOString(),
       href: sourceBoard(path, "caredelivery"), inNumerator: Boolean(event.isVariance || event.isException),
     }));
@@ -291,7 +343,7 @@ export async function buildMetricDrilldown(
   } else if (metricKey === "shared_staffing_exceptions") {
     const setting = await prisma.appSetting.findFirst({ where: { ...tenant, key: CAREGIVER_SCHEDULE_KEY }, select: { value: true } });
     records = parseSchedules(setting?.value)
-      .filter((item) => item.date === today && item.shift === shiftKey && item.residentIds.length > 6)
+      .filter((item) => item.date === window.date && item.shift === window.key && item.residentIds.length > 6)
       .map((item) => ({
         id: item.id, label: `${item.caregiverName || "Caregiver"} · ${item.residentIds.length} residents`,
         detail: `${item.private ? "PCG / dedicated" : "Shared"} assignment exceeds the 1:6 reference`,

@@ -28,9 +28,13 @@ const LIVE_TABLES = [
   "CallBell", "TimeTracking", "AppSetting", "Resident",
 ] as const;
 
+type DrilldownRecord = {
+  id: string; label: string; detail?: string; occurredAt?: string; href: string;
+  inNumerator: boolean; residentLabel?: string;
+};
 type DrilldownData = {
   metricKey: string; asOf: string; numerator: number; denominator: number; truncated: boolean;
-  records: Array<{ id: string; label: string; detail?: string; occurredAt?: string; href: string; inNumerator: boolean }>;
+  records: DrilldownRecord[];
 };
 
 const DASHBOARD_WINDOW_OPTIONS: Record<DashboardWindowKey, { label: string; icon: typeof Timer; hint: string }> = {
@@ -69,8 +73,10 @@ const SECTION_ICONS: Record<string, typeof Activity> = {
   "family-preferences": UsersRound, "alerts-for-action": BellRing, "endorsement-notes": ClipboardCheck,
 };
 
-/** Sections a nurse triages by PERSON, so they roll up to one row per resident. */
-const PER_RESIDENT_SECTIONS = new Set(["clinical-triage"]);
+/** Sections triaged by PERSON, so they roll up to one row per resident. Care delivery
+ *  reliability is here because a resident's morning routine is a dozen overdue rows —
+ *  one line per resident is the decision, the tasks are the detail behind it. */
+const PER_RESIDENT_SECTIONS = new Set(["clinical-triage", "care-delivery-reliability"]);
 
 const PRIORITY_CLASS = {
   P1: "bg-[var(--clinical-coral)] text-white",
@@ -602,7 +608,9 @@ function SteadyMeasures({
                     className={`flex min-h-14 items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--clinical-panel)] ${selectedKey === metric.key ? "border-[var(--clinical-panel)] bg-[var(--clinical-surface-2)]" : "border-[var(--clinical-line)] bg-[var(--clinical-surface)] hover:border-[var(--clinical-line-strong)]"}`}>
                     <span className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--clinical-muted)]">{metric.label}</span>
                     <span className="flex shrink-0 items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                      {/* Grey, not green, when there is nothing to measure — "—" with a
+                          healthy dot would read as a pass the data never earned. */}
+                      <span className={`h-1.5 w-1.5 rounded-full ${metric.display === "—" ? "bg-[var(--clinical-muted)]" : "bg-emerald-500"}`} aria-hidden />
                       <span className="text-sm font-bold tabular-nums text-[var(--clinical-ink)]">{metric.display}</span>
                     </span>
                   </button>
@@ -667,19 +675,62 @@ function DrilldownModal({
           {data.records.length === 0 ? (
             <p className="rounded-xl border border-[var(--clinical-line)] p-6 text-center text-sm text-[var(--clinical-muted)]">No records are in this metric window.</p>
           ) : (
-            <div className="divide-y divide-[var(--clinical-line)] overflow-hidden rounded-xl border border-[var(--clinical-line)]">
-              {data.records.map((record) => (
-                <div key={record.id} className="flex items-start gap-3 bg-[var(--clinical-surface)] p-3">
+            <DrilldownRecords records={data.records} />
+          )}
+        </div>
+      ) : null}
+    </ClinicalModal>
+  );
+}
+
+/** Source records per resident: one row each, showing how much of that resident's owed
+ *  care landed in the numerator. A shift is dozens of occurrences across a handful of
+ *  residents, so the flat list buried the one resident whose care actually slipped.
+ *  Records with no resident (facility-wide) keep their own group rather than vanish. */
+function DrilldownRecords({ records }: { records: DrilldownRecord[] }) {
+  const groups = useMemo(() => {
+    const map = new Map<string, DrilldownRecord[]>();
+    for (const record of records) {
+      const key = record.residentLabel || "Facility-wide";
+      (map.get(key) ?? map.set(key, []).get(key)!).push(record);
+    }
+    // Weakest delivery first — that is the resident the manager is looking for.
+    return [...map.entries()]
+      .map(([label, items]) => ({ label, items, done: items.filter((item) => item.inNumerator).length }))
+      .sort((a, b) => (a.done / a.items.length) - (b.done / b.items.length) || b.items.length - a.items.length);
+  }, [records]);
+  const [open, setOpen] = useState<string | null>(groups.length === 1 ? groups[0].label : null);
+
+  return (
+    <div className="divide-y divide-[var(--clinical-line)] overflow-hidden rounded-xl border border-[var(--clinical-line)]">
+      {groups.map((group) => (
+        <div key={group.label}>
+          <button type="button" onClick={() => setOpen((current) => current === group.label ? null : group.label)}
+            aria-expanded={open === group.label}
+            className="flex w-full min-h-11 items-center gap-3 bg-[var(--clinical-surface)] px-3 py-3 text-left transition hover:bg-[var(--clinical-surface-2)]">
+            <span className={`rounded-md px-2 py-1 text-[10px] font-bold tabular-nums ${group.done === group.items.length ? "bg-emerald-100 text-emerald-800" : "bg-[var(--clinical-surface-2)] text-[var(--clinical-ink-soft)]"}`}>
+              {group.done}/{group.items.length}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--clinical-ink)]">{group.label}</span>
+            <ChevronDown className={`h-4 w-4 shrink-0 text-[var(--clinical-muted)] transition ${open === group.label ? "rotate-180" : ""}`} aria-hidden />
+          </button>
+          {open === group.label && (
+            <div className="divide-y divide-[var(--clinical-line)] border-t border-[var(--clinical-line)] bg-[var(--clinical-surface-2)]/40">
+              {group.items.map((record) => (
+                <div key={record.id} className="flex items-start gap-3 p-3">
                   <span className={`mt-0.5 rounded-md px-2 py-1 text-[10px] font-bold uppercase ${record.inNumerator ? "bg-emerald-100 text-emerald-800" : "bg-[var(--clinical-surface-2)] text-[var(--clinical-ink-soft)]"}`}>{record.inNumerator ? "Numerator" : "Denominator only"}</span>
-                  <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-[var(--clinical-ink)]">{record.label}</p>{record.detail && <p className="mt-1 text-xs text-[var(--clinical-muted)]">{record.detail}</p>}</div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-[var(--clinical-ink)]">{record.label}</p>
+                    {record.detail && <p className="mt-1 text-xs text-[var(--clinical-muted)]">{record.detail}</p>}
+                  </div>
                   <Link href={record.href} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-[var(--clinical-panel)]" aria-label={`Open ${record.label}`}><ArrowUpRight className="h-4 w-4" /></Link>
                 </div>
               ))}
             </div>
           )}
         </div>
-      ) : null}
-    </ClinicalModal>
+      ))}
+    </div>
   );
 }
 
