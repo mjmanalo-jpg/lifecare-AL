@@ -57,7 +57,9 @@ test("clinical role sidebars use the role-based dashboard language", () => {
   assert.ok(ROLES.NURSE.sidebarLinks.some(({ name, group }) => name === "Action Queue" && group === "Shift Command"));
   assert.ok(ROLES.NURSE.sidebarLinks.some(({ route, group }) => route === "/nurse/caredelivery" && group === "Residents & Care"));
   assert.ok(ROLES.CARE_MANAGER.sidebarLinks.some(({ route, group }) => route === "/care_manager/staffinghub" && group === "Staffing / Team Quality"));
-  assert.ok(ROLES.CARE_MANAGER.sidebarLinks.some(({ route, group }) => route === "/care_manager/privatecare" && group === "Open Decisions"));
+  // Dedicated Staffing / PCG sits with the rest of the staffing surface, not in
+  // "Open Decisions" — assigning a private caregiver is a staffing action.
+  assert.ok(ROLES.CARE_MANAGER.sidebarLinks.some(({ route, group }) => route === "/care_manager/privatecare" && group === "Staffing / Team Quality"));
   assert.ok(ROLES.CAREGIVER.sidebarLinks.some(({ name, group }) => name === "Task Cards" && group === "Care This Shift"));
   assert.ok(ROLES.CAREGIVER.sidebarLinks.some(({ route, group }) => route === "/caregiver/caregiverschedule" && group === "My Shift"));
 });
@@ -80,8 +82,10 @@ test("Daily Rounds is retired and Daily Care Logs is available across clinical u
   // reached via dashboard drill-down, not a standing sidebar link.
   // Caregiver is excluded too: Daily Log (and ADL / Weight / MAR) now open
   // in-place from each resident card on the Shift Dashboard, not the sidebar.
+  // Administrator is excluded since the Phase 1 nav simplification folded its flat
+  // carelogs link into the "Daily Care Documentation & Monitoring" hub (asserted
+  // separately below); the /superadmin/carelogs route still resolves.
   const careLogRoles: Role[] = [
-    "SUPERADMIN",
     "FACILITY_ADMIN",
     "PHYSICIAN",
     "NURSE",
@@ -103,4 +107,10 @@ test("Daily Rounds is retired and Daily Care Logs is available across clinical u
       `${role} is missing Daily Care Logs`,
     );
   }
+
+  // Administrator still reaches daily care documentation — via the hub that absorbed it.
+  assert.ok(
+    ROLES.SUPERADMIN.sidebarLinks.some(({ route }) => route === "/superadmin/tasks"),
+    "Administrator is missing the Daily Care Documentation & Monitoring hub",
+  );
 });

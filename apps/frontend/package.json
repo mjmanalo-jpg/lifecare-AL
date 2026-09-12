@@ -9,6 +9,7 @@
     "lint": "eslint",
     "db:setup": "prisma db push && prisma db seed",
     "db:studio": "prisma studio",
+    "test": "node --import ./tests/alias-hooks.mjs --test \"tests/*.test.ts\"",
     "test:saas": "node --test --test-isolation=none tests/saas-foundation.test.mjs"
   },
   "engines": {

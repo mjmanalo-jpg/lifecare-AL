@@ -23,12 +23,13 @@ export function activeLevel(opts: {
   locHistory: LocHistoryEntry[];
   admissionIds?: string[];
   residentName?: string;
-  /** Validated v4.2 assessments (any scope). When provided, the resident's
-   *  authoritative Final LOC is STRICT — a validated Final LOC (including a clinical
-   *  override / below-floor "-ovr") always wins over loc_history and the coarse
-   *  careLevel enum. A later LOC change is expected to come through a new validated
-   *  (re)assessment, which authoritativeAssessmentFor() then surfaces as the most
-   *  recent one. Omit it and behaviour is unchanged (loc_history → enum). */
+  /** Validated v4.2 assessments (any scope). A validated Final LOC (including a
+   *  clinical override / below-floor "-ovr") wins over loc_history and the coarse
+   *  careLevel enum — but only once it has been APPLIED, i.e. loc_history carries an
+   *  entry stamped with that assessment's id. A validated reassessment still awaiting
+   *  approval does NOT move the level, since the level drives the care plan and
+   *  billing. With no matching history at all, the validated assessment is trusted.
+   *  Omit this and behaviour is unchanged (loc_history → enum). */
   assessments?: AssessmentV42[];
 }): number {
   const history = historyForResident(opts.locHistory, opts.residentId, opts.admissionIds ?? [], opts.residentName ?? "");

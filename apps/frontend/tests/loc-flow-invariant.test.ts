@@ -98,7 +98,13 @@ test("MARINA: no loc_history + ASSISTED enum → validated L3 assessment wins ov
   assert.equal(n, 3);
 });
 
-test("MARIA: stale older PRE_ADMISSION L2 entry loses to the newer validated L1 assessment", () => {
+// A validated Final LOC governs only once it has been APPLIED — i.e. loc_history
+// carries an entry stamped with that assessment's id (written on direct apply, or on
+// CM/Superadmin approval). A validated reassessment still awaiting approval must NOT
+// move the resident's level, because the level drives the care plan and billing.
+// When there is no matching history at all, the validated assessment is trusted.
+
+test("MARIA: a validated L1 that is NOT yet applied leaves the approved loc_history level in force", () => {
   const n = activeLevel({
     residentId: "res-maria",
     careLevel: "INDEPENDENT",
@@ -106,12 +112,28 @@ test("MARIA: stale older PRE_ADMISSION L2 entry loses to the newer validated L1 
     residentName: "Maria Marquez",
     assessments: [asmt({ residentName: "Maria Marquez", finalLevel: "L1", updatedAt: "2026-09-01T00:00:00Z" })],
   });
+  assert.equal(n, 2); // approved L2 holds until the L1 assessment is applied
+});
+
+test("MARIA: once applied, the validated L1 supersedes the older PRE_ADMISSION L2 entry", () => {
+  const validated = asmt({ residentName: "Maria Marquez", finalLevel: "L1", updatedAt: "2026-09-01T00:00:00Z" });
+  const n = activeLevel({
+    residentId: "res-maria",
+    careLevel: "INDEPENDENT",
+    locHistory: [
+      entry({ id: "stale", residentId: undefined, residentName: "Maria Marquez", level: "L2", at: "2026-08-31T00:00:00Z" }),
+      // The apply/approve step stamps the assessment id onto the history entry.
+      entry({ id: "applied", residentId: undefined, residentName: "Maria Marquez", level: "L1", assessmentId: validated.id, at: "2026-09-01T00:00:00Z" }),
+    ],
+    residentName: "Maria Marquez",
+    assessments: [validated],
+  });
   assert.equal(n, 1);
 });
 
-test("STRICT: a validated Final LOC wins even when a NEWER loc_history entry disagrees", () => {
-  // The validated assessment is authoritative — a later LOC change must come through a
-  // new validated (re)assessment, not a raw loc_history write.
+test("an UNAPPLIED validated Final LOC does not override a newer approved loc_history entry", () => {
+  // The reverse of the old STRICT rule: a raw approved L4 stands until a new
+  // validated assessment is actually applied on top of it.
   const n = activeLevel({
     residentId: "res-1",
     careLevel: "ASSISTED",
@@ -119,18 +141,22 @@ test("STRICT: a validated Final LOC wins even when a NEWER loc_history entry dis
     residentName: "Elma Fabros",
     assessments: [asmt({ residentId: "res-1", residentName: "Elma Fabros", finalLevel: "L1", updatedAt: "2026-09-01T00:00:00Z" })],
   });
-  assert.equal(n, 1);
+  assert.equal(n, 4);
 });
 
-test("STRICT: a validated OVERRIDE Final LOC (below the engine floor) is honoured verbatim", () => {
-  // finalLevel carries the nurse-set override value (the "-ovr" case); it must not be
-  // second-guessed against loc_history or the enum.
+test("an APPLIED validated OVERRIDE Final LOC (below the engine floor) is honoured verbatim", () => {
+  // finalLevel carries the nurse-set override value (the "-ovr" case); once applied it
+  // must not be second-guessed against the older history entry or the enum.
+  const override = asmt({ residentId: "res-ovr", residentName: "Override Case", finalLevel: "L3", updatedAt: "2026-09-01T00:00:00Z" });
   const n = activeLevel({
     residentId: "res-ovr",
     careLevel: "INDEPENDENT", // enum would say L1
-    locHistory: [entry({ id: "old", residentId: "res-ovr", residentName: "Override Case", level: "L2", at: "2026-08-01T00:00:00Z" })],
+    locHistory: [
+      entry({ id: "old", residentId: "res-ovr", residentName: "Override Case", level: "L2", at: "2026-08-01T00:00:00Z" }),
+      entry({ id: "applied", residentId: "res-ovr", residentName: "Override Case", level: "L3", assessmentId: override.id, at: "2026-09-01T00:00:00Z" }),
+    ],
     residentName: "Override Case",
-    assessments: [asmt({ residentId: "res-ovr", residentName: "Override Case", finalLevel: "L3", updatedAt: "2026-09-01T00:00:00Z" })],
+    assessments: [override],
   });
   assert.equal(n, 3);
 });
