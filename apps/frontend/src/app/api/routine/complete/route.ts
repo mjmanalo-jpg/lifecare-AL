@@ -89,6 +89,38 @@ export async function POST(request: NextRequest) {
   if (!occ) return NextResponse.json({ error: "Occurrence not found" }, { status: 404 });
   const def = occ.definition;
 
+  // ── Offline replay safety ────────────────────────────────────────────────────
+  // The caregiver's client queues this POST when the facility has no signal and
+  // replays it on reconnect — and can resend an op whose response was lost. So:
+  //
+  //  1. Dedupe on the caller's `clientOpId`, stamped into the occurrence's existing
+  //     `results` JSON (no schema change). Without it a replay writes a SECOND
+  //     CareEvent, Escalation and nurse notification for one act of care. Note this
+  //     also fixes a plain double-tap online: Closed→Closed skips the terminal-state
+  //     guard in applyOccurrenceState, so a repeat POST used to sail through.
+  //  2. Trust the caller's `chartedAt` for WHEN care happened. Care given at 08:04
+  //     and synced at 14:00 must read 08:04 — stamping sync time falsifies the
+  //     clinical record.
+  const clientOpId = str(body.clientOpId);
+  const priorResults = (occ.results && typeof occ.results === "object" && !Array.isArray(occ.results))
+    ? (occ.results as Record<string, unknown>)
+    : undefined;
+  if (clientOpId && priorResults?.__clientOpId === clientOpId) {
+    return NextResponse.json({ ok: true, deduped: true, occurrence: occ });
+  }
+
+  // A client clock can be wrong or hostile: accept only a plausible past instant
+  // (small forward skew tolerated, no older than the queue could plausibly hold)
+  // and fall back to server time otherwise.
+  const chartedAt = (() => {
+    const raw = str(body.chartedAt);
+    if (!raw) return new Date();
+    const t = new Date(raw);
+    if (Number.isNaN(t.getTime())) return new Date();
+    const age = Date.now() - t.getTime();
+    return age >= -5 * 60_000 && age <= 7 * 86_400_000 ? t : new Date();
+  })();
+
   // Care is charted by the role that DELIVERS it (definition.responsibleRole — the
   // "Assisted By" column). A nurse charts nurse-owned (NOD) work such as medication and
   // vitals; clinical oversight roles read the record and never sign for care they did
@@ -101,7 +133,10 @@ export async function POST(request: NextRequest) {
 
   // Caregivers may only chart a chartable (Due/Overdue) occurrence — same gate the
   // UI enforces, re-checked server-side so a stale client can't chart ahead of time.
-  if (ctx.role === "CAREGIVER" && !isChartable({ scheduledTime: occ.scheduledTime, workflowState: occ.workflowState }, manilaMinutesNow())) {
+  // Judged at the moment care was GIVEN (chartedAt), not at sync time — otherwise a
+  // completion queued inside its window is rejected purely because the connection
+  // came back later, and the caregiver's work is thrown away.
+  if (ctx.role === "CAREGIVER" && !isChartable({ scheduledTime: occ.scheduledTime, workflowState: occ.workflowState }, manilaMinutesNow(chartedAt))) {
     return NextResponse.json({ error: "This occurrence is not open for charting yet." }, { status: 409 });
   }
 
@@ -122,7 +157,13 @@ export async function POST(request: NextRequest) {
   if (outcome !== "Not completed" && def.resultSchemaKey && results) {
     const v = validateResult(def.resultSchemaKey, results);
     if (!v.ok) {
-      return NextResponse.json({ error: "Result is incomplete.", missing: v.missing, invalid: v.invalid }, { status: 400 });
+      // `detail` duplicates missing/invalid as text: the client now posts through the
+      // offline outbox helper, which surfaces only `error`/`detail`.
+      return NextResponse.json({
+        error: "Result is incomplete.",
+        detail: [...(v.missing ?? []), ...(v.invalid ?? [])].join(", ") || undefined,
+        missing: v.missing, invalid: v.invalid,
+      }, { status: 400 });
     }
   }
 
@@ -173,7 +214,13 @@ export async function POST(request: NextRequest) {
   const notifyNurse = c.escalationAction !== "none" || reviewAlertRaised;
 
   // ── Persist the occurrence FIRST (the atomic close) ──────────────────────────
-  const now = new Date();
+  // `now` is the care time (chartedAt), which equals the request time online.
+  const now = chartedAt;
+  // Carry the idempotency key alongside any structured result so a replay of this
+  // exact op is recognised above and becomes a no-op.
+  const resultsToStore = clientOpId
+    ? { ...(priorResults ?? {}), ...(results ?? {}), __clientOpId: clientOpId }
+    : results;
   try {
     await prisma.routineOccurrence.update({
       where: { id: occ.id },
@@ -182,7 +229,7 @@ export async function POST(request: NextRequest) {
         careDeliveryOutcome: nextState.careDeliveryOutcome ?? null,
         exceptionReason: nextState.exceptionReason ?? null,
         clinicalFinding: nextState.clinicalFinding ? (nextState.clinicalFinding as Prisma.InputJsonValue) : undefined,
-        results: results ? (results as Prisma.InputJsonValue) : undefined,
+        results: resultsToStore ? (resultsToStore as Prisma.InputJsonValue) : undefined,
         actualTime: now,
         completionUserId: ctx.userId,
         completionAt: now,
@@ -257,6 +304,9 @@ export async function POST(request: NextRequest) {
         reviewAlertRaised,
         shift: str(body.shift) || def.shiftOwner || undefined,
         actorId: ctx.userId, actorName,
+        // Care time, not sync time — keeps the clinical timeline (and the 30-day
+        // variance lookback above) honest for work charted offline.
+        createdAt: now,
       },
       select: { id: true },
     });

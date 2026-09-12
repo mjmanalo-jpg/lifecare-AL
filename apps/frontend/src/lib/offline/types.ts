@@ -21,6 +21,11 @@ export interface OutboxOp {
   url: string;               // the target /api/db path
   recordId?: string;         // record id (PATCH/DELETE) or app-settings composite id
   body?: Rec;                // row-level create/update payload
+  // Custom-route writes (e.g. POST /api/routine/complete) send a command payload
+  // that is NOT the row shape, so `body` can't be merged into a cached rowset for
+  // the optimistic read. `optimistic` is the row patch to display while queued —
+  // without it a charted-offline row reverts to "Due" after a reload.
+  optimistic?: Rec;
   // app-settings whole-array writes carry both the whole value (optimistic read)
   // and the item-level diff (merge-on-sync so concurrent edits are not clobbered).
   settingKey?: string;

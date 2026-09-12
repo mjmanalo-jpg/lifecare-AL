@@ -14,6 +14,19 @@ export default function OfflineIndicator() {
 
   useEffect(() => { startOfflineSync(); }, []);
 
+  // Register the app-shell cache worker. Previously /sw.js was only registered
+  // by enablePush(), so users who declined notifications had no offline shell at
+  // all. register() is idempotent for the same script URL, so both paths coexist.
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const register = () => { void navigator.serviceWorker.register("/sw.js").catch(() => { /* non-fatal */ }); };
+    if (document.readyState === "complete") register();
+    else {
+      window.addEventListener("load", register, { once: true });
+      return () => window.removeEventListener("load", register);
+    }
+  }, []);
+
   // Flash a brief "Synced" confirmation when the outbox drains to zero. Driven by
   // the sync subscription (external system) — the allowed place to call setState.
   useEffect(() => {

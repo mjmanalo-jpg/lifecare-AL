@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { allOps, enqueueWrite, isOfflineModel, pendingCount, removeOp, putOp } from "./outbox.ts";
-import { applyItemOps } from "./merge.ts";
+import { applyItemOps, parseArray } from "./merge.ts";
 import type { HttpMethod, OutboxOp, Rec, SyncStatus } from "./types.ts";
 
 // ── status pub/sub ───────────────────────────────────────────────────────────
@@ -47,12 +47,22 @@ async function sendJson(method: HttpMethod, url: string, body?: Rec): Promise<Re
   });
 }
 
-function parseArray(raw: string | null | undefined): unknown[] {
-  if (!raw) return [];
-  try { const v = JSON.parse(raw); return Array.isArray(v) ? v : []; } catch { return []; }
+// ── replay one op ────────────────────────────────────────────────────────────
+
+/** A server rejection, carrying the status so drain() can tell 4xx from 5xx. */
+class ReplayError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
 }
 
-// ── replay one op ────────────────────────────────────────────────────────────
+/**
+ * A 4xx means the server understood and refused (validation, conflict, gone) —
+ * replaying it forever cannot help. Because drain() stops at the first failure to
+ * preserve ordering, keeping such an op would wedge the ENTIRE queue behind it and
+ * silently strand every clinical write made after it.
+ */
+const isPermanent = (err: unknown): boolean =>
+  err instanceof ReplayError && err.status >= 400 && err.status < 500;
+
 async function replayOp(op: OutboxOp): Promise<void> {
   if (op.model === "app-settings" && op.settingKey) {
     // Merge into the CURRENT server value so concurrent edits aren't clobbered.
@@ -63,12 +73,12 @@ async function replayOp(op: OutboxOp): Promise<void> {
       value = JSON.stringify(applyItemOps(parseArray(cur?.value as string | undefined), op.itemOps));
     }
     const r = await sendJson("POST", "/api/db/app-settings", { id: op.settingKey, key: op.settingKey, value });
-    if (!r.ok) throw new Error(`app-settings sync failed (${r.status})`);
+    if (!r.ok) throw new ReplayError(`app-settings sync failed (${r.status})`, r.status);
     return;
   }
   const r = await sendJson(op.method, op.url, op.body);
   // A 404 on DELETE/PATCH means the row is already gone server-side — treat as done.
-  if (!r.ok && !(op.method !== "POST" && r.status === 404)) throw new Error(`sync failed (${r.status})`);
+  if (!r.ok && !(op.method !== "POST" && r.status === 404)) throw new ReplayError(`sync failed (${r.status})`, r.status);
 }
 
 let draining = false;
@@ -87,9 +97,18 @@ export async function drain(): Promise<void> {
         await refreshPending();
       } catch (err) {
         if (isNetworkError(err)) break; // still offline — try again later
-        // A server-side (non-network) failure: record it, keep the op, stop.
-        await putOp({ ...op, tries: op.tries + 1, lastError: err instanceof Error ? err.message : "sync error" });
-        emit({ lastError: err instanceof Error ? err.message : "sync error" });
+        const message = err instanceof Error ? err.message : "sync error";
+        if (isPermanent(err)) {
+          // Unreplayable (rejected, conflicting, or already applied). Drop it and
+          // keep draining so one bad op can't strand the writes queued behind it.
+          await removeOp(op.opId);
+          await refreshPending();
+          emit({ lastError: message });
+          continue;
+        }
+        // Transient server-side failure (5xx): keep the op, stop to preserve order.
+        await putOp({ ...op, tries: op.tries + 1, lastError: message });
+        emit({ lastError: message });
         break;
       }
     }
@@ -108,14 +127,14 @@ export async function drain(): Promise<void> {
  * queued. Only clinical/high-value models are queued; other models throw as
  * before so nothing is silently swallowed.
  */
-export async function offlineWrite(model: string, method: HttpMethod, url: string, body?: Rec, recordId?: string): Promise<unknown> {
+export async function offlineWrite(model: string, method: HttpMethod, url: string, body?: Rec, recordId?: string, optimistic?: Rec): Promise<unknown> {
   const queue = async () => {
-    const op = await enqueueWrite({ model, method, url, recordId, body });
+    const op = await enqueueWrite({ model, method, url, recordId, body, optimistic });
     await refreshPending();
     void tryDrainSoon();
     // Optimistic result mirrors the /api/db POST shape ({ data: <record> }).
-    const optimistic = op.settingKey ? { id: op.settingKey, key: op.settingKey, value: op.wholeValue } : body;
-    return { data: optimistic, __queuedOffline: true };
+    const record = op.settingKey ? { id: op.settingKey, key: op.settingKey, value: op.wholeValue } : (optimistic ?? body);
+    return { data: record, __queuedOffline: true };
   };
 
   if (!isOfflineModel(model)) {

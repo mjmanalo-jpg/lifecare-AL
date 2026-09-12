@@ -4,7 +4,7 @@
 
 import { OUTBOX_STORE, idbGetAll, idbPut, idbDelete } from "./idb.ts";
 import { readAppSettingSnapshot } from "./cache.ts";
-import { diffArrayById, isDiffable } from "./merge.ts";
+import { diffArrayById, isDiffable, parseArray } from "./merge.ts";
 import type { HttpMethod, OutboxOp, Rec } from "./types.ts";
 
 /** Clinical / high-value models whose writes are queued offline (v1 scope). */
@@ -13,21 +13,24 @@ export const OFFLINE_MODELS = new Set<string>([
   "tasks",
   "care-events",
   "daily-rounds",
+  // Routine charting. The write is a command POST to /api/routine/complete rather
+  // than /api/db/routine-occurrences, so it carries an explicit recordId +
+  // optimistic patch; the server dedupes replays on clientOpId.
+  "routine-occurrences",
   "bowel-records", "urine-records", "edema-records", "concern-records",
   "pain-records", "mood-records", "round-sleep-records", "mobility-records",
   "meal-records", "vital-signs",
   "medication-administrations",
   "incidents", "escalations",
+  // Alerts raised BY an offline clinical write (care-package overage, out-of-package
+  // care). Without this they were created with .catch(() => null) and dropped
+  // silently, so the nurse/care manager never learned of an event charted offline.
+  "notifications",
 ]);
 
 export const isOfflineModel = (model: string): boolean => OFFLINE_MODELS.has(model);
 
 const uuid = () => (globalThis.crypto?.randomUUID?.() ?? `op-${Date.now()}-${Math.floor(Math.random() * 1e9)}`);
-
-function parseArray(raw: string | null | undefined): unknown[] {
-  if (!raw) return [];
-  try { const v = JSON.parse(raw); return Array.isArray(v) ? v : []; } catch { return []; }
-}
 
 /** All queued ops, oldest first (replay order). */
 export async function allOps(): Promise<OutboxOp[]> {
@@ -57,6 +60,7 @@ export async function enqueueWrite(input: {
   url: string;
   recordId?: string;
   body?: Rec;
+  optimistic?: Rec;
 }): Promise<OutboxOp> {
   const base: OutboxOp = {
     opId: uuid(),
@@ -65,6 +69,7 @@ export async function enqueueWrite(input: {
     url: input.url,
     recordId: input.recordId,
     body: input.body,
+    optimistic: input.optimistic,
     createdAt: Date.now(),
     tries: 0,
   };

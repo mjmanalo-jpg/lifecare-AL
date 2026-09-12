@@ -17,6 +17,7 @@ import {
   RefreshCw, CheckCircle2, AlertTriangle, ShieldAlert, User2,
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
+import { commandRecord } from "@/lib/api";
 import {
   ClinicalPage, ClinicalHeader, ClinicalCard, ClinicalButton, StatusPill,
   DataState, MicroLabel, SearchInput, ClinicalModal,
@@ -286,14 +287,30 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
     setOptimistic((prev) => new Map(prev).set(row.occId, optimisticPatch));
     setBusy(true);
     try {
-      const res = await fetch("/api/routine/complete", {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
-        body: JSON.stringify({ occId: row.occId, actorName: me || undefined, shift: shiftOf(row.scheduledTime), ...body }),
-      });
-      const json = await res.json().catch(() => ({} as Record<string, unknown>));
-      if (!res.ok) {
-        const detail = [(json as { missing?: string[] }).missing?.join(", "), (json as { invalid?: string[] }).invalid?.join(", ")].filter(Boolean).join(" · ");
-        throw new Error(`${(json as { error?: string }).error || "Could not chart."}${detail ? ` (${detail})` : ""}`);
+      // Routed through the offline outbox, not a bare fetch: in a dead zone the
+      // completion is queued and replayed on reconnect instead of being lost with
+      // "Could not chart". `clientOpId` makes that replay a server-side no-op, and
+      // `chartedAt` keeps the record at the time the care was actually given.
+      const json = await commandRecord(
+        "routine-occurrences",
+        "/api/routine/complete",
+        row.id,
+        {
+          occId: row.occId,
+          actorName: me || undefined,
+          shift: shiftOf(row.scheduledTime),
+          clientOpId: globalThis.crypto?.randomUUID?.() ?? `op-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          chartedAt: new Date().toISOString(),
+          ...body,
+        },
+        // Row patch shown while the write sits in the queue — survives a reload,
+        // unlike the in-memory `optimistic` map above.
+        { ...optimisticPatch },
+      ) as Record<string, unknown>;
+
+      if (json?.__queuedOffline) {
+        pushGlobalToast("info", "Saved on this device", "No connection — this charting syncs automatically when you're back online.");
+        return true;
       }
       const escalated = !!(json as { escalated?: boolean }).escalated;
       const reviewFlagged = !!(json as { reviewAlertRaised?: boolean }).reviewAlertRaised;

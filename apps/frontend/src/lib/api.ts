@@ -41,6 +41,19 @@ export const upsertRecord = async (model: string, id: string, body: unknown) => 
 export const deleteRecord = (model: string, id: string) =>
   offlineWrite(model, "DELETE", `/api/db/${model}/${id}`, undefined, id);
 
+/**
+ * Offline-aware POST to a CUSTOM route that acts on ONE existing record — e.g.
+ * `/api/routine/complete`, where the server owns governed side effects
+ * (CareEvent, Escalation, notifications, audit) that must not be reimplemented
+ * client-side. `recordId` + `optimistic` let the queued op patch the cached row
+ * so the charting survives a reload while offline.
+ *
+ * The route MUST be replay-safe: the outbox retries on reconnect and can resend
+ * an op whose response was lost. Pass an idempotency key in `body`.
+ */
+export const commandRecord = (model: string, url: string, recordId: string, body: Rec, optimistic: Rec): Promise<any> =>
+  offlineWrite(model, "POST", url, body, recordId, optimistic);
+
 // SLICE 1 — single-entry delta writes for the keyed JSON app-settings arrays
 // (care_log_notes, adl_logs, weight_logs, shift_endorsements). The server merges
 // the entry into the array by id under a row lock (see /api/db/[model] POST), so

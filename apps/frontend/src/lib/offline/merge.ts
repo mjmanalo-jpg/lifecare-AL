@@ -9,6 +9,12 @@ const idOf = (x: unknown): string => {
   return v == null ? "" : String(v);
 };
 
+/** Parse an app-settings `value` (JSON string) as an array; [] when unusable. */
+export function parseArray(raw: unknown): unknown[] {
+  if (typeof raw !== "string" || !raw) return [];
+  try { const v = JSON.parse(raw); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+
 /**
  * Diff two app-settings JSON arrays by item `id`, producing the item-level ops
  * needed to turn `prev` into `next`. Used at enqueue time to capture WHAT the
@@ -58,7 +64,13 @@ export function isDiffable(prev: unknown[], next: unknown[]): boolean {
 export function applyOutboxToRows(rows: Rec[], ops: OutboxOp[]): Rec[] {
   let out = rows.slice();
   for (const op of ops) {
-    if (op.method === "POST" && op.body) {
+    // A POST that names an existing record is a COMMAND against that row (a custom
+    // route such as /api/routine/complete), not a create. Merge its optimistic
+    // patch in — never prepend it, which would render a phantom duplicate row.
+    if (op.method === "POST" && op.recordId) {
+      const patch = op.optimistic ?? {};
+      out = out.map((r) => (idOf(r) === op.recordId ? { ...r, ...patch } : r));
+    } else if (op.method === "POST" && op.body) {
       const id = idOf(op.body);
       if (!id || !out.some((r) => idOf(r) === id)) out = [op.body, ...out];
       else out = out.map((r) => (idOf(r) === id ? { ...r, ...op.body } : r));
@@ -71,17 +83,49 @@ export function applyOutboxToRows(rows: Rec[], ops: OutboxOp[]): Rec[] {
   return out;
 }
 
+/** Fold one queued app-settings op into `out`, returning the updated rows. */
+function patchSettingRow(out: Rec[], key: string, nextValue: string): Rec[] {
+  const idx = out.findIndex((r) => (r.key ?? r.id) === key);
+  if (idx < 0) return [...out, { id: key, key, value: nextValue }];
+  const copy = out.slice();
+  copy[idx] = { ...copy[idx], value: nextValue };
+  return copy;
+}
+
 /**
- * Optimistic read for the app-settings model: patch each affected key row with
- * the queued whole value so a board re-reading app-settings sees its own save.
+ * Optimistic read for the app-settings model, covering BOTH write shapes:
+ *
+ *  - whole-array writes (upsertRecord("app-settings", …)) carry `settingKey` +
+ *    `wholeValue`, set at enqueue time;
+ *  - single-entry delta writes (upsertSettingEntry/deleteSettingEntry) post
+ *    `{ key, op, entry }` with no `value`, so enqueueWrite never populates
+ *    settingKey/wholeValue. Those must be replayed onto the cached array here or
+ *    the caregiver's own offline entry vanishes from the list until reconnect —
+ *    which reads as data loss and invites a duplicate re-entry.
  */
 export function applyOutboxToAppSettings(rows: Rec[], ops: OutboxOp[]): Rec[] {
   let out = rows.slice();
   for (const op of ops) {
-    if (op.model !== "app-settings" || !op.settingKey || op.wholeValue == null) continue;
-    const idx = out.findIndex((r) => (r.key ?? r.id) === op.settingKey);
-    if (idx >= 0) out[idx] = { ...out[idx], value: op.wholeValue };
-    else out = [...out, { id: op.settingKey, key: op.settingKey, value: op.wholeValue }];
+    if (op.model !== "app-settings") continue;
+
+    if (op.settingKey && op.wholeValue != null) {
+      out = patchSettingRow(out, op.settingKey, op.wholeValue);
+      continue;
+    }
+
+    const body = op.body;
+    const key = body?.key == null ? "" : String(body.key);
+    const kind = body?.op;
+    const entry = body?.entry as Rec | undefined;
+    const entryId = entry?.id == null ? "" : String(entry.id);
+    if (!key || !entryId || (kind !== "upsert" && kind !== "delete")) continue;
+
+    const current = out.find((r) => (r.key ?? r.id) === key);
+    const next = applyItemOps(
+      parseArray(current?.value),
+      [kind === "delete" ? { op: "delete", id: entryId } : { op: "upsert", id: entryId, item: entry }],
+    );
+    out = patchSettingRow(out, key, JSON.stringify(next));
   }
   return out;
 }
