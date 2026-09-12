@@ -25,6 +25,8 @@ const esc = (v: unknown) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&
 const BODY_IMG = "/physical-exam-body.png";
 const bodyImgUrl = () => (typeof window !== "undefined" ? window.location.origin : "") + BODY_IMG;
 const cell = "rounded border border-gray-300 px-2 py-1 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white disabled:bg-gray-50 disabled:text-gray-600";
+// What a ticked injury line stores (and prints on the paper form's fill-in line).
+const INJURY_MARK = "✓";
 
 // Open the exam on the LifeCare letterhead and trigger the browser print dialog.
 function printExam(exam: PhysicalExam, residentName: string, room?: string) {
@@ -123,12 +125,19 @@ export function PhysicalExamCard({ exam, residentName, room, editable, onChange,
   const setInjury = (t: InjuryType, v: string) => onChange?.({ ...exam, injuries: { ...injuries, [t]: v } });
   const submitted = exam.status === "SUBMITTED";
 
-  const injuryRow = (t: InjuryType, n: number) => (
-    <div key={t} className="flex items-center gap-2 py-1">
-      <input disabled={!editable} value={injuries[t] || ""} onChange={(e) => setInjury(t, e.target.value)} placeholder="—" className={`${cell} w-24 text-center`} title={`Mark / count for ${t}`} />
-      <span className="text-sm text-gray-800"><span className="tabular-nums text-gray-500">{n}.</span> {t}</span>
-    </div>
-  );
+  // Each injury line is a tick. Stored as the mark string the paper form / print
+  // expects, so older free-text entries still read as ticked (shown beside it).
+  const injuryRow = (t: InjuryType, n: number) => {
+    const v = (injuries[t] || "").trim();
+    return (
+      <label key={t} className={`flex items-center gap-2 py-1.5 text-sm text-gray-800 ${editable ? "cursor-pointer" : ""}`}>
+        <input type="checkbox" disabled={!editable} checked={v !== ""} onChange={(e) => setInjury(t, e.target.checked ? INJURY_MARK : "")}
+          className="h-4 w-4 shrink-0 rounded border-gray-300 accent-[#2E4A48] disabled:opacity-60" />
+        <span><span className="tabular-nums text-gray-500">{n}.</span> {t}</span>
+        {v && v !== INJURY_MARK && <span className="truncate text-xs text-gray-500">· {v}</span>}
+      </label>
+    );
+  };
 
   return (
     <div className="rounded-xl border bg-white p-5 sm:p-6" style={{ borderColor: "var(--clinical-line)" }}>

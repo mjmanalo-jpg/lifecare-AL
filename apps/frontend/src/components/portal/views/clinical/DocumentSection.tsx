@@ -11,8 +11,9 @@ import { createRecord, deleteRecord } from "@/lib/api";
 
 type Doc = Record<string, unknown>;
 const s = (v: unknown) => (v == null ? "" : String(v));
+const OTHER = "__other";
 
-export default function DocumentSection({ residentId, documentType, label, canEdit, docs, onChanged, uploadedByName }: {
+export default function DocumentSection({ residentId, documentType, label, canEdit, docs, onChanged, uploadedByName, presetTitles }: {
   residentId: string;
   documentType: string;
   label: string;
@@ -20,20 +21,28 @@ export default function DocumentSection({ residentId, documentType, label, canEd
   docs: Doc[];
   onChanged: () => void | Promise<void>;
   uploadedByName?: string;
+  /** Standard document names to pick from instead of typing a title (e.g. Move-In Checklist). */
+  presetTitles?: string[];
 }) {
   const mine = docs.filter((d) => s(d.documentType) === documentType);
   const [adding, setAdding] = useState(false);
-  const [title, setTitle] = useState("");
+  // The preset only seeds the title — it stays editable so staff can qualify it
+  // ("Move-In Checklist — QA Test 2").
+  const firstPreset = presetTitles?.length ? presetTitles[0] : "";
+  const [preset, setPreset] = useState(firstPreset || OTHER);
+  const [title, setTitle] = useState(firstPreset);
   const [link, setLink] = useState("");
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const chosenTitle = title.trim();
 
-  const reset = () => { setAdding(false); setTitle(""); setLink(""); if (fileRef.current) fileRef.current.value = ""; };
+  const pickPreset = (v: string) => { setPreset(v); setTitle(v === OTHER ? "" : v); };
+  const reset = () => { setAdding(false); setPreset(firstPreset || OTHER); setTitle(firstPreset); setLink(""); if (fileRef.current) fileRef.current.value = ""; };
 
   const saveDoc = async (fileUrl: string, fileName: string) => {
     await createRecord("resident-documents", {
       residentId, documentType,
-      title: title.trim() || fileName || "Document",
+      title: chosenTitle || fileName || "Document",
       fileUrl, fileName, uploadedByName: uploadedByName || undefined,
     });
     await onChanged();
@@ -59,7 +68,7 @@ export default function DocumentSection({ residentId, documentType, label, canEd
     const url = link.trim();
     if (!url) return;
     setBusy(true);
-    try { await saveDoc(url, title.trim() || url); } catch { /* keep open */ } finally { setBusy(false); }
+    try { await saveDoc(url, chosenTitle || url); } catch { /* keep open */ } finally { setBusy(false); }
   };
 
   const remove = async (id: string) => {
@@ -88,6 +97,12 @@ export default function DocumentSection({ residentId, documentType, label, canEd
       )}
       {adding && (
         <div className="mt-2 space-y-2 border-t border-gray-200 pt-2">
+          {presetTitles?.length ? (
+            <select value={preset} onChange={(e) => pickPreset(e.target.value)} className="w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm">
+              {presetTitles.map((t) => <option key={t} value={t}>{t}</option>)}
+              <option value={OTHER}>Other document…</option>
+            </select>
+          ) : null}
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Document title (optional)" className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm" />
           <div className="flex flex-wrap items-center gap-2">
             <input ref={fileRef} type="file" onChange={onUpload} disabled={busy} className="hidden" id={`doc-file-${documentType}`} />

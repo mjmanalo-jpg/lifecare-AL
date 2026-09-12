@@ -15,13 +15,12 @@
  */
 
 import { useMemo, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
 import {
   Search, ChevronRight, ChevronDown, ExternalLink, Printer,
   UserPlus, ClipboardList, Gauge, Layers, Pill, AlertTriangle, Bandage,
   Stethoscope, FolderOpen, FileText, Scale, HeartHandshake, StickyNote, ClipboardCheck,
   ListChecks, BellRing, ConciergeBell,
-  RefreshCw, ShieldCheck, ShieldAlert, CalendarClock,
+  RefreshCw, ShieldCheck, ShieldAlert, CalendarClock, CalendarDays,
   TrendingUp, TrendingDown, Minus, ArrowRight, GitCompareArrows, Paperclip, Activity,
   type LucideIcon,
 } from "lucide-react";
@@ -143,11 +142,6 @@ const parseArr = (raw: string | undefined): Row[] => { if (!raw) return []; try 
 const parseObj = (raw: string | undefined): Record<string, Row[]> => { if (!raw) return {}; try { const v = JSON.parse(raw); return v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch { return {}; } };
 
 export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly = false, residentId }: { clinicianRole?: ClinicianRole; readOnly?: boolean; residentId?: string }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  // Portal segment from the live URL (nurse / care_manager / …) — the Care Manager
-  // portal passes clinicianRole="FACILITY_ADMIN", so the URL is the reliable source.
-  const roleSeg = (pathname || "").split("/").filter(Boolean)[0] || clinicianRole.toLowerCase();
   const resQ = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const { data: settingRows } = useLiveQuery<{ key?: string; id?: string; value?: string }>("app-settings", { tables: ["AppSetting"] });
   const medQ = useLiveQuery<Row>("medications", { query: "take=2000", tables: ["Medication"] });
@@ -175,6 +169,10 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
   const [resId, setResId] = useState(residentId ?? "");
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState<JourneyCategory | "ALL">("ALL");
+  // Date range (yyyy-mm-dd, inclusive) for looking back at an earlier stretch of
+  // the journey. Empty = unbounded on that side.
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [view, setView] = useState<ResidentView>("journey");
 
   const resident = useMemo(() => residents.find((r) => r.id === resId) || null, [residents, resId]);
@@ -332,13 +330,21 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
     });
   }, [resident, assessmentsV42, settingRows, medQ.data, incQ.data, refQ.data, docQ.data, noteQ.data, ceQ.data, cpQ.data, taskQ.data, cbQ.data, svcQ.data]);
 
+  // Date range first, so the category chip counts reflect the window on screen.
+  const inRange = useMemo(() => {
+    if (!from && !to) return journey;
+    return journey.filter((e) => {
+      const d = (e.date || "").slice(0, 10);
+      return (!from || d >= from) && (!to || d <= to);
+    });
+  }, [journey, from, to]);
   // Counts per category (for the filter chips) + the filtered feed.
   const counts = useMemo(() => {
     const m = new Map<JourneyCategory, number>();
-    journey.forEach((e) => m.set(e.category, (m.get(e.category) || 0) + 1));
+    inRange.forEach((e) => m.set(e.category, (m.get(e.category) || 0) + 1));
     return m;
-  }, [journey]);
-  const events = useMemo(() => (cat === "ALL" ? journey : journey.filter((e) => e.category === cat)), [journey, cat]);
+  }, [inRange]);
+  const events = useMemo(() => (cat === "ALL" ? inRange : inRange.filter((e) => e.category === cat)), [inRange, cat]);
 
   const span = useMemo(() => {
     if (journey.length === 0) return "—";
@@ -355,14 +361,6 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
   const viewAssessmentReport = (assessmentId: string) => {
     const a = assessmentsV42.find((x) => s(x.id) === assessmentId);
     if (a) printNarrativeReport(a as AssessmentV42);
-  };
-
-  // Deep-link to a source board. The assessment board (careacuity) opens straight
-  // to this resident via ?resident=; other boards just switch tab.
-  const openTab = (tab?: string) => {
-    if (!tab || readOnly) return;
-    const q = tab === "careacuity" && resident ? `?resident=${encodeURIComponent(resident.id)}` : "";
-    router.push(`/${roleSeg}/${tab}${q}`);
   };
 
   // Group the filtered feed by calendar day for the timeline rails.
@@ -476,16 +474,30 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       ) : (
       <>
       {/* Category filter chips */}
-      <div className="mb-5 flex flex-wrap gap-2">
-        <FilterChip active={cat === "ALL"} label="All" count={journey.length} onClick={() => setCat("ALL")} />
+      <div className="mb-3 flex flex-wrap gap-2">
+        <FilterChip active={cat === "ALL"} label="All" count={inRange.length} onClick={() => setCat("ALL")} />
         {JOURNEY_CATEGORY_ORDER.filter((c) => counts.get(c)).map((c) => (
           <FilterChip key={c} active={cat === c} label={JOURNEY_CATEGORY_META[c].label} count={counts.get(c) || 0} accent={JOURNEY_CATEGORY_META[c].accent} onClick={() => setCat(c)} />
         ))}
       </div>
 
+      {/* Date range — look back at an earlier stretch of the journey */}
+      <div className="mb-5 flex flex-wrap items-center gap-2 text-sm">
+        <CalendarDays className="h-4 w-4 text-[var(--clinical-muted)]" />
+        {/* Picking a start date alone shows just that day; widen it by setting an end date. */}
+        <input type="date" value={from} onChange={(e) => { const v = e.target.value; setFrom(v); if (v && (!to || v > to)) setTo(v); }} aria-label="Journey from date"
+          className="rounded-lg border px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[var(--clinical-panel)]/30" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)", color: "var(--clinical-ink)" }} />
+        <span className="text-[var(--clinical-muted)]">→</span>
+        <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} aria-label="Journey to date"
+          className="rounded-lg border px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[var(--clinical-panel)]/30" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)", color: "var(--clinical-ink)" }} />
+        {(from || to)
+          ? <button onClick={() => { setFrom(""); setTo(""); }} className="text-[11px] font-semibold text-[var(--clinical-panel)] hover:underline">Clear dates</button>
+          : <span className="text-[11px] text-[var(--clinical-muted)]">Pick one date for a single day, or set an end date for a range.</span>}
+      </div>
+
       {events.length === 0 ? (
         <div className="rounded-2xl border p-10 text-center text-sm text-[var(--clinical-muted)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
-          {journey.length === 0 ? "No records compiled for this resident yet. As forms and records are added anywhere in the system, they appear here automatically." : "No entries in this category."}
+          {journey.length === 0 ? "No records compiled for this resident yet. As forms and records are added anywhere in the system, they appear here automatically." : (from || to) ? "No entries in this date range." : "No entries in this category."}
         </div>
       ) : (
         <div className="space-y-6">
@@ -519,7 +531,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
                           {e.href ? <a href={e.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--clinical-panel)] hover:underline">View document <ExternalLink className="h-3 w-3" /></a> : null}
                           {!readOnly && asmtId ? <button onClick={() => viewAssessmentReport(asmtId)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--clinical-panel)] hover:underline">View report <Printer className="h-3 w-3" /></button>
                             : !readOnly && admReport ? <button onClick={() => printAdmissionForm(admReport)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--clinical-panel)] hover:underline">View report <Printer className="h-3 w-3" /></button>
-                            : !readOnly && e.category !== "ASSESSMENT" && e.tab ? <button onClick={() => openTab(e.tab)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--clinical-panel)] hover:underline">Open in {m.label} <ChevronRight className="h-3 w-3" /></button> : null}
+                            : null}
                         </div>
                       </div>
                     </div>

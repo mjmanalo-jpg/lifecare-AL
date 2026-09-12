@@ -26,8 +26,8 @@ export interface PhysicalExam {
   residentId: string;
   residentName?: string;
   room?: string;
-  // Per injury type: the fill-in next to that line on the paper form (a mark,
-  // count, or affected area). Empty / absent = not present.
+  // Per injury type: the mark on that line of the paper form. The UI ticks a
+  // checkbox ("✓"); older records may hold free text. Empty / absent = not present.
   injuries: Partial<Record<InjuryType, string>>;
   bodyMarks?: BodyMark[];    // numbered pins placed on the body diagram
   bodyNotes?: string;        // free-text observations keyed to the body diagram
