@@ -1006,11 +1006,11 @@ p, blockquote, li {
    Maintenance / Family / Resident / admin portals get the same mobile
    guarantees without inheriting the clinical look.
 
-   NOTE: these deliberately avoid `:where()`. The clinical rules above can use
-   it because they are anchored by a class, but a *bare* top-level `:where(...)`
-   is dropped by the production CSS minifier (verified: present in the dev
-   stylesheet, absent from every built chunk), so it would silently ship as a
-   no-op. Plain selector lists survive the build. */
+   BUILD-CACHE WARNING: edits to this tail can appear to "not exist" in a built
+   stylesheet — the utilities generated from .tsx regenerate, but the
+   hand-written rules here come back stale. It is the CSS build cache, not the
+   minifier. Verify with a clean `rm -rf .next && next build`, and on Vercel use
+   a redeploy with the build cache disabled, or the change ships as a no-op. */
 @media (max-width: 640px) {
   /* Flex/grid children default to min-width:auto, which lets long content push
      a row wider than the screen instead of wrapping. */
