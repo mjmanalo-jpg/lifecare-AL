@@ -277,11 +277,12 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
       Swal.fire("Reason required", doseStatus === "REFUSED" ? "Please document why the resident refused this dose." : "Please document why this dose is being held.", "warning");
       return;
     }
-    // A late GIVEN dose is STAMPED Late for the audit trail but never blocked on a
-    // typed justification — nursing charts at its designated time, and the flag plus
-    // the scheduled/actual timestamps already carry the fact. Refused/Held still need
-    // a reason above: those are clinical decisions, not documentation timing.
     const late = doseStatus === "GIVEN" && timing?.phase === "LATE";
+    // A late GIVEN dose must be justified for the audit trail.
+    if (late && !doseReason.trim()) {
+      Swal.fire("Reason required", "This dose is outside its scheduled window. Please document why it is being given late.", "warning");
+      return;
+    }
     const status = doseStatus, reason = doseReason.trim();
     setDoseFor(null);
     await administer(m, slot, iso, marId, status, reason, late);
@@ -324,10 +325,11 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
               <span className="mt-1 block text-xs" style={{ color: "color-mix(in srgb, var(--clinical-coral) 80%, var(--clinical-ink))" }}>Scheduled {to12h(SLOT_TIME[doseFor.slot] || "")} · window opens <b>{msTo12h(doseT.openMs)}</b>. No outcome — Given, Refused or Held — can be recorded before then.</span>
             </div>
           )}
-          {/* Outcome + Reason side-by-side when a reason field shows (uses the wide
-              strip); compact single column for a plain on-time Given. On a late dose
-              the field is OPTIONAL — its label is what tells the nurse the dose is
-              outside its window, and the record is flagged Late either way. */}
+          {/* Outcome + Reason side-by-side when a reason is required (uses the wide
+              strip); compact single column for a plain on-time Given. The late-window
+              notice banner is gone — the required "Reason for late administration"
+              field below is what tells the nurse the dose is outside its window, and
+              the record is still flagged Late either way. */}
           <div className={(doseStatus === "REFUSED" || doseStatus === "HELD" || lateGiven) ? "grid gap-4 lg:grid-cols-2 lg:items-stretch" : "max-w-sm"}>
             <div className="flex flex-col">
               <FieldLabel>Outcome</FieldLabel>
@@ -349,12 +351,11 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
             </div>
             {(doseStatus === "REFUSED" || doseStatus === "HELD" || lateGiven) && (
               <div className="flex flex-col">
-                <FieldLabel required={!lateGiven}>{doseStatus === "REFUSED" ? "Reason for refusal" : doseStatus === "HELD" ? "Reason held" : "Late administration — note (optional)"}</FieldLabel>
+                <FieldLabel required>{doseStatus === "REFUSED" ? "Reason for refusal" : doseStatus === "HELD" ? "Reason held" : "Reason for late administration"}</FieldLabel>
                 {/* flex-1 inside the stretched grid row so the box ends level with the
                     three outcome cards instead of overshooting them. */}
-                {/* Focus only when the note is required — a late dose must stay one tap. */}
-                <textarea value={doseReason} onChange={(e) => setDoseReason(e.target.value)} rows={3} autoFocus={!lateGiven}
-                  placeholder={doseStatus === "REFUSED" ? "Why did the resident refuse this dose?" : doseStatus === "HELD" ? "Why is this dose being held?" : "Optional — the dose is recorded as Late either way. Add a note only if it matters clinically."} className={`${controlClass} min-h-0 flex-1 resize-none`} />
+                <textarea value={doseReason} onChange={(e) => setDoseReason(e.target.value)} rows={3} autoFocus
+                  placeholder={doseStatus === "REFUSED" ? "Why did the resident refuse this dose?" : doseStatus === "HELD" ? "Why is this dose being held?" : "Why is this dose being given outside its scheduled window?"} className={`${controlClass} min-h-0 flex-1 resize-none`} />
               </div>
             )}
           </div>

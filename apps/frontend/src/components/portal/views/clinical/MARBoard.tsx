@@ -89,11 +89,8 @@ export default function MARBoard() {
     const flags = classifyMedication(med?.name);
     const resName = resMap.get(mar.residentId)?.name || "this resident";
 
-    // Strict administration window (skips PRN). Before the window opens the dose is
-    // hard-blocked; after it closes it is given in ONE tap and the record is stamped
-    // Late automatically. The nurse is never asked to justify the delay — client rule:
-    // nursing charts at its designated time, and the Late flag + timestamps (which
-    // Med Safety reports off) already carry the fact for oversight.
+    // Strict administration window (skips PRN). Before the window opens the dose
+    // is hard-blocked; after it closes it's allowed but flagged Late with a reason.
     let lateNote: string | undefined;
     const schedMs = mar.scheduledTime ? new Date(mar.scheduledTime).getTime() : NaN;
     if (!isPrn(med?.frequency) && !Number.isNaN(schedMs)) {
@@ -107,7 +104,16 @@ export default function MARBoard() {
         return { ok: false };
       }
       if (w.phase === "LATE") {
-        lateNote = `Late administration — scheduled ${fmtWindowTime(schedMs)}, window closed ${fmtWindowTime(w.closeMs)}`;
+        const res = await Swal.fire({
+          title: "Outside scheduled window",
+          input: "text",
+          inputLabel: `The ${fmtWindowTime(schedMs)} window closed at ${fmtWindowTime(w.closeMs)}. Document why this dose is being given late.`,
+          inputPlaceholder: "Reason for late administration",
+          showCancelButton: true, confirmButtonColor: "#2E4A48", confirmButtonText: "Record late",
+          inputValidator: (v) => (!String(v || "").trim() ? "A reason is required" : undefined),
+        });
+        if (!res.isConfirmed) return { ok: false };
+        lateNote = `Late administration — ${String(res.value).trim()}`;
       }
     }
 
