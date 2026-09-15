@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
   // Judged at the moment care was GIVEN (chartedAt), not at sync time — otherwise a
   // completion queued inside its window is rejected purely because the connection
   // came back later, and the caregiver's work is thrown away.
-  if (ctx.role === "CAREGIVER" && !isChartable({ scheduledTime: occ.scheduledTime, workflowState: occ.workflowState }, manilaMinutesNow(chartedAt))) {
+  if (ctx.role === "CAREGIVER" && !isChartable({ scheduledTime: occ.scheduledTime, workflowState: occ.workflowState, responsibleRole: def?.responsibleRole }, manilaMinutesNow(chartedAt))) {
     return NextResponse.json({ error: "This occurrence is not open for charting yet." }, { status: 409 });
   }
 

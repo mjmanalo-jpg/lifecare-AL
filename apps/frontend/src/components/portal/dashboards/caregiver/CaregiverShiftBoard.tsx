@@ -93,7 +93,7 @@ function currentShift(nowMin: number): { label: string; inWindow: (hhmm: string)
 
 // The day a Night shift belongs to spills past midnight; occurrences are keyed to
 // the Manila care day, which already advances at 00:00, so today's careDay covers it.
-type ShiftOcc = { scheduledTime: string; workflowState?: string | null; careDeliveryOutcome?: string | null; escalationState?: string | null; assignedStaffId?: string | null; residentId?: string };
+type ShiftOcc = { scheduledTime: string; workflowState?: string | null; careDeliveryOutcome?: string | null; escalationState?: string | null; assignedStaffId?: string | null; residentId?: string; definition?: { responsibleRole?: string | null } | null };
 
 export default function CaregiverShiftBoard() {
   const [data, setData] = useState<DashboardPayload | null>(null);
@@ -112,7 +112,10 @@ export default function CaregiverShiftBoard() {
   // caregiver's ASSIGNED RESIDENTS (occurrences are resident-owned; the generic
   // read is already community/resident-scoped) AND the current shift window.
   const { data: occRows, refetch: refetchOccs } = useLiveQuery<ShiftOcc & { careDate?: unknown }>(
-    "routine-occurrences", { tables: ["RoutineOccurrence"], query: "take=500" },
+    // `include=definition` carries responsibleRole, which sets the charting window
+    // (nurse-owned +30 min vs the rest of the shift) — without it these tiles would
+    // call a medication row Due while the routine modal calls it Overdue.
+    "routine-occurrences", { tables: ["RoutineOccurrence"], query: "include=definition&take=500" },
   );
   const [, setShiftTick] = useState(() => Date.now());
   useEffect(() => { const t = setInterval(() => setShiftTick(Date.now()), 30_000); return () => clearInterval(t); }, []);
@@ -155,7 +158,7 @@ export default function CaregiverShiftBoard() {
     const p = countProgress(myShiftOccs, nowMin);
     let dueNow = 0, upcoming = 0;
     for (const o of myShiftOccs) {
-      const s = deriveState({ scheduledTime: o.scheduledTime, workflowState: o.workflowState }, nowMin);
+      const s = deriveState(o, nowMin);
       if (s === "Due") dueNow += 1; else if (s === "Upcoming") upcoming += 1;
     }
     return { dueNow, overdue: p.overdue, upcoming, completed: p.completed, total: p.total, pendingReview: p.pendingReview };
@@ -164,21 +167,22 @@ export default function CaregiverShiftBoard() {
   // exception (a live escalation), or a handover-flagged item.
   const alwaysShow = useMemo(() =>
     myShiftOccs.filter((o) => {
-      const s = deriveState({ scheduledTime: o.scheduledTime, workflowState: o.workflowState }, nowMin);
+      const s = deriveState(o, nowMin);
       return s === "Overdue" || (o.escalationState && o.escalationState !== "Not required");
     }).length,
   [myShiftOccs, nowMin]);
 
   // Real-time per-resident routine buckets (SLMS v4.2 #4): overdue / due-now derived
   // from THIS resident's RoutineOccurrence rows in the current shift window via the
-  // same deriveState (lead 5m / grace 30m) that drives the modal + shift tiles.
+  // same deriveState (lead 5m / chart through the shift, 30m for nurse-owned rows)
+  // that drives the modal + shift tiles.
   // Recomputes with nowMin (30s tick), so the card chips stay live instead of showing
   // the stale legacy-Task counts the dashboard payload carries.
   const occByResident = useMemo(() => {
     const m = new Map<string, { overdue: number; dueNext: number }>();
     for (const o of myShiftOccs) {
       if (o.residentId == null) continue;
-      const s = deriveState({ scheduledTime: o.scheduledTime, workflowState: o.workflowState }, nowMin);
+      const s = deriveState(o, nowMin);
       if (s !== "Overdue" && s !== "Due") continue;
       const rid = String(o.residentId);
       const e = m.get(rid) ?? { overdue: 0, dueNext: 0 };

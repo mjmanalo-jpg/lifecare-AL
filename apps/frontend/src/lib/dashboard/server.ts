@@ -591,7 +591,7 @@ export async function buildDashboard(
         ...(residentScope ? { residentId: { in: residentScope } } : {}),
       },
       take: 5000,
-      select: { residentId: true, careDate: true, scheduledTime: true, workflowState: true, careDeliveryOutcome: true, completionUserId: true, completionAt: true },
+      select: { residentId: true, careDate: true, scheduledTime: true, workflowState: true, careDeliveryOutcome: true, completionUserId: true, completionAt: true, definition: { select: { responsibleRole: true } } },
     }),
     // Routine coverage. Occurrences only materialise from APPROVED definitions, so a
     // resident on an active care plan with none has NO planned care in the routine
@@ -1556,7 +1556,7 @@ export async function buildDashboard(
       prisma.routineOccurrence.findMany({
         where: { communityId: tenant.communityId, careDate: { gte: new Date(periodStart.getTime() - 86400_000) } },
         take: OCCURRENCE_WINDOW_CAP,
-        select: { careDate: true, scheduledTime: true, workflowState: true, careDeliveryOutcome: true },
+        select: { careDate: true, scheduledTime: true, workflowState: true, careDeliveryOutcome: true, definition: { select: { responsibleRole: true } } },
       }),
       prisma.task.count({ where: { ...tenant, dueDate: { gte: periodStart, lt: now }, status: { not: TaskStatus.CANCELLED } } }),
       prisma.task.count({ where: { ...tenant, dueDate: { gte: periodStart, lt: now }, status: TaskStatus.COMPLETED } }),

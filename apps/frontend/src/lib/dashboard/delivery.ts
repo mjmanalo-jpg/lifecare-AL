@@ -14,6 +14,9 @@ export interface DeliveryOccurrence {
   scheduledTime: string;
   workflowState?: string | null;
   careDeliveryOutcome?: string | null;
+  /** Sets the charting window (isMissed): nurse-owned rows are +30 min, hands-on
+   *  care has the rest of its shift. Absent → treated as caregiver-delivered. */
+  definition?: { responsibleRole?: string | null } | null;
 }
 
 /**

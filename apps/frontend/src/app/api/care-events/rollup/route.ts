@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
 import { countsAsCompleted, type CareOutcome } from "@/lib/lifecare/vocab";
-import { deriveState, isMissed, manilaMinutesNow, shiftOfTime, toMin, OCCURRENCE_GRACE_MIN } from "@/lib/lifecare/occurrenceStatus";
+import { chartingDeadlineMin, deriveState, isMissed, manilaMinutesNow, shiftOfTime } from "@/lib/lifecare/occurrenceStatus";
 import { CAREGIVER_SCHEDULE_KEY, localDateStr, parseSchedules } from "@/lib/caregiverSchedule";
 import type { RoutineShift } from "@/lib/lifecare/carePlanRoutine";
 
@@ -117,6 +117,9 @@ export async function GET(request: NextRequest) {
       select: {
         residentId: true, careDate: true, scheduledTime: true, workflowState: true,
         careDeliveryOutcome: true, completionUserId: true, completionAt: true,
+        // Drives the charting window: nurse-owned rows are +30 min, hands-on care
+        // has the rest of its shift (chartingDeadlineMin).
+        definition: { select: { responsibleRole: true } },
       },
     }),
     prisma.careEvent.findMany({
@@ -203,9 +206,11 @@ export async function GET(request: NextRequest) {
       const c = take(byCaregiver, o.completionUserId, staffName.get(o.completionUserId) || "Caregiver");
       c.timed += 1;
       if (done) c.completed += 1;
-      // On time = closed inside the scheduled window + grace on that care day.
-      const dueMs = dayMs + toMin(o.scheduledTime) * 60_000 + OCCURRENCE_GRACE_MIN * 60_000;
-      if (o.completionAt.getTime() <= dueMs) c.onTime += 1;
+      // On time = closed inside the charting window on that care day (rest of the
+      // shift for hands-on care; +30 min for nurse-owned medication rows). Charting
+      // at the caregiver's designated charting time is on time, not late.
+      const dueMs = dayMs + (chartingDeadlineMin(o) + 1) * 60_000;
+      if (o.completionAt.getTime() < dueMs) c.onTime += 1;
       bumpLast(c, o.completionAt.toISOString());
     }
   }

@@ -2,17 +2,38 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { deriveState, isChartable, isLate, isMissed, countProgress, manilaDay, shiftOfTime, WINDOW_LEAD_MIN, OCCURRENCE_GRACE_MIN } from "../src/lib/lifecare/occurrenceStatus.ts";
+import { deriveState, isChartable, isLate, isMissed, countProgress, manilaDay, shiftOfTime, chartingDeadlineMin, WINDOW_LEAD_MIN, OCCURRENCE_GRACE_MIN } from "../src/lib/lifecare/occurrenceStatus.ts";
 
 const at = "08:00"; // 480 min
 const S = 480;
+const AM_END = 14 * 60;
+const nurse = { scheduledTime: at, responsibleRole: "Nurse" };
 
-test("deriveState: lead/grace boundaries around the scheduled time", () => {
+test("deriveState: a caregiver row stays Due for the REST OF ITS SHIFT", () => {
   assert.equal(deriveState({ scheduledTime: at }, S - WINDOW_LEAD_MIN - 1), "Upcoming");
   assert.equal(deriveState({ scheduledTime: at }, S - WINDOW_LEAD_MIN), "Due");     // opens at lead
   assert.equal(deriveState({ scheduledTime: at }, S), "Due");
-  assert.equal(deriveState({ scheduledTime: at }, S + OCCURRENCE_GRACE_MIN), "Due"); // last Due minute
-  assert.equal(deriveState({ scheduledTime: at }, S + OCCURRENCE_GRACE_MIN + 1), "Overdue");
+  assert.equal(deriveState({ scheduledTime: at }, S + OCCURRENCE_GRACE_MIN + 1), "Due", "30 min late is NOT overdue");
+  assert.equal(deriveState({ scheduledTime: at }, AM_END - 1), "Due", "last minute of the AM shift");
+  assert.equal(deriveState({ scheduledTime: at }, AM_END), "Overdue", "the shift ended uncharted");
+});
+
+test("deriveState: nurse-owned (medication/vitals) keeps the tight 30-min window", () => {
+  assert.equal(deriveState(nurse, S + OCCURRENCE_GRACE_MIN), "Due");
+  assert.equal(deriveState(nurse, S + OCCURRENCE_GRACE_MIN + 1), "Overdue");
+  // The role may arrive nested on the row's definition.
+  assert.equal(deriveState({ scheduledTime: at, definition: { responsibleRole: "Nurse" } }, S + 31), "Overdue");
+});
+
+// chartingDeadlineMin = the LAST minute that still counts as on time.
+test("chartingDeadlineMin: end of the owning shift, never less than the 30-min grace", () => {
+  assert.equal(chartingDeadlineMin({ scheduledTime: "08:00" }), AM_END - 1);      // AM → through 13:59
+  assert.equal(chartingDeadlineMin({ scheduledTime: "15:00" }), 22 * 60 - 1);     // PM → through 21:59
+  assert.equal(chartingDeadlineMin({ scheduledTime: "00:30" }), 6 * 60 - 1);      // NOC tail → through 05:59
+  assert.equal(chartingDeadlineMin({ scheduledTime: "23:00" }), 1439);            // NOC head → end of care day
+  assert.equal(chartingDeadlineMin({ scheduledTime: "13:50" }), 13 * 60 + 50 + OCCURRENCE_GRACE_MIN,
+    "a task scheduled minutes before the shift ends still gets the 30-min floor");
+  assert.equal(chartingDeadlineMin(nurse), S + OCCURRENCE_GRACE_MIN);
 });
 
 test("manilaDay: careDate stored as Manila midnight resolves to the correct PH care day (not the UTC prev day)", () => {
@@ -31,7 +52,9 @@ test("deriveState: persisted Closed/Cancelled always win", () => {
 test("isChartable / isLate", () => {
   assert.equal(isChartable({ scheduledTime: at }, S), true);
   assert.equal(isChartable({ scheduledTime: at }, S - 60), false); // too early
-  assert.equal(isLate({ scheduledTime: at }, S + OCCURRENCE_GRACE_MIN + 5), true);
+  assert.equal(isLate({ scheduledTime: at }, S + OCCURRENCE_GRACE_MIN + 5), false, "still inside the shift");
+  assert.equal(isLate({ scheduledTime: at }, AM_END), true, "charted after the shift ended");
+  assert.equal(isLate(nurse, S + OCCURRENCE_GRACE_MIN + 5), true, "medication is late 30 min past its time");
   assert.equal(isLate({ scheduledTime: at, workflowState: "Closed" }, 9999), false);
 });
 
@@ -46,10 +69,11 @@ test("isMissed: a past care day's open row is missed regardless of the clock", (
   assert.equal(isMissed({ ...open, workflowState: "Cancelled" }, 0, -1), false, "withdrawn from the plan");
 });
 
-test("isMissed: today only counts as missed past the grace window", () => {
+test("isMissed: today only counts as missed once the charting window has closed", () => {
   assert.equal(isMissed({ scheduledTime: at }, S, 0), false, "inside the window");
-  assert.equal(isMissed({ scheduledTime: at }, S + OCCURRENCE_GRACE_MIN, 0), false, "last grace minute");
-  assert.equal(isMissed({ scheduledTime: at }, S + OCCURRENCE_GRACE_MIN + 1, 0), true);
+  assert.equal(isMissed({ scheduledTime: at }, AM_END - 1, 0), false, "still the caregiver's shift");
+  assert.equal(isMissed({ scheduledTime: at }, AM_END, 0), true, "shift ended uncharted");
+  assert.equal(isMissed(nurse, S + OCCURRENCE_GRACE_MIN + 1, 0), true, "medication window is tight");
   assert.equal(isMissed({ scheduledTime: at }, S - 120, 0), false, "not yet due");
 });
 

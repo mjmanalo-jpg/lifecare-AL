@@ -824,8 +824,12 @@ async function scanCommunity(communityId: string, organizationId: string | null)
   // (meals, hydration, toileting, rounds, …). A frequency task is already
   // materialized as many occurrences (night rounds every 30 min = one per :00/:30),
   // so alerting per occurrence gives the client's per-frequency reminders for free.
-  // Reuses the SAME state machine as the caregiver board (deriveState): Due = −5…+30
-  // min, Overdue = past +30. CAREGIVERS ONLY (client rule): both due and overdue go
+  // Reuses the SAME state machine as the caregiver board (deriveState): Due from −5 min
+  // through the charting deadline (rest of the shift for hands-on care, +30 min for
+  // nurse-owned medication rows), Overdue after it. So the "not yet charted" nag fires
+  // when the caregiver's shift is actually running out — not 30 minutes after the
+  // bedside minute, which is still well inside their designated charting time.
+  // CAREGIVERS ONLY (client rule): both due and overdue go
   // solely to the caregiver on the LIVE shift for that resident — never nurse/CM. No
   // on-duty caregiver → no alert. Keyed by occId so each occurrence fires once;
   // already-charted (Closed/Cancelled) never alerts. Routing is shift-window scoped
@@ -848,7 +852,7 @@ async function scanCommunity(communityId: string, organizationId: string | null)
         careDate: { gte: new Date(nowTs - 24 * 3_600_000), lte: new Date(nowTs + 24 * 3_600_000) },
         workflowState: { notIn: ["Closed", "Cancelled"] },
       },
-      select: { occId: true, residentId: true, scheduledTime: true, careDate: true, workflowState: true, definition: { select: { name: true } } },
+      select: { occId: true, residentId: true, scheduledTime: true, careDate: true, workflowState: true, definition: { select: { name: true, responsibleRole: true } } },
       take: 3000,
     });
     if (!occs.length) return;
@@ -861,7 +865,7 @@ async function scanCommunity(communityId: string, organizationId: string | null)
     for (const o of occs) {
       const r = resById.get(o.residentId);
       if (!r || manilaDay(o.careDate) !== todayManila) continue; // other community / other care day
-      const state = deriveState({ scheduledTime: o.scheduledTime, workflowState: o.workflowState }, nowMin);
+      const state = deriveState({ scheduledTime: o.scheduledTime, workflowState: o.workflowState, responsibleRole: o.definition?.responsibleRole }, nowMin);
       if (state !== "Due" && state !== "Overdue") continue; // Upcoming: not yet
 
       const task = o.definition?.name || "care task";

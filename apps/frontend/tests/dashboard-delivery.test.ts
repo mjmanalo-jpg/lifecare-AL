@@ -28,10 +28,13 @@ test("an occurrence slot resolves in the facility zone", () => {
 
 test("care still inside its window is not owed yet", () => {
   assert.equal(owed([occ("13:00")]).length, 0, "a task later this shift is not a failure");
+  assert.equal(owed([occ("06:15")]).length, 0, "hands-on care has the whole shift to be charted");
 });
 
 test("care whose window has passed is owed and undelivered", () => {
-  const rows = owed([occ("06:15")]);
+  // Nurse-owned (medication / clinical monitoring) keeps the tight 30-min window, so
+  // an open 06:15 dose is already a miss at 10:00.
+  const rows = owed([occ("06:15", { definition: { responsibleRole: "Nurse" } })]);
   assert.equal(rows.length, 1);
   assert.equal(rows[0].delivered, false);
 });

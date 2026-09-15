@@ -117,7 +117,7 @@ export async function buildMetricDrilldown(
         // 08:00), which React surfaces as a duplicate-key warning.
         occId: true,
         residentId: true, careDate: true, scheduledTime: true, workflowState: true,
-        careDeliveryOutcome: true, definition: { select: { name: true } },
+        careDeliveryOutcome: true, definition: { select: { name: true, responsibleRole: true } },
       },
     });
     const owed = owedOccurrences(occurrences, { from: window.start, to: window.end, now, timeZone });

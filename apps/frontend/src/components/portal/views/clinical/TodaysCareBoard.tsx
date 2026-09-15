@@ -362,7 +362,7 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
     canChartOccurrence(effectiveRole, row.definition?.responsibleRole);
   const canChart = (row: OccurrenceRow): boolean => {
     if (!isCaregiverView) return true;
-    return isChartable({ scheduledTime: row.scheduledTime, workflowState: row.workflowState } as OccLike, nowMin);
+    return isChartable({ scheduledTime: row.scheduledTime, workflowState: row.workflowState, responsibleRole: row.definition?.responsibleRole } as OccLike, nowMin);
   };
 
   // ---- Render ----------------------------------------------------------------
@@ -598,7 +598,7 @@ function OccurrenceRowView({
   onDone: (row: OccurrenceRow) => void;
   onException: (row: OccurrenceRow) => void;
 }) {
-  const state = deriveState({ scheduledTime: row.scheduledTime, workflowState: row.workflowState } as OccLike, nowMin) as WorkflowState;
+  const state = deriveState({ scheduledTime: row.scheduledTime, workflowState: row.workflowState, responsibleRole: row.definition?.responsibleRole } as OccLike, nowMin) as WorkflowState;
   const closed = state === "Closed" || state === "Cancelled";
   const def = row.definition;
   const assist = def?.assistanceLevel && (ASSISTANCE_DISPLAY as Record<string, string>)[def.assistanceLevel]
