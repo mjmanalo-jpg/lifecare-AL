@@ -112,11 +112,14 @@ export function buildNarrativeHtml(a: AssessmentV42): string {
   let summary = `${esc(name)} is a ${age ? `${esc(age)}-year-old ` : ""}${esc(sexWord)}${histBits.length ? ` with ${histBits.join(" and ")}` : ""}.`;
   if (has(l1.diagnoses)) summary += ` ${p.female ? "Her" : p.male ? "His" : "Their"} medical history includes ${esc(val(l1.diagnoses))}.`;
   if (has(l1.medications)) summary += ` ${esc(p.subject.charAt(0).toUpperCase() + p.subject.slice(1))} ${V("is", "are")} currently taking prescribed medications, including ${esc(val(l1.medications))}, and continue${V("s", "")} to require routine monitoring to support ${esc(p.poss)} overall health and safety.`;
+  // Only speak to domains that were actually assessed — an unscored domain reads
+  // as 0 and would otherwise assert "remains continent" for a blank form.
+  const assessed = (code: string) => !!entryOf(a, code);
   const clin2Bits: string[] = [];
-  if (scoreOf(a, "AS-10") <= 1) clin2Bits.push("remains continent");
-  if (scoreOf(a, "AS-09") <= 1) clin2Bits.push("communicates appropriately");
-  if (scoreOf(a, "AS-04") <= 2) clin2Bits.push(`demonstrates ${scoreOf(a, "AS-04") <= 1 ? "no significant" : "only mild"} memory impairment`);
-  if (scoreOf(a, "AS-05") <= 1) clin2Bits.push("shows no significant behavioural concerns");
+  if (assessed("AS-10") && scoreOf(a, "AS-10") <= 1) clin2Bits.push("remains continent");
+  if (assessed("AS-09") && scoreOf(a, "AS-09") <= 1) clin2Bits.push("communicates appropriately");
+  if (assessed("AS-04") && scoreOf(a, "AS-04") <= 2) clin2Bits.push(`demonstrates ${scoreOf(a, "AS-04") <= 1 ? "no significant" : "only mild"} memory impairment`);
+  if (assessed("AS-05") && scoreOf(a, "AS-05") <= 1) clin2Bits.push("shows no significant behavioural concerns");
   const clinicalSummary = para(summary) + (clin2Bits.length ? para(`Although ${esc(p.subject)} ${V("requires", "require")} assistance with selected daily activities, ${esc(p.subject)} ${clin2Bits.join(", ")}.`) : "");
 
   // ── Functional assessment ───────────────────────────────────────────────────
@@ -250,6 +253,48 @@ export function buildNarrativeHtml(a: AssessmentV42): string {
   <div class="foot">Model ${esc(a.modelVersion || "v4.2")} · Generated ${esc(new Date().toLocaleString())} · Confidential — for authorized use only.</div>
   </td></tr></tbody><tfoot><tr><td><div class="vpad"></div></td></tr></tfoot></table>
 </body></html>`;
+}
+
+/** Resident-row shape the backfill reads (a Prisma Resident row, loosely typed). */
+export interface ReportResidentRow {
+  id?: string; firstName?: string; lastName?: string;
+  dateOfBirth?: string; gender?: string; diagnosis?: string; medicalHistory?: string; allergies?: string;
+}
+
+/**
+ * Backfill the Layer 1 clinical fields the narrative reads before printing.
+ * A reassessment raised from Care Acuity (pick-resident) starts with a blank
+ * Layer 1, so pull from the resident's richest prior assessment and their
+ * Resident record — otherwise the Clinical Summary collapses to
+ * "<name> is a resident." Every caller of printNarrativeReport goes through this.
+ */
+export function enrichForReport(a: AssessmentV42, assessments: AssessmentV42[] = [], residents: ReportResidentRow[] = []): AssessmentV42 {
+  const t = (v: unknown) => (v == null ? "" : String(v));
+  const cur = a.layer1 || ({} as AssessmentV42["layer1"]);
+  const rid = t(cur.residentId);
+  const nm = t(cur.residentName).trim().toLowerCase();
+  const rich = (x?: AssessmentV42) => !!x && !!(t(x.layer1?.diagnoses).trim() || t(x.layer1?.medications).trim() || t(x.layer1?.reasonForAdmission).trim() || t(x.layer1?.dateOfBirth).trim());
+  const sameResident = (x: AssessmentV42) => x.id !== a.id && ((!!rid && t(x.layer1?.residentId) === rid) || (!!nm && t(x.layer1?.residentName).trim().toLowerCase() === nm));
+  const src = [
+    assessments.find((x) => x.id === a.layer3?.priorAssessmentId),
+    ...assessments.filter(sameResident).sort((x, y) => t(y.updatedAt).localeCompare(t(x.updatedAt))),
+  ].filter((x): x is AssessmentV42 => !!x).find(rich)?.layer1;
+  const resident = residents.find((r) => (!!rid && t(r.id) === rid) || (!!nm && `${t(r.firstName)} ${t(r.lastName)}`.trim().toLowerCase() === nm));
+  const first = (...vals: Array<string | undefined>) => vals.map((v) => t(v).trim()).find(Boolean) || undefined;
+  return {
+    ...a,
+    layer1: {
+      ...cur,
+      dateOfBirth: first(cur.dateOfBirth, src?.dateOfBirth, resident?.dateOfBirth ? t(resident.dateOfBirth).slice(0, 10) : undefined),
+      sex: first(cur.sex, src?.sex, resident?.gender),
+      age: first(cur.age, src?.age),
+      diagnoses: first(cur.diagnoses, src?.diagnoses, resident?.diagnosis, resident?.medicalHistory),
+      medications: first(cur.medications, src?.medications),
+      allergies: first(cur.allergies, src?.allergies, resident?.allergies),
+      surgeries: first(cur.surgeries, src?.surgeries),
+      reasonForAdmission: first(cur.reasonForAdmission, src?.reasonForAdmission),
+    },
+  };
 }
 
 /** Open the report in a new window and trigger the browser's Print / Save-as-PDF dialog. */

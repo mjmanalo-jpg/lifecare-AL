@@ -13,11 +13,10 @@ import {
 } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { useFacilityConfig } from "@/lib/useFacilityConfig";
-import { ASSESSMENTS_V42_KEY, originOf, classifyAssessment, assessmentRawScore, newAssessment, type AssessmentV42, type DomainEntry } from "@/lib/lifecare/assessment";
+import { ASSESSMENTS_V42_KEY, originOf, classifyAssessment, assessmentRawScore, newAssessment, assessmentMatchesResident, type AssessmentV42, type DomainEntry, type ResidentKey } from "@/lib/lifecare/assessment";
 import type { CareLevel, DomainCode } from "@/lib/lifecare/types.ts";
 import { recordLocChange } from "@/lib/lifecare/locHistory";
 import DomainScoreGrid from "@/components/portal/views/clinical/DomainScoreGrid";
-import { CRM_LEADS_KEY, parseLeads, type Lead } from "@/lib/crmLeads";
 import { createRecord, updateRecord, upsertRecord, deleteRecord } from "@/lib/api";
 import { recordAudit } from "@/lib/auditClient";
 import MedicationsEditor from "@/components/portal/views/clinical/MedicationsEditor";
@@ -412,27 +411,33 @@ export default function AdmissionsContent() {
   const { data: residentRows } = useLiveQuery<Row>("residents", { tables: ["Resident"] });
   const { data: userRows } = useLiveQuery<Row>("users", { tables: ["User"] });
   const { data: settingRows } = useLiveQuery<Row>("app-settings", { tables: ["AppSetting"] });
-  // Completed pre-admission assessments available to prefill a new admission from.
-  // Names + admission-ids already taken by a LIVE (non-cancelled) admission.
-  // An onboarded resident can't be onboarded again, so they drop out of every
-  // prefill source below — only CRM leads and never-admitted assessments remain.
-  const onboarded = useMemo(() => {
-    const names = new Set<string>();
-    const ids = new Set<string>();
-    for (const a of admissionRows) {
-      if (s(a.status) === "CANCELLED") continue;
-      const nm = normName(`${s(a.firstName)} ${s(a.lastName)}`);
-      if (nm) names.add(nm);
-      if (s(a.id)) ids.add(s(a.id));
-    }
-    return { names, ids };
-  }, [admissionRows]);
+  // People already taken by a LIVE (non-cancelled) admission or an existing
+  // resident record. An onboarded resident can't be onboarded again, so they drop
+  // out of the prefill sources below — only never-admitted screenings remain.
+  // Matched with the shared `assessmentMatchesResident` key (linked residentId,
+  // linked admission, or name token-SET) — an exact full-name compare misses the
+  // real store, where a resident composed as "MARINA DACANAY DACANAY DROHMAN"
+  // must still resolve to the screening for "MARINA DACANAY DROHMAN". Residents
+  // count too: the admission row can be gone while the resident lives on.
+  const onboardedKeys = useMemo<ResidentKey[]>(() => [
+    ...admissionRows
+      .filter((a) => s(a.status) !== "CANCELLED")
+      .map((a) => ({ admissionIds: [s(a.id)], residentId: s(a.residentId), residentName: `${s(a.firstName)} ${s(a.lastName)}` })),
+    ...residentRows.map((r) => ({ residentId: s(r.id), residentName: `${s(r.firstName)} ${s(r.lastName)}` })),
+  ], [admissionRows, residentRows]);
+  // Is this prefill candidate already onboarded? Legacy pre-admissions are wrapped
+  // into the assessment shape so both sources share one rule.
+  const isOnboarded = useCallback(
+    (residentName: string, convertedAdmissionId?: string) =>
+      onboardedKeys.some((k) => assessmentMatchesResident({ layer1: { residentName, convertedAdmissionId } }, k)),
+    [onboardedKeys],
+  );
   const preadmits = useMemo(
     () => parseArr(settingRows.find((r) => (r.key ?? r.id) === PREADMIT_KEY)?.value)
       .filter((p) => String(p.residentName ?? "").trim())
-      .filter((p) => !onboarded.names.has(normName(s(p.residentName))))
+      .filter((p) => !isOnboarded(s(p.residentName)))
       .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))),
-    [settingRows, onboarded]
+    [settingRows, isOnboarded]
   );
   // v4.2 pre-admission assessments (the current instrument). Only PREADMISSION-origin
   // records that are completed/validated are offered as a prefill source.
@@ -441,23 +446,12 @@ export default function AdmissionsContent() {
       .filter((a) => originOf(a) === "PREADMISSION")
       .filter((a) => a.status === "COMPLETED" || a.status === "VALIDATED")
       .filter((a) => String(a.layer1?.residentName ?? "").trim())
-      // Exclude anyone already onboarded (live admission by name, or the linked
-      // admission this screening was converted into) — no re-onboarding.
-      .filter((a) => !onboarded.names.has(normName(s(a.layer1?.residentName)))
-        && !(s(a.layer1?.convertedAdmissionId) && onboarded.ids.has(s(a.layer1?.convertedAdmissionId))))
+      // Exclude anyone already onboarded (linked resident, linked admission, or
+      // name) — re-prefilling a screening would duplicate the resident's data.
+      .filter((a) => !onboardedKeys.some((k) => assessmentMatchesResident(a, k)))
       .sort((a, b) => String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? ""))),
-    [settingRows, onboarded]
+    [settingRows, onboardedKeys]
   );
-  // Open CRM leads (community-scoped) that don't yet have an admission — offered
-  // as a prefill source so an admission can be started straight from a lead.
-  const openLeads = useMemo<Lead[]>(
-    () => parseLeads(s(settingRows.find((r) => (r.key ?? r.id) === CRM_LEADS_KEY)?.value))
-      .filter((l) => !l.convertedAdmissionId && l.stage !== "LOST" && String(l.name ?? "").trim())
-      .filter((l) => !onboarded.names.has(normName(s(l.prospectiveResident || l.name))))
-      .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))),
-    [settingRows, onboarded]
-  );
-
   // Nurse/CM-validated Final LOC for an admission → legacy careLevel enum. Read
   // from the admission's own v4.2 record (or the linked screening), so the edit
   // view reflects the assessment's decision (incl. overrides) instead of a stale
@@ -646,32 +640,7 @@ export default function AdmissionsContent() {
     Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Prefilled from pre-admission", showConfirmButton: false, timer: 1600 });
   };
 
-  // Start an admission straight from a CRM lead — pulls the prospective
-  // resident's name and the lead's contact/sponsor details.
-  const prefillFromLead = async (id: string) => {
-    const l = openLeads.find((x) => x.id === id);
-    if (!l) return;
-    const who = String(l.prospectiveResident || l.name).trim();
-    const c = await Swal.fire({
-      title: "Prefill from CRM lead?",
-      text: `Populate this admission with ${who || "the lead"}'s details? Matching fields already entered will be overwritten.`,
-      icon: "question", showCancelButton: true, confirmButtonColor: "#4f46e5", confirmButtonText: "Prefill",
-    });
-    if (!c.isConfirmed) return;
-    const [first, ...rest] = who.split(/\s+/);
-    set({
-      firstName: first || l.name || form.firstName,
-      lastName: rest.join(" ") || form.lastName,
-      phone: s(l.contact) || form.phone,
-      email: s(l.email) || form.email,
-      sponsorName: l.name || form.sponsorName,
-      sponsorEmail: s(l.email) || form.sponsorEmail,
-    });
-    Swal.fire({ toast: true, position: "top-end", icon: "success", title: "Prefilled from lead", showConfirmButton: false, timer: 1600 });
-  };
-
   const prefillFromPreadmission = async (paId: string) => {
-    if (paId.startsWith("lead:")) { await prefillFromLead(paId.slice(5)); return; }
     if (paId.startsWith("v42:")) { await prefillFromV42(paId.slice(4)); return; }
     const pa = preadmits.find((p) => s(p.id) === paId);
     if (!pa) return;
@@ -1469,21 +1438,19 @@ export default function AdmissionsContent() {
             <div className="p-6 overflow-y-auto flex-1 min-h-0">
               {step === 1 && (
                 <div className="space-y-4">
-                  {(preadmits.length > 0 || preadmitsV42.length > 0 || openLeads.length > 0) && (
+                  {(() => {
+                    // Always render the picker — when every screening is filtered out
+                    // (already onboarded, or still a draft) the panel used to
+                    // disappear, which reads as a broken form. Say why instead.
+                    const sources = preadmits.length + preadmitsV42.length;
+                    return (
                     <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <Sparkles className="w-4 h-4 text-indigo-500" />
-                        <span className="text-xs font-semibold text-indigo-800">Prefill from a CRM Lead or Pre-Admission Assessment</span>
+                        <span className="text-xs font-semibold text-indigo-800">Prefill from a Pre-Admission Assessment</span>
                       </div>
-                      <select value="" onChange={(e) => { const v = e.target.value; if (v) prefillFromPreadmission(v); }} className={`${inputCls} mt-2`}>
-                        <option value="">Select a CRM lead or completed pre-admission assessment…</option>
-                        {openLeads.length > 0 && (
-                          <optgroup label="CRM Leads">
-                            {openLeads.map((l) => (
-                              <option key={`lead:${l.id}`} value={`lead:${l.id}`}>{s(l.prospectiveResident || l.name)}{l.stage ? ` — ${l.stage.replace(/_/g, " ").toLowerCase()}` : ""}</option>
-                            ))}
-                          </optgroup>
-                        )}
+                      <select value="" disabled={sources === 0} onChange={(e) => { const v = e.target.value; if (v) prefillFromPreadmission(v); }} className={`${inputCls} mt-2 ${sources === 0 ? "opacity-60 cursor-not-allowed" : ""}`}>
+                        <option value="">{sources === 0 ? "No prefill source available" : "Select a completed pre-admission assessment…"}</option>
                         {preadmitsV42.length > 0 && (
                           <optgroup label="Resident Assessment (v4.2)">
                             {preadmitsV42.map((a) => { const lvl = s(a.layer3?.finalLevel); const dt = s(a.layer1?.assessmentDate) || s(a.updatedAt).slice(0, 10); return (
@@ -1499,9 +1466,14 @@ export default function AdmissionsContent() {
                           </optgroup>
                         )}
                       </select>
-                      <p className="text-[11px] text-indigo-600/80 mt-1.5">A CRM lead pulls the prospective resident&apos;s name + contact/sponsor. A pre-admission assessment also pulls DOB, diagnoses, allergies, care level &amp; the 14-domain scores. Review before completing.</p>
+                      <p className="text-[11px] text-indigo-600/80 mt-1.5">
+                        {sources === 0
+                          ? "Nothing to prefill from: every completed pre-admission assessment in this community is already onboarded. Drafts aren't offered — complete/validate the assessment in Pre-Admission Assessment first, then reopen this wizard."
+                          : "Pulls name, DOB, diagnoses, allergies, care level & the 14-domain scores from the screening. Only residents who aren’t onboarded yet appear here. Review before completing."}
+                      </p>
                     </div>
-                  )}
+                    );
+                  })()}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field label="First Name *"><input className={inputCls} value={form.firstName} onChange={(e) => set({ firstName: e.target.value })} /></Field>
                     <Field label="Middle Name (optional)"><input className={inputCls} value={form.middleName} onChange={(e) => set({ middleName: e.target.value })} /></Field>

@@ -28,7 +28,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident } from "@/lib/adapters";
 import { PhysicalExamHistory } from "./PhysicalExamForm";
 import { originOf, assessmentRawScore, classifyAssessment, type AssessmentV42 } from "@/lib/lifecare/assessment";
-import { printNarrativeReport } from "@/lib/lifecare/narrativeReport";
+import { printNarrativeReport, enrichForReport, type ReportResidentRow } from "@/lib/lifecare/narrativeReport";
 import { lifecareLetterhead, LIFECARE_BRAND_CSS } from "@/lib/lifecare/brand";
 import { ASSESSMENT_DOMAINS } from "@/lib/lifecare/dataset";
 import { DOMAIN_CODES } from "@/lib/lifecare/types";
@@ -358,9 +358,11 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
   // A Journey ASSESSMENT entry's "View report" opens the prose narrative
   // (Pre-Admission Resident Assessment Report), not the raw domain-score sheet —
   // same report the Care Acuity board prints. Sourced from the raw v4.2 record.
+  // Backfilled first (enrichForReport) so a reassessment with a thin Layer 1 still
+  // prints a full Clinical Summary instead of "<name> is a resident."
   const viewAssessmentReport = (assessmentId: string) => {
     const a = assessmentsV42.find((x) => s(x.id) === assessmentId);
-    if (a) printNarrativeReport(a as AssessmentV42);
+    if (a) printNarrativeReport(enrichForReport(a as AssessmentV42, assessmentsV42 as AssessmentV42[], (resQ.data || []) as ReportResidentRow[]));
   };
 
   // Group the filtered feed by calendar day for the timeline rails.
@@ -454,7 +456,7 @@ export default function ResidentJourneyBoard({ clinicianRole = "NURSE", readOnly
       </div>
 
       {view === "forms" ? (
-        <FormsPanel forms={forms} admissions={admissionForms} />
+        <FormsPanel forms={forms} admissions={admissionForms} onReport={viewAssessmentReport} />
       ) : view === "physexam" ? (
         <PhysicalExamHistory residentId={resident.id} residentName={resident.name} room={resident.room} />
       ) : view === "careplan" ? (
@@ -601,7 +603,7 @@ function TrendPill({ delta, suffix = "" }: { delta: number; suffix?: string }) {
   );
 }
 
-function FormsPanel({ forms, admissions = [] }: { forms: FormRecord[]; admissions?: AdmissionForm[] }) {
+function FormsPanel({ forms, admissions = [], onReport }: { forms: FormRecord[]; admissions?: AdmissionForm[]; onReport: (assessmentId: string) => void }) {
   const [openId, setOpenId] = useState<string | null>(forms[0]?.id ?? null);
   const [openAdm, setOpenAdm] = useState<string | null>(admissions[0]?.id ?? null);
   if (forms.length === 0 && admissions.length === 0) {
@@ -652,8 +654,10 @@ function FormsPanel({ forms, admissions = [] }: { forms: FormRecord[]; admission
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <button type="button" onClick={(e) => { e.stopPropagation(); printAssessmentForm(f); }} className="rounded-lg p-1.5 text-[var(--clinical-muted)] transition hover:bg-[var(--clinical-surface-2)] hover:text-[var(--clinical-panel)]" title="Print / Save as PDF">
-                      <Printer className="h-4 w-4" />
+                    {/* Same prose report the Journey entry prints — Pre-Admission
+                        Resident Assessment / Resident Reassessment Report. */}
+                    <button type="button" onClick={(e) => { e.stopPropagation(); onReport(f.id); }} className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-[var(--clinical-panel)] transition hover:bg-[var(--clinical-surface-2)] hover:underline" title="View report — print / save as PDF">
+                      View report <Printer className="h-3.5 w-3.5" />
                     </button>
                     <ChevronDown className={`h-4 w-4 text-[var(--clinical-muted)] transition-transform ${isOpen ? "rotate-180" : ""}`} />
                   </div>
@@ -749,131 +753,12 @@ function AdmissionCard({ a, open, onToggle }: { a: AdmissionForm; open: boolean;
   );
 }
 
-// ── Print assessment as structured PDF ─────────────────────────────────────
+// ── Print helpers (Admission & Onboarding sheet) ───────────────────────────
+// Assessment forms print the prose narrative report instead — see narrativeReport.ts.
 const esc = (v: unknown): string => String(v ?? "").replace(/[&<>\"]|\n/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "\n": "<br>" }[c] as string));
 const has = (v: unknown): boolean => v != null && String(v).trim() !== "";
 const field = (label: string, val: string): string => val ? `<div class="f"><span class="fl">${esc(label)}</span><span class="fv">${esc(val)}</span></div>` : "";
 const section = (title: string, body: string): string => body.trim() ? `<div class="sec"><h3>${esc(title)}</h3>${body}</div>` : "";
-
-function printAssessmentForm(f: FormRecord): void {
-  const l1 = f.layer1;
-  const l3 = f.layer3;
-  const name = l1?.residentName || "Resident";
-  const title = f.kind;
-  const origin = f.originLabel;
-  // ── Layer 1 sections ──
-  const profileFields = [
-    field("Resident", name),
-    field("Date of Birth", l1?.dob || ""),
-    field("Age", l1?.age || ""),
-    field("Sex", l1?.sex || ""),
-    field("Phone", l1?.contactNo || ""),
-    field("Primary Contact", l1?.primaryContact || ""),
-    field("Referral Source", l1?.referralSource || ""),
-  ].join("");
-  const clinicalFields = [
-    field("Diagnoses", l1?.diagnoses || ""),
-    field("Allergies", l1?.allergies || ""),
-    field("Hospital / ED (12 mo)", l1?.hospitalEd12mo ? `Yes${l1.hospitalEdReason ? ` — ${l1.hospitalEdReason}` : ""}` : ""),
-    field("Significant Change (30–90 d)", l1?.significantChange3090 ? `Yes${l1.significantChangeDescribe ? ` — ${l1.significantChangeDescribe}` : ""}` : ""),
-    field("Physician Follow-Up", l1?.physicianFollowUp || ""),
-  ].join("");
-  const meds = l1?.medicationList && l1.medicationList.length > 0
-    ? l1.medicationList.map((m) => `<div class="med">${esc(m.name)}${m.dose ? ` — ${esc(m.dose)}` : ""}${m.frequency ? ` · ${esc(m.frequency)}` : ""}${m.instructions ? `<br><span class="mi">${esc(m.instructions)}</span>` : ""}${m.requiresVitals ? ` <span class="vt">⚠ Vitals required</span>` : ""}</div>`).join("")
-    : (l1?.medications ? `<div class="med">${esc(l1.medications)}</div>` : "");
-  const decisionFields = [
-    field("Participation Level", l1?.canParticipate?.replace(/_/g, " ") || ""),
-    field("Authorized Representative", l1?.authorizedRepresentative || ""),
-    field("Family Involvement", l1?.familyInvolvement?.join(", ") || ""),
-    field("Advance Directive", l1?.advanceDirective?.replace(/_/g, " ") || ""),
-    field("Cultural / Spiritual Preferences", l1?.culturalPreferences || ""),
-    field("Goals & Preferences", l1?.goalsPreferences || ""),
-  ].join("");
-  // ── Layer 2 — domain scores ──
-  const domainRows = f.domains.map((d) => {
-    const bars = [0, 1, 2, 3].map((n) => n < d.score ? "█" : "░").join("");
-    const detail = [d.evidence ? `Evidence: ${d.evidence}` : "", d.note ? `Goal: ${d.note}` : "", d.flags.length ? `Flags: ${d.flags.join(", ")}` : ""].filter(Boolean).join(" · ");
-    return `<tr><td class="dc">${esc(d.code)}</td><td class="dn">${esc(d.name)}</td><td class="ds">${bars}</td><td class="dv">${d.score}/4</td>${detail ? `<td class="dd">${esc(detail)}</td>` : "<td></td>"}</tr>`;
-  }).join("");
-  // ── Layer 3 — evaluation ──
-  const evalFields = [
-    field("Final Level of Care", f.level || ""),
-    field("Engine Suggested", f.suggestedLevel || ""),
-    field("Final LOC Justification", f.justification || ""),
-    field("Below-Floor Reason", l3?.belowFloorReason || ""),
-    field("Override Reason", l3?.overrideReason || ""),
-    field("Reconciled Modifiers", l3?.reconciledModifiers?.join(", ") || ""),
-    field("Capability Review", l3?.capabilityReview ? `${l3.capabilityReview.outcome} — ${l3.capabilityReview.rationale}` : ""),
-    field("Reassessment Interval", l3?.reassessmentInterval || ""),
-    field("Next Review", l3?.nextReviewDate || ""),
-  ].join("");
-  const validationHtml = f.validation
-    ? `<div class="val"><strong>${esc(f.validation.decision)}</strong> — by ${esc(f.validation.by)}${f.validation.role ? ` (${esc(f.validation.role)})` : ""}${f.validation.at ? ` on ${esc(f.validation.at)}` : ""}${f.validation.notes ? `<br>${esc(f.validation.notes)}` : ""}</div>`
-    : f.status === "COMPLETED" ? `<div class="val">Completed${f.completedBy ? ` by ${esc(f.completedBy)}` : ""} — awaiting clinical validation.</div>` : "";
-  const scoreTotal = f.score;
-  const pct = Math.min(100, Math.round((scoreTotal / 56) * 100));
-
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)} — ${esc(name)}</title>
-<style>
-*{box-sizing:border-box}
-body{font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;color:#1f2933;line-height:1.6;max-width:820px;margin:0 auto;padding:44px 48px;font-size:14px}
-${LIFECARE_BRAND_CSS}
-.rule{border:0;border-top:1.5px solid #ced4da;margin:10px 0 18px}
-.company{font-weight:800;font-size:17px;margin:0 0 2px}
-.title{font-weight:700;font-size:14px;color:#343a40;margin:0 0 4px}
-.origin{font-size:12px;color:#868e96;margin:0 0 12px}
-.meta{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 18px;font-size:13px}
-.meta .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
-.pill-status{background:#4263eb;color:#fff}
-.pill-level{background:#e03131;color:#fff}
-.pill-score{background:#f1f3f5;color:#495057}
-.sec{margin-top:22px;page-break-inside:avoid}
-sec h3{font-size:14px;color:#1c7ed6;border-bottom:1px solid #dee2e6;padding-bottom:4px;margin:0 0 10px;page-break-after:avoid}
-h3{font-size:14px;color:#1c7ed6;border-bottom:1px solid #dee2e6;padding-bottom:4px;margin:0 0 10px;page-break-after:avoid}
-.f{display:flex;gap:8px;margin:3px 0;font-size:13px}.fl{font-weight:700;min-width:160px;flex-shrink:0;color:#495057}.fv{color:#212529}
-.med{padding:6px 10px;background:#f8f9fa;border-radius:6px;margin:4px 0;font-size:13px;border-left:3px solid #4263eb}
-.mi{color:#868e96;font-style:italic;font-size:12px}
-.vt{background:#fff3bf;color:#e8590c;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px}
-table{width:100%;border-collapse:collapse;margin:8px 0;font-size:12.5px}
-th{text-align:left;font-size:11px;color:#495057;border-bottom:1.5px solid #dee2e6;padding:6px 4px}
-td{padding:5px 4px;border-bottom:1px solid #f1f3f5}
-.dc{font-weight:700;color:#4263eb;width:60px}.dn{width:180px}.ds{font-family:monospace;letter-spacing:1px;color:#868e96}.dv{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;width:40px}.dd{font-size:11px;color:#868e96;max-width:200px}
-tr,td,.sec,.med,.f{page-break-inside:avoid}
-.val{background:#f1f3f5;border-radius:8px;padding:10px 14px;font-size:13px;margin-top:12px}
-.foot{margin-top:26px;border-top:1px solid #e9ecef;padding-top:10px;color:#adb5bd;font-size:11px}
-@page{margin:0}
-table.sheet{width:100%;border-collapse:collapse}
-table.sheet>thead>tr>td,table.sheet>tfoot>tr>td{padding:0;border:0}
-.vpad{height:0}
-@media print{body{padding:0;max-width:none;margin:0}td.sheet-body{padding:0 44px}.vpad{height:34px}}
-</style></head><body onload="window.focus();window.print()">
-<table class="sheet"><thead><tr><td><div class="vpad"></div></td></tr></thead><tbody><tr><td class="sheet-body">
-${lifecareLetterhead()}
-<hr class="rule">
-<p class="company">LifeCare Living Solutions, Inc.</p>
-<p class="title">${esc(title)}</p>
-<p class="origin">${esc(origin)} · ${esc(f.date)}</p>
-<div class="meta">
-  <span class="pill pill-status">${esc(f.status)}</span>
-  ${f.level ? `<span class="pill pill-level">${esc(f.level)}</span>` : ""}
-  <span class="pill pill-score">Acuity ${scoreTotal} / 56 (${pct}%)</span>
-  ${f.by ? `<span style="color:#868e96;font-size:12px">by ${esc(f.by)}</span>` : ""}
-</div>
-${section("Layer 1 · Profile & History", profileFields)}
-${section("Clinical History", clinicalFields)}
-${meds ? section("Medications", meds) : ""}
-${decisionFields ? section("Decision Support & Person-Centered Care", decisionFields) : ""}
-${section("Layer 2 · Domain Scores (14 domains, max /56)", `<table><thead><tr><th>Code</th><th>Domain</th><th>Score</th><th>Rating</th><th>Details</th></tr></thead><tbody>${domainRows}<tr style="font-weight:800;border-top:1.5px solid #ced4da"><td></td><td>Total</td><td></td><td class="dv">${scoreTotal}/56</td><td></td></tr></tbody></table>`)}
-${section("Layer 3 · Evaluation", evalFields)}
-${validationHtml}
-<div class="foot">Assessment ${esc(f.id)} · Generated ${esc(new Date().toLocaleString())} · Confidential — for authorized use only.</div>
-</td></tr></tbody><tfoot><tr><td><div class="vpad"></div></td></tr></tfoot></table>
-</body></html>`;
-  const w = window.open("", "_blank", "width=840,height=920");
-  if (!w) return;
-  w.document.write(html);
-  w.document.close();
-}
 
 // ── Print Admission & Onboarding as structured PDF ─────────────────────────
 // Every captured admission field rendered into the same LifeCare letterhead sheet

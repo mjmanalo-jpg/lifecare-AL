@@ -30,6 +30,7 @@ import SignatureModal from "@/components/portal/SignatureModal";
 import {
   ASSESSMENTS_V42_KEY, newAssessment, cloneForReassessment, originOf,
   classifyAssessment, assessmentRawScore, requiredModifierIds, assessmentValidationIssues, medItemsOf,
+  pendingPreadmissionAssessments,
   type AssessmentV42, type AssessmentLayer1, type DomainEntry, type AssessmentStatus,
   type AssessmentOrigin, type ModifierReconciliationDecision,
 } from "@/lib/lifecare/assessment.ts";
@@ -42,7 +43,7 @@ import {
 import type { CareLevel, DomainCode, ClinicalContext } from "@/lib/lifecare/types.ts";
 import { CRM_LEADS_KEY, parseLeads } from "@/lib/crmLeads";
 import { composeName, nameParts } from "@/lib/names";
-import { printNarrativeReport } from "@/lib/lifecare/narrativeReport";
+import { printNarrativeReport, enrichForReport } from "@/lib/lifecare/narrativeReport";
 import DomainScoreGrid from "./DomainScoreGrid";
 
 type SettingRow = { key?: string; id?: string; value?: string };
@@ -292,7 +293,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
   }, [settingRows]);
 
   // Converted CRM leads land here as in-progress admissions — offer them for the picker.
-  const { data: admissionRows } = useLiveQuery<{ id: string; firstName?: string; lastName?: string; dateOfBirth?: string; gender?: string; phone?: string; sponsorName?: string; status?: string }>("admissions", { query: "take=500", tables: ["Admission"] });
+  const { data: admissionRows } = useLiveQuery<{ id: string; firstName?: string; lastName?: string; dateOfBirth?: string; gender?: string; phone?: string; sponsorName?: string; status?: string; residentId?: string }>("admissions", { query: "take=500", tables: ["Admission"] });
   const admissionOpts = useMemo<AdmissionOpt[]>(
     // "In progress" by exclusion — mirror the Admissions card, which shows any
     // admission that isn't COMPLETED/CANCELLED as In Progress (status may be
@@ -329,6 +330,22 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     [residentRows]
   );
   const isAcuity = origin === "ACUITY";
+
+  // Once the resident is onboarded, their finalized pre-admission assessment stops
+  // being admissions work-in-progress: it becomes part of the clinical record and is
+  // read in One Care · One Journey (ResidentJourneyBoard links it by residentId,
+  // linked admission, or name). This board then keeps only the DRAFTS still moving
+  // through admission. Hidden records stay in the store — `assessments` (not this
+  // list) is what persist() rewrites, so nothing is dropped on save.
+  const visible = useMemo(() => {
+    if (origin !== "PREADMISSION") return assessments;
+    const admissionIdsByResident = new Map<string, string[]>();
+    for (const r of admissionRows) {
+      const rid = String(r.residentId || "");
+      if (rid) admissionIdsByResident.set(rid, [...(admissionIdsByResident.get(rid) || []), String(r.id)]);
+    }
+    return pendingPreadmissionAssessments(assessments, residentOpts.map((r) => ({ residentId: r.id, admissionIds: admissionIdsByResident.get(r.id) || [], residentName: r.name })));
+  }, [assessments, admissionRows, residentOpts, origin]);
 
   const [me, setMe] = useState("");
   const [myId, setMyId] = useState("");
@@ -814,44 +831,14 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
     openEdit(clone);
   };
 
-  // The narrative report reads Layer 1 clinical fields. A reassessment raised from
-  // Care Acuity (pick-resident) starts with a blank Layer 1, so backfill from the
-  // resident's richest prior assessment and their Resident record before printing —
-  // otherwise the Clinical Summary collapses to "<name> is a resident."
-  const openNarrativeReport = (a: AssessmentV42) => {
-    const s = (v: unknown) => (v == null ? "" : String(v));
-    const cur = a.layer1 || ({} as AssessmentV42["layer1"]);
-    const rid = s(cur.residentId);
-    const nm = s(cur.residentName).trim().toLowerCase();
-    const rich = (x?: AssessmentV42) => !!x && !!(s(x.layer1?.diagnoses).trim() || s(x.layer1?.medications).trim() || s(x.layer1?.reasonForAdmission).trim() || s(x.layer1?.dateOfBirth).trim());
-    const sameResident = (x: AssessmentV42) => x.id !== a.id && ((!!rid && s(x.layer1?.residentId) === rid) || (!!nm && s(x.layer1?.residentName).trim().toLowerCase() === nm));
-    const src = [
-      assessments.find((x) => x.id === a.layer3?.priorAssessmentId),
-      ...assessments.filter(sameResident).sort((x, y) => s(y.updatedAt).localeCompare(s(x.updatedAt))),
-    ].filter((x): x is AssessmentV42 => !!x).find(rich)?.layer1;
-    const resident = residentRows.find((r) => (!!rid && s(r.id) === rid) || (!!nm && `${s(r.firstName)} ${s(r.lastName)}`.trim().toLowerCase() === nm));
-    const pick = (...vals: Array<string | undefined>) => vals.map((v) => s(v).trim()).find(Boolean) || undefined;
-    const enriched: AssessmentV42 = {
-      ...a,
-      layer1: {
-        ...cur,
-        dateOfBirth: pick(cur.dateOfBirth, src?.dateOfBirth, resident?.dateOfBirth ? s(resident.dateOfBirth).slice(0, 10) : undefined),
-        sex: pick(cur.sex, src?.sex, resident?.gender),
-        age: pick(cur.age, src?.age),
-        diagnoses: pick(cur.diagnoses, src?.diagnoses, resident?.diagnosis, resident?.medicalHistory),
-        medications: pick(cur.medications, src?.medications),
-        allergies: pick(cur.allergies, src?.allergies, resident?.allergies),
-        surgeries: pick(cur.surgeries, src?.surgeries),
-        reasonForAdmission: pick(cur.reasonForAdmission, src?.reasonForAdmission),
-      },
-    };
-    printNarrativeReport(enriched);
-  };
+  // The narrative report reads Layer 1 clinical fields; enrichForReport backfills
+  // them from the richest prior assessment + the Resident record before printing.
+  const openNarrativeReport = (a: AssessmentV42) => printNarrativeReport(enrichForReport(a, assessments, residentRows));
 
   const q = search.trim().toLowerCase();
-  const filtered = assessments.filter((a) => !q || (a.layer1?.residentName || "").toLowerCase().includes(q));
+  const filtered = visible.filter((a) => !q || (a.layer1?.residentName || "").toLowerCase().includes(q));
   const stat = (lvl: CareLevel) =>
-    assessments.filter((a) => (a.layer3?.finalLevel ?? (a.status !== "DRAFT" ? classifyAssessment(a).suggestedLevel : undefined)) === lvl).length;
+    visible.filter((a) => (a.layer3?.finalLevel ?? (a.status !== "DRAFT" ? classifyAssessment(a).suggestedLevel : undefined)) === lvl).length;
 
   // When embedded inside another board (e.g. Care Acuity), suppress this
   // component's own page chrome + big H1 so it composes cleanly: render a light
@@ -872,7 +859,7 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
       {/* Level distribution — hidden when embedded (Care Acuity shows its own stats). */}
       {!embedded && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <StatCard label="Total" value={assessments.length} accent="ink" />
+          <StatCard label="Total" value={visible.length} accent="ink" />
           {LEVELS.map((l) => <StatCard key={l} label={LEVEL_LABEL[l]} value={stat(l)} accent={LEVEL_ACCENT[l]} />)}
         </div>
       )}
@@ -893,12 +880,12 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
 
       {/* List */}
       <DataState
-        loading={loading && assessments.length === 0}
+        loading={loading && visible.length === 0}
         error={error}
         empty={filtered.length === 0}
-        emptyTitle={assessments.length === 0 ? "No assessments yet" : "No matches"}
-        emptyHint={assessments.length === 0 ? "Click New Assessment to assess a resident on the v4.2 model." : "Try a different resident name."}
-        emptyAction={assessments.length === 0 ? <ClinicalButton variant="accent" onClick={openNew}><Plus className="w-4 h-4" /> New Assessment</ClinicalButton> : undefined}
+        emptyTitle={visible.length === 0 ? "No assessments yet" : "No matches"}
+        emptyHint={visible.length === 0 ? "Click New Assessment to assess a resident on the v4.2 model." : "Try a different resident name."}
+        emptyAction={visible.length === 0 ? <ClinicalButton variant="accent" onClick={openNew}><Plus className="w-4 h-4" /> New Assessment</ClinicalButton> : undefined}
         onRetry={() => void refetch()}
         skeletonRows={3}
       >

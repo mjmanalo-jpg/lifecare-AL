@@ -316,6 +316,17 @@ export function assessmentMatchesResident(a: Pick<AssessmentV42, "layer1">, key:
   return !!nk && nameTokenKey(a.layer1?.residentName) === nk;
 }
 
+/**
+ * Pre-admission assessments still owned by the admissions board: every DRAFT, plus
+ * finalized records whose resident has not been onboarded yet. Once the resident is
+ * onboarded, the finalized (COMPLETED/VALIDATED) pre-admission assessment belongs to
+ * the clinical record and is read in One Care · One Journey instead — keeping it on
+ * the admissions list makes onboarded residents look like open admissions work.
+ */
+export function pendingPreadmissionAssessments<T extends Pick<AssessmentV42, "layer1" | "status">>(all: T[], onboarded: ResidentKey[]): T[] {
+  return all.filter((a) => a.status === "DRAFT" || !onboarded.some((k) => assessmentMatchesResident(a, k)));
+}
+
 const STATUS_RANK: Record<AssessmentStatus, number> = { VALIDATED: 3, COMPLETED: 2, DRAFT: 1, SUPERSEDED: 0 };
 
 /** The most authoritative assessment for a resident: VALIDATED first, then COMPLETED,
