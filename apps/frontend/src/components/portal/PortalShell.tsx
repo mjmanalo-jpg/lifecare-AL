@@ -1368,8 +1368,11 @@ export default function PortalShell({
           )}
         </AnimatePresence>
 
-        {/* Main Content Area */}
-        <main className="min-h-0 flex-1 overflow-y-auto p-3 pb-24 sm:p-5 sm:pb-24 lg:p-7 lg:pb-7" style={{ height: 0 }}>
+        {/* Main Content Area. The bottom padding clears the mobile dock (72px)
+            *plus* the home-indicator inset, which is non-zero now that the root
+            layout sets viewport-fit=cover — a flat pb-24 would leave the last
+            rows of content sitting behind the dock on notched iPhones. */}
+        <main className="min-h-0 flex-1 overflow-y-auto p-3 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-5 sm:pb-[calc(6rem+env(safe-area-inset-bottom))] lg:p-7 lg:pb-7" style={{ height: 0 }}>
           <div className={["CARE_MANAGER", "RESIDENT_COORDINATOR", "NURSE", "CAREGIVER"].includes(userRole) ? "clinical-portal-content" : undefined}>
             {contentPending ? <PortalContentSkeleton variant={activeSegment === "dashboard" ? "dashboard" : "list"} /> : children}
           </div>

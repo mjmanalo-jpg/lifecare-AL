@@ -156,7 +156,9 @@ export default function DashboardQuickActions({ role }: { role: Role }) {
   return (
     <>
       {/* Speed dial */}
-      <div className="fixed bottom-24 right-4 z-40 flex flex-col items-end gap-3 print:hidden md:bottom-6 md:right-6">
+      {/* Sits above the mobile dock (72px) and the home-indicator inset; the
+          inset is live now that the root layout sets viewport-fit=cover. */}
+      <div className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-4 z-40 flex flex-col items-end gap-3 print:hidden md:bottom-6 md:right-6">
         {menuOpen && (
           <div className="mb-1 flex max-h-[60vh] w-60 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl animate-in fade-in slide-in-from-bottom-2 zoom-in-95 duration-200">
             <div className="min-h-0 flex-1 overflow-y-auto p-1.5">

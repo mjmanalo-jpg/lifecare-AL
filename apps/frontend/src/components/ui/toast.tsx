@@ -88,8 +88,10 @@ export function Toaster({
   toasts: ToastItem[];
   onDismiss: (id: number) => void;
 }) {
+  // See GlobalToaster: both edges anchored below `sm` so the card can't hang off
+  // a 390px screen, and lifted clear of the iOS home indicator.
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[120] flex w-full max-w-sm flex-col gap-2">
+    <div className="pointer-events-none fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-4 right-4 z-[120] flex w-auto max-w-sm flex-col gap-2 sm:left-auto sm:w-full">
       {toasts.map((t) => (
         <ToastCard key={t.id} toast={t} onDismiss={() => onDismiss(t.id)} />
       ))}

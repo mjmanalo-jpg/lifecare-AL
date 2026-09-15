@@ -996,3 +996,41 @@ p, blockquote, li {
 @media (pointer: coarse) {
   .clinical-portal-content :where(button, a, input, select, textarea) { min-height: 2.75rem; }
 }
+
+/* ── Mobile safety net — ALL portals ──────────────────────────────────
+   The blocks above only reach `.clinical-portal-content`, which PortalShell
+   applies to just 4 of the 20 roles. That class is also a full visual theme
+   (surfaces, typography, button colours), so it can't simply be switched on
+   everywhere. These rules re-state only the *responsive* half of it, unscoped,
+   so Physician / Billing / Fleet / Driver / Security / Housekeeping /
+   Maintenance / Family / Resident / admin portals get the same mobile
+   guarantees without inheriting the clinical look.
+
+   NOTE: these deliberately avoid `:where()`. The clinical rules above can use
+   it because they are anchored by a class, but a *bare* top-level `:where(...)`
+   is dropped by the production CSS minifier (verified: present in the dev
+   stylesheet, absent from every built chunk), so it would silently ship as a
+   no-op. Plain selector lists survive the build. */
+@media (max-width: 640px) {
+  /* Flex/grid children default to min-width:auto, which lets long content push
+     a row wider than the screen instead of wrapping. */
+  .flex > *, .grid > * { min-width: 0; }
+  h1, h2, h3, p { overflow-wrap: anywhere; }
+  img, video, canvas, svg { max-width: 100%; }
+  /* iOS Safari auto-zooms the page when a focused control's font is under 16px
+     and leaves the layout shifted after blur. `!important` is needed because
+     nearly every control carries Tailwind's `text-sm` (14px). */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea { font-size: 16px !important; }
+}
+
+@media (pointer: coarse) {
+  /* 44px minimum touch target. `a` is matched only when it carries padding
+     utilities (i.e. it renders as a button) so inline text links are untouched. */
+  button,
+  a[class*="px-"],
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea { min-height: 2.75rem !important; }
+}
