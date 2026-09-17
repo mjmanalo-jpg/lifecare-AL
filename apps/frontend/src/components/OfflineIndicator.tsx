@@ -27,6 +27,31 @@ export default function OfflineIndicator() {
     }
   }, []);
 
+  // Auto-update stale clients. iOS pins an installed PWA to its last-loaded
+  // bundle, so a deploy's fixes never arrive until a full reload — the app keeps
+  // POSTing the old payload shape. Poll a PHI-free deploy id; when it changes
+  // under a running client, reload ONCE to pull the new build. Only reloads on
+  // return-to-foreground (a natural break, never mid-charting), skips "dev"
+  // (local), and can't loop: after the reload the new id is the fresh baseline.
+  useEffect(() => {
+    let baseline: string | null = null;
+    let reloading = false;
+    const check = async () => {
+      try {
+        const res = await fetch("/api/version", { cache: "no-store" });
+        if (!res.ok) return;
+        const { v } = (await res.json()) as { v?: string };
+        if (!v || v === "dev") return;
+        if (baseline == null) { baseline = v; return; }
+        if (v !== baseline && !reloading) { reloading = true; window.location.reload(); }
+      } catch { /* offline / transient — ignore */ }
+    };
+    void check();
+    const onVis = () => { if (document.visibilityState === "visible") void check(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
   // Flash a brief "Synced" confirmation when the outbox drains to zero. Driven by
   // the sync subscription (external system) — the allowed place to call setState.
   useEffect(() => {
