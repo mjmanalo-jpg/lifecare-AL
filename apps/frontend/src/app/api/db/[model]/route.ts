@@ -446,6 +446,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             }
             return delegate.create({ data });
           }
+          // SleepRecord is 1:1 with its DailyRound (dailyRoundId @unique) — unlike
+          // the other daily-round sub-records, which allow many rows per round. A
+          // second sleep log for the same day must UPDATE the existing row, not
+          // collide on the unique. Upsert on dailyRoundId; every other model creates.
+          if (model === "round-sleep-records" && typeof data.dailyRoundId === "string" && data.dailyRoundId) {
+            return delegate.upsert({ where: { dailyRoundId: data.dailyRoundId }, create: data, update: data });
+          }
           return delegate.create({ data });
         });
     if (OVERVIEW_COUNT_MODELS.has(model) && context.organizationId) invalidatePortalDataPrefix(`org-admin:${context.organizationId}:`);
