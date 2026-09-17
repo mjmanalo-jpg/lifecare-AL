@@ -973,7 +973,9 @@ function LogModal({ resident, initialTab, loggedDomains, domainCounts, baseline 
         if (f.assistanceLevel) out.push({ resource: "mobility-records", data: { ...base, activityType: f.ambulated === false ? "BED_REST" : "AMBULATION", assistanceLevel: f.assistanceLevel, assistiveDevice: f.assistiveDevice || null, fallOccurred: !!f.fallOccurred }, kind: "mobility" });
         break;
       case "sleep":
-        if (f.totalHours) out.push({ resource: "round-sleep-records", data: { ...base, totalHours: Number(f.totalHours), quality: SLEEP_MAP[f.quality] || "FAIR", interruptionReason: (f.disturbances || []).join(", ") || null }, kind: "sleep" });
+        // SleepRecord is the only DailyRounds model without a `time` column
+        // (it keys on createdAt), so it can't take `...base`'s time field.
+        if (f.totalHours) out.push({ resource: "round-sleep-records", data: { dailyRoundId: roundId, notes: notes || null, totalHours: Number(f.totalHours), quality: SLEEP_MAP[f.quality] || "FAIR", interruptionReason: (f.disturbances || []).join(", ") || null }, kind: "sleep" });
         break;
     }
     return out;
