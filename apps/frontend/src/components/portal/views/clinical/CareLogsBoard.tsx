@@ -960,9 +960,15 @@ function LogModal({ resident, initialTab, loggedDomains, domainCounts, baseline 
       case "skin":
         if (f.severity || f.location) out.push({ resource: "edema-records", data: { ...base, location: f.location || "", severity: f.severity || "NONE", pitting: !!f.pitting }, kind: "edema" });
         break;
-      case "concerns":
-        if (f.description || notes) out.push({ resource: "concern-records", data: { ...base, category: f.category || "PHYSICAL", description: f.description || notes || "", severity: f.severity || "LOW" }, kind: "concerns" });
+      case "concerns": {
+        // ConcernRecord has no `notes` column (its free text is `description`), so
+        // it can't take `...base`'s notes field — set dailyRoundId/time explicitly
+        // and fold the clinical note into the description. Category or severity
+        // alone is enough to save; description is synthesised when left blank.
+        const desc = [f.description, notes].filter(Boolean).join(" — ");
+        if (desc || f.category || f.severity) out.push({ resource: "concern-records", data: { dailyRoundId: roundId, time: base.time, category: f.category || "PHYSICAL", description: desc || `${f.category || "Concern"}${f.severity ? ` — ${f.severity}` : ""}`, severity: f.severity || "LOW" }, kind: "concerns" });
         break;
+      }
       case "mood":
         if (f.mood) out.push({ resource: "mood-records", data: { ...base, mood: MOOD_MAP[f.mood] || "CALM", behaviorNotes: [f.baseline ? `Baseline: ${f.baseline}` : "", (f.tags || []).length ? `Tags: ${(f.tags || []).join(", ")}` : ""].filter(Boolean).join(" · ") || null }, kind: "mood" });
         break;
