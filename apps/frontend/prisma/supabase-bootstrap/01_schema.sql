@@ -4289,9 +4289,6 @@ CREATE INDEX "MoodRecord_organizationId_idx" ON "MoodRecord"("organizationId");
 CREATE INDEX "MoodRecord_communityId_idx" ON "MoodRecord"("communityId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "SleepRecord_dailyRoundId_key" ON "SleepRecord"("dailyRoundId");
-
--- CreateIndex
 CREATE INDEX "SleepRecord_dailyRoundId_idx" ON "SleepRecord"("dailyRoundId");
 
 -- CreateIndex

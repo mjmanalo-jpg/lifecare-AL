@@ -4053,7 +4053,7 @@ model DailyRound {
   concerns        ConcernRecord[]
   painRecords     PainRecord[]
   moodRecords     MoodRecord[]
-  sleepRecord     SleepRecord?
+  sleepRecords    SleepRecord[]
   mobilityRecords MobilityRecord[]
   mealRecords     MealRecord[]
   vitalSigns      VitalSigns[]
@@ -4218,7 +4218,7 @@ model SleepRecord {
   id                   String     @id @default(uuid())
   organizationId String?
   communityId    String?
-  dailyRoundId         String     @unique
+  dailyRoundId         String
   dailyRound           DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
   bedtime              DateTime?
   wakeTime             DateTime?
