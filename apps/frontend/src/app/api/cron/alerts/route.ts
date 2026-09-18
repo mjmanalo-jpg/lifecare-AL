@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
-import { slaMinutes } from "@/lib/alertAccess";
+import { slaMinutes, isLoudAlert } from "@/lib/alertAccess";
 import { scanCameraHealth } from "@/lib/cameraHealth";
 import { isAbnormalVital, vitalSeverity } from "@/lib/vitalThresholds";
 import { reassessmentStatus } from "@/lib/lifecare/reassessment";
@@ -113,12 +113,23 @@ async function scanCommunity(communityId: string, organizationId: string | null)
   const idsForRoles = (roles: string[]) => [...new Set(memberships.filter((m) => roles.includes(m.role)).map((m) => m.userId))];
   const recipientIds = idsForRoles(["NURSE", "FACILITY_ADMIN"]);
   const escalationChainIds = idsForRoles(["NURSE", "CARE_MANAGER", "PHYSICIAN", "FACILITY_ADMIN"]);
-  // Vital-sign alerts reach the bedside + clinical team — caregiver, nurse, care
-  // manager, physician — not the operations-only facility admin bell.
-  const vitalRecipientIds = idsForRoles(["CAREGIVER", "NURSE", "CARE_MANAGER", "PHYSICIAN"]);
+  // Vital-sign alerts reach the clinical team community-wide (nurse, care manager,
+  // physician) PLUS the caregiver(s) whose live shift covers that resident (added
+  // per-resident below) — not the operations-only facility admin bell.
+  const vitalClinicalIds = idsForRoles(["NURSE", "CARE_MANAGER", "PHYSICIAN"]);
 
   const now = new Date();
   const nowTs = now.getTime();
+
+  // Caregiver alert routing is per-resident and shift-scoped: a caregiver only gets a
+  // resident's alerts while their rostered shift covers that resident (the same rule the
+  // routine-due source already uses). Nurses / care managers stay community-wide as
+  // clinical oversight. This is why a caregiver with no assigned resident sees nothing.
+  const caregiverTz = process.env.FACILITY_TZ || "Asia/Manila";
+  const caregiverSchedules = parseSchedules(
+    (await prisma.appSetting.findFirst({ where: { communityId, key: CAREGIVER_SCHEDULE_KEY }, select: { value: true } }))?.value,
+  );
+  const caregiversForResident = (residentId: string) => activeCaregiverUserIdsForResident(residentId, caregiverSchedules, now, caregiverTz);
 
   // De-dup against notifications already raised in the last 30 days. Alerts are
   // keyed by entity id, so a longer window stops a still-open task / low-stock
@@ -146,13 +157,14 @@ async function scanCommunity(communityId: string, organizationId: string | null)
       await prisma.notification.createMany({
         data: recipients.map((userId) => ({ userId, type: type as never, title, message, severity, relatedEntityId, relatedEntityType, organizationId, communityId })),
       });
-      // Also push to the same recipients' registered devices so the alert reaches
-      // them when the app is closed/backgrounded. urgent → OS notification stays
-      // until acknowledged + vibrates; tag collapses repeats of the same entity.
-      if (pushSubs.length) {
+      // Web push only for Tier-1 "loud" alerts (client-approved streamlining) — the
+      // alert reaches devices when the app is closed/backgrounded. Tier-2 routine
+      // alerts stay in the in-app bell but never buzz a phone. urgent → OS
+      // notification stays until acknowledged + vibrates; tag collapses repeats.
+      if (pushSubs.length && isLoudAlert(type, severity)) {
         await sendToSubscriptions(
           pushSubs, recipients,
-          { title, body: message, url: "/", tag: `${type}:${relatedEntityId}`, urgent: severity === "WARNING" || severity === "CRITICAL" },
+          { title, body: message, url: "/", tag: `${type}:${relatedEntityId}`, urgent: true },
           deadPush,
         );
       }
@@ -212,7 +224,9 @@ async function scanCommunity(communityId: string, organizationId: string | null)
       const l = VITAL_LABEL[v.type] ?? v.type.toLowerCase();
       const sev = vitalSeverity(v.type, v.value);
       const lead = sev === "CRITICAL" ? "Critically abnormal" : "Abnormal";
-      if (await notify("VITAL_ALERT", "vitalsLog", v.id, `${lead} ${l}`, `${rname(v.resident)} (Room ${room(v.resident)}) recorded ${l} of ${v.value}.${sev === "CRITICAL" ? " Immediate review required." : " Please review."}`, sev, vitalRecipientIds)) counts.abnormalVitals++;
+      // Clinical team (all) + only the caregiver(s) whose live shift covers this resident.
+      const vitalRecipients = [...new Set([...caregiversForResident(v.residentId), ...vitalClinicalIds])];
+      if (await notify("VITAL_ALERT", "vitalsLog", v.id, `${lead} ${l}`, `${rname(v.resident)} (Room ${room(v.resident)}) recorded ${l} of ${v.value}.${sev === "CRITICAL" ? " Immediate review required." : " Please review."}`, sev, vitalRecipients)) counts.abnormalVitals++;
 
       // CRITICAL vital → auto-raise an SBAR escalation into the clinical chain of
       // command (assigned to the physician). Idempotent per reading.
@@ -413,8 +427,7 @@ async function scanCommunity(communityId: string, organizationId: string | null)
   //     baseline exists. Bowel is keyed per calendar day (re-nags once/day while it
   //     persists); urine is keyed per rolling 12h block (up to twice/day).
   await runSource("elimination", async () => {
-    const elimTeam = idsForRoles(["CAREGIVER", "NURSE", "CARE_MANAGER"]);
-    if (!elimTeam.length) return;
+    const elimClinicalIds = idsForRoles(["NURSE", "CARE_MANAGER"]);
 
     const BOWEL_MS = 3 * 86_400_000; // no BM in 3 days
     const URINE_MS = 12 * 3_600_000; // no void in 12 hours
@@ -442,6 +455,9 @@ async function scanCommunity(communityId: string, organizationId: string | null)
 
     for (const r of residents) {
       const admittedMs = r.admissionDate ? nowTs - new Date(r.admissionDate).getTime() : Infinity;
+      // Clinical team (all) + only the caregiver(s) whose live shift covers this resident.
+      const elimTeam = [...new Set([...caregiversForResident(r.id), ...elimClinicalIds])];
+      if (!elimTeam.length) continue;
       if (!wentBowel.has(r.id) && admittedMs >= BOWEL_MS) {
         if (await notify("SYSTEM_ALERT", "elimination", `bowelmiss:${r.id}:${dayKey}`, "No bowel movement in 3+ days", `${rname(r)} (Room ${room(r)}) has no recorded bowel movement in the last 3 days — constipation / impaction risk. Review the bowel protocol, hydration and diet; document a BM or intervene.`, "WARNING", elimTeam)) counts.missedElimination++;
       }
@@ -484,8 +500,7 @@ async function scanCommunity(communityId: string, organizationId: string | null)
   //     the care team (caregiver / nurse / care manager) gets a reminder. Keyed by
   //     the due date so it fires once per cycle — a fresh weigh-in moves the key.
   await runSource("weight-due", async () => {
-    const weightTeam = idsForRoles(["CAREGIVER", "NURSE", "CARE_MANAGER"]);
-    if (!weightTeam.length) return;
+    const weightClinicalIds = idsForRoles(["NURSE", "CARE_MANAGER"]);
     const setting = await prisma.appSetting.findFirst({ where: { communityId, key: "weight_logs" }, select: { value: true } });
     if (!setting?.value) return;
     let wlogs: Array<{ type?: string; residentId?: string; date?: string }> = [];
@@ -507,6 +522,9 @@ async function scanCommunity(communityId: string, organizationId: string | null)
       if (nextDue > todayStr) continue; // not due yet
       const r = await prisma.resident.findFirst({ where: { id: residentId, communityId }, select: { firstName: true, lastName: true, roomNumber: true } });
       if (!r) continue;
+      // Clinical team (all) + only the caregiver(s) whose live shift covers this resident.
+      const weightTeam = [...new Set([...caregiversForResident(residentId), ...weightClinicalIds])];
+      if (!weightTeam.length) continue;
       const overdueDays = Math.round((new Date(todayStr + "T00:00:00Z").getTime() - new Date(nextDue + "T00:00:00Z").getTime()) / 86_400_000);
       const when = overdueDays > 0 ? `overdue by ${overdueDays} day${overdueDays === 1 ? "" : "s"}` : "due today";
       if (await notify("SHIFT_REMINDER", "weightReminder", `weightdue:${residentId}:${nextDue}`, "Weekly weight check due", `${rname(r)} (Room ${room(r)}) — weekly weight is ${when} (last recorded ${fmtDate(lastDate)}). Please record their weight.`, "INFO", weightTeam)) counts.weightDue++;

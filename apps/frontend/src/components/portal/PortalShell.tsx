@@ -53,7 +53,7 @@ import {
   SidebarLink,
   groupSidebarLinks,
 } from "@/constants/roleConfig";
-import { canAlertAction } from "@/lib/alertAccess";
+import { canAlertAction, isLoudAlert } from "@/lib/alertAccess";
 
 interface PortalShellProps {
   userRole: Role;
@@ -312,6 +312,19 @@ export default function PortalShell({
     tables: ["Notification"],
   });
 
+  // Ids cleared from THIS bell — hidden optimistically so Clear feels instant, then
+  // pruned once the server delete drops them from the live query.
+  const [clearedIds, setClearedIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setClearedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const live = new Set((notificationsData || []).map((n) => n.id));
+      const next = new Set<string>();
+      prev.forEach((id) => { if (live.has(id)) next.add(id); });
+      return next.size === prev.size ? prev : next;
+    });
+  }, [notificationsData]);
+
   const [bellDropdownOpen, setBellDropdownOpen] = useState(false);
 
   // Dropdown dismissal: Escape and outside-click close the notification and
@@ -374,6 +387,7 @@ export default function PortalShell({
     String(n.type) === "BILLING_UPDATE" && String(n.relatedEntityType ?? "") === "invoice";
   const scopeRole = String(userRole);
   const visibleNotifications = (notificationsData || []).filter((n) => {
+    if (clearedIds.has(n.id)) return false;
     if (isSnoozed(n)) return false;
     if (scopeRole === "FACILITY_ADMIN") return !isClinicalNotif(n);
     if (scopeRole === "ORGANIZATION_ADMIN" || scopeRole === "PLATFORM_ADMIN") return !isClinicalNotif(n) && !isFacilityNotif(n) && !isResidentBilling(n);
@@ -382,10 +396,11 @@ export default function PortalShell({
   const unreadNotifications = visibleNotifications.filter((n) => !n.isRead);
   const unreadCount = unreadNotifications.length;
 
-  // Audible alert: chime + vibrate when a GENUINELY NEW unread notification
-  // arrives (WARNING/CRITICAL → urgent triple tone). Tracks seen ids so it never
-  // sounds for the existing backlog on load, and re-arms an id once it's read so a
-  // re-raised alert can chime again. Gated by the user's notifications toggle.
+  // Audible alert: chime + vibrate when a GENUINELY NEW unread Tier-1 "loud" alert
+  // arrives (client-approved streamlining). Tier-2 routine alerts still appear in
+  // the bell but never chime. Tracks seen ids so it never sounds for the existing
+  // backlog on load, and re-arms an id once it's read so a re-raised alert can
+  // chime again. Gated by the user's notifications toggle.
   const seenUnreadRef = useRef<Set<string>>(new Set());
   const soundInitRef = useRef(false);
   useEffect(() => {
@@ -398,10 +413,10 @@ export default function PortalShell({
     let hasNew = false, urgent = false;
     for (const n of unreadNotifications) {
       if (seen.has(n.id)) continue;
-      hasNew = true;
-      const sev = String(n.severity || "").toUpperCase();
-      if (sev === "WARNING" || sev === "CRITICAL") urgent = true;
       seen.add(n.id);
+      if (!isLoudAlert(n.type, n.severity)) continue; // Tier-2 stays silent
+      hasNew = true;
+      urgent = true;
     }
     if (hasNew && notifications) {
       import("@/lib/alertSound").then((m) => m.playAlertChime(urgent)).catch(() => { /* non-fatal */ });
@@ -425,6 +440,38 @@ export default function PortalShell({
       await updateRecord("notifications", id, { snoozedUntil: new Date(nowTs + 60 * 60 * 1000).toISOString() });
       await refetchNotifications();
     } catch (err) { console.error("Snooze failed:", err); }
+  };
+
+  // Clear (dismiss) a notification off the user's own bell. Deleting only affects the
+  // caller's inbox row — the server keeps ALERT-type dismissals gated to full-control roles.
+  // All staff may clear their OWN notifications — the bell only ever holds the
+  // caller's own rows (server scopes every notification query to the session user).
+  const canClear = (_n?: { type: string }) => true;
+
+  const handleClear = async (id: string) => {
+    setClearedIds((prev) => new Set(prev).add(id)); // optimistic: hide immediately
+    try {
+      const { deleteRecord } = await import("@/lib/api");
+      await deleteRecord("notifications", id);
+      await refetchNotifications();
+    } catch (err) {
+      console.error("Clear failed:", err);
+      setClearedIds((prev) => { const next = new Set(prev); next.delete(id); return next; }); // rollback
+    }
+  };
+
+  // Clear every notification the user is allowed to dismiss from their own bell.
+  const handleClearAll = async () => {
+    const ids = visibleNotifications.filter(canClear).map((n) => n.id);
+    if (!ids.length) return;
+    setClearedIds((prev) => { const next = new Set(prev); ids.forEach((id) => next.add(id)); return next; }); // optimistic
+    try {
+      const { deleteRecord } = await import("@/lib/api");
+      const results = await Promise.allSettled(ids.map((id) => deleteRecord("notifications", id)));
+      const failed = ids.filter((_, i) => results[i].status === "rejected");
+      if (failed.length) setClearedIds((prev) => { const next = new Set(prev); failed.forEach((id) => next.delete(id)); return next; }); // rollback failures
+      await refetchNotifications();
+    } catch (err) { console.error("Clear all failed:", err); }
   };
 
   const handleMarkAllRead = async () => {
@@ -1095,14 +1142,24 @@ export default function PortalShell({
                         <Bell className="w-4 h-4 text-blue-500" />
                         <span className="font-bold text-sm">Notifications</span>
                       </div>
-                      {unreadCount > 0 && (
-                        <button
-                          onClick={handleMarkAllRead}
-                          className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition"
-                        >
-                        Mark all as read
-                      </button>
-                    )}
+                      <div className="flex items-center gap-3">
+                        {unreadCount > 0 && (
+                          <button
+                            onClick={handleMarkAllRead}
+                            className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition"
+                          >
+                            Mark all as read
+                          </button>
+                        )}
+                        {visibleNotifications.some(canClear) && (
+                          <button
+                            onClick={handleClearAll}
+                            className="text-xs font-semibold text-red-600 hover:text-red-700 transition"
+                          >
+                            Clear all
+                          </button>
+                        )}
+                      </div>
                   </div>
 
                   {/* Per-device push toggle (hidden where web push is unsupported) */}
@@ -1210,6 +1267,17 @@ export default function PortalShell({
                                 className="self-center flex-shrink-0 text-[10px] font-semibold text-gray-400 hover:text-gray-700 px-1.5 py-1 rounded"
                               >
                                 Snooze
+                              </button>
+                            )}
+                            {/* Clear: any staff may dismiss their own non-alert notification;
+                                ALERT-type ones stay resolve-gated (server enforces the same). */}
+                            {canClear(n) && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); void handleClear(n.id); }}
+                                title="Clear this notification"
+                                className="self-center flex-shrink-0 text-[10px] font-semibold text-gray-400 hover:text-red-600 px-1.5 py-1 rounded"
+                              >
+                                Clear
                               </button>
                             )}
                             {!n.isRead && (

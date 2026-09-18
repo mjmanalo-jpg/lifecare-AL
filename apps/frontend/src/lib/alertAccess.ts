@@ -10,13 +10,14 @@ export type AlertAction = "acknowledge" | "snooze" | "resolve";
 // resolve). Everyone else — Caregiver, Receptionist and other staff — may only
 // ACKNOWLEDGE. Mirrors the Module 09 RBAC matrix.
 //   Administrator  → PLATFORM_ADMIN / ORGANIZATION_ADMIN / SUPERADMIN
-//   Care Manager   → FACILITY_ADMIN
+//   Care Manager   → FACILITY_ADMIN (facility ops) + CARE_MANAGER (clinical oversight)
 //   Nurse          → NURSE  (PHYSICIAN included as senior clinical authority)
 const FULL_CONTROL_ROLES = new Set([
   "PLATFORM_ADMIN",
   "ORGANIZATION_ADMIN",
   "SUPERADMIN",
   "FACILITY_ADMIN",
+  "CARE_MANAGER",
   "NURSE",
   "PHYSICIAN",
 ]);
@@ -68,6 +69,23 @@ export const occIdFromRoutineAlertKey = (key: string) => key.replace(/^routine(d
 
 /** Task states that mean "no longer outstanding" — an alert for one is stale. */
 export const SETTLED_TASK_STATUS = new Set(["COMPLETED", "CANCELLED"]);
+
+// Tier 1 (client-approved notification streamlining): only "loud" alerts fire a
+// web push + in-app chime. Everything else stays visible in the bell but silent
+// and self-clearing (Tier 2). Loud = the critical alert TYPES (abnormal vitals,
+// incidents, call bell, SBAR escalation) OR anything raised at CRITICAL severity
+// (SLA breach, out-of-stock medication). Shared by the cron push gate and the
+// client chime gate so both agree on what counts as loud.
+const LOUD_ALERT_TYPES = new Set([
+  "VITAL_ALERT",
+  "INCIDENT_REPORT",
+  "CALL_BELL",
+  "SBAR_ESCALATION",
+]);
+
+export function isLoudAlert(type: string | null | undefined, severity: string | null | undefined): boolean {
+  return LOUD_ALERT_TYPES.has(String(type ?? "")) || String(severity ?? "").toUpperCase() === "CRITICAL";
+}
 
 /** The notification types that count as "automatic alerts" in the Alert Center. */
 export const ALERT_NOTIFICATION_TYPES = new Set([

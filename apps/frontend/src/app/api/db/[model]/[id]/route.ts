@@ -177,13 +177,10 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const definition = getModel(model);
   if (!definition || EXPLICIT_ADMIN_MODELS.has(model)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (isClinicalWriteDenied(model, context)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  // Module 09 RBAC: resolving an alert removes it from the queue — restricted to
-  // full-control roles (Administrator/Care Manager/Nurse). The delete is audit-logged.
-  if (model === "notifications" && !canAlertAction(context.role, "resolve")) {
-    return NextResponse.json({ error: "Your role cannot resolve alerts." }, { status: 403 });
-  }
   const existing = await scopedRecord(model, id, context);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  // Notifications are scoped to the session user (tenantWhere), so a delete here can only
+  // remove the caller's OWN inbox row — any staff may clear their own notifications. Audit-logged.
   const deleteLock = SIGN_LOCK[model];
   if (deleteLock && (existing as Record<string, unknown>)[deleteLock.lockField] && !context.isPlatform) {
     return NextResponse.json({ error: "This record has been signed and cannot be deleted." }, { status: 423 });

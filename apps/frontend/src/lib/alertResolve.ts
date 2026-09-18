@@ -27,8 +27,12 @@ export async function clearEntityAlerts(
   const ids = [...new Set(relatedEntityIds.filter(Boolean))];
   if (!ids.length) return 0;
   try {
+    // Never auto-clear CRITICAL alerts: vitals/incidents/SBAR etc. must be handled by
+    // a human (acknowledge/resolve), never silently dropped by system activity. Today
+    // no critical alert is keyed to a task/routine entity, so this is a no-op; it's a
+    // durable safety net that keeps the "critical = manual only" guarantee explicit.
     const { count } = await prisma.notification.deleteMany({
-      where: { relatedEntityType, relatedEntityId: { in: ids }, ...(communityId ? { communityId } : {}) },
+      where: { relatedEntityType, relatedEntityId: { in: ids }, severity: { not: "CRITICAL" }, ...(communityId ? { communityId } : {}) },
     });
     return count;
   } catch (e) {
