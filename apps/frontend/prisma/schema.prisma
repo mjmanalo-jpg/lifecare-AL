@@ -4021,15 +4021,6 @@ enum AppetiteLevel {
   NPO
 }
 
-enum AssistanceLevel {
-  SBA
-  CGA
-  MIN
-  MOD
-  MAX
-  TOTAL
-}
-
 model DailyRound {
   id              String            @id @default(uuid())
   organizationId String?
@@ -4248,7 +4239,7 @@ model MobilityRecord {
   dailyRound        DailyRound @relation(fields: [dailyRoundId], references: [id], onDelete: Cascade)
   time              DateTime
   activityType      String
-  assistanceLevel   AssistanceLevel
+  assistanceLevel   String
   assistiveDevice   String?
   durationMinutes   Int?
   distance          String?
