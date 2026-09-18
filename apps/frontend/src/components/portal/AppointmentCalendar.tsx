@@ -243,17 +243,17 @@ export default function AppointmentCalendar({ residentId, residentName, canSched
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="flex items-center gap-2 font-bold text-gray-900"><CalendarDays className="w-5 h-5 text-blue-600" /> {title}</h3>
+        <h3 className="flex items-center gap-2 font-bold text-gray-900"><CalendarDays className="w-5 h-5 text-[#1f4f70]" /> {title}</h3>
         <div className="flex items-center gap-2">
-          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-blue-400/40" title="Filter by type">
+          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-[#4f93bd]/40" title="Filter by type">
             <option value="">All types</option>
             {TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
           </select>
           {residentId && (
-            <button onClick={() => void openConnect()} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100"><Link2 className="w-4 h-4" /> Connect calendar</button>
+            <button onClick={() => void openConnect()} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#a9c6d8] bg-[#e0ecf2] text-[#1b4763] text-xs font-semibold hover:bg-[#cfe0eb]"><Link2 className="w-4 h-4" /> Connect calendar</button>
           )}
           {canSchedule && residentId && (
-            <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700"><Plus className="w-4 h-4" /> Schedule</button>
+            <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1f4f70] text-white text-xs font-semibold hover:bg-[#1b4763]"><Plus className="w-4 h-4" /> Schedule</button>
           )}
         </div>
       </div>
@@ -278,8 +278,8 @@ export default function AppointmentCalendar({ residentId, residentName, canSched
             const isToday = key === todayKey;
             const isSelected = key === selectedDay;
             return (
-              <div key={key} onClick={() => setSelectedDay(key)} className={`min-h-[68px] cursor-pointer rounded-lg border p-1 transition hover:border-blue-300 hover:bg-blue-50/40 ${isSelected ? "border-blue-400 ring-1 ring-blue-300 bg-blue-50/60" : isToday ? "border-blue-300 bg-blue-50/40" : "border-gray-100"}`}>
-                <p className={`text-[11px] font-semibold ${isToday ? "text-blue-600" : "text-gray-500"}`}>{Number(key.slice(-2))}</p>
+              <div key={key} onClick={() => setSelectedDay(key)} className={`min-h-[68px] cursor-pointer rounded-lg border p-1 transition hover:border-[#7fa9c2] hover:bg-[#e0ecf2]/40 ${isSelected ? "border-[#4f93bd] ring-1 ring-[#7fa9c2] bg-[#e0ecf2]/60" : isToday ? "border-[#7fa9c2] bg-[#e0ecf2]/40" : "border-gray-100"}`}>
+                <p className={`text-[11px] font-semibold ${isToday ? "text-[#1f4f70]" : "text-gray-500"}`}>{Number(key.slice(-2))}</p>
                 <div className="mt-0.5 space-y-0.5">
                   {list.slice(0, 2).map((a) => { const meta = typeMeta(a.type); return (
                     <button key={a.id} onClick={(e) => { e.stopPropagation(); setDetailAppt(a); }} title={`${a.title}${a.withWhom && a.withWhom !== "—" ? ` · ${a.withWhom}` : ""}`} className="block w-full truncate rounded px-1 py-0.5 text-left text-[10px] font-medium hover:opacity-80" style={{ backgroundColor: `${meta.color}1a`, color: meta.color }}>
@@ -295,9 +295,9 @@ export default function AppointmentCalendar({ residentId, residentName, canSched
       </div>
 
       {selectedDay && (
-        <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50/30 p-3">
+        <div className="mb-4 rounded-xl border border-[#a9c6d8] bg-[#e0ecf2]/30 p-3">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm font-bold text-blue-700">{new Date(selectedDay + "T00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</p>
+            <p className="text-sm font-bold text-[#1b4763]">{new Date(selectedDay + "T00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</p>
             <button onClick={() => setSelectedDay(null)} className="text-xs font-medium text-gray-500 hover:text-gray-700">Clear</button>
           </div>
           {(apptsByDay.get(selectedDay) ?? []).length === 0 ? (
@@ -305,7 +305,7 @@ export default function AppointmentCalendar({ residentId, residentName, canSched
           ) : (
             <div className="space-y-1.5">
               {(apptsByDay.get(selectedDay) ?? []).map((a) => { const meta = typeMeta(a.type); const Icon = meta.icon; return (
-                <button key={a.id} onClick={() => setDetailAppt(a)} className="flex w-full items-center gap-2.5 rounded-lg border border-gray-100 bg-white p-2 text-left hover:border-blue-200">
+                <button key={a.id} onClick={() => setDetailAppt(a)} className="flex w-full items-center gap-2.5 rounded-lg border border-gray-100 bg-white p-2 text-left hover:border-[#a9c6d8]">
                   <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${meta.color}1a`, color: meta.color }}><Icon className="h-4 w-4" /></span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-gray-900">{a.title}{a.source === "referral" && <span className="ml-2 align-middle inline-flex items-center rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-700">Confirmed</span>}</span>
@@ -328,7 +328,7 @@ export default function AppointmentCalendar({ residentId, residentName, canSched
             const isToday = day === todayKey;
             return (
               <div key={day}>
-                <p className={`text-xs font-bold uppercase tracking-wide mb-1.5 ${isToday ? "text-blue-600" : "text-gray-400"}`}>
+                <p className={`text-xs font-bold uppercase tracking-wide mb-1.5 ${isToday ? "text-[#1f4f70]" : "text-gray-400"}`}>
                   {isToday ? "Today · " : ""}{d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
                 </p>
                 <div className="space-y-1.5">
@@ -347,7 +347,7 @@ export default function AppointmentCalendar({ residentId, residentName, canSched
                           </p>
                           {a.notes && <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{a.notes}</p>}
                           <div className="mt-1.5 flex items-center gap-2">
-                            <a href={googleCalendarUrl(apptToIcsEvent(a, residentName))} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:underline"><ExternalLink className="w-3 h-3" /> Google</a>
+                            <a href={googleCalendarUrl(apptToIcsEvent(a, residentName))} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] font-medium text-[#1f4f70] hover:text-[#1b4763] hover:underline"><ExternalLink className="w-3 h-3" /> Google</a>
                             <button onClick={() => downloadIcs(`${a.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "appointment"}.ics`, buildIcsEvent(apptToIcsEvent(a, residentName), a.title))} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 hover:text-gray-700 hover:underline"><Download className="w-3 h-3" /> .ics</button>
                           </div>
                         </div>
@@ -364,22 +364,22 @@ export default function AppointmentCalendar({ residentId, residentName, canSched
       {showConnect && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between bg-blue-600 px-5 py-4 text-white rounded-t-2xl">
+            <div className="flex items-center justify-between bg-[#1f4f70] px-5 py-4 text-white rounded-t-2xl">
               <h3 className="flex items-center gap-2 font-bold"><Link2 className="w-5 h-5" /> Connect your calendar</h3>
               <button onClick={() => setShowConnect(false)} className="p-1 hover:bg-white/15 rounded"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-5 space-y-5">
               <p className="text-sm text-gray-600">Subscribe to {residentName ? <span className="font-semibold text-gray-900">{residentName}&rsquo;s</span> : "this"} appointment schedule from Google Calendar, Apple Calendar or Outlook. Once subscribed, new and changed appointments sync automatically.</p>
 
-              <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-blue-700 mb-2">Subscription link</p>
+              <div className="rounded-2xl border border-[#cfe0eb] bg-[#e0ecf2]/60 p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-[#1b4763] mb-2">Subscription link</p>
                 {connecting ? (
                   <p className="flex items-center gap-2 text-sm text-gray-500"><Loader2 className="w-4 h-4 animate-spin" /> Creating your private feed&hellip;</p>
                 ) : feedHttpsUrl ? (
                   <>
                     <div className="flex items-center gap-2">
-                      <input readOnly value={feedHttpsUrl} onFocus={(e) => e.currentTarget.select()} className="flex-1 min-w-0 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs text-gray-700 font-mono" />
-                      <button onClick={() => void copyFeed()} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 whitespace-nowrap">{copied ? <><Check className="w-4 h-4" /> Copied</> : <><Copy className="w-4 h-4" /> Copy</>}</button>
+                      <input readOnly value={feedHttpsUrl} onFocus={(e) => e.currentTarget.select()} className="flex-1 min-w-0 rounded-lg border border-[#a9c6d8] bg-white px-3 py-2 text-xs text-gray-700 font-mono" />
+                      <button onClick={() => void copyFeed()} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#1f4f70] text-white text-xs font-semibold hover:bg-[#1b4763] whitespace-nowrap">{copied ? <><Check className="w-4 h-4" /> Copied</> : <><Copy className="w-4 h-4" /> Copy</>}</button>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <a href={feedWebcalUrl} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-700 hover:bg-gray-50"><CalIcon className="w-4 h-4" /> Add to Apple / Outlook</a>
@@ -408,11 +408,11 @@ export default function AppointmentCalendar({ residentId, residentName, canSched
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between bg-blue-600 px-5 py-4 text-white rounded-t-xl">
+            <div className="flex items-center justify-between bg-[#1f4f70] px-5 py-4 text-white rounded-t-xl">
               <h3 className="font-bold">Schedule appointment{residentName ? ` — ${residentName}` : ""}</h3>
               <button onClick={() => setShowForm(false)} className="p-1 hover:bg-white/15 rounded"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-5 grid grid-cols-2 gap-3">
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="text-xs font-medium text-gray-600 col-span-2">Type
                 <select className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>{TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}</select>
               </label>
@@ -434,7 +434,7 @@ export default function AppointmentCalendar({ residentId, residentName, canSched
             </div>
             <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-3">
               <button onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Cancel</button>
-              <button onClick={() => void schedule()} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Schedule</button>
+              <button onClick={() => void schedule()} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763] disabled:opacity-60">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Schedule</button>
             </div>
           </div>
         </div>
@@ -461,7 +461,7 @@ export default function AppointmentCalendar({ residentId, residentName, canSched
                   {detailAppt.notes && <p className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 text-gray-400" />{detailAppt.notes}</p>}
                 </div>
                 <div className="flex items-center gap-2 border-t border-gray-100 pt-3">
-                  <a href={googleCalendarUrl(apptToIcsEvent(detailAppt, residentName))} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"><ExternalLink className="h-3.5 w-3.5" /> Add to Google</a>
+                  <a href={googleCalendarUrl(apptToIcsEvent(detailAppt, residentName))} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-[#a9c6d8] bg-[#e0ecf2] px-3 py-1.5 text-xs font-semibold text-[#1b4763] hover:bg-[#cfe0eb]"><ExternalLink className="h-3.5 w-3.5" /> Add to Google</a>
                   <button onClick={() => downloadIcs(`${detailAppt.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "appointment"}.ics`, buildIcsEvent(apptToIcsEvent(detailAppt, residentName), detailAppt.title))} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"><Download className="h-3.5 w-3.5" /> Download .ics</button>
                 </div>
               </div>

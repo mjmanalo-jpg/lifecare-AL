@@ -172,7 +172,7 @@ export default function FamilyApprovals() {
                 {/* Header — what + how much */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4">
                   <div className="flex items-center gap-3">
-                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-sm"><HeartHandshake className="h-5 w-5" /></span>
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#1f4f70] text-white shadow-sm"><HeartHandshake className="h-5 w-5" /></span>
                     <div>
                       <p className="text-[15px] font-bold text-slate-900">Private (1:1) Caregiver</p>
                       <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700"><Clock className="h-3 w-3" /> Awaiting your approval</span>
@@ -195,12 +195,12 @@ export default function FamilyApprovals() {
                 {/* Assessment — review the completed assessment before deciding */}
                 <div className="border-t border-slate-100 px-5 py-3">
                   {a.assessment ? (
-                    <button onClick={() => setViewAssessment(a)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50/60 px-3.5 py-3 text-left transition hover:bg-blue-50">
+                    <button onClick={() => setViewAssessment(a)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-[#a9c6d8] bg-[#e0ecf2]/60 px-3.5 py-3 text-left transition hover:bg-[#e0ecf2]">
                       <span className="min-w-0">
-                        <span className="flex items-center gap-1.5 text-sm font-bold text-blue-800"><ClipboardList className="h-4 w-4" /> Resident assessment{a.assessment.level ? ` · Level ${a.assessment.level}` : ""}</span>
+                        <span className="flex items-center gap-1.5 text-sm font-bold text-[#163c56]"><ClipboardList className="h-4 w-4" /> Resident assessment{a.assessment.level ? ` · Level ${a.assessment.level}` : ""}</span>
                         <span className="mt-0.5 block truncate text-xs text-slate-500">{a.assessment.recommend ? "Recommends a private caregiver — " : ""}{a.assessment.triggers?.[0] || a.assessment.rationale || "See the full assessment results"}</span>
                       </span>
-                      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-blue-700">Review <ChevronRight className="h-4 w-4" /></span>
+                      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[#1b4763]">Review <ChevronRight className="h-4 w-4" /></span>
                     </button>
                   ) : (
                     <p className="text-xs text-slate-400">No assessment was attached to this request.</p>
@@ -356,7 +356,7 @@ function AssessmentModal({ a, onClose }: { a: PrivateCareAssignment; onClose: ()
       <div className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl ring-1 ring-slate-900/5 sm:max-h-[88vh] sm:rounded-2xl">
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4">
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-sm"><ClipboardList className="h-5 w-5" /></span>
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#1f4f70] text-white shadow-sm"><ClipboardList className="h-5 w-5" /></span>
             <div>
               <h2 className="text-[15px] font-bold text-slate-900">Resident Assessment</h2>
               <p className="mt-0.5 text-xs text-slate-500">{a.residentName}{a.room ? ` · Room ${a.room}` : ""}</p>
@@ -374,10 +374,10 @@ function AssessmentModal({ a, onClose }: { a: PrivateCareAssignment; onClose: ()
           <p className="text-[11px] text-slate-400">Assessed {fmtDate(sn.assessedAt)}{sn.assessor ? ` · by ${sn.assessor}` : ""}</p>
 
           <div className="rounded-xl border px-4 py-3" style={{ borderColor: sn.recommend ? "#bfdbfe" : "#e2e8f0", backgroundColor: sn.recommend ? "#eff6ff" : "#f8fafc" }}>
-            <p className="flex items-center gap-1.5 text-sm font-bold text-slate-900"><Sparkles className="h-4 w-4 text-blue-600" /> Why a private caregiver is needed</p>
+            <p className="flex items-center gap-1.5 text-sm font-bold text-slate-900"><Sparkles className="h-4 w-4 text-[#1f4f70]" /> Why a private caregiver is needed</p>
             {sn.triggers?.length ? (
               <ul className="mt-2 space-y-1">
-                {sn.triggers.map((t, i) => <li key={i} className="flex items-start gap-2 text-xs text-slate-700"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-blue-500" />{t}</li>)}
+                {sn.triggers.map((t, i) => <li key={i} className="flex items-start gap-2 text-xs text-slate-700"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#22577a]" />{t}</li>)}
               </ul>
             ) : <p className="mt-1 text-xs text-slate-600">{sn.rationale || "The care team assessed the resident and requested dedicated 1:1 support."}</p>}
             {sn.rationale && sn.triggers?.length ? <p className="mt-2 text-xs italic text-slate-600">{sn.rationale}</p> : null}
@@ -390,7 +390,7 @@ function AssessmentModal({ a, onClose }: { a: PrivateCareAssignment; onClose: ()
                 {sn.domains.map((d) => (
                   <div key={d.code} className="flex items-center gap-3">
                     <span className="w-40 shrink-0 truncate text-xs font-medium text-slate-700">{d.label}</span>
-                    <span className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100"><span className="block h-full rounded-full bg-blue-500" style={{ width: `${(d.score / 4) * 100}%` }} /></span>
+                    <span className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100"><span className="block h-full rounded-full bg-[#22577a]" style={{ width: `${(d.score / 4) * 100}%` }} /></span>
                     <span className="w-8 shrink-0 text-right text-xs font-semibold tabular-nums text-slate-600">{d.score}/4</span>
                   </div>
                 ))}

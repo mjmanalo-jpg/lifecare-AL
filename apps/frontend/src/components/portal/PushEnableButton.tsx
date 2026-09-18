@@ -50,7 +50,7 @@ export default function PushEnableButton() {
       type="button"
       onClick={granted ? onDisable : onEnable}
       disabled={busy}
-      className={`flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold transition disabled:opacity-50 ${granted ? "text-gray-500 hover:bg-gray-50" : "text-blue-600 hover:bg-blue-50"}`}
+      className={`flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold transition disabled:opacity-50 ${granted ? "text-gray-500 hover:bg-gray-50" : "text-[#1f4f70] hover:bg-[#e0ecf2]"}`}
     >
       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : granted ? <BellOff className="h-4 w-4" /> : <BellRing className="h-4 w-4" />}
       {busy ? "Working…" : granted ? "Turn off alerts on this device" : "Enable alerts on this device"}

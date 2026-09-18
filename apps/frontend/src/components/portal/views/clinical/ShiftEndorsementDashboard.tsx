@@ -159,7 +159,7 @@ export default function ShiftEndorsementDashboard({ clinicianRole = "FACILITY_AD
   return (
     <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-6" style={{ background: "#F7F8FA" }}>
       <div className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem] flex items-center gap-2"><Repeat className="w-6 h-6 text-blue-600" /> Shift Endorsement Dashboard</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem] flex items-center gap-2"><Repeat className="w-6 h-6 text-[#1f4f70]" /> Shift Endorsement Dashboard</h1>
         <p className="mt-1 text-sm text-slate-500">Shift continuity overview — pending items, carry-overs, and alerts.</p>
       </div>
 
@@ -173,7 +173,7 @@ export default function ShiftEndorsementDashboard({ clinicianRole = "FACILITY_AD
         <div className="mb-3 flex items-center gap-2">
           <Clock className="w-5 h-5 text-orange-500" />
           <p className="font-bold text-slate-900">Awaiting Incoming Acknowledgement</p>
-          <span className="ml-1 inline-flex items-center justify-center min-w-6 h-5 px-1.5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">{awaiting.length}</span>
+          <span className="ml-1 inline-flex items-center justify-center min-w-6 h-5 px-1.5 rounded-full bg-[#cfe0eb] text-[#1b4763] text-xs font-bold">{awaiting.length}</span>
         </div>
         {loading && items.length === 0 ? (
           <p className="py-8 text-center text-sm text-slate-400">Loading…</p>
@@ -228,7 +228,7 @@ export default function ShiftEndorsementDashboard({ clinicianRole = "FACILITY_AD
           <p className="font-bold text-slate-900">Recent Endorsements</p>
           <div className="inline-flex items-center rounded-full bg-slate-100 p-1">
             {(["today", "week", "month", "all"] as const).map((r) => (
-              <button key={r} onClick={() => setRange(r)} className={`rounded-full px-3.5 py-1.5 text-xs font-semibold capitalize transition ${range === r ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>{r === "week" ? "This week" : r === "month" ? "This month" : r}</button>
+              <button key={r} onClick={() => setRange(r)} className={`rounded-full px-3.5 py-1.5 text-xs font-semibold capitalize transition ${range === r ? "bg-[#1f4f70] text-white shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>{r === "week" ? "This week" : r === "month" ? "This month" : r}</button>
             ))}
           </div>
         </div>
@@ -257,7 +257,7 @@ export default function ShiftEndorsementDashboard({ clinicianRole = "FACILITY_AD
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   PENDING: { label: "Pending Sign-Off", cls: "bg-amber-100 text-amber-700" },
-  SIGNED_OFF: { label: "Awaiting Acknowledgement", cls: "bg-blue-100 text-blue-700" },
+  SIGNED_OFF: { label: "Awaiting Acknowledgement", cls: "bg-[#cfe0eb] text-[#1b4763]" },
   ACKNOWLEDGED: { label: "Acknowledged", cls: "bg-green-100 text-green-700" },
 };
 
@@ -385,7 +385,7 @@ function ViewModal({ e, resName, canAck, onAck, onClose }: { e: Endorsement; res
           </span>
           <div className="flex items-center gap-2">
             <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">Close</button>
-            {canAck && <button onClick={onAck} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700"><CheckCircle2 className="w-4 h-4" /> Acknowledge</button>}
+            {canAck && <button onClick={onAck} className="inline-flex items-center gap-2 rounded-lg bg-[#1f4f70] px-5 py-2 text-sm font-semibold text-white hover:bg-[#1b4763]"><CheckCircle2 className="w-4 h-4" /> Acknowledge</button>}
           </div>
         </div>
       </div>

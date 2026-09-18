@@ -162,11 +162,11 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
     const result = await Swal.fire({
       title: "Log physician communication",
       html:
-        `<input id="pc-phys" class="swal2-input" placeholder="Physician name (e.g. Dr. Reyes)">` +
-        `<select id="pc-method" class="swal2-select" style="display:block;width:80%;margin:0.5em auto">` +
+        `<input id="pc-phys" class="swal2-input" style="font-size:16px" placeholder="Physician name (e.g. Dr. Reyes)">` +
+        `<select id="pc-method" class="swal2-select" style="display:block;width:100%;margin:0.5em auto 0;font-size:16px">` +
           `<option value="PHONE">Phone Call</option><option value="IN_PERSON">In-Person Visit</option><option value="WRITTEN">Written</option><option value="TELEMEDICINE">Telemedicine</option>` +
         `</select>` +
-        `<textarea id="pc-instr" class="swal2-textarea" placeholder="Instructions received (verbatim)">${esc(e.response || "")}</textarea>`,
+        `<textarea id="pc-instr" class="swal2-textarea" style="font-size:16px" placeholder="Instructions received (verbatim)">${esc(e.response || "")}</textarea>`,
       showCancelButton: true, confirmButtonText: "Save & link", confirmButtonColor: "#2E4A48",
       preConfirm: () => {
         const phys = (document.getElementById("pc-phys") as HTMLInputElement | null)?.value.trim() || "";
@@ -202,7 +202,7 @@ export default function EscalationsBoard({ role }: { role: ClinicianRole }) {
         </div>
         <div className="flex flex-wrap items-center gap-2 self-start">
           <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-xs font-bold uppercase tracking-[0.08em] text-[var(--clinical-green)]" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}><span className="h-2 w-2 rounded-full bg-[var(--clinical-green)] animate-pulse" /> Live</span>
-          <RefreshButton onRefresh={() => void refetch()} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+          <RefreshButton onRefresh={() => void refetch()} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#22577a]/30" />
           {canCreate && (
             <button onClick={() => setShowRaise(true)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--clinical-panel)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--clinical-panel-hover,var(--clinical-panel))] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-[var(--clinical-focus,var(--clinical-panel))]">
               <Plus className="h-4 w-4" /> New Escalation

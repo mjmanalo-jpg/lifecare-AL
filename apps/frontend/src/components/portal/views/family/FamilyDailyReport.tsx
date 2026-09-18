@@ -13,7 +13,7 @@ import {
 
 const SNAPSHOT = [
   { key: "HEART_RATE", label: "Heart Rate", icon: Heart, color: "text-red-500" },
-  { key: "BLOOD_PRESSURE", label: "Blood Pressure", icon: Droplets, color: "text-blue-500" },
+  { key: "BLOOD_PRESSURE", label: "Blood Pressure", icon: Droplets, color: "text-[#22577a]" },
   { key: "TEMPERATURE", label: "Temperature", icon: Thermometer, color: "text-orange-500" },
   { key: "OXYGEN", label: "Oxygen", icon: Wind, color: "text-green-500" },
 ];
@@ -54,7 +54,7 @@ export default function FamilyDailyReport() {
     ...relVitals.map((v) => ({ icon: HeartPulse, color: "text-red-500", title: `${humanize(String(v.type))} recorded`, detail: `${String(v.value)}${v.unit ? ` ${String(v.unit)}` : ""}`, ts: t(v.recordedAt), when: v.recordedAt ? new Date(String(v.recordedAt)).toLocaleString() : "" })),
     ...rawIncidents.map((i) => ({ icon: AlertTriangle, color: "text-orange-500", title: humanize(String(i.incidentType ?? "")) || "Incident", detail: String(i.description ?? ""), ts: t(i.incidentDate), when: i.incidentDate ? new Date(String(i.incidentDate)).toLocaleString() : "" })),
     ...visitRows.map((v: Row) => ({ icon: Calendar, color: "text-purple-500", title: `Visit — ${String(v.visitorName ?? "Guest")}`, detail: String(v.purpose ?? ""), ts: t(v.checkInTime), when: v.checkInTime ? new Date(String(v.checkInTime)).toLocaleString() : "" })),
-    ...messageRows.map((m: Row) => ({ icon: MessageSquare, color: "text-blue-500", title: String(m.subject ?? humanize(String(m.messageType ?? ""))) || "Message", detail: String(m.content ?? ""), ts: t(m.createdAt), when: m.createdAt ? new Date(String(m.createdAt)).toLocaleString() : "" })),
+    ...messageRows.map((m: Row) => ({ icon: MessageSquare, color: "text-[#22577a]", title: String(m.subject ?? humanize(String(m.messageType ?? ""))) || "Message", detail: String(m.content ?? ""), ts: t(m.createdAt), when: m.createdAt ? new Date(String(m.createdAt)).toLocaleString() : "" })),
   ].filter((e) => e.ts > 0).sort((a, b) => b.ts - a.ts).slice(0, 10);
 
   return (
@@ -71,7 +71,7 @@ export default function FamilyDailyReport() {
       </div>
 
       {/* Live summary sentence */}
-      <div className="bg-gradient-to-br from-green-50 to-blue-50 border border-green-200 rounded-lg p-5">
+      <div className="bg-[#e2f6ec] to-[#e0ecf2] border border-green-200 rounded-lg p-5">
         <p className="text-gray-800">
           {displayName} has <span className="font-bold">{vitalsToday}</span> vital reading{vitalsToday === 1 ? "" : "s"} logged today,
           {" "}<span className="font-bold">{rawMeds.length}</span> active medication{rawMeds.length === 1 ? "" : "s"}, and
@@ -106,7 +106,7 @@ export default function FamilyDailyReport() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Activity timeline */}
         <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-5">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-blue-500" /> Activity Timeline</h3>
+          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity className="w-4 h-4 text-[#22577a]" /> Activity Timeline</h3>
           {events.length > 0 ? (
             <ol className="relative border-l-2 border-gray-100 ml-2 space-y-4">
               {events.map((e, i) => {
@@ -134,11 +134,11 @@ export default function FamilyDailyReport() {
 
         {/* Medication schedule */}
         <div className="bg-white rounded-lg border border-gray-200 p-5">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Pill className="w-4 h-4 text-blue-500" /> Medications</h3>
+          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Pill className="w-4 h-4 text-[#22577a]" /> Medications</h3>
           {rawMeds.length > 0 ? (
             <div className="space-y-2">
               {rawMeds.map((m, i) => (
-                <div key={i} className="p-2.5 rounded-lg bg-blue-50 border border-blue-100">
+                <div key={i} className="p-2.5 rounded-lg bg-[#e0ecf2] border border-[#cfe0eb]">
                   <p className="font-medium text-gray-900 text-sm">{String(m.name ?? "")} <span className="text-gray-500 font-normal">{String(m.dosage ?? "")}</span></p>
                   <p className="text-xs text-gray-600">{String(m.frequency ?? "")}{m.status ? ` • ${humanize(String(m.status))}` : ""}</p>
                 </div>

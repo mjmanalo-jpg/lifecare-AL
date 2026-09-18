@@ -26,7 +26,7 @@ const asStr = (v: unknown): string => (v == null ? "" : String(v));
 
 const KIND_META: Record<string, { label: string; icon: LucideIcon; cls: string }> = {
   CONSULTATION: { label: "Consult", icon: Inbox, cls: "bg-teal-100 text-teal-700" },
-  REFERRAL: { label: "Referral", icon: Send, cls: "bg-indigo-100 text-indigo-700" },
+  REFERRAL: { label: "Referral", icon: Send, cls: "bg-[#cfe0eb] text-[#1b4763]" },
 };
 
 type ConsultVM = {
@@ -107,7 +107,7 @@ export default function PhysicianConsults() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <Stethoscope className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Consults &amp; Referrals
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -117,7 +117,7 @@ export default function PhysicianConsults() {
         </div>
         <div className="flex items-center gap-2 self-start">
           <RefreshButton onRefresh={() => notesQ.refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
-          <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+          <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
             <Plus className="w-4 h-4" /> New Referral / Consult
           </button>
         </div>
@@ -176,7 +176,7 @@ export default function PhysicianConsults() {
                     {i.content && <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap line-clamp-2">{i.content}</p>}
                   </button>
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    <button onClick={() => setViewing(i)} className="p-1.5 rounded hover:bg-blue-50 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
+                    <button onClick={() => setViewing(i)} className="p-1.5 rounded hover:bg-[#e0ecf2] text-[#1f4f70] transition" title="View"><Eye className="w-4 h-4" /></button>
                     {!i.resolvedBy && (busy ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : (
                       <button onClick={() => resolve(i.id)} className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 transition"><CheckCircle2 className="w-3.5 h-3.5" /> Resolve</button>
                     ))}
@@ -216,7 +216,7 @@ export default function PhysicianConsults() {
         return (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-              <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-blue-600 text-white p-5 flex items-start justify-between gap-3 z-10">
+              <div className="sticky top-0 bg-[#22577a] text-white p-5 flex items-start justify-between gap-3 z-10">
                 <div className="min-w-0">
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ${meta.cls}`}><Icon className="w-3 h-3" /> {meta.label}</span>
                   <h2 className="text-lg sm:text-xl font-bold mt-1 break-words">{viewing.title}</h2>
@@ -248,7 +248,7 @@ export default function PhysicianConsults() {
                 </button>
                 {!viewing.resolvedBy && (
                   <button onClick={() => resolve(viewing.id)} disabled={busy}
-                    className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 text-sm">
+                    className="flex items-center gap-2 px-5 py-2 bg-[#4fa77e] text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 text-sm">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Resolve &amp; Co-sign
                   </button>
                 )}
@@ -294,7 +294,7 @@ function AddConsultModal({ residents, authorName, onClose, onSaved }: {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold">New Consult / Referral</h2>
           <button onClick={onClose} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
@@ -328,7 +328,7 @@ function AddConsultModal({ residents, authorName, onClose, onSaved }: {
           <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
             <button type="button" onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
             <button type="submit" disabled={!valid || saving}
-              className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50">
+              className="flex items-center gap-2 px-6 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50">
               <Send className="w-4 h-4" /> {saving ? "Saving…" : "Create"}
             </button>
           </div>
@@ -340,7 +340,7 @@ function AddConsultModal({ residents, authorName, onClose, onSaved }: {
 
 const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
   teal: { wrap: "bg-teal-50 border-teal-200", icon: "text-teal-500", value: "text-teal-600" },
-  indigo: { wrap: "bg-indigo-50 border-indigo-200", icon: "text-indigo-500", value: "text-indigo-600" },
+  indigo: { wrap: "bg-[#e0ecf2] border-[#a9c6d8]", icon: "text-[#22577a]", value: "text-[#1f4f70]" },
   green: { wrap: "bg-green-50 border-green-200", icon: "text-green-500", value: "text-green-600" },
 };
 function Stat({ label, value, icon: Icon, tone }: { label: string; value: number; icon: LucideIcon; tone: keyof typeof TONES }) {

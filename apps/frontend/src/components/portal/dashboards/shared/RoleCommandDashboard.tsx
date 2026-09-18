@@ -923,7 +923,7 @@ function QueueRow({ item, acting, onAction }: { item: DashboardQueueItem; acting
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h3 className="font-semibold text-[var(--clinical-ink)]">{item.title}</h3>
             <StatusPill status={item.state} />
-            {item.isNew && <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-sky-800">New</span>}
+            {item.isNew && <span className="rounded bg-[#cfe0eb] px-1.5 py-0.5 text-[10px] font-bold uppercase text-[#163c56]">New</span>}
           </div>
           {(item.residentLabel || item.roomLabel || timestamp) && (
             <p className="mt-1 text-xs text-[var(--clinical-muted)]">

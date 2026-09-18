@@ -172,7 +172,7 @@ function AccountModal({ resident, onClose, onDone }: { resident: Row; onClose: (
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white px-6 py-4 flex items-center justify-between gap-3">
+        <div className="bg-[#1e293b] text-white px-6 py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <span className="h-10 w-10 shrink-0 rounded-full bg-white/15 ring-1 ring-white/20 flex items-center justify-center font-bold text-sm">{(`${s(resident.firstName).charAt(0)}${s(resident.lastName).charAt(0)}`).toUpperCase() || "?"}</span>
             <div className="min-w-0">

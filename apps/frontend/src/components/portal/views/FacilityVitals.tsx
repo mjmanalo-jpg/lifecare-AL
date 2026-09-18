@@ -30,7 +30,7 @@ const VITAL_DEFS: { key: string; label: string; icon: LucideIcon; normalRange: s
 ];
 
 const VITAL_COLORS: Record<string, string> = {
-  HEART_RATE: "text-red-500", BLOOD_PRESSURE: "text-blue-500", TEMPERATURE: "text-orange-500",
+  HEART_RATE: "text-red-500", BLOOD_PRESSURE: "text-[#22577a]", TEMPERATURE: "text-orange-500",
   OXYGEN: "text-green-500", RESPIRATORY_RATE: "text-purple-500", BLOOD_GLUCOSE: "text-amber-500",
 };
 function relTime(iso: string | null, nowTs: number): string {
@@ -266,13 +266,13 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
         <>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+              <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1 flex items-center gap-2">
                 <Activity className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Vitals Monitor
               </h1>
               <p className="text-gray-600 text-sm">Facility-wide vital signs overview</p>
             </div>
             <div className="flex items-center gap-2 self-start">
-              <RefreshButton onRefresh={() => { resetLog(); setShowLog(true); }} className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-semibold" />
+              <RefreshButton onRefresh={() => { resetLog(); setShowLog(true); }} className="flex items-center gap-2 px-3.5 py-2 bg-[#1f4f70] text-white rounded-lg hover:bg-[#1b4763] transition text-sm font-semibold" />
             </div>
           </div>
 
@@ -280,14 +280,14 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
           {showLog && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[92vh] overflow-y-auto">
-                <div className="sticky top-0 bg-blue-600 text-white px-5 py-4 flex items-center justify-between">
+                <div className="sticky top-0 bg-[#1f4f70] text-white px-5 py-4 flex items-center justify-between">
                   <h3 className="font-bold text-lg flex items-center gap-2"><HeartPulse className="w-5 h-5" /> Log Vitals</h3>
-                  <button onClick={() => setShowLog(false)} className="p-1 hover:bg-blue-700 rounded"><X className="w-5 h-5" /></button>
+                  <button onClick={() => setShowLog(false)} className="p-1 hover:bg-[#1b4763] rounded"><X className="w-5 h-5" /></button>
                 </div>
                 <div className="p-5 space-y-3">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1">Resident *</label>
-                    <select value={logForm.residentId} onChange={(e) => setLog("residentId", e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-400">
+                    <select value={logForm.residentId} onChange={(e) => setLog("residentId", e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]">
                       <option value="">Select resident…</option>
                       {residentRows.map((r) => (
                         <option key={String(r.id)} value={String(r.id)}>{`${r.firstName ?? ""} ${r.lastName ?? ""}`.trim() || "Resident"}{r.roomNumber ? ` · Rm ${r.roomNumber}` : ""}</option>
@@ -296,8 +296,8 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
                   </div>
 
                   {/* #1 — capture straight from a connected BLE medical device */}
-                  <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-2.5">
-                    <p className="text-[11px] font-semibold text-blue-900 mb-1.5 flex items-center gap-1.5"><Bluetooth className="w-3.5 h-3.5" /> Capture from device</p>
+                  <div className="rounded-lg border border-[#a9c6d8] bg-[#e0ecf2]/60 p-2.5">
+                    <p className="text-[11px] font-semibold text-[#12324a] mb-1.5 flex items-center gap-1.5"><Bluetooth className="w-3.5 h-3.5" /> Capture from device</p>
                     <div className="flex flex-wrap gap-1.5">
                       {(Object.keys(DEVICE_KINDS) as DeviceVitalKind[]).map((kind) => (
                         <button
@@ -305,14 +305,14 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
                           type="button"
                           onClick={() => void captureFromDevice(kind)}
                           disabled={connecting !== null}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-blue-300 bg-white text-blue-700 text-xs font-medium hover:bg-blue-100 disabled:opacity-50 transition"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-[#7fa9c2] bg-white text-[#1b4763] text-xs font-medium hover:bg-[#cfe0eb] disabled:opacity-50 transition"
                         >
                           {connecting === kind ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bluetooth className="w-3 h-3" />}
                           {DEVICE_KINDS[kind].label}
                         </button>
                       ))}
                     </div>
-                    <p className="mt-1.5 text-[10px] text-blue-800/70">Reads the instrument directly — no transcription error. Falls back to manual entry.</p>
+                    <p className="mt-1.5 text-[10px] text-[#163c56]/70">Reads the instrument directly — no transcription error. Falls back to manual entry.</p>
                   </div>
 
                   {LOG_KEYS.map((k) => {
@@ -331,7 +331,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
                           value={val}
                           onChange={(e) => setLog(k, e.target.value)}
                           placeholder={k === "BLOOD_PRESSURE" ? "e.g. 120/80" : `${meta.normal}`}
-                          className={`w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 ${bad ? "border-red-300 focus:ring-red-400" : "border-gray-300 focus:ring-blue-400"}`}
+                          className={`w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 ${bad ? "border-red-300 focus:ring-red-400" : "border-gray-300 focus:ring-[#4f93bd]"}`}
                         />
                         {val.trim() !== "" && (methods || prov) && (
                           <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -339,14 +339,14 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
                               <select
                                 value={logContext[k] ?? ""}
                                 onChange={(e) => setContext(k, e.target.value)}
-                                className="text-xs px-2 py-1 border border-gray-300 rounded-md bg-white outline-none focus:ring-2 focus:ring-blue-400"
+                                className="text-xs px-2 py-1 border border-gray-300 rounded-md bg-white outline-none focus:ring-2 focus:ring-[#4f93bd]"
                               >
                                 <option value="">Context…</option>
                                 {methods.map((m) => <option key={m} value={m}>{m}</option>)}
                               </select>
                             )}
                             {prov && (
-                              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded ${prov.source === "DEVICE" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}>
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded ${prov.source === "DEVICE" ? "bg-[#cfe0eb] text-[#1b4763]" : "bg-gray-100 text-gray-500"}`}>
                                 {prov.source === "DEVICE" ? <><Bluetooth className="w-2.5 h-2.5" /> {prov.deviceId ?? "Device"}</> : "Manual"}
                               </span>
                             )}
@@ -359,7 +359,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
                 </div>
                 <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-5 py-3 flex flex-wrap items-center justify-end gap-2">
                   <button onClick={() => { setShowLog(false); resetLog(); }} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg text-sm font-medium">Cancel</button>
-                  <button onClick={() => void submitLog()} disabled={savingLog} className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-sm disabled:opacity-50">{savingLog ? "Saving…" : "Save Vitals"}</button>
+                  <button onClick={() => void submitLog()} disabled={savingLog} className="px-5 py-2 bg-[#1f4f70] hover:bg-[#1b4763] text-white font-semibold rounded-lg text-sm disabled:opacity-50">{savingLog ? "Saving…" : "Save Vitals"}</button>
                 </div>
               </div>
             </div>
@@ -367,7 +367,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             <StatBox label="Total Readings" value={stats.total} color="text-gray-900" bg="bg-gray-50" />
-            <StatBox label="Residents Tracked" value={stats.residents} color="text-blue-600" bg="bg-blue-50" />
+            <StatBox label="Residents Tracked" value={stats.residents} color="text-[#1f4f70]" bg="bg-[#e0ecf2]" />
             <StatBox label="Abnormal Readings" value={stats.abnormal} color="text-red-600" bg="bg-red-50" />
             <StatBox label="Residents w/ Alerts" value={stats.withAbnormal} color="text-orange-600" bg="bg-orange-50" />
           </div>
@@ -408,7 +408,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
             {scopedResidents.map((rv) => (
               <div key={`${rv.name}||${rv.room}`} className="divide-y divide-gray-100">
                 {/* Profile Header */}
-                <div className="bg-gradient-to-br from-yellow-50/50 to-amber-50/50 p-4 sm:p-6 flex items-center justify-between">
+                <div className="bg-[#f6eddb] /50 to-amber-50/50 p-4 sm:p-6 flex items-center justify-between">
                   <div>
                     <h3 className="text-xl font-bold text-slate-800">{rv.name}</h3>
                     <p className="text-xs text-slate-500 font-semibold mt-0.5">Room {rv.room} &bull; Latest Vital Signs</p>
@@ -420,10 +420,10 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
                 </div>
 
                  {/* Explanatory Notice */}
-                <div className="bg-sky-50/50 border-b border-sky-100 px-4 sm:px-6 py-3.5 flex gap-2.5 items-start">
-                  <Activity className="w-4 h-4 text-sky-500 mt-0.5 flex-shrink-0 animate-pulse" />
-                  <p className="text-[10px] leading-relaxed text-sky-700 font-medium">
-                    <strong>Source:</strong> the latest logged readings. Vitals marked <span className="text-sky-800 font-extrabold bg-sky-100/60 px-1 py-0.5 rounded text-[9px] uppercase tracking-wider">Device</span> were captured from a connected medical device; <span className="text-emerald-800 font-extrabold bg-emerald-100/60 px-1 py-0.5 rounded text-[9px] uppercase tracking-wider">Manual</span> were entered by staff. Updates automatically when new vitals are logged.
+                <div className="bg-[#e0ecf2]/50 border-b border-[#cfe0eb] px-4 sm:px-6 py-3.5 flex gap-2.5 items-start">
+                  <Activity className="w-4 h-4 text-[#22577a] mt-0.5 flex-shrink-0 animate-pulse" />
+                  <p className="text-[10px] leading-relaxed text-[#1b4763] font-medium">
+                    <strong>Source:</strong> the latest logged readings. Vitals marked <span className="text-[#163c56] font-extrabold bg-[#cfe0eb]/60 px-1 py-0.5 rounded text-[9px] uppercase tracking-wider">Device</span> were captured from a connected medical device; <span className="text-emerald-800 font-extrabold bg-emerald-100/60 px-1 py-0.5 rounded text-[9px] uppercase tracking-wider">Manual</span> were entered by staff. Updates automatically when new vitals are logged.
                   </p>
                 </div>
 
@@ -434,7 +434,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
                     const abnormalVal = v?.abnormal;
                     const src = v?.source ?? null;
                     const srcText = src === "DEVICE" ? "Device" : src === "CAMERA_RPPG" ? "Camera" : src === "MANUAL" ? "Manual" : "Logged";
-                    const srcCls = src === "DEVICE" ? "bg-sky-50 text-sky-600 border-sky-100"
+                    const srcCls = src === "DEVICE" ? "bg-[#e0ecf2] text-[#1f4f70] border-[#cfe0eb]"
                       : src === "CAMERA_RPPG" ? "bg-amber-50 text-amber-600 border-amber-100"
                       : "bg-emerald-50 text-emerald-600 border-emerald-100";
                     return (
@@ -514,7 +514,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
                   <span className="text-xs text-gray-500">
                     Latest: {relTime(Object.values(rv.vitals).sort((a, b) => new Date(b.recordedAt ?? 0).getTime() - new Date(a.recordedAt ?? 0).getTime())[0]?.recordedAt ?? null, nowTs)}
                   </span>
-                  <button onClick={() => setViewingResident(`${rv.name}||${rv.room}`)} className="text-sm text-blue-600 hover:text-blue-800 font-medium transition">
+                  <button onClick={() => setViewingResident(`${rv.name}||${rv.room}`)} className="text-sm text-[#1f4f70] hover:text-[#163c56] font-medium transition">
                     View All
                   </button>
                 </div>
@@ -529,7 +529,7 @@ export default function FacilityVitals({ residentFilter }: { residentFilter?: st
       {viewingResident && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-4 sm:p-6 flex items-center justify-between">
+            <div className="sticky top-0 bg-[#22577a] text-black p-4 sm:p-6 flex items-center justify-between">
               <h2 className="text-xl font-bold">{viewingResident.split("||")[0]} — All Vitals</h2>
               <button onClick={() => setViewingResident(null)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>

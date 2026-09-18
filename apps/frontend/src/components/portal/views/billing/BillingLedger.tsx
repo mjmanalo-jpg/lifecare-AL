@@ -13,7 +13,7 @@ type LedgerStatus = "Paid" | "Invoiced" | "Pending";
 
 const STATUS_BADGE: Record<LedgerStatus, string> = {
   Paid: "bg-green-100 text-green-700 border-green-200",
-  Invoiced: "bg-blue-100 text-blue-700 border-blue-200",
+  Invoiced: "bg-[#cfe0eb] text-[#1b4763] border-[#a9c6d8]",
   Pending: "bg-amber-100 text-amber-700 border-amber-200",
 };
 
@@ -194,8 +194,8 @@ export default function BillingLedger() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2 flex items-center gap-3">
-            <Receipt className="w-8 h-8 text-blue-500" /> Transactions Ledger
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2 flex items-center gap-3">
+            <Receipt className="w-8 h-8 text-[#22577a]" /> Transactions Ledger
           </h1>
           <p className="text-gray-600">Every charge across all revenue sources — care, hotel services, concierge, dining, transport.</p>
         </div>
@@ -223,10 +223,10 @@ export default function BillingLedger() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search resident, description, or invoice #…"
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4f93bd] outline-none"
           />
         </div>
-        <select value={source} onChange={(e) => setSource(e.target.value)} className="px-4 py-2.5 border border-gray-300 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400">
+        <select value={source} onChange={(e) => setSource(e.target.value)} className="px-4 py-2.5 border border-gray-300 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]">
           <option value="all">All Sources</option>
           {sources.map((s) => (
             <option key={s} value={s}>
@@ -234,7 +234,7 @@ export default function BillingLedger() {
             </option>
           ))}
         </select>
-        <select value={status} onChange={(e) => setStatus(e.target.value)} className="px-4 py-2.5 border border-gray-300 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400">
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className="px-4 py-2.5 border border-gray-300 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]">
           <option value="all">All Status</option>
           <option value="paid">Paid</option>
           <option value="invoiced">Invoiced</option>
@@ -244,13 +244,13 @@ export default function BillingLedger() {
 
       {/* Selection toolbar */}
       {selected.size > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
-          <div className="text-sm text-blue-900">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#a9c6d8] bg-[#e0ecf2] px-4 py-3">
+          <div className="text-sm text-[#12324a]">
             <span className="font-semibold">{selected.size}</span> pending charge{selected.size === 1 ? "" : "s"} · <span className="font-semibold">{fmt(selTotal)}</span>
             {mixedResident ? (
               <span className="ml-2 font-medium text-red-600">⚠ Multiple residents — pick one resident&apos;s charges</span>
             ) : (
-              <span className="ml-2 text-blue-700">· {selResidentName}</span>
+              <span className="ml-2 text-[#1b4763]">· {selResidentName}</span>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -258,7 +258,7 @@ export default function BillingLedger() {
             <button
               onClick={openInvoiceModal}
               disabled={mixedResident}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-semibold shadow hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#22577a] text-white text-sm font-semibold shadow hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <FileText className="w-4 h-4" /> Generate Invoice
             </button>
@@ -286,7 +286,7 @@ export default function BillingLedger() {
               {loading && filtered.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-10 text-center text-gray-500">
-                    <div className="inline-block w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mb-2" />
+                    <div className="inline-block w-6 h-6 border-2 border-[#4f93bd] border-t-transparent rounded-full animate-spin mb-2" />
                     <p>Loading transactions…</p>
                   </td>
                 </tr>
@@ -298,7 +298,7 @@ export default function BillingLedger() {
                 filtered.map(({ c, status: st }) => {
                   const sm = sourceMeta(c.category);
                   return (
-                    <tr key={c.id} className={`hover:bg-gray-50 transition ${selected.has(c.id) ? "bg-blue-50/60" : ""}`}>
+                    <tr key={c.id} className={`hover:bg-gray-50 transition ${selected.has(c.id) ? "bg-[#e0ecf2]/60" : ""}`}>
                       <td className="px-4 py-3">
                         {st === "Pending" ? (
                           <input
@@ -334,7 +334,7 @@ export default function BillingLedger() {
       {showInvoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
-            <div className="sticky top-0 flex items-center justify-between bg-gradient-to-r from-blue-500 to-indigo-600 p-5 text-white">
+            <div className="sticky top-0 flex items-center justify-between bg-[#22577a] p-5 text-white">
               <h2 className="flex items-center gap-2 text-xl font-bold"><FileText className="w-5 h-5" /> Generate Invoice</h2>
               <button onClick={() => setShowInvoice(false)} className="rounded-lg p-1.5 hover:bg-white/20"><X className="w-5 h-5" /></button>
             </div>
@@ -360,18 +360,18 @@ export default function BillingLedger() {
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-gray-700">Due Date</label>
-                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400" />
+                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#4f93bd]" />
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-gray-700">Description (optional)</label>
-                <input value={invoiceDesc} onChange={(e) => setInvoiceDesc(e.target.value)} placeholder="e.g. August services" className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400" />
+                <input value={invoiceDesc} onChange={(e) => setInvoiceDesc(e.target.value)} placeholder="e.g. August services" className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#4f93bd]" />
               </div>
             </div>
             <div className="sticky bottom-0 flex items-center justify-between flex-wrap gap-2 border-t border-gray-200 bg-gray-50 px-6 py-4">
               <button onClick={() => setShowInvoice(false)} disabled={busy} className="rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 disabled:opacity-50">Cancel</button>
               <div className="flex items-center flex-wrap gap-2">
                 <button onClick={() => createInvoice(false)} disabled={busy || !dueDate} className="rounded-lg border border-gray-300 px-4 py-2 font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-50">Create Draft</button>
-                <button onClick={() => createInvoice(true)} disabled={busy || !dueDate} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 px-4 py-2 font-semibold text-white shadow hover:shadow-lg disabled:opacity-50">
+                <button onClick={() => createInvoice(true)} disabled={busy || !dueDate} className="inline-flex items-center gap-2 rounded-lg bg-[#22577a] px-4 py-2 font-semibold text-white shadow hover:shadow-lg disabled:opacity-50">
                   <Send className="w-4 h-4" /> {busy ? "Working…" : "Create & Send"}
                 </button>
               </div>
@@ -397,10 +397,10 @@ function StatChip({
   color: "blue" | "green" | "amber" | "indigo";
 }) {
   const ring: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50",
+    blue: "text-[#1f4f70] bg-[#e0ecf2]",
     green: "text-green-600 bg-green-50",
     amber: "text-amber-600 bg-amber-50",
-    indigo: "text-indigo-600 bg-indigo-50",
+    indigo: "text-[#1f4f70] bg-[#e0ecf2]",
   };
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">

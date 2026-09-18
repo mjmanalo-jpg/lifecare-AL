@@ -27,7 +27,7 @@ type Payment = ReturnType<typeof adaptPayment>;
 
 const STATUS: Record<string, { label: string; badge: string; bar: string }> = {
   DRAFT: { label: "Draft", badge: "bg-gray-100 text-gray-700 border-gray-200", bar: "bg-gray-400" },
-  SENT: { label: "Sent", badge: "bg-blue-100 text-blue-700 border-blue-200", bar: "bg-blue-500" },
+  SENT: { label: "Sent", badge: "bg-[#cfe0eb] text-[#1b4763] border-[#a9c6d8]", bar: "bg-[#22577a]" },
   PAID: { label: "Paid", badge: "bg-green-100 text-green-700 border-green-200", bar: "bg-green-500" },
   OVERDUE: { label: "Overdue", badge: "bg-red-100 text-red-700 border-red-200", bar: "bg-red-500" },
   CANCELLED: { label: "Cancelled", badge: "bg-gray-100 text-gray-500 border-gray-200", bar: "bg-gray-300" },

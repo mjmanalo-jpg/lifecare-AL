@@ -321,7 +321,7 @@ export default function MARBoard() {
                             <p className="font-bold text-[#2B2B27]">{med?.name || "—"}</p>
                             {medFlagLabels(med?.name).length > 0 && (
                               <span className="flex flex-wrap gap-1 mt-0.5">
-                                {medFlagLabels(med?.name).map((b) => <span key={b.label} className={`px-1 py-0.5 rounded text-[9px] font-bold ${b.tone === "red" ? "bg-red-100 text-red-700" : b.tone === "purple" ? "bg-purple-100 text-purple-700" : b.tone === "amber" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{b.label}</span>)}
+                                {medFlagLabels(med?.name).map((b) => <span key={b.label} className={`px-1 py-0.5 rounded text-[9px] font-bold ${b.tone === "red" ? "bg-red-100 text-red-700" : b.tone === "purple" ? "bg-purple-100 text-purple-700" : b.tone === "amber" ? "bg-amber-100 text-amber-700" : "bg-[#cfe0eb] text-[#1b4763]"}`}>{b.label}</span>)}
                               </span>
                             )}
                             {med?.category ? <p className="text-[11px] text-[#C0573F]">{String(med.category)}</p> : null}
@@ -478,7 +478,7 @@ function MARModal({ residents, me, vitalsTodayByResident, onRecordVitals, onClos
             </select>
             {medFlagLabels(selectedMed?.name).length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1.5">
-                {medFlagLabels(selectedMed?.name).map((b) => <span key={b.label} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${b.tone === "red" ? "bg-red-100 text-red-700" : b.tone === "purple" ? "bg-purple-100 text-purple-700" : b.tone === "amber" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>{b.label}</span>)}
+                {medFlagLabels(selectedMed?.name).map((b) => <span key={b.label} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${b.tone === "red" ? "bg-red-100 text-red-700" : b.tone === "purple" ? "bg-purple-100 text-purple-700" : b.tone === "amber" ? "bg-amber-100 text-amber-700" : "bg-[#cfe0eb] text-[#1b4763]"}`}>{b.label}</span>)}
               </div>
             )}
           </div>

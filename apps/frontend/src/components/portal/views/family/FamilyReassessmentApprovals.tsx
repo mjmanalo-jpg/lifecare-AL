@@ -66,7 +66,7 @@ export default function FamilyReassessmentApprovals() {
   return (
     <section className="mx-auto max-w-4xl space-y-4">
       <div className="flex items-center gap-2">
-        <Gauge className="h-4 w-4 text-indigo-600" />
+        <Gauge className="h-4 w-4 text-[#1f4f70]" />
         <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Level of Care Changes</h2>
         {pending.length > 0 && <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-amber-100 px-1.5 text-xs font-bold text-amber-700">{pending.length}</span>}
       </div>
@@ -77,7 +77,7 @@ export default function FamilyReassessmentApprovals() {
           <div key={sg.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-900/5">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4">
               <div className="flex items-center gap-3">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-indigo-600 text-white shadow-sm"><Gauge className="h-5 w-5" /></span>
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#1f4f70] text-white shadow-sm"><Gauge className="h-5 w-5" /></span>
                 <div>
                   <p className="text-[15px] font-bold text-slate-900">{sg.residentName || "Your relative"}</p>
                   <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700"><Clock className="h-3 w-3" /> Awaiting your sign-off</span>
@@ -86,11 +86,11 @@ export default function FamilyReassessmentApprovals() {
               <div className="flex items-center gap-2 text-slate-900">
                 <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-sm font-bold text-slate-500">Level {lvlNum(sg.oldLevel) || "?"}</span>
                 <ArrowRight className="h-4 w-4 text-slate-400" />
-                <span className="rounded-lg bg-indigo-600 px-2.5 py-1 text-sm font-bold text-white">Level {lvlNum(sg.newLevel) || "?"}</span>
+                <span className="rounded-lg bg-[#1f4f70] px-2.5 py-1 text-sm font-bold text-white">Level {lvlNum(sg.newLevel) || "?"}</span>
               </div>
             </div>
             <div className="space-y-3 px-5 py-4">
-              <div className="rounded-xl border border-indigo-100 bg-indigo-50/70 px-3.5 py-2.5 text-sm text-indigo-900">
+              <div className="rounded-xl border border-[#cfe0eb] bg-[#e0ecf2]/70 px-3.5 py-2.5 text-sm text-[#12324a]">
                 A care reassessment recommends changing the level of care. Because the level of care affects the monthly care fee, your sign-off is needed before it takes effect.
               </div>
               {sg.justification && <div className="text-sm text-slate-700"><span className="font-bold text-slate-800">Clinical rationale: </span>{sg.justification}</div>}
@@ -139,7 +139,7 @@ export default function FamilyReassessmentApprovals() {
             <h3 className="text-base font-bold text-slate-900">Reject this level-of-care change?</h3>
             <p className="mt-1 text-sm text-slate-500">Let the care team know your concern. They&apos;ll review and can resubmit for your approval.</p>
             <textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3} placeholder="Reason (optional)"
-              className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+              className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-[#22577a] focus:outline-none focus:ring-1 focus:ring-[#22577a]" />
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={() => setRejectFor(null)} disabled={rejectBusy} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
               <button onClick={async () => { const sg = rejectFor; setRejectBusy(true); try { await decide(sg, "REJECT", rejectReason.trim()); setRejectFor(null); } finally { setRejectBusy(false); } }} disabled={rejectBusy}

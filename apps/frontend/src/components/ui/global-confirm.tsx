@@ -64,11 +64,11 @@ const VARIANT: Record<
   ConfirmVariant,
   { Icon: typeof HelpCircle; tint: string; confirm: "default" | "destructive" }
 > = {
-  default: { Icon: HelpCircle, tint: "bg-blue-500/10 text-blue-500 ring-blue-500/10", confirm: "default" },
-  info: { Icon: Info, tint: "bg-blue-500/10 text-blue-500 ring-blue-500/10", confirm: "default" },
-  warning: { Icon: AlertTriangle, tint: "bg-amber-500/10 text-amber-500 ring-amber-500/10", confirm: "default" },
+  default: { Icon: HelpCircle, tint: "bg-[#22577a]/10 text-[#22577a] ring-[#22577a]/10", confirm: "default" },
+  info: { Icon: Info, tint: "bg-[#22577a]/10 text-[#22577a] ring-[#22577a]/10", confirm: "default" },
+  warning: { Icon: AlertTriangle, tint: "bg-[#8f6410]/10 text-[#8f6410] ring-[#8f6410]/10", confirm: "default" },
   danger: { Icon: ShieldAlert, tint: "bg-destructive/10 text-destructive ring-destructive/10", confirm: "destructive" },
-  success: { Icon: CheckCircle2, tint: "bg-emerald-500/10 text-emerald-500 ring-emerald-500/10", confirm: "default" },
+  success: { Icon: CheckCircle2, tint: "bg-[#277a55]/10 text-[#277a55] ring-[#277a55]/10", confirm: "default" },
 };
 
 export function GlobalConfirmDialog() {

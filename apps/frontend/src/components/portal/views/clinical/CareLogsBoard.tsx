@@ -93,7 +93,7 @@ const LEVELS: Record<string, { n: number; label: string; badge: string }> = {
   MEMORY: { n: 4, label: "Memory Care", badge: "bg-orange-100 text-orange-700" },
   SKILLED: { n: 5, label: "Skilled Care", badge: "bg-red-100 text-red-700" },
 };
-export const levelOf = (r: Row) => LEVELS[s(r.careLevel)] || { n: 2, label: "Assisted", badge: "bg-blue-100 text-blue-700" };
+export const levelOf = (r: Row) => LEVELS[s(r.careLevel)] || { n: 2, label: "Assisted", badge: "bg-[#cfe0eb] text-[#1b4763]" };
 
 // Theme-safe care-level chip: ink label + a coloured dot keyed to the level
 // (green independent → amber moderate → coral memory/skilled), replacing the
@@ -159,15 +159,15 @@ const DOMAINS: { key: DomainKey; code: string; label: string; icon: LucideIcon; 
   { key: "AS-01", code: "AS-01", label: "ADLs / Personal Care", icon: Bath, tint: "text-cyan-600", bg: "bg-cyan-50", pill: "bg-cyan-100 text-cyan-700", form: "generic" },
   { key: "AS-02", code: "AS-02", label: "Mobility / Transfers", icon: Footprints, tint: "text-teal-600", bg: "bg-teal-50", pill: "bg-teal-100 text-teal-700", form: "mobility", resource: "mobility-records" },
   { key: "AS-03", code: "AS-03", label: "Fall Risk", icon: TrendingDown, tint: "text-red-600", bg: "bg-red-50", pill: "bg-red-100 text-red-700", form: "generic" },
-  { key: "AS-04", code: "AS-04", label: "Cognition", icon: Brain, tint: "text-violet-600", bg: "bg-violet-50", pill: "bg-violet-100 text-violet-700", form: "generic" },
+  { key: "AS-04", code: "AS-04", label: "Cognition", icon: Brain, tint: "text-[#1f4f70]", bg: "bg-[#e0ecf2]", pill: "bg-[#cfe0eb] text-[#1b4763]", form: "generic" },
   { key: "AS-05", code: "AS-05", label: "Behavior / BPSD", icon: Smile, tint: "text-purple-500", bg: "bg-purple-50", pill: "bg-purple-100 text-purple-700", form: "mood", resource: "mood-records" },
   { key: "AS-06", code: "AS-06", label: "Clinical Monitoring", icon: Activity, tint: "text-rose-500", bg: "bg-rose-50", pill: "bg-rose-100 text-rose-600", form: "vitals", resource: "vital-signs" },
   { key: "AS-07", code: "AS-07", label: "Medication", icon: Pill, tint: "text-emerald-600", bg: "bg-emerald-50", pill: "bg-emerald-100 text-emerald-700", form: "generic" },
   { key: "AS-08", code: "AS-08", label: "Nutrition / Hydration", icon: Utensils, tint: "text-green-600", bg: "bg-green-50", pill: "bg-green-100 text-green-700", form: "meals", resource: "meal-records" },
-  { key: "AS-09", code: "AS-09", label: "Communication", icon: MessageCircle, tint: "text-blue-600", bg: "bg-blue-50", pill: "bg-blue-100 text-blue-700", form: "generic" },
+  { key: "AS-09", code: "AS-09", label: "Communication", icon: MessageCircle, tint: "text-[#1f4f70]", bg: "bg-[#e0ecf2]", pill: "bg-[#cfe0eb] text-[#1b4763]", form: "generic" },
   { key: "AS-10", code: "AS-10", label: "Continence / Toileting", icon: Droplets, tint: "text-amber-600", bg: "bg-amber-50", pill: "bg-amber-100 text-amber-700", form: "continence", resource: "bowel-records" },
-  { key: "AS-11", code: "AS-11", label: "Skin Integrity", icon: Wind, tint: "text-sky-600", bg: "bg-sky-50", pill: "bg-sky-100 text-sky-700", form: "skin", resource: "edema-records" },
-  { key: "AS-12", code: "AS-12", label: "Sleep / Daily Routine", icon: Moon, tint: "text-indigo-500", bg: "bg-indigo-50", pill: "bg-indigo-100 text-indigo-700", form: "sleep", resource: "round-sleep-records" },
+  { key: "AS-11", code: "AS-11", label: "Skin Integrity", icon: Wind, tint: "text-[#1f4f70]", bg: "bg-[#e0ecf2]", pill: "bg-[#cfe0eb] text-[#1b4763]", form: "skin", resource: "edema-records" },
+  { key: "AS-12", code: "AS-12", label: "Sleep / Daily Routine", icon: Moon, tint: "text-[#22577a]", bg: "bg-[#e0ecf2]", pill: "bg-[#cfe0eb] text-[#1b4763]", form: "sleep", resource: "round-sleep-records" },
   { key: "AS-13", code: "AS-13", label: "Safety / Supervision", icon: ShieldAlert, tint: "text-orange-600", bg: "bg-orange-50", pill: "bg-orange-100 text-orange-700", form: "concerns", resource: "concern-records" },
   { key: "AS-14", code: "AS-14", label: "Reablement / Therapy", icon: Dumbbell, tint: "text-lime-600", bg: "bg-lime-50", pill: "bg-lime-100 text-lime-700", form: "generic" },
 ];
@@ -669,7 +669,7 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
           <div className="bg-[var(--clinical-panel)] p-5 sm:p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-blue-100">Shift documentation coverage</p>
+                <p className="text-sm font-semibold text-[#cfe0eb]">Shift documentation coverage</p>
                 <p className="mt-1 text-3xl font-bold tracking-[-0.03em]">{coverage}%</p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15"><Activity className="h-6 w-6" /></div>
@@ -677,11 +677,11 @@ export function CareLogsTimeline({ clinicianRole = "NURSE" }: { clinicianRole?: 
             <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-black/20" aria-label={`${documentedResidents} of ${residents.length} residents documented`}>
               <div className="h-full rounded-full bg-white transition-[width] duration-500" style={{ width: `${coverage}%` }} />
             </div>
-            <p className="mt-2 text-xs text-blue-100">{documentedResidents} of {residents.length} residents have an entry this shift</p>
+            <p className="mt-2 text-xs text-[#cfe0eb]">{documentedResidents} of {residents.length} residents have an entry this shift</p>
           </div>
-          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Entries today</p><p className="mt-2 text-2xl font-bold tabular-nums">{entries.length}</p></div>
-          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Still due</p><p className="mt-2 text-2xl font-bold tabular-nums">{needsDocumentation}</p></div>
-          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Domains charted</p><p className="mt-2 text-2xl font-bold tabular-nums">{documentedDomains}<span className="ml-1 text-sm font-semibold text-blue-100">/ 14</span></p></div>
+          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-[#cfe0eb]">Entries today</p><p className="mt-2 text-2xl font-bold tabular-nums">{entries.length}</p></div>
+          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-[#cfe0eb]">Still due</p><p className="mt-2 text-2xl font-bold tabular-nums">{needsDocumentation}</p></div>
+          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-[#cfe0eb]">Domains charted</p><p className="mt-2 text-2xl font-bold tabular-nums">{documentedDomains}<span className="ml-1 text-sm font-semibold text-[#cfe0eb]">/ 14</span></p></div>
         </div>
       </section>
 

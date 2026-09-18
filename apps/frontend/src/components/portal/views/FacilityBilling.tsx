@@ -23,7 +23,7 @@ type Payment = ReturnType<typeof adaptPayment>;
 
 const STATUS_BADGE: Record<string, string> = {
   PAID: "bg-green-100 text-green-800 border border-green-200",
-  SENT: "bg-blue-100 text-blue-800 border border-blue-200",
+  SENT: "bg-[#cfe0eb] text-[#163c56] border border-[#a9c6d8]",
   DRAFT: "bg-gray-100 text-gray-800 border border-gray-200",
   OVERDUE: "bg-red-100 text-red-800 border border-red-200",
   CANCELLED: "bg-yellow-100 text-yellow-800 border border-yellow-200",
@@ -431,7 +431,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
       {/* Portal Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1">
+          <h1 className="text-3xl sm:text-4xl font-extrabold bg-[#22577a] bg-clip-text text-transparent mb-1">
             Billing &amp; Finance Control Center
           </h1>
           <p className="text-gray-600 font-medium">Real-time ledger audit, insurance validation gateway, and payment processing hub</p>
@@ -443,7 +443,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
           <button onClick={() => setShowVerifyInsurance(true)} className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-yellow-400 border border-yellow-400/20 font-bold rounded-lg hover:bg-gray-800 transition active:scale-95 text-sm shadow">
             <ShieldCheck className="w-4 h-4" /> Validate Insurance
           </button>
-          <button onClick={() => setShowCreateInvoice(true)} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-extrabold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+          <button onClick={() => setShowCreateInvoice(true)} className="flex items-center gap-2 px-4 py-2.5 bg-[#22577a] text-black font-extrabold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
             <Plus className="w-4 h-4" /> New Invoice
           </button>
         </div>
@@ -493,7 +493,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-gray-900">Collections Summary</h3>
-                <button onClick={handleExportCSV} className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1">
+                <button onClick={handleExportCSV} className="text-xs font-semibold text-[#1f4f70] hover:underline flex items-center gap-1">
                   <Download className="w-3.5 h-3.5" /> Export Data
                 </button>
               </div>
@@ -519,10 +519,10 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                 <div>
                   <div className="flex justify-between text-sm font-semibold text-gray-600 mb-1">
                     <span>Unbilled Care Backlog</span>
-                    <span className="text-blue-600">₱{stats.pendingChargesSum.toLocaleString()}</span>
+                    <span className="text-[#1f4f70]">₱{stats.pendingChargesSum.toLocaleString()}</span>
                   </div>
                   <div className="w-full h-4 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${stats.totalCollected > 0 ? Math.min(100, (stats.pendingChargesSum / stats.totalCollected) * 100) : 0}%` }} />
+                    <div className="h-full bg-[#22577a] transition-all duration-500" style={{ width: `${stats.totalCollected > 0 ? Math.min(100, (stats.pendingChargesSum / stats.totalCollected) * 100) : 0}%` }} />
                   </div>
                 </div>
               </div>
@@ -535,9 +535,9 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                   <p className="text-xs font-bold text-green-700">PAID</p>
                   <p className="text-2xl font-extrabold text-green-800">{invoices.filter(i => i.status === "PAID").length}</p>
                 </div>
-                <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg">
-                  <p className="text-xs font-bold text-blue-700">SENT / UNPAID</p>
-                  <p className="text-2xl font-extrabold text-blue-800">{invoices.filter(i => i.status === "SENT").length}</p>
+                <div className="p-3 bg-[#e0ecf2] border border-[#cfe0eb] rounded-lg">
+                  <p className="text-xs font-bold text-[#1b4763]">SENT / UNPAID</p>
+                  <p className="text-2xl font-extrabold text-[#163c56]">{invoices.filter(i => i.status === "SENT").length}</p>
                 </div>
                 <div className="p-3 bg-red-50 border border-red-100 rounded-lg">
                   <p className="text-xs font-bold text-red-700">OVERDUE</p>
@@ -588,7 +588,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                         <td className="px-6 py-4">₱{billed.toLocaleString()}</td>
                         <td className="px-6 py-4 text-green-600">₱{paid.toLocaleString()}</td>
                         <td className={`px-6 py-4 ${balance > 0 ? "text-amber-600" : "text-gray-400"}`}>₱{balance.toLocaleString()}</td>
-                        <td className="px-6 py-4 text-blue-600">₱{unbilled.toLocaleString()}</td>
+                        <td className="px-6 py-4 text-[#1f4f70]">₱{unbilled.toLocaleString()}</td>
                       </tr>
                     );
                   })}
@@ -768,7 +768,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
                       </td>
                       <td className="px-6 py-4 text-right flex flex-wrap justify-end gap-2">
                         {inv.status === "DRAFT" && (
-                          <button onClick={() => handleMarkSent(inv)} className="px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-bold transition">
+                          <button onClick={() => handleMarkSent(inv)} className="px-3 py-1.5 bg-[#e0ecf2] text-[#1f4f70] hover:bg-[#cfe0eb] rounded-lg text-xs font-bold transition">
                             Send / Dispatch
                           </button>
                         )}
@@ -913,7 +913,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
       {showCreateInvoice && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92dvh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between">
               <h2 className="text-xl font-bold">Generate Invoice</h2>
               <button onClick={() => setShowCreateInvoice(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5" /></button>
             </div>
@@ -928,7 +928,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
               </div>
 
               {invoiceForm.residentId && (
-                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3.5 text-xs text-blue-800 space-y-1">
+                <div className="bg-[#e0ecf2] border border-[#cfe0eb] rounded-lg p-3.5 text-xs text-[#163c56] space-y-1">
                   <p className="font-bold flex items-center gap-1">
                     <Layers className="w-3.5 h-3.5" />
                     Pending Care Charges:
@@ -968,7 +968,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setShowCreateInvoice(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-semibold transition">Cancel</button>
-              <button onClick={handleCreateInvoice} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-extrabold rounded-lg hover:shadow-lg transition">Generate Draft Invoice</button>
+              <button onClick={handleCreateInvoice} className="px-5 py-2 bg-[#22577a] text-black font-extrabold rounded-lg hover:shadow-lg transition">Generate Draft Invoice</button>
             </div>
           </div>
         </div>
@@ -978,7 +978,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
       {showRecordCharge && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92dvh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between">
               <h2 className="text-xl font-bold">Record Service Charge</h2>
               <button onClick={() => setShowRecordCharge(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5" /></button>
             </div>
@@ -1034,7 +1034,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setShowRecordCharge(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-semibold transition">Cancel</button>
-              <button onClick={handleRecordCharge} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-extrabold rounded-lg hover:shadow-lg transition">Record Charge</button>
+              <button onClick={handleRecordCharge} className="px-5 py-2 bg-[#22577a] text-black font-extrabold rounded-lg hover:shadow-lg transition">Record Charge</button>
             </div>
           </div>
         </div>
@@ -1044,7 +1044,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
       {showVerifyInsurance && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92dvh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between">
               <h2 className="text-xl font-bold">Validate Insurance</h2>
               <button onClick={() => setShowVerifyInsurance(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5" /></button>
             </div>
@@ -1081,7 +1081,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setShowVerifyInsurance(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-semibold transition">Cancel</button>
-              <button onClick={handleRecordInsurance} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-extrabold rounded-lg hover:shadow-lg transition">Submit Policy</button>
+              <button onClick={handleRecordInsurance} className="px-5 py-2 bg-[#22577a] text-black font-extrabold rounded-lg hover:shadow-lg transition">Submit Policy</button>
             </div>
           </div>
         </div>
@@ -1091,7 +1091,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
       {showRecordPayment && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92dvh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between">
               <h2 className="text-xl font-bold">Process Payment</h2>
               <button onClick={() => setShowRecordPayment(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5" /></button>
             </div>
@@ -1157,7 +1157,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
           onClick={() => { if (!chargebackBusy) { setChargebackInv(null); setChargebackReason(""); } }}
         >
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-gradient-to-r from-rose-500 to-red-600 text-black p-5 flex items-center justify-between">
+            <div className="sticky top-0 bg-[#b0432c] text-black p-5 flex items-center justify-between">
               <h2 className="text-xl font-bold flex items-center gap-2"><AlertTriangle className="w-5 h-5" /> Raise Dispute / Chargeback</h2>
               <button onClick={() => { setChargebackInv(null); setChargebackReason(""); }} className="p-2 hover:bg-black/10 rounded-lg transition"><X className="w-5 h-5" /></button>
             </div>
@@ -1188,7 +1188,7 @@ export default function FacilityBilling({ initialTab = "overview" }: { initialTa
               <button
                 onClick={submitChargeback}
                 disabled={chargebackBusy || chargebackReason.trim().length < 3}
-                className="px-5 py-2 bg-gradient-to-r from-rose-500 to-red-600 text-white font-extrabold rounded-lg hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-5 py-2 bg-[#b0432c] text-white font-extrabold rounded-lg hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {chargebackBusy ? "Recording…" : "Record Chargeback"}
               </button>
@@ -1204,20 +1204,20 @@ function StatBox({ label, value, icon: Icon, color }: { label: string; value: st
   const COLORS: Record<string, string> = {
     green: "text-green-800 bg-green-50 border border-green-200/60",
     amber: "text-amber-800 bg-amber-50 border border-amber-200/60",
-    blue: "text-blue-800 bg-blue-50 border border-blue-200/60",
+    blue: "text-[#163c56] bg-[#e0ecf2] border border-[#a9c6d8]/60",
     red: "text-red-800 bg-red-50 border border-red-200/60"
   };
   const ICON_COLORS: Record<string, string> = {
     green: "text-green-500",
     amber: "text-amber-500",
-    blue: "text-blue-500",
+    blue: "text-[#22577a]",
     red: "text-red-500"
   };
   return (
     <div className={`rounded-xl p-5 shadow-sm transition hover:shadow-md ${COLORS[color] || COLORS.blue}`}>
       <div className="flex items-center justify-between">
         <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">{label}</p>
-        <Icon className={`w-5 h-5 ${ICON_COLORS[color] || "text-blue-500"}`} />
+        <Icon className={`w-5 h-5 ${ICON_COLORS[color] || "text-[#22577a]"}`} />
       </div>
       <p className="text-2xl sm:text-3xl font-black mt-2 tracking-tight">{value}</p>
     </div>

@@ -42,7 +42,7 @@ export default function LeadAnalyticsBoard({ api }: { api: CrmApi }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi label="Open Pipeline" value={a.open} icon={TrendingUp} tone="text-blue-600" />
+        <Kpi label="Open Pipeline" value={a.open} icon={TrendingUp} tone="text-[#1f4f70]" />
         <Kpi label="Moved In (Won)" value={a.won} icon={UserPlus} tone="text-emerald-600" />
         <Kpi label="Conversion" value={`${a.conv}%`} icon={Percent} tone="text-teal-600" />
         <Kpi label="Avg days to move-in" value={a.avgWin ?? "—"} icon={Clock} tone="text-slate-700" />
@@ -55,7 +55,7 @@ export default function LeadAnalyticsBoard({ api }: { api: CrmApi }) {
               <div key={f.stage} className="flex items-center gap-2">
                 <span className="w-28 text-xs text-slate-600 shrink-0 truncate">{STAGE_META[f.stage].label}</span>
                 <div className="flex-1 bg-slate-100 rounded-full h-5 overflow-hidden">
-                  <div className="h-full rounded-full bg-blue-500 flex items-center justify-end px-2" style={{ width: `${Math.max(6, (f.count / maxFunnel) * 100)}%` }}>
+                  <div className="h-full rounded-full bg-[#22577a] flex items-center justify-end px-2" style={{ width: `${Math.max(6, (f.count / maxFunnel) * 100)}%` }}>
                     <span className="text-[10px] font-bold text-white">{f.count}</span>
                   </div>
                 </div>

@@ -46,7 +46,7 @@ const ACUITY_BADGE: Record<string, string> = {
 };
 const CARE_BADGE: Record<string, string> = {
   INDEPENDENT: "bg-green-100 text-green-700",
-  ASSISTED: "bg-blue-100 text-blue-700",
+  ASSISTED: "bg-[#cfe0eb] text-[#1b4763]",
   MEMORY: "bg-purple-100 text-purple-700",
   SKILLED: "bg-red-100 text-red-700",
 };

@@ -153,12 +153,12 @@ export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { 
   return (
     <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-        <div><h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2"><Package className="w-6 h-6 text-blue-500" /> Medication Inventory</h1><p className="text-sm text-slate-500 mt-1">Track stock levels and manage purchase requests</p></div>
+        <div><h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2"><Package className="w-6 h-6 text-[#22577a]" /> Medication Inventory</h1><p className="text-sm text-slate-500 mt-1">Track stock levels and manage purchase requests</p></div>
         <div className="flex items-center gap-2 flex-wrap">
           <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={importCsv} className="hidden" />
           <button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50"><Upload className="w-4 h-4" /> Import CSV</button>
           <button onClick={exportCsv} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50"><Download className="w-4 h-4" /> Export CSV</button>
-          <button onClick={() => { setEditItem(null); setAddOpen(true); }} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"><Plus className="w-4 h-4" /> Add Item</button>
+          <button onClick={() => { setEditItem(null); setAddOpen(true); }} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763]"><Plus className="w-4 h-4" /> Add Item</button>
         </div>
       </div>
 
@@ -175,7 +175,7 @@ export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { 
 
       {tab === "inventory" && (<>
         <div className="flex flex-col lg:flex-row gap-3 mb-5">
-          <div className="relative flex-1"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, category, location, supplier…" className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
+          <div className="relative flex-1"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, category, location, supplier…" className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40" /></div>
           <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm"><option value="">All Categories</option>{categoryOpts.map((c) => <option key={c} value={c}>{c}</option>)}</select>
           <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm"><option value="">All Locations</option>{locationOpts.map((l) => <option key={l} value={l}>{l}</option>)}</select>
           <select value={stockFilter} onChange={(e) => setStockFilter(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm"><option value="">All Stock Levels</option><option value="out">Out of Stock</option><option value="low">Low Stock</option><option value="ok">In Stock</option></select>
@@ -190,7 +190,7 @@ export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { 
           <div className="flex flex-col sm:flex-row gap-3 mb-5">
             <div className="relative flex-1 max-w-md">
               <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <select value={residentFilter} onChange={(e) => setResidentFilter(e.target.value)} className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40">
+              <select value={residentFilter} onChange={(e) => setResidentFilter(e.target.value)} className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40">
                 <option value="">All residents</option>
                 {residents.map((r) => <option key={r.id} value={r.id}>{r.name}{r.room ? ` — Rm ${r.room}` : ""}</option>)}
               </select>
@@ -206,7 +206,7 @@ export default function MedicationInventoryBoard({ clinicianRole = "NURSE" }: { 
             : prs.map((pr) => (
               <div key={pr.id} className="rounded-2xl border border-slate-200 bg-white p-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <div className="flex items-center gap-2 flex-wrap"><p className="font-bold text-slate-900">{pr.itemName}</p><span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{pr.urgency}</span><span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${pr.status === "APPROVED" ? "bg-green-100 text-green-700" : pr.status === "ORDERED" ? "bg-slate-200 text-slate-600" : pr.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{pr.status === "APPROVED" && <CheckCircle2 className="w-3 h-3" />}{pr.status[0] + pr.status.slice(1).toLowerCase()}</span></div>
+                  <div className="flex items-center gap-2 flex-wrap"><p className="font-bold text-slate-900">{pr.itemName}</p><span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#cfe0eb] text-[#1b4763]">{pr.urgency}</span><span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${pr.status === "APPROVED" ? "bg-green-100 text-green-700" : pr.status === "ORDERED" ? "bg-slate-200 text-slate-600" : pr.status === "REJECTED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{pr.status === "APPROVED" && <CheckCircle2 className="w-3 h-3" />}{pr.status[0] + pr.status.slice(1).toLowerCase()}</span></div>
                   <p className="text-sm text-slate-600 mt-1">Requested: <b>{pr.quantity} {pr.unit}</b></p>
                   {pr.notes && <p className="text-sm italic text-slate-500 mt-0.5">&ldquo;{pr.notes}&rdquo;</p>}
                   <p className="text-xs text-slate-400 mt-1">By {pr.by || "—"} · {fmtDate(pr.byAt.slice(0, 10))}{pr.approvedBy ? ` · Approved by ${pr.approvedBy}` : ""}</p>
@@ -283,14 +283,14 @@ function InvTableRow({ it, onRestock, onRequest, onEdit }: { it: InvItem; onRest
       <td className="px-6 py-3.5 align-middle text-sm text-slate-700">{it.location || <span className="text-slate-300">—</span>}</td>
       <td className="px-4 py-3.5 align-middle text-right whitespace-nowrap">
         <button onClick={() => onRestock(it)} title="Restock" className="p-1.5 rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-[#2E4A48]"><RefreshCw className="w-4 h-4" /></button>
-        <button onClick={() => onRequest(it)} title="Request purchase" className="p-1.5 rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-blue-600"><ShoppingCart className="w-4 h-4" /></button>
+        <button onClick={() => onRequest(it)} title="Request purchase" className="p-1.5 rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-[#1f4f70]"><ShoppingCart className="w-4 h-4" /></button>
         <button onClick={() => onEdit(it)} title="Edit" className="p-1.5 rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><Pencil className="w-4 h-4" /></button>
       </td>
     </tr>
   );
 }
 
-const inp = "w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
+const inp = "w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40";
 const lbl = "block text-sm font-bold text-slate-700 mb-1.5";
 
 function AddItemModal({ item, residents, onClose, onSave }: { item: InvItem | null; residents: ResOpt[]; onClose: () => void; onSave: (it: InvItem) => Promise<void> }) {
@@ -361,7 +361,7 @@ function AddItemModal({ item, residents, onClose, onSave }: { item: InvItem | nu
         {/* Header */}
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><TypeIcon className="w-5 h-5" /></span>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#e0ecf2] text-[#1f4f70]"><TypeIcon className="w-5 h-5" /></span>
             <div className="min-w-0">
               <h2 className="font-bold text-slate-900 text-lg leading-tight">{item ? "Edit" : "Add"} Inventory Item</h2>
               <p className="text-xs text-slate-500 mt-0.5">Medication &amp; supply stock — facility or resident-assigned</p>
@@ -377,10 +377,10 @@ function AddItemModal({ item, residents, onClose, onSave }: { item: InvItem | nu
               const m = TYPE_META[t]; const Icon = m.icon; const active = type === t;
               return (
                 <button key={t} type="button" onClick={() => setType(t)} aria-pressed={active}
-                  className={`flex items-start gap-2.5 rounded-xl border-2 p-3 text-left transition ${active ? "border-blue-500 bg-blue-50/60" : "border-slate-200 bg-white hover:border-blue-300"}`}>
-                  <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${active ? "text-blue-600" : "text-slate-400"}`} />
+                  className={`flex items-start gap-2.5 rounded-xl border-2 p-3 text-left transition ${active ? "border-[#22577a] bg-[#e0ecf2]/60" : "border-slate-200 bg-white hover:border-[#7fa9c2]"}`}>
+                  <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${active ? "text-[#1f4f70]" : "text-slate-400"}`} />
                   <span className="min-w-0">
-                    <span className={`block text-sm font-bold ${active ? "text-blue-800" : "text-slate-700"}`}>{m.label}</span>
+                    <span className={`block text-sm font-bold ${active ? "text-[#163c56]" : "text-slate-700"}`}>{m.label}</span>
                     <span className="block text-[11px] leading-tight text-slate-500 mt-0.5">{m.desc}</span>
                   </span>
                 </button>
@@ -413,7 +413,7 @@ function AddItemModal({ item, residents, onClose, onSave }: { item: InvItem | nu
                     <div className="px-3 py-2 text-xs text-slate-400">No matches found — enter generic &amp; brand manually.</div>
                   ) : suggestions.map((sg) => (
                     <button key={sg.rxcui} type="button" onMouseDown={(e) => { e.preventDefault(); pickSuggestion(sg); }}
-                      className="flex w-full flex-col items-start gap-0.5 border-b border-slate-50 px-3 py-2 text-left last:border-0 hover:bg-blue-50/60">
+                      className="flex w-full flex-col items-start gap-0.5 border-b border-slate-50 px-3 py-2 text-left last:border-0 hover:bg-[#e0ecf2]/60">
                       <span className="text-sm font-semibold text-slate-800">{sg.generic || sg.name}</span>
                       <span className="text-[11px] text-slate-500">{[sg.generic && `Generic: ${sg.generic}`, sg.brand && `Brand: ${sg.brand}`].filter(Boolean).join(" · ") || sg.name}</span>
                     </button>
@@ -457,7 +457,7 @@ function AddItemModal({ item, residents, onClose, onSave }: { item: InvItem | nu
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100 bg-slate-50/60"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100">Cancel</button><button onClick={submit} disabled={saving} className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"><Plus className="w-4 h-4" /> {saving ? "Saving…" : item ? "Save Changes" : "Add Item"}</button></div>
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100 bg-slate-50/60"><button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100">Cancel</button><button onClick={submit} disabled={saving} className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763] disabled:opacity-60"><Plus className="w-4 h-4" /> {saving ? "Saving…" : item ? "Save Changes" : "Add Item"}</button></div>
       </div>
     </div>
   );
@@ -472,7 +472,7 @@ function RestockModal({ item, onClose, onRestock }: { item: InvItem; onClose: ()
         <div className="rounded-xl bg-amber-50 border border-amber-100 px-3 py-2 text-sm text-amber-800 mb-3">Current: {item.quantity} {item.unit}</div>
         <label className={lbl}>Add Quantity ({item.unit})</label>
         <input inputMode="numeric" value={add} onChange={(e) => setAdd(e.target.value)} placeholder="e.g., 100" className={inp} />
-        <div className="flex justify-end gap-2 mt-4"><button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button><button onClick={() => Number(add) > 0 && onRestock(item, Number(add))} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700">Restock</button></div>
+        <div className="flex justify-end gap-2 mt-4"><button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button><button onClick={() => Number(add) > 0 && onRestock(item, Number(add))} className="px-5 py-2 rounded-xl bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763]">Restock</button></div>
       </div>
     </div>
   );
@@ -493,7 +493,7 @@ function RequestModal({ item, onClose, onSubmit }: { item: InvItem; onClose: () 
         <select value={urgency} onChange={(e) => setUrgency(e.target.value)} className={inp}>{URGENCIES.map((u) => <option key={u} value={u}>{u}</option>)}</select>
         <label className={`${lbl} mt-3`}>Notes</label>
         <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className={inp} />
-        <div className="flex justify-end gap-2 mt-4"><button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button><button onClick={() => Number(quantity) > 0 && onSubmit(item, Number(quantity), urgency, notes)} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700">Submit Request</button></div>
+        <div className="flex justify-end gap-2 mt-4"><button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button><button onClick={() => Number(quantity) > 0 && onSubmit(item, Number(quantity), urgency, notes)} className="px-5 py-2 rounded-xl bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763]">Submit Request</button></div>
       </div>
     </div>
   );

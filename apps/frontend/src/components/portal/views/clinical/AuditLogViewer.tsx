@@ -7,7 +7,7 @@ import { adaptResident } from "@/lib/adapters";
 const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none text-sm";
 const actionColors: Record<string, string> = {
   CREATE: "bg-green-100 text-green-700",
-  UPDATE: "bg-blue-100 text-blue-700",
+  UPDATE: "bg-[#cfe0eb] text-[#1b4763]",
   DELETE: "bg-red-100 text-red-700",
   LOGIN: "bg-purple-100 text-purple-700",
   LOGOUT: "bg-gray-100 text-gray-600",

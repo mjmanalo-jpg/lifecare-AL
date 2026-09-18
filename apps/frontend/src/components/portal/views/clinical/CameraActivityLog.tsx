@@ -139,7 +139,7 @@ export default function CameraActivityLog() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <Camera className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Camera Activity Log
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -252,7 +252,7 @@ export default function CameraActivityLog() {
                       )}
                       {l.behavior && <p>Behavior: {l.behavior}</p>}
                       {l.posture && <p>Posture: {l.posture}</p>}
-                      {l.sleepState && <p>State: <span className={l.sleepState === "Sleeping" ? "text-indigo-600 font-medium" : l.sleepState === "Drowsy" ? "text-amber-600" : "text-gray-900"}>{l.sleepState}</span></p>}
+                      {l.sleepState && <p>State: <span className={l.sleepState === "Sleeping" ? "text-[#1f4f70] font-medium" : l.sleepState === "Drowsy" ? "text-amber-600" : "text-gray-900"}>{l.sleepState}</span></p>}
                       {l.confused && <p className="text-red-600 font-semibold">⚠ Confused / disoriented</p>}
                       {!l.emotion && !l.behavior && !l.posture && !l.sleepState && <span className="text-gray-400">—</span>}
                     </td>
@@ -310,7 +310,7 @@ export default function CameraActivityLog() {
 
 const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
   gray: { wrap: "bg-white border-gray-200", icon: "text-gray-500", value: "text-gray-900" },
-  blue: { wrap: "bg-blue-50 border-blue-200", icon: "text-blue-500", value: "text-blue-600" },
+  blue: { wrap: "bg-[#e0ecf2] border-[#a9c6d8]", icon: "text-[#22577a]", value: "text-[#1f4f70]" },
   red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
   amber: { wrap: "bg-amber-50 border-amber-200", icon: "text-amber-500", value: "text-amber-600" },
 };

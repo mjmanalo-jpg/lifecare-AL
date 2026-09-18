@@ -110,7 +110,7 @@ export default function BillingReceivables() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2 flex items-center gap-3">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2 flex items-center gap-3">
             <TrendingDown className="w-8 h-8 text-amber-500" /> Receivables &amp; Aging
           </h1>
           <p className="text-gray-600">What&apos;s owed but not yet paid — unbilled charges and outstanding invoices, aged.</p>
@@ -141,7 +141,7 @@ export default function BillingReceivables() {
               <div key={b} className="flex items-center gap-3">
                 <span className={`w-20 shrink-0 text-center inline-flex items-center justify-center px-2 py-1 rounded-full text-xs font-semibold border ${BUCKET_STYLE[b]}`}>{b}</span>
                 <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-blue-400 to-indigo-500 transition-all duration-500" style={{ width: `${(cell.amount / maxBucket) * 100}%` }} />
+                  <div className="h-full bg-[#22577a] transition-all duration-500" style={{ width: `${(cell.amount / maxBucket) * 100}%` }} />
                 </div>
                 <span className="w-20 sm:w-28 shrink-0 text-right font-semibold text-gray-900">{fmt(cell.amount)}</span>
                 <span className="hidden sm:block w-14 shrink-0 text-right text-xs text-gray-500">{cell.count} item{cell.count === 1 ? "" : "s"}</span>
@@ -169,7 +169,7 @@ export default function BillingReceivables() {
               {loading && items.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
-                    <div className="inline-block w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mb-2" />
+                    <div className="inline-block w-6 h-6 border-2 border-[#4f93bd] border-t-transparent rounded-full animate-spin mb-2" />
                     <p>Loading receivables…</p>
                   </td>
                 </tr>
@@ -181,7 +181,7 @@ export default function BillingReceivables() {
                 items.map((i) => (
                   <tr key={`${i.kind}-${i.id}`} className="hover:bg-gray-50 transition">
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${i.kind === "Invoice" ? "bg-blue-100 text-blue-700 border-blue-200" : "bg-amber-100 text-amber-700 border-amber-200"}`}>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${i.kind === "Invoice" ? "bg-[#cfe0eb] text-[#1b4763] border-[#a9c6d8]" : "bg-amber-100 text-amber-700 border-amber-200"}`}>
                         {i.kind === "Invoice" ? "Invoice" : "Unbilled"}
                       </span>
                     </td>
@@ -218,9 +218,9 @@ function StatChip({
   color: "blue" | "amber" | "indigo" | "red";
 }) {
   const ring: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50",
+    blue: "text-[#1f4f70] bg-[#e0ecf2]",
     amber: "text-amber-600 bg-amber-50",
-    indigo: "text-indigo-600 bg-indigo-50",
+    indigo: "text-[#1f4f70] bg-[#e0ecf2]",
     red: "text-red-600 bg-red-50",
   };
   return (

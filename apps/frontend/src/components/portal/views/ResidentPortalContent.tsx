@@ -420,7 +420,7 @@ export default function ResidentPortalContent({ tab }: ResidentPortalContentProp
 
   const wellnessLabel = (score: number) => {
     if (score >= 90) return { text: "Optimal", color: "bg-emerald-500 text-white" };
-    if (score >= 80) return { text: "Good", color: "bg-blue-500 text-white" };
+    if (score >= 80) return { text: "Good", color: "bg-[#22577a] text-white" };
     return { text: "Stable", color: "bg-amber-500 text-white" };
   };
 
@@ -1062,14 +1062,14 @@ Vitals:
             </h1>
             <p className="text-gray-600 text-base sm:text-lg md:text-xl leading-relaxed">
               Happy {dayName}. You have{" "}
-              <span className="font-bold text-blue-700">{todayTasks.filter(t => t.status !== "COMPLETED").length}</span>{" "}
+              <span className="font-bold text-[#1b4763]">{todayTasks.filter(t => t.status !== "COMPLETED").length}</span>{" "}
               {todayTasks.filter(t => t.status !== "COMPLETED").length === 1 ? "activity" : "activities"} left today.
             </p>
           </div>
 
           {/* Wellness score — clean, large, easy to read */}
           <div className="flex items-center gap-4 bg-gray-50 rounded-2xl px-5 py-4 shrink-0 self-start md:self-auto">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-600 flex items-center justify-center shrink-0">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-[#1f4f70] flex items-center justify-center shrink-0">
               <TrendingUp className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
             </div>
             <div>
@@ -1096,13 +1096,13 @@ Vitals:
         {/* ── COL 1: Today's Schedule (span 4) ── */}
         <div
           onClick={() => setScheduleModalOpen(true)}
-          className="lg:col-span-4 bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 shadow-sm flex flex-col h-auto lg:h-[600px] hover:border-blue-400 hover:shadow-md transition cursor-pointer"
+          className="lg:col-span-4 bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 shadow-sm flex flex-col h-auto lg:h-[600px] hover:border-[#4f93bd] hover:shadow-md transition cursor-pointer"
         >
           <div className="flex items-center justify-between pb-4 border-b border-gray-100">
             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <Calendar className="w-6 h-6 text-blue-600" /> Today&apos;s Schedule
+              <Calendar className="w-6 h-6 text-[#1f4f70]" /> Today&apos;s Schedule
             </h2>
-            <span className="text-sm font-semibold text-blue-600 px-3 py-1 bg-blue-50 rounded-full">
+            <span className="text-sm font-semibold text-[#1f4f70] px-3 py-1 bg-[#e0ecf2] rounded-full">
               {now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
             </span>
           </div>
@@ -1115,7 +1115,7 @@ Vitals:
                 <p className="text-xs">Enjoy your leisure time!</p>
               </div>
             ) : (
-              <div className="relative border-l-2 border-blue-100 ml-4 pl-6 space-y-6 py-2">
+              <div className="relative border-l-2 border-[#cfe0eb] ml-4 pl-6 space-y-6 py-2">
                 {todayTasks.slice(0, 4).map((task) => {
                   const TaskIcon = getTaskIcon(task.title);
                   const isDone = task.status === "COMPLETED";
@@ -1126,7 +1126,7 @@ Vitals:
                         className={`absolute -left-[35px] top-1 w-6 h-6 rounded-full flex items-center justify-center border-2 transition active:scale-95 ${
                           isDone
                             ? "bg-emerald-500 border-emerald-500 text-white"
-                            : "bg-white border-blue-300 text-blue-500 hover:bg-blue-50"
+                            : "bg-white border-[#7fa9c2] text-[#22577a] hover:bg-[#e0ecf2]"
                         }`}
                       >
                         {isDone ? <CheckSquare className="w-3.5 h-3.5" /> : <TaskIcon className="w-3.5 h-3.5" />}
@@ -1137,11 +1137,11 @@ Vitals:
                         className={`p-3 rounded-xl border transition ${
                           isDone
                             ? "bg-emerald-50/20 border-emerald-100"
-                            : "bg-white border-gray-100 group-hover:border-blue-200"
+                            : "bg-white border-gray-100 group-hover:border-[#a9c6d8]"
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-bold text-blue-600">
+                          <span className="text-sm font-bold text-[#1f4f70]">
                             {new Date(task.dueDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                           </span>
                           {task.priority === "URGENT" && (
@@ -1163,7 +1163,7 @@ Vitals:
               </div>
             )}
           </div>
-          <div className="pt-3 border-t border-gray-100 text-center text-sm text-blue-600 font-bold flex items-center justify-center gap-1">
+          <div className="pt-3 border-t border-gray-100 text-center text-sm text-[#1f4f70] font-bold flex items-center justify-center gap-1">
             Tap to see full schedule <ChevronRight className="w-4 h-4" />
           </div>
         </div>
@@ -1174,21 +1174,21 @@ Vitals:
           {/* Medications Card */}
           <div 
             onClick={() => setMedsModalOpen(true)}
-            className="bg-blue-600 rounded-2xl p-4 sm:p-6 text-white shadow-md flex-1 flex flex-col justify-between mb-2 hover:bg-blue-700 hover:shadow-lg transition cursor-pointer border border-blue-500"
+            className="bg-[#1f4f70] rounded-2xl p-4 sm:p-6 text-white shadow-md flex-1 flex flex-col justify-between mb-2 hover:bg-[#1b4763] hover:shadow-lg transition cursor-pointer border border-[#22577a]"
           >
             <div>
-              <div className="flex items-center justify-between pb-3 border-b border-blue-500/30">
+              <div className="flex items-center justify-between pb-3 border-b border-[#22577a]/30">
                 <h3 className="text-xl font-bold flex items-center gap-2 text-white">
                   <Pill className="w-6 h-6 text-white" /> Upcoming Medications
                 </h3>
-                <span className="text-xs font-black bg-blue-700/50 px-2.5 py-1 rounded text-blue-100 tracking-wide">
+                <span className="text-xs font-black bg-[#1b4763]/50 px-2.5 py-1 rounded text-[#cfe0eb] tracking-wide">
                   {nextDoseTime ? `Next dose: ${nextDoseTime}` : "No doses scheduled"}
                 </span>
               </div>
               
               <div className="space-y-3 mt-4 overflow-y-auto max-h-[140px] pr-1 custom-scrollbar">
                 {medications.length === 0 ? (
-                  <p className="text-sm text-blue-100 italic py-4">No medications scheduled.</p>
+                  <p className="text-sm text-[#cfe0eb] italic py-4">No medications scheduled.</p>
                 ) : (
                   medications.slice(0, 2).map((med) => {
                     const isChecked = complianceMap[med.id] || false;
@@ -1198,23 +1198,23 @@ Vitals:
                         onClick={(e) => { e.stopPropagation(); toggleMedicationCompliance(med.id); }}
                         className={`p-3 rounded-xl border flex items-center justify-between transition ${
                           isChecked
-                            ? "bg-blue-700/40 border-blue-400/50"
-                            : "bg-blue-500/20 border-blue-400/30 hover:bg-blue-500/30"
+                            ? "bg-[#1b4763]/40 border-[#4f93bd]/50"
+                            : "bg-[#22577a]/20 border-[#4f93bd]/30 hover:bg-[#22577a]/30"
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <Pill className="w-5 h-5 text-blue-100" />
+                          <Pill className="w-5 h-5 text-[#cfe0eb]" />
                           <div>
-                            <div className={`text-base font-bold ${isChecked ? "text-blue-200 line-through" : "text-white"}`}>
+                            <div className={`text-base font-bold ${isChecked ? "text-[#a9c6d8] line-through" : "text-white"}`}>
                               {med.name}
                             </div>
-                            <div className="text-sm text-blue-100">
+                            <div className="text-sm text-[#cfe0eb]">
                               {med.dosage} • {med.frequency}
                             </div>
                           </div>
                         </div>
                         <div className={`w-7 h-7 rounded-full flex items-center justify-center transition border-2 ${
-                          isChecked ? "bg-emerald-500 border-emerald-500 text-white" : "border-blue-200"
+                          isChecked ? "bg-emerald-500 border-emerald-500 text-white" : "border-[#a9c6d8]"
                         }`}>
                           {isChecked && <CheckCircle2 className="w-4 h-4" />}
                         </div>
@@ -1225,7 +1225,7 @@ Vitals:
               </div>
             </div>
             
-            <div className="flex items-center justify-between text-sm text-blue-100 pt-3 border-t border-blue-500/30">
+            <div className="flex items-center justify-between text-sm text-[#cfe0eb] pt-3 border-t border-[#22577a]/30">
               <span>Tap to mark as taken</span>
               <span className="font-bold flex items-center gap-0.5">View details <ChevronRight className="w-4 h-4" /></span>
             </div>
@@ -1252,14 +1252,14 @@ Vitals:
             {/* Activity Steps */}
             <div
               onClick={() => setStepsModalOpen(true)}
-              className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-blue-400 hover:shadow-md transition cursor-pointer"
+              className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-[#4f93bd] hover:shadow-md transition cursor-pointer"
             >
               <div className="flex items-center gap-2 pb-1">
-                <Activity className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500" />
+                <Activity className="w-5 h-5 sm:w-6 sm:h-6 text-[#22577a]" />
                 <span className="text-sm font-semibold text-gray-600">Activity</span>
               </div>
               <div className="text-3xl sm:text-4xl font-extrabold text-gray-900">{activitySteps}</div>
-              <span className="text-xs text-blue-700 font-bold px-2.5 py-1 bg-blue-50 rounded-full mt-2 inline-block">
+              <span className="text-xs text-[#1b4763] font-bold px-2.5 py-1 bg-[#e0ecf2] rounded-full mt-2 inline-block">
                 Daily Goal: {activityGoalPct}%
               </span>
             </div>
@@ -1314,7 +1314,7 @@ Vitals:
             {/* CALL FAMILY */}
             <button
               onClick={() => setFamilyModalOpen(true)}
-              className="py-5 sm:py-6 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold rounded-2xl text-center shadow-sm hover:shadow-md transition flex flex-col items-center justify-center gap-2"
+              className="py-5 sm:py-6 bg-[#1f4f70] hover:bg-[#1b4763] active:scale-95 text-white font-bold rounded-2xl text-center shadow-sm hover:shadow-md transition flex flex-col items-center justify-center gap-2"
             >
               <PhoneCall className="w-8 h-8" />
               <span className="text-sm sm:text-base">Call Family</span>
@@ -1358,12 +1358,12 @@ Vitals:
                       <div className="flex items-center justify-between">
                         <span className="text-xs uppercase tracking-wide font-extrabold text-amber-600">{item.mealType}</span>
                         {item.dietaryTags && (
-                          <span className="text-xs font-bold px-2 py-0.5 bg-blue-50 text-blue-600 rounded">{item.dietaryTags.split(",")[0]}</span>
+                          <span className="text-xs font-bold px-2 py-0.5 bg-[#e0ecf2] text-[#1f4f70] rounded">{item.dietaryTags.split(",")[0]}</span>
                         )}
                       </div>
                       {item.imageUrl ? (
                         <div className="h-24 w-full bg-cover bg-center rounded-lg relative border border-gray-100" style={{ backgroundImage: `url('${item.imageUrl}')` }}>
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent rounded-lg flex items-end p-2">
+                          <div className="absolute inset-0 bg-[#0f172a] /50 to-transparent rounded-lg flex items-end p-2">
                             <span className="text-white text-base font-black truncate">{item.name}</span>
                           </div>
                         </div>
@@ -1436,11 +1436,11 @@ Vitals:
       {scheduleModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-            <div className="px-4 sm:px-6 py-4 bg-blue-600 text-white flex items-center justify-between flex-shrink-0">
+            <div className="px-4 sm:px-6 py-4 bg-[#1f4f70] text-white flex items-center justify-between flex-shrink-0">
               <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <Calendar className="w-5 h-5" /> Today&apos;s Complete Schedule
               </h3>
-              <button onClick={() => setScheduleModalOpen(false)} className="p-1 hover:bg-blue-700 rounded transition">
+              <button onClick={() => setScheduleModalOpen(false)} className="p-1 hover:bg-[#1b4763] rounded transition">
                 <X className="w-5 h-5 text-white" />
               </button>
             </div>
@@ -1462,7 +1462,7 @@ Vitals:
                         className={`p-4 rounded-xl border flex items-start gap-4 transition cursor-pointer ${
                           isDone 
                             ? "bg-emerald-50/20 border-emerald-100 hover:bg-emerald-50/40" 
-                            : "bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm"
+                            : "bg-white border-gray-200 hover:border-[#7fa9c2] hover:shadow-sm"
                         }`}
                       >
                         <div className={`mt-1 w-5 h-5 rounded-full flex items-center justify-center border transition ${
@@ -1473,7 +1473,7 @@ Vitals:
                         
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs font-bold text-blue-600">
+                            <span className="text-xs font-bold text-[#1f4f70]">
                               {new Date(t.dueDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                             </span>
                             <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
@@ -1516,11 +1516,11 @@ Vitals:
       {medsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-            <div className="px-4 sm:px-6 py-4 bg-blue-700 text-white flex items-center justify-between flex-shrink-0">
+            <div className="px-4 sm:px-6 py-4 bg-[#1b4763] text-white flex items-center justify-between flex-shrink-0">
               <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <Pill className="w-5 h-5" /> Active Medications & Prescriptions
               </h3>
-              <button onClick={() => setMedsModalOpen(false)} className="p-1 hover:bg-blue-800 rounded transition">
+              <button onClick={() => setMedsModalOpen(false)} className="p-1 hover:bg-[#163c56] rounded transition">
                 <X className="w-5 h-5 text-white" />
               </button>
             </div>
@@ -1540,12 +1540,12 @@ Vitals:
                         onClick={() => toggleMedicationCompliance(m.id)}
                         className={`p-4 rounded-xl border flex items-start justify-between gap-4 transition cursor-pointer ${
                           isChecked 
-                            ? "bg-blue-50/20 border-blue-200 hover:bg-blue-50/40" 
-                            : "bg-white border-gray-200 hover:border-blue-400"
+                            ? "bg-[#e0ecf2]/20 border-[#a9c6d8] hover:bg-[#e0ecf2]/40" 
+                            : "bg-white border-gray-200 hover:border-[#4f93bd]"
                         }`}
                       >
                         <div className="flex items-start gap-3">
-                          <Pill className="w-5 h-5 text-blue-600 mt-1" />
+                          <Pill className="w-5 h-5 text-[#1f4f70] mt-1" />
                           <div>
                             <h4 className={`text-base font-extrabold text-gray-900 ${isChecked ? "line-through text-gray-400" : ""}`}>
                               {m.name} <span className="font-normal text-gray-500 text-sm">{m.dosage}</span>
@@ -1781,11 +1781,11 @@ Vitals:
       {vitalsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-            <div className="px-4 sm:px-6 py-4 bg-blue-600 text-white flex items-center justify-between flex-shrink-0">
+            <div className="px-4 sm:px-6 py-4 bg-[#1f4f70] text-white flex items-center justify-between flex-shrink-0">
               <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <HeartPulse className="w-5 h-5 text-white" /> Vitals History Logs
               </h3>
-              <button onClick={() => setVitalsModalOpen(false)} className="p-1 hover:bg-blue-700 rounded transition">
+              <button onClick={() => setVitalsModalOpen(false)} className="p-1 hover:bg-[#1b4763] rounded transition">
                 <X className="w-5 h-5 text-white" />
               </button>
             </div>
@@ -1835,7 +1835,7 @@ Vitals:
                           <tr key={v.id} className="hover:bg-gray-50 transition">
                             <td className="px-4 py-3 font-semibold flex items-center gap-2">
                               {isHR ? <Heart className="w-4 h-4 text-red-500" /> :
-                               isOxy ? <Volume2 className="w-4 h-4 text-blue-500" /> :
+                               isOxy ? <Volume2 className="w-4 h-4 text-[#22577a]" /> :
                                <Activity className="w-4 h-4 text-gray-500" />}
                               {displayType}
                             </td>
@@ -1875,7 +1875,7 @@ Vitals:
       {stepsModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-            <div className="px-4 sm:px-6 py-4 bg-gradient-to-r from-indigo-500 to-violet-600 text-white flex items-center justify-between flex-shrink-0">
+            <div className="px-4 sm:px-6 py-4 bg-[#22577a] text-white flex items-center justify-between flex-shrink-0">
               <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <StepIcon className="w-5 h-5 text-white" /> Activity Steps Tracker
               </h3>
@@ -1887,15 +1887,15 @@ Vitals:
             <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
               {/* Hero stats */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-indigo-50 rounded-xl p-4 text-center border border-indigo-100">
-                  <p className="text-[10px] sm:text-xs font-semibold text-indigo-500 uppercase tracking-wider mb-1">Today</p>
-                  <p className="text-2xl sm:text-3xl font-black text-indigo-900">{activitySteps.replace(" Steps", "")}</p>
-                  <p className="text-[10px] text-indigo-400 mt-1">steps recorded</p>
+                <div className="bg-[#e0ecf2] rounded-xl p-4 text-center border border-[#cfe0eb]">
+                  <p className="text-[10px] sm:text-xs font-semibold text-[#22577a] uppercase tracking-wider mb-1">Today</p>
+                  <p className="text-2xl sm:text-3xl font-black text-[#12324a]">{activitySteps.replace(" Steps", "")}</p>
+                  <p className="text-[10px] text-[#4f93bd] mt-1">steps recorded</p>
                 </div>
-                <div className="bg-violet-50 rounded-xl p-4 text-center border border-violet-100">
-                  <p className="text-[10px] sm:text-xs font-semibold text-violet-500 uppercase tracking-wider mb-1">Goal</p>
-                  <p className="text-2xl sm:text-3xl font-black text-violet-900">{activityGoalPct}%</p>
-                  <p className="text-[10px] text-violet-400 mt-1">completion</p>
+                <div className="bg-[#e0ecf2] rounded-xl p-4 text-center border border-[#cfe0eb]">
+                  <p className="text-[10px] sm:text-xs font-semibold text-[#22577a] uppercase tracking-wider mb-1">Goal</p>
+                  <p className="text-2xl sm:text-3xl font-black text-[#12324a]">{activityGoalPct}%</p>
+                  <p className="text-[10px] text-[#4f93bd] mt-1">completion</p>
                 </div>
                 <div className="col-span-2 bg-emerald-50 rounded-xl p-4 text-center border border-emerald-100">
                   <p className="text-[10px] sm:text-xs font-semibold text-emerald-500 uppercase tracking-wider mb-1">Goals Done</p>
@@ -1908,11 +1908,11 @@ Vitals:
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-sm font-bold text-gray-800">Daily Goal Progress</h4>
-                  <span className="text-xs font-semibold text-indigo-600">{activityGoalPct}%</span>
+                  <span className="text-xs font-semibold text-[#1f4f70]">{activityGoalPct}%</span>
                 </div>
                 <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-700"
+                    className="h-full bg-[#22577a] rounded-full transition-all duration-700"
                     style={{ width: `${Math.min(activityGoalPct, 100)}%` }}
                   />
                 </div>
@@ -1965,7 +1965,7 @@ Vitals:
             <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
               <button
                 onClick={() => setStepsModalOpen(false)}
-                className="px-5 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold rounded-lg transition"
+                className="px-5 py-2 bg-[#cfe0eb] hover:bg-[#a9c6d8] text-[#163c56] font-bold rounded-lg transition"
               >
                 Close
               </button>
@@ -1978,11 +1978,11 @@ Vitals:
       {familyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="px-4 sm:px-6 py-4 bg-blue-600 text-white flex items-center justify-between">
+            <div className="px-4 sm:px-6 py-4 bg-[#1f4f70] text-white flex items-center justify-between">
               <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
                 <Phone className="w-5 h-5" /> Family Contact Details
               </h3>
-              <button onClick={() => setFamilyModalOpen(false)} className="p-1 hover:bg-blue-700 rounded transition">
+              <button onClick={() => setFamilyModalOpen(false)} className="p-1 hover:bg-[#1b4763] rounded transition">
                 <X className="w-5 h-5 text-white" />
               </button>
             </div>
@@ -1990,12 +1990,12 @@ Vitals:
             <div className="p-4 sm:p-6 space-y-4">
               {resident?.sponsor ? (
                 <div className="space-y-4">
-                  <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-xl">
+                  <div className="bg-[#e0ecf2] p-4 rounded-xl border border-[#cfe0eb] flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-[#1f4f70] text-white flex items-center justify-center font-black text-xl">
                       {resident.sponsor.name.charAt(0)}
                     </div>
                     <div>
-                      <h4 className="font-black text-blue-900">{resident.sponsor.name}</h4>
+                      <h4 className="font-black text-[#12324a]">{resident.sponsor.name}</h4>
                       <p className="text-xs text-gray-500">Family Sponsor</p>
                     </div>
                   </div>
@@ -2007,7 +2007,7 @@ Vitals:
                         className="w-full py-2.5 px-4 bg-white border border-gray-200 text-gray-800 rounded-xl font-bold flex items-center justify-between hover:bg-gray-50 transition active:scale-95"
                       >
                         <span className="text-sm">Phone: {resident.sponsor.phone}</span>
-                        <Phone className="w-4 h-4 text-blue-600" />
+                        <Phone className="w-4 h-4 text-[#1f4f70]" />
                       </a>
                     )}
                     <a
@@ -2015,7 +2015,7 @@ Vitals:
                       className="w-full py-2.5 px-4 bg-white border border-gray-200 text-gray-800 rounded-xl font-bold flex items-center justify-between hover:bg-gray-50 transition active:scale-95"
                     >
                       <span className="text-sm">Email: {resident.sponsor.email}</span>
-                      <MessageSquare className="w-4 h-4 text-blue-600" />
+                      <MessageSquare className="w-4 h-4 text-[#1f4f70]" />
                     </a>
                   </div>
                 </div>
@@ -2078,7 +2078,7 @@ Vitals:
               <button
                 onClick={handleRoomServiceRequest}
                 disabled={requestingService}
-                className="px-5 py-2 bg-gradient-to-r from-amber-400 to-amber-500 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm flex items-center gap-2"
+                className="px-5 py-2 bg-[#b58a2e] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm flex items-center gap-2"
               >
                 {requestingService && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black" />}
                 Submit Request
@@ -2177,7 +2177,7 @@ Vitals:
               <button
                 onClick={handleCallBell}
                 disabled={!callBellReason || sendingBell}
-                className="px-5 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-bold rounded-lg hover:shadow-lg transition active:scale-95 text-sm flex items-center gap-2 disabled:opacity-50"
+                className="px-5 py-2 bg-[#b0432c] text-white font-bold rounded-lg hover:shadow-lg transition active:scale-95 text-sm flex items-center gap-2 disabled:opacity-50"
               >
                 {sendingBell && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
                 <Bell className="w-4 h-4" /> Send Call Bell
@@ -2189,10 +2189,10 @@ Vitals:
 
       {/* ── 6. FLOATING VOICE AND TEXT CHAT COMPANION MODAL ── */}
       {/* Floating Action Button */}
-      <div className="fixed bottom-6 right-6 z-40">
+      <div className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-4 z-40 md:bottom-6 md:left-6">
         <button
           onClick={() => setAssistantOpen(true)}
-          className="w-16 h-16 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition duration-300 animate-bounce group relative border border-blue-400"
+          className="w-16 h-16 rounded-full bg-[#22577a] text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition duration-300 animate-bounce group relative border border-[#4f93bd]"
           title="Talk with AI Companion"
         >
           <Bot className="w-8 h-8 text-white group-hover:rotate-12 transition duration-300" />
@@ -2206,10 +2206,10 @@ Vitals:
       {/* Slide-out Assistant Modal Panel */}
       {assistantOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-end p-4 bg-black/30 backdrop-blur-sm">
-          <div className="bg-white w-full sm:w-[480px] h-[80vh] sm:h-[600px] rounded-2xl shadow-2xl border border-gray-100 flex flex-col overflow-hidden animate-slide-in">
+          <div className="bg-white w-full sm:w-[480px] h-[80dvh] sm:h-[600px] rounded-2xl shadow-2xl border border-gray-100 flex flex-col overflow-hidden animate-slide-in">
             
             {/* Header */}
-            <div className="px-5 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-between flex-shrink-0">
+            <div className="px-5 py-4 bg-[#22577a] text-white flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center relative">
                   <Bot className="w-5 h-5 text-white" />
@@ -2222,9 +2222,9 @@ Vitals:
                   <div className="flex items-center gap-1">
                     <span className={`w-2 h-2 rounded-full ${
                       assistantListening ? "bg-red-500 animate-pulse" :
-                      assistantSpeaking ? "bg-emerald-400 animate-pulse" : "bg-blue-300"
+                      assistantSpeaking ? "bg-emerald-400 animate-pulse" : "bg-[#7fa9c2]"
                     }`} />
-                    <span className="text-[10px] text-blue-100 font-semibold uppercase tracking-wider">
+                    <span className="text-[10px] text-[#cfe0eb] font-semibold uppercase tracking-wider">
                       {assistantListening ? "Listening..." :
                        assistantSpeaking ? "Speaking..." : "Online"}
                     </span>
@@ -2235,7 +2235,7 @@ Vitals:
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setAssistantAutoSpeak(!assistantAutoSpeak)}
-                  className={`p-1.5 rounded transition ${assistantAutoSpeak ? "bg-white/20 text-white" : "text-blue-200 hover:bg-white/10"}`}
+                  className={`p-1.5 rounded transition ${assistantAutoSpeak ? "bg-white/20 text-white" : "text-[#a9c6d8] hover:bg-white/10"}`}
                   title={assistantAutoSpeak ? "Mute Voice output" : "Enable Voice output"}
                 >
                   {assistantAutoSpeak ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
@@ -2261,13 +2261,13 @@ Vitals:
                     <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
                       isAI
                         ? "bg-white text-gray-900 border border-gray-100 rounded-tl-none"
-                        : "bg-blue-600 text-white rounded-tr-none font-medium"
+                        : "bg-[#1f4f70] text-white rounded-tr-none font-medium"
                     }`}>
                       <p className="leading-relaxed">{m.text}</p>
                       {m.link && (
                         <Link
                           href={m.link.href}
-                          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 active:scale-95 transition"
+                          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1f4f70] text-white text-xs font-bold hover:bg-[#1b4763] active:scale-95 transition"
                         >
                           <Calendar className="w-3.5 h-3.5" />
                           {m.link.label}
@@ -2282,7 +2282,7 @@ Vitals:
               {/* Voice recognition interim display */}
               {interimSpeech && (
                 <div className="flex justify-end">
-                  <div className="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm bg-blue-500/20 text-blue-900 rounded-tr-none italic border border-blue-200">
+                  <div className="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm bg-[#22577a]/20 text-[#12324a] rounded-tr-none italic border border-[#a9c6d8]">
                     <p>{interimSpeech}</p>
                   </div>
                 </div>
@@ -2304,19 +2304,19 @@ Vitals:
             <div className="p-3 bg-gray-50 border-t border-gray-100 flex gap-2 overflow-x-auto flex-shrink-0 select-none custom-scrollbar">
               <button 
                 onClick={() => handleSendAssistantMessage("What is my schedule for today?")}
-                className="px-3 py-1 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 text-blue-900 font-bold rounded-full text-xs flex-shrink-0 transition active:scale-95"
+                className="px-3 py-1 bg-white hover:bg-[#e0ecf2] border border-gray-200 hover:border-[#7fa9c2] text-[#12324a] font-bold rounded-full text-xs flex-shrink-0 transition active:scale-95"
               >
                 🗓️ Today&apos;s Schedule
               </button>
               <button 
                 onClick={() => handleSendAssistantMessage("What is on the dining menu?")}
-                className="px-3 py-1 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 text-blue-900 font-bold rounded-full text-xs flex-shrink-0 transition active:scale-95"
+                className="px-3 py-1 bg-white hover:bg-[#e0ecf2] border border-gray-200 hover:border-[#7fa9c2] text-[#12324a] font-bold rounded-full text-xs flex-shrink-0 transition active:scale-95"
               >
                 🥗 Today&apos;s Menu
               </button>
               <button 
                 onClick={() => handleSendAssistantMessage("How are my heart rate vitals looking?")}
-                className="px-3 py-1 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 text-blue-900 font-bold rounded-full text-xs flex-shrink-0 transition active:scale-95"
+                className="px-3 py-1 bg-white hover:bg-[#e0ecf2] border border-gray-200 hover:border-[#7fa9c2] text-[#12324a] font-bold rounded-full text-xs flex-shrink-0 transition active:scale-95"
               >
                 ❤️ Vitals Status
               </button>
@@ -2330,7 +2330,7 @@ Vitals:
                 className={`w-12 h-12 rounded-xl flex items-center justify-center shadow transition active:scale-90 flex-shrink-0 ${
                   assistantListening
                     ? "bg-red-500 hover:bg-red-600 text-white animate-pulse"
-                    : "bg-blue-50 hover:bg-blue-100 text-blue-600"
+                    : "bg-[#e0ecf2] hover:bg-[#cfe0eb] text-[#1f4f70]"
                 }`}
                 title={assistantListening ? "Stop listening" : "Start speaking"}
               >
@@ -2344,13 +2344,13 @@ Vitals:
                 onKeyDown={(e) => e.key === "Enter" && handleSendAssistantMessage(assistantInput)}
                 placeholder={assistantListening ? "Listening..." : "Type or speak to assistant..."}
                 disabled={assistantListening}
-                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-600 outline-none text-gray-900 text-sm"
+                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#1f4f70] outline-none text-gray-900 text-sm"
               />
 
               <button
                 onClick={() => handleSendAssistantMessage(assistantInput)}
                 disabled={!assistantInput.trim() || assistantThinking}
-                className="w-10 h-10 rounded-xl bg-blue-600 text-white shadow flex items-center justify-center hover:bg-blue-700 active:scale-90 transition disabled:opacity-50 disabled:scale-100 flex-shrink-0"
+                className="w-10 h-10 rounded-xl bg-[#1f4f70] text-white shadow flex items-center justify-center hover:bg-[#1b4763] active:scale-90 transition disabled:opacity-50 disabled:scale-100 flex-shrink-0"
               >
                 <Send className="w-4 h-4 text-white" />
               </button>

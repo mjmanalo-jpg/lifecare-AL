@@ -24,7 +24,7 @@ import {
 const esc = (v: unknown) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));
 const BODY_IMG = "/physical-exam-body.png";
 const bodyImgUrl = () => (typeof window !== "undefined" ? window.location.origin : "") + BODY_IMG;
-const cell = "rounded border border-gray-300 px-2 py-1 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white disabled:bg-gray-50 disabled:text-gray-600";
+const cell = "rounded border border-gray-300 px-2 py-1 text-sm outline-none focus:border-[#22577a] focus:ring-2 focus:ring-[#22577a]/20 bg-white disabled:bg-gray-50 disabled:text-gray-600";
 // What a ticked injury line stores (and prints on the paper form's fill-in line).
 const INJURY_MARK = "✓";
 
@@ -93,7 +93,7 @@ function BodyDiagram({ marks, editable, onChange }: {
           {INJURY_TYPES.map((t, i) => (
             <button key={t} type="button" onClick={() => setPen(i + 1)} title={t}
               style={{ width: 28, height: 28, minWidth: 0, minHeight: 0, padding: 0, borderRadius: "50%" }}
-              className={`inline-flex items-center justify-center text-xs font-bold tabular-nums transition ${pen === i + 1 ? "bg-blue-600 text-white ring-2 ring-blue-300" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+              className={`inline-flex items-center justify-center text-xs font-bold tabular-nums transition ${pen === i + 1 ? "bg-[#1f4f70] text-white ring-2 ring-[#7fa9c2]" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
               {i + 1}
             </button>
           ))}
@@ -107,7 +107,7 @@ function BodyDiagram({ marks, editable, onChange }: {
           <button key={m.id} type="button" title={`${m.n}. ${INJURY_TYPES[m.n - 1] ?? ""}`}
             onClick={(e) => { e.stopPropagation(); if (editable) onChange?.(marks.filter((x) => x.id !== m.id)); }}
             style={{ left: `${m.x}%`, top: `${m.y}%`, width: 20, height: 20, minWidth: 0, minHeight: 0, padding: 0, borderRadius: "50%" }}
-            className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center border-[1.5px] border-white bg-blue-700 text-[11px] font-extrabold leading-none text-white shadow ring-1 ring-blue-700 tabular-nums hover:bg-red-600 hover:ring-red-600">
+            className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center border-[1.5px] border-white bg-[#1b4763] text-[11px] font-extrabold leading-none text-white shadow ring-1 ring-[#1b4763] tabular-nums hover:bg-red-600 hover:ring-red-600">
             {m.n}
           </button>
         ))}

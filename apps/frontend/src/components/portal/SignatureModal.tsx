@@ -116,7 +116,7 @@ export default function SignatureModal({ open, onClose, onSigned, mode = "sign",
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between bg-[#1e2a4a] px-5 py-4 text-white">
-          <h3 className="flex items-center gap-2 font-bold"><KeyRound className="h-5 w-5 text-blue-400" /> {title || (mode === "manage" ? "Your signing PIN" : "Sign & finalise")}</h3>
+          <h3 className="flex items-center gap-2 font-bold"><KeyRound className="h-5 w-5 text-[#4f93bd]" /> {title || (mode === "manage" ? "Your signing PIN" : "Sign & finalise")}</h3>
           <button onClick={onClose} className="rounded p-1 text-white/80 hover:bg-white/15 hover:text-white"><X className="h-5 w-5" /></button>
         </div>
 
@@ -152,17 +152,17 @@ export default function SignatureModal({ open, onClose, onSigned, mode = "sign",
                     onKeyDown={(e) => onKey(i, e)}
                     onPaste={onPaste}
                     onFocus={(e) => e.target.select()}
-                    className="h-14 w-14 rounded-xl border border-slate-200 bg-slate-100 text-center text-2xl font-bold text-slate-700 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500/30"
+                    className="h-14 w-14 rounded-xl border border-slate-200 bg-slate-100 text-center text-2xl font-bold text-slate-700 outline-none transition focus:border-[#4f93bd] focus:bg-white focus:ring-2 focus:ring-[#22577a]/30"
                   />
                 ))}
               </div>
               {error && <p className="text-center text-sm text-red-600">{error}</p>}
-              <button type="submit" disabled={busy} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-800 disabled:opacity-60">
+              <button type="submit" disabled={busy} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1b4763] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#163c56] disabled:opacity-60">
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Sign
               </button>
             </form>
             <div className="border-t border-slate-100 bg-slate-50 px-5 py-3 text-center text-xs text-slate-500">
-              Forgot your PIN? <span className="font-medium text-blue-600">View it under Account settings → Signing PIN</span>
+              Forgot your PIN? <span className="font-medium text-[#1f4f70]">View it under Account settings → Signing PIN</span>
             </div>
           </>
         )}

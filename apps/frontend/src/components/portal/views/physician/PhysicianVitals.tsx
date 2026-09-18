@@ -149,7 +149,7 @@ export default function PhysicianVitals() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <TrendingUp className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Vitals Trends
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -235,7 +235,7 @@ export default function PhysicianVitals() {
         {/* Latest by Patient */}
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-            <Heart className="w-4 h-4 text-blue-500" /> Latest Readings by Patient
+            <Heart className="w-4 h-4 text-[#22577a]" /> Latest Readings by Patient
           </h3>
           {latestByResident.length > 0 ? (
             <div className="space-y-2 max-h-80 overflow-y-auto">
@@ -266,7 +266,7 @@ export default function PhysicianVitals() {
 
 const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
   gray: { wrap: "bg-white border-gray-200", icon: "text-gray-500", value: "text-gray-900" },
-  blue: { wrap: "bg-blue-50 border-blue-200", icon: "text-blue-500", value: "text-blue-600" },
+  blue: { wrap: "bg-[#e0ecf2] border-[#a9c6d8]", icon: "text-[#22577a]", value: "text-[#1f4f70]" },
   red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
   purple: { wrap: "bg-purple-50 border-purple-200", icon: "text-purple-500", value: "text-purple-600" },
 };

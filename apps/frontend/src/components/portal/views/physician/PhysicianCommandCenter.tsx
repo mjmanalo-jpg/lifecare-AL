@@ -144,7 +144,7 @@ export default function PhysicianCommandCenter() {
       at: asStr(n.createdAt),
     }));
     tasksQ.data.filter((t) => asStr(t.status) === "COMPLETED").forEach((t) => evs.push({
-      id: `t-${t.id}`, icon: CheckSquare, color: "text-blue-600", source: "Caregiver",
+      id: `t-${t.id}`, icon: CheckSquare, color: "text-[#1f4f70]", source: "Caregiver",
       text: `Completed: ${asStr(t.title)}${nameById.get(asStr(t.residentId)) ? ` · ${nameById.get(asStr(t.residentId))}` : ""}`,
       at: asStr(t.completedAt) || asStr(t.updatedAt) || asStr(t.createdAt),
     }));
@@ -174,8 +174,8 @@ export default function PhysicianCommandCenter() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-indigo-700 mb-1 flex items-center gap-2">
-            <Stethoscope className="w-7 h-7 text-indigo-500 flex-shrink-0" /> Command Center
+          <h1 className="text-3xl sm:text-4xl font-bold text-[#1b4763] mb-1 flex items-center gap-2">
+            <Stethoscope className="w-7 h-7 text-[#22577a] flex-shrink-0" /> Command Center
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
             <span className="inline-flex items-center gap-1 text-green-600"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /> Live</span>
@@ -230,7 +230,7 @@ export default function PhysicianCommandCenter() {
         {/* Pending physician actions */}
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="flex items-center gap-2 mb-3">
-            <ClipboardCheck className="w-5 h-5 text-blue-500" />
+            <ClipboardCheck className="w-5 h-5 text-[#22577a]" />
             <h2 className="font-bold text-gray-900">Pending Physician Actions</h2>
           </div>
           <div className="space-y-2">
@@ -243,7 +243,7 @@ export default function PhysicianCommandCenter() {
       {/* Clinical Review — quick access to the full record boards */}
       <div className="bg-white rounded-lg border border-gray-200 p-4">
         <div className="flex items-center gap-2 mb-3">
-          <ClipboardCheck className="w-5 h-5 text-indigo-500" />
+          <ClipboardCheck className="w-5 h-5 text-[#22577a]" />
           <h2 className="font-bold text-gray-900">Clinical Review — Quick Access</h2>
           <span className="ml-auto text-xs text-gray-500">Jump into any record board</span>
         </div>
@@ -287,7 +287,7 @@ const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
   red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
   amber: { wrap: "bg-amber-50 border-amber-200", icon: "text-amber-500", value: "text-amber-600" },
   orange: { wrap: "bg-orange-50 border-orange-200", icon: "text-orange-500", value: "text-orange-600" },
-  blue: { wrap: "bg-blue-50 border-blue-200", icon: "text-blue-500", value: "text-blue-600" },
+  blue: { wrap: "bg-[#e0ecf2] border-[#a9c6d8]", icon: "text-[#22577a]", value: "text-[#1f4f70]" },
   teal: { wrap: "bg-teal-50 border-teal-200", icon: "text-teal-500", value: "text-teal-600" },
   green: { wrap: "bg-green-50 border-green-200", icon: "text-green-500", value: "text-green-600" },
 };
@@ -313,15 +313,15 @@ interface ReviewBoard { label: string; desc: string; icon: LucideIcon; route: st
 const REVIEW_BOARDS: ReviewBoard[] = [
   { label: "Vital Sign Trends", desc: "10-domain trends & bands", icon: HeartPulse, route: "/physician/vitalstrend", tint: "text-rose-500" },
   { label: "Wound Care", desc: "Registry, photos, staging", icon: Bandage, route: "/physician/woundcare", tint: "text-amber-600" },
-  { label: "Care Plan Reviews", desc: "Reviews due & decisions", icon: Target, route: "/physician/careplans", tint: "text-indigo-600" },
-  { label: "Clinical Records", desc: "Labs, therapy, dx, orders", icon: FolderOpen, route: "/physician/clinicalrecords", tint: "text-blue-600" },
+  { label: "Care Plan Reviews", desc: "Reviews due & decisions", icon: Target, route: "/physician/careplans", tint: "text-[#1f4f70]" },
+  { label: "Clinical Records", desc: "Labs, therapy, dx, orders", icon: FolderOpen, route: "/physician/clinicalrecords", tint: "text-[#1f4f70]" },
   { label: "Med Compliance", desc: "Adherence & missed doses", icon: PieChart, route: "/physician/medcompliance", tint: "text-teal-600" },
   { label: "Daily Living (ADL)", desc: "Function & assistance", icon: Accessibility, route: "/physician/adlmonitoring", tint: "text-cyan-600" },
   { label: "Weight Tracking", desc: "Weekly weights & trend", icon: Scale, route: "/physician/weightmonitoring", tint: "text-slate-600" },
   { label: "Progress Reports", desc: "Period clinical summary", icon: FileText, route: "/physician/progressreport", tint: "text-green-600" },
   { label: "Daily Care Logs", desc: "10-domain bedside logs", icon: NotebookPen, route: "/physician/carelogs", tint: "text-purple-600" },
   { label: "Care Timeline", desc: "Full documentation history", icon: History, route: "/physician/carehistory", tint: "text-orange-600" },
-  { label: "Med Inventory", desc: "Stock & purchase requests", icon: Package, route: "/physician/medinventory", tint: "text-blue-500" },
+  { label: "Med Inventory", desc: "Stock & purchase requests", icon: Package, route: "/physician/medinventory", tint: "text-[#22577a]" },
   { label: "Mini Pharmacy", desc: "Backup stock & dispense", icon: Cross, route: "/physician/minipharmacy", tint: "text-teal-500" },
 ];
 

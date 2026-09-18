@@ -263,14 +263,14 @@ export default function FrontDeskBoard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2">
             Front Desk
           </h1>
           <p className="text-gray-600">Guest management — arrivals · check-in (ID &amp; pass) · ancillary payments · check-out &amp; receipt</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
-          <button onClick={() => { setForm(emptyForm); setShowCreate(true); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+          <button onClick={() => { setForm(emptyForm); setShowCreate(true); }} className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
             <Plus className="w-4 h-4" /> Log Arrival
           </button>
         </div>
@@ -365,14 +365,14 @@ export default function FrontDeskBoard() {
                           <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
                         ) : (
                           <>
-                            <button onClick={() => setViewing(v)} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
+                            <button onClick={() => setViewing(v)} className="p-1.5 rounded hover:bg-[#cfe0eb] text-[#1f4f70] transition" title="View"><Eye className="w-4 h-4" /></button>
                             {v.status === "ARRIVED" && (
                               <button onClick={() => handleCheckIn(v)} className="p-1.5 rounded hover:bg-green-100 text-green-600 transition" title="Check In & Issue Pass"><LogIn className="w-4 h-4" /></button>
                             )}
                             {v.status === "CHECKED_IN" && (
                               <>
                                 <button onClick={() => handleAncillary(v)} className="p-1.5 rounded hover:bg-amber-100 text-amber-600 transition" title="Add Ancillary Charge"><CircleDollarSign className="w-4 h-4" /></button>
-                                <button onClick={() => handleCheckOut(v)} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="Check Out & Receipt"><LogOut className="w-4 h-4" /></button>
+                                <button onClick={() => handleCheckOut(v)} className="p-1.5 rounded hover:bg-[#cfe0eb] text-[#1f4f70] transition" title="Check Out & Receipt"><LogOut className="w-4 h-4" /></button>
                               </>
                             )}
                             {v.status === "CHECKED_OUT" && v.receiptNumber && (
@@ -410,7 +410,7 @@ export default function FrontDeskBoard() {
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
               <h2 className="text-xl font-bold">Log Arrival</h2>
               <button onClick={() => setShowCreate(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
@@ -459,7 +459,7 @@ export default function FrontDeskBoard() {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
               <button onClick={() => setShowCreate(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
-              <button onClick={handleCreate} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Log Arrival</button>
+              <button onClick={handleCreate} className="px-5 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Log Arrival</button>
             </div>
           </div>
         </div>
@@ -472,7 +472,7 @@ export default function FrontDeskBoard() {
 
 function Stat({ label, value, icon: Icon, color }: { label: string; value: string; icon: React.ComponentType<{ className?: string }>; color: string }) {
   const COLORS: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50 border-blue-200",
+    blue: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     green: "text-green-600 bg-green-50 border-green-200",
     amber: "text-amber-600 bg-amber-50 border-amber-200",
     purple: "text-purple-600 bg-purple-50 border-purple-200",
@@ -513,7 +513,7 @@ function FrontDeskViewModal({ visit, onClose }: { visit: Visit; onClose: () => v
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold">{visit.visitorName}</h2>
           <button onClick={onClose} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>

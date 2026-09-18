@@ -73,7 +73,7 @@ const SECTION_HINT: Record<string, string> = {
 };
 
 const TYPE_BADGE: Record<string, string> = {
-  CLINICAL_NOTE: "bg-blue-100 text-blue-700",
+  CLINICAL_NOTE: "bg-[#cfe0eb] text-[#1b4763]",
   SOAP_NOTE: "bg-green-100 text-green-700",
   PROGRESS_NOTE: "bg-purple-100 text-purple-700",
   DISCHARGE_SUMMARY: "bg-orange-100 text-orange-700",
@@ -175,7 +175,7 @@ export default function ClinicalNotes({ clinicianRole = "PHYSICIAN" }: { clinici
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <PenTool className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Clinical Notes
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -185,7 +185,7 @@ export default function ClinicalNotes({ clinicianRole = "PHYSICIAN" }: { clinici
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
-          <button onClick={() => setAdding(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+          <button onClick={() => setAdding(true)} className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
             <Plus className="w-4 h-4" /> New Note
           </button>
         </div>
@@ -227,7 +227,7 @@ export default function ClinicalNotes({ clinicianRole = "PHYSICIAN" }: { clinici
           {paginated.map((n) => (
             <div key={n.id} className="bg-white rounded-lg border border-gray-200 hover:border-yellow-300 hover:shadow-md transition p-4 flex items-start gap-3 sm:gap-4">
               <button onClick={() => setViewing(n)} className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1 text-left">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-400 to-green-500 flex items-center justify-center flex-shrink-0">
+                <div className="w-10 h-10 rounded-lg bg-[#4fa77e] flex items-center justify-center flex-shrink-0">
                   <PenTool className="w-5 h-5 text-white" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -242,7 +242,7 @@ export default function ClinicalNotes({ clinicianRole = "PHYSICIAN" }: { clinici
               <div className="flex flex-col items-end gap-2 flex-shrink-0">
                 <span className="text-xs text-gray-500 whitespace-nowrap">{relTime(n.createdAt, nowTs)}</span>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => setViewing(n)} className="p-1.5 rounded hover:bg-blue-50 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
+                  <button onClick={() => setViewing(n)} className="p-1.5 rounded hover:bg-[#e0ecf2] text-[#1f4f70] transition" title="View"><Eye className="w-4 h-4" /></button>
                   <button onClick={() => void handleDelete(n)} className="p-1.5 rounded hover:bg-red-100 text-red-500 transition" title="Delete"><Trash2 className="w-4 h-4" /></button>
                 </div>
               </div>
@@ -277,7 +277,7 @@ export default function ClinicalNotes({ clinicianRole = "PHYSICIAN" }: { clinici
       {viewing && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-green-500 to-green-600 text-white p-5 sm:p-6 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#277a55] text-white p-5 sm:p-6 flex items-center justify-between z-10">
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold">{viewing.title || "Clinical Note"}</h2>
                 <p className="text-green-100 text-sm">{viewing.residentName} &middot; Room {viewing.room}</p>
@@ -436,7 +436,7 @@ function AddNoteModal({ residents, authorName, onClose, onSaved }: {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-green-500 to-green-600 text-white p-5 sm:p-6 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[#277a55] text-white p-5 sm:p-6 flex items-center justify-between z-10">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold">New Clinical Note</h2>
             <p className="text-green-100 text-sm">Dictate by voice, then draft with AI — or type directly</p>
@@ -471,12 +471,12 @@ function AddNoteModal({ residents, authorName, onClose, onSaved }: {
                   <button type="button" onClick={toggleDictation} disabled={!speechSupported}
                     title={speechSupported ? "Dictate with your microphone" : "Voice input not supported in this browser"}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed ${
-                      listening ? "bg-red-500 text-white animate-pulse" : "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+                      listening ? "bg-red-500 text-white animate-pulse" : "bg-[#e0ecf2] text-[#1b4763] border border-[#a9c6d8] hover:bg-[#cfe0eb]"
                     }`}>
                     {listening ? <><MicOff className="w-3.5 h-3.5" /> Stop</> : <><Mic className="w-3.5 h-3.5" /> Voice-to-Text</>}
                   </button>
                   <button type="button" onClick={() => void generateDraft()} disabled={drafting}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:shadow-md transition disabled:opacity-50">
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#22577a] text-white hover:shadow-md transition disabled:opacity-50">
                     {drafting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Drafting…</> : <><Sparkles className="w-3.5 h-3.5" /> AI Draft</>}
                   </button>
                 </div>
@@ -493,7 +493,7 @@ function AddNoteModal({ residents, authorName, onClose, onSaved }: {
           <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
             <button type="button" onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
             <button type="submit" disabled={!valid || saving}
-              className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+              className="flex items-center gap-2 px-6 py-2 bg-[#4fa77e] text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
               <PenTool className="w-4 h-4" /> {saving ? "Saving..." : "Save Note"}
             </button>
           </div>
@@ -505,7 +505,7 @@ function AddNoteModal({ residents, authorName, onClose, onSaved }: {
 
 const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
   gray: { wrap: "bg-white border-gray-200", icon: "text-gray-500", value: "text-gray-900" },
-  blue: { wrap: "bg-blue-50 border-blue-200", icon: "text-blue-500", value: "text-blue-600" },
+  blue: { wrap: "bg-[#e0ecf2] border-[#a9c6d8]", icon: "text-[#22577a]", value: "text-[#1f4f70]" },
   green: { wrap: "bg-green-50 border-green-200", icon: "text-green-500", value: "text-green-600" },
 };
 function Stat({ label, value, icon: Icon, tone }: { label: string; value: number; icon: LucideIcon; tone: keyof typeof TONES }) {

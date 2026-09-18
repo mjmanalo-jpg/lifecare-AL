@@ -51,20 +51,20 @@ interface ResidentVM {
 const CARE_ORDER: CareLevel[] = ["INDEPENDENT", "ASSISTED", "MEMORY", "SKILLED"];
 const CARE_BADGE: Record<CareLevel, string> = {
   INDEPENDENT: "bg-green-100 text-green-800",
-  ASSISTED: "bg-blue-100 text-blue-800",
+  ASSISTED: "bg-[#cfe0eb] text-[#163c56]",
   MEMORY: "bg-purple-100 text-purple-800",
   SKILLED: "bg-red-100 text-red-800",
 };
 const CARE_COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#ef4444"];
 const CARD_VITALS: { key: string; label: string; icon: LucideIcon; color: string }[] = [
   { key: "HEART_RATE", label: "HR", icon: Heart, color: "text-red-500" },
-  { key: "BLOOD_PRESSURE", label: "BP", icon: Droplets, color: "text-blue-500" },
+  { key: "BLOOD_PRESSURE", label: "BP", icon: Droplets, color: "text-[#22577a]" },
   { key: "TEMPERATURE", label: "Temp", icon: Thermometer, color: "text-orange-500" },
   { key: "OXYGEN", label: "O₂", icon: Wind, color: "text-green-500" },
 ];
 const SEVERITY_BADGE: Record<string, string> = {
   critical: "bg-red-100 text-red-700", high: "bg-orange-100 text-orange-700",
-  medium: "bg-yellow-100 text-yellow-700", low: "bg-blue-100 text-blue-700",
+  medium: "bg-yellow-100 text-yellow-700", low: "bg-[#cfe0eb] text-[#1b4763]",
 };
 
 const asStr = (v: unknown): string => (v == null ? "" : String(v));
@@ -244,7 +244,7 @@ export default function FacilityResidents({ canManageProfile = false }: { canMan
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <Users className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Resident Directory
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -265,7 +265,7 @@ export default function FacilityResidents({ canManageProfile = false }: { canMan
           </div>
           <RefreshButton onRefresh={() => { void refetch(); void refetchVitals(); }} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
           {canManageProfile && (
-            <button onClick={() => setAdmitting(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+            <button onClick={() => setAdmitting(true)} className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
               <UserPlus className="w-4 h-4" /> Admit Resident
             </button>
           )}
@@ -400,7 +400,7 @@ export default function FacilityResidents({ canManageProfile = false }: { canMan
                         <td className="px-4 py-3 text-right">
                           <div className="inline-flex items-center gap-1.5">
                             <button onClick={() => setQrResident({ id: r.id, name: r.name, room: r.room })} className="inline-flex items-center gap-1 px-2.5 py-1 border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition" title="View QR — opens the resident's full care card"><QrCode className="w-3.5 h-3.5" /> QR</button>
-                            <button onClick={() => setViewing(r)} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition">View</button>
+                            <button onClick={() => setViewing(r)} className="px-3 py-1 bg-[#22577a] text-white rounded-lg text-xs font-semibold hover:bg-[#1f4f70] transition">View</button>
                           </div>
                         </td>
                       </tr>
@@ -445,12 +445,12 @@ export default function FacilityResidents({ canManageProfile = false }: { canMan
       {viewing && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92dvh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-400 to-blue-500 text-white p-4 sm:p-6 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-white p-4 sm:p-6 flex items-center justify-between z-10">
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold">{viewing.name}</h2>
-                <p className="text-blue-100 text-sm">Room {viewing.room} • Age {viewing.age} • {humanize(viewing.careLevel)}</p>
+                <p className="text-[#cfe0eb] text-sm">Room {viewing.room} • Age {viewing.age} • {humanize(viewing.careLevel)}</p>
                 <div className="mt-2 flex items-center gap-2">
-                  <span className="text-xs text-blue-100">Status:</span>
+                  <span className="text-xs text-[#cfe0eb]">Status:</span>
                   {canManageProfile ? (
                     <select
                       value={viewing.status}
@@ -470,7 +470,7 @@ export default function FacilityResidents({ canManageProfile = false }: { canMan
                   )}
                 </div>
               </div>
-              <button onClick={() => setViewing(null)} className="p-2 hover:bg-blue-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+              <button onClick={() => setViewing(null)} className="p-2 hover:bg-[#1f4f70]/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
             <div className="p-4 sm:p-8 space-y-6">
               {/* Patient ID + intake / move-in body-check record */}
@@ -529,7 +529,7 @@ export default function FacilityResidents({ canManageProfile = false }: { canMan
                   <h3 className="font-bold text-gray-900 mb-3">Medications ({viewing.meds.length})</h3>
                   <div className="space-y-2">
                     {viewing.meds.length ? viewing.meds.map((m, i) => (
-                      <div key={i} className="flex items-center justify-between gap-2 p-2 bg-blue-50 rounded border border-blue-200">
+                      <div key={i} className="flex items-center justify-between gap-2 p-2 bg-[#e0ecf2] rounded border border-[#a9c6d8]">
                         <span className="text-gray-900 text-sm">💊 {m.name} <span className="text-gray-500">{m.dosage}</span></span>
                         <span className="text-xs text-gray-600">{m.frequency}</span>
                       </div>
@@ -606,7 +606,7 @@ function ProfileField({ label, value, emphasis }: { label: string; value?: strin
   return (
     <div>
       <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{label}</p>
-      <p className={`text-sm mt-0.5 ${value ? (emphasis ? "text-blue-700 font-semibold" : "text-gray-900 font-medium") : "text-gray-400 italic"}`}>
+      <p className={`text-sm mt-0.5 ${value ? (emphasis ? "text-[#1b4763] font-semibold" : "text-gray-900 font-medium") : "text-gray-400 italic"}`}>
         {value || "Not recorded"}
       </p>
     </div>
@@ -696,7 +696,7 @@ function AdmitResidentModal({ takenRooms, onClose, onAdmitted }: {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92dvh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-4 sm:p-6 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[#22577a] text-black p-4 sm:p-6 flex items-center justify-between z-10">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
               <UserPlus className="w-6 h-6" /> Admit New Resident
@@ -803,7 +803,7 @@ function AdmitResidentModal({ takenRooms, onClose, onAdmitted }: {
 
             <div className="flex flex-wrap items-center justify-end gap-3 pt-2 border-t border-gray-200">
               <button type="button" onClick={onClose} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Cancel</button>
-              <button type="submit" disabled={!valid || saving} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100">
+              <button type="submit" disabled={!valid || saving} className="flex items-center gap-2 px-6 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
                 {saving ? "Admitting…" : "Admit Resident"}
               </button>
@@ -817,7 +817,7 @@ function AdmitResidentModal({ takenRooms, onClose, onAdmitted }: {
 
 const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
   gray: { wrap: "bg-white border-gray-200", icon: "text-gray-500", value: "text-gray-900" },
-  blue: { wrap: "bg-blue-50 border-blue-200", icon: "text-blue-500", value: "text-blue-600" },
+  blue: { wrap: "bg-[#e0ecf2] border-[#a9c6d8]", icon: "text-[#22577a]", value: "text-[#1f4f70]" },
   red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
   green: { wrap: "bg-green-50 border-green-200", icon: "text-green-500", value: "text-green-600" },
   amber: { wrap: "bg-amber-50 border-amber-200", icon: "text-amber-500", value: "text-amber-600" },

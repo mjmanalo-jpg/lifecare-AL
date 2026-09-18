@@ -20,9 +20,9 @@ export default function StatCard({
   unit = "",
   icon: Icon,
   trend,
-  backgroundColor = "bg-blue-50",
-  textColor = "text-blue-900",
-  iconColor = "text-blue-500",
+  backgroundColor = "bg-[#e0ecf2]",
+  textColor = "text-[#12324a]",
+  iconColor = "text-[#22577a]",
 }: StatCardProps) {
   return (
     <div className="bg-surface rounded-lg p-3 sm:p-5 md:p-6 border border-border shadow-sm hover:shadow-md transition">

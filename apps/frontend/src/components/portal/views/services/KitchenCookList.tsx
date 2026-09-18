@@ -36,14 +36,14 @@ const DIET_TYPES = [
 /** Color-coded pill classes per diet type (mirrors DietOrdersBoard). */
 const DIET_PILL: Record<string, string> = {
   REGULAR: "bg-gray-100 text-gray-700 border-gray-200",
-  LOW_SODIUM: "bg-blue-100 text-blue-700 border-blue-200",
+  LOW_SODIUM: "bg-[#cfe0eb] text-[#1b4763] border-[#a9c6d8]",
   LOW_SUGAR: "bg-amber-100 text-amber-700 border-amber-200",
   DIABETIC: "bg-red-100 text-red-700 border-red-200",
   SOFT: "bg-purple-100 text-purple-700 border-purple-200",
   PUREED: "bg-pink-100 text-pink-700 border-pink-200",
   HIGH_FIBER: "bg-green-100 text-green-700 border-green-200",
   RENAL: "bg-cyan-100 text-cyan-700 border-cyan-200",
-  HIGH_PROTEIN: "bg-indigo-100 text-indigo-700 border-indigo-200",
+  HIGH_PROTEIN: "bg-[#cfe0eb] text-[#1b4763] border-[#a9c6d8]",
 };
 
 const dietLabel = (d: string) => d.replace(/_/g, " ");
@@ -131,7 +131,7 @@ export default function KitchenCookList() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent mb-2 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#7c560e] bg-clip-text text-transparent mb-2 flex items-center gap-2">
             <ChefHat className="w-8 h-8 text-orange-500" /> Kitchen — Today&apos;s Cook List
           </h1>
           <p className="text-gray-600">Active diet orders straight from the nutritionist, grouped by meal. Cook to each resident&apos;s diet type &amp; restrictions.</p>
@@ -177,7 +177,7 @@ export default function KitchenCookList() {
                   {dishes.map(d => (
                     <li key={String(d.id)} className="text-sm">
                       <span className="font-semibold text-gray-900">{String(d.name ?? "—")}</span>
-                      {d.dietaryTags ? <span className="ml-1 text-[11px] text-blue-600">· {String(d.dietaryTags).split(",")[0]}</span> : null}
+                      {d.dietaryTags ? <span className="ml-1 text-[11px] text-[#1f4f70]">· {String(d.dietaryTags).split(",")[0]}</span> : null}
                       {d.description ? <p className="text-[11px] text-gray-500 leading-snug">{String(d.description)}</p> : null}
                     </li>
                   ))}
@@ -228,7 +228,7 @@ export default function KitchenCookList() {
         <div className="space-y-6">
           {grouped.map(({ meal, items }) => (
             <div key={meal} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <div className="bg-gradient-to-r from-orange-50 to-red-50 border-b border-gray-200 px-4 py-3 flex items-center gap-2">
+              <div className="bg-[#f6eddb] border-b border-gray-200 px-4 py-3 flex items-center gap-2">
                 <Utensils className="w-4 h-4 text-orange-500" />
                 <h2 className="font-bold text-gray-900">{MEAL_LABEL[meal]}</h2>
                 <span className="ml-auto text-xs font-semibold text-gray-500">{items.length} resident{items.length === 1 ? "" : "s"}</span>

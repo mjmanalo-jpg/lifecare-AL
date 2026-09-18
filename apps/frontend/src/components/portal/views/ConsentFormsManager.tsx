@@ -8,7 +8,7 @@ import { upsertRecord } from "@/lib/api";
 import { CONSENT_FORMS_KEY, DEFAULT_FORMS, parseConsentForms, newId, type ConsentForm } from "@/lib/consentForms";
 
 type SettingRow = { id: string; key?: string; value: string };
-const input = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white";
+const input = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#22577a] focus:ring-2 focus:ring-[#22577a]/20 bg-white";
 
 /** Care Manager — configure the consent / move-in forms families e-sign, and
  *  attach a viewable PDF to each. Migration-free (app-settings). */
@@ -57,13 +57,13 @@ export default function ConsentFormsManager() {
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><FileSignature className="w-7 h-7 text-blue-600" /> Consent &amp; Move-in Forms</h1>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><FileSignature className="w-7 h-7 text-[#1f4f70]" /> Consent &amp; Move-in Forms</h1>
           <p className="text-gray-500 text-sm">Define the forms families e-sign during move-in and attach a viewable PDF to each.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 self-start">
           {forms.length === 0 && !dirty && <button onClick={() => setDraft(DEFAULT_FORMS.map((f) => ({ ...f, id: newId() })))} className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1.5"><RotateCcw className="w-4 h-4" /> Load default set</button>}
           <button onClick={add} className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 inline-flex items-center gap-1.5"><Plus className="w-4 h-4" /> Add form</button>
-          {dirty && <button onClick={() => void save()} disabled={saving} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 inline-flex items-center gap-1.5">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save</button>}
+          {dirty && <button onClick={() => void save()} disabled={saving} className="px-4 py-2 rounded-lg bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763] disabled:opacity-60 inline-flex items-center gap-1.5">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save</button>}
         </div>
       </div>
 
@@ -79,7 +79,7 @@ export default function ConsentFormsManager() {
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {f.fileUrl ? (
-                  <a href={f.fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100"><FileText className="w-4 h-4" /> {f.fileName || "View PDF"} <ExternalLink className="w-3 h-3" /></a>
+                  <a href={f.fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#e0ecf2] text-[#1b4763] text-xs font-semibold hover:bg-[#cfe0eb]"><FileText className="w-4 h-4" /> {f.fileName || "View PDF"} <ExternalLink className="w-3 h-3" /></a>
                 ) : <span className="text-xs text-gray-400">No document attached</span>}
                 <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
                   {uploadingId === f.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} {f.fileUrl ? "Replace PDF" : "Attach PDF"}

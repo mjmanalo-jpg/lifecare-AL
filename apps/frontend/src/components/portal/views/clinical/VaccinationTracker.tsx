@@ -9,7 +9,7 @@ import { createRecord, updateRecord, deleteRecord } from "@/lib/api";
 const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none text-sm";
 const labelCls = "block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1";
 const statusColors: Record<string, string> = {
-  SCHEDULED: "bg-blue-100 text-blue-700",
+  SCHEDULED: "bg-[#cfe0eb] text-[#1b4763]",
   COMPLETED: "bg-green-100 text-green-700",
   OVERDUE: "bg-red-100 text-red-700",
   DECLINED: "bg-gray-100 text-gray-700",
@@ -62,7 +62,7 @@ export default function VaccinationTracker() {
         {[
           { label: "Total", value: stats.total, color: "text-gray-900" },
           { label: "Completed", value: stats.completed, color: "text-green-600" },
-          { label: "Scheduled", value: stats.scheduled, color: "text-blue-600" },
+          { label: "Scheduled", value: stats.scheduled, color: "text-[#1f4f70]" },
           { label: "Overdue", value: stats.overdue, color: "text-red-600" },
         ].map(s => (
           <div key={s.label} className="bg-white rounded-lg border p-3 text-center">
@@ -168,7 +168,7 @@ function VaccinationModal({ residents, onClose, onSaved }: { residents: any[]; o
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4 rounded-t-xl flex items-center justify-between">
+        <div className="sticky top-0 bg-[#8f6410] px-6 py-4 rounded-t-xl flex items-center justify-between">
           <h3 className="text-white font-bold text-lg">Add Vaccination</h3>
           <button onClick={onClose} className="text-white/80 hover:text-white cursor-pointer"><X className="w-5 h-5" /></button>
         </div>

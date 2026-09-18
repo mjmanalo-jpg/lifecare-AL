@@ -177,7 +177,7 @@ export default function InventoryOpsPanel() {
         </section>
 
         <section className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-1"><PackageMinus className="w-5 h-5 text-indigo-600" /> FEFO dispense <span className="text-[10px] font-bold uppercase tracking-wide text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded">First-Expire-First-Out</span></h3>
+          <h3 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-1"><PackageMinus className="w-5 h-5 text-[#1f4f70]" /> FEFO dispense <span className="text-[10px] font-bold uppercase tracking-wide text-[#22577a] bg-[#e0ecf2] px-1.5 py-0.5 rounded">First-Expire-First-Out</span></h3>
           <p className="text-xs text-gray-500 mb-3">Deducts from the batch nearest to expiry first, across batches, to minimise waste.</p>
 
           {expiringPreview.length > 0 && (
@@ -189,7 +189,7 @@ export default function InventoryOpsPanel() {
                   const active = fefoName === b.name;
                   return (
                     <button key={b.id} type="button" onClick={() => setFefoName(b.name)}
-                      className={`flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition ${active ? "border-indigo-400 bg-indigo-50" : "border-gray-200 hover:bg-gray-50"}`}>
+                      className={`flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition ${active ? "border-[#4f93bd] bg-[#e0ecf2]" : "border-gray-200 hover:bg-gray-50"}`}>
                       <span className="min-w-0 truncate font-semibold text-gray-800">{b.name}{b.batch ? <span className="ml-1 font-normal text-gray-400">· {b.batch}</span> : null}</span>
                       <span className="flex shrink-0 items-center gap-2">
                         <span className={dleft != null && dleft < 0 ? "font-semibold text-rose-600" : dleft != null && dleft < 30 ? "font-semibold text-amber-600" : "text-gray-500"}>
@@ -214,7 +214,7 @@ export default function InventoryOpsPanel() {
             <label className="text-xs font-medium text-gray-600 w-24">Qty
               <input type="number" min={1} className={inputCls + " mt-1"} value={fefoQty} onChange={(e) => setFefoQty(e.target.value)} />
             </label>
-            <button onClick={() => void dispenseFefo()} disabled={dispensing || !fefoName} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-60 inline-flex items-center gap-2">{dispensing ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Dispense</button>
+            <button onClick={() => void dispenseFefo()} disabled={dispensing || !fefoName} className="px-4 py-2 rounded-lg bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763] disabled:opacity-60 inline-flex items-center gap-2">{dispensing ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Dispense</button>
           </div>
           {fefoName && (
             <div className="mt-3 text-xs text-gray-600">
@@ -223,7 +223,7 @@ export default function InventoryOpsPanel() {
                 {fefoBatches.map((b) => {
                   const take = fefoPlan.find((p) => p.id === b.id)?.take ?? 0;
                   const dleft = daysUntil(b.expiryDate);
-                  return <li key={b.id} className={`flex justify-between rounded px-2 py-1 ${take > 0 ? "bg-indigo-50" : "bg-gray-50"}`}><span>Exp {b.expiryDate ? new Date(b.expiryDate).toLocaleDateString() : "—"} {dleft != null && dleft < 30 ? <span className="text-rose-600 font-semibold">({dleft}d)</span> : ""} · {b.quantity} on hand</span><span className="font-semibold">{take > 0 ? `take ${take}` : "—"}</span></li>;
+                  return <li key={b.id} className={`flex justify-between rounded px-2 py-1 ${take > 0 ? "bg-[#e0ecf2]" : "bg-gray-50"}`}><span>Exp {b.expiryDate ? new Date(b.expiryDate).toLocaleDateString() : "—"} {dleft != null && dleft < 30 ? <span className="text-rose-600 font-semibold">({dleft}d)</span> : ""} · {b.quantity} on hand</span><span className="font-semibold">{take > 0 ? `take ${take}` : "—"}</span></li>;
                 })}
               </ul>
             </div>
@@ -264,10 +264,10 @@ export default function InventoryOpsPanel() {
       {/* Vendors */}
       <section className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <h3 className="text-base font-bold text-gray-900 flex items-center gap-2"><Truck className="w-5 h-5 text-blue-600" /> Vendor directory ({vlist.length})</h3>
+          <h3 className="text-base font-bold text-gray-900 flex items-center gap-2"><Truck className="w-5 h-5 text-[#1f4f70]" /> Vendor directory ({vlist.length})</h3>
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => setDraftVendors([...(vlist), { id: newId("v"), name: "", contact: "", email: "", category: "" }])} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50"><Plus className="w-4 h-4" /> Add vendor</button>
-            {draftVendors !== null && <button onClick={() => void saveVendors(vlist)} disabled={savingV} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{savingV ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save</button>}
+            {draftVendors !== null && <button onClick={() => void saveVendors(vlist)} disabled={savingV} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763] disabled:opacity-60">{savingV ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save</button>}
           </div>
         </div>
         {vlist.length === 0 ? <p className="text-sm text-gray-400 py-3 text-center">No vendors yet.</p> : (

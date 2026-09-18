@@ -415,7 +415,7 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
       const proceed = await Swal.fire({ icon: "warning", title: "Level of care mismatch", html: `This plan was built at <b>Level ${planLvl}</b>, but the resident's current level of care is <b>Level ${curLvl}</b>. Releasing it activates the <b>Level ${planLvl}</b> plan. Regenerate at Level ${curLvl} first, or release anyway.`, showCancelButton: true, confirmButtonColor: "#D97706", confirmButtonText: "Release anyway", cancelButtonText: "Cancel" });
       return proceed.isConfirmed;
     }
-    const c = await Swal.fire({ title: `${verb}?`, text: "Releasing activates the plan and dispatches tasks to the assigned caregiver.", icon: "question", showCancelButton: true, confirmButtonColor: "#4F46E5", confirmButtonText: verb });
+    const c = await Swal.fire({ title: `${verb}?`, text: "Releasing activates the plan and dispatches tasks to the assigned caregiver.", icon: "question", showCancelButton: true, confirmButtonColor: "var(--clinical-panel)", confirmButtonText: verb });
     return c.isConfirmed;
   };
 
@@ -478,15 +478,15 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
     <>
       {!embedded && (
       <div className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem]">Care Plan Reviews</h1>
-        <p className="mt-1 text-sm text-slate-500">Review resident indicators, evaluate triggers, and make care plan decisions</p>
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--clinical-ink)] sm:text-[1.75rem]">Care Plan Reviews</h1>
+        <p className="mt-1 text-sm text-[var(--clinical-muted)]">Review resident indicators, evaluate triggers, and make care plan decisions</p>
       </div>
       )}
 
       {!embedded && (
-      <div className="-mx-1 flex items-center gap-2 overflow-x-auto scrollbar-hide px-1" role="tablist" aria-label="Care plan reviews view">
+      <div className="flex w-full items-end gap-1 overflow-x-auto scrollbar-hide border-b border-[var(--clinical-line)]" role="tablist" aria-label="Care plan reviews view">
         {([["plans", "Care Plans"], ["new", "New Review"], ["pending", "Pending Approval"], ["due", "Reviews Due"], ["history", "History"]] as const).filter(([v]) => !tabs || tabs.includes(v)).map(([v, label]) => (
-          <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`shrink-0 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-semibold transition ${tab === v ? "bg-[#4F46E5] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}{v === "due" && dueList.length ? ` (${dueList.length})` : ""}{v === "pending" && pendingQueue.length ? ` (${pendingQueue.length})` : ""}</button>
+          <button key={v} role="tab" aria-selected={tab === v} onClick={() => setTab(v)} className={`shrink-0 whitespace-nowrap -mb-px border-b-2 px-4 py-2.5 text-sm font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--clinical-focus)] ${tab === v ? "border-[var(--clinical-panel)] text-[var(--clinical-ink)]" : "border-transparent text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>{label}{v === "due" && dueList.length ? ` (${dueList.length})` : ""}{v === "pending" && pendingQueue.length ? ` (${pendingQueue.length})` : ""}</button>
         ))}
       </div>
       )}
@@ -505,52 +505,66 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
             <p className="mb-1 font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>Resident Care Plans</p>
             <p className="mb-3 text-xs text-[var(--clinical-muted)]">Create a care plan for a resident, finalize a held draft, or view the current plan of record. Once activated, the resident&apos;s review appears under Reviews Due after the chosen interval.</p>
             <DataState loading={loading && (cpQ.data || []).length === 0} error={error} empty={residents.length === 0} emptyTitle="No residents" emptyHint="No residents found for this community." onRetry={() => void refetch()} skeletonRows={4}>
-              <div className="space-y-2.5">
-                {residents.map((r: Row) => {
-                  const rid = s(r.id);
-                  const active = activePlanByResident.get(rid);
-                  const drafts = draftPlansByResident.get(rid) || [];
-                  const underReview = underReviewByResident.get(rid);
-                  const last = latestReview(rid);
-                  const lvl = resLevel(r).n;
-                  const activeLvl = planLevelOf(active);
-                  const locMismatch = !!active && activeLvl !== null && activeLvl !== lvl;
-                  const st = active ? { label: "Active", color: "var(--clinical-green)" }
-                    : drafts.length ? { label: "Draft", color: "var(--clinical-amber)" }
-                    : underReview ? { label: "Pending approval", color: "var(--clinical-amber)" }
-                    : { label: "No plan", color: "var(--clinical-muted)" };
-                  return (
-                    <div key={rid} className="group flex flex-col gap-3 rounded-xl border px-4 py-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_-22px_rgba(15,23,42,0.55)] sm:flex-row sm:items-center sm:gap-3.5" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
-                      <div className="flex min-w-0 flex-1 items-center gap-3.5">
-                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold" style={{ backgroundColor: `color-mix(in srgb, ${st.color} 15%, transparent)`, color: st.color, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${st.color} 32%, transparent)` }}>{initials(s(r.name))}</span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                            <p className="font-bold text-[var(--clinical-ink)]">{s(r.name)}</p>
-                            <span className="text-xs font-medium text-[var(--clinical-muted)]">Rm {s(r.room)}</span>
-                            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em]" style={{ backgroundColor: `color-mix(in srgb, ${st.color} 16%, transparent)`, color: st.color }}>{st.label}</span>
-                          </div>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--clinical-muted)]">
+              <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "var(--clinical-line)" }}>
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b" style={{ borderColor: "var(--clinical-line)", backgroundColor: "var(--clinical-surface-2)" }}>
+                      {["Resident", "Room", "Level", "Status", "Active Since", "Next Review"].map((h) => (
+                        <th key={h} className="whitespace-nowrap px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--clinical-muted)]">{h}</th>
+                      ))}
+                      <th className="whitespace-nowrap px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--clinical-muted)]">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {residents.map((r: Row) => {
+                      const rid = s(r.id);
+                      const active = activePlanByResident.get(rid);
+                      const drafts = draftPlansByResident.get(rid) || [];
+                      const underReview = underReviewByResident.get(rid);
+                      const last = latestReview(rid);
+                      const lvl = resLevel(r).n;
+                      const activeLvl = planLevelOf(active);
+                      const locMismatch = !!active && activeLvl !== null && activeLvl !== lvl;
+                      const st = active ? { label: "Active", color: "var(--clinical-green)" }
+                        : drafts.length ? { label: "Draft", color: "var(--clinical-amber)" }
+                        : underReview ? { label: "Pending approval", color: "var(--clinical-amber)" }
+                        : { label: "No plan", color: "var(--clinical-muted)" };
+                      return (
+                        <tr key={rid} className="border-b transition last:border-b-0 hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: "var(--clinical-line)" }}>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-2.5">
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ backgroundColor: `color-mix(in srgb, ${st.color} 15%, transparent)`, color: st.color, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${st.color} 32%, transparent)` }}>{initials(s(r.name))}</span>
+                              <span className="font-semibold text-[var(--clinical-ink)]">{s(r.name)}</span>
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-[var(--clinical-ink-soft)]">Rm {s(r.room)}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5">
                             <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, transparent)", color: "var(--clinical-panel)" }}>Level {lvl}</span>
-                            {locMismatch && <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ backgroundColor: "color-mix(in srgb, var(--clinical-amber) 18%, transparent)", color: "var(--clinical-amber)" }}><AlertTriangle className="h-3 w-3" /> Plan is Level {activeLvl} · LOC now {lvl}</span>}
-                            {active && <span>Active since {fmt(s(active.startDate).slice(0, 10))}</span>}
-                            {last?.nextReviewDate && <span className="inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" /> Next review {fmt(last.nextReviewDate)}</span>}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
-                        {(active || underReview || drafts.length > 0) && <ClinicalButton variant="secondary" size="sm" className="max-sm:flex-1" onClick={() => setViewPlan({ resident: r, plan: (drafts[0] || underReview || active) as Row })}>View</ClinicalButton>}
-                        {active && <ClinicalButton variant="secondary" size="sm" className="max-sm:flex-1" onClick={() => printPlan(r, active as Row)}><Printer className="h-3.5 w-3.5" /> Print</ClinicalButton>}
-                        {!readOnly && (drafts.length > 0
-                          ? <ClinicalButton variant="primary" size="sm" className="max-sm:flex-1" onClick={() => { setResId(rid); setTab("new"); }}>Finalize draft</ClinicalButton>
-                          : underReview
-                          ? <ClinicalButton variant="primary" size="sm" className="max-sm:flex-1" onClick={() => setTab("pending")}>Awaiting approval</ClinicalButton>
-                          : locMismatch
-                          ? <ClinicalButton variant="primary" size="sm" disabled={genBusy} className="max-sm:flex-1" onClick={() => void createPlanForResident(r)}>Update to Level {lvl}</ClinicalButton>
-                          : !active && <ClinicalButton variant="primary" size="sm" disabled={genBusy} className="max-sm:flex-1" onClick={() => void createPlanForResident(r)}>Create care plan</ClinicalButton>)}
-                      </div>
-                    </div>
-                  );
-                })}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span className="inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em]" style={{ backgroundColor: `color-mix(in srgb, ${st.color} 16%, transparent)`, color: st.color }}>{st.label}</span>
+                            {locMismatch && <span className="mt-1 flex items-center gap-1 whitespace-nowrap text-[10px] font-bold" style={{ color: "var(--clinical-amber)" }}><AlertTriangle className="h-3 w-3" /> Plan L{activeLvl} · LOC now {lvl}</span>}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-[var(--clinical-muted)]">{active ? fmt(s(active.startDate).slice(0, 10)) : "—"}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-[var(--clinical-muted)]">{last?.nextReviewDate ? fmt(last.nextReviewDate) : "—"}</td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center justify-end gap-2">
+                              {(active || underReview || drafts.length > 0) && <ClinicalButton variant="secondary" size="sm" onClick={() => setViewPlan({ resident: r, plan: (drafts[0] || underReview || active) as Row })}>View</ClinicalButton>}
+                              {active && <ClinicalButton variant="secondary" size="sm" onClick={() => printPlan(r, active as Row)}><Printer className="h-3.5 w-3.5" /> Print</ClinicalButton>}
+                              {!readOnly && (drafts.length > 0
+                                ? <ClinicalButton variant="primary" size="sm" onClick={() => { setResId(rid); setTab("new"); }}>Finalize draft</ClinicalButton>
+                                : underReview
+                                ? <ClinicalButton variant="primary" size="sm" onClick={() => setTab("pending")}>Awaiting approval</ClinicalButton>
+                                : locMismatch
+                                ? <ClinicalButton variant="primary" size="sm" disabled={genBusy} onClick={() => void createPlanForResident(r)}>Update to Level {lvl}</ClinicalButton>
+                                : !active && <ClinicalButton variant="primary" size="sm" disabled={genBusy} onClick={() => void createPlanForResident(r)}>Create care plan</ClinicalButton>)}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </DataState>
           </ClinicalCard>
@@ -834,8 +848,8 @@ export default function CarePlanReviewsBoard({ clinicianRole = "NURSE", tabs, fo
               </div>
             </div>
 
-            <div className="flex items-start gap-2.5 rounded-xl border p-3 text-sm" style={{ borderColor: "color-mix(in srgb, #4F46E5 35%, transparent)", backgroundColor: "color-mix(in srgb, #4F46E5 8%, transparent)", color: "var(--clinical-ink-soft)" }}>
-              <ListChecks className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "#4F46E5" }} />
+            <div className="flex items-start gap-2.5 rounded-xl border p-3 text-sm" style={{ borderColor: "color-mix(in srgb, var(--clinical-panel) 35%, transparent)", backgroundColor: "color-mix(in srgb, var(--clinical-panel) 8%, transparent)", color: "var(--clinical-ink-soft)" }}>
+              <ListChecks className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "var(--clinical-panel)" }} />
               <p>The plan is <b className="text-[var(--clinical-ink)]">held as a draft</b> — its tasks are not sent to caregivers until you submit and approve the care plan review below.</p>
             </div>
 
@@ -1330,8 +1344,8 @@ function ReviewForm({ resident, level, recentInc, recentVariances = [], last, re
       <Section title="Nurse/Admin Decision">
         <div className="space-y-4">
           {heldPlanCount > 0 && (
-            <div className="flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm" style={{ borderColor: "#4F46E5", backgroundColor: "color-mix(in srgb, #4F46E5 8%, transparent)" }}>
-              <ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-[#4F46E5]" />
+            <div className="flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm" style={{ borderColor: "var(--clinical-panel)", backgroundColor: "color-mix(in srgb, var(--clinical-panel) 8%, transparent)" }}>
+              <ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-[var(--clinical-panel)]" />
               <span className="text-[var(--clinical-ink)]"><b>{heldPlanCount} draft care plan{heldPlanCount === 1 ? "" : "s"} held</b> — needs a Care Manager sign-off.</span>
             </div>
           )}
@@ -1348,7 +1362,7 @@ function ReviewForm({ resident, level, recentInc, recentVariances = [], last, re
             <div><FieldLabel htmlFor="cpr-resp">Responsible Person</FieldLabel><input id="cpr-resp" value={responsible} onChange={(e) => setResponsible(e.target.value)} placeholder="Name or role" className={controlClass} /></div>
             <div><FieldLabel htmlFor="cpr-target">Target Completion Date</FieldLabel><input id="cpr-target" type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className={controlClass} /></div>
           </div>
-          <button onClick={submit} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] disabled:opacity-60"><ClipboardList className="h-4 w-4" /> {saving ? "Submitting…" : heldPlanCount > 0 ? "Submit Care Plan" : "Submit Care Plan Review"}</button>
+          <button onClick={submit} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[var(--clinical-panel)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--clinical-panel-hover)] disabled:opacity-60"><ClipboardList className="h-4 w-4" /> {saving ? "Submitting…" : heldPlanCount > 0 ? "Submit Care Plan" : "Submit Care Plan Review"}</button>
         </div>
       </Section>
     </>

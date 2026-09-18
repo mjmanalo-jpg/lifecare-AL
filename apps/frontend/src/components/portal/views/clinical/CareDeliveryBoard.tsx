@@ -18,14 +18,37 @@
 
 import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Activity, AlertTriangle, ShieldAlert, RefreshCw, ChevronRight, UserRound } from "lucide-react";
+import { Activity, RefreshCw, UserRound } from "lucide-react";
 import { useLiveQuery } from "@/lib/useLiveQuery";
 import { type ClinicianRole } from "./useClinician";
-import { ClinicalPage, ClinicalHeader, ClinicalCard, StatCard, DataState, SERIF } from "./clinical-ui";
+import { ClinicalPage, ClinicalHeader, ClinicalCard, DataState, SERIF } from "./clinical-ui";
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
-const fmtDate = (iso: string) => { const d = new Date(iso); return isNaN(d.getTime()) ? "—" : d.toLocaleDateString(undefined, { month: "short", day: "numeric" }); };
+const fmtTime = (iso: string) => { const d = new Date(iso); return isNaN(d.getTime()) ? "" : d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); };
+
+/** Charted non-completion outcome → the label + tone shown in the Exceptions list. */
+function exceptionMeta(outcome: string): { label: string; tone: "amber" | "coral" } {
+  const o = (outcome || "").toLowerCase();
+  if (o.includes("refus") || o.includes("declin")) return { label: "Resident declined", tone: "amber" };
+  if (o.includes("unsafe") || o.includes("unable")) return { label: "Unsafe to perform", tone: "coral" };
+  if (o.includes("clinical")) return { label: "Clinical change", tone: "coral" };
+  if (o.includes("frequency") || o.includes("variance")) return { label: "Frequency variance", tone: "amber" };
+  if (o.includes("increased")) return { label: "Increased assist", tone: "amber" };
+  return { label: outcome || "Exception", tone: "amber" };
+}
+
+/** KPI tile — big figure over a plain-language explanation of what it counts. */
+function KpiCard({ label, value, accent, hint }: { label: string; value: string | number; accent: "ink" | "green" | "amber" | "coral"; hint: string }) {
+  const color = accent === "green" ? "var(--clinical-green)" : accent === "amber" ? "var(--clinical-amber)" : accent === "coral" ? "var(--clinical-coral)" : "var(--clinical-ink)";
+  return (
+    <div className="rounded-xl border p-4" style={{ backgroundColor: "var(--clinical-surface)", borderColor: "var(--clinical-line)" }}>
+      <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--clinical-muted)]">{label}</p>
+      <p className="mt-1.5 text-3xl font-bold leading-none tabular-nums" style={{ color, fontFamily: SERIF }}>{value}</p>
+      <p className="mt-2 text-[11px] leading-snug text-[var(--clinical-muted)]">{hint}</p>
+    </div>
+  );
+}
 
 const PERIODS = [{ key: "1", label: "Today", days: 1 }, { key: "7", label: "7 days", days: 7 }, { key: "30", label: "30 days", days: 30 }] as const;
 const SHIFT_KEYS = ["AM", "PM", "NOC"] as const;
@@ -34,6 +57,8 @@ type ShiftKey = (typeof SHIFT_KEYS)[number];
 /** One row of the roll-up — the server fills both the plan-side and the actor-side counts. */
 interface Bucket {
   id: string; name: string;
+  /** Resident buckets carry their room for the reliability table sub-label. */
+  room?: string;
   /** Resident rows: nobody rostered today, which is why the row may read 0%. */
   uncoveredToday?: boolean;
   scheduled: number; due: number; dueNow: number; completed: number; missed: number;
@@ -42,27 +67,28 @@ interface Bucket {
   shifts: Record<ShiftKey, number>;
 }
 
+/** One charted non-completion — powers the Exceptions list. */
+interface CareException {
+  id: string; name: string; residentName: string; room: string;
+  shift: string | null; outcome: string; reason: string; caregiver: string; at: string;
+}
+
 interface Rollup {
   scheduled: number; due: number; completed: number; missed: number;
   exceptions: number; escalations: number; reassessResidents: number; charted: number;
   outcomes: { outcome: string; n: number }[];
+  exceptionList: CareException[];
   byResident: Bucket[];
   byCaregiver: Bucket[];
 }
 
 const EMPTY: Rollup = {
   scheduled: 0, due: 0, completed: 0, missed: 0, exceptions: 0, escalations: 0, reassessResidents: 0, charted: 0,
-  outcomes: [], byResident: [], byCaregiver: [],
+  outcomes: [], exceptionList: [], byResident: [], byCaregiver: [],
 };
 
 /** A clean completion stays green; a dipping one warns before it is a failure. */
 const rateAccent = (rate: number) => (rate >= 95 ? "green" : rate >= 85 ? "amber" : "coral");
-
-const outcomeColor = (o: string) =>
-  o === "Completed as planned" || o === "Completed" || o === "Not required" ? "var(--clinical-green)"
-    : o === "Not documented" || o === "Not completed" ? "var(--clinical-coral)"
-      : o === "Still open" ? "var(--clinical-line)"
-        : "var(--clinical-amber)";
 
 function Segmented<T extends string>({ label, value, options, onChange }: {
   label: string; value: T; options: readonly (readonly [T, string])[]; onChange: (v: T) => void;
@@ -73,7 +99,7 @@ function Segmented<T extends string>({ label, value, options, onChange }: {
       <div className="inline-flex rounded-lg p-0.5" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
         {options.map(([v, text]) => (
           <button key={v} onClick={() => onChange(v)} aria-pressed={value === v}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${value === v ? "bg-[var(--clinical-surface)] shadow-sm text-[var(--clinical-ink)]" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${value === v ? "bg-[var(--clinical-panel)] text-white shadow-sm" : "text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>
             {text}
           </button>
         ))}
@@ -104,12 +130,13 @@ export default function CareDeliveryBoard({ clinicianRole = "NURSE" }: { clinici
 
   // Against DUE work, not everything on the calendar — a task later today is not a miss.
   const completionRate = pct(k.completed, k.due);
-  const pending = k.scheduled - k.due;
   const rows = groupBy === "resident" ? k.byResident : k.byCaregiver;
+  const openNow = k.byResident.reduce((a, b) => a + (b.dueNow || 0), 0);
+  const maxExc = Math.max(1, ...rows.map((r) => r.exceptions));
 
   return (
     <ClinicalPage>
-      <ClinicalHeader title="Care Delivery" subtitle="Completion against the governed care plan — documented vs scheduled, misses, variances, escalations and reassessment flags." />
+      <ClinicalHeader title="Care Delivery Reliability" subtitle="Completion against the governed care plan — what was delivered, what was refused or unsafe, and where the plan needs a second look." />
 
       <div className="mt-4 mb-5 flex flex-wrap items-center gap-x-4 gap-y-2">
         <Segmented label="Period" value={periodKey} onChange={setPeriodKey} options={PERIODS.map((p) => [p.key, p.label] as const)} />
@@ -120,13 +147,11 @@ export default function CareDeliveryBoard({ clinicianRole = "NURSE" }: { clinici
       </div>
 
       <DataState loading={loading && data.length === 0} error={error} empty={false} onRetry={() => void refetch()} skeletonRows={4}>
-        <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-6">
-          <StatCard value={k.scheduled} label={pending > 0 ? `Tasks scheduled · ${pending} pending` : "Tasks scheduled"} accent="ink" />
-          <StatCard value={`${completionRate}%`} label={`Completion · ${k.completed}/${k.due} due`} accent={rateAccent(completionRate)} />
-          <StatCard value={k.missed} label="Missed / not documented" accent={k.missed > 0 ? "coral" : "ink"} />
-          <StatCard value={k.exceptions} label="Exceptions / variances" accent={k.exceptions > 0 ? "amber" : "ink"} />
-          <StatCard value={k.escalations} label="Escalations raised" accent={k.escalations > 0 ? "coral" : "ink"} />
-          <StatCard value={k.reassessResidents} label="Flagged for reassessment" accent={k.reassessResidents > 0 ? "coral" : "ink"} />
+        <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <KpiCard label="Care delivered" value={`${completionRate}%`} accent={rateAccent(completionRate)} hint={`Completed against care due or past due (${k.completed}/${k.due}). Upcoming work is excluded.`} />
+          <KpiCard label="Exceptions" value={k.exceptions} accent={k.exceptions > 0 ? "amber" : "ink"} hint="Closed without counting as completion — refused, unable, unsafe, clinical change or variance." />
+          <KpiCard label="Open now" value={openNow} accent={openNow > 0 ? "amber" : "ink"} hint="Due and not yet actioned. Counted in the denominator, but the shift still has time to deliver." />
+          <KpiCard label={groupBy === "resident" ? "Residents" : "Caregivers"} value={rows.length} accent="ink" hint={`Distinct ${groupBy}s with care events in the current filter.`} />
         </div>
 
         {k.scheduled === 0 && rows.length === 0 ? (
@@ -134,130 +159,54 @@ export default function CareDeliveryBoard({ clinicianRole = "NURSE" }: { clinici
             No care tasks scheduled{shiftFilter === "ALL" ? "" : ` on the ${shiftFilter} shift`} in this period. Generate a resident routine from the care plan and its occurrences appear here.
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_2fr]">
-            {/* Outcome breakdown — every scheduled task, so a miss is visible. */}
-            <ClinicalCard className="p-5">
-              <p className="mb-1 font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>Outcomes</p>
-              <p className="mb-3 text-xs text-[var(--clinical-muted)]">Of {k.scheduled} scheduled task{k.scheduled === 1 ? "" : "s"}</p>
-              <div className="space-y-2.5">
-                {k.outcomes.map(({ outcome, n }) => (
-                  <div key={outcome}>
-                    <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="font-medium text-[var(--clinical-ink-soft)]">{outcome}</span>
-                      <span className="tabular-nums text-[var(--clinical-muted)]">{n} · {pct(n, k.scheduled)}%</span>
-                    </div>
-                    <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: "var(--clinical-line)" }}>
-                      <div className="h-full rounded-full" style={{ width: `${pct(n, k.scheduled)}%`, backgroundColor: outcomeColor(outcome) }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </ClinicalCard>
-
-            {/* Roll-up */}
+          <>
             <ClinicalCard className="p-0 overflow-hidden">
-              <div className="flex items-center gap-2 px-5 py-3.5 border-b" style={{ borderColor: "var(--clinical-line)" }}>
+              <div className="flex items-center gap-2 border-b px-5 py-3.5" style={{ borderColor: "var(--clinical-line)" }}>
                 {groupBy === "resident" ? <Activity className="h-4 w-4 text-[var(--clinical-panel)]" /> : <UserRound className="h-4 w-4 text-[var(--clinical-panel)]" />}
-                <p className="font-bold text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>By {groupBy}</p>
-                <span className="ml-auto text-xs text-[var(--clinical-muted)]">
-                  {shiftFilter === "ALL" ? "All shifts" : `${shiftFilter} shift`} · {groupBy === "resident" ? `${k.scheduled} scheduled` : `${k.charted} charted`}
-                </span>
+                <div className="min-w-0">
+                  <p className="font-bold leading-tight text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>Reliability by {groupBy}</p>
+                  <p className="text-xs text-[var(--clinical-muted)]">Ordered by exceptions. Where care is repeatedly not delivered as planned, the plan is usually wrong.</p>
+                </div>
+                <span className="ml-auto shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold text-[var(--clinical-muted)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}>{rows.length} row{rows.length === 1 ? "" : "s"}</span>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm">
-                  <thead><tr className="border-b text-left text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line)" }}>
-                    <th className="px-5 py-2.5 font-semibold">{groupBy === "resident" ? "Resident" : "Caregiver"}</th>
-                    <th className="px-3 py-2.5 font-semibold text-right">Done</th>
-                    <th className="px-3 py-2.5 font-semibold text-right">{groupBy === "resident" ? "Missed" : "On time"}</th>
-                    <th className="px-3 py-2.5 font-semibold text-right">Exceptions</th>
-                    <th className="px-3 py-2.5 font-semibold">Flags</th>
-                    <th className="px-3 py-2.5 font-semibold text-right">Last</th>
-                    <th className="px-3 py-2.5" />
+                <table className="w-full min-w-[620px] text-sm">
+                  <thead><tr className="border-b text-left text-[11px] uppercase tracking-[0.06em] text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line)" }}>
+                    <th className="px-5 py-2.5 font-bold">{groupBy === "resident" ? "Resident" : "Caregiver"}</th>
+                    <th className="px-3 py-2.5 font-bold text-right">Events</th>
+                    <th className="px-3 py-2.5 font-bold text-right">Completed</th>
+                    <th className="px-3 py-2.5 font-bold">Exceptions</th>
+                    <th className="px-3 py-2.5 font-bold text-right">Reliability</th>
                   </tr></thead>
                   <tbody>
                     {rows.map((r) => {
-                      // Resident: completion against that resident's own plan. Caregiver: the
-                      // share of charted work they closed — a caregiver has no assigned plan
-                      // (RoutineOccurrence.assignedStaffId is never written), so "of their own
-                      // scheduled tasks" is not a figure that exists.
-                      const done = groupBy === "resident" ? r.completed : r.charted;
-                      const of = groupBy === "resident" ? r.due : k.charted;
+                      const events = groupBy === "resident" ? r.due + r.dueNow : r.charted;
+                      const denom = r.completed + r.exceptions;
+                      const rel = denom > 0 ? Math.round((r.completed / denom) * 100) : null;
+                      const relColor = rel === null ? "var(--clinical-muted)" : rel >= 95 ? "var(--clinical-green)" : rel >= 50 ? "var(--clinical-amber)" : "var(--clinical-coral)";
+                      const sub = groupBy === "resident" ? (r.room ? `Room ${r.room}` : (r.uncoveredToday ? "No caregiver today" : "")) : SHIFT_KEYS.filter((sk) => r.shifts[sk] > 0).map((sk) => `${sk} ${r.shifts[sk]}`).join(" · ");
                       return (
-                        <tr key={r.id} className="border-b last:border-0 transition hover:bg-[var(--clinical-surface-2)]" style={{ borderColor: "var(--clinical-line)" }}>
+                        <tr key={r.id} className={`border-b last:border-0 transition hover:bg-[var(--clinical-surface-2)] ${groupBy === "resident" ? "cursor-pointer" : ""}`} style={{ borderColor: "var(--clinical-line)" }} onClick={groupBy === "resident" ? () => router.push(`/${roleSeg}/residentjourney`) : undefined}>
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-2.5">
                               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold" style={{ backgroundColor: "var(--clinical-surface-2)", color: "var(--clinical-ink-soft)" }}>{initials(r.name)}</span>
-                              <div>
-                                <span className="font-semibold text-[var(--clinical-ink)]">{r.name}</span>
-                                {groupBy === "resident" && r.uncoveredToday && (
-                                  // Why this resident sits at 0%: planned care with nobody
-                                  // rostered to deliver it. Shown, never filtered out —
-                                  // hiding the row would inflate the completion rate.
-                                  <span className="ml-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                                    style={{ backgroundColor: "color-mix(in srgb, var(--clinical-amber) 16%, transparent)", color: "var(--clinical-amber)" }}
-                                    title="No caregiver is rostered to this resident today — assign one in Caregiver Schedule">
-                                    No caregiver today
-                                  </span>
-                                )}
-                                {shiftFilter === "ALL" && (
-                                  // Labelled "Scheduled": this is the whole day's plan, not the
-                                  // work due so far. Unlabelled, "AM 14" next to a 6/6 ratio
-                                  // reads as a contradiction rather than two different figures.
-                                  <p className="mt-0.5 text-[11px] tabular-nums text-[var(--clinical-muted)]">
-                                    {groupBy === "resident" ? "Scheduled · " : ""}
-                                    {SHIFT_KEYS.filter((sk) => r.shifts[sk] > 0).map((sk) => `${sk} ${r.shifts[sk]}`).join(" · ") || "—"}
-                                  </p>
-                                )}
+                              <div className="min-w-0">
+                                <p className="font-semibold text-[var(--clinical-ink)]">{r.name}</p>
+                                {sub && <p className="text-[11px] text-[var(--clinical-muted)]">{sub}</p>}
                               </div>
                             </div>
                           </td>
-                          <td className="px-3 py-3 text-right tabular-nums">
-                            <span className="font-semibold" style={{ color: groupBy === "resident" ? `var(--clinical-${rateAccent(pct(done, of))})` : "var(--clinical-ink)" }}>{done}</span>
-                            <span className="text-[var(--clinical-muted)]">/{of}</span>
-                            <span className="ml-1.5 text-[11px] text-[var(--clinical-muted)]">{pct(done, of)}%</span>
-                            {groupBy === "resident" && r.dueNow > 0 && (
-                              // Care in its window right now. It is not a miss yet, so it is
-                              // absent from the ratio — but a 100% row with live work waiting
-                              // is exactly what a manager must not be reassured by.
-                              <p className="mt-0.5 text-[11px] font-semibold" style={{ color: "var(--clinical-amber)" }}>
-                                {r.dueNow} due now
-                              </p>
-                            )}
-                            {groupBy === "resident" && r.scheduled > r.due + r.dueNow && (
-                              // The gap between the plan and what is owed yet. Without it a
-                              // morning row looks like 21 tasks went missing.
-                              <p className="mt-0.5 text-[11px] font-normal text-[var(--clinical-muted)]">
-                                {r.scheduled - r.due - r.dueNow} not due yet
-                              </p>
-                            )}
-                          </td>
-                          <td className="px-3 py-3 text-right tabular-nums">
-                            {groupBy === "resident" ? (
-                              <span style={{ color: r.missed > 0 ? "var(--clinical-coral)" : "var(--clinical-muted)" }}>{r.missed}</span>
-                            ) : r.timed === 0 ? (
-                              // Only scheduled occurrences carry a due time; Task-based
-                              // charting has none, so punctuality is not measurable.
-                              <span className="text-[var(--clinical-muted)]" title="No scheduled-time tasks charted in this period">—</span>
-                            ) : (
-                              <span style={{ color: r.onTime < r.timed ? "var(--clinical-amber)" : "var(--clinical-muted)" }}>{pct(r.onTime, r.timed)}%</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-3 text-right tabular-nums" style={{ color: r.exceptions > 0 ? "var(--clinical-amber)" : "var(--clinical-muted)" }}>
-                            {r.exceptions}{done ? ` · ${pct(r.exceptions, done)}%` : ""}
-                          </td>
+                          <td className="px-3 py-3 text-right tabular-nums text-[var(--clinical-ink-soft)]">{events}</td>
+                          <td className="px-3 py-3 text-right tabular-nums text-[var(--clinical-ink-soft)]">{r.completed}</td>
                           <td className="px-3 py-3">
-                            <div className="flex flex-wrap gap-1">
-                              {r.escalations > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-[var(--clinical-coral)] px-2 py-0.5 text-[10px] font-bold text-white"><ShieldAlert className="h-3 w-3" /> {r.escalations}</span>}
-                              {r.reassess && <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ backgroundColor: "var(--clinical-panel)" }}><RefreshCw className="h-3 w-3" /> Reassess</span>}
-                              {r.escalations === 0 && !r.reassess && <span className="text-[var(--clinical-muted)]">—</span>}
+                            <div className="flex items-center gap-2">
+                              <div className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full" style={{ backgroundColor: "var(--clinical-surface-2)" }}>
+                                <div className="h-full rounded-full" style={{ width: `${pct(r.exceptions, maxExc)}%`, backgroundColor: r.exceptions > 0 ? "var(--clinical-coral)" : "transparent" }} />
+                              </div>
+                              <span className="tabular-nums" style={{ color: r.exceptions > 0 ? "var(--clinical-coral)" : "var(--clinical-muted)" }}>{r.exceptions}</span>
                             </div>
                           </td>
-                          <td className="px-3 py-3 text-right text-xs tabular-nums text-[var(--clinical-muted)]">{r.last ? fmtDate(r.last) : "—"}</td>
-                          <td className="px-3 py-3 text-right">
-                            {groupBy === "resident" && (
-                              <button onClick={() => router.push(`/${roleSeg}/residentjourney`)} title="Open resident journey" className="text-[var(--clinical-panel)] hover:underline"><ChevronRight className="h-4 w-4" /></button>
-                            )}
-                          </td>
+                          <td className="px-3 py-3 text-right"><span className="font-bold tabular-nums" style={{ color: relColor }}>{rel === null ? "—" : `${rel}%`}</span></td>
                         </tr>
                       );
                     })}
@@ -265,18 +214,37 @@ export default function CareDeliveryBoard({ clinicianRole = "NURSE" }: { clinici
                 </table>
               </div>
             </ClinicalCard>
-          </div>
-        )}
 
-        {(k.missed > 0 || k.escalations > 0 || k.reassessResidents > 0) && (
-          <div className="mt-4 flex items-start gap-2 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--clinical-amber)", backgroundColor: "color-mix(in srgb, var(--clinical-amber) 8%, transparent)" }}>
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--clinical-amber)]" />
-            <span className="text-[var(--clinical-ink-soft)]">
-              {k.missed > 0 ? `${k.missed} scheduled task${k.missed === 1 ? "" : "s"} passed its window without documentation. ` : ""}
-              {k.escalations > 0 ? `${k.escalations} escalation${k.escalations === 1 ? "" : "s"} raised from care during this period. ` : ""}
-              {k.reassessResidents > 0 ? `${k.reassessResidents} resident${k.reassessResidents === 1 ? "" : "s"} flagged for reassessment — review their care plan (no automatic level/fee change).` : ""}
-            </span>
-          </div>
+            {k.exceptionList.length > 0 && (
+              <ClinicalCard className="mt-5 p-0 overflow-hidden">
+                <div className="border-b px-5 py-3.5" style={{ borderColor: "var(--clinical-line)" }}>
+                  <p className="font-bold leading-tight text-[var(--clinical-ink)]" style={{ fontFamily: SERIF }}>Exceptions</p>
+                  <p className="text-xs text-[var(--clinical-muted)]">Every occurrence closed without counting as completion.</p>
+                </div>
+                <div>
+                  {k.exceptionList.map((ex) => {
+                    const meta = exceptionMeta(ex.outcome);
+                    const tone = meta.tone === "coral" ? "var(--clinical-coral)" : "var(--clinical-amber)";
+                    const when = [ex.shift, fmtTime(ex.at)].filter(Boolean).join(" ");
+                    const line = [ex.residentName, ex.room ? `Room ${ex.room}` : "", when, ex.caregiver].filter(Boolean).join(" · ");
+                    return (
+                      <div key={ex.id} className="flex items-start justify-between gap-4 border-b px-5 py-3.5 last:border-0" style={{ borderColor: "var(--clinical-line)" }}>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-[var(--clinical-ink)]">{ex.name}</p>
+                          <p className="mt-0.5 text-xs text-[var(--clinical-muted)]">{line}</p>
+                          {ex.reason && <p className="mt-1 text-xs text-[var(--clinical-ink-soft)]"><span className="font-semibold">{ex.outcome}:</span> {ex.reason}</p>}
+                        </div>
+                        <span className="shrink-0 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-[0.04em]" style={{ backgroundColor: `color-mix(in srgb, ${tone} 16%, transparent)`, color: tone }}>{meta.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="border-t px-5 py-3 text-xs text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line)" }}>
+                  An exception is not completion, and escalating is not delivering — the original stays in the audit record and the next recurrence generates separately.
+                </div>
+              </ClinicalCard>
+            )}
+          </>
         )}
       </DataState>
     </ClinicalPage>

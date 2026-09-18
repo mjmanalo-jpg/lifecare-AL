@@ -15,7 +15,7 @@ import {
 /* ── Front Desk & Guest Management ── */
 
 export const VISIT_TYPE_META: Record<string, { label: string; icon: LucideIcon; cls: string }> = {
-  GUEST_VISIT: { label: "Guest Visit", icon: Users, cls: "text-blue-600 bg-blue-50 border-blue-200" },
+  GUEST_VISIT: { label: "Guest Visit", icon: Users, cls: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]" },
   NEW_RESIDENT_ARRIVAL: { label: "New Resident Arrival", icon: UserPlus, cls: "text-emerald-600 bg-emerald-50 border-emerald-200" },
   TOUR: { label: "Tour", icon: Compass, cls: "text-purple-600 bg-purple-50 border-purple-200" },
   CONTRACTOR: { label: "Contractor", icon: HardHat, cls: "text-amber-600 bg-amber-50 border-amber-200" },
@@ -36,10 +36,10 @@ export const UNIT_STATUS_ORDER = [
 ];
 
 export const UNIT_STATUS_META: Record<string, { label: string; icon: LucideIcon; cls: string }> = {
-  MAKE_READY: { label: "Make Ready", icon: Sparkles, cls: "bg-blue-100 text-blue-700" },
+  MAKE_READY: { label: "Make Ready", icon: Sparkles, cls: "bg-[#cfe0eb] text-[#1b4763]" },
   INSPECTION: { label: "Inspection", icon: ClipboardCheck, cls: "bg-amber-100 text-amber-700" },
   READY: { label: "Ready", icon: BadgeCheck, cls: "bg-green-100 text-green-700" },
-  OCCUPIED: { label: "Occupied", icon: DoorOpen, cls: "bg-indigo-100 text-indigo-700" },
+  OCCUPIED: { label: "Occupied", icon: DoorOpen, cls: "bg-[#cfe0eb] text-[#1b4763]" },
   TURNOVER: { label: "Turnover", icon: Repeat, cls: "bg-orange-100 text-orange-700" },
   MOVE_OUT: { label: "Move-Out / Transfer", icon: PackageCheck, cls: "bg-purple-100 text-purple-700" },
   DEEP_CLEAN: { label: "Deep Clean & Maintenance", icon: HardHat, cls: "bg-red-100 text-red-700" },
@@ -52,14 +52,14 @@ export const EVENT_CATEGORY_META: Record<string, { label: string; icon: LucideIc
   WELLNESS: { label: "Wellness", icon: HeartPulse, cls: "text-rose-600 bg-rose-50 border-rose-200" },
   RECREATION: { label: "Recreation", icon: Gamepad2, cls: "text-purple-600 bg-purple-50 border-purple-200" },
   SPIRITUAL: { label: "Spiritual", icon: Church, cls: "text-slate-600 bg-slate-50 border-slate-200" },
-  EDUCATIONAL: { label: "Educational", icon: GraduationCap, cls: "text-blue-600 bg-blue-50 border-blue-200" },
+  EDUCATIONAL: { label: "Educational", icon: GraduationCap, cls: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]" },
   DINING: { label: "Dining", icon: UtensilsCrossed, cls: "text-orange-600 bg-orange-50 border-orange-200" },
   OUTING: { label: "Outing", icon: TreePine, cls: "text-green-600 bg-green-50 border-green-200" },
 };
 
 export const RSVP_PILL: Record<string, string> = {
   INVITED: "bg-gray-100 text-gray-600",
-  GOING: "bg-blue-100 text-blue-700",
+  GOING: "bg-[#cfe0eb] text-[#1b4763]",
   DECLINED: "bg-red-100 text-red-700",
   ATTENDED: "bg-green-100 text-green-700",
   NO_SHOW: "bg-amber-100 text-amber-700",
@@ -67,8 +67,8 @@ export const RSVP_PILL: Record<string, string> = {
 
 export const DINING_STATUS_PILL: Record<string, string> = {
   REQUESTED: "bg-amber-100 text-amber-700",
-  CONFIRMED: "bg-blue-100 text-blue-700",
-  SEATED: "bg-indigo-100 text-indigo-700",
+  CONFIRMED: "bg-[#cfe0eb] text-[#1b4763]",
+  SEATED: "bg-[#cfe0eb] text-[#1b4763]",
   COMPLETED: "bg-green-100 text-green-700",
   CANCELLED: "bg-gray-100 text-gray-600",
 };
@@ -77,7 +77,7 @@ export const MEAL_TYPES = ["BREAKFAST", "LUNCH", "DINNER"];
 export const DINING_VENUES = ["Main Dining", "Bistro", "Private Room", "Garden Lounge"];
 
 export const ANNOUNCEMENT_PRIORITY_PILL: Record<string, string> = {
-  NORMAL: "bg-blue-50 text-blue-700 border border-blue-200",
+  NORMAL: "bg-[#e0ecf2] text-[#1b4763] border border-[#a9c6d8]",
   HIGH: "bg-orange-50 text-orange-700 border border-orange-200",
   URGENT: "bg-red-100 text-red-700 border border-red-300",
 };

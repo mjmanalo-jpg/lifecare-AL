@@ -77,7 +77,7 @@ const STEP_LABELS: Record<string, string> = {
 };
 
 const STATUS_PILL: Record<string, string> = {
-  SCHEDULED: "bg-blue-50 text-blue-700 border-blue-200",
+  SCHEDULED: "bg-[#e0ecf2] text-[#1b4763] border-[#a9c6d8]",
   INSPECTION: "bg-amber-50 text-amber-700 border-amber-200",
   EN_ROUTE: "bg-yellow-100 text-yellow-800 border-yellow-300",
   ARRIVED: "bg-purple-50 text-purple-700 border-purple-200",
@@ -397,7 +397,7 @@ export default function FleetTrips() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2">
             Trip Board
           </h1>
           <p className="text-gray-600">Pre-trip inspection · live GPS tracking · drop-off confirmation</p>
@@ -629,7 +629,7 @@ export default function FleetTrips() {
       {inspecting && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
               <div>
                 <h2 className="text-xl font-bold">Pre-Trip Inspection</h2>
                 <p className="text-sm text-black/70">{inspecting.vehicleName} · {inspecting.vehiclePlate}</p>
@@ -667,7 +667,7 @@ export default function FleetTrips() {
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
               <button onClick={() => setInspecting(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
               <button onClick={handleCompleteInspection} disabled={!allChecked}
-                className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center gap-2">
+                className="px-5 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4" /> Complete Inspection
               </button>
             </div>
@@ -679,7 +679,7 @@ export default function FleetTrips() {
       {cancellingTrip && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setCancellingTrip(null); }}>
           <div className="bg-white w-full max-w-lg max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-xl shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-gradient-to-r from-red-500 to-red-600 px-5 py-4 text-white">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-[#b0432c] px-5 py-4 text-white">
               <div>
                 <h2 className="flex items-center gap-2 text-lg font-bold"><Ban className="w-5 h-5" /> Cancel Trip</h2>
                 <p className="text-sm text-white/80">{cancellingTrip.residentName} · Rm {cancellingTrip.roomNumber} → {cancellingTrip.destination}</p>
@@ -708,7 +708,7 @@ export default function FleetTrips() {
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string; icon: LucideIcon; color: string }) {
   const COLORS: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50 border-blue-200",
+    blue: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     green: "text-green-600 bg-green-50 border-green-200",
     red: "text-red-600 bg-red-50 border-red-200",
     purple: "text-purple-600 bg-purple-50 border-purple-200",

@@ -34,14 +34,14 @@ type MealType = (typeof MEAL_TYPES)[number];
 /** Color-coded pill classes per diet type (shared with KitchenCookList). */
 const DIET_PILL: Record<string, string> = {
   REGULAR: "bg-gray-100 text-gray-700 border-gray-200",
-  LOW_SODIUM: "bg-blue-100 text-blue-700 border-blue-200",
+  LOW_SODIUM: "bg-[#cfe0eb] text-[#1b4763] border-[#a9c6d8]",
   LOW_SUGAR: "bg-amber-100 text-amber-700 border-amber-200",
   DIABETIC: "bg-red-100 text-red-700 border-red-200",
   SOFT: "bg-purple-100 text-purple-700 border-purple-200",
   PUREED: "bg-pink-100 text-pink-700 border-pink-200",
   HIGH_FIBER: "bg-green-100 text-green-700 border-green-200",
   RENAL: "bg-cyan-100 text-cyan-700 border-cyan-200",
-  HIGH_PROTEIN: "bg-indigo-100 text-indigo-700 border-indigo-200",
+  HIGH_PROTEIN: "bg-[#cfe0eb] text-[#1b4763] border-[#a9c6d8]",
 };
 
 const dietLabel = (d: string) => d.replace(/_/g, " ");
@@ -187,14 +187,14 @@ export default function DietOrdersBoard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#226b4b] bg-clip-text text-transparent mb-2">
             Diet &amp; Nutrition Orders
           </h1>
           <p className="text-gray-600">Nutritionist desk — set per-resident diet type, restrictions &amp; meal targeting. The kitchen cooks from the active orders.</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
-          <button onClick={() => openCreate()} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+          <button onClick={() => openCreate()} className="flex items-center gap-2 px-4 py-2 bg-[#277a55] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
             <Plus className="w-4 h-4" /> New Diet Order
           </button>
         </div>
@@ -328,7 +328,7 @@ export default function DietOrdersBoard() {
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-emerald-500 to-teal-600 text-black p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#277a55] text-black p-5 flex items-center justify-between z-10">
               <h2 className="text-xl font-bold">New Diet Order</h2>
               <button onClick={() => setShowCreate(false)} className="p-2 hover:bg-emerald-700/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
@@ -377,7 +377,7 @@ export default function DietOrdersBoard() {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
               <button onClick={() => setShowCreate(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
-              <button onClick={handleCreate} className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Set Diet Order</button>
+              <button onClick={handleCreate} className="px-5 py-2 bg-[#277a55] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Set Diet Order</button>
             </div>
           </div>
         </div>

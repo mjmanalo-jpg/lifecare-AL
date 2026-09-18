@@ -59,7 +59,7 @@ interface ReportForm {
 const SHIFTS: Record<ShiftType, { label: string; icon: LucideIcon; badge: string }> = {
   MORNING: { label: "Morning", icon: Sun, badge: "bg-amber-100 text-amber-800 border-amber-300" },
   AFTERNOON: { label: "Afternoon", icon: Sunset, badge: "bg-orange-100 text-orange-800 border-orange-300" },
-  NIGHT: { label: "Night", icon: Moon, badge: "bg-indigo-100 text-indigo-800 border-indigo-300" },
+  NIGHT: { label: "Night", icon: Moon, badge: "bg-[#cfe0eb] text-[#163c56] border-[#7fa9c2]" },
   OVERNIGHT: { label: "Overnight", icon: Moon, badge: "bg-purple-100 text-purple-800 border-purple-300" },
 };
 
@@ -415,7 +415,7 @@ export default function CaregiverReports() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <FileText className="w-7 h-7 text-yellow-500 flex-shrink-0" />
             Shift Reports
           </h1>
@@ -455,7 +455,7 @@ export default function CaregiverReports() {
           </button>
           <button
             onClick={() => { setForm(EMPTY_FORM()); setCreating(true); }}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm"
           >
             <Plus className="w-4 h-4" /> New Report
           </button>
@@ -584,7 +584,7 @@ export default function CaregiverReports() {
                 <div className="mt-auto flex flex-wrap items-center gap-1 pt-2 border-t border-gray-100">
                   <button
                     onClick={() => setViewing(r)}
-                    className="flex items-center gap-1 px-2.5 py-1 text-blue-600 hover:bg-blue-50 rounded text-sm font-medium transition"
+                    className="flex items-center gap-1 px-2.5 py-1 text-[#1f4f70] hover:bg-[#e0ecf2] rounded text-sm font-medium transition"
                   >
                     <Eye className="w-4 h-4" /> View
                   </button>
@@ -601,7 +601,7 @@ export default function CaregiverReports() {
                   {r.signedAt && !r.acknowledgedByName && !isAuthor(r) && (
                     <button
                       onClick={() => void handleAck(r)}
-                      className="flex items-center gap-1 px-2.5 py-1 text-indigo-600 hover:bg-indigo-50 rounded text-sm font-medium transition"
+                      className="flex items-center gap-1 px-2.5 py-1 text-[#1f4f70] hover:bg-[#e0ecf2] rounded text-sm font-medium transition"
                     >
                       <CheckCircle2 className="w-4 h-4" /> Acknowledge
                     </button>
@@ -700,7 +700,7 @@ export default function CaregiverReports() {
               {!viewing.signedAt && isAuthor(viewing) && (
                 <button
                   onClick={() => void handleSign(viewing)}
-                  className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition"
+                  className="flex items-center gap-2 px-5 py-2 bg-[#4fa77e] text-white font-semibold rounded-lg hover:shadow-lg transition"
                 >
                   <PenLine className="w-4 h-4" /> Sign Off
                 </button>
@@ -708,7 +708,7 @@ export default function CaregiverReports() {
               {viewing.signedAt && !viewing.acknowledgedByName && !isAuthor(viewing) && (
                 <button
                   onClick={() => { void handleAck(viewing); setViewing((v) => (v ? { ...v, acknowledgedByName: me.name } : v)); }}
-                  className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white font-semibold rounded-lg hover:shadow-lg transition"
+                  className="flex items-center gap-2 px-5 py-2 bg-[#22577a] text-white font-semibold rounded-lg hover:shadow-lg transition"
                 >
                   <CheckCircle2 className="w-4 h-4" /> Acknowledge Receipt
                 </button>
@@ -760,7 +760,7 @@ export default function CaregiverReports() {
 
             {/* Auto-fill the whole report from real shift activity, then let the nurse edit. */}
             <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 space-y-1.5">
-              <button type="button" onClick={() => void recapFromShift()} disabled={recapping} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold hover:shadow-md transition active:scale-[0.99] disabled:opacity-60">
+              <button type="button" onClick={() => void recapFromShift()} disabled={recapping} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[#277a55] text-white text-sm font-semibold hover:shadow-md transition active:scale-[0.99] disabled:opacity-60">
                 {recapping ? <><RefreshCw className="w-4 h-4 animate-spin" /> Pulling your shift activity…</> : <><Sparkles className="w-4 h-4" /> Auto-fill from my shift activity</>}
               </button>
               <p className="text-[11px] text-emerald-800/80 text-center">Pulls the meds you gave, incidents you filed, escalations you raised, tasks you completed &amp; open carry-over for this shift — then drafts the summary. Review before saving.</p>
@@ -768,7 +768,7 @@ export default function CaregiverReports() {
 
             <div className="flex items-center justify-between">
               <label className="text-sm font-semibold text-gray-700">Summary <span className="text-red-500">*</span></label>
-              <button type="button" onClick={() => void generateSummary()} disabled={generating} className="text-xs font-semibold text-indigo-600 hover:underline flex items-center gap-1 disabled:opacity-60">
+              <button type="button" onClick={() => void generateSummary()} disabled={generating} className="text-xs font-semibold text-[#1f4f70] hover:underline flex items-center gap-1 disabled:opacity-60">
                 {generating ? <><RefreshCw className="w-3 h-3 animate-spin" /> Generating…</> : <>⚡ Re-draft summary from fields</>}
               </button>
             </div>
@@ -797,7 +797,7 @@ export default function CaregiverReports() {
             <button
               onClick={() => void handleCreate()}
               disabled={saving}
-              className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-60"
+              className="flex items-center gap-2 px-6 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-60"
             >
               <Plus className="w-4 h-4" /> {saving ? "Saving…" : "Save Report"}
             </button>
@@ -929,7 +929,7 @@ function ChartCard({ title, className, children }: { title: string; className?: 
 
 const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
   gray: { wrap: "bg-white border-gray-200", icon: "text-gray-500", value: "text-gray-900" },
-  blue: { wrap: "bg-blue-50 border-blue-200", icon: "text-blue-500", value: "text-blue-600" },
+  blue: { wrap: "bg-[#e0ecf2] border-[#a9c6d8]", icon: "text-[#22577a]", value: "text-[#1f4f70]" },
   red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
   amber: { wrap: "bg-amber-50 border-amber-200", icon: "text-amber-500", value: "text-amber-600" },
 };
@@ -975,7 +975,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 sm:p-6 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[#22577a] text-black p-5 sm:p-6 flex items-center justify-between z-10">
           <h2 className="text-xl sm:text-2xl font-bold">{title}</h2>
           <button onClick={onClose} className="p-2 hover:bg-black/10 rounded-lg transition">
             <X className="w-6 h-6" />

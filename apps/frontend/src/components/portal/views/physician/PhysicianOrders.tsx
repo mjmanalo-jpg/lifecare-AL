@@ -24,7 +24,7 @@ interface MedVM {
 
 const STATUS_BADGE: Record<MedStatus, string> = {
   ACTIVE: "bg-green-100 text-green-800 border-green-300",
-  PENDING: "bg-blue-100 text-blue-800 border-blue-300",
+  PENDING: "bg-[#cfe0eb] text-[#163c56] border-[#7fa9c2]",
   ON_HOLD: "bg-amber-100 text-amber-800 border-amber-300",
   DISCONTINUED: "bg-gray-200 text-gray-600 border-gray-300",
 };
@@ -153,7 +153,7 @@ export default function PhysicianOrders({ approveMode = false }: { approveMode?:
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <Pill className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Orders &amp; Prescriptions
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -163,7 +163,7 @@ export default function PhysicianOrders({ approveMode = false }: { approveMode?:
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <RefreshButton onRefresh={refreshAll} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
-          <button onClick={() => setAdding(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+          <button onClick={() => setAdding(true)} className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
             <Plus className="w-4 h-4" /> New Order
           </button>
         </div>
@@ -210,7 +210,7 @@ export default function PhysicianOrders({ approveMode = false }: { approveMode?:
                 <p className="text-xs text-gray-500 mt-0.5">{m.dosage} &middot; {m.frequency} &middot; {m.route}{m.prescribedBy ? ` &middot; Rx: ${m.prescribedBy}` : ""}</p>
               </div>
               <div className="flex items-center gap-1 flex-shrink-0 flex-wrap">
-                <button onClick={() => setViewing(m)} className="flex items-center gap-1 px-2.5 py-1 text-blue-600 hover:bg-blue-50 rounded text-sm font-medium transition">
+                <button onClick={() => setViewing(m)} className="flex items-center gap-1 px-2.5 py-1 text-[#1f4f70] hover:bg-[#e0ecf2] rounded text-sm font-medium transition">
                   <Eye className="w-4 h-4" /> View
                 </button>
                 {m.status === "ACTIVE" && (
@@ -265,7 +265,7 @@ export default function PhysicianOrders({ approveMode = false }: { approveMode?:
       {viewing && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 sm:p-6 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 sm:p-6 flex items-center justify-between z-10">
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold">💊 {viewing.name} {viewing.dosage}</h2>
                 <p className="text-yellow-900/70 text-sm">{viewing.residentName} &middot; Room {viewing.room}</p>
@@ -276,7 +276,7 @@ export default function PhysicianOrders({ approveMode = false }: { approveMode?:
               <div className="flex flex-wrap items-center gap-2">
                 <span className={`px-3 py-1 rounded-full text-sm font-bold border ${STATUS_BADGE[viewing.status]}`}>{humanize(viewing.status)}</span>
                 <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700 capitalize">{viewing.route}</span>
-                <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-50 text-blue-700">{viewing.frequency}</span>
+                <span className="px-3 py-1 rounded-full text-sm font-medium bg-[#e0ecf2] text-[#1b4763]">{viewing.frequency}</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><p className="text-sm font-semibold text-gray-600 mb-1">Start Date</p><p className="text-gray-900 text-sm">{viewing.startDate ? new Date(viewing.startDate).toLocaleDateString() : "—"}</p></div>
@@ -377,7 +377,7 @@ function AddOrderModal({ residents, onClose, onSaved }: {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 sm:p-6 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[#22577a] text-black p-5 sm:p-6 flex items-center justify-between z-10">
           <div><h2 className="text-xl sm:text-2xl font-bold">New Prescription Order</h2><p className="text-yellow-900/70 text-sm">Create a new medication order for a patient</p></div>
           <button onClick={onClose} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
@@ -407,7 +407,7 @@ function AddOrderModal({ residents, onClose, onSaved }: {
           <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between gap-2">
             <button type="button" onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
             <button type="submit" disabled={!valid || saving}
-              className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+              className="flex items-center gap-2 px-6 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
               <Plus className="w-4 h-4" /> {saving ? "Saving..." : "Create Order"}
             </button>
           </div>

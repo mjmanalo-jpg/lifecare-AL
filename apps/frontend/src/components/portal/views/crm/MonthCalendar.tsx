@@ -59,7 +59,7 @@ export default function MonthCalendar({ items, icon }: { items: CalItem[]; icon?
             <div key={i} className={`min-h-[92px] border-b border-r border-slate-100 p-1.5 ${i % 7 === 0 ? "border-l" : ""} ${day ? "" : "bg-slate-50/40"}`}>
               {day && (
                 <>
-                  <div className={`text-[11px] font-semibold mb-1 w-5 h-5 flex items-center justify-center rounded-full ${isToday(day) ? "bg-blue-600 text-white" : "text-slate-500"}`}>{day}</div>
+                  <div className={`text-[11px] font-semibold mb-1 w-5 h-5 flex items-center justify-center rounded-full ${isToday(day) ? "bg-[#1f4f70] text-white" : "text-slate-500"}`}>{day}</div>
                   <div className="space-y-1">
                     {list.slice(0, 3).map((it) => (
                       <button key={it.id} onClick={it.onClick} title={it.title} className={`w-full text-left truncate text-[10px] font-medium px-1.5 py-0.5 rounded ${it.className}`}>{it.label}</button>

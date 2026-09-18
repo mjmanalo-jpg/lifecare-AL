@@ -9,7 +9,7 @@ import { createRecord, deleteRecord } from "@/lib/api";
 const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none text-sm";
 const labelCls = "block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1";
 const typeColors: Record<string, string> = {
-  ADMISSION: "bg-blue-100 text-blue-700",
+  ADMISSION: "bg-[#cfe0eb] text-[#1b4763]",
   INSURANCE: "bg-green-100 text-green-700",
   LEGAL: "bg-purple-100 text-purple-700",
   MEDICAL: "bg-red-100 text-red-700",
@@ -77,8 +77,8 @@ export default function ResidentDocuments() {
         <div className="space-y-2">
           {filtered.map((doc: any) => (
             <div key={doc.id} className="bg-white rounded-lg border border-gray-200 p-4 flex items-center gap-4 hover:bg-gray-50 transition">
-              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                <FileText className="w-5 h-5 text-blue-500" />
+              <div className="w-10 h-10 rounded-lg bg-[#e0ecf2] flex items-center justify-center flex-shrink-0">
+                <FileText className="w-5 h-5 text-[#22577a]" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -95,7 +95,7 @@ export default function ResidentDocuments() {
               </div>
               <div className="flex items-center gap-1">
                 {doc.fileUrl && (
-                  <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 text-blue-500 hover:bg-blue-50 rounded cursor-pointer">
+                  <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 text-[#22577a] hover:bg-[#e0ecf2] rounded cursor-pointer">
                     <Download className="w-4 h-4" />
                   </a>
                 )}
@@ -111,7 +111,7 @@ export default function ResidentDocuments() {
       {creating && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4 rounded-t-xl flex items-center justify-between">
+            <div className="sticky top-0 bg-[#8f6410] px-6 py-4 rounded-t-xl flex items-center justify-between">
               <h3 className="text-white font-bold text-lg">Upload Document</h3>
               <button onClick={() => setCreating(false)} className="text-white/80 hover:text-white cursor-pointer"><X className="w-5 h-5" /></button>
             </div>

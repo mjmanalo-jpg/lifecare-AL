@@ -30,7 +30,7 @@ const SEVERITY_META: Record<string, { label: string; badge: string; color: strin
   critical: { label: "Critical", badge: "bg-red-100 text-red-700", color: "#ef4444" },
   high: { label: "High", badge: "bg-orange-100 text-orange-700", color: "#f97316" },
   medium: { label: "Medium", badge: "bg-yellow-100 text-yellow-700", color: "#eab308" },
-  low: { label: "Low", badge: "bg-blue-100 text-blue-700", color: "#3b82f6" },
+  low: { label: "Low", badge: "bg-[#cfe0eb] text-[#1b4763]", color: "#3b82f6" },
 };
 const SEVERITY_ORDER = ["critical", "high", "medium", "low"] as const;
 
@@ -238,7 +238,7 @@ export default function CareManagerDashboard() {
 /* ── Sub-components ──────────────────────────────────────────────────── */
 
 const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
-  blue: { wrap: "bg-blue-50 border-blue-200", icon: "text-blue-500", value: "text-blue-600" },
+  blue: { wrap: "bg-[#e0ecf2] border-[#a9c6d8]", icon: "text-[#22577a]", value: "text-[#1f4f70]" },
   amber: { wrap: "bg-amber-50 border-amber-200", icon: "text-amber-500", value: "text-amber-600" },
   red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
   purple: { wrap: "bg-purple-50 border-purple-200", icon: "text-purple-500", value: "text-purple-600" },

@@ -104,16 +104,16 @@ export default function CaregiverCareTeam() {
         {/* ── Physician: medication orders to assist with ── */}
         <div className="bg-white rounded-lg border border-gray-200 p-5">
           <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
-            <Pill className="w-4 h-4 text-blue-500" /> Physician Orders — Medication Assistance
+            <Pill className="w-4 h-4 text-[#22577a]" /> Physician Orders — Medication Assistance
           </h3>
           <p className="text-xs text-gray-500 mb-4">Active prescriptions from the physician portal. Confirm identity and route before assisting.</p>
           {medicationRows.length > 0 ? (
             <div className="space-y-2">
               {medicationRows.slice(0, 8).map((m: Row, i: number) => (
-                <div key={String(m.id ?? i)} className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+                <div key={String(m.id ?? i)} className="p-3 rounded-lg bg-[#e0ecf2] border border-[#cfe0eb]">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-medium text-gray-900 text-sm">💊 {String(m.name ?? "")} <span className="text-gray-500 font-normal">{String(m.dosage ?? "")}</span></p>
-                    <span className="text-xs font-semibold text-blue-700 flex-shrink-0">{humanize(String(m.route ?? "oral"))}</span>
+                    <span className="text-xs font-semibold text-[#1b4763] flex-shrink-0">{humanize(String(m.route ?? "oral"))}</span>
                   </div>
                   <p className="text-xs text-gray-600 mt-0.5">
                     {residentName(m) || "Unassigned"} • {String(m.frequency ?? "")}
@@ -165,13 +165,13 @@ export default function CaregiverCareTeam() {
         {/* ── Shared clinical notes ── */}
         <div className="bg-white rounded-lg border border-gray-200 p-5">
           <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
-            <PenTool className="w-4 h-4 text-indigo-500" /> Clinical Notes — Care Instructions
+            <PenTool className="w-4 h-4 text-[#22577a]" /> Clinical Notes — Care Instructions
           </h3>
           <p className="text-xs text-gray-500 mb-4">Non-confidential notes from physicians and nurses that affect daily care.</p>
           {notes.length > 0 ? (
             <div className="space-y-2">
               {notes.slice(0, 5).map((n: Row, i: number) => (
-                <div key={String(n.id ?? i)} className="p-3 rounded-lg bg-indigo-50/60 border border-indigo-100">
+                <div key={String(n.id ?? i)} className="p-3 rounded-lg bg-[#e0ecf2]/60 border border-[#cfe0eb]">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-medium text-gray-900 text-sm truncate">{String(n.title ?? humanize(String(n.noteType ?? ""))) || "Care note"}</p>
                     <span className="text-xs text-gray-400 flex-shrink-0">{relTime(ts(n.createdAt), nowTs)}</span>

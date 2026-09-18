@@ -8,7 +8,7 @@ import { upsertRecord } from "@/lib/api";
 import { CAMERA_REGISTRY_KEY, parseCameras, cameraHealth, newCameraId, type CameraDevice, type CameraType } from "@/lib/cameraRegistry";
 
 type SettingRow = { id: string; key?: string; value: string };
-const input = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white";
+const input = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#22577a] focus:ring-2 focus:ring-[#22577a]/20 bg-white";
 const TAPO_STREAM_URL = "/api/camera/tapo-feed";
 const TYPES: { v: CameraType; label: string }[] = [
   { v: "tapo", label: "Tapo (MJPEG proxy)" }, { v: "rtsp", label: "RTSP via gateway" },
@@ -75,17 +75,17 @@ export default function CameraRegistryBoard() {
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Camera className="w-6 h-6 text-blue-600" /> Camera Registry &amp; Health</h1>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Camera className="w-6 h-6 text-[#1f4f70]" /> Camera Registry &amp; Health</h1>
           <p className="text-gray-500 text-sm">Room cameras, their streams, and live online/offline status.</p>
         </div>
         <div className="flex gap-2 self-start">
           <button onClick={() => void refetch()} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"><RefreshCw className="w-4 h-4" /></button>
-          <button onClick={openAdd} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"><Plus className="w-4 h-4" /> Add Camera</button>
+          <button onClick={openAdd} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763]"><Plus className="w-4 h-4" /> Add Camera</button>
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        <Stat label="Cameras" value={stats.total} cls="text-blue-600" />
+        <Stat label="Cameras" value={stats.total} cls="text-[#1f4f70]" />
         <Stat label="Online" value={stats.online} cls="text-green-600" />
         <Stat label="Offline" value={stats.offline} cls={stats.offline ? "text-red-600" : "text-gray-500"} />
       </div>
@@ -117,7 +117,7 @@ export default function CameraRegistryBoard() {
                   {!c.enabled && <p className="text-amber-600 font-semibold">Disabled</p>}
                 </div>
                 <div className="flex flex-wrap gap-1 pt-1">
-                  <button onClick={() => testConnection(c)} disabled={!!testing} className="text-[11px] px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 inline-flex items-center gap-1 disabled:opacity-50">{testing === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />} Test connection</button>
+                  <button onClick={() => testConnection(c)} disabled={!!testing} className="text-[11px] px-2 py-1 rounded bg-[#e0ecf2] text-[#1b4763] hover:bg-[#cfe0eb] inline-flex items-center gap-1 disabled:opacity-50">{testing === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wifi className="w-3 h-3" />} Test connection</button>
                   <button onClick={() => setPreview(c)} className="text-[11px] px-2 py-1 rounded border border-gray-200 text-gray-600 hover:bg-gray-50 inline-flex items-center gap-1"><Video className="w-3 h-3" /> Preview</button>
                   <button onClick={() => openEdit(c)} className="text-[11px] px-2 py-1 rounded border border-gray-200 text-gray-600 hover:bg-gray-50">Edit</button>
                   <button onClick={() => remove(c)} className="text-[11px] px-2 py-1 rounded text-red-500 hover:bg-red-50 inline-flex items-center gap-1"><Trash2 className="w-3 h-3" /></button>
@@ -132,7 +132,7 @@ export default function CameraRegistryBoard() {
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowForm(false)}>
           <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between bg-blue-600 px-5 py-4 text-white rounded-t-xl">
+            <div className="flex items-center justify-between bg-[#1f4f70] px-5 py-4 text-white rounded-t-xl">
               <h3 className="font-bold">{editing ? "Edit Camera" : "Add Camera"}</h3>
               <button onClick={() => setShowForm(false)} className="p-1 hover:bg-white/15 rounded"><X className="w-5 h-5" /></button>
             </div>
@@ -140,7 +140,7 @@ export default function CameraRegistryBoard() {
               <label className="text-xs font-medium text-gray-600 sm:col-span-2">Name *<input className={input + " mt-1"} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Room 302 camera" /></label>
               <label className="text-xs font-medium text-gray-600">Room number<input className={input + " mt-1"} value={form.roomNumber} onChange={(e) => setForm({ ...form, roomNumber: e.target.value })} placeholder="302" /></label>
               <label className="text-xs font-medium text-gray-600">Type<select className={input + " mt-1"} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as CameraType })}>{TYPES.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}</select></label>
-              <label className="text-xs font-medium text-gray-600 sm:col-span-2">Stream URL * <button type="button" onClick={() => setForm({ ...form, type: "tapo", streamUrl: TAPO_STREAM_URL })} className="ml-2 text-blue-600 hover:underline">use Tapo preset</button><input className={input + " mt-1"} value={form.streamUrl} onChange={(e) => setForm({ ...form, streamUrl: e.target.value })} placeholder="/api/camera/tapo-feed or https://gateway/room302.m3u8" /></label>
+              <label className="text-xs font-medium text-gray-600 sm:col-span-2">Stream URL * <button type="button" onClick={() => setForm({ ...form, type: "tapo", streamUrl: TAPO_STREAM_URL })} className="ml-2 text-[#1f4f70] hover:underline">use Tapo preset</button><input className={input + " mt-1"} value={form.streamUrl} onChange={(e) => setForm({ ...form, streamUrl: e.target.value })} placeholder="/api/camera/tapo-feed or https://gateway/room302.m3u8" /></label>
               <label className="text-xs font-medium text-gray-600 sm:col-span-2">Server-side RTSP URL <span className="text-gray-400">(for 24/7 backend fall monitoring; Tapo cameras can leave this blank)</span><input className={input + " mt-1"} value={form.rtspUrl ?? ""} onChange={(e) => setForm({ ...form, rtspUrl: e.target.value })} placeholder="rtsp://user:pass@192.168.1.50:554/stream1" /></label>
               <label className="text-xs font-medium text-gray-600 sm:col-span-2">Notes<input className={input + " mt-1"} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
               <label className="flex items-center gap-2 text-sm text-gray-700 sm:col-span-2"><input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} className="w-4 h-4 rounded" /> Enabled (monitored)</label>
@@ -148,7 +148,7 @@ export default function CameraRegistryBoard() {
             </div>
             <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-3">
               <button onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
-              <button onClick={() => void save()} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null} {editing ? "Save" : "Add"}</button>
+              <button onClick={() => void save()} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763] disabled:opacity-60">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null} {editing ? "Save" : "Add"}</button>
             </div>
           </div>
         </div>

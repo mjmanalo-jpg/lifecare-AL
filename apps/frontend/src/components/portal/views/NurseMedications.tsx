@@ -61,7 +61,7 @@ const MAR_NOTE_TYPE = "MEDICATION_ADMIN";
 const SLOTS: Record<SlotKey, { label: string; time: string; hour: number; icon: LucideIcon; badge: string }> = {
   MORNING: { label: "Morning", time: "08:00", hour: 8, icon: Sunrise, badge: "bg-amber-100 text-amber-800 border-amber-300" },
   NOON: { label: "Noon", time: "12:00", hour: 12, icon: Sun, badge: "bg-orange-100 text-orange-800 border-orange-300" },
-  EVENING: { label: "Evening", time: "18:00", hour: 18, icon: Sunset, badge: "bg-indigo-100 text-indigo-800 border-indigo-300" },
+  EVENING: { label: "Evening", time: "18:00", hour: 18, icon: Sunset, badge: "bg-[#cfe0eb] text-[#163c56] border-[#7fa9c2]" },
   NIGHT: { label: "Night", time: "22:00", hour: 22, icon: Moon, badge: "bg-purple-100 text-purple-800 border-purple-300" },
   PRN: { label: "PRN / As Needed", time: "Any time", hour: 24, icon: HelpCircle, badge: "bg-gray-100 text-gray-700 border-gray-300" },
 };
@@ -69,7 +69,7 @@ const SLOT_ORDER: SlotKey[] = ["MORNING", "NOON", "EVENING", "NIGHT", "PRN"];
 
 const STATUS_BADGE: Record<MedStatus, string> = {
   ACTIVE: "bg-green-100 text-green-800 border-green-300",
-  PENDING: "bg-blue-100 text-blue-800 border-blue-300",
+  PENDING: "bg-[#cfe0eb] text-[#163c56] border-[#7fa9c2]",
   ON_HOLD: "bg-amber-100 text-amber-800 border-amber-300",
   DISCONTINUED: "bg-gray-200 text-gray-600 border-gray-300",
 };
@@ -358,7 +358,7 @@ export default function NurseMedications() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <Pill className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Medication Rounds
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -378,7 +378,7 @@ export default function NurseMedications() {
             ))}
           </div>
           <RefreshButton onRefresh={refreshAll} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
-          <button onClick={() => setAdding(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+          <button onClick={() => setAdding(true)} className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
             <Plus className="w-4 h-4" /> Add Medication
           </button>
         </div>
@@ -444,7 +444,7 @@ export default function NurseMedications() {
                               </span>
                             )}
                             <button onClick={() => void handleAdminister(m, slot)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-green-400 to-green-500 text-white text-sm font-semibold rounded-lg hover:shadow transition active:scale-95">
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#4fa77e] text-white text-sm font-semibold rounded-lg hover:shadow transition active:scale-95">
                               <Syringe className="w-4 h-4" /> Administer
                             </button>
                           </div>
@@ -508,7 +508,7 @@ export default function NurseMedications() {
                     ))}
                   </div>
                   <div className="mt-auto flex items-center gap-1 pt-2 border-t border-gray-100 flex-wrap">
-                    <button onClick={() => setViewing(m)} className="flex items-center gap-1 px-2.5 py-1 text-blue-600 hover:bg-blue-50 rounded text-sm font-medium transition">
+                    <button onClick={() => setViewing(m)} className="flex items-center gap-1 px-2.5 py-1 text-[#1f4f70] hover:bg-[#e0ecf2] rounded text-sm font-medium transition">
                       <Eye className="w-4 h-4" /> View
                     </button>
                     {m.status === "ACTIVE" && (
@@ -564,7 +564,7 @@ export default function NurseMedications() {
             <div className="flex flex-wrap items-center gap-2">
               <span className={`px-3 py-1 rounded-full text-sm font-bold border ${STATUS_BADGE[viewing.status]}`}>{humanize(viewing.status)}</span>
               <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700 capitalize">{viewing.route}</span>
-              <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-50 text-blue-700">{viewing.frequency}</span>
+              <span className="px-3 py-1 rounded-full text-sm font-medium bg-[#e0ecf2] text-[#1b4763]">{viewing.frequency}</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Detail label="Start Date">{viewing.startDate ? new Date(viewing.startDate).toLocaleDateString() : "—"}</Detail>
@@ -761,7 +761,7 @@ function AddMedicationModal({ residents, existingByResident, onClose, onSaved }:
   const inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none text-sm";
 
   const flagBadges = medFlagLabels(form.name);
-  const flagBadgeTone: Record<string, string> = { red: "bg-red-100 text-red-700", purple: "bg-purple-100 text-purple-700", amber: "bg-amber-100 text-amber-700", blue: "bg-blue-100 text-blue-700" };
+  const flagBadgeTone: Record<string, string> = { red: "bg-red-100 text-red-700", purple: "bg-purple-100 text-purple-700", amber: "bg-amber-100 text-amber-700", blue: "bg-[#cfe0eb] text-[#1b4763]" };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -887,7 +887,7 @@ function AddMedicationModal({ residents, existingByResident, onClose, onSaved }:
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-2">
           <button type="button" onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
           <button type="submit" disabled={!valid || saving}
-            className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+            className="flex items-center gap-2 px-6 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
             <Plus className="w-4 h-4" /> {saving ? "Saving…" : "Add Medication"}
           </button>
         </div>
@@ -900,7 +900,7 @@ function AddMedicationModal({ residents, existingByResident, onClose, onSaved }:
 
 const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
   gray: { wrap: "bg-white border-gray-200", icon: "text-gray-500", value: "text-gray-900" },
-  blue: { wrap: "bg-blue-50 border-blue-200", icon: "text-blue-500", value: "text-blue-600" },
+  blue: { wrap: "bg-[#e0ecf2] border-[#a9c6d8]", icon: "text-[#22577a]", value: "text-[#1f4f70]" },
   red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
   green: { wrap: "bg-green-50 border-green-200", icon: "text-green-500", value: "text-green-600" },
   amber: { wrap: "bg-amber-50 border-amber-200", icon: "text-amber-500", value: "text-amber-600" },
@@ -941,7 +941,7 @@ function Modal({ title, subtitle, onClose, children }: { title: string; subtitle
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 sm:p-6 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[#22577a] text-black p-5 sm:p-6 flex items-center justify-between z-10">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold">{title}</h2>
             {subtitle && <p className="text-yellow-900/70 text-sm">{subtitle}</p>}

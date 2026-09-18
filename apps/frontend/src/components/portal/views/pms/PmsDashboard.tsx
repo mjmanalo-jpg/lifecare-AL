@@ -140,7 +140,7 @@ export default function PmsDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2">
             PMS Hub
           </h1>
           <p className="text-gray-600">Property Management System — central hub of hospitality operations &amp; live KPIs</p>
@@ -263,7 +263,7 @@ export default function PmsDashboard() {
 
 function Kpi({ label, value, sub, icon: Icon, color }: { label: string; value: string; sub: string; icon: LucideIcon; color: string }) {
   const COLORS: Record<string, string> = {
-    indigo: "text-indigo-600 bg-indigo-50 border-indigo-200",
+    indigo: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     amber: "text-amber-600 bg-amber-50 border-amber-200",
     purple: "text-purple-600 bg-purple-50 border-purple-200",
     green: "text-green-600 bg-green-50 border-green-200",

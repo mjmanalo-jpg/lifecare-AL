@@ -157,7 +157,7 @@ export default function SuperAdminDashboard() {
 
   /* Real cross-portal telemetry from /api/stats — replaces mock numbers. */
   const OPS_TILES: { label: string; value: number; icon: LucideIcon; color: string }[] = [
-    { label: "Residents", value: stats?.residents ?? 0, icon: UserRound, color: "text-blue-500 bg-blue-50 border-blue-200" },
+    { label: "Residents", value: stats?.residents ?? 0, icon: UserRound, color: "text-[#22577a] bg-[#e0ecf2] border-[#a9c6d8]" },
     { label: "Active Incidents", value: stats?.activeIncidents ?? 0, icon: AlertTriangle, color: "text-red-500 bg-red-50 border-red-200" },
     { label: "Staff On Duty", value: stats?.activeStaff ?? 0, icon: Users, color: "text-green-500 bg-green-50 border-green-200" },
     { label: "Open Tasks", value: stats?.openTasks ?? 0, icon: ClipboardList, color: "text-amber-500 bg-amber-50 border-amber-200" },
@@ -170,7 +170,7 @@ export default function SuperAdminDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <Settings className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-yellow-500 flex-shrink-0" /> Admin Dashboard
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-xs sm:text-sm">
@@ -279,7 +279,7 @@ export default function SuperAdminDashboard() {
                     <p className="text-xs text-gray-600 truncate">{s.position}{s.department ? ` • ${s.department}` : ""}</p>
                     <div className="flex flex-wrap items-center gap-2 mt-2">
                       <button onClick={() => void handleApprove(s.id, s.name)} disabled={approvingId === s.id}
-                        className="flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r from-green-400 to-green-500 text-white rounded text-xs font-semibold hover:shadow transition disabled:opacity-50">
+                        className="flex items-center gap-1 px-2.5 py-1 bg-[#4fa77e] text-white rounded text-xs font-semibold hover:shadow transition disabled:opacity-50">
                         <CheckCircle2 className="w-3.5 h-3.5" /> Approve
                       </button>
                       <button onClick={() => void handleReject(s.id, s.name)}
@@ -314,7 +314,7 @@ export default function SuperAdminDashboard() {
                     <span className="text-gray-500">{enabled}/{total} features</span>
                   </div>
                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all"
+                    <div className="h-full bg-[#22577a] rounded-full transition-all"
                       style={{ width: `${total ? Math.round((enabled / total) * 100) : 0}%` }} />
                   </div>
                 </div>
@@ -335,7 +335,7 @@ export default function SuperAdminDashboard() {
 
 const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
   gray: { wrap: "bg-white border-gray-200", icon: "text-gray-500", value: "text-gray-900" },
-  blue: { wrap: "bg-blue-50 border-blue-200", icon: "text-blue-500", value: "text-blue-600" },
+  blue: { wrap: "bg-[#e0ecf2] border-[#a9c6d8]", icon: "text-[#22577a]", value: "text-[#1f4f70]" },
   red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
   green: { wrap: "bg-green-50 border-green-200", icon: "text-green-500", value: "text-green-600" },
   amber: { wrap: "bg-amber-50 border-amber-200", icon: "text-amber-500", value: "text-amber-600" },

@@ -71,7 +71,7 @@ export default function HubTabs({
       <div
         role="tablist"
         aria-label="Section tabs"
-        className="flex w-full items-end gap-1 overflow-x-auto scrollbar-hide border-b border-slate-200 pb-2 dark:border-slate-700"
+        className="flex w-full items-end gap-1 overflow-x-auto scrollbar-hide border-b border-[var(--clinical-line)]"
       >
         {tabs.map((t) => {
           const on = t.key === current?.key;
@@ -82,14 +82,10 @@ export default function HubTabs({
               role="tab"
               aria-selected={on}
               onClick={() => select(t.key)}
-              className={`shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              className={`shrink-0 whitespace-nowrap -mb-px border-b-2 px-4 py-2.5 text-sm font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--clinical-focus)] ${
                 on
-                  ? "bg-blue-600 text-white shadow-sm"
-                  // Translucent hover overlays, not bg-white/bg-slate-700 — the clinical
-                  // theme layer (globals.css) remaps those solid surfaces to a dark
-                  // colour, which turned the hovered tab dark-on-dark. Opacity variants
-                  // compile to different class names and are left un-remapped.
-                  : "text-slate-700 hover:bg-black/5 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+                  ? "border-[var(--clinical-panel)] text-[var(--clinical-ink)]"
+                  : "border-transparent text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"
               }`}
             >
               {t.label}
@@ -98,7 +94,7 @@ export default function HubTabs({
         })}
       </div>
       {current?.hint && (
-        <p className="-mt-1 text-xs text-slate-500 dark:text-slate-400">{current.hint}</p>
+        <p className="-mt-1 text-xs text-[var(--clinical-muted)]">{current.hint}</p>
       )}
       <div>{current?.node}</div>
     </div>

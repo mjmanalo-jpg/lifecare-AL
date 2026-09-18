@@ -24,7 +24,7 @@ type Payment = ReturnType<typeof adaptPayment>;
 type ResRow = { id: string; name: string; room: string; sponsorId: string; sponsorName: string };
 
 const STATUS_BADGE: Record<string, string> = {
-  DRAFT: "bg-gray-100 text-gray-700", SENT: "bg-blue-100 text-blue-700", PAID: "bg-green-100 text-green-700", OVERDUE: "bg-red-100 text-red-700", CANCELLED: "bg-gray-100 text-gray-500",
+  DRAFT: "bg-gray-100 text-gray-700", SENT: "bg-[#cfe0eb] text-[#1b4763]", PAID: "bg-green-100 text-green-700", OVERDUE: "bg-red-100 text-red-700", CANCELLED: "bg-gray-100 text-gray-500",
 };
 
 export default function ResidentBillingRecord() {

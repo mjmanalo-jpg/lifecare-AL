@@ -62,10 +62,10 @@ export function dismissGlobalToast(id: number): void {
 }
 
 const META: Record<GlobalToastVariant, { icon: typeof CheckCircle2; iconClass: string; ring: string }> = {
-  success: { icon: CheckCircle2, iconClass: "text-emerald-500", ring: "border-l-emerald-500" },
+  success: { icon: CheckCircle2, iconClass: "text-[#277a55]", ring: "border-l-[#277a55]" },
   error: { icon: AlertCircle, iconClass: "text-destructive", ring: "border-l-destructive" },
-  warning: { icon: AlertTriangle, iconClass: "text-amber-500", ring: "border-l-amber-500" },
-  info: { icon: Info, iconClass: "text-blue-500", ring: "border-l-blue-500" },
+  warning: { icon: AlertTriangle, iconClass: "text-[#8f6410]", ring: "border-l-[#8f6410]" },
+  info: { icon: Info, iconClass: "text-[#22577a]", ring: "border-l-[#22577a]" },
 };
 
 function ToastCard({ item }: { item: GlobalToastItem }) {

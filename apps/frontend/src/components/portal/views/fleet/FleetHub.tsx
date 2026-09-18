@@ -60,12 +60,12 @@ type TabKey = "maintenance" | "fuel" | "requests" | "trips";
 const MAINT_STATUSES = ["SCHEDULED", "OPEN", "IN_PROGRESS", "AWAITING_PARTS", "COMPLETED", "CANCELLED"];
 const MAINT_TYPES = ["PREVENTIVE", "REPAIR", "INSPECTION"];
 const MAINT_STATUS_STYLES: Record<string, string> = {
-  SCHEDULED: "bg-gray-100 text-gray-700", OPEN: "bg-blue-100 text-blue-700",
+  SCHEDULED: "bg-gray-100 text-gray-700", OPEN: "bg-[#cfe0eb] text-[#1b4763]",
   IN_PROGRESS: "bg-amber-100 text-amber-700", AWAITING_PARTS: "bg-purple-100 text-purple-700",
   COMPLETED: "bg-green-100 text-green-700", CANCELLED: "bg-red-100 text-red-700",
 };
 const MAINT_TYPE_META: Record<string, { icon: LucideIcon; cls: string }> = {
-  PREVENTIVE: { icon: CalendarClock, cls: "bg-blue-100 text-blue-700" },
+  PREVENTIVE: { icon: CalendarClock, cls: "bg-[#cfe0eb] text-[#1b4763]" },
   REPAIR: { icon: Wrench, cls: "bg-red-100 text-red-700" },
   INSPECTION: { icon: ClipboardCheck, cls: "bg-purple-100 text-purple-700" },
 };
@@ -91,7 +91,7 @@ type WorkOrder = ReturnType<typeof adaptWorkOrder>;
 
 /* ── Fuel ── */
 const FUEL_TYPE_STYLES: Record<string, string> = {
-  Diesel: "bg-amber-100 text-amber-700", Gasoline: "bg-blue-100 text-blue-700",
+  Diesel: "bg-amber-100 text-amber-700", Gasoline: "bg-[#cfe0eb] text-[#1b4763]",
   "Electric kWh": "bg-green-100 text-green-700",
 };
 const adaptFuelLog = (r: Row) => {
@@ -110,7 +110,7 @@ type FuelLogEntry = ReturnType<typeof adaptFuelLog>;
 
 /* ── Transport Requests ── */
 const REQ_TYPE_META: Record<string, { label: string; icon: LucideIcon; color: string; pill: string }> = {
-  MEDICAL_APPOINTMENT: { label: "Medical", icon: Stethoscope, color: "#3b82f6", pill: "bg-blue-50 text-blue-700 border-blue-200" },
+  MEDICAL_APPOINTMENT: { label: "Medical", icon: Stethoscope, color: "#3b82f6", pill: "bg-[#e0ecf2] text-[#1b4763] border-[#a9c6d8]" },
   DIALYSIS: { label: "Dialysis", icon: Droplets, color: "#06b6d4", pill: "bg-cyan-50 text-cyan-700 border-cyan-200" },
   THERAPY: { label: "Therapy", icon: HeartPulse, color: "#ec4899", pill: "bg-pink-50 text-pink-700 border-pink-200" },
   FAMILY_OUTING: { label: "Family", icon: TreePine, color: "#22c55e", pill: "bg-green-50 text-green-700 border-green-200" },
@@ -121,12 +121,12 @@ const REQ_TYPES = Object.keys(REQ_TYPE_META);
 const PRIORITY_PILL: Record<string, string> = {
   EMERGENCY: "bg-red-100 text-red-700 border-red-300 animate-pulse",
   HIGH: "bg-orange-50 text-orange-700 border-orange-200",
-  NORMAL: "bg-blue-50 text-blue-700 border-blue-200",
+  NORMAL: "bg-[#e0ecf2] text-[#1b4763] border-[#a9c6d8]",
   LOW: "bg-gray-100 text-gray-600 border-gray-200",
 };
 const STATUS_PILL: Record<string, string> = {
   PENDING: "bg-amber-50 text-amber-700 border-amber-200",
-  APPROVED: "bg-blue-50 text-blue-700 border-blue-200",
+  APPROVED: "bg-[#e0ecf2] text-[#1b4763] border-[#a9c6d8]",
   SCHEDULED: "bg-purple-50 text-purple-700 border-purple-200",
   DECLINED: "bg-red-50 text-red-700 border-red-200",
   COMPLETED: "bg-green-50 text-green-700 border-green-200",
@@ -159,7 +159,7 @@ const TRIP_STEP_LABELS: Record<string, string> = {
   ARRIVED: "Arrived", RETURNING: "Returning", COMPLETED: "Completed",
 };
 const TRIP_STATUS_PILL: Record<string, string> = {
-  SCHEDULED: "bg-blue-50 text-blue-700 border-blue-200",
+  SCHEDULED: "bg-[#e0ecf2] text-[#1b4763] border-[#a9c6d8]",
   INSPECTION: "bg-amber-50 text-amber-700 border-amber-200",
   EN_ROUTE: "bg-yellow-100 text-yellow-800 border-yellow-300",
   ARRIVED: "bg-purple-50 text-purple-700 border-purple-200",
@@ -385,7 +385,7 @@ function MaintenanceTab({ onView }: { onView: (r: Record<string, unknown>) => vo
           <div className="flex gap-2">
             <button onClick={() => void refreshAll()} className="flex items-center gap-2 px-3 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm"><RefreshCw className="w-4 h-4" /></button>
             <button onClick={() => { setCreateForm({ vehicleId: "", type: "PREVENTIVE", status: "SCHEDULED", title: "", description: "", scheduledDate: "", vendor: "", odometerAt: "", cost: "", downtimeHours: "", notes: "" }); setShowCreate(true); }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm active:scale-95">
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition text-sm active:scale-95">
               <ClipboardList className="w-4 h-4" /> New
             </button>
           </div>
@@ -426,7 +426,7 @@ function MaintenanceTab({ onView }: { onView: (r: Record<string, unknown>) => vo
                         <div className="flex items-center justify-center gap-1">
                           {busyId === w.id ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : (
                             <>
-                              <button onClick={() => onView({ ...w, _tab: "maintenance" })} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
+                              <button onClick={() => onView({ ...w, _tab: "maintenance" })} className="p-1.5 rounded hover:bg-[#cfe0eb] text-[#1f4f70] transition" title="View"><Eye className="w-4 h-4" /></button>
                               {w.status === "OPEN" && <button onClick={() => handleStatusChange(w, "IN_PROGRESS")} className="p-1.5 rounded hover:bg-amber-100 text-amber-600 transition" title="Start"><Play className="w-4 h-4" /></button>}
                               {["IN_PROGRESS", "AWAITING_PARTS"].includes(w.status) && <button onClick={() => handleStatusChange(w, "COMPLETED")} className="p-1.5 rounded hover:bg-green-100 text-green-600 transition" title="Complete"><CheckCircle2 className="w-4 h-4" /></button>}
                               <button onClick={() => startEditing(w)} className="p-1.5 rounded hover:bg-yellow-100 text-yellow-600 transition" title="Edit"><Edit className="w-4 h-4" /></button>
@@ -459,7 +459,7 @@ function MaintenanceTab({ onView }: { onView: (r: Record<string, unknown>) => vo
                   <p className="font-medium text-gray-900 text-sm truncate">{w.title}</p>
                   <p className="text-xs text-gray-500">{w.vehicleName} · {fmtDate(w.scheduledDate)} {w.vendor ? `· ${w.vendor}` : ""}</p>
                   <div className="flex gap-1 pt-1">
-                    <button onClick={() => onView({ ...w, _tab: "maintenance" })} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition"><Eye className="w-3 h-3" /> View</button>
+                    <button onClick={() => onView({ ...w, _tab: "maintenance" })} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#1f4f70] bg-[#e0ecf2] hover:bg-[#cfe0eb] rounded transition"><Eye className="w-3 h-3" /> View</button>
                     <button onClick={() => startEditing(w)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-yellow-600 bg-yellow-50 hover:bg-yellow-100 rounded transition"><Edit className="w-3 h-3" /> Edit</button>
                     <button onClick={() => handleDelete(w)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded transition"><Trash2 className="w-3 h-3" /></button>
                   </div>
@@ -567,7 +567,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
         <div className="flex gap-2">
           <button onClick={() => void refreshAll()} className="flex items-center gap-2 px-3 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm"><RefreshCw className="w-4 h-4" /></button>
           <button onClick={() => { setForm({ vehicleId: "", driverId: "", logDate: toLocalInputValue(new Date()), odometer: "", liters: "", cost: "", fuelType: "Diesel", notes: "" }); setShowCreate(true); }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm active:scale-95">
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition text-sm active:scale-95">
             <Fuel className="w-4 h-4" /> Log Fuel-Up
           </button>
         </div>
@@ -602,7 +602,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
                     <Td><span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${FUEL_TYPE_STYLES[log.fuelType] || "bg-gray-100 text-gray-700"}`}>{log.fuelType}</span></Td>
                     <Td>
                       <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => onView({ ...log, _tab: "fuel" })} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
+                        <button onClick={() => onView({ ...log, _tab: "fuel" })} className="p-1.5 rounded hover:bg-[#cfe0eb] text-[#1f4f70] transition" title="View"><Eye className="w-4 h-4" /></button>
                         <button onClick={() => handleDelete(log)} className="p-1.5 rounded hover:bg-red-100 text-red-600 transition" title="Delete"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </Td>
@@ -622,7 +622,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
                 <p className="font-medium text-gray-900 text-sm">{log.vehicleName} <span className="text-xs text-gray-400">{log.vehiclePlate}</span></p>
                 <p className="text-xs text-gray-500">{log.liters}L · {log.odometer.toLocaleString()} km · {log.driverName || "No driver"} · {fmtDT(log.logDate)}</p>
                 <div className="flex gap-1 pt-1">
-                  <button onClick={() => onView({ ...log, _tab: "fuel" })} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition"><Eye className="w-3 h-3" /> View</button>
+                  <button onClick={() => onView({ ...log, _tab: "fuel" })} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#1f4f70] bg-[#e0ecf2] hover:bg-[#cfe0eb] rounded transition"><Eye className="w-3 h-3" /> View</button>
                   <button onClick={() => handleDelete(log)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded transition"><Trash2 className="w-3 h-3" /></button>
                 </div>
               </div>
@@ -637,7 +637,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90dvh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
               <h2 className="text-xl font-bold">Log Fuel-Up</h2>
               <button onClick={() => setShowCreate(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
@@ -663,7 +663,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
               <button onClick={() => setShowCreate(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
-              <button onClick={handleCreate} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Log Fuel-Up</button>
+              <button onClick={handleCreate} className="px-5 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Log Fuel-Up</button>
             </div>
           </div>
         </div>
@@ -859,7 +859,7 @@ function RequestsTab({ onView }: { onView: (r: Record<string, unknown>) => void 
                       <Td><span className={`inline-block px-2 py-0.5 rounded-full border text-xs font-semibold ${STATUS_PILL[req.status] || STATUS_PILL.PENDING}`}>{req.status}</span></Td>
                       <Td>
                         <div className="flex items-center justify-center gap-1.5">
-                          <button onClick={() => onView({ ...req, raw: req.raw, _tab: "requests" })} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
+                          <button onClick={() => onView({ ...req, raw: req.raw, _tab: "requests" })} className="p-1.5 rounded hover:bg-[#cfe0eb] text-[#1f4f70] transition" title="View"><Eye className="w-4 h-4" /></button>
                           {req.status === "PENDING" && <button onClick={() => handleApprove(req)} className="p-1.5 rounded hover:bg-green-100 text-green-600 transition" title="Approve"><Check className="w-4 h-4" /></button>}
                           {req.status === "PENDING" && <button onClick={() => handleDecline(req)} className="p-1.5 rounded hover:bg-red-100 text-red-500 transition" title="Decline"><BanIcon className="w-4 h-4" /></button>}
                           {req.status === "APPROVED" && <button onClick={() => openAssign(req)} className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold text-black bg-yellow-400 hover:bg-yellow-500 transition" title="Assign vehicle & driver"><Truck className="w-3.5 h-3.5" /> Assign</button>}
@@ -886,7 +886,7 @@ function RequestsTab({ onView }: { onView: (r: Record<string, unknown>) => void 
                   <p className="text-xs text-gray-600 flex items-center gap-1"><MapPin className="w-3 h-3 text-gray-400" /> {req.destination}</p>
                   <p className="text-xs text-gray-500">{fmtDT(req.requestedDate)} · <span className={`font-semibold ${req.priority === "EMERGENCY" ? "text-red-600" : ""}`}>{req.priority}</span></p>
                   <div className="flex gap-1 pt-1">
-                    <button onClick={() => onView({ ...req, raw: req.raw, _tab: "requests" })} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition"><Eye className="w-3 h-3" /> View</button>
+                    <button onClick={() => onView({ ...req, raw: req.raw, _tab: "requests" })} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#1f4f70] bg-[#e0ecf2] hover:bg-[#cfe0eb] rounded transition"><Eye className="w-3 h-3" /> View</button>
                     {req.status === "PENDING" && <button onClick={() => handleApprove(req)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-green-600 bg-green-50 hover:bg-green-100 rounded transition"><Check className="w-3 h-3" /> Approve</button>}
                     {req.status === "PENDING" && <button onClick={() => handleDecline(req)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded transition"><BanIcon className="w-3 h-3" /> Decline</button>}
                     {req.status === "APPROVED" && <button onClick={() => openAssign(req)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-black bg-yellow-400 hover:bg-yellow-500 rounded transition"><Truck className="w-3 h-3" /> Assign Vehicle &amp; Driver</button>}
@@ -904,7 +904,7 @@ function RequestsTab({ onView }: { onView: (r: Record<string, unknown>) => void 
       {assigning && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setAssigning(null)}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-white p-5 flex items-center justify-between z-10">
               <div>
                 <h2 className="text-lg font-bold flex items-center gap-2"><Truck className="w-5 h-5" /> Assign Vehicle &amp; Driver</h2>
                 <p className="text-sm text-white/80">{assigning.residentName} → {assigning.destination}</p>
@@ -914,32 +914,32 @@ function RequestsTab({ onView }: { onView: (r: Record<string, unknown>) => void 
             <div className="p-5 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Vehicle</label>
-                <select value={assignForm.vehicleId} onChange={e => setAssignForm(f => ({ ...f, vehicleId: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-400 outline-none">
+                <select value={assignForm.vehicleId} onChange={e => setAssignForm(f => ({ ...f, vehicleId: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#4f93bd] outline-none">
                   <option value="">Select a vehicle…</option>
                   {vehicles.filter(v => v.status !== "MAINTENANCE").map(v => <option key={v.id} value={v.id}>{v.name} ({v.licensePlate}){v.status && v.status !== "AVAILABLE" ? ` — ${v.status}` : ""}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Driver</label>
-                <select value={assignForm.driverId} onChange={e => setAssignForm(f => ({ ...f, driverId: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-400 outline-none">
+                <select value={assignForm.driverId} onChange={e => setAssignForm(f => ({ ...f, driverId: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#4f93bd] outline-none">
                   <option value="">Select a driver…</option>
                   {drivers.map((d: ReturnType<typeof adaptDriver>) => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Pickup Date &amp; Time</label>
-                <input type="datetime-local" value={assignForm.scheduledAt} onChange={e => setAssignForm(f => ({ ...f, scheduledAt: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-400 outline-none" />
+                <input type="datetime-local" value={assignForm.scheduledAt} onChange={e => setAssignForm(f => ({ ...f, scheduledAt: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#4f93bd] outline-none" />
               </div>
               {assigning.escortRequired && (
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Escort ({assigning.escortRole || "staff"}) name <span className="text-gray-400 normal-case">(optional)</span></label>
-                  <input type="text" value={assignForm.escortName} onChange={e => setAssignForm(f => ({ ...f, escortName: e.target.value }))} placeholder="Escort staff name" className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-400 outline-none" />
+                  <input type="text" value={assignForm.escortName} onChange={e => setAssignForm(f => ({ ...f, escortName: e.target.value }))} placeholder="Escort staff name" className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#4f93bd] outline-none" />
                 </div>
               )}
             </div>
             <div className="px-5 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
               <button onClick={() => setAssigning(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg text-sm font-semibold transition">Cancel</button>
-              <button onClick={handleAssign} disabled={savingAssign} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 text-sm flex items-center gap-2">
+              <button onClick={handleAssign} disabled={savingAssign} className="px-5 py-2 bg-[#22577a] text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 text-sm flex items-center gap-2">
                 {savingAssign ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />} Schedule Trip
               </button>
             </div>
@@ -951,7 +951,7 @@ function RequestsTab({ onView }: { onView: (r: Record<string, unknown>) => void 
       {decliningReq && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setDecliningReq(null); }}>
           <div className="bg-white w-full max-w-lg max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-xl shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-gradient-to-r from-red-500 to-red-600 px-5 py-4 text-white">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-[#b0432c] px-5 py-4 text-white">
               <div>
                 <h2 className="flex items-center gap-2 text-lg font-bold"><Ban className="w-5 h-5" /> Decline Transport Request</h2>
                 <p className="text-sm text-white/80">{decliningReq.residentName} · Rm {decliningReq.roomNumber} → {decliningReq.destination}</p>
@@ -1137,7 +1137,7 @@ function TripsTab({ onView }: { onView: (r: Record<string, unknown>) => void }) 
                     <Td align="right" className="font-medium">{trip.charge != null ? fmtCurrency(trip.charge) : "—"}</Td>
                     <Td>
                       <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => onView({ ...trip, raw: trip.raw, _tab: "trips" })} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
+                        <button onClick={() => onView({ ...trip, raw: trip.raw, _tab: "trips" })} className="p-1.5 rounded hover:bg-[#cfe0eb] text-[#1f4f70] transition" title="View"><Eye className="w-4 h-4" /></button>
                         {trip.status === "INSPECTION" && <button onClick={() => handleDepart(trip)} className="p-1.5 rounded hover:bg-amber-100 text-amber-600 transition" title="Depart"><Play className="w-4 h-4" /></button>}
                         {trip.status === "EN_ROUTE" && <button onClick={() => handleArrive(trip)} className="p-1.5 rounded hover:bg-purple-100 text-purple-600 transition" title="Arrive"><Flag className="w-4 h-4" /></button>}
                         {trip.status === "ARRIVED" && <button onClick={() => handleStartReturn(trip)} className="p-1.5 rounded hover:bg-cyan-100 text-cyan-600 transition" title="Return"><Undo2 className="w-4 h-4" /></button>}
@@ -1162,7 +1162,7 @@ function TripsTab({ onView }: { onView: (r: Record<string, unknown>) => void }) 
                 <p className="text-xs text-gray-600 flex items-center gap-1"><MapPin className="w-3 h-3 text-gray-400" /> {trip.origin} → {trip.destination}</p>
                 <p className="text-xs text-gray-500">{trip.vehicleName} · {trip.driverName} · {fmtDT(trip.scheduledAt)}</p>
                 <div className="flex gap-1 pt-1 flex-wrap">
-                  <button onClick={() => onView({ ...trip, raw: trip.raw, _tab: "trips" })} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition"><Eye className="w-3 h-3" /> View</button>
+                  <button onClick={() => onView({ ...trip, raw: trip.raw, _tab: "trips" })} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#1f4f70] bg-[#e0ecf2] hover:bg-[#cfe0eb] rounded transition"><Eye className="w-3 h-3" /> View</button>
                   {trip.status === "INSPECTION" && <button onClick={() => handleDepart(trip)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded transition"><Play className="w-3 h-3" /> Depart</button>}
                   {trip.status === "EN_ROUTE" && <button onClick={() => handleArrive(trip)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded transition"><Flag className="w-3 h-3" /> Arrive</button>}
                   {["ARRIVED", "RETURNING"].includes(trip.status) && <button onClick={() => handleComplete(trip)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 rounded transition"><CheckCircle2 className="w-3 h-3" /> Done</button>}
@@ -1179,7 +1179,7 @@ function TripsTab({ onView }: { onView: (r: Record<string, unknown>) => void }) 
       {cancellingTrip && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setCancellingTrip(null); }}>
           <div className="bg-white w-full max-w-lg max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-xl shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-gradient-to-r from-red-500 to-red-600 px-5 py-4 text-white">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-[#b0432c] px-5 py-4 text-white">
               <div>
                 <h2 className="flex items-center gap-2 text-lg font-bold"><Ban className="w-5 h-5" /> Cancel Trip</h2>
                 <p className="text-sm text-white/80">{cancellingTrip.residentName} · Rm {cancellingTrip.roomNumber} → {cancellingTrip.destination}</p>
@@ -1215,7 +1215,7 @@ function ViewModal({ row, onClose }: { row: Record<string, unknown>; onClose: ()
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold">{title}</h2>
           <button onClick={onClose} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
@@ -1330,7 +1330,7 @@ function TripDetail({ row }: { row: Record<string, unknown> }) {
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string; icon: LucideIcon; color: string }) {
   const COLORS: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50 border-blue-200",
+    blue: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     green: "text-green-600 bg-green-50 border-green-200",
     red: "text-red-600 bg-red-50 border-red-200",
     purple: "text-purple-600 bg-purple-50 border-purple-200",
@@ -1395,7 +1395,7 @@ function MaintFormModal({ title, form, onChange, onSave, onCancel, vehicles }: {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90dvh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold">{title}</h2>
           <button onClick={onCancel} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
@@ -1427,7 +1427,7 @@ function MaintFormModal({ title, form, onChange, onSave, onCancel, vehicles }: {
         </div>
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
           <button onClick={onCancel} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
-          <button onClick={onSave} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">{title.includes("Edit") ? "Save Changes" : "Create"}</button>
+          <button onClick={onSave} className="px-5 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">{title.includes("Edit") ? "Save Changes" : "Create"}</button>
         </div>
       </div>
     </div>

@@ -11,13 +11,13 @@ import { formatDurationHm } from "@/lib/utils";
 export const PRIORITY_META: Record<string, { label: string; slaMin: number; pill: string; dot: string }> = {
   EMERGENCY: { label: "Emergency", slaMin: 5, pill: "bg-red-100 text-red-700 border border-red-300", dot: "bg-red-500" },
   URGENT: { label: "Urgent", slaMin: 30, pill: "bg-orange-50 text-orange-700 border border-orange-200", dot: "bg-orange-500" },
-  ROUTINE: { label: "Routine", slaMin: 240, pill: "bg-blue-50 text-blue-700 border border-blue-200", dot: "bg-blue-500" },
+  ROUTINE: { label: "Routine", slaMin: 240, pill: "bg-[#e0ecf2] text-[#1b4763] border border-[#a9c6d8]", dot: "bg-[#22577a]" },
 };
 
 export const STATUS_PILL: Record<string, string> = {
   OPEN: "bg-amber-100 text-amber-700",
-  ACKNOWLEDGED: "bg-blue-100 text-blue-700",
-  IN_PROGRESS: "bg-indigo-100 text-indigo-700",
+  ACKNOWLEDGED: "bg-[#cfe0eb] text-[#1b4763]",
+  IN_PROGRESS: "bg-[#cfe0eb] text-[#1b4763]",
   RESOLVED: "bg-green-100 text-green-700",
   ESCALATED: "bg-red-100 text-red-700",
   CANCELLED: "bg-gray-100 text-gray-600",

@@ -87,12 +87,12 @@ const GEMINI_VOICES: GeminiVoice[] = [
 const ACCENT: Record<string, { on: string; dot: string }> = {
   amber: { on: "border-amber-400 bg-amber-50 ring-amber-400", dot: "bg-amber-400" },
   orange: { on: "border-orange-400 bg-orange-50 ring-orange-400", dot: "bg-orange-400" },
-  sky: { on: "border-sky-400 bg-sky-50 ring-sky-400", dot: "bg-sky-400" },
+  sky: { on: "border-[#4f93bd] bg-[#e0ecf2] ring-[#4f93bd]", dot: "bg-[#4f93bd]" },
   yellow: { on: "border-yellow-400 bg-yellow-50 ring-yellow-400", dot: "bg-yellow-400" },
   red: { on: "border-red-400 bg-red-50 ring-red-400", dot: "bg-red-400" },
   pink: { on: "border-pink-400 bg-pink-50 ring-pink-400", dot: "bg-pink-400" },
   emerald: { on: "border-emerald-400 bg-emerald-50 ring-emerald-400", dot: "bg-emerald-400" },
-  violet: { on: "border-violet-400 bg-violet-50 ring-violet-400", dot: "bg-violet-400" },
+  violet: { on: "border-[#4f93bd] bg-[#e0ecf2] ring-[#4f93bd]", dot: "bg-[#4f93bd]" },
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -478,7 +478,7 @@ export default function AIAssistantContent() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2 flex items-center gap-2">
             <Sparkles className="w-8 h-8 text-yellow-500" />
             AI Assistant
           </h1>
@@ -627,7 +627,7 @@ export default function AIAssistantContent() {
               <button
                 onClick={saveConfig}
                 disabled={savingConfig || !configDirty}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-black text-sm font-semibold hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#22577a] text-black text-sm font-semibold hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
               >
                 {savingConfig ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 Save personality
@@ -641,9 +641,9 @@ export default function AIAssistantContent() {
         {/* ── Chat column ─────────────────────────────────────────────── */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 flex flex-col h-[70vh] overflow-hidden">
           {/* header */}
-          <div className="px-5 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2 bg-gradient-to-r from-yellow-50 to-white">
+          <div className="px-5 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2 bg-[#f6eddb] ">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
+              <div className="w-9 h-9 rounded-full bg-[#22577a] flex items-center justify-center flex-shrink-0">
                 <Bot className="w-5 h-5 text-black" />
               </div>
               <div className="min-w-0">
@@ -691,7 +691,7 @@ export default function AIAssistantContent() {
                 <div
                   className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                     m.role === "user"
-                      ? "bg-gradient-to-br from-blue-500 to-indigo-600 text-black rounded-br-sm"
+                      ? "bg-[#22577a] text-black rounded-br-sm"
                       : "bg-gray-100 text-gray-800 rounded-bl-sm"
                   }`}
                 >
@@ -753,7 +753,7 @@ export default function AIAssistantContent() {
               <button
                 onClick={() => send(input)}
                 disabled={!input.trim() || thinking}
-                className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-black hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0 active:scale-95"
+                className="p-3 rounded-xl bg-[#22577a] text-black hover:shadow-lg transition disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0 active:scale-95"
               >
                 {thinking ? <LoaderCircle className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
               </button>
@@ -763,8 +763,8 @@ export default function AIAssistantContent() {
 
         {/* ── Knowledge base column ────────────────────────────────────── */}
         <div className="bg-white rounded-xl border border-gray-200 flex flex-col h-[70vh] overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2 bg-gradient-to-r from-blue-50 to-white">
-            <Database className="w-5 h-5 text-blue-500" />
+          <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2 bg-[#e0ecf2] to-white">
+            <Database className="w-5 h-5 text-[#22577a]" />
             <div>
               <p className="font-bold text-gray-900 leading-tight">Knowledge Base</p>
               <p className="text-xs text-gray-500">{docs.length} document{docs.length === 1 ? "" : "s"} · {formatBytes(used)}</p>
@@ -831,8 +831,8 @@ export default function AIAssistantContent() {
             ) : (
               docs.map((doc) => (
                 <div key={doc.id} className="group flex items-start gap-3 p-3 rounded-lg border border-gray-100 hover:border-gray-200 hover:bg-gray-50 transition">
-                  <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                    <FileText className="w-4 h-4 text-blue-500" />
+                  <div className="w-9 h-9 rounded-lg bg-[#e0ecf2] flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-4 h-4 text-[#22577a]" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{doc.name}</p>
@@ -859,7 +859,7 @@ export default function AIAssistantContent() {
       {speaking && (
         <button
           onClick={stopSpeaking}
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white rounded-full shadow-lg hover:bg-gray-800 transition"
+          className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-4 z-50 flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white rounded-full shadow-lg hover:bg-gray-800 transition md:bottom-6 md:left-6"
         >
           <X className="w-4 h-4" /> Stop speaking
         </button>

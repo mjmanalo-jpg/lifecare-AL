@@ -28,9 +28,9 @@ interface RoleAccess {
 
 const ROLES: RoleAccess[] = [
   { role: "SUPERADMIN", label: "Super Admin", icon: ShieldCheck, color: "text-purple-600 bg-purple-50", features: ["System Settings","Feature Matrix","User Management","Community Management","All Portals Access","Audit Logs","KPI Dashboards","Staff Registry","Admissions","Rooms","Inventory","Billing","Clinical Reports"] },
-  { role: "FACILITY_ADMIN", label: "Facility Admin", icon: Settings, color: "text-blue-600 bg-blue-50", features: ["Staff Management","Admissions","Rooms","Occupancy","Inventory","Billing","Incidents","Audit Logs","Vaccinations","Documents","Clinical Reports","Inventory Alerts","Daily Care Logs"] },
+  { role: "FACILITY_ADMIN", label: "Facility Admin", icon: Settings, color: "text-[#1f4f70] bg-[#e0ecf2]", features: ["Staff Management","Admissions","Rooms","Occupancy","Inventory","Billing","Incidents","Audit Logs","Vaccinations","Documents","Clinical Reports","Inventory Alerts","Daily Care Logs"] },
   { role: "NURSE", label: "Head Nurse", icon: Stethoscope, color: "text-emerald-600 bg-emerald-50", features: ["Tasks","Care Plans","Medications","MAR","Vitals","Incidents","Escalations","Daily Care Logs","Vaccinations","Documents","Care Team","Shift Reports","Follow-ups","Clinical Notes"] },
-  { role: "PHYSICIAN", label: "Physician", icon: Stethoscope, color: "text-indigo-600 bg-indigo-50", features: ["Care Plans","Orders","Rounds","Notes","Messages","Medications","Vitals","Incidents","Escalations","Daily Care Logs","Documents","Follow-ups","Consults"] },
+  { role: "PHYSICIAN", label: "Physician", icon: Stethoscope, color: "text-[#1f4f70] bg-[#e0ecf2]", features: ["Care Plans","Orders","Rounds","Notes","Messages","Medications","Vitals","Incidents","Escalations","Daily Care Logs","Documents","Follow-ups","Consults"] },
   { role: "CAREGIVER", label: "Caregiver", icon: Heart, color: "text-rose-600 bg-rose-50", features: ["Daily Care Logs","Tasks","Care Plans","Medications","MAR","Residents","Call Bells","Time Clock","Vaccinations","Documents","Follow-ups","Care Team","Escalations"] },
   { role: "FAMILY", label: "Family Member", icon: Users, color: "text-amber-600 bg-amber-50", features: ["Resident Profile","Care Plans","Documents","Vitals","Medications","Incidents","Messages","Appointments","Billing","Care Timeline"] },
   { role: "RESIDENT", label: "Resident", icon: Heart, color: "text-teal-600 bg-teal-50", features: ["Vitals","Medications","Documents","Care Plans","Vaccinations","Messages","Billing"] },
@@ -237,9 +237,9 @@ export default function FeatureMatrixDashboard({ initialTab = "overview" }: { in
 
   const stats = useMemo(() => [
     { label: "Organizations", value: orgQ.data?.length ?? 0, icon: Settings, color: "text-purple-600" },
-    { label: "Communities", value: commQ.data?.length ?? 0, icon: Settings, color: "text-indigo-600" },
+    { label: "Communities", value: commQ.data?.length ?? 0, icon: Settings, color: "text-[#1f4f70]" },
     { label: "Residents", value: resQ.data?.length ?? 0, icon: Users, color: "text-emerald-600" },
-    { label: "Staff", value: staffQ.data?.length ?? 0, icon: Stethoscope, color: "text-blue-600" },
+    { label: "Staff", value: staffQ.data?.length ?? 0, icon: Stethoscope, color: "text-[#1f4f70]" },
     { label: "Users", value: userQ.data?.length ?? 0, icon: Users, color: "text-amber-600" },
     { label: "Rooms", value: roomQ.data?.length ?? 0, icon: Bed, color: "text-teal-600" },
     { label: "Care Plans", value: planQ.data?.length ?? 0, icon: Target, color: "text-pink-600" },
@@ -263,16 +263,16 @@ export default function FeatureMatrixDashboard({ initialTab = "overview" }: { in
           <ShieldCheck className="w-5 h-5 text-purple-600" />
           SLMS Feature Matrix &amp; Access Control
         </h2>
-        <div className="flex items-center gap-1 border-b border-gray-200 overflow-x-auto">
+        <div className="flex items-center gap-1 border-b border-[var(--clinical-line)] overflow-x-auto">
           <button
             onClick={() => setView("overview")}
-            className={`flex items-center gap-1.5 whitespace-nowrap shrink-0 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${view === "overview" ? "border-purple-600 text-purple-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`flex items-center gap-1.5 whitespace-nowrap shrink-0 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${view === "overview" ? "border-[var(--clinical-panel)] text-[var(--clinical-ink)]" : "border-transparent text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}
           >
             <BarChart3 className="w-4 h-4" /> System Overview
           </button>
           <button
             onClick={() => setView("matrix")}
-            className={`flex items-center gap-1.5 whitespace-nowrap shrink-0 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${view === "matrix" ? "border-purple-600 text-purple-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`flex items-center gap-1.5 whitespace-nowrap shrink-0 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${view === "matrix" ? "border-[var(--clinical-panel)] text-[var(--clinical-ink)]" : "border-transparent text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}
           >
             <ShieldCheck className="w-4 h-4" /> Access Control Matrix
           </button>
@@ -309,7 +309,7 @@ export default function FeatureMatrixDashboard({ initialTab = "overview" }: { in
           <span className="text-sm font-bold text-emerald-600">{Math.round((implementedFeatures / totalFeatures) * 100)}%</span>
         </div>
         <div className="w-full bg-gray-100 rounded-full h-3">
-          <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-3 rounded-full transition-all" style={{ width: `${(implementedFeatures / totalFeatures) * 100}%` }} />
+          <div className="bg-[#277a55] h-3 rounded-full transition-all" style={{ width: `${(implementedFeatures / totalFeatures) * 100}%` }} />
         </div>
         <p className="text-xs text-gray-500 mt-1">{implementedFeatures} of {totalFeatures} SLMS spec features fully implemented</p>
       </div>

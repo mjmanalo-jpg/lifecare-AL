@@ -47,9 +47,9 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 const TYPE_PILL: Record<string, string> = {
-  PATROL: "bg-blue-100 text-blue-800 border-blue-200",
+  PATROL: "bg-[#cfe0eb] text-[#163c56] border-[#a9c6d8]",
   INCIDENT: "bg-red-100 text-red-800 border-red-200",
-  GATE_EVENT: "bg-indigo-100 text-indigo-800 border-indigo-200",
+  GATE_EVENT: "bg-[#cfe0eb] text-[#163c56] border-[#a9c6d8]",
   VISITOR: "bg-emerald-100 text-emerald-800 border-emerald-200",
   HAZARD: "bg-orange-100 text-orange-800 border-orange-200",
 };
@@ -256,14 +256,14 @@ export default function SecurityLogBoard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-slate-700 to-slate-900 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#334155] bg-clip-text text-transparent mb-2">
             Security Log
           </h1>
           <p className="text-gray-600">Guard patrols · incidents · gate events · visitor sign-ins · hazards</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
-          <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-slate-700 to-slate-900 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+          <button onClick={openCreate} className="flex items-center gap-2 px-4 py-2 bg-[#334155] text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
             <Plus className="w-4 h-4" /> New Log
           </button>
         </div>
@@ -390,7 +390,7 @@ export default function SecurityLogBoard() {
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-slate-700 to-slate-900 text-white p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#334155] text-white p-5 flex items-center justify-between z-10">
               <h2 className="text-xl font-bold">New Security Log</h2>
               <button onClick={() => setShowCreate(false)} className="p-2 hover:bg-white/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
@@ -470,7 +470,7 @@ export default function SecurityLogBoard() {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setShowCreate(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
-              <button onClick={handleCreate} className="px-5 py-2 bg-gradient-to-r from-slate-700 to-slate-900 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Record Log</button>
+              <button onClick={handleCreate} className="px-5 py-2 bg-[#334155] text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Record Log</button>
             </div>
           </div>
         </div>
@@ -483,10 +483,10 @@ export default function SecurityLogBoard() {
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string; icon: React.ComponentType<{ className?: string }>; color: string }) {
   const COLORS: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50 border-blue-200",
+    blue: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     green: "text-green-600 bg-green-50 border-green-200",
     red: "text-red-600 bg-red-50 border-red-200",
-    indigo: "text-indigo-600 bg-indigo-50 border-indigo-200",
+    indigo: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     amber: "text-amber-600 bg-amber-50 border-amber-200",
   };
   const c = COLORS[color] || COLORS.blue;

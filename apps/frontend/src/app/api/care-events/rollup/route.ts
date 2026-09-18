@@ -125,14 +125,15 @@ export async function GET(request: NextRequest) {
     prisma.careEvent.findMany({
       where: { communityId, createdAt: { gte: start } },
       select: {
-        residentId: true, residentName: true, shift: true,
+        id: true, residentId: true, residentName: true, shift: true,
+        eventName: true, outcome: true, observation: true,
         isException: true, immediateEscalation: true, reviewAlertRaised: true,
         actorId: true, actorName: true, createdAt: true,
       },
     }),
     prisma.resident.findMany({
       where: { communityId },
-      select: { id: true, firstName: true, lastName: true },
+      select: { id: true, firstName: true, lastName: true, roomNumber: true },
     }),
     // Today's roster, so a resident sitting at 0% can say WHY: scheduled care with
     // nobody rostered to deliver it. The uncovered resident is never filtered out —
@@ -153,6 +154,7 @@ export async function GET(request: NextRequest) {
   const residentName = new Map(
     residents.map((r) => [r.id, `${r.firstName ?? ""} ${r.lastName ?? ""}`.trim() || "Resident"]),
   );
+  const residentRoom = new Map(residents.map((r) => [r.id, r.roomNumber || ""]));
   const staffName = new Map<string, string>();
   for (const e of events) if (e.actorId && e.actorName) staffName.set(e.actorId, e.actorName);
 
@@ -220,11 +222,27 @@ export async function GET(request: NextRequest) {
   // honest measure of a caregiver's documented volume.
   let exceptions = 0, escalations = 0, charted = 0;
   const reassessResidents = new Set<string>();
+  // Per-occurrence exception detail for the board's Exceptions list — every charted
+  // non-completion (refused / unsafe / variance / clinical change) with who·where·why.
+  const exceptionList: { id: string; name: string; residentName: string; room: string; shift: RoutineShift | null; outcome: string; reason: string; caregiver: string; at: string }[] = [];
   for (const e of events) {
     const shift = normalizeShift(e.shift);
     if (shiftFilter && shift !== shiftFilter) continue;
     charted += 1;
-    if (e.isException) exceptions += 1;
+    if (e.isException) {
+      exceptions += 1;
+      exceptionList.push({
+        id: e.id,
+        name: e.eventName || "Care task",
+        residentName: e.residentName || residentName.get(e.residentId) || "Resident",
+        room: residentRoom.get(e.residentId) || "",
+        shift,
+        outcome: e.outcome || "",
+        reason: e.observation || "",
+        caregiver: e.actorName || "",
+        at: e.createdAt.toISOString(),
+      });
+    }
     if (e.immediateEscalation) escalations += 1;
     if (e.reviewAlertRaised) reassessResidents.add(e.residentId);
 
@@ -261,8 +279,9 @@ export async function GET(request: NextRequest) {
     reassessResidents: reassessResidents.size,
     charted,
     outcomes: [...outcomes.entries()].map(([outcome, n]) => ({ outcome, n })).sort((a, b) => b.n - a.n),
+    exceptionList: exceptionList.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 100),
     byResident: [...byResident.values()]
-      .map((b) => ({ ...b, uncoveredToday: !coveredToday.has(b.id) }))
+      .map((b) => ({ ...b, uncoveredToday: !coveredToday.has(b.id), room: residentRoom.get(b.id) || "" }))
       .sort(rank),
     byCaregiver: [...byCaregiver.values()].sort(rank),
   };

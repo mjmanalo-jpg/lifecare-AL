@@ -80,13 +80,13 @@ export default function FamilyDocuments() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><FileSignature className="w-7 h-7 text-blue-600" /> Documents &amp; Signatures</h1>
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><FileSignature className="w-7 h-7 text-[#1f4f70]" /> Documents &amp; Signatures</h1>
         <p className="text-gray-500 text-sm">Complete move-in tasks for <b>{residentName}</b> — e-sign forms and upload files from home.</p>
       </div>
 
       {/* E-sign forms */}
       <section className="rounded-xl border border-gray-200 bg-white p-5">
-        <h3 className="font-bold text-gray-900 flex items-center gap-2 mb-3"><PenLine className="w-5 h-5 text-blue-600" /> Forms to sign</h3>
+        <h3 className="font-bold text-gray-900 flex items-center gap-2 mb-3"><PenLine className="w-5 h-5 text-[#1f4f70]" /> Forms to sign</h3>
         <div className="space-y-2">
           {forms.map((form) => {
             const done = isSigned(form.name);
@@ -97,11 +97,11 @@ export default function FamilyDocuments() {
                   {form.description && <p className="text-xs text-gray-500">{form.description}</p>}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {form.fileUrl && <a href={form.fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline"><FileText className="w-3.5 h-3.5" /> View</a>}
+                  {form.fileUrl && <a href={form.fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-[#1f4f70] hover:underline"><FileText className="w-3.5 h-3.5" /> View</a>}
                   {done ? (
                     <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-700"><ShieldCheck className="w-4 h-4" /> Signed</span>
                   ) : (
-                    <button onClick={() => setSignForm(form)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700"><PenLine className="w-4 h-4" /> E-sign</button>
+                    <button onClick={() => setSignForm(form)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1f4f70] text-white text-xs font-semibold hover:bg-[#1b4763]"><PenLine className="w-4 h-4" /> E-sign</button>
                   )}
                 </div>
               </div>
@@ -113,7 +113,7 @@ export default function FamilyDocuments() {
 
       {/* Upload */}
       <section className="rounded-xl border border-gray-200 bg-white p-5">
-        <h3 className="font-bold text-gray-900 flex items-center gap-2 mb-3"><Upload className="w-5 h-5 text-blue-600" /> Upload files</h3>
+        <h3 className="font-bold text-gray-900 flex items-center gap-2 mb-3"><Upload className="w-5 h-5 text-[#1f4f70]" /> Upload files</h3>
         <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
           {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Choose a file (ID, insurance, records…)
           <input type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ""; }} />
@@ -134,7 +134,7 @@ export default function FamilyDocuments() {
             {files.map((d) => (
               <div key={s(d.id)} className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 p-3">
                 <span className="text-sm text-gray-800 flex items-center gap-2 min-w-0"><FileText className="w-4 h-4 text-gray-400" /> <span className="truncate">{s(d.title) || s(d.fileName)}</span></span>
-                {d.fileUrl && <a href={s(d.fileUrl)} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs inline-flex items-center gap-1 shrink-0"><Download className="w-3.5 h-3.5" /> Open</a>}
+                {d.fileUrl && <a href={s(d.fileUrl)} target="_blank" rel="noopener noreferrer" className="text-[#1f4f70] hover:underline text-xs inline-flex items-center gap-1 shrink-0"><Download className="w-3.5 h-3.5" /> Open</a>}
               </div>
             ))}
           </div>

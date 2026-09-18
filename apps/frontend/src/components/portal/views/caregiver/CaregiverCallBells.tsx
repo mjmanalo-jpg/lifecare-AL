@@ -251,7 +251,7 @@ export default function CaregiverCallBells() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <BellRing className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Call Bells
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -263,7 +263,7 @@ export default function CaregiverCallBells() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
-          <button onClick={() => setCreating(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+          <button onClick={() => setCreating(true)} className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
             <Plus className="w-4 h-4" /> New Call Bell
           </button>
         </div>
@@ -304,15 +304,15 @@ export default function CaregiverCallBells() {
                       </p>
                     </div>
                     <span className={`px-2 py-1 rounded text-xs font-semibold border ${STATUS_META[b.status].badge}`}>{STATUS_META[b.status].label}</span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-start justify-end">
                       {b.status === "PENDING" && (
                         <button onClick={() => void handleRespond(b)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-400 to-amber-500 text-white text-sm font-semibold rounded-lg hover:shadow transition active:scale-95">
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#b58a2e] text-white text-sm font-semibold rounded-lg hover:shadow transition active:scale-95">
                           <HandHelping className="w-4 h-4" /> Respond
                         </button>
                       )}
                       <button onClick={() => void handleResolve(b)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-green-400 to-green-500 text-white text-sm font-semibold rounded-lg hover:shadow transition active:scale-95">
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#4fa77e] text-white text-sm font-semibold rounded-lg hover:shadow transition active:scale-95">
                         <CheckCircle2 className="w-4 h-4" /> Resolve
                       </button>
                       <button onClick={() => void handleCancel(b)} title="Cancel (false alarm)"
@@ -396,7 +396,7 @@ export default function CaregiverCallBells() {
       {resolveFor && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setResolveFor(null); }}>
           <div className="bg-white w-full max-w-md max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-gradient-to-r from-green-500 to-green-600 px-5 py-4 text-white">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-[#277a55] px-5 py-4 text-white">
               <h2 className="flex items-center gap-2 text-lg font-bold"><CheckCircle2 className="w-5 h-5" /> Resolve Call Bell</h2>
               <button onClick={() => setResolveFor(null)} className="rounded-lg p-1.5 transition hover:bg-white/20"><X className="w-5 h-5" /></button>
             </div>
@@ -413,7 +413,7 @@ export default function CaregiverCallBells() {
             </div>
             <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
               <button onClick={() => setResolveFor(null)} disabled={resolveBusy} className="rounded-lg px-5 py-2 text-sm text-gray-700 transition hover:bg-gray-100 disabled:opacity-50">Cancel</button>
-              <button onClick={() => void submitResolve()} disabled={resolveBusy} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-6 py-2 text-sm font-semibold text-white transition hover:shadow-lg disabled:opacity-50">{resolveBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} {resolveBusy ? "Resolving…" : "Resolve"}</button>
+              <button onClick={() => void submitResolve()} disabled={resolveBusy} className="inline-flex items-center gap-2 rounded-lg bg-[#277a55] px-6 py-2 text-sm font-semibold text-white transition hover:shadow-lg disabled:opacity-50">{resolveBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} {resolveBusy ? "Resolving…" : "Resolve"}</button>
             </div>
           </div>
         </div>
@@ -549,7 +549,7 @@ function NewBellModal({ residents, onClose, onSaved }: {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[92vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold flex items-center gap-2"><BellRing className="w-5 h-5" /> New Call Bell</h2>
           <button onClick={onClose} className="p-2 hover:bg-black/10 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
@@ -579,7 +579,7 @@ function NewBellModal({ residents, onClose, onSaved }: {
           <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
             <button type="button" onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
             <button type="submit" disabled={!valid || saving}
-              className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+              className="flex items-center gap-2 px-6 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
               <UserRound className="w-4 h-4" /> {saving ? "Raising…" : "Raise Bell"}
             </button>
           </div>
@@ -593,7 +593,7 @@ function NewBellModal({ residents, onClose, onSaved }: {
 
 const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
   gray: { wrap: "bg-white border-gray-200", icon: "text-gray-500", value: "text-gray-900" },
-  blue: { wrap: "bg-blue-50 border-blue-200", icon: "text-blue-500", value: "text-blue-600" },
+  blue: { wrap: "bg-[#e0ecf2] border-[#a9c6d8]", icon: "text-[#22577a]", value: "text-[#1f4f70]" },
   red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
   green: { wrap: "bg-green-50 border-green-200", icon: "text-green-500", value: "text-green-600" },
   amber: { wrap: "bg-amber-50 border-amber-200", icon: "text-amber-500", value: "text-amber-600" },

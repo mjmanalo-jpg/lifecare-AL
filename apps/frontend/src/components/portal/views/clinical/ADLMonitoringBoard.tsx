@@ -208,17 +208,17 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE", focusResid
             <div className="grid gap-px bg-white/15 sm:grid-cols-[1.35fr_repeat(3,1fr)]">
               <div className="bg-[var(--clinical-panel)] p-5 sm:p-6">
                 <div className="flex items-center justify-between gap-4">
-                  <div><p className="text-sm font-semibold text-blue-100">ADL documentation coverage</p><p className="mt-1 text-3xl font-bold tracking-[-0.03em]">{coverage}%</p></div>
+                  <div><p className="text-sm font-semibold text-[#cfe0eb]">ADL documentation coverage</p><p className="mt-1 text-3xl font-bold tracking-[-0.03em]">{coverage}%</p></div>
                   <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15"><Activity className="h-6 w-6" /></div>
                 </div>
                 <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-black/20" aria-label={`${documentedResidents} of ${residents.length} residents documented`}>
                   <div className="h-full rounded-full bg-white transition-[width] duration-500" style={{ width: `${coverage}%` }} />
                 </div>
-                <p className="mt-2 text-xs text-blue-100">{documentedResidents} of {residents.length} residents have an ADL entry this shift</p>
+                <p className="mt-2 text-xs text-[#cfe0eb]">{documentedResidents} of {residents.length} residents have an ADL entry this shift</p>
               </div>
-              <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Entries recorded</p><p className="mt-2 text-2xl font-bold tabular-nums">{scopeLogs.length}</p></div>
-              <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Still due</p><p className="mt-2 text-2xl font-bold tabular-nums">{stillDue}</p></div>
-              <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Decline flags</p><p className="mt-2 text-2xl font-bold tabular-nums">{shiftDeclines.length}</p></div>
+              <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-[#cfe0eb]">Entries recorded</p><p className="mt-2 text-2xl font-bold tabular-nums">{scopeLogs.length}</p></div>
+              <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-[#cfe0eb]">Still due</p><p className="mt-2 text-2xl font-bold tabular-nums">{stillDue}</p></div>
+              <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-[#cfe0eb]">Decline flags</p><p className="mt-2 text-2xl font-bold tabular-nums">{shiftDeclines.length}</p></div>
             </div>
           </section>
           )}

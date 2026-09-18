@@ -5,7 +5,7 @@
 @theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-primary: #3b82f6;
+  --color-primary: #22577a;
   --color-surface: var(--surface);
   --color-surface-hover: var(--surface-hover);
   --color-border: var(--border);
@@ -41,27 +41,32 @@
     --primary-foreground: #ffffff;
     --secondary: #27272a;
     --secondary-foreground: #fafafa;
-    --destructive: #ef4444;
+    --destructive: #b0432c;
     --destructive-foreground: #ffffff;
     --accent: #27272a;
     --accent-foreground: #fafafa;
     --input: rgba(255, 255, 255, 0.14);
-    --ring: #3b82f6;
+    --ring: #4f93bd;
     /* Clinical UI kit — dark. "Clean clinical SaaS": cool slate neutrals, an
        indigo primary, and emerald/amber/rose status. Panel = primary brand,
        coral token = attention/danger (rose), amber = caution, green = positive. */
-    --clinical-ground: #0a0e17;     /* page ground — cool slate-black */
-    --clinical-surface: #141a26;    /* card */
-    --clinical-surface-2: #1e2634;  /* raised / hover */
-    --clinical-ink: #f1f5f9;
-    --clinical-ink-soft: #cbd5e1;
-    --clinical-muted: #94a3b8;
-    --clinical-line: rgba(255, 255, 255, 0.08);
-    --clinical-line-strong: rgba(255, 255, 255, 0.14);
-    --clinical-panel: #6366f1;      /* PRIMARY — indigo (lifted for dark) */
-    --clinical-coral: #fb7185;      /* attention / danger — rose */
-    --clinical-amber: #fbbf24;      /* caution */
-    --clinical-green: #34d399;      /* positive — emerald */
+    --clinical-ground: #0c1519;     /* page ground — deep teal-charcoal */
+    --clinical-surface: #14201f;    /* card */
+    --clinical-surface-2: #1d2b2a;  /* raised / hover */
+    --clinical-ink: #eef4f2;
+    --clinical-ink-soft: #cdd8d5;
+    --clinical-muted: #93a29e;
+    --clinical-line: rgba(200, 222, 218, 0.10);
+    --clinical-line-strong: rgba(200, 222, 218, 0.20);
+    --clinical-panel: #4f93bd;      /* PRIMARY — LifeCare teal (lifted for dark) */
+    --clinical-panel-hover: #5ea3cc;
+    --clinical-panel-soft: rgba(79, 147, 189, 0.17);
+    --clinical-accent2: #6fd6a6;    /* SECONDARY — mint (lifted) */
+    --clinical-accent2-soft: rgba(111, 214, 166, 0.16);
+    --clinical-coral: #e08a76;      /* attention / danger */
+    --clinical-amber: #d6ab63;      /* caution */
+    --clinical-green: #6fd6a6;      /* positive — brand mint */
+    --clinical-focus: #5fbfc0;      /* teal focus ring */
   }
 
   :root.light {
@@ -79,27 +84,32 @@
     --primary-foreground: #ffffff;
     --secondary: #f4f4f5;
     --secondary-foreground: #18181b;
-    --destructive: #ef4444;
+    --destructive: #b0432c;
     --destructive-foreground: #ffffff;
     --accent: #f4f4f5;
     --accent-foreground: #18181b;
     --input: #e4e4e7;
-    --ring: #3b82f6;
+    --ring: #22577a;
     /* Clinical UI kit — light. "Clean clinical SaaS": cool slate neutrals, an
        indigo primary, emerald/amber/rose status. All accents meet WCAG AA on
        white. Panel = primary brand, coral = attention/danger (rose). */
-    --clinical-ground: #f3f5fa;     /* clean cool near-white (no green) */
+    --clinical-ground: #f4f6f7;     /* neutral cool near-white (cream paused) */
     --clinical-surface: #ffffff;
-    --clinical-surface-2: #eef1f7;
-    --clinical-ink: #0f172a;        /* slate-900 */
-    --clinical-ink-soft: #334155;   /* slate-700 */
-    --clinical-muted: #5b6577;      /* AA on white + ground */
-    --clinical-line: #e6e9f0;
-    --clinical-line-strong: #cfd5e2;
-    --clinical-panel: #4f46e5;      /* PRIMARY — indigo-600 */
-    --clinical-coral: #e11d48;      /* attention / danger — rose-600 */
-    --clinical-amber: #b45309;      /* caution — amber-700 (AA) */
-    --clinical-green: #047857;      /* positive — emerald-700 (AA) */
+    --clinical-surface-2: #edf0f1;
+    --clinical-ink: #22323a;        /* deep charcoal-teal — headings */
+    --clinical-ink-soft: #3c3a47;   /* LifeCare charcoal — body */
+    --clinical-muted: #6a6b6f;      /* AA on white + cream */
+    --clinical-line: #e7e8db;
+    --clinical-line-strong: #d3d5c5;
+    --clinical-panel: #22577a;      /* PRIMARY — LifeCare deep teal-navy */
+    --clinical-panel-hover: #1b4763;
+    --clinical-panel-soft: #e0ecf2; /* active nav / soft chips */
+    --clinical-accent2: #57cc99;    /* SECONDARY — LifeCare mint */
+    --clinical-accent2-soft: #e2f6ec;
+    --clinical-coral: #b0432c;      /* attention / danger (AA) */
+    --clinical-amber: #8f6410;      /* caution — amber-700 (AA) */
+    --clinical-green: #277a55;      /* positive — brand mint, AA */
+    --clinical-focus: #38a3a5;      /* teal focus ring */
   }
 
   html, body {
@@ -135,11 +145,9 @@
   transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-/* Heading Text Gradient Utility */
+/* Heading utility — flat solid ink (no gradient text, per clinical redesign) */
 .heading-gradient {
-  background: linear-gradient(to bottom, var(--heading-from), var(--heading-to));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--heading-from);
 }
 
 /* LifeCare Glow Effect */
@@ -270,20 +278,23 @@ p, blockquote, li {
    ============================================================ */
 :root:not(.light) {
   color-scheme: dark;
-  --clinical-ground: #080d16;
-  --clinical-surface: #111927;
-  --clinical-surface-2: #1a2535;
-  --clinical-surface-raised: #202d40;
-  --clinical-surface-inset: #0c1320;
-  --clinical-ink: #f4f7fb;
-  --clinical-ink-soft: #d2dbea;
-  --clinical-muted: #9dabc0;
-  --clinical-line: rgba(190, 211, 239, 0.11);
-  --clinical-line-strong: rgba(190, 211, 239, 0.21);
-  --clinical-panel: #5b5ee5;
-  --clinical-panel-hover: #6a6df0;
-  --clinical-focus: #a5b4fc;
-  --clinical-overlay: rgba(3, 7, 18, 0.76);
+  --clinical-ground: #0c1519;
+  --clinical-surface: #14201f;
+  --clinical-surface-2: #1d2b2a;
+  --clinical-surface-raised: #24332f;
+  --clinical-surface-inset: #0a1211;
+  --clinical-ink: #eef4f2;
+  --clinical-ink-soft: #cdd8d5;
+  --clinical-muted: #93a29e;
+  --clinical-line: rgba(200, 222, 218, 0.10);
+  --clinical-line-strong: rgba(200, 222, 218, 0.20);
+  --clinical-panel: #4f93bd;
+  --clinical-panel-hover: #5ea3cc;
+  --clinical-panel-soft: rgba(79, 147, 189, 0.17);
+  --clinical-accent2: #6fd6a6;
+  --clinical-accent2-soft: rgba(111, 214, 166, 0.16);
+  --clinical-focus: #5fbfc0;
+  --clinical-overlay: rgba(4, 10, 12, 0.76);
   --clinical-shadow: 0 18px 42px -28px rgba(0, 0, 0, 0.9);
 }
 
@@ -568,11 +579,11 @@ p, blockquote, li {
 .al-swal2-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* Confirm — semantic variants derived from the call's intent. */
-.swal2-confirm.al-swal2-confirm { color: #ffffff; background: var(--color-primary); box-shadow: 0 4px 12px -4px rgba(59, 130, 246, 0.5); }
-.swal2-confirm.al-swal2-confirm--info { background: var(--color-primary); box-shadow: 0 4px 12px -4px rgba(59, 130, 246, 0.5); }
-.swal2-confirm.al-swal2-confirm--success { background: #16a34a; box-shadow: 0 4px 12px -4px rgba(22, 163, 74, 0.6); }
-.swal2-confirm.al-swal2-confirm--warning { background: #d97706; box-shadow: 0 4px 12px -4px rgba(217, 119, 6, 0.6); }
-.swal2-confirm.al-swal2-confirm--danger { background: var(--destructive); box-shadow: 0 4px 12px -4px rgba(239, 68, 68, 0.5); }
+.swal2-confirm.al-swal2-confirm { color: #ffffff; background: var(--color-primary); box-shadow: 0 4px 12px -4px rgba(34, 87, 122, 0.5); }
+.swal2-confirm.al-swal2-confirm--info { background: var(--color-primary); box-shadow: 0 4px 12px -4px rgba(34, 87, 122, 0.5); }
+.swal2-confirm.al-swal2-confirm--success { background: #277a55; box-shadow: 0 4px 12px -4px rgba(39, 122, 85, 0.55); }
+.swal2-confirm.al-swal2-confirm--warning { background: #8f6410; box-shadow: 0 4px 12px -4px rgba(143, 100, 16, 0.55); }
+.swal2-confirm.al-swal2-confirm--danger { background: var(--destructive); box-shadow: 0 4px 12px -4px rgba(176, 67, 44, 0.45); }
 
 /* Cancel — neutral secondary surface. */
 .swal2-cancel.al-swal2-cancel {
@@ -678,6 +689,15 @@ p, blockquote, li {
 
 .clinical-portal-content .text-white {
   color: #fff;
+}
+
+/* Headings/paragraphs inside a white-on-dark bar (modal title bars, coloured
+   card headers) must INHERIT the white — otherwise the `.clinical-portal-content
+   h1/h2/h3 { color: --clinical-ink }` rules above win over the parent's inherited
+   white (a direct rule beats inheritance) and the title renders dark-on-dark.
+   Specificity (0,2,0) here beats those heading rules (0,1,1). */
+.clinical-portal-content .text-white :where(h1, h2, h3, h4, h5, h6, p) {
+  color: inherit;
 }
 
 .clinical-portal-content :where(h1, h2, h3) + p {
@@ -847,26 +867,10 @@ p, blockquote, li {
   background-color: var(--clinical-surface-2);
 }
 
-/* Tabs read as one control family rather than unrelated page-specific buttons. */
-.clinical-portal-content [role="tablist"] {
-  gap: 0.25rem;
-  padding: 0.25rem;
-  border: 1px solid var(--clinical-line);
-  border-radius: 0.875rem;
-  background-color: var(--clinical-surface-2);
-}
-
-.clinical-portal-content [role="tab"] {
-  min-height: 2.5rem;
-  border-radius: 0.625rem;
-  color: var(--clinical-muted);
-}
-
-.clinical-portal-content [role="tab"][aria-selected="true"] {
-  background-color: var(--clinical-surface);
-  color: var(--clinical-ink);
-  box-shadow: 0 4px 14px -12px rgba(15, 23, 42, 0.6);
-}
+/* Tab appearance is owned per-component: section-nav (HubTabs, Care Plan Reviews,
+   Shift Endorsement) uses a flush underline; in-board filters use segmented pills.
+   No global [role="tablist"] override here — it out-specified the underline utilities
+   and force-pilled every nav into an overlapping white tab. */
 
 /* Dark mode is composed as a navy surface hierarchy rather than a mechanical
    inversion. Inset controls recede, cards stay readable, and primary indigo
@@ -951,16 +955,6 @@ p, blockquote, li {
 :root:not(.light) .clinical-portal-content select option {
   background-color: var(--clinical-surface-raised);
   color: var(--clinical-ink);
-}
-
-:root:not(.light) .clinical-portal-content [role="tablist"] {
-  background-color: var(--clinical-surface-inset);
-  border-color: var(--clinical-line-strong);
-}
-
-:root:not(.light) .clinical-portal-content [role="tab"][aria-selected="true"] {
-  background-color: var(--clinical-surface-raised);
-  box-shadow: 0 7px 18px -12px rgba(0, 0, 0, 0.95);
 }
 
 :root:not(.light) .clinical-portal-content :where(button, a, input, select, textarea):focus-visible {

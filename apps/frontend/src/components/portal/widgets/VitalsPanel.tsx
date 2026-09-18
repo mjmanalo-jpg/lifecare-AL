@@ -27,7 +27,7 @@ const vitalConfig: Record<string, { icon: React.ComponentType<{ className?: stri
   },
   BLOOD_PRESSURE: {
     icon: Activity,
-    color: "text-blue-600",
+    color: "text-[#1f4f70]",
     range: [90, 140],
   },
   OXYGEN: {

@@ -360,12 +360,12 @@ export default function PreAdmissionAssessmentForm({ clinicianRole = "NURSE" }: 
             const top = due ? "coral" : a.status === "VALIDATED" ? "teal" : a.status === "COMPLETED" ? "green" : "amber";
             return (
               <ClinicalCard key={a.id} top={top} className="p-4 sm:p-5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0 sm:flex-1">
                     <h3 className="font-bold text-[var(--clinical-ink)] truncate">{a.residentName || "Unnamed prospect"}</h3>
                     <p className="text-xs text-[var(--clinical-muted)] mt-0.5">{a.referralSource ? `Referral: ${a.referralSource} · ` : ""}{a.dateOfAssessment || (a.updatedAt || "").slice(0, 10)}</p>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0 sm:justify-end">
                     {a.status === "VALIDATED" ? <StatusPill status="APPROVED">Validated</StatusPill> : <StatusPill status={a.status} />}
                     <button onClick={() => openEdit(a)} aria-label="Edit form" className="p-2 rounded-lg text-[var(--clinical-ink-soft)] hover:bg-[var(--clinical-surface-2)]"><Pencil className="w-4 h-4" /></button>
                     <button onClick={() => remove(a)} aria-label="Delete" className="p-2 rounded-lg text-[var(--clinical-coral)] hover:bg-[var(--clinical-surface-2)]"><Trash2 className="w-4 h-4" /></button>

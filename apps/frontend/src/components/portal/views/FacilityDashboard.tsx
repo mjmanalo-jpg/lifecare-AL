@@ -226,7 +226,7 @@ export default function FacilityDashboard() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
             <ShiftIcon className="w-6 h-6 text-yellow-500 flex-shrink-0" />
-            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">{shift.greeting} — Facility Operations</span>
+            <span className="bg-[#22577a] bg-clip-text text-transparent">{shift.greeting} — Facility Operations</span>
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm mt-1">
             <span className="inline-flex items-center gap-1 text-green-600">
@@ -466,7 +466,7 @@ export default function FacilityDashboard() {
           <span className="text-sm font-bold text-gray-700">{activeStaff.length} / {staff.length} active</span>
         </div>
         <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-green-400 to-green-500 transition-all duration-500" style={{ width: `${staff.length ? Math.round((activeStaff.length / staff.length) * 100) : 0}%` }} />
+          <div className="h-full bg-[#4fa77e] transition-all duration-500" style={{ width: `${staff.length ? Math.round((activeStaff.length / staff.length) * 100) : 0}%` }} />
         </div>
       </div>
     </div>
@@ -474,7 +474,7 @@ export default function FacilityDashboard() {
 }
 
 const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
-  blue: { wrap: "bg-blue-50 border-blue-200", icon: "text-blue-500", value: "text-blue-600" },
+  blue: { wrap: "bg-[#e0ecf2] border-[#a9c6d8]", icon: "text-[#22577a]", value: "text-[#1f4f70]" },
   amber: { wrap: "bg-amber-50 border-amber-200", icon: "text-amber-500", value: "text-amber-600" },
   red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
   purple: { wrap: "bg-purple-50 border-purple-200", icon: "text-purple-500", value: "text-purple-600" },

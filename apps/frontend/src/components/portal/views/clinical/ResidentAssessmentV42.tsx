@@ -902,15 +902,17 @@ export default function ResidentAssessmentV42({ clinicianRole = "NURSE", embedde
             return (
               <ClinicalCard key={a.id} top={top} className="group flex flex-col gap-3.5 p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-24px_rgba(15,23,42,0.5)] sm:p-5">
                 {/* header — avatar · identity · status · action cluster */}
-                <div className="flex items-start gap-3">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold" style={{ backgroundColor: eff ? `color-mix(in srgb, ${LEVEL_COLOR[eff]} 15%, transparent)` : "var(--clinical-surface-2)", color: eff ? LEVEL_COLOR[eff] : "var(--clinical-ink-soft)", boxShadow: eff ? `inset 0 0 0 1px color-mix(in srgb, ${LEVEL_COLOR[eff]} 32%, transparent)` : "none" }}>
-                    {initials(a.layer1?.residentName || "")}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="truncate font-bold text-[var(--clinical-ink)]">{a.layer1?.residentName || "Unnamed resident"}</h3>
-                    <p className="mt-0.5 text-xs text-[var(--clinical-muted)]">{a.layer1?.assessmentDate || (a.updatedAt || "").slice(0, 10)} · {a.modelVersion}</p>
+                <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:gap-3">
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold" style={{ backgroundColor: eff ? `color-mix(in srgb, ${LEVEL_COLOR[eff]} 15%, transparent)` : "var(--clinical-surface-2)", color: eff ? LEVEL_COLOR[eff] : "var(--clinical-ink-soft)", boxShadow: eff ? `inset 0 0 0 1px color-mix(in srgb, ${LEVEL_COLOR[eff]} 32%, transparent)` : "none" }}>
+                      {initials(a.layer1?.residentName || "")}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate font-bold text-[var(--clinical-ink)]">{a.layer1?.residentName || "Unnamed resident"}</h3>
+                      <p className="mt-0.5 text-xs text-[var(--clinical-muted)]">{a.layer1?.assessmentDate || (a.updatedAt || "").slice(0, 10)} · {a.modelVersion}</p>
+                    </div>
                   </div>
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
                     {a.status === "VALIDATED" ? <StatusPill status="APPROVED">Validated</StatusPill> : <StatusPill status={a.status} />}
                     {locBadge(a.id)}
                     <div className="flex items-center gap-1">

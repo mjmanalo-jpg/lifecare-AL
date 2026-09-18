@@ -18,7 +18,7 @@ const SEVERITY_BADGE: Record<string, string> = {
   SEVERE: "bg-red-100 text-red-700", LIFE_THREATENING: "bg-red-200 text-red-800",
 };
 const FLAG_BADGE: Record<string, string> = {
-  NORMAL: "bg-green-100 text-green-700", LOW: "bg-blue-100 text-blue-700",
+  NORMAL: "bg-green-100 text-green-700", LOW: "bg-[#cfe0eb] text-[#1b4763]",
   HIGH: "bg-orange-100 text-orange-700", CRITICAL: "bg-red-100 text-red-700", ABNORMAL: "bg-amber-100 text-amber-700",
 };
 

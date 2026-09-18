@@ -331,6 +331,7 @@ export default function CaregiverScheduleBoard({ clinicianRole = "NURSE" }: { cl
       {form && (
         <AssignmentModal
           form={form} setForm={setForm} caregivers={caregivers} residents={residents}
+          schedules={schedules}
           saving={saving} onClose={() => setForm(null)} onSave={saveForm}
         />
       )}
@@ -533,12 +534,25 @@ function BreakGlassModal({ onClose }: { onClose: () => void }) {
 }
 
 // ── Assignment form modal ─────────────────────────────────────────────────────
-function AssignmentModal({ form, setForm, caregivers, residents, saving, onClose, onSave }: {
+function AssignmentModal({ form, setForm, caregivers, residents, schedules, saving, onClose, onSave }: {
   form: FormState; setForm: (f: FormState) => void;
   caregivers: { id: string; userId?: string; name: string }[];
   residents: { id: string; name: string; room: string }[];
+  schedules: CaregiverSchedule[];
   saving: boolean; onClose: () => void; onSave: () => void;
 }) {
+  // Residents already rostered to a caregiver for THIS date+shift can't be picked
+  // again (one caregiver per resident per shift). Editing keeps your own set
+  // selectable (skip form.id); other shifts are unaffected — the key is date+shift.
+  const takenElsewhere = useMemo(() => {
+    const s = new Set<string>();
+    for (const sc of schedules) {
+      if (sc.id === form.id) continue;
+      if (sc.date === form.date && sc.shift === form.shift) sc.residentIds.forEach((r) => s.add(r));
+    }
+    return s;
+  }, [schedules, form.date, form.shift, form.id]);
+  const available = useMemo(() => residents.filter((r) => !takenElsewhere.has(r.id)), [residents, takenElsewhere]);
   const toggle = (id: string) => {
     const set = new Set(form.residentIds);
     if (set.has(id)) set.delete(id); else set.add(id);
@@ -575,15 +589,15 @@ function AssignmentModal({ form, setForm, caregivers, residents, saving, onClose
             <div className="flex items-center justify-between mb-1">
               <MicroLabel>Residents ({form.residentIds.length} selected)</MicroLabel>
               <div className="text-xs">
-                <button type="button" onClick={() => setForm({ ...form, residentIds: residents.map((r) => r.id) })} className="text-[var(--clinical-panel)] hover:underline">Select all</button>
+                <button type="button" onClick={() => setForm({ ...form, residentIds: available.map((r) => r.id) })} className="text-[var(--clinical-panel)] hover:underline">Select all</button>
                 <span className="text-[var(--clinical-muted)] mx-1.5">|</span>
                 <button type="button" onClick={() => setForm({ ...form, residentIds: [] })} className="text-[var(--clinical-panel)] hover:underline">Clear</button>
               </div>
             </div>
             <div className="max-h-52 overflow-y-auto rounded-lg border divide-y scrollbar-thin" style={{ borderColor: "var(--clinical-line-strong)" }}>
-              {residents.length === 0 ? (
-                <p className="text-xs text-[var(--clinical-muted)] p-3">No residents found.</p>
-              ) : residents.map((r) => (
+              {available.length === 0 ? (
+                <p className="text-xs text-[var(--clinical-muted)] p-3">{residents.length === 0 ? "No residents found." : "All residents already have a caregiver for this shift."}</p>
+              ) : available.map((r) => (
                 <label key={r.id} className="flex items-center gap-2.5 px-3 py-1.5 text-sm text-[var(--clinical-ink-soft)] hover:bg-[var(--clinical-surface-2)] cursor-pointer" style={{ borderColor: "var(--clinical-line)" }}>
                   <input type="checkbox" checked={form.residentIds.includes(r.id)} onChange={() => toggle(r.id)} style={{ minHeight: 0, minWidth: 0 }} className="h-4 w-4 shrink-0 rounded accent-[var(--clinical-panel)]" />
                   <span className="truncate">{r.name} — Rm {r.room}</span>

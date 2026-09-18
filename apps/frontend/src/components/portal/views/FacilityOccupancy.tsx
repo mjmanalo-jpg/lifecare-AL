@@ -25,14 +25,14 @@ type Resident = ReturnType<typeof adaptResident>;
 
 const STATUS_STYLES: Record<string, { label: string; bg: string; text: string; border: string; icon: LucideIcon }> = {
   OCCUPIED:   { label: "Occupied",   bg: "bg-green-100",  text: "text-green-700",  border: "border-green-400",  icon: Users },
-  AVAILABLE:  { label: "Available",  bg: "bg-blue-100",   text: "text-blue-700",   border: "border-blue-400",   icon: DoorOpen },
+  AVAILABLE:  { label: "Available",  bg: "bg-[#cfe0eb]",   text: "text-[#1b4763]",   border: "border-[#4f93bd]",   icon: DoorOpen },
   MAINTENANCE:{ label: "Maintenance",bg: "bg-amber-100",  text: "text-amber-700",  border: "border-amber-400",  icon: Wrench },
   RESERVED:   { label: "Reserved",   bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-400", icon: Clock },
 };
 
 const ROOM_TYPE_COLORS: Record<string, string> = {
-  PRIVATE: "text-indigo-600 bg-indigo-50",
-  SEMI_PRIVATE: "text-sky-600 bg-sky-50",
+  PRIVATE: "text-[#1f4f70] bg-[#e0ecf2]",
+  SEMI_PRIVATE: "text-[#1f4f70] bg-[#e0ecf2]",
   WARD: "text-teal-600 bg-teal-50",
   SUITE: "text-rose-600 bg-rose-50",
 };
@@ -191,7 +191,7 @@ export default function FacilityOccupancy() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2">
             Facility Occupancy
           </h1>
           <p className="text-gray-600">Real-time occupancy management &mdash; beds, rooms, wings, and floors</p>
@@ -217,7 +217,7 @@ export default function FacilityOccupancy() {
         <div className="flex flex-wrap gap-4 text-sm">
           <span className="text-gray-600">Total Beds: <strong className="text-gray-900">{totalBeds}</strong></span>
           <span className="text-gray-600">Occupied: <strong className="text-green-600">{occupiedBeds}</strong></span>
-          <span className="text-gray-600">Available: <strong className="text-blue-600">{availableBeds}</strong></span>
+          <span className="text-gray-600">Available: <strong className="text-[#1f4f70]">{availableBeds}</strong></span>
           <span className="text-gray-600">Utilization: <strong className="text-purple-600">{occupancyRate}%</strong></span>
         </div>
       </div>
@@ -296,7 +296,7 @@ export default function FacilityOccupancy() {
                   </div>
                   <div className="flex gap-3 text-xs font-medium">
                     <span className="text-green-600">{floorStats.occupied} occupied</span>
-                    <span className="text-blue-600">{floorStats.available} free</span>
+                    <span className="text-[#1f4f70]">{floorStats.available} free</span>
                     {floorStats.maintenance > 0 && <span className="text-amber-600">{floorStats.maintenance} maintenance</span>}
                   </div>
                 </button>
@@ -362,7 +362,7 @@ export default function FacilityOccupancy() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => setViewingRoom(room)} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
+                        <button onClick={() => setViewingRoom(room)} className="p-1.5 rounded hover:bg-[#cfe0eb] text-[#1f4f70] transition" title="View"><Eye className="w-4 h-4" /></button>
                         <select value={room.status} onChange={e => quickStatus(room, e.target.value)}
                           className="text-xs border border-gray-200 rounded px-1.5 py-1 bg-white focus:outline-none">
                           <option value="OCCUPIED">Occupied</option>
@@ -456,9 +456,9 @@ export default function FacilityOccupancy() {
       {viewingRoom && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-400 to-blue-500 text-white p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-white p-5 flex items-center justify-between z-10">
               <h2 className="text-xl font-bold">Room {viewingRoom.roomNumber}</h2>
-              <button onClick={() => setViewingRoom(null)} className="p-2 hover:bg-blue-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+              <button onClick={() => setViewingRoom(null)} className="p-2 hover:bg-[#1f4f70]/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -513,7 +513,7 @@ export default function FacilityOccupancy() {
               </div>
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end">
-              <button onClick={() => setViewingRoom(null)} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition">Close</button>
+              <button onClick={() => setViewingRoom(null)} className="px-6 py-2 bg-[#22577a] hover:bg-[#1f4f70] text-white font-semibold rounded-lg transition">Close</button>
             </div>
           </div>
         </div>
@@ -526,7 +526,7 @@ export default function FacilityOccupancy() {
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string; icon: LucideIcon; color: string }) {
   const COLORS: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50 border-blue-200",
+    blue: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     green: "text-green-600 bg-green-50 border-green-200",
     amber: "text-amber-600 bg-amber-50 border-amber-200",
     purple: "text-purple-600 bg-purple-50 border-purple-200",
@@ -598,7 +598,7 @@ function RoomCard({ room, occupants, onView, onStatusChange }: {
           </div>
         )}
         <div className="flex gap-1.5 mt-2">
-          <button onClick={onView} className="flex-1 px-2 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition flex items-center justify-center gap-1">
+          <button onClick={onView} className="flex-1 px-2 py-1.5 text-xs font-medium text-[#1f4f70] bg-[#e0ecf2] hover:bg-[#cfe0eb] rounded transition flex items-center justify-center gap-1">
             <Eye className="w-3 h-3" /> View
           </button>
           <select value={room.status} onChange={e => onStatusChange(e.target.value)}

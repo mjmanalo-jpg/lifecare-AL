@@ -187,12 +187,12 @@ export default function AmbulanceBooking() {
       {/* Week calendar — one row per ambulance, 7 day columns */}
       <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <h2 className="font-bold text-gray-900 flex items-center gap-2"><CalendarDays className="w-5 h-5 text-blue-600" /> Weekly Calendar</h2>
+          <h2 className="font-bold text-gray-900 flex items-center gap-2"><CalendarDays className="w-5 h-5 text-[#1f4f70]" /> Weekly Calendar</h2>
           <div className="flex items-center gap-2">
             <button onClick={() => setWeekTs((t) => (t || startOfWeek(new Date()).getTime()) - 7 * DAY_MS)} className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50"><ChevronLeft className="w-4 h-4" /></button>
             <span className="text-sm font-semibold text-gray-700">{fmtDay(weekDays[0])} – {fmtDay(weekDays[6])}</span>
             <button onClick={() => setWeekTs((t) => (t || startOfWeek(new Date()).getTime()) + 7 * DAY_MS)} className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50"><ChevronRight className="w-4 h-4" /></button>
-            <button onClick={() => setWeekTs(startOfWeek(new Date()).getTime())} className="text-sm font-semibold text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-50">Today</button>
+            <button onClick={() => setWeekTs(startOfWeek(new Date()).getTime())} className="text-sm font-semibold text-[#1f4f70] px-2 py-1 rounded-lg hover:bg-[#e0ecf2]">Today</button>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -202,7 +202,7 @@ export default function AmbulanceBooking() {
                 <th className="text-left text-xs font-bold uppercase tracking-wide text-gray-500 px-3 py-2 w-40">Ambulance</th>
                 {weekDays.map((d) => {
                   const isToday = iso(d) === iso(new Date());
-                  return <th key={d.getTime()} className={`text-center text-xs font-semibold px-2 py-2 ${isToday ? "text-blue-700" : "text-gray-500"}`}>{d.toLocaleDateString([], { weekday: "short" })}<br />{d.getDate()}</th>;
+                  return <th key={d.getTime()} className={`text-center text-xs font-semibold px-2 py-2 ${isToday ? "text-[#1b4763]" : "text-gray-500"}`}>{d.toLocaleDateString([], { weekday: "short" })}<br />{d.getDate()}</th>;
                 })}
               </tr>
             </thead>
@@ -312,7 +312,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div><label className="block text-sm font-semibold text-gray-700 mb-1">{label}</label>{children}</div>;
 }
 
-const TONES: Record<string, string> = { red: "text-red-500", blue: "text-blue-500", green: "text-green-500" };
+const TONES: Record<string, string> = { red: "text-red-500", blue: "text-[#22577a]", green: "text-green-500" };
 function Stat({ label, value, icon: Icon, tone }: { label: string; value: number; icon: typeof Ambulance; tone: string }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4">

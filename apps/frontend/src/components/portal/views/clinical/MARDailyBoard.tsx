@@ -786,8 +786,8 @@ function SummaryView({ residents, meds, onBack }: { residents: Row[]; meds: Row[
         <MarStat value={prn} label="PRN Medications" accent="pending" />
       </div>
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search medication, resident, or prescriber…" className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
-        <select value={resFilter} onChange={(e) => setResFilter(e.target.value)} className="px-3 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40"><option value="">All Residents</option>{residents.map((r) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)}</option>)}</select>
+        <div className="relative flex-1"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search medication, resident, or prescriber…" className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40" /></div>
+        <select value={resFilter} onChange={(e) => setResFilter(e.target.value)} className="px-3 py-2.5 rounded-2xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40"><option value="">All Residents</option>{residents.map((r) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)}</option>)}</select>
       </div>
       <p className="text-sm font-bold text-green-700 flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4" /> ACTIVE MEDICATIONS ({filtered.length})</p>
       <div className="space-y-3">
@@ -798,10 +798,10 @@ function SummaryView({ residents, meds, onBack }: { residents: Row[]; meds: Row[
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-slate-900">{brand} {generic && <span className="text-xs font-normal text-slate-400">({generic})</span>}</p>
                 <p className="text-xs text-slate-500 mt-0.5"><b className="text-slate-600">Dose:</b> {s(m.dosage) || "NA"} · <b className="text-slate-600">Route:</b> {s(m.route) || "oral"} · <b className="text-slate-600">Freq:</b> {s(m.frequency)}{s(m.prescribedBy) ? <> · <b className="text-slate-600">Prescriber:</b> {s(m.prescribedBy)}</> : ""} · <b className="text-slate-600">Started:</b> {dayOf(m.startDate)}</p>
-                <div className="flex flex-wrap gap-1.5 mt-2">{isOnDemandFreq(s(m.frequency)) ? <span className="text-[11px] font-medium text-blue-600 border border-blue-200 rounded-lg px-2 py-0.5">On-demand</span> : parseSlots(s(m.frequency)).map((sl) => <span key={sl} className="text-[11px] font-medium text-blue-600 border border-blue-200 rounded-lg px-2 py-0.5">{SLOT_TIME[sl]}</span>)}</div>
+                <div className="flex flex-wrap gap-1.5 mt-2">{isOnDemandFreq(s(m.frequency)) ? <span className="text-[11px] font-medium text-[#1f4f70] border border-[#a9c6d8] rounded-lg px-2 py-0.5">On-demand</span> : parseSlots(s(m.frequency)).map((sl) => <span key={sl} className="text-[11px] font-medium text-[#1f4f70] border border-[#a9c6d8] rounded-lg px-2 py-0.5">{SLOT_TIME[sl]}</span>)}</div>
                 {s(m.reason) && <p className="text-xs italic text-slate-400 mt-1.5">{s(m.reason)}</p>}
               </div>
-              <div className="text-right shrink-0"><span className="text-[11px] font-semibold text-blue-600 border border-blue-200 rounded px-1.5 py-0.5">Rm {rn.room}</span><p className="text-xs text-slate-400 mt-1">{rn.name}</p></div>
+              <div className="text-right shrink-0"><span className="text-[11px] font-semibold text-[#1f4f70] border border-[#a9c6d8] rounded px-1.5 py-0.5">Rm {rn.room}</span><p className="text-xs text-slate-400 mt-1">{rn.name}</p></div>
             </div>
           </div>
         ); })}
@@ -865,7 +865,7 @@ function AddMedicationModal({ resident, med, vitalsRequired = false, medInventor
     } catch (e) { Swal.fire({ title: "Save failed", text: e instanceof Error ? e.message : "", icon: "error" }); }
     finally { setSaving(false); }
   };
-  const inp = "w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
+  const inp = "w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40";
   const lbl = "block text-sm font-bold text-slate-700 mb-1.5";
   const sec = "text-[11px] font-bold uppercase tracking-[0.09em] text-slate-400";
   return (
@@ -874,7 +874,7 @@ function AddMedicationModal({ resident, med, vitalsRequired = false, medInventor
         {/* Header */}
         <div className="flex items-start justify-between gap-3 px-6 py-5 border-b border-slate-100">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><Pill className="w-5 h-5" /></span>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#e0ecf2] text-[#1f4f70]"><Pill className="w-5 h-5" /></span>
             <div className="min-w-0">
               <h2 className="font-bold text-slate-900 text-lg leading-tight">{editing ? "Edit" : "Add"} Medication</h2>
               <p className="mt-0.5 truncate text-xs text-slate-500">{s(resident.name)}{s(resident.room) ? ` · Room ${s(resident.room)}` : ""}</p>
@@ -886,7 +886,7 @@ function AddMedicationModal({ resident, med, vitalsRequired = false, medInventor
         {/* Body */}
         <div className="px-6 py-5 overflow-y-auto flex-1 space-y-6">
           {!editing && (
-            <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3.5">
+            <div className="rounded-xl border border-[#a9c6d8] bg-[#e0ecf2]/60 p-3.5">
               <label className={lbl}>Add from inventory <span className="font-normal text-slate-500">(optional)</span></label>
               <select value={invPick} onChange={(e) => pickInventory(e.target.value)} disabled={medInv.length === 0} className={`${inp} disabled:opacity-60`}>
                 <option value="">{medInv.length === 0 ? "No medications in inventory yet" : "Choose a medication in stock…"}</option>
@@ -915,7 +915,7 @@ function AddMedicationModal({ resident, med, vitalsRequired = false, medInventor
               <div><label className={lbl}>Route <span className="text-red-500">*</span></label><select value={route} onChange={(e) => setRoute(e.target.value)} className={inp}>{ROUTES.map((r) => <option key={r} value={r}>{r}</option>)}</select></div>
             </div>
             <div><label className={lbl}>Frequency <span className="text-red-500">*</span></label><select value={frequency} onChange={(e) => setFrequency(e.target.value)} className={inp}><option value="">Select frequency</option>{FREQUENCIES.map((f) => <option key={f} value={f}>{f}</option>)}</select></div>
-            {frequency && <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-3.5 py-3"><label className={lbl}>Scheduled Times</label>{isOnDemandFreq(frequency) ? <p className="text-sm font-semibold text-blue-600">On-demand — nurse administers with a button, no fixed times.</p> : <><div className="flex flex-wrap gap-1.5">{parseSlots(frequency).map((sl) => <span key={sl} className="rounded-lg border border-blue-200 bg-white px-2 py-1 text-xs font-semibold text-blue-600">{SLOT_TIME[sl]}</span>)}</div><p className="mt-1.5 text-[11px] text-slate-400">Derived automatically from the frequency.</p></>}</div>}
+            {frequency && <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-3.5 py-3"><label className={lbl}>Scheduled Times</label>{isOnDemandFreq(frequency) ? <p className="text-sm font-semibold text-[#1f4f70]">On-demand — nurse administers with a button, no fixed times.</p> : <><div className="flex flex-wrap gap-1.5">{parseSlots(frequency).map((sl) => <span key={sl} className="rounded-lg border border-[#a9c6d8] bg-white px-2 py-1 text-xs font-semibold text-[#1f4f70]">{SLOT_TIME[sl]}</span>)}</div><p className="mt-1.5 text-[11px] text-slate-400">Derived automatically from the frequency.</p></>}</div>}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div><label className={lbl}>Start Date</label><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inp} /></div>
               <div><label className={lbl}>End Date</label><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inp} /></div>

@@ -76,7 +76,7 @@ export function relTime(ts: number, nowTs: number): string {
 export function TabLoading({ label = "Loading..." }: { label?: string }) {
   return (
     <div className="flex items-center justify-center py-10 text-gray-500">
-      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3" />
+      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#1f4f70] mr-3" />
       <span className="text-sm">{label}</span>
     </div>
   );
@@ -115,7 +115,7 @@ export function Panel({ title, icon: Icon, count, children }: { title: string; i
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Icon className="w-4 h-4 text-blue-500" /> {title}</h3>
+        <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Icon className="w-4 h-4 text-[#22577a]" /> {title}</h3>
         {typeof count === "number" && count > 0 && <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs font-bold">{count}</span>}
       </div>
       {children}
@@ -127,7 +127,7 @@ export function Panel({ title, icon: Icon, count, children }: { title: string; i
 
 const REPORT_TONES: Record<string, { wrap: string; icon: string; value: string }> = {
   gray: { wrap: "bg-white border-gray-200", icon: "text-gray-500", value: "text-gray-900" },
-  blue: { wrap: "bg-blue-50 border-blue-200", icon: "text-blue-500", value: "text-blue-600" },
+  blue: { wrap: "bg-[#e0ecf2] border-[#a9c6d8]", icon: "text-[#22577a]", value: "text-[#1f4f70]" },
   red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
   green: { wrap: "bg-green-50 border-green-200", icon: "text-green-500", value: "text-green-600" },
   rose: { wrap: "bg-rose-50 border-rose-200", icon: "text-rose-500", value: "text-rose-600" },

@@ -27,8 +27,8 @@ const alertConfig: Record<AlertType, { bg: string; border: string; icon: React.C
     icon: AlertCircle,
   },
   info: {
-    bg: "bg-blue-500/10",
-    border: "border-blue-500/20",
+    bg: "bg-[#22577a]/10",
+    border: "border-[#22577a]/20",
     icon: Info,
   },
   success: {
@@ -41,14 +41,14 @@ const alertConfig: Record<AlertType, { bg: string; border: string; icon: React.C
 const textConfig: Record<AlertType, string> = {
   error: "text-red-500",
   warning: "text-yellow-600",
-  info: "text-blue-500",
+  info: "text-[#22577a]",
   success: "text-green-500",
 };
 
 const iconConfig: Record<AlertType, string> = {
   error: "text-red-500",
   warning: "text-yellow-600",
-  info: "text-blue-500",
+  info: "text-[#22577a]",
   success: "text-green-500",
 };
 

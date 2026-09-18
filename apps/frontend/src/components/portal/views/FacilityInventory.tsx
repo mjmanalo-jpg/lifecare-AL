@@ -298,12 +298,12 @@ export default function FacilityInventory() {
   return (
     <div className="-m-4 sm:-m-6 p-4 sm:p-6 min-h-full space-y-5" style={{ background: "#FFFFFF" }}>
       {/* Tabs — Inventory stock list + embedded Purchase Requests workflow */}
-      <div className="flex gap-1 border-b border-[#E1E3D9]">
+      <div className="flex gap-1 border-b border-[var(--clinical-line)]">
         {([["inventory", "Inventory", Package], ["purchase", "Purchase Requests", ShoppingCart]] as const).map(([key, label, Icon]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${tab === key ? "border-[#2E4A48] text-[#2E4A48]" : "border-transparent text-[#8A8D82] hover:text-[#2B2B27]"}`}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition ${tab === key ? "border-[var(--clinical-panel)] text-[var(--clinical-ink)]" : "border-transparent text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}
           >
             <Icon className="w-4 h-4" /> {label}
           </button>

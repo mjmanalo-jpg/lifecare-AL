@@ -59,12 +59,12 @@ const currentShiftIdx = () => {
 };
 const SECTIONS = [
   { key: "generalCondition", label: "General Condition", icon: Heart, color: "text-rose-500" },
-  { key: "intakeElimination", label: "Intake & Elimination", icon: Droplets, color: "text-blue-500" },
+  { key: "intakeElimination", label: "Intake & Elimination", icon: Droplets, color: "text-[#22577a]" },
   { key: "adlMobility", label: "ADL & Mobility", icon: Accessibility, color: "text-purple-500" },
   { key: "skinWound", label: "Skin & Wound", icon: Shield, color: "text-amber-500" },
   { key: "behaviorCognitive", label: "Behavior & Cognitive", icon: Brain, color: "text-pink-500" },
   { key: "medicationIssues", label: "Medication Issues", icon: Pill, color: "text-green-500" },
-  { key: "appointmentsOrders", label: "Appointments & Orders", icon: Calendar, color: "text-indigo-500" },
+  { key: "appointmentsOrders", label: "Appointments & Orders", icon: Calendar, color: "text-[#22577a]" },
   { key: "incidentsEscalations", label: "Incidents & Escalations", icon: Siren, color: "text-red-500" },
 ] as const;
 const CHECKLIST = [
@@ -101,7 +101,7 @@ const STATUS_CLS: Record<ItemStatus, string> = {
 };
 const CLOSE_CLS: Record<CloseState, string> = {
   Resolved: "bg-emerald-50 border-emerald-200 text-emerald-700",
-  "Continue Monitoring": "bg-blue-50 border-blue-200 text-blue-700",
+  "Continue Monitoring": "bg-[#e0ecf2] border-[#a9c6d8] text-[#1b4763]",
   "Action Next Shift": "bg-amber-50 border-amber-200 text-amber-700",
   "Awaiting External Response": "bg-purple-50 border-purple-200 text-purple-700",
 };
@@ -152,7 +152,7 @@ function NotesBlock({ text }: { text: string }) {
         })}
       </ul>
       {lines.length > 4 && (
-        <button onClick={() => setOpen((v) => !v)} className="mt-1 text-xs font-semibold text-blue-600 hover:underline">
+        <button onClick={() => setOpen((v) => !v)} className="mt-1 text-xs font-semibold text-[#1f4f70] hover:underline">
           {open ? "Show less" : `Show ${lines.length - 4} more`}
         </button>
       )}
@@ -472,7 +472,7 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedde
           instead of floating right over empty space. Standalone page keeps the title row. */}
       <div className={`flex flex-wrap items-start justify-between gap-3 ${embedded ? "mb-3" : "mb-4"}`}>
         {!embedded && <div><h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Shift Endorsements</h1><p className="text-sm text-slate-500 mt-1">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p></div>}
-        <button onClick={() => setNewOpen(true)} className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 ${embedded ? "w-full" : "ml-auto"}`}><Plus className="w-4 h-4" /> New Endorsement</button>
+        <button onClick={() => setNewOpen(true)} className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763] ${embedded ? "w-full" : "ml-auto"}`}><Plus className="w-4 h-4" /> New Endorsement</button>
       </div>
 
       {pendingCount > 0 && (
@@ -482,9 +482,9 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedde
         </div>
       )}
 
-      <div className="flex items-center gap-5 border-b border-slate-200 mb-5">
+      <div className="flex items-center gap-5 border-b border-[var(--clinical-line)] mb-5">
         {([["today", "Today"], ["week", "This Week"], ["month", "This Month"]] as const).map(([v, label]) => (
-          <button key={v} onClick={() => setRange(v)} className={`pb-2.5 text-sm font-semibold border-b-2 -mb-px ${range === v ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500"}`}>{label}</button>
+          <button key={v} onClick={() => setRange(v)} className={`pb-2.5 text-sm font-semibold border-b-2 -mb-px outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--clinical-focus)] ${range === v ? "border-[var(--clinical-panel)] text-[var(--clinical-ink)]" : "border-transparent text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>{label}</button>
         ))}
       </div>
 
@@ -497,7 +497,7 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedde
                   {list.map((e) => (
                     <div key={e.id} className="rounded-2xl border border-slate-200 bg-white p-4">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${e.status === "ACKNOWLEDGED" ? "bg-green-100 text-green-700" : e.status === "SIGNED_OFF" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>{e.status === "ACKNOWLEDGED" ? "Acknowledged" : e.status === "SIGNED_OFF" ? "Signed Off" : "Pending"}</span>
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${e.status === "ACKNOWLEDGED" ? "bg-green-100 text-green-700" : e.status === "SIGNED_OFF" ? "bg-[#cfe0eb] text-[#1b4763]" : "bg-amber-100 text-amber-700"}`}>{e.status === "ACKNOWLEDGED" ? "Acknowledged" : e.status === "SIGNED_OFF" ? "Signed Off" : "Pending"}</span>
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-slate-200 text-slate-600">{e.shiftLabel} · {e.shiftRange}</span>
                       </div>
                       <p className="text-sm font-semibold text-slate-800 mt-2 flex items-center gap-1.5"><User className="w-4 h-4 text-slate-400" />{e.outgoingBy} → {e.incomingBy} <span className="font-normal text-slate-400 inline-flex items-center gap-1 ml-1"><Clock className="w-3.5 h-3.5" /> Signed {e.signedAt}</span></p>
@@ -521,7 +521,7 @@ export default function ShiftEndorsementBoard({ clinicianRole = "NURSE", embedde
                       {e.generalNotes && <NotesBlock text={e.generalNotes} />}
                       {/* 2-col grid on mobile (even alignment) → compact inline row from sm up. */}
                       <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-                        {e.status === "SIGNED_OFF" && !isAuthor(e) && <button onClick={() => setAckFor(e)} className="col-span-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 sm:w-auto sm:justify-start"><Check className="w-4 h-4" /> Acknowledge</button>}
+                        {e.status === "SIGNED_OFF" && !isAuthor(e) && <button onClick={() => setAckFor(e)} className="col-span-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#1f4f70] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#1b4763] sm:w-auto sm:justify-start"><Check className="w-4 h-4" /> Acknowledge</button>}
                         <button onClick={() => { setActiveId(e.id); setView("details"); }} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto sm:justify-start"><FileText className="w-4 h-4" /> Structured Details</button>
                         <button onClick={() => { setActiveId(e.id); setView("carryover"); }} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto sm:justify-start"><ArrowLeftRight className="w-4 h-4" /> Carry-Over & Sign-Off</button>
                         {canModify(e) && e.status !== "ACKNOWLEDGED" && <button onClick={() => setEditing(e)} className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto sm:justify-start"><Pencil className="w-4 h-4" /> Edit</button>}
@@ -596,7 +596,7 @@ function NewEndorsementModal({ existing, onClose, onSave, onDone }: { existing?:
     finally { setAiLoading(false); }
   };
   const submit = async () => { setSaving(true); try { const id = await persistDraft(); if (id) onDone(id, { shiftLabel: sh.label, shiftRange: sh.range }, isEdit); } finally { setSaving(false); } };
-  const ta = "w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
+  const ta = "w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40";
   const lbl = "text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 block";
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3">
@@ -605,7 +605,7 @@ function NewEndorsementModal({ existing, onClose, onSave, onDone }: { existing?:
         <div className="p-5 overflow-y-auto flex-1 space-y-4">
           <div><span className={lbl}>Shift Type</span>
             <div className="grid grid-cols-3 gap-2">
-              {SHIFT_TYPES.map((t, i) => <button key={t.label} onClick={() => setShiftIdx(i)} className={`px-2 py-2.5 rounded-xl text-center border ${shiftIdx === i ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"}`}><span className="block text-sm font-semibold">{t.label}</span><span className={`block text-[11px] ${shiftIdx === i ? "text-white/80" : "text-slate-400"}`}>{t.range}</span></button>)}
+              {SHIFT_TYPES.map((t, i) => <button key={t.label} onClick={() => setShiftIdx(i)} className={`px-2 py-2.5 rounded-xl text-center border ${shiftIdx === i ? "bg-[#1f4f70] text-white border-[#1f4f70]" : "bg-white text-slate-600 border-slate-200 hover:border-[#7fa9c2]"}`}><span className="block text-sm font-semibold">{t.label}</span><span className={`block text-[11px] ${shiftIdx === i ? "text-white/80" : "text-slate-400"}`}>{t.range}</span></button>)}
             </div>
           </div>
           <div><span className={lbl}>General Notes</span><textarea rows={2} value={general} onChange={(e) => setGeneral(e.target.value)} placeholder="Overall shift observations, incidents, concerns…" className={ta} /></div>
@@ -617,8 +617,8 @@ function NewEndorsementModal({ existing, onClose, onSave, onDone }: { existing?:
         </div>
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100">
           <button onClick={closeModal} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button onClick={saveDraft} disabled={saving || !hasContent()} title="Save what you've entered without finalizing — auto-saves as you type" className="px-4 py-2 rounded-xl text-sm font-semibold text-blue-700 border border-blue-200 hover:bg-blue-50 disabled:opacity-50">{savedTick ? "Draft saved ✓" : "Save Draft"}</button>
-          <button onClick={() => (isEdit ? submit() : setSignOpen(true))} disabled={saving} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? "Saving…" : isEdit ? "Save Changes" : "Create Endorsement"}</button>
+          <button onClick={saveDraft} disabled={saving || !hasContent()} title="Save what you've entered without finalizing — auto-saves as you type" className="px-4 py-2 rounded-xl text-sm font-semibold text-[#1b4763] border border-[#a9c6d8] hover:bg-[#e0ecf2] disabled:opacity-50">{savedTick ? "Draft saved ✓" : "Save Draft"}</button>
+          <button onClick={() => (isEdit ? submit() : setSignOpen(true))} disabled={saving} className="px-5 py-2 rounded-xl bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763] disabled:opacity-60">{saving ? "Saving…" : isEdit ? "Save Changes" : "Create Endorsement"}</button>
         </div>
       </div>
       <SignatureModal open={signOpen} onClose={() => setSignOpen(false)} onSigned={submit} title="Sign shift endorsement" description="Enter your 4-digit signing PIN to sign off and create this endorsement." />
@@ -692,8 +692,8 @@ function DetailsView({ e, residents, resName, onBack, update, buildSections, has
         <div className="mb-3"><h1 className="flex flex-wrap items-center gap-2 text-xl sm:text-2xl font-bold tracking-tight text-slate-900">Structured Endorsement Details{!canEdit && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">View only</span>}</h1><p className="text-sm text-slate-500 mt-0.5">Endorsement {e.number} — Per-resident clinical sections</p></div>
         {canEdit ? (
           <div className="flex items-center gap-2">
-            <button onClick={autoFillAll} disabled={filling} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-60"><Sparkles className="w-4 h-4 shrink-0" /> {filling ? "Filling…" : "Auto-fill from shift data"}</button>
-            <button onClick={addResident} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-600 px-2.5 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"><Plus className="w-4 h-4 shrink-0" /> Add Resident</button>
+            <button onClick={autoFillAll} disabled={filling} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#a9c6d8] bg-white px-2.5 py-1.5 text-sm font-semibold text-[#1b4763] hover:bg-[#e0ecf2] disabled:opacity-60"><Sparkles className="w-4 h-4 shrink-0" /> {filling ? "Filling…" : "Auto-fill from shift data"}</button>
+            <button onClick={addResident} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#1f4f70] px-2.5 py-1.5 text-sm font-semibold text-white hover:bg-[#1b4763]"><Plus className="w-4 h-4 shrink-0" /> Add Resident</button>
           </div>
         ) : (
           <span className="text-xs text-slate-400">Only {e.outgoingBy || "the logging clinician"} can edit this endorsement.</span>
@@ -708,9 +708,9 @@ function DetailsView({ e, residents, resName, onBack, update, buildSections, has
               return (
                 <div key={r.residentId} className={`rounded-2xl border overflow-hidden ${hasConcerns ? "border-amber-200" : "border-slate-200"}`}>
                   <div className={`flex items-center justify-between gap-2 px-4 py-3 ${hasConcerns ? "bg-amber-50/60" : "bg-slate-50/60"}`}>
-                    <div className="flex items-center gap-2.5"><span className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center"><User className="w-4 h-4 text-blue-500" /></span><div><p className="font-bold text-slate-900 flex items-center gap-2">{rn.name}{hasConcerns && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Has Concerns</span>}</p><p className="text-xs text-slate-400">Room {rn.room}</p></div></div>
+                    <div className="flex items-center gap-2.5"><span className="w-9 h-9 rounded-full bg-[#cfe0eb] flex items-center justify-center"><User className="w-4 h-4 text-[#22577a]" /></span><div><p className="font-bold text-slate-900 flex items-center gap-2">{rn.name}{hasConcerns && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Has Concerns</span>}</p><p className="text-xs text-slate-400">Room {rn.room}</p></div></div>
                     <div className="flex items-center gap-1">
-                      {canEdit && <button onClick={() => refillResident(r.residentId)} title="Re-fill from shift data" className="p-1.5 rounded-lg hover:bg-white/60 text-slate-400 hover:text-blue-600"><Sparkles className="w-4 h-4" /></button>}
+                      {canEdit && <button onClick={() => refillResident(r.residentId)} title="Re-fill from shift data" className="p-1.5 rounded-lg hover:bg-white/60 text-slate-400 hover:text-[#1f4f70]"><Sparkles className="w-4 h-4" /></button>}
                       {canEdit && <button onClick={() => update(e.id, (en) => ({ ...en, residents: en.residents.filter((x) => x.residentId !== r.residentId) }))} className="p-1.5 rounded-lg hover:bg-white/60 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>}
                     </div>
                   </div>
@@ -722,7 +722,7 @@ function DetailsView({ e, residents, resName, onBack, update, buildSections, has
                           {val.trim() && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-600">1</span>}
                           {open ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
                         </button>
-                        {open && <div className="px-4 pb-3">{canEdit ? <textarea rows={2} defaultValue={val} onBlur={(ev) => { if (ev.target.value !== val) setSection(r.residentId, sec.key, ev.target.value); }} placeholder={`${sec.label} notes for this shift…`} className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /> : <p className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-100 text-sm text-slate-700 whitespace-pre-wrap min-h-[2.5rem]">{val || <span className="text-slate-400">No notes.</span>}</p>}</div>}
+                        {open && <div className="px-4 pb-3">{canEdit ? <textarea rows={2} defaultValue={val} onBlur={(ev) => { if (ev.target.value !== val) setSection(r.residentId, sec.key, ev.target.value); }} placeholder={`${sec.label} notes for this shift…`} className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40" /> : <p className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-100 text-sm text-slate-700 whitespace-pre-wrap min-h-[2.5rem]">{val || <span className="text-slate-400">No notes.</span>}</p>}</div>}
                       </div>
                     ); })}
                   </div>
@@ -745,7 +745,7 @@ function DetailsView({ e, residents, resName, onBack, update, buildSections, has
                 <p className="text-sm text-slate-500">Pick a resident to document on this endorsement — their eight sections are pre-drafted from this shift&apos;s live care data.</p>
                 <div>
                   <label htmlFor="add-resident-sel" className="mb-2 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Resident</label>
-                  <select id="add-resident-sel" autoFocus value={addSel} onChange={(ev) => setAddSel(ev.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400/40">
+                  <select id="add-resident-sel" autoFocus value={addSel} onChange={(ev) => setAddSel(ev.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40">
                     <option value="">Select resident…</option>
                     {opts.map((r: Row) => <option key={s(r.id)} value={s(r.id)}>{s(r.name)} — Rm {s(r.room)}</option>)}
                   </select>
@@ -753,7 +753,7 @@ function DetailsView({ e, residents, resName, onBack, update, buildSections, has
               </div>
               <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-4">
                 <button onClick={() => setAddOpen(false)} disabled={addBusy} className="rounded-xl px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
-                <button onClick={submitAddResident} disabled={addBusy || !addSel} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"><Plus className="h-4 w-4" /> {addBusy ? "Adding…" : "Add resident"}</button>
+                <button onClick={submitAddResident} disabled={addBusy || !addSel} className="inline-flex items-center gap-2 rounded-xl bg-[#1f4f70] px-5 py-2 text-sm font-semibold text-white hover:bg-[#1b4763] disabled:opacity-50"><Plus className="h-4 w-4" /> {addBusy ? "Adding…" : "Add resident"}</button>
               </div>
             </div>
           </div>
@@ -828,12 +828,12 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
       </div>
 
       <div className="mb-3">
-        <p className="font-bold text-slate-900 flex items-center gap-2 mb-2"><ArrowLeftRight className="w-5 h-5 text-blue-500" /> Carry-Over to Next Shift</p>
-        {canEdit && (<div className="flex flex-wrap items-center gap-2"><button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"><Plus className="w-4 h-4" /> Add Item</button></div>)}
+        <p className="font-bold text-slate-900 flex items-center gap-2 mb-2"><ArrowLeftRight className="w-5 h-5 text-[#22577a]" /> Carry-Over to Next Shift</p>
+        {canEdit && (<div className="flex flex-wrap items-center gap-2"><button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#1f4f70] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#1b4763]"><Plus className="w-4 h-4" /> Add Item</button></div>)}
       </div>
       {e.carryOvers.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center mb-6">
-          <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-blue-50"><ClipboardList className="h-5 w-5 text-blue-500" /></span>
+          <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#e0ecf2]"><ClipboardList className="h-5 w-5 text-[#22577a]" /></span>
           <p className="font-semibold text-slate-700">No carry-over items.</p>
           <p className="text-sm text-slate-400 mt-1">Add concerns that need to continue into the next shift.</p>
         </div>
@@ -844,7 +844,7 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
               {c.whatChanged && <p className="text-xs text-slate-500 mt-0.5">What changed: {c.whatChanged}</p>}
               {c.action && <p className="text-xs text-slate-500 mt-0.5">Action: {c.action}</p>}
               {c.pending && <p className="text-xs text-slate-500 mt-0.5 whitespace-pre-line">Pending:{"\n"}{c.pending}</p>}
-              {c.watchNext && <p className="text-xs text-blue-600/90 mt-0.5">Watch next shift: {c.watchNext}</p>}
+              {c.watchNext && <p className="text-xs text-[#1f4f70]/90 mt-0.5">Watch next shift: {c.watchNext}</p>}
               {c.coverageNote && <p className="text-xs text-slate-500 mt-0.5 italic">Coverage: {c.coverageNote}</p>}
               {(e.status !== "PENDING") && (
                 <div className="flex flex-wrap items-center gap-2 mt-3 pt-2.5 border-t border-slate-100">
@@ -852,7 +852,7 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
                   <select
                     value={c.closeState || ""}
                     onChange={(ev) => setCloseState(c.id, ev.target.value as CloseState | "")}
-                    className={`text-xs font-semibold rounded-lg border px-2 py-1 outline-none focus:ring-2 focus:ring-blue-400/40 ${c.closeState ? CLOSE_CLS[c.closeState] : "border-slate-200 text-slate-500"}`}
+                    className={`text-xs font-semibold rounded-lg border px-2 py-1 outline-none focus:ring-2 focus:ring-[#4f93bd]/40 ${c.closeState ? CLOSE_CLS[c.closeState] : "border-slate-200 text-slate-500"}`}
                   >
                     <option value="">Open — not closed yet</option>
                     {CLOSE_STATES.map((cs) => <option key={cs} value={cs}>{cs}</option>)}
@@ -882,17 +882,17 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
                   <p className="text-sm text-slate-700 mt-1.5">{o.reason}</p>
                   {canEdit && (
                     <div className="flex flex-wrap items-center gap-2 mt-3 pt-2.5 border-t border-slate-100">
-                      <select value={r.disposition || ""} onChange={(ev) => setOccField(o.occId, { disposition: (ev.target.value || undefined) as OccDisposition | undefined })} className={`text-xs font-semibold rounded-lg border px-2 py-1 outline-none focus:ring-2 focus:ring-blue-400/40 ${r.disposition ? "border-emerald-200 text-emerald-700" : needs ? "border-red-300 text-red-600" : "border-slate-200 text-slate-500"}`}>
+                      <select value={r.disposition || ""} onChange={(ev) => setOccField(o.occId, { disposition: (ev.target.value || undefined) as OccDisposition | undefined })} className={`text-xs font-semibold rounded-lg border px-2 py-1 outline-none focus:ring-2 focus:ring-[#4f93bd]/40 ${r.disposition ? "border-emerald-200 text-emerald-700" : needs ? "border-red-300 text-red-600" : "border-slate-200 text-slate-500"}`}>
                         <option value="">Disposition…</option>
                         <option value="resolve">Resolve</option>
                         <option value="escalate">Escalate</option>
                         <option value="transfer">Transfer to next shift</option>
                       </select>
-                      <select value={r.owner || ""} onChange={(ev) => setOccField(o.occId, { owner: ev.target.value || undefined })} className="text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 px-2 py-1 outline-none focus:ring-2 focus:ring-blue-400/40">
+                      <select value={r.owner || ""} onChange={(ev) => setOccField(o.occId, { owner: ev.target.value || undefined })} className="text-xs font-semibold rounded-lg border border-slate-200 text-slate-500 px-2 py-1 outline-none focus:ring-2 focus:ring-[#4f93bd]/40">
                         <option value="">Follow-up owner…</option>
                         {ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
                       </select>
-                      <input type="time" value={r.dueTime || ""} onChange={(ev) => setOccField(o.occId, { dueTime: ev.target.value || undefined })} title="Follow-up due time" className="text-xs rounded-lg border border-slate-200 text-slate-600 px-2 py-1 outline-none focus:ring-2 focus:ring-blue-400/40" />
+                      <input type="time" value={r.dueTime || ""} onChange={(ev) => setOccField(o.occId, { dueTime: ev.target.value || undefined })} title="Follow-up due time" className="text-xs rounded-lg border border-slate-200 text-slate-600 px-2 py-1 outline-none focus:ring-2 focus:ring-[#4f93bd]/40" />
                     </div>
                   )}
                 </div>
@@ -915,7 +915,7 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
         <div className="space-y-2 mb-5">
           {CHECKLIST.map((c) => { const on = !!checklist[c.key]; return (
             <button key={c.key} onClick={() => toggle(c.key)} disabled={!canEdit} className="w-full flex items-start gap-3 text-left rounded-xl p-2 transition hover:bg-slate-50 disabled:cursor-default disabled:hover:bg-transparent">
-              <span className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 mt-0.5 transition ${on ? "bg-blue-600 border-blue-600 text-white" : "border-slate-300"}`}>{on && <Check className="w-3.5 h-3.5" />}</span>
+              <span className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 mt-0.5 transition ${on ? "bg-[#1f4f70] border-[#1f4f70] text-white" : "border-slate-300"}`}>{on && <Check className="w-3.5 h-3.5" />}</span>
               <span><span className="block text-sm font-semibold text-slate-800">{c.label}</span><span className="block text-xs text-amber-600/80">{c.desc}</span></span>
             </button>
           ); })}
@@ -925,13 +925,13 @@ function CarryOverView({ e, residents, resName, stats, by, byId, onBack, update,
             signed ? (
               <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700"><CheckCircle2 className="w-4 h-4" /> You signed off{acknowledged ? " · acknowledged by incoming shift" : " · awaiting incoming acknowledgement"}</span>
             ) : (
-              <button onClick={requestSignOff} disabled={!allChecked || !gate.ok} title={!gate.ok ? "Shift cannot close with unaddressed critical items" : undefined} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-40"><CheckCircle2 className="w-4 h-4" /> Sign Off (Outgoing)</button>
+              <button onClick={requestSignOff} disabled={!allChecked || !gate.ok} title={!gate.ok ? "Shift cannot close with unaddressed critical items" : undefined} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1f4f70] text-white font-semibold hover:bg-[#1b4763] disabled:opacity-40"><CheckCircle2 className="w-4 h-4" /> Sign Off (Outgoing)</button>
             )
           ) : acknowledged ? (
             <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700"><CheckCircle2 className="w-4 h-4" /> Acknowledged</span>
           ) : (
             <>
-              <button onClick={() => setAckOpen(true)} disabled={!signed} title={!signed ? "Awaiting the outgoing shift's sign-off" : undefined} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"><Check className="w-4 h-4" /> Acknowledge (Incoming)</button>
+              <button onClick={() => setAckOpen(true)} disabled={!signed} title={!signed ? "Awaiting the outgoing shift's sign-off" : undefined} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1f4f70] text-white font-semibold hover:bg-[#1b4763] disabled:cursor-not-allowed disabled:opacity-40"><Check className="w-4 h-4" /> Acknowledge (Incoming)</button>
               {!signed && <span className="text-xs text-slate-400">Awaiting sign-off from {e.outgoingBy || "the outgoing shift"} — acknowledgement unlocks once signed.</span>}
             </>
           )}
@@ -965,7 +965,7 @@ function AddCarryOverModal({ residents, onClose, onAdd }: { residents: Row[]; on
   const [autoAlert, setAutoAlert] = useState(false);
   const [saving, setSaving] = useState(false);
   const submit = async () => { if (!residentId || !concern.trim()) { Swal.fire({ title: "Resident and concern are required", icon: "warning" }); return; } setSaving(true); try { await onAdd({ residentId, concern: concern.trim(), priority, role, dueTime: dueTime || undefined, action: action || undefined, status, whatChanged: whatChanged.trim() || undefined, pending: pending.trim() || undefined, watchNext: watchNext.trim() || undefined, coverageNote: coverageNote.trim() || undefined, autoTask, autoAlert }); } finally { setSaving(false); } };
-  const inp ="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
+  const inp ="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40";
   const lbl = "text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 block";
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3">
@@ -986,11 +986,11 @@ function AddCarryOverModal({ residents, onClose, onAdd }: { residents: Row[]; on
           <div><span className={lbl}>Watch Next Shift (Optional)</span><textarea rows={2} value={watchNext} onChange={(e) => setWatchNext(e.target.value)} placeholder="What the incoming shift should keep an eye on…" className={inp} /></div>
           <div><span className={lbl}>Caregiver / Coverage Note (Optional)</span><textarea rows={2} value={coverageNote} onChange={(e) => setCoverageNote(e.target.value)} placeholder="Staffing constraints, who covered this before, special competencies…" className={inp} /></div>
           <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 space-y-2">
-            <button onClick={() => setAutoTask((v) => !v)} className="flex items-center gap-2.5 text-sm text-slate-700"><span className={`w-5 h-5 rounded border flex items-center justify-center ${autoTask ? "bg-blue-600 border-blue-600 text-white" : "border-slate-300"}`}>{autoTask && <Check className="w-3.5 h-3.5" />}</span>Auto-create clinical task</button>
-            <button onClick={() => setAutoAlert((v) => !v)} className="flex items-center gap-2.5 text-sm text-slate-700"><span className={`w-5 h-5 rounded border flex items-center justify-center ${autoAlert ? "bg-blue-600 border-blue-600 text-white" : "border-slate-300"}`}>{autoAlert && <Check className="w-3.5 h-3.5" />}</span>Auto-create alert</button>
+            <button onClick={() => setAutoTask((v) => !v)} className="flex items-center gap-2.5 text-sm text-slate-700"><span className={`w-5 h-5 rounded border flex items-center justify-center ${autoTask ? "bg-[#1f4f70] border-[#1f4f70] text-white" : "border-slate-300"}`}>{autoTask && <Check className="w-3.5 h-3.5" />}</span>Auto-create clinical task</button>
+            <button onClick={() => setAutoAlert((v) => !v)} className="flex items-center gap-2.5 text-sm text-slate-700"><span className={`w-5 h-5 rounded border flex items-center justify-center ${autoAlert ? "bg-[#1f4f70] border-[#1f4f70] text-white" : "border-slate-300"}`}>{autoAlert && <Check className="w-3.5 h-3.5" />}</span>Auto-create alert</button>
           </div>
         </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100"><button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button><button onClick={submit} disabled={saving} className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? "Adding…" : "Add Carry-Over"}</button></div>
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100"><button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50">Cancel</button><button onClick={submit} disabled={saving} className="px-5 py-2 rounded-xl bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763] disabled:opacity-60">{saving ? "Adding…" : "Add Carry-Over"}</button></div>
       </div>
     </div>
   );

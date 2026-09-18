@@ -25,7 +25,7 @@ const SEVERITY_META: Record<Severity, { label: string; badge: string; color: str
   critical: { label: "Critical", badge: "bg-red-100 text-red-700", color: "#ef4444", icon: AlertTriangle },
   high:     { label: "High",     badge: "bg-orange-100 text-orange-700", color: "#f97316", icon: Flag },
   medium:   { label: "Medium",   badge: "bg-yellow-100 text-yellow-700", color: "#eab308", icon: Shield },
-  low:      { label: "Low",      badge: "bg-blue-100 text-blue-700", color: "#3b82f6", icon: FileText },
+  low:      { label: "Low",      badge: "bg-[#cfe0eb] text-[#1b4763]", color: "#3b82f6", icon: FileText },
 };
 
 const INCIDENT_TYPES = ["FALL", "MEDICATION_ERROR", "BEHAVIORAL", "MEDICAL_EMERGENCY", "SAFETY_HAZARD", "INFECTION", "OTHER"];
@@ -217,7 +217,7 @@ export default function PhysicianIncidents() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <Stethoscope className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Incident Review
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -369,7 +369,7 @@ export default function PhysicianIncidents() {
                       <p className="text-xs text-gray-600 p-2 bg-gray-100 rounded border-l-2 border-yellow-400 mb-2">{i.notes}</p>
                     )}
                     <div className="flex items-center gap-2 flex-wrap">
-                      <button onClick={() => setViewing(i)} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition">
+                      <button onClick={() => setViewing(i)} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-[#1f4f70] bg-[#e0ecf2] hover:bg-[#cfe0eb] rounded transition">
                         <Eye className="w-3.5 h-3.5" /> View
                       </button>
                       {!i.resolved ? (
@@ -425,7 +425,7 @@ export default function PhysicianIncidents() {
                     <td className="px-4 py-3 max-w-[200px] truncate text-xs hidden lg:table-cell">{i.description}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => setViewing(i)} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
+                        <button onClick={() => setViewing(i)} className="p-1.5 rounded hover:bg-[#cfe0eb] text-[#1f4f70] transition" title="View"><Eye className="w-4 h-4" /></button>
                         {!i.resolved ? (
                           <button onClick={() => openSignOff(i)} className="p-1.5 rounded hover:bg-green-100 text-green-600 transition" title="Sign Off"><Stethoscope className="w-4 h-4" /></button>
                         ) : (
@@ -461,9 +461,9 @@ export default function PhysicianIncidents() {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
             <div className={`sticky top-0 text-white p-5 flex items-center justify-between z-10 ${
-              viewing.severity === "critical" ? "bg-gradient-to-r from-red-500 to-red-600" :
-              viewing.severity === "high" ? "bg-gradient-to-r from-orange-500 to-orange-600" :
-              "bg-gradient-to-r from-blue-500 to-blue-600"
+              viewing.severity === "critical" ? "bg-[#b0432c] " :
+              viewing.severity === "high" ? "bg-[#8f6410] " :
+              "bg-[#22577a] "
             }`}>
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold">{viewing.type}</h2>
@@ -492,7 +492,7 @@ export default function PhysicianIncidents() {
               </div>
 
               {viewing.raw.immediateActions && (
-                <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
+                <div className="bg-[#e0ecf2] border-l-4 border-[#4f93bd] p-3 rounded">
                   <h3 className="font-bold text-gray-900 mb-1 text-sm">Immediate Actions Taken</h3>
                   <p className="text-gray-900 text-sm">{viewing.raw.immediateActions}</p>
                 </div>
@@ -532,17 +532,17 @@ export default function PhysicianIncidents() {
               <div className="flex flex-wrap gap-2">
                 {!viewing.resolved ? (
                   <button onClick={() => openSignOff(viewing)}
-                    className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm active:scale-95">
+                    className="flex items-center gap-2 px-5 py-2 bg-[#4fa77e] text-white font-semibold rounded-lg hover:shadow-lg transition text-sm active:scale-95">
                     <Stethoscope className="w-4 h-4" /> Physician Sign-off
                   </button>
                 ) : (
                   <button onClick={() => { void handleReopen(viewing.id); setViewing(null); setPhysicianNote(""); }}
-                    className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-amber-400 to-amber-500 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm">
+                    className="flex items-center gap-2 px-5 py-2 bg-[#b58a2e] text-white font-semibold rounded-lg hover:shadow-lg transition text-sm">
                     <RefreshCw className="w-4 h-4" /> Reopen
                   </button>
                 )}
                 <button onClick={() => { void handleDelete(viewing.id); setViewing(null); setPhysicianNote(""); }}
-                  className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-red-400 to-red-500 text-white font-semibold rounded-lg hover:shadow-lg transition text-sm">
+                  className="flex items-center gap-2 px-5 py-2 bg-[#c05d43] text-white font-semibold rounded-lg hover:shadow-lg transition text-sm">
                   <Trash2 className="w-4 h-4" /> Delete
                 </button>
               </div>
@@ -556,7 +556,7 @@ export default function PhysicianIncidents() {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4"
           onMouseDown={(e) => { if (e.target === e.currentTarget && !signOffBusy) setSignOffFor(null); }}>
           <div className="bg-white w-full max-w-lg max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-xl shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-gradient-to-r from-green-500 to-emerald-600 px-5 py-4 text-white">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-[#277a55] px-5 py-4 text-white">
               <h2 className="flex items-center gap-2 text-lg font-bold"><Stethoscope className="w-5 h-5" /> Physician Sign-off</h2>
               <button onClick={() => setSignOffFor(null)} disabled={signOffBusy} className="rounded-lg p-1.5 transition hover:bg-white/20 disabled:opacity-50"><X className="w-5 h-5" /></button>
             </div>

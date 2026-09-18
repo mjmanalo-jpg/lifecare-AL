@@ -126,7 +126,7 @@ export default function MedSafetyDashboard() {
     { key: "overdue", label: "Overdue doses", value: m.overdue.length, icon: Clock, tone: "text-red-600 bg-red-50 border-red-200" },
     { key: "late", label: "Late (7d)", value: m.late.length, icon: AlertTriangle, tone: "text-amber-600 bg-amber-50 border-amber-200" },
     { key: "refusals", label: "Refusals (7d)", value: m.refusals.length, icon: XCircle, tone: "text-orange-600 bg-orange-50 border-orange-200" },
-    { key: "prn", label: "PRN follow-ups (24h)", value: m.prnFollowUps.length, icon: RefreshCcw, tone: "text-blue-600 bg-blue-50 border-blue-200" },
+    { key: "prn", label: "PRN follow-ups (24h)", value: m.prnFollowUps.length, icon: RefreshCcw, tone: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]" },
     { key: "controlled", label: "Controlled given (7d)", value: m.controlled.length, icon: ShieldAlert, tone: "text-purple-600 bg-purple-50 border-purple-200" },
     { key: "discrepancies", label: "Count discrepancies", value: discrepancies.length, icon: Boxes, tone: discrepancies.length ? "text-red-700 bg-red-50 border-red-300" : "text-emerald-600 bg-emerald-50 border-emerald-200" },
     { key: "errors", label: "Medication errors", value: m.medErrors.length, icon: ClipboardX, tone: "text-red-700 bg-red-50 border-red-300" },

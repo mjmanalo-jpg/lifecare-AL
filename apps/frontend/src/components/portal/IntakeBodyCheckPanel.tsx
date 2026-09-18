@@ -76,7 +76,7 @@ export default function IntakeBodyCheckPanel({ residentId, communityCode, examin
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-bold tracking-wide text-gray-800">
-            <IdCard className="w-4 h-4 text-blue-600" /> {pid}
+            <IdCard className="w-4 h-4 text-[#1f4f70]" /> {pid}
           </span>
           <span className="text-xs text-gray-500">Patient ID</span>
         </div>
@@ -85,7 +85,7 @@ export default function IntakeBodyCheckPanel({ residentId, communityCode, examin
 
       <div className="border-t border-gray-100 pt-3">
         <h4 className="flex items-center gap-2 text-sm font-bold text-gray-800 mb-3">
-          <ScanLine className="w-4 h-4 text-blue-600" /> Intake / Move-in Body Check
+          <ScanLine className="w-4 h-4 text-[#1f4f70]" /> Intake / Move-in Body Check
         </h4>
 
         {loading && !existing ? (
@@ -98,7 +98,7 @@ export default function IntakeBodyCheckPanel({ residentId, communityCode, examin
       {!readOnly && dirty && (
         <div className="flex flex-wrap justify-end gap-2 border-t border-gray-100 pt-3">
           <button onClick={() => setDraft(null)} className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Cancel</button>
-          <button onClick={() => void save()} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">
+          <button onClick={() => void save()} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763] disabled:opacity-60">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save intake
           </button>
         </div>

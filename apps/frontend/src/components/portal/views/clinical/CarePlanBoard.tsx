@@ -12,7 +12,7 @@ const statusColors: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-700",
   ACTIVE: "bg-green-100 text-green-700",
   UNDER_REVIEW: "bg-yellow-100 text-yellow-700",
-  COMPLETED: "bg-blue-100 text-blue-700",
+  COMPLETED: "bg-[#cfe0eb] text-[#1b4763]",
   DISCONTINUED: "bg-red-100 text-red-700",
 };
 
@@ -156,8 +156,8 @@ export default function CarePlanBoard() {
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           {plan.status === "DRAFT" && <button onClick={() => handleStatusChange(plan.id, "ACTIVE")} className="p-1.5 text-green-500 hover:bg-green-50 rounded cursor-pointer" title="Activate"><CheckCircle className="w-4 h-4" /></button>}
-                          {plan.status === "ACTIVE" && <button onClick={() => handleStatusChange(plan.id, "COMPLETED")} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded cursor-pointer" title="Complete"><CheckCircle className="w-4 h-4" /></button>}
-                          <button onClick={() => generateTasks(plan)} disabled={!!genTaskId} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded cursor-pointer disabled:opacity-50" title="Generate caregiver tasks from interventions">{genTaskId === plan.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />}</button>
+                          {plan.status === "ACTIVE" && <button onClick={() => handleStatusChange(plan.id, "COMPLETED")} className="p-1.5 text-[#22577a] hover:bg-[#e0ecf2] rounded cursor-pointer" title="Complete"><CheckCircle className="w-4 h-4" /></button>}
+                          <button onClick={() => generateTasks(plan)} disabled={!!genTaskId} className="p-1.5 text-[#22577a] hover:bg-[#e0ecf2] rounded cursor-pointer disabled:opacity-50" title="Generate caregiver tasks from interventions">{genTaskId === plan.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />}</button>
                           <button onClick={() => setEditing(plan)} className="p-1.5 text-yellow-500 hover:bg-yellow-50 rounded cursor-pointer" title="Edit"><FileText className="w-4 h-4" /></button>
                           <button onClick={() => handleDelete(plan.id)} className="p-1.5 text-red-400 hover:text-red-500 hover:bg-red-50 rounded cursor-pointer" title="Delete"><Trash2 className="w-4 h-4" /></button>
                         </div>
@@ -216,7 +216,7 @@ function CarePlanModal({ plan, residents, onClose, onSaved }: { plan: any; resid
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4 rounded-t-xl flex items-center justify-between">
+        <div className="sticky top-0 bg-[#8f6410] px-6 py-4 rounded-t-xl flex items-center justify-between">
           <h3 className="text-white font-bold text-lg">{plan ? "Edit" : "New"} Care Plan</h3>
           <button onClick={onClose} className="text-white/80 hover:text-white cursor-pointer"><X className="w-5 h-5" /></button>
         </div>

@@ -99,13 +99,13 @@ export default function BillingRevenue() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2 flex items-center gap-3">
-            <PieChart className="w-8 h-8 text-indigo-500" /> Revenue by Source
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2 flex items-center gap-3">
+            <PieChart className="w-8 h-8 text-[#22577a]" /> Revenue by Source
           </h1>
           <p className="text-gray-600">Where the money comes from — collected vs outstanding per revenue stream.</p>
         </div>
         <div className="flex items-center gap-2">
-          <select value={period} onChange={(e) => setPeriod(e.target.value as typeof period)} className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400">
+          <select value={period} onChange={(e) => setPeriod(e.target.value as typeof period)} className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]">
             {PERIODS.map((p) => (
               <option key={p.key} value={p.key}>
                 {p.label}
@@ -131,7 +131,7 @@ export default function BillingRevenue() {
         <h3 className="text-lg font-bold text-gray-900 mb-5">Revenue Streams</h3>
         {loading && rows.length === 0 ? (
           <div className="py-8 text-center text-gray-500">
-            <div className="inline-block w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mb-2" />
+            <div className="inline-block w-6 h-6 border-2 border-[#4f93bd] border-t-transparent rounded-full animate-spin mb-2" />
             <p>Loading revenue…</p>
           </div>
         ) : rows.length === 0 ? (
@@ -184,10 +184,10 @@ function StatChip({
   color: "blue" | "green" | "amber" | "indigo";
 }) {
   const ring: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50",
+    blue: "text-[#1f4f70] bg-[#e0ecf2]",
     green: "text-green-600 bg-green-50",
     amber: "text-amber-600 bg-amber-50",
-    indigo: "text-indigo-600 bg-indigo-50",
+    indigo: "text-[#1f4f70] bg-[#e0ecf2]",
   };
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">

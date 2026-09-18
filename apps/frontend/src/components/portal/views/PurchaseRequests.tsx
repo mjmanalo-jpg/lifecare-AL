@@ -13,8 +13,8 @@ const money = (v: number) => `₱${Math.round(v).toLocaleString()}`;
 
 const STATUS_BADGE: Record<string, string> = {
   REQUESTED: "bg-amber-100 text-amber-700 border-amber-200",
-  APPROVED: "bg-blue-100 text-blue-700 border-blue-200",
-  ORDERED: "bg-indigo-100 text-indigo-700 border-indigo-200",
+  APPROVED: "bg-[#cfe0eb] text-[#1b4763] border-[#a9c6d8]",
+  ORDERED: "bg-[#cfe0eb] text-[#1b4763] border-[#a9c6d8]",
   RECEIVED: "bg-green-100 text-green-700 border-green-200",
   REJECTED: "bg-red-100 text-red-700 border-red-200",
   CANCELLED: "bg-gray-100 text-gray-500 border-gray-200",
@@ -22,7 +22,7 @@ const STATUS_BADGE: Record<string, string> = {
 const PRIORITY_BADGE: Record<string, string> = {
   URGENT: "bg-red-100 text-red-700 border-red-200",
   HIGH: "bg-orange-100 text-orange-700 border-orange-200",
-  NORMAL: "bg-blue-100 text-blue-700 border-blue-200",
+  NORMAL: "bg-[#cfe0eb] text-[#1b4763] border-[#a9c6d8]",
   LOW: "bg-gray-100 text-gray-600 border-gray-200",
 };
 
@@ -172,30 +172,30 @@ export default function PurchaseRequests() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2 flex items-center gap-3">
-            <ShoppingCart className="w-8 h-8 text-blue-500" /> Purchase Requests
+          <h1 className="text-2xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2 flex items-center gap-3">
+            <ShoppingCart className="w-8 h-8 text-[#22577a]" /> Purchase Requests
           </h1>
           <p className="text-gray-600">Restock &amp; procurement — request → approve → order → receive.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={exportCsv} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold text-gray-700 hover:bg-gray-50"><Download className="w-4 h-4" /> CSV</button>
-          <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm font-semibold shadow hover:shadow-lg"><Plus className="w-4 h-4" /> New Request</button>
+          <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#22577a] text-white text-sm font-semibold shadow hover:shadow-lg"><Plus className="w-4 h-4" /> New Request</button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="Pending Approval" value={String(stats.pending)} tint="text-amber-600 bg-amber-50" />
-        <Stat label="Open Orders" value={String(stats.openOrders)} tint="text-indigo-600 bg-indigo-50" />
+        <Stat label="Open Orders" value={String(stats.openOrders)} tint="text-[#1f4f70] bg-[#e0ecf2]" />
         <Stat label="Received" value={String(stats.received)} tint="text-green-600 bg-green-50" />
-        <Stat label="Open Spend (est.)" value={money(stats.openSpend)} tint="text-blue-600 bg-blue-50" />
+        <Stat label="Open Spend (est.)" value={money(stats.openSpend)} tint="text-[#1f4f70] bg-[#e0ecf2]" />
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search item or supplier…" className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-400" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search item or supplier…" className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#4f93bd]" />
         </div>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-4 py-2.5 border border-gray-300 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400">
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-4 py-2.5 border border-gray-300 rounded-lg bg-white text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]">
           <option value="all">All Status</option>
           {["REQUESTED", "APPROVED", "ORDERED", "RECEIVED", "REJECTED", "CANCELLED"].map((st) => <option key={st} value={st}>{st}</option>)}
         </select>
@@ -239,7 +239,7 @@ export default function PurchaseRequests() {
                           <button onClick={() => approve(r)} title="Approve" className="p-1.5 rounded text-green-600 hover:bg-green-50"><Check className="w-4 h-4" /></button>
                           <button onClick={() => reject(r)} title="Reject" className="p-1.5 rounded text-red-600 hover:bg-red-50"><Ban className="w-4 h-4" /></button>
                         </>)}
-                        {st === "APPROVED" && <button onClick={() => order(r)} title="Mark ordered" className="p-1.5 rounded text-indigo-600 hover:bg-indigo-50"><Truck className="w-4 h-4" /></button>}
+                        {st === "APPROVED" && <button onClick={() => order(r)} title="Mark ordered" className="p-1.5 rounded text-[#1f4f70] hover:bg-[#e0ecf2]"><Truck className="w-4 h-4" /></button>}
                         {st === "ORDERED" && <button onClick={() => receive(r)} title="Mark received" className="p-1.5 rounded text-green-600 hover:bg-green-50"><PackageCheck className="w-4 h-4" /></button>}
                         {["REQUESTED", "APPROVED", "ORDERED"].includes(st) && <button onClick={() => cancel(r)} title="Cancel" className="p-1.5 rounded text-gray-500 hover:bg-gray-100"><X className="w-4 h-4" /></button>}
                       </div>
@@ -255,26 +255,26 @@ export default function PurchaseRequests() {
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
-            <div className="sticky top-0 flex items-center justify-between bg-gradient-to-r from-blue-500 to-indigo-600 p-5 text-white">
+            <div className="sticky top-0 flex items-center justify-between bg-[#22577a] p-5 text-white">
               <h2 className="flex items-center gap-2 text-xl font-bold"><ShoppingCart className="w-5 h-5" /> New Purchase Request</h2>
               <button onClick={() => setShowCreate(false)} className="rounded-lg p-1.5 hover:bg-white/20"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-4 p-6">
               <div>
                 <label className="mb-1 block text-sm font-semibold text-gray-700">Link inventory item (optional)</label>
-                <select value={form.inventoryItemId} onChange={(e) => onPickItem(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400">
+                <select value={form.inventoryItemId} onChange={(e) => onPickItem(e.target.value)} className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#4f93bd]">
                   <option value="">— New / unlisted item —</option>
                   {invRows.map((i) => <option key={s(i.id)} value={s(i.id)}>{s(i.itemName)} ({n(i.quantity)} on hand)</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2"><label className="mb-1 block text-sm font-semibold text-gray-700">Item name <span className="text-red-500">*</span></label><input value={form.itemName} onChange={(e) => setForm({ ...form, itemName: e.target.value })} className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400" /></div>
-                <div><label className="mb-1 block text-sm font-semibold text-gray-700">Quantity <span className="text-red-500">*</span></label><input type="number" min={1} value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400" /></div>
-                <div><label className="mb-1 block text-sm font-semibold text-gray-700">Unit</label><input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="pcs / box" className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400" /></div>
-                <div><label className="mb-1 block text-sm font-semibold text-gray-700">Est. unit cost</label><input type="number" min={0} value={form.estimatedUnitCost} onChange={(e) => setForm({ ...form, estimatedUnitCost: e.target.value })} className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400" /></div>
-                <div><label className="mb-1 block text-sm font-semibold text-gray-700">Priority</label><select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} className="w-full rounded-lg border border-gray-300 px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-blue-400">{["LOW", "NORMAL", "HIGH", "URGENT"].map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
-                <div className="col-span-2"><label className="mb-1 block text-sm font-semibold text-gray-700">Supplier</label><input value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400" /></div>
-                <div className="col-span-2"><label className="mb-1 block text-sm font-semibold text-gray-700">Reason</label><input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="e.g. below reorder point" className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400" /></div>
+                <div className="col-span-2"><label className="mb-1 block text-sm font-semibold text-gray-700">Item name <span className="text-red-500">*</span></label><input value={form.itemName} onChange={(e) => setForm({ ...form, itemName: e.target.value })} className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#4f93bd]" /></div>
+                <div><label className="mb-1 block text-sm font-semibold text-gray-700">Quantity <span className="text-red-500">*</span></label><input type="number" min={1} value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#4f93bd]" /></div>
+                <div><label className="mb-1 block text-sm font-semibold text-gray-700">Unit</label><input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="pcs / box" className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#4f93bd]" /></div>
+                <div><label className="mb-1 block text-sm font-semibold text-gray-700">Est. unit cost</label><input type="number" min={0} value={form.estimatedUnitCost} onChange={(e) => setForm({ ...form, estimatedUnitCost: e.target.value })} className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#4f93bd]" /></div>
+                <div><label className="mb-1 block text-sm font-semibold text-gray-700">Priority</label><select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} className="w-full rounded-lg border border-gray-300 px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-[#4f93bd]">{["LOW", "NORMAL", "HIGH", "URGENT"].map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
+                <div className="col-span-2"><label className="mb-1 block text-sm font-semibold text-gray-700">Supplier</label><input value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#4f93bd]" /></div>
+                <div className="col-span-2"><label className="mb-1 block text-sm font-semibold text-gray-700">Reason</label><input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="e.g. below reorder point" className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-[#4f93bd]" /></div>
               </div>
               {form.quantity && form.estimatedUnitCost && (
                 <p className="text-sm text-gray-600">Estimated total: <span className="font-semibold text-gray-900">{money(Number(form.quantity) * Number(form.estimatedUnitCost))}</span></p>
@@ -282,7 +282,7 @@ export default function PurchaseRequests() {
             </div>
             <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
               <button onClick={() => setShowCreate(false)} disabled={busy} className="rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 disabled:opacity-50">Cancel</button>
-              <button onClick={submit} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-2 font-semibold text-white shadow hover:shadow-lg disabled:opacity-50"><Plus className="w-4 h-4" /> {busy ? "Submitting…" : "Submit Request"}</button>
+              <button onClick={submit} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-[#22577a] px-6 py-2 font-semibold text-white shadow hover:shadow-lg disabled:opacity-50"><Plus className="w-4 h-4" /> {busy ? "Submitting…" : "Submit Request"}</button>
             </div>
           </div>
         </div>

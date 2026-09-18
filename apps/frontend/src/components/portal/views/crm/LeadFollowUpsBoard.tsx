@@ -16,7 +16,7 @@ const BUCKET_KPI: { key: DueBucket; label: string; tone: string }[] = [
 const bucketPill = (b: DueBucket) =>
   b === "overdue" ? "bg-rose-100 text-rose-700 hover:bg-rose-200"
   : b === "today" ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
-  : "bg-sky-100 text-sky-800 hover:bg-sky-200";
+  : "bg-[#cfe0eb] text-[#163c56] hover:bg-[#a9c6d8]";
 
 /** Cross-lead follow-up work — KPI counts, an overdue action strip, and a month
  *  calendar plotting every open follow-up on its due date. */
@@ -58,7 +58,7 @@ export default function LeadFollowUpsBoard({ api, onOpenLead }: { api: CrmApi; o
             {overdue.map(({ lead, task }) => {
               const Icon = TASK_ICON[task.type];
               return (
-                <div key={task.id} className="flex items-center gap-3 px-4 py-2.5">
+                <div key={task.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
                   <button onClick={() => api.toggleTask(lead.id, task.id)} className="text-slate-300 hover:text-emerald-600 shrink-0" title="Mark done"><Circle className="w-5 h-5" /></button>
                   <Icon className="w-4 h-4 text-slate-400 shrink-0" />
                   <div className="min-w-0 flex-1">
@@ -67,7 +67,7 @@ export default function LeadFollowUpsBoard({ api, onOpenLead }: { api: CrmApi; o
                   </div>
                   <span className="text-xs font-medium text-rose-500 shrink-0">{new Date(task.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
                   <button onClick={() => reschedule(lead.id, task.id, task.dueDate)} className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-500 hover:bg-slate-50 shrink-0">Snooze</button>
-                  <button onClick={() => onOpenLead(lead.id)} className="p-1 text-slate-400 hover:text-blue-600 shrink-0" title="Open lead"><ChevronRight className="w-4 h-4" /></button>
+                  <button onClick={() => onOpenLead(lead.id)} className="p-1 text-slate-400 hover:text-[#1f4f70] shrink-0" title="Open lead"><ChevronRight className="w-4 h-4" /></button>
                 </div>
               );
             })}
@@ -75,7 +75,7 @@ export default function LeadFollowUpsBoard({ api, onOpenLead }: { api: CrmApi; o
         </section>
       )}
 
-      <MonthCalendar items={items} icon={<ListChecks className="w-4 h-4 text-blue-600" />} />
+      <MonthCalendar items={items} icon={<ListChecks className="w-4 h-4 text-[#1f4f70]" />} />
 
       {queue.length === 0 && (
         <div className="rounded-xl border border-dashed border-slate-200 bg-white py-10 text-center">

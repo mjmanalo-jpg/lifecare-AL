@@ -13,7 +13,7 @@ import {
 
 const TASK_BADGE: Record<string, string> = {
   PENDING: "bg-gray-100 text-gray-700",
-  IN_PROGRESS: "bg-blue-100 text-blue-700",
+  IN_PROGRESS: "bg-[#cfe0eb] text-[#1b4763]",
   COMPLETED: "bg-green-100 text-green-700",
   CANCELLED: "bg-gray-100 text-gray-400",
 };
@@ -21,11 +21,11 @@ const PRIORITY_BADGE: Record<string, string> = {
   URGENT: "bg-red-100 text-red-700",
   HIGH: "bg-orange-100 text-orange-700",
   MEDIUM: "bg-yellow-100 text-yellow-700",
-  LOW: "bg-blue-100 text-blue-700",
+  LOW: "bg-[#cfe0eb] text-[#1b4763]",
 };
 const BELL_BADGE: Record<string, string> = {
   PENDING: "bg-red-100 text-red-700",
-  RESPONDED: "bg-blue-100 text-blue-700",
+  RESPONDED: "bg-[#cfe0eb] text-[#1b4763]",
   RESOLVED: "bg-green-100 text-green-700",
 };
 
@@ -113,16 +113,16 @@ export default function FamilyCareTeam() {
         {/* ── Physician: Orders & Prescriptions ── */}
         <div className="bg-white rounded-lg border border-gray-200 p-5">
           <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
-            <Pill className="w-4 h-4 text-blue-500" /> Physician — Orders &amp; Prescriptions
+            <Pill className="w-4 h-4 text-[#22577a]" /> Physician — Orders &amp; Prescriptions
           </h3>
           <p className="text-xs text-gray-500 mb-4">Mirrors the physician portal&apos;s Orders &amp; Prescriptions module.</p>
           {meds.length > 0 ? (
             <div className="space-y-2">
               {meds.slice(0, 6).map((m, i) => (
-                <div key={String(m.id ?? i)} className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+                <div key={String(m.id ?? i)} className="p-3 rounded-lg bg-[#e0ecf2] border border-[#cfe0eb]">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-medium text-gray-900 text-sm">💊 {String(m.name ?? "")} <span className="text-gray-500 font-normal">{String(m.dosage ?? "")}</span></p>
-                    <span className="text-xs font-semibold text-blue-700 flex-shrink-0">{humanize(String(m.route ?? "oral"))}</span>
+                    <span className="text-xs font-semibold text-[#1b4763] flex-shrink-0">{humanize(String(m.route ?? "oral"))}</span>
                   </div>
                   <p className="text-xs text-gray-600 mt-0.5">
                     {String(m.frequency ?? "")}
@@ -140,13 +140,13 @@ export default function FamilyCareTeam() {
         {/* ── Physician: Clinical Notes ── */}
         <div className="bg-white rounded-lg border border-gray-200 p-5">
           <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
-            <PenTool className="w-4 h-4 text-indigo-500" /> Physician — Clinical Notes
+            <PenTool className="w-4 h-4 text-[#22577a]" /> Physician — Clinical Notes
           </h3>
           <p className="text-xs text-gray-500 mb-4">Non-confidential notes shared with the family.</p>
           {notes.length > 0 ? (
             <div className="space-y-2">
               {notes.slice(0, 5).map((n, i) => (
-                <div key={String(n.id ?? i)} className="p-3 rounded-lg bg-indigo-50/60 border border-indigo-100">
+                <div key={String(n.id ?? i)} className="p-3 rounded-lg bg-[#e0ecf2]/60 border border-[#cfe0eb]">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-medium text-gray-900 text-sm truncate">{String(n.title ?? humanize(String(n.noteType ?? ""))) || "Clinical note"}</p>
                     <span className="text-xs text-gray-400 flex-shrink-0">{relTime(ts(n.createdAt), nowTs)}</span>

@@ -53,9 +53,9 @@ export default function ReceiptDocument({ receipt, facilityName, onClose }: { re
 
           <div className="relative">
             {/* Header: company · RECEIPT */}
-            <div className="flex items-start justify-between gap-6 border-b-2 border-sky-600 pb-3">
-              <h1 className="text-2xl font-bold text-sky-700 min-w-0">{company}</h1>
-              <p className="text-2xl sm:text-3xl font-semibold uppercase tracking-[0.15em] text-sky-700 shrink-0">Receipt</p>
+            <div className="flex items-start justify-between gap-6 border-b-2 border-[#1f4f70] pb-3">
+              <h1 className="text-2xl font-bold text-[#1b4763] min-w-0">{company}</h1>
+              <p className="text-2xl sm:text-3xl font-semibold uppercase tracking-[0.15em] text-[#1b4763] shrink-0">Receipt</p>
             </div>
 
             {/* Invoice # + date */}
@@ -67,14 +67,14 @@ export default function ReceiptDocument({ receipt, facilityName, onClose }: { re
             {/* Mailing info | Bill to */}
             <div className="mt-5 grid grid-cols-2 gap-6 text-sm">
               <div className="flex gap-3">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-sky-700 pt-0.5">Mailing<br />Info</span>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-[#1b4763] pt-0.5">Mailing<br />Info</span>
                 <div className="leading-6 text-slate-700">
                   <p className="font-semibold text-slate-900">{company}</p>
                   {addressLines.length ? addressLines.map((l, i) => <p key={i} className="text-xs">{l}</p>) : <p className="text-xs text-slate-400">—</p>}
                 </div>
               </div>
               <div className="flex gap-3">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-sky-700 pt-0.5">Bill<br />To</span>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-[#1b4763] pt-0.5">Bill<br />To</span>
                 <div className="leading-6 text-slate-700">
                   <p className="font-semibold text-slate-900">{receipt.residentName}{receipt.room && receipt.room !== "—" ? ` · Room ${receipt.room}` : ""}</p>
                   {receipt.sponsorName ? <p className="text-xs">c/o {receipt.sponsorName} (payer)</p> : null}
@@ -87,7 +87,7 @@ export default function ReceiptDocument({ receipt, facilityName, onClose }: { re
             {/* Line items */}
             <table className="mt-5 w-full border-collapse text-sm">
               <thead>
-                <tr className="border-b-2 border-sky-600 text-sky-700">
+                <tr className="border-b-2 border-[#1f4f70] text-[#1b4763]">
                   <th className="px-1 py-1.5 text-left text-[11px] font-bold uppercase tracking-wider">Description</th>
                   <th className="px-1 py-1.5 text-right text-[11px] font-bold uppercase tracking-wider w-40">Amount</th>
                 </tr>
@@ -108,7 +108,7 @@ export default function ReceiptDocument({ receipt, facilityName, onClose }: { re
             {/* Comments + totals */}
             <div className="mt-4 flex flex-wrap items-start justify-between gap-6">
               <div className="min-w-0 flex-1">
-                <p className="border-b border-sky-600 pb-1 text-[11px] font-bold uppercase tracking-wider text-sky-700">Other comments</p>
+                <p className="border-b border-[#1f4f70] pb-1 text-[11px] font-bold uppercase tracking-wider text-[#1b4763]">Other comments</p>
                 <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs text-slate-500">
                   <li>Thank you for keeping your account current.</li>
                   <li>Please quote the invoice number on any correspondence.</li>
@@ -117,12 +117,12 @@ export default function ReceiptDocument({ receipt, facilityName, onClose }: { re
               <div className="w-56 text-sm">
                 <div className="flex items-center justify-between py-1"><span className="text-slate-500">Subtotal</span><span className="tabular-nums text-slate-700">{money(subtotal)}</span></div>
                 {discount > 0 && <div className="flex items-center justify-between py-1 text-slate-500"><span>Discount</span><span className="tabular-nums">({money(discount)})</span></div>}
-                <div className="mt-1 flex items-center justify-between border-t-2 border-sky-600 py-2"><span className="font-bold uppercase tracking-wide text-slate-800">Total</span><span className="font-extrabold tabular-nums text-sky-700">{money(receipt.total)}</span></div>
+                <div className="mt-1 flex items-center justify-between border-t-2 border-[#1f4f70] py-2"><span className="font-bold uppercase tracking-wide text-slate-800">Total</span><span className="font-extrabold tabular-nums text-[#1b4763]">{money(receipt.total)}</span></div>
               </div>
             </div>
 
             <div className="mt-6 flex items-end justify-between gap-4">
-              <p className="text-lg font-bold text-sky-700">Thank you for your business!</p>
+              <p className="text-lg font-bold text-[#1b4763]">Thank you for your business!</p>
               <p className="text-right text-xs text-slate-500">Make all payments payable to:<br /><span className="font-semibold text-slate-700">{company}</span></p>
             </div>
           </div>
@@ -130,7 +130,7 @@ export default function ReceiptDocument({ receipt, facilityName, onClose }: { re
 
         <div className="no-print bg-slate-50 border-t border-slate-200 px-6 py-4 flex flex-wrap justify-between gap-2">
           <button onClick={onClose} className="px-5 py-2 text-slate-700 hover:bg-slate-100 border border-slate-300 rounded-lg text-sm font-semibold transition">Close</button>
-          <button onClick={() => window.print()} className="flex items-center gap-2 px-5 py-2 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-lg text-sm transition"><Printer className="w-4 h-4" /> Print / Save PDF</button>
+          <button onClick={() => window.print()} className="flex items-center gap-2 px-5 py-2 bg-[#1f4f70] hover:bg-[#1b4763] text-white font-bold rounded-lg text-sm transition"><Printer className="w-4 h-4" /> Print / Save PDF</button>
         </div>
       </div>
     </div>

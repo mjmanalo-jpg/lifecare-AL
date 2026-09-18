@@ -638,8 +638,8 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE", residentId: 
   const smallCards: CardSpec[] = [
     { key: "heartRate", title: "Heart Rate", icon: Heart, tint: "text-pink-500", unit: "bpm", digits: 0, band: NORMAL.heartRate, normalCaption: "Normal: 60–100 bpm", color: "#ec4899", get: (r) => r.heartRate },
     { key: "temperature", title: "Temperature", icon: Thermometer, tint: "text-amber-500", unit: "°C", digits: 1, band: NORMAL.temperature, normalCaption: "Normal: 36.1–37.2 °C", color: "#f59e0b", get: (r) => r.temperature },
-    { key: "spo2", title: "SpO₂", icon: Droplets, tint: "text-sky-500", unit: "%", digits: 0, band: NORMAL.spo2, normalCaption: "Normal: 95–100 %", color: "#0ea5e9", get: (r) => r.spo2 },
-    { key: "respRate", title: "Resp. Rate", icon: Wind, tint: "text-indigo-500", unit: "/min", digits: 0, band: NORMAL.respRate, normalCaption: "Normal: 12–20 /min", color: "#6366f1", get: (r) => r.respRate },
+    { key: "spo2", title: "SpO₂", icon: Droplets, tint: "text-[#22577a]", unit: "%", digits: 0, band: NORMAL.spo2, normalCaption: "Normal: 95–100 %", color: "#0ea5e9", get: (r) => r.spo2 },
+    { key: "respRate", title: "Resp. Rate", icon: Wind, tint: "text-[#22577a]", unit: "/min", digits: 0, band: NORMAL.respRate, normalCaption: "Normal: 12–20 /min", color: "#6366f1", get: (r) => r.respRate },
     { key: "weight", title: "Weight", icon: Scale, tint: "text-slate-500", unit: "kg", digits: 1, band: undefined, normalCaption: "Trend vs. baseline", color: "#64748b", get: (r) => r.weight },
   ];
 
@@ -805,12 +805,12 @@ export default function VitalsTrendBoard({ clinicianRole = "NURSE", residentId: 
                   <VitalCard key={spec.key} spec={spec} points={readings.map((r) => ({ at: r.at, v: spec.get(r) }))} />
                 ))}
                 <OtherTrendCard title="Pain Score" icon={Zap} tint="text-orange-500" color="#f97316" unit="/10" points={painPoints} digits={0} band={[0, 3]} caption="Normal: 0–3 /10" idBase="ot-pain" />
-                <OtherTrendCard title="Sleep Hours" icon={Moon} tint="text-indigo-500" color="#6366f1" unit="h" points={sleepPoints} digits={1} band={[6, 8]} caption="Normal: 6–8 h/night" idBase="ot-sleep" />
+                <OtherTrendCard title="Sleep Hours" icon={Moon} tint="text-[#22577a]" color="#6366f1" unit="h" points={sleepPoints} digits={1} band={[6, 8]} caption="Normal: 6–8 h/night" idBase="ot-sleep" />
                 <OtherTrendCard title="Urine Output" icon={Droplets} tint="text-cyan-500" color="#06b6d4" unit="mL" points={domain.urine} digits={0} caption="Output per void" idBase="ot-urine" />
                 <OtherTrendCard title="Meal Intake" icon={Utensils} tint="text-green-600" color="#16a34a" unit="%" points={domain.meal} digits={0} band={[50, 100]} caption="Normal: ≥ 50% intake" idBase="ot-meal" />
                 <OtherTrendCard title="Mobility Duration" icon={Footprints} tint="text-teal-600" color="#0d9488" unit="min" points={domain.mobility} digits={0} caption="Active minutes per session" idBase="ot-mobility" />
                 <OtherTrendCard title="Bowel (Bristol)" icon={CircleDot} tint="text-amber-600" color="#d97706" unit="" points={domain.bowel} digits={0} band={[3, 5]} fmt={fmtBristol} caption="Normal: Type 3–5" idBase="ot-bowel" />
-                <OtherTrendCard title="Edema Severity" icon={Waves} tint="text-blue-500" color="#3b82f6" unit="" points={domain.edema} digits={0} band={[0, 1]} fmt={fmtEdema} caption="None → Deep (0–5)" idBase="ot-edema" />
+                <OtherTrendCard title="Edema Severity" icon={Waves} tint="text-[#22577a]" color="#3b82f6" unit="" points={domain.edema} digits={0} band={[0, 1]} fmt={fmtEdema} caption="None → Deep (0–5)" idBase="ot-edema" />
                 <OtherTrendCard title="Mood" icon={Smile} tint="text-purple-500" color="#a855f7" unit="" points={domain.mood} digits={0} fmt={fmtMood} caption="Wellbeing (worst → best)" idBase="ot-mood" />
                 <OtherTrendCard title="Concerns" icon={AlertTriangle} tint="text-red-500" color="#ef4444" unit="" points={domain.concern} digits={0} band={[0, 1]} fmt={fmtConcern} caption="Severity: Low → Critical" idBase="ot-concern" />
               </div>

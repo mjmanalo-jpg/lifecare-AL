@@ -237,7 +237,7 @@ export default function LandingCustomizerContent() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1">
+          <h1 className="text-3xl md:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1">
             Landing Studio
           </h1>
           <p className="text-gray-600 text-sm">
@@ -264,7 +264,7 @@ export default function LandingCustomizerContent() {
             disabled={!dirty}
             className={`flex items-center gap-2 px-5 py-2 rounded-lg font-semibold text-sm transition active:scale-95 ${
               dirty
-                ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-black hover:shadow-lg"
+                ? "bg-[#22577a] text-black hover:shadow-lg"
                 : "bg-gray-100 text-gray-400 cursor-not-allowed"
             }`}
           >
@@ -978,7 +978,7 @@ function SiteContentEditor() {
           <h2 className="text-lg font-bold text-gray-900">Site Content Editor</h2>
           <p className="text-sm text-gray-500">Edit all text content displayed on the public landing page.</p>
         </div>
-        <button onClick={handleSaveAll} className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+        <button onClick={handleSaveAll} className="flex items-center gap-2 px-5 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
           <Save className="w-4 h-4" /> Save All
         </button>
       </div>
@@ -1007,7 +1007,7 @@ function SiteContentEditor() {
               <button
                 onClick={() => handleSave(field.id)}
                 disabled={isSaving}
-                className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold hover:bg-blue-100 transition disabled:opacity-50"
+                className="flex items-center gap-1 px-3 py-1.5 bg-[#e0ecf2] text-[#1b4763] border border-[#a9c6d8] rounded-lg text-xs font-semibold hover:bg-[#cfe0eb] transition disabled:opacity-50"
               >
                 {isSaving ? "Saving…" : "Save"}
               </button>
@@ -1128,7 +1128,7 @@ function BlogManager() {
           <h2 className="text-lg font-bold text-gray-900">Blog Posts</h2>
           <p className="text-sm text-gray-500">Create and manage blog posts displayed on the landing page.</p>
         </div>
-        <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+        <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
           <Plus className="w-4 h-4" /> New Post
         </button>
       </div>
@@ -1162,7 +1162,7 @@ function BlogManager() {
                   <Calendar className="w-3 h-3" /> {new Date(p.publishedAt).toLocaleDateString()}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => openEdit(p)} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold hover:bg-blue-100 transition">
+                  <button onClick={() => openEdit(p)} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-[#e0ecf2] text-[#1b4763] border border-[#a9c6d8] rounded-lg text-xs font-semibold hover:bg-[#cfe0eb] transition">
                     <Pencil className="w-3 h-3" /> Edit
                   </button>
                   <button onClick={() => handleDelete(p.id)} className="flex items-center justify-center gap-1 px-3 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-semibold hover:bg-red-100 transition">
@@ -1250,7 +1250,7 @@ function BlogManager() {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap justify-end gap-3">
               <button onClick={() => setModalOpen(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Cancel</button>
-              <button onClick={handleSubmit} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+              <button onClick={handleSubmit} className="px-6 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
                 {editingId ? "Update Post" : "Publish Post"}
               </button>
             </div>
@@ -1452,7 +1452,7 @@ function PagesManager() {
           <h2 className="text-lg font-bold text-gray-900">Custom Pages</h2>
           <p className="text-sm text-gray-500">Add pages to the landing page navigation. Published pages appear in the navbar.</p>
         </div>
-        <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+        <button onClick={openCreate} className="flex items-center gap-2 px-5 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
           <Plus className="w-4 h-4" /> Add Page
         </button>
       </div>
@@ -1473,7 +1473,7 @@ function PagesManager() {
                 {p.description && <p className="text-sm text-gray-600 truncate">{p.description}</p>}
                 <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
                   <span className="px-2 py-1 bg-gray-100 rounded">/page/{p.slug}</span>
-                  {p.pagePurpose && <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">{p.pagePurpose}</span>}
+                  {p.pagePurpose && <span className="px-2 py-1 bg-[#cfe0eb] text-[#1b4763] rounded">{p.pagePurpose}</span>}
                   {p.parcelType && <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">{p.parcelType}</span>}
                 </div>
               </div>
@@ -1485,8 +1485,8 @@ function PagesManager() {
               <button onClick={() => togglePublished(p)} className="p-2 hover:bg-gray-100 rounded-lg transition" title={p.published ? "Unpublish" : "Publish"}>
                 {p.published ? <Eye className="w-4 h-4 text-green-600" /> : <EyeOff className="w-4 h-4 text-gray-400" />}
               </button>
-              <button onClick={() => openEdit(p)} className="p-2 hover:bg-blue-50 rounded-lg transition">
-                <Pencil className="w-4 h-4 text-blue-600" />
+              <button onClick={() => openEdit(p)} className="p-2 hover:bg-[#e0ecf2] rounded-lg transition">
+                <Pencil className="w-4 h-4 text-[#1f4f70]" />
               </button>
               <button onClick={() => handleDelete(p.id)} className="p-2 hover:bg-red-50 rounded-lg transition">
                 <Trash2 className="w-4 h-4 text-red-500" />
@@ -1521,7 +1521,7 @@ function PagesManager() {
                         <h5 className="font-semibold text-gray-900 group-hover:text-yellow-600 transition">{template.name}</h5>
                         <p className="text-sm text-gray-600">{template.description}</p>
                         <div className="flex items-center gap-2 mt-2 text-xs">
-                          <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">{template.purpose}</span>
+                          <span className="px-2 py-1 bg-[#cfe0eb] text-[#1b4763] rounded">{template.purpose}</span>
                           <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">{template.parcelType}</span>
                         </div>
                       </button>
@@ -1540,7 +1540,7 @@ function PagesManager() {
                 {!editingId && (
                   <button
                     onClick={() => setShowTemplates(true)}
-                    className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    className="flex items-center gap-2 text-sm text-[#1f4f70] hover:text-[#1b4763] font-medium"
                   >
                     ← Back to templates
                   </button>
@@ -1690,7 +1690,7 @@ function PagesManager() {
             {!showTemplates || editingId ? (
               <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap justify-end gap-3">
                 <button onClick={() => setModalOpen(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium">Cancel</button>
-                <button onClick={handleSubmit} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+                <button onClick={handleSubmit} className="px-6 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
                   {editingId ? "Update Page" : "Create Page"}
                 </button>
               </div>

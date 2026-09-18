@@ -140,11 +140,11 @@ export default function NurseRecordsWithCallBells() {
                 setViewMode("list");
                 setSelectedResident(null);
               }}
-              className="text-blue-600 hover:text-blue-800 font-medium mb-2 flex items-center gap-2"
+              className="text-[#1f4f70] hover:text-[#163c56] font-medium mb-2 flex items-center gap-2"
             >
               ← Back to Residents
             </button>
-            <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+            <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent">
               {selectedResidentData.firstName} {selectedResidentData.lastName}
             </h1>
             <p className="text-gray-600 mt-1">Room {selectedResidentData.roomNumber}</p>
@@ -256,7 +256,7 @@ export default function NurseRecordsWithCallBells() {
         {resolveFor && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !resolveBusy && setResolveFor(null)}>
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-6 flex items-center justify-between">
+              <div className="bg-[#277a55] text-white p-6 flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold">Resolve Call Bell</h2>
                   <p className="text-sm text-green-100">{resolveFor.residentName} • Room {selectedResidentData.roomNumber}</p>
@@ -310,7 +310,7 @@ export default function NurseRecordsWithCallBells() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+        <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2">
           Resident Records & Call Bells
         </h1>
         <p className="text-gray-600">View resident records with active call bells highlighted</p>
@@ -405,7 +405,7 @@ export default function NurseRecordsWithCallBells() {
             )}
 
             {/* View Button */}
-            <button className="w-full mt-4 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition text-sm">
+            <button className="w-full mt-4 px-3 py-2 bg-[#22577a] hover:bg-[#1f4f70] text-white font-semibold rounded-lg transition text-sm">
               View Details
             </button>
           </div>

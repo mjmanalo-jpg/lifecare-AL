@@ -45,10 +45,10 @@ function Panel({ icon: Icon, title, children }: { icon: typeof Heart; title: str
 function RoleChips({ p }: { p: AboutPerson }) {
   const chips: { label: string; cls: string }[] = [];
   if (p.medicalPOA) chips.push({ label: "Medical POA", cls: "bg-teal-100 text-teal-800 border-teal-200" });
-  if (p.financialPOA) chips.push({ label: "Financial POA / Guardian", cls: "bg-indigo-100 text-indigo-800 border-indigo-200" });
+  if (p.financialPOA) chips.push({ label: "Financial POA / Guardian", cls: "bg-[#cfe0eb] text-[#163c56] border-[#a9c6d8]" });
   if (p.decisionMaker && !p.medicalPOA && !p.financialPOA) chips.push({ label: "Decision Maker", cls: "bg-teal-100 text-teal-800 border-teal-200" });
   if (p.emergency) chips.push({ label: "Emergency", cls: "bg-amber-100 text-amber-800 border-amber-200" });
-  if (p.family) chips.push({ label: "Family", cls: "bg-blue-100 text-blue-800 border-blue-200" });
+  if (p.family) chips.push({ label: "Family", cls: "bg-[#cfe0eb] text-[#163c56] border-[#a9c6d8]" });
   if (p.blocked) chips.push({ label: "Blocked", cls: "bg-red-100 text-red-700 border-red-200" });
   return (
     <div className="flex flex-wrap gap-1">

@@ -293,13 +293,13 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+            <h1 className="text-2xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2">
               Staff Registry
             </h1>
             <p className="text-gray-600">Manage facility staff members, positions, and status</p>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
-            <button onClick={() => setShowAddStaff(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+            <button onClick={() => setShowAddStaff(true)} className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
               <Plus className="w-4 h-4" /> Add New Staff
             </button>
             {selectedStaff.size > 0 && (
@@ -366,7 +366,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                             {staff.avatarUrl ? (
                               <img src={staff.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
                             ) : (
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-black font-bold text-sm">
+                              <div className="w-8 h-8 rounded-full bg-[#22577a] flex items-center justify-center text-black font-bold text-sm">
                                 {staff.name.charAt(0)}
                               </div>
                             )}
@@ -389,7 +389,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                             ) : (
                               <button onClick={() => handleToggleApproval(staff, true)} className="p-2 text-green-500 hover:bg-green-50 rounded-lg transition" title="Approve"><Check className="w-4 h-4" /></button>
                             )}
-                            <button onClick={() => setViewingStaff(staff)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="View details"><Eye className="w-4 h-4" /></button>
+                            <button onClick={() => setViewingStaff(staff)} className="p-2 text-[#1f4f70] hover:bg-[#e0ecf2] rounded-lg transition" title="View details"><Eye className="w-4 h-4" /></button>
                             <button onClick={() => startEditing(staff)} className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition" title="Edit record"><Edit className="w-4 h-4" /></button>
                           </div>
                         </td>
@@ -410,7 +410,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                     {staff.avatarUrl ? (
                       <img src={staff.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover mt-0.5" />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-black font-bold text-sm mt-0.5">
+                      <div className="w-8 h-8 rounded-full bg-[#22577a] flex items-center justify-center text-black font-bold text-sm mt-0.5">
                         {staff.name.charAt(0)}
                       </div>
                     )}
@@ -431,7 +431,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                         ) : (
                           <button onClick={() => handleToggleApproval(staff, true)} className="flex-1 px-3 py-2 bg-green-50 text-green-600 hover:bg-green-100 rounded text-sm font-medium transition"><Check className="w-4 h-4 inline mr-1" /> Approve</button>
                         )}
-                        <button onClick={() => setViewingStaff(staff)} className="flex-1 px-3 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded text-sm font-medium transition"><Eye className="w-4 h-4 inline mr-1" /> View</button>
+                        <button onClick={() => setViewingStaff(staff)} className="flex-1 px-3 py-2 bg-[#e0ecf2] text-[#1f4f70] hover:bg-[#cfe0eb] rounded text-sm font-medium transition"><Eye className="w-4 h-4 inline mr-1" /> View</button>
                         <button onClick={() => startEditing(staff)} className="flex-1 px-3 py-2 bg-yellow-50 text-yellow-600 hover:bg-yellow-100 rounded text-sm font-medium transition"><Edit className="w-4 h-4 inline mr-1" /> Edit</button>
                       </div>
                     </div>
@@ -455,16 +455,16 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
         {viewingStaff && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-gradient-to-r from-blue-400 to-blue-500 text-white p-6 flex items-center justify-between border-b border-blue-600">
+              <div className="sticky top-0 bg-[#22577a] text-white p-6 flex items-center justify-between border-b border-[#1f4f70]">
                 <h2 className="text-2xl font-bold">Staff Details</h2>
-                <button onClick={() => setViewingStaff(null)} className="p-2 hover:bg-blue-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+                <button onClick={() => setViewingStaff(null)} className="p-2 hover:bg-[#1f4f70]/20 rounded-lg transition"><X className="w-6 h-6" /></button>
               </div>
               <div className="p-8 space-y-6">
                 <div className="flex items-center gap-6 mb-6">
                   {viewingStaff.avatarUrl ? (
                     <img src={viewingStaff.avatarUrl} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-gray-200" />
                   ) : (
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-black font-bold text-2xl">
+                    <div className="w-20 h-20 rounded-full bg-[#22577a] flex items-center justify-center text-black font-bold text-2xl">
                       {viewingStaff.name.charAt(0)}
                     </div>
                   )}
@@ -504,7 +504,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
                       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                       {viewingStaff.documents.map((doc: any, i: number) => (
                         <li key={i}>
-                          <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm">
+                          <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[#1f4f70] hover:text-[#163c56] text-sm">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                             {doc.name}
                           </a>
@@ -516,7 +516,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
               </div>
               <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex flex-wrap items-center justify-between gap-2">
                 <button onClick={() => setViewingStaff(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
-                <button onClick={() => { startEditing(viewingStaff); setViewingStaff(null); }} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Edit Staff Member</button>
+                <button onClick={() => { startEditing(viewingStaff); setViewingStaff(null); }} className="px-6 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Edit Staff Member</button>
               </div>
             </div>
           </div>
@@ -525,7 +525,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
         {showAddStaff && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-6 flex items-center justify-between border-b border-yellow-600">
+              <div className="sticky top-0 bg-[#22577a] text-black p-6 flex items-center justify-between border-b border-yellow-600">
                 <h2 className="text-2xl font-bold">Add New Staff</h2>
                 <button onClick={() => setShowAddStaff(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
               </div>
@@ -560,7 +560,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
               </div>
               <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex flex-wrap items-center justify-between gap-2">
                 <button onClick={() => setShowAddStaff(false)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
-                <button onClick={handleAddStaff} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Create Staff Account</button>
+                <button onClick={handleAddStaff} className="px-6 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Create Staff Account</button>
               </div>
             </div>
           </div>
@@ -569,7 +569,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
         {editingStaff && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-6 flex items-center justify-between border-b border-yellow-600">
+              <div className="sticky top-0 bg-[#22577a] text-black p-6 flex items-center justify-between border-b border-yellow-600">
                 <h2 className="text-2xl font-bold">Edit Staff Member</h2>
                 <button onClick={() => setEditingStaff(null)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
               </div>
@@ -650,7 +650,7 @@ export default function FacilityAdminPortalContent({ tab }: FacilityAdminPortalC
               </div>
               <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-8 py-4 flex flex-wrap items-center justify-between gap-2">
                 <button onClick={() => setEditingStaff(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
-                <button onClick={handleSaveEdit} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Save Changes</button>
+                <button onClick={handleSaveEdit} className="px-6 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">Save Changes</button>
               </div>
             </div>
           </div>
@@ -688,7 +688,7 @@ function MonitoringViewInner() {
   return (
     <div className="space-y-6">
       {/* Resident Header Card */}
-      <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 shadow-lg">
+      <div className="bg-[#22577a] rounded-xl p-6 shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
@@ -709,13 +709,13 @@ function MonitoringViewInner() {
                 {resident || "Facility Monitoring"}
               </h1>
               {room && (
-                <p className="text-blue-100 text-sm">
+                <p className="text-[#cfe0eb] text-sm">
                   Room {room} &middot; Camera feed with AI-powered analysis
                 </p>
               )}
             </div>
           </div>
-          <Camera className="w-12 h-12 text-blue-200/50 hidden sm:block" />
+          <Camera className="w-12 h-12 text-[#a9c6d8]/50 hidden sm:block" />
         </div>
       </div>
 
@@ -743,7 +743,7 @@ function MonitoringViewInner() {
 
       {/* Camera Mode Info */}
       <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
-        <Camera className="w-4 h-4 text-blue-500" />
+        <Camera className="w-4 h-4 text-[#22577a]" />
         Switch between <span className="font-semibold text-gray-700">Local</span> (browser webcam) and{" "}
         <span className="font-semibold text-gray-700">Tapo IP</span> (network camera) using the buttons on the camera feed.
       </div>
@@ -752,7 +752,7 @@ function MonitoringViewInner() {
       {showVitals && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className={`bg-white rounded-xl shadow-2xl w-full ${resident ? "max-w-md" : "max-w-3xl"} max-h-[90vh] overflow-y-auto`}>
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
               <div className="flex items-center gap-2">
                 <Activity className="w-5 h-5" />
                 <h2 className="text-xl font-bold">

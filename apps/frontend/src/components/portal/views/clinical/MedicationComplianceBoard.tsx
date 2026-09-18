@@ -75,14 +75,14 @@ export default function MedicationComplianceBoard() {
     <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2.5"><span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 shrink-0"><Pill className="h-5 w-5 text-blue-500" /></span> Medication Compliance Report</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2.5"><span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#e0ecf2] shrink-0"><Pill className="h-5 w-5 text-[#22577a]" /></span> Medication Compliance Report</h1>
           <p className="text-sm text-slate-500 mt-1">Given, Refused, Held, and Missed dose breakdown</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50"><Printer className="w-4 h-4" /> Export PDF</button>
           <div className="inline-flex rounded-xl border border-slate-200 bg-white overflow-hidden text-sm">
             {([["week", "This week"], ["lastweek", "Last week"], ["30d", "Last 30 days"], ["month", "This month"]] as const).map(([v, label]) => (
-              <button key={v} onClick={() => setRange(v)} className={`px-3 py-2 font-medium ${range === v ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>{label}</button>
+              <button key={v} onClick={() => setRange(v)} className={`px-3 py-2 font-medium ${range === v ? "bg-[#1f4f70] text-white" : "text-slate-600 hover:bg-slate-50"}`}>{label}</button>
             ))}
           </div>
         </div>
@@ -90,7 +90,7 @@ export default function MedicationComplianceBoard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         <StatCard icon={TrendingUp} tint="#16a34a" bg="bg-green-50" value={compliancePct(facility) == null ? "—" : `${compliancePct(facility)}%`} label="Facility Compliance" sub={rangeLabel} />
-        <StatCard icon={Pill} tint="#2563eb" bg="bg-blue-50" value={String(facility.doses)} label="Total Doses Scheduled" />
+        <StatCard icon={Pill} tint="#2563eb" bg="bg-[#e0ecf2]" value={String(facility.doses)} label="Total Doses Scheduled" />
         <StatCard icon={CheckCircle2} tint="#16a34a" bg="bg-green-50" value={String(facility.given)} label="Doses Given" />
         <StatCard icon={AlertCircle} tint="#dc2626" bg="bg-red-50" value={String(residentsWithMissed)} label="Residents with Missed Doses" sub="pending / not administered" />
       </div>
@@ -110,7 +110,7 @@ export default function MedicationComplianceBoard() {
               <thead><tr className="text-left border-b border-slate-100">
                 <th className="font-semibold text-slate-500 px-3 py-2.5">Resident</th>
                 <th className="font-semibold text-slate-500 px-3 py-2.5 text-center">Doses</th>
-                {([["given", "Given", "text-green-600"], ["refused", "Refused", "text-amber-600"], ["held", "Held", "text-blue-600"], ["missed", "Missed", "text-red-600"]] as const).map(([k, label, cls]) => (
+                {([["given", "Given", "text-green-600"], ["refused", "Refused", "text-amber-600"], ["held", "Held", "text-[#1f4f70]"], ["missed", "Missed", "text-red-600"]] as const).map(([k, label, cls]) => (
                   <th key={k} onClick={() => toggleSort(k)} className={`font-semibold px-3 py-2.5 text-center cursor-pointer select-none ${cls}`}>
                     <span className="inline-flex items-center gap-1">{label}{sortKey === k ? (sortDir === "asc" ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />) : null}</span>
                   </th>
@@ -119,11 +119,11 @@ export default function MedicationComplianceBoard() {
               <tbody>
                 {sortedResidents.map(({ r, t }) => (
                   <tr key={s(r.id)} className="border-b border-slate-50 last:border-0">
-                    <td className="px-3 py-2.5"><span className="inline-flex items-center gap-2"><span className="w-7 h-7 rounded-full bg-blue-50 text-blue-600 text-[10px] font-bold flex items-center justify-center">{s(r.room)}</span><span className="font-semibold text-slate-800">{s(r.name)}</span></span></td>
+                    <td className="px-3 py-2.5"><span className="inline-flex items-center gap-2"><span className="w-7 h-7 rounded-full bg-[#e0ecf2] text-[#1f4f70] text-[10px] font-bold flex items-center justify-center">{s(r.room)}</span><span className="font-semibold text-slate-800">{s(r.name)}</span></span></td>
                     <td className="px-3 py-2.5 text-center text-slate-700">{t.doses}</td>
                     <td className="px-3 py-2.5 text-center font-semibold text-green-600">{dash(t.given)}</td>
                     <td className="px-3 py-2.5 text-center text-amber-600">{dash(t.refused)}</td>
-                    <td className="px-3 py-2.5 text-center text-blue-600">{dash(t.held)}</td>
+                    <td className="px-3 py-2.5 text-center text-[#1f4f70]">{dash(t.held)}</td>
                     <td className="px-3 py-2.5 text-center text-red-600">{dash(t.missed)}</td>
                   </tr>
                 ))}
@@ -173,7 +173,7 @@ function ResidentDetail({ residents, meds, marsInRange, add, rangeLabel, end, de
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <select value={resId} onChange={(e) => setDetailRes(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40">
+        <select value={resId} onChange={(e) => setDetailRes(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40">
           {residents.map((r) => <option key={s(r.id)} value={s(r.id)}>Rm {s(r.room)} — {s(r.name)}</option>)}
         </select>
         <span className="text-xs text-slate-400">{rangeLabel}</span>
@@ -181,7 +181,7 @@ function ResidentDetail({ residents, meds, marsInRange, add, rangeLabel, end, de
 
       {resident && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3"><span className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 text-xs font-bold flex flex-col items-center justify-center leading-none"><span className="text-[9px]">Rm</span>{s(resident.room)}</span><div><p className="font-bold text-slate-900">{s(resident.name)}</p><p className="text-xs text-slate-500">{resMeds.length} medication{resMeds.length === 1 ? "" : "s"} in period</p></div></div>
+          <div className="flex items-center gap-3"><span className="w-11 h-11 rounded-xl bg-[#e0ecf2] text-[#1f4f70] text-xs font-bold flex flex-col items-center justify-center leading-none"><span className="text-[9px]">Rm</span>{s(resident.room)}</span><div><p className="font-bold text-slate-900">{s(resident.name)}</p><p className="text-xs text-slate-500">{resMeds.length} medication{resMeds.length === 1 ? "" : "s"} in period</p></div></div>
           <div className="flex items-center gap-6 text-center">
             <div><p className="text-lg font-bold" style={{ color: pctTone(compliancePct(total)) }}>{compliancePct(total) == null ? "—" : `${compliancePct(total)}%`}</p><p className="text-[11px] text-slate-400">Overall</p></div>
             <div><p className="text-lg font-bold text-slate-800">{total.doses}</p><p className="text-[11px] text-slate-400">Total doses</p></div>
@@ -198,7 +198,7 @@ function ResidentDetail({ residents, meds, marsInRange, add, rangeLabel, end, de
             <th className="font-semibold text-slate-500 px-3 py-2.5 text-center">Total</th>
             <th className="font-semibold text-green-600 px-3 py-2.5 text-center">Given</th>
             <th className="font-semibold text-amber-600 px-3 py-2.5 text-center">Refused</th>
-            <th className="font-semibold text-blue-600 px-3 py-2.5 text-center">Held</th>
+            <th className="font-semibold text-[#1f4f70] px-3 py-2.5 text-center">Held</th>
             <th className="font-semibold text-red-600 px-3 py-2.5 text-center">Missed</th>
             <th className="font-semibold text-slate-500 px-3 py-2.5 text-center">Compliance</th>
           </tr></thead>
@@ -211,7 +211,7 @@ function ResidentDetail({ residents, meds, marsInRange, add, rangeLabel, end, de
                   <td className="px-3 py-2.5 text-center text-slate-700">{t.doses}</td>
                   <td className="px-3 py-2.5 text-center text-green-600 font-semibold">{t.given}<span className="block text-[10px] text-slate-400">{p == null ? "0%" : `${p}%`}</span></td>
                   <td className="px-3 py-2.5 text-center text-amber-600">{dash(t.refused)}</td>
-                  <td className="px-3 py-2.5 text-center text-blue-600">{dash(t.held)}</td>
+                  <td className="px-3 py-2.5 text-center text-[#1f4f70]">{dash(t.held)}</td>
                   <td className="px-3 py-2.5 text-center text-red-600">{dash(t.missed)}</td>
                   <td className="px-3 py-2.5 text-center"><span className={`text-xs font-bold px-2 py-0.5 rounded-full ${pctBadge(p)}`}>{p == null ? "0%" : `${p}%`}</span></td>
                 </tr>

@@ -12,7 +12,7 @@ interface ResidentCardProps {
 
 const careLevelColor: Record<string, { bg: string; text: string }> = {
   INDEPENDENT: { bg: "bg-green-100", text: "text-green-800" },
-  ASSISTED: { bg: "bg-blue-100", text: "text-blue-800" },
+  ASSISTED: { bg: "bg-[#cfe0eb]", text: "text-[#163c56]" },
   MEMORY: { bg: "bg-purple-100", text: "text-purple-800" },
   SKILLED: { bg: "bg-orange-100", text: "text-orange-800" },
 };
@@ -40,12 +40,12 @@ export default function ResidentCard({
     <div
       onClick={onClick}
       className={`bg-surface rounded-lg p-4 border border-border shadow-sm hover:shadow-md transition ${
-        isSelectable && "cursor-pointer hover:border-blue-300"
+        isSelectable && "cursor-pointer hover:border-[#7fa9c2]"
       }`}
     >
       <div className="flex items-start gap-3">
         {/* Avatar */}
-        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 flex-shrink-0">
+        <div className="w-10 h-10 bg-[#cfe0eb] rounded-lg flex items-center justify-center text-[#1f4f70] flex-shrink-0">
           <User className="w-5 h-5" />
         </div>
 

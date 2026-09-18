@@ -17,9 +17,9 @@ import LeadFollowUpsBoard from "@/components/portal/views/crm/LeadFollowUpsBoard
 import LeadToursBoard from "@/components/portal/views/crm/LeadToursBoard";
 import LeadAnalyticsBoard from "@/components/portal/views/crm/LeadAnalyticsBoard";
 
-const input = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white";
+const input = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#22577a] focus:ring-2 focus:ring-[#22577a]/20 bg-white";
 // No `w-full` — for selects/inputs whose width is set by flex/explicit classes.
-const selectCls = "rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white";
+const selectCls = "rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#22577a] focus:ring-2 focus:ring-[#22577a]/20 bg-white";
 type View = "pipeline" | "followups" | "tours" | "analytics";
 const TABS: { key: View; label: string; icon: typeof LayoutGrid }[] = [
   { key: "pipeline", label: "Pipeline", icon: LayoutGrid },
@@ -93,19 +93,19 @@ export default function LeadPipelineBoard({ initialView = "pipeline" }: { initia
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2"><Users className="w-7 h-7 text-blue-600" /> CRM Workspace</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2"><Users className="w-7 h-7 text-[#1f4f70]" /> CRM Workspace</h1>
           <p className="text-slate-500 text-sm">Leads from first inquiry to move-in — pipeline, follow-ups, tours and growth analytics.</p>
         </div>
-        <button onClick={() => { setNf(NEW_EMPTY); setShowNew(true); }} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 self-start shadow-sm"><Plus className="w-4 h-4" /> New Lead</button>
+        <button onClick={() => { setNf(NEW_EMPTY); setShowNew(true); }} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763] self-start shadow-sm"><Plus className="w-4 h-4" /> New Lead</button>
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-slate-200">
+      <div className="flex gap-1 border-b border-[var(--clinical-line)]">
         {TABS.map((t) => {
           const active = view === t.key;
           return (
             <button key={t.key} onClick={() => setView(t.key)}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium border-b-2 -mb-px transition ${active ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium border-b-2 -mb-px transition ${active ? "border-[var(--clinical-panel)] text-[var(--clinical-ink)]" : "border-transparent text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"}`}>
               <t.icon className="w-4 h-4" /> {t.label}
             </button>
           );
@@ -116,7 +116,7 @@ export default function LeadPipelineBoard({ initialView = "pipeline" }: { initia
         <>
           {/* KPIs */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Kpi label="Open Pipeline" value={stats.open} icon={TrendingUp} tone="text-blue-600" />
+            <Kpi label="Open Pipeline" value={stats.open} icon={TrendingUp} tone="text-[#1f4f70]" />
             <Kpi label="Moved In (Won)" value={stats.won} icon={UserPlus} tone="text-emerald-600" />
             <Kpi label="Conversion" value={`${stats.conversion}%`} icon={Percent} tone="text-teal-600" />
             <Kpi label="Overdue Follow-ups" value={stats.due} icon={CalendarClock} tone={stats.due ? "text-amber-600" : "text-slate-500"} />
@@ -143,7 +143,7 @@ export default function LeadPipelineBoard({ initialView = "pipeline" }: { initia
                 <div key={stage}
                   onDragOver={(e) => { if (dragId) e.preventDefault(); }}
                   onDrop={() => { const lead = api.leads.find((l) => l.id === dragId); if (lead && lead.stage !== stage) api.moveStage(lead, stage); setDragId(null); }}
-                  className={`flex flex-col rounded-xl border bg-slate-50/70 overflow-hidden transition ${dragId ? "border-dashed border-blue-300" : "border-slate-200"}`}>
+                  className={`flex flex-col rounded-xl border bg-slate-50/70 overflow-hidden transition ${dragId ? "border-dashed border-[#7fa9c2]" : "border-slate-200"}`}>
                   <button type="button" onClick={() => setCollapsed((c) => ({ ...c, [stage]: !c[stage] }))} aria-expanded={!isCollapsed}
                     className="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-slate-100 bg-white/70 hover:bg-slate-50 text-left">
                     <span className="flex items-center gap-1.5 min-w-0">
@@ -162,7 +162,7 @@ export default function LeadPipelineBoard({ initialView = "pipeline" }: { initia
                         return (
                           <div key={lead.id} draggable onDragStart={() => setDragId(lead.id)} onDragEnd={() => setDragId(null)}
                             onClick={() => setDrawerId(lead.id)}
-                            className={`group rounded-lg border border-slate-200 bg-white p-3 shadow-sm hover:shadow-md hover:border-blue-300 cursor-pointer transition ${dragId === lead.id ? "opacity-50" : ""}`}>
+                            className={`group rounded-lg border border-slate-200 bg-white p-3 shadow-sm hover:shadow-md hover:border-[#7fa9c2] cursor-pointer transition ${dragId === lead.id ? "opacity-50" : ""}`}>
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
                                 <p className="font-semibold text-sm text-slate-900 truncate">{lead.name}</p>
@@ -179,7 +179,7 @@ export default function LeadPipelineBoard({ initialView = "pipeline" }: { initia
                               {lead.source && <p className="text-slate-400">Source: {lead.source}</p>}
                             </div>
                             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                              {lead.tourDate && !lead.tourOutcome && <Chip icon={MapPin} cls="bg-sky-50 text-sky-700">{new Date(lead.tourDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</Chip>}
+                              {lead.tourDate && !lead.tourOutcome && <Chip icon={MapPin} cls="bg-[#e0ecf2] text-[#1b4763]">{new Date(lead.tourDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</Chip>}
                               {openCount > 0 && <Chip icon={ListChecks} cls="bg-slate-100 text-slate-600">{openCount}</Chip>}
                               {fu && <Chip icon={CalendarClock} cls={fd != null && fd < 0 ? "bg-rose-50 text-rose-600" : fd != null && fd <= 2 ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}>{fd != null && fd < 0 ? `${Math.abs(fd)}d overdue` : fd === 0 ? "today" : `${fd}d`}</Chip>}
                               {adm && <Chip icon={UserPlus} cls="bg-amber-50 text-amber-700">{String(adm.status) === "COMPLETED" ? "Admitted" : "In admission"}</Chip>}
@@ -188,7 +188,7 @@ export default function LeadPipelineBoard({ initialView = "pipeline" }: { initia
                             <select value={lead.stage}
                               onClick={(e) => e.stopPropagation()}
                               onChange={(e) => { e.stopPropagation(); const s = e.target.value as LeadStage; if (s !== lead.stage) api.moveStage(lead, s); }}
-                              className="mt-2 w-full rounded-md border border-slate-200 bg-slate-50 text-[11px] font-medium text-slate-600 py-1 px-1.5 outline-none focus:border-blue-400 cursor-pointer">
+                              className="mt-2 w-full rounded-md border border-slate-200 bg-slate-50 text-[11px] font-medium text-slate-600 py-1 px-1.5 outline-none focus:border-[#4f93bd] cursor-pointer">
                               {LEAD_STAGES.map((s) => <option key={s} value={s}>{STAGE_META[s].label}</option>)}
                             </select>
                           </div>
@@ -215,7 +215,7 @@ export default function LeadPipelineBoard({ initialView = "pipeline" }: { initia
       {showNew && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between bg-blue-600 px-5 py-4 text-white rounded-t-xl">
+            <div className="flex items-center justify-between bg-[#1f4f70] px-5 py-4 text-white rounded-t-xl">
               <h3 className="font-bold">New Lead</h3>
               <button onClick={() => setShowNew(false)} className="p-1 hover:bg-white/15 rounded"><X className="w-5 h-5" /></button>
             </div>
@@ -231,7 +231,7 @@ export default function LeadPipelineBoard({ initialView = "pipeline" }: { initia
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3">
               <button onClick={() => setShowNew(false)} className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100">Cancel</button>
-              <button onClick={() => void saveNew()} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Create &amp; open</button>
+              <button onClick={() => void saveNew()} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763] disabled:opacity-60">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Create &amp; open</button>
             </div>
           </div>
         </div>

@@ -20,7 +20,7 @@ interface Goal {
 
 const STATUS_META = {
   "on-track": { label: "On track", badge: "bg-green-100 text-green-700", bar: "bg-green-500" },
-  "in-progress": { label: "In progress", badge: "bg-blue-100 text-blue-700", bar: "bg-blue-500" },
+  "in-progress": { label: "In progress", badge: "bg-[#cfe0eb] text-[#1b4763]", bar: "bg-[#22577a]" },
   attention: { label: "Needs attention", badge: "bg-red-100 text-red-700", bar: "bg-red-500" },
 } as const;
 
@@ -28,13 +28,13 @@ const STATUS_META = {
 // grouped by category. We present them to the resident/family in plain language.
 const ITEM_GROUPS: { key: string; label: string; icon: typeof Target; tone: string }[] = [
   { key: "GOAL", label: "Care goals", icon: Target, tone: "text-green-600" },
-  { key: "INTERVENTION", label: "What the care team will do", icon: Stethoscope, tone: "text-blue-600" },
+  { key: "INTERVENTION", label: "What the care team will do", icon: Stethoscope, tone: "text-[#1f4f70]" },
   { key: "RESPONSIBILITY", label: "Responsibilities", icon: Users, tone: "text-purple-600" },
   { key: "REVIEW_NOTE", label: "Review notes", icon: FileText, tone: "text-gray-600" },
 ];
 const PLAN_STATUS_BADGE: Record<string, string> = {
   ACTIVE: "bg-green-100 text-green-700", DRAFT: "bg-gray-100 text-gray-600",
-  UNDER_REVIEW: "bg-amber-100 text-amber-700", COMPLETED: "bg-blue-100 text-blue-700",
+  UNDER_REVIEW: "bg-amber-100 text-amber-700", COMPLETED: "bg-[#cfe0eb] text-[#1b4763]",
   DISCONTINUED: "bg-red-100 text-red-600",
 };
 
@@ -122,7 +122,7 @@ export default function FamilyCareGoals() {
       {plan ? (
         <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-bold text-gray-900 flex items-center gap-2"><FileText className="w-5 h-5 text-blue-500" /> Your documented care plan</h2>
+            <h2 className="font-bold text-gray-900 flex items-center gap-2"><FileText className="w-5 h-5 text-[#22577a]" /> Your documented care plan</h2>
             <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${PLAN_STATUS_BADGE[str(plan.status)] ?? "bg-gray-100 text-gray-600"}`}>{str(plan.status, "DRAFT")}</span>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-500">
@@ -163,18 +163,18 @@ export default function FamilyCareGoals() {
           {str(plan.notes) && <p className="text-xs text-gray-500 border-t border-gray-100 pt-3">{str(plan.notes)}</p>}
         </div>
       ) : (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800 flex items-center gap-2">
+        <div className="bg-[#e0ecf2] border border-[#a9c6d8] rounded-lg px-4 py-3 text-sm text-[#163c56] flex items-center gap-2">
           <FileText className="w-5 h-5 flex-shrink-0" /> Your care team is preparing the documented care plan. Meanwhile, here is {displayName}&apos;s live progress.
         </div>
       )}
 
       {/* ── Be an active participant ── */}
       <div className="bg-white rounded-lg border border-gray-200 p-5">
-        <h3 className="font-semibold text-gray-900 flex items-center gap-2 mb-1"><MessageSquarePlus className="w-4 h-4 text-indigo-500" /> Share your input with the care team</h3>
+        <h3 className="font-semibold text-gray-900 flex items-center gap-2 mb-1"><MessageSquarePlus className="w-4 h-4 text-[#22577a]" /> Share your input with the care team</h3>
         <p className="text-xs text-gray-500 mb-3">Your goals, preferences, and questions help shape the plan. What matters most to you?</p>
         <div className="flex flex-col sm:flex-row gap-2">
-          <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={2} placeholder="e.g. I'd like more time outdoors in the afternoon…" className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none resize-none" />
-          <button onClick={shareInput} disabled={sending || !input.trim()} className="self-start inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition disabled:opacity-40">
+          <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={2} placeholder="e.g. I'd like more time outdoors in the afternoon…" className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#4f93bd] outline-none resize-none" />
+          <button onClick={shareInput} disabled={sending || !input.trim()} className="self-start inline-flex items-center gap-2 px-4 py-2 bg-[#1f4f70] text-white text-sm font-semibold rounded-lg hover:bg-[#1b4763] transition disabled:opacity-40">
             <Send className="w-4 h-4" /> Send
           </button>
         </div>
@@ -182,7 +182,7 @@ export default function FamilyCareGoals() {
 
       {/* ── Live progress snapshot ── */}
       <div>
-        <div className={`rounded-lg border px-4 py-3 text-sm font-semibold flex items-center gap-2 mb-4 ${onTrack === goals.length ? "border-green-200 bg-green-50 text-green-800" : "border-blue-200 bg-blue-50 text-blue-800"}`}>
+        <div className={`rounded-lg border px-4 py-3 text-sm font-semibold flex items-center gap-2 mb-4 ${onTrack === goals.length ? "border-green-200 bg-green-50 text-green-800" : "border-[#a9c6d8] bg-[#e0ecf2] text-[#163c56]"}`}>
           <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
           {onTrack === goals.length ? `Every wellness goal is on track — ${displayName} is doing great.` : `${onTrack} of ${goals.length} wellness goals on track; the care team is working on the rest.`}
         </div>

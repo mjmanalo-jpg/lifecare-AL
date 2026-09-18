@@ -302,7 +302,7 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2">
             Resident Services
           </h1>
           <p className="text-gray-600">Hotel-style ticket desk — aircon/HVAC · housekeeping · room service · laundry · repairs</p>
@@ -312,7 +312,7 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
           {/* Tickets originate from residents or the Facility Admin front desk — crew
               portals (scoped via `categories`) work the queue but don't raise tickets. */}
           {!categories && (
-            <button onClick={() => { setForm(emptyForm); setShowCreate(true); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+            <button onClick={() => { setForm(emptyForm); setShowCreate(true); }} className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
               <Plus className="w-4 h-4" /> New Ticket (Front Desk)
             </button>
           )}
@@ -408,7 +408,7 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
                     <td className="px-4 py-3 text-gray-600 text-xs max-w-[220px]">
                       <p className="truncate" title={t.details}>{t.details || "—"}</p>
                       {t.photoProofUrl && (
-                        <a href={t.photoProofUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 mt-0.5">
+                        <a href={t.photoProofUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[#1f4f70] hover:text-[#163c56] mt-0.5">
                           <Camera className="w-3 h-3" /> Photo proof
                         </a>
                       )}
@@ -511,7 +511,7 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
               <h2 className="text-xl font-bold">New Service Ticket</h2>
               <button onClick={() => setShowCreate(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
@@ -559,7 +559,7 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Photo (optional)</label>
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* capture="environment" opens the rear camera on a phone. */}
-                    <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 cursor-pointer">
+                    <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763] cursor-pointer">
                       <Camera className="w-4 h-4" /> Take Photo
                       <input type="file" accept="image/*" capture="environment" className="hidden" onChange={async e => { const f = e.target.files?.[0]; if (!f) return; const url = await downscaleImage(f); setForm(p => ({ ...p, photo: url })); }} />
                     </label>
@@ -583,7 +583,7 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
               <button onClick={() => setShowCreate(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
-              <button onClick={handleCreate} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Create Ticket</button>
+              <button onClick={handleCreate} className="px-5 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Create Ticket</button>
             </div>
           </div>
         </div>
@@ -615,7 +615,7 @@ export default function ServiceRequestsBoard({ categories }: { categories?: stri
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string; icon: React.ComponentType<{ className?: string }>; color: string }) {
   const COLORS: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50 border-blue-200",
+    blue: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     green: "text-green-600 bg-green-50 border-green-200",
     red: "text-red-600 bg-red-50 border-red-200",
     purple: "text-purple-600 bg-purple-50 border-purple-200",

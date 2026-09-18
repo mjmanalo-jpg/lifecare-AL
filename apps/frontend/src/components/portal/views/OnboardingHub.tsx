@@ -16,12 +16,12 @@ export default function OnboardingHub({ initialTab = "admissions" }: { initialTa
 
   const tabCls = (active: boolean) =>
     `flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors whitespace-nowrap ${
-      active ? "border-amber-500 text-amber-600" : "border-transparent text-gray-500 hover:text-gray-700"
+      active ? "border-[var(--clinical-panel)] text-[var(--clinical-ink)]" : "border-transparent text-[var(--clinical-muted)] hover:text-[var(--clinical-ink)]"
     }`;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-1 border-b border-gray-200 overflow-x-auto">
+      <div className="flex items-center gap-1 border-b border-[var(--clinical-line)] overflow-x-auto">
         <button onClick={() => setView("admissions")} className={tabCls(view === "admissions")}>
           <UserPlus className="w-4 h-4" /> Admissions
         </button>

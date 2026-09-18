@@ -53,20 +53,20 @@ interface EditForm { name: string; room: string; careLevel: CareLevel; allergies
 const CARE_ORDER: CareLevel[] = ["INDEPENDENT", "ASSISTED", "MEMORY", "SKILLED"];
 const CARE_BADGE: Record<CareLevel, string> = {
   INDEPENDENT: "bg-green-100 text-green-800",
-  ASSISTED: "bg-blue-100 text-blue-800",
+  ASSISTED: "bg-[#cfe0eb] text-[#163c56]",
   MEMORY: "bg-purple-100 text-purple-800",
   SKILLED: "bg-red-100 text-red-800",
 };
 const CARE_COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#ef4444"];
 const CARD_VITALS: { key: string; label: string; icon: LucideIcon; color: string }[] = [
   { key: "HEART_RATE", label: "HR", icon: Heart, color: "text-red-500" },
-  { key: "BLOOD_PRESSURE", label: "BP", icon: Droplets, color: "text-blue-500" },
+  { key: "BLOOD_PRESSURE", label: "BP", icon: Droplets, color: "text-[#22577a]" },
   { key: "TEMPERATURE", label: "Temp", icon: Thermometer, color: "text-orange-500" },
   { key: "OXYGEN", label: "O₂", icon: Wind, color: "text-green-500" },
 ];
 const SEVERITY_BADGE: Record<string, string> = {
   critical: "bg-red-100 text-red-700", high: "bg-orange-100 text-orange-700",
-  medium: "bg-yellow-100 text-yellow-700", low: "bg-blue-100 text-blue-700",
+  medium: "bg-yellow-100 text-yellow-700", low: "bg-[#cfe0eb] text-[#1b4763]",
 };
 
 /* ── Helpers ─────────────────────────────────────────────────────────── */
@@ -281,7 +281,7 @@ export default function NurseRecords() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <Users className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Resident Records
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -405,7 +405,7 @@ export default function NurseRecords() {
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-1">
                               {r.callBells.length > 0 && <button onClick={() => setBellsViewing(r)} className="px-2 py-1 bg-orange-500 text-white rounded text-xs font-semibold hover:bg-orange-600 transition">Bells</button>}
-                              <button onClick={() => setViewing(r)} className="px-3 py-1 bg-blue-500 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition">View</button>
+                              <button onClick={() => setViewing(r)} className="px-3 py-1 bg-[#22577a] text-white rounded-lg text-xs font-semibold hover:bg-[#1f4f70] transition">View</button>
                               <button onClick={() => setQrResident({ id: r.id, name: r.name, room: r.room })} title="Show QR care card" className="px-2 py-1 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 transition inline-flex items-center gap-1"><QrCode className="w-3.5 h-3.5" /> QR</button>
                             </div>
                           </td>
@@ -465,7 +465,7 @@ export default function NurseRecords() {
           </div>
           <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-3">
             <button onClick={() => setEditing(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
-            <button onClick={() => void saveEdit()} disabled={saving} className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-60">{saving ? "Saving…" : "Save Changes"}</button>
+            <button onClick={() => void saveEdit()} disabled={saving} className="px-6 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-60">{saving ? "Saving…" : "Save Changes"}</button>
           </div>
         </Modal>
       )}
@@ -540,7 +540,7 @@ function CallBellsModal({ r, onClose, refetchCallBells }: { r: RecordVM; onClose
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-orange-400 to-orange-500 text-white p-6 flex items-center justify-between">
+        <div className="sticky top-0 bg-[#b58a2e] text-white p-6 flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold">Call Bells</h2>
             <p className="text-orange-100">{r.name} • Room {r.room}</p>
@@ -658,7 +658,7 @@ function CallBellsModal({ r, onClose, refetchCallBells }: { r: RecordVM; onClose
       {resolveFor && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={() => !resolveBusy && setResolveFor(null)}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-green-400 to-green-500 text-white p-6 flex items-center justify-between">
+            <div className="bg-[#4fa77e] text-white p-6 flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold">Resolve Call Bell</h2>
                 <p className="text-sm text-green-100">{r.name} • Room {r.room}</p>
@@ -799,7 +799,7 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
             <h3 className="font-bold text-gray-900 mb-3">Medications ({r.meds.length})</h3>
             <div className="space-y-2">
               {r.meds.length ? r.meds.map((m, i) => (
-                <div key={i} className="flex items-center justify-between gap-2 p-2 bg-blue-50 rounded border border-blue-200">
+                <div key={i} className="flex items-center justify-between gap-2 p-2 bg-[#e0ecf2] rounded border border-[#a9c6d8]">
                   <span className="text-gray-900 text-sm">💊 {m.name} <span className="text-gray-500">{m.dosage}</span></span>
                   <span className="text-xs text-gray-600">{m.frequency}</span>
                 </div>
@@ -888,12 +888,12 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
             onClick={() => {
               router.push(`/${basePrefix}/monitoring?resident=${encodeURIComponent(r.name)}&room=${encodeURIComponent(r.room)}&residentId=${encodeURIComponent(r.id)}`);
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-400 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
+            className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
           >
             <Camera className="w-4 h-4" /> View Monitoring
           </button>
         </div>
-        <button onClick={onEdit} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition"><Pencil className="w-4 h-4" /> Edit Record</button>
+        <button onClick={onEdit} className="flex items-center gap-2 px-6 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition"><Pencil className="w-4 h-4" /> Edit Record</button>
       </div>
     </Modal>
 
@@ -901,7 +901,7 @@ function RecordModal({ r, nowTs, onClose, onEdit }: { r: RecordVM; nowTs: number
     {selectedBell && bellModalMode === "respond" && (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-6 flex items-center justify-between">
+          <div className="bg-[#22577a] text-black p-6 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold">Respond to Call Bell</h2>
               <p className="text-sm text-gray-900">{r.name} • Room {r.room}</p>
@@ -1020,7 +1020,7 @@ function CallBellResolveModal({
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="bg-gradient-to-r from-green-400 to-green-500 text-white p-6 flex items-center justify-between">
+        <div className="bg-[#4fa77e] text-white p-6 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold">Resolve Call Bell</h2>
             <p className="text-sm text-green-100">{resident.name} • Room {resident.room}</p>
@@ -1073,7 +1073,7 @@ function CallBellResolveModal({
 
 const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
   gray: { wrap: "bg-white border-gray-200", icon: "text-gray-500", value: "text-gray-900" },
-  blue: { wrap: "bg-blue-50 border-blue-200", icon: "text-blue-500", value: "text-blue-600" },
+  blue: { wrap: "bg-[#e0ecf2] border-[#a9c6d8]", icon: "text-[#22577a]", value: "text-[#1f4f70]" },
   red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
   green: { wrap: "bg-green-50 border-green-200", icon: "text-green-500", value: "text-green-600" },
   purple: { wrap: "bg-purple-50 border-purple-200", icon: "text-purple-500", value: "text-purple-600" },
@@ -1105,7 +1105,7 @@ function Modal({ title, subtitle, onClose, children }: { title: string; subtitle
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-gray-900 to-black text-white p-5 sm:p-6 flex items-center justify-between z-10 border-b border-yellow-300">
+        <div className="sticky top-0 bg-[#0f172a] text-white p-5 sm:p-6 flex items-center justify-between z-10 border-b border-yellow-300">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold">{title}</h2>
             {subtitle && <p className="text-gray-300 text-sm">{subtitle}</p>}

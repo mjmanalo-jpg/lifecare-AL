@@ -34,7 +34,7 @@ type Kind = "appointment" | "med" | "lab" | "care-plan";
 type Item = { kind: Kind; id: string; row: Row; state: "PENDING" | "APPROVED" | "REJECTED"; when: number };
 
 const KIND_META: Record<Kind, { label: string; Icon: typeof Pill; tint: string; ring: string }> = {
-  appointment: { label: "Medical Appointment", Icon: CalendarClock, tint: "bg-blue-50 text-blue-600", ring: "border-blue-200" },
+  appointment: { label: "Medical Appointment", Icon: CalendarClock, tint: "bg-[#e0ecf2] text-[#1f4f70]", ring: "border-[#a9c6d8]" },
   med: { label: "Medication", Icon: Pill, tint: "bg-purple-50 text-purple-600", ring: "border-purple-200" },
   lab: { label: "Lab Order", Icon: TestTube, tint: "bg-amber-50 text-amber-600", ring: "border-amber-200" },
   "care-plan": { label: "Care Plan · LOC Change", Icon: ClipboardList, tint: "bg-emerald-50 text-emerald-600", ring: "border-emerald-200" },
@@ -233,16 +233,16 @@ export default function ApprovalWorkflows() {
     <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2"><ClipboardList className="w-6 h-6 text-blue-500" /> Pending Approvals</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-2"><ClipboardList className="w-6 h-6 text-[#22577a]" /> Pending Approvals</h1>
           <p className="text-sm text-slate-500 mt-1">Review and action requests from staff</p>
         </div>
-        {!canDecide && <button onClick={() => setShowRequest(true)} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"><Plus className="w-4 h-4" /> Request Meds</button>}
+        {!canDecide && <button onClick={() => setShowRequest(true)} className="inline-flex items-center gap-2 rounded-xl bg-[#1f4f70] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#1b4763]"><Plus className="w-4 h-4" /> Request Meds</button>}
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
         <ApprovalStat value={counts.total} label="Total Pending" tone="#d97706" ring="border-amber-200" />
-        <ApprovalStat value={counts.appointment} label="Appointments" tone="#2563eb" ring="border-blue-200" />
+        <ApprovalStat value={counts.appointment} label="Appointments" tone="#2563eb" ring="border-[#a9c6d8]" />
         <ApprovalStat value={counts.med} label="Medications" tone="#7c3aed" ring="border-purple-200" />
         <ApprovalStat value={counts.lab} label="Lab Orders" tone="#d97706" ring="border-amber-200" />
         <ApprovalStat value={counts.carePlan} label="Care Plans" tone="#059669" ring="border-emerald-200" />
@@ -336,30 +336,30 @@ export default function ApprovalWorkflows() {
       {showRequest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
-            <div className="sticky top-0 flex items-center justify-between bg-blue-600 p-5 text-white">
+            <div className="sticky top-0 flex items-center justify-between bg-[#1f4f70] p-5 text-white">
               <h2 className="text-lg font-bold flex items-center gap-2"><Pill className="w-5 h-5" /> Request Medication</h2>
               <button onClick={() => setShowRequest(false)} className="rounded-lg p-1.5 hover:bg-white/15"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-4 p-6">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1.5">Resident *</label>
-                <select value={reqForm.residentId} onChange={(e) => setReq("residentId", e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400/40">
+                <select value={reqForm.residentId} onChange={(e) => setReq("residentId", e.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40">
                   <option value="">Select resident…</option>
                   {residents.map((r) => <option key={r.id} value={r.id}>{r.name}{r.room ? ` — Room ${r.room}` : ""}</option>)}
                 </select>
               </div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Medication *</label><input value={reqForm.name} onChange={(e) => setReq("name", e.target.value)} placeholder="e.g. Amlodipine" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
+              <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Medication *</label><input value={reqForm.name} onChange={(e) => setReq("name", e.target.value)} placeholder="e.g. Amlodipine" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40" /></div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Dosage</label><input value={reqForm.dosage} onChange={(e) => setReq("dosage", e.target.value)} placeholder="e.g. 5mg" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
-                <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Route</label><select value={reqForm.route} onChange={(e) => setReq("route", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400/40">{["ORAL", "IV", "IM", "SUBCUTANEOUS", "TOPICAL", "INHALATION", "RECTAL", "OTHER"].map((r) => <option key={r} value={r}>{r}</option>)}</select></div>
+                <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Dosage</label><input value={reqForm.dosage} onChange={(e) => setReq("dosage", e.target.value)} placeholder="e.g. 5mg" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40" /></div>
+                <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Route</label><select value={reqForm.route} onChange={(e) => setReq("route", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40">{["ORAL", "IV", "IM", "SUBCUTANEOUS", "TOPICAL", "INHALATION", "RECTAL", "OTHER"].map((r) => <option key={r} value={r}>{r}</option>)}</select></div>
               </div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Frequency</label><input value={reqForm.frequency} onChange={(e) => setReq("frequency", e.target.value)} placeholder="e.g. Once daily, BID, PRN" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400/40" /></div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Indication / reason</label><textarea value={reqForm.reason} onChange={(e) => setReq("reason", e.target.value)} rows={2} placeholder="Why is this being prescribed?" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400/40 resize-y" /></div>
+              <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Frequency</label><input value={reqForm.frequency} onChange={(e) => setReq("frequency", e.target.value)} placeholder="e.g. Once daily, BID, PRN" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40" /></div>
+              <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Indication / reason</label><textarea value={reqForm.reason} onChange={(e) => setReq("reason", e.target.value)} rows={2} placeholder="Why is this being prescribed?" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40 resize-y" /></div>
               <p className="text-[11px] text-slate-400">Saved as <span className="font-semibold text-slate-600">Pending</span> — it won&apos;t activate in the MAR until a Care Manager approves it.</p>
             </div>
             <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4">
               <button onClick={() => setShowRequest(false)} disabled={saving} className="rounded-xl px-4 py-2 text-slate-600 hover:bg-black/5 disabled:opacity-50">Cancel</button>
-              <button onClick={submitRequest} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2 font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} {saving ? "Submitting…" : "Submit request"}</button>
+              <button onClick={submitRequest} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-[#1f4f70] px-6 py-2 font-semibold text-white hover:bg-[#1b4763] disabled:opacity-50">{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} {saving ? "Submitting…" : "Submit request"}</button>
             </div>
           </div>
         </div>

@@ -32,7 +32,7 @@ const TYPE_BADGE: Record<string, string> = {
   GENERAL: "bg-gray-100 text-gray-700",
   ALERT: "bg-amber-100 text-amber-700",
   URGENT: "bg-red-100 text-red-700",
-  NOTIFICATION: "bg-blue-100 text-blue-700",
+  NOTIFICATION: "bg-[#cfe0eb] text-[#1b4763]",
 };
 const DIRECTION_FILTERS = ["all", "inbox", "sent"] as const;
 const READ_FILTERS = ["all", "unread", "read"] as const;
@@ -178,7 +178,7 @@ export default function ClinicalMessages({ clinicianRole = "PHYSICIAN" }: { clin
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <MessageSquare className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Secure Messages
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -188,7 +188,7 @@ export default function ClinicalMessages({ clinicianRole = "PHYSICIAN" }: { clin
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
-          <button onClick={() => setComposing(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+          <button onClick={() => setComposing(true)} className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
             <Plus className="w-4 h-4" /> Compose
           </button>
         </div>
@@ -249,7 +249,7 @@ export default function ClinicalMessages({ clinicianRole = "PHYSICIAN" }: { clin
               return (
                 <div key={m.id}
                   className={`bg-white rounded-lg border transition p-4 flex items-start gap-3 sm:gap-4 ${inbound && !m.isRead ? "border-yellow-300 bg-yellow-50/30" : "border-gray-200 hover:bg-gray-50"}`}>
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-500 flex items-center justify-center text-white font-bold flex-shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-[#22577a] flex items-center justify-center text-white font-bold flex-shrink-0">
                     {(mine ? "Me" : m.senderName).charAt(0)}
                   </div>
                   <div className="min-w-0 flex-1 cursor-pointer" onClick={() => { void markRead(m); setViewing(m); }}>
@@ -268,7 +268,7 @@ export default function ClinicalMessages({ clinicianRole = "PHYSICIAN" }: { clin
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
                     <span className="text-xs text-gray-500">{relTime(m.createdAt, nowTs)}</span>
                     <div className="flex items-center gap-1">
-                      <button onClick={() => setViewing(m)} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setViewing(m)} className="p-1.5 rounded hover:bg-[#cfe0eb] text-[#1f4f70] transition" title="View"><Eye className="w-3.5 h-3.5" /></button>
                       <button onClick={() => handleReply(m)} className="p-1.5 rounded hover:bg-green-100 text-green-600 transition" title="Reply"><Reply className="w-3.5 h-3.5" /></button>
                       <button onClick={() => void handleDelete(m)} className="p-1.5 rounded hover:bg-red-100 text-red-600 transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
@@ -298,10 +298,10 @@ export default function ClinicalMessages({ clinicianRole = "PHYSICIAN" }: { clin
       {viewing && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setViewing(null)}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-blue-600 text-white p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-white p-5 flex items-center justify-between z-10">
               <div className="min-w-0">
                 <h2 className="text-xl font-bold truncate">{viewing.subject || "No Subject"}</h2>
-                <p className="text-blue-100 text-sm truncate">
+                <p className="text-[#cfe0eb] text-sm truncate">
                   {viewing.senderName} → {viewing.recipientName}
                 </p>
               </div>
@@ -346,7 +346,7 @@ export default function ClinicalMessages({ clinicianRole = "PHYSICIAN" }: { clin
                 </button>
                 {viewing.recipientId === clinician.userId && !viewing.isRead && (
                   <button onClick={() => { void markRead(viewing); setViewing({ ...viewing, isRead: true }); }}
-                    className="px-5 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition text-sm">Mark as Read</button>
+                    className="px-5 py-2 bg-[#22577a] hover:bg-[#1f4f70] text-white font-semibold rounded-lg transition text-sm">Mark as Read</button>
                 )}
               </div>
             </div>
@@ -358,12 +358,12 @@ export default function ClinicalMessages({ clinicianRole = "PHYSICIAN" }: { clin
       {composing && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setComposing(false)}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-blue-600 text-white p-5 sm:p-6 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-white p-5 sm:p-6 flex items-center justify-between z-10">
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
                   {subject.startsWith("Re:") ? <><Reply className="w-6 h-6" /> Reply</> : <><ShieldCheck className="w-6 h-6" /> Compose</>}
                 </h2>
-                <p className="text-blue-100 text-sm">From {clinician.name}</p>
+                <p className="text-[#cfe0eb] text-sm">From {clinician.name}</p>
               </div>
               <button onClick={() => setComposing(false)} className="p-2 hover:bg-white/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
@@ -395,7 +395,7 @@ export default function ClinicalMessages({ clinicianRole = "PHYSICIAN" }: { clin
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between gap-2 flex-wrap">
               <button onClick={() => setComposing(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
               <button onClick={() => void handleSend()} disabled={!recipientId || !content.trim() || sending}
-                className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-400 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+                className="flex items-center gap-2 px-6 py-2 bg-[#22577a] text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
                 {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} {sending ? "Sending..." : "Send"}
               </button>
             </div>
@@ -408,7 +408,7 @@ export default function ClinicalMessages({ clinicianRole = "PHYSICIAN" }: { clin
 
 const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
   gray: { wrap: "bg-white border-gray-200", icon: "text-gray-500", value: "text-gray-900" },
-  blue: { wrap: "bg-blue-50 border-blue-200", icon: "text-blue-500", value: "text-blue-600" },
+  blue: { wrap: "bg-[#e0ecf2] border-[#a9c6d8]", icon: "text-[#22577a]", value: "text-[#1f4f70]" },
   red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
   green: { wrap: "bg-green-50 border-green-200", icon: "text-green-500", value: "text-green-600" },
   amber: { wrap: "bg-amber-50 border-amber-200", icon: "text-amber-500", value: "text-amber-600" },

@@ -33,7 +33,7 @@ interface RoundPatient {
 
 const CARD_VITALS = [
   { key: "HEART_RATE", label: "HR", color: "text-red-500" },
-  { key: "BLOOD_PRESSURE", label: "BP", color: "text-blue-500" },
+  { key: "BLOOD_PRESSURE", label: "BP", color: "text-[#22577a]" },
   { key: "TEMPERATURE", label: "Temp", color: "text-orange-500" },
   { key: "OXYGEN", label: "O\u2082", color: "text-green-500" },
   { key: "RESPIRATORY_RATE", label: "RR", color: "text-purple-500" },
@@ -43,7 +43,7 @@ const CARD_VITALS = [
 const CARE_LEVEL_BADGES: Record<string, string> = {
   SKILLED: "bg-red-100 text-red-700 border-red-300",
   MEMORY: "bg-purple-100 text-purple-700 border-purple-300",
-  ASSISTED: "bg-blue-100 text-blue-700 border-blue-300",
+  ASSISTED: "bg-[#cfe0eb] text-[#1b4763] border-[#7fa9c2]",
   INDEPENDENT: "bg-green-100 text-green-700 border-green-300",
 };
 
@@ -270,7 +270,7 @@ export default function PhysicianRounds({ clinicianRole = "PHYSICIAN" }: { clini
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <ClipboardList className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Patient Rounds
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -324,7 +324,7 @@ export default function PhysicianRounds({ clinicianRole = "PHYSICIAN" }: { clini
             <div key={p.id} className={`bg-white rounded-lg border transition hover:shadow-md overflow-hidden ${p.openAlerts > 0 ? "border-red-200" : "border-gray-200"}`}>
               <div className={`px-4 py-3 flex items-center justify-between gap-4 ${p.openAlerts > 0 ? "bg-red-50" : "bg-gray-50"}`}>
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-black font-bold flex-shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-[#22577a] flex items-center justify-center text-black font-bold flex-shrink-0">
                     {p.name.charAt(0)}
                   </div>
                   <div className="min-w-0">
@@ -345,7 +345,7 @@ export default function PhysicianRounds({ clinicianRole = "PHYSICIAN" }: { clini
                     <span className="px-2 py-1 bg-red-600 text-white rounded text-xs font-bold animate-pulse hidden sm:inline-flex">Fall</span>
                   )}
                   {p.monitoringCount > 0 && !p.hasFallAlert && (
-                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-semibold hidden sm:inline-flex">Camera</span>
+                    <span className="px-2 py-1 bg-[#cfe0eb] text-[#1b4763] rounded text-xs font-semibold hidden sm:inline-flex">Camera</span>
                   )}
                 </div>
               </div>
@@ -367,7 +367,7 @@ export default function PhysicianRounds({ clinicianRole = "PHYSICIAN" }: { clini
                 </div>
                 <div className="flex items-center gap-2">
                   <button onClick={() => { setViewing(p); setRoundNotes(""); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-400 to-blue-500 text-white text-sm font-semibold rounded-lg hover:shadow transition active:scale-95">
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#22577a] text-white text-sm font-semibold rounded-lg hover:shadow transition active:scale-95">
                     <Stethoscope className="w-4 h-4" /> Round
                   </button>
                 </div>
@@ -411,7 +411,7 @@ export default function PhysicianRounds({ clinicianRole = "PHYSICIAN" }: { clini
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setViewing(null)}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             {/* Modal Header */}
-            <div className={`sticky top-0 text-white p-5 sm:p-6 flex items-center justify-between z-10 ${viewing.openAlerts > 0 ? "bg-gradient-to-r from-red-500 to-red-600" : "bg-gradient-to-r from-blue-500 to-blue-600"}`}>
+            <div className={`sticky top-0 text-white p-5 sm:p-6 flex items-center justify-between z-10 ${viewing.openAlerts > 0 ? "bg-[#b0432c] " : "bg-[#22577a] "}`}>
               <div>
                 <h2 className="text-xl sm:text-2xl font-bold">{viewing.name}</h2>
                 <p className="text-white/80 text-sm">Room {viewing.room} &middot; <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-white/20">{viewing.careLevel}</span> &middot; Age {viewing.age}</p>
@@ -451,7 +451,7 @@ export default function PhysicianRounds({ clinicianRole = "PHYSICIAN" }: { clini
                   <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2"><Pill className="w-4 h-4 text-yellow-500" /> Active Medications ({viewingMeds.length})</h3>
                   <div className="space-y-2">
                     {viewingMeds.map((m, i) => (
-                      <div key={i} className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between gap-3">
+                      <div key={i} className="p-3 bg-[#e0ecf2] border border-[#a9c6d8] rounded-lg flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <p className="font-semibold text-gray-900 text-sm">{asStr(m.name) || "Unknown"}</p>
                           <p className="text-xs text-gray-600">{asStr(m.dosage)} {asStr(m.route)} &middot; {asStr(m.frequency)}</p>
@@ -491,10 +491,10 @@ export default function PhysicianRounds({ clinicianRole = "PHYSICIAN" }: { clini
                     {viewingMonitoringLogs.map((log, i) => {
                       const isFall = asStr(log.logType) === "FALL_DETECTION";
                       return (
-                        <div key={i} className={`p-3 rounded-lg border ${isFall ? "bg-red-50 border-red-200" : "bg-blue-50 border-blue-200"}`}>
+                        <div key={i} className={`p-3 rounded-lg border ${isFall ? "bg-red-50 border-red-200" : "bg-[#e0ecf2] border-[#a9c6d8]"}`}>
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <div className="flex items-center gap-2">
-                              <span className={`text-xs font-semibold px-2 py-0.5 rounded ${isFall ? "bg-red-200 text-red-800" : "bg-blue-200 text-blue-800"}`}>
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded ${isFall ? "bg-red-200 text-red-800" : "bg-[#a9c6d8] text-[#163c56]"}`}>
                                 {asStr(log.logType).replace(/_/g, " ")}
                               </span>
                               {log.emotion && <span className="text-xs text-gray-600">{asStr(log.emotion)}</span>}
@@ -527,7 +527,7 @@ export default function PhysicianRounds({ clinicianRole = "PHYSICIAN" }: { clini
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-5 sm:px-6 py-4 flex items-center justify-between gap-2">
               <button onClick={() => setViewing(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
               <button onClick={() => handleCompleteRound(viewing)}
-                className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+                className="flex items-center gap-2 px-6 py-2 bg-[#4fa77e] text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
                 <CheckCircle2 className="w-4 h-4" /> Complete Round
               </button>
             </div>
@@ -540,13 +540,13 @@ export default function PhysicianRounds({ clinicianRole = "PHYSICIAN" }: { clini
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4"
           onMouseDown={(e) => { if (e.target === e.currentTarget && !completeBusy) setCompleteFor(null); }}>
           <div className="bg-white w-full max-w-lg max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-xl shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-gradient-to-r from-green-500 to-emerald-600 px-5 py-4 text-white">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-[#277a55] px-5 py-4 text-white">
               <h2 className="flex items-center gap-2 text-lg font-bold"><CheckCircle2 className="w-5 h-5" /> Complete Round</h2>
               <button onClick={() => setCompleteFor(null)} disabled={completeBusy} className="rounded-lg p-1.5 transition hover:bg-white/20 disabled:opacity-50"><X className="w-5 h-5" /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                <p className="flex items-center gap-2 font-semibold text-gray-900"><Stethoscope className="w-4 h-4 text-blue-500" />{completeFor.name} &middot; Room {completeFor.room}</p>
+                <p className="flex items-center gap-2 font-semibold text-gray-900"><Stethoscope className="w-4 h-4 text-[#22577a]" />{completeFor.name} &middot; Room {completeFor.room}</p>
                 <p className="mt-1 text-xs text-gray-500">Mark this patient&apos;s round as completed.</p>
               </div>
               <div>
@@ -574,7 +574,7 @@ export default function PhysicianRounds({ clinicianRole = "PHYSICIAN" }: { clini
 
 const TONES: Record<string, { wrap: string; icon: string; value: string }> = {
   gray: { wrap: "bg-white border-gray-200", icon: "text-gray-500", value: "text-gray-900" },
-  blue: { wrap: "bg-blue-50 border-blue-200", icon: "text-blue-500", value: "text-blue-600" },
+  blue: { wrap: "bg-[#e0ecf2] border-[#a9c6d8]", icon: "text-[#22577a]", value: "text-[#1f4f70]" },
   red: { wrap: "bg-red-50 border-red-200", icon: "text-red-500", value: "text-red-600" },
   purple: { wrap: "bg-purple-50 border-purple-200", icon: "text-purple-500", value: "text-purple-600" },
 };

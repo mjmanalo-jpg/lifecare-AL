@@ -143,7 +143,7 @@ const INSPECTION_ITEMS = [
 ];
 
 const STATUS_PILL: Record<string, string> = {
-  SCHEDULED: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  SCHEDULED: "bg-[#22577a]/10 text-[#4f93bd] border-[#22577a]/20",
   INSPECTION: "bg-amber-500/10 text-amber-400 border-amber-500/20",
   EN_ROUTE: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
   ARRIVED: "bg-purple-500/10 text-purple-400 border-purple-500/20",
@@ -196,7 +196,7 @@ export default function DriverHub({ initialTab = "dashboard" }: DriverHubProps) 
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent">
             {header.title}
           </h1>
           <p className="text-gray-600 text-sm mt-1">{header.subtitle}</p>
@@ -375,7 +375,7 @@ function DashboardTab() {
       <div className="bg-white rounded-lg border border-gray-200 p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shrink-0">
+            <div className="w-12 h-12 rounded-xl bg-[#22577a] flex items-center justify-center text-white shrink-0">
               <Car className="w-6 h-6" />
             </div>
             <div>
@@ -394,7 +394,7 @@ function DashboardTab() {
             </div>
             <div className="text-center">
               <span className="text-[10px] uppercase font-bold tracking-wider text-gray-500 block">Trips</span>
-              <span className="text-lg font-black text-blue-600 flex items-center gap-1 mt-0.5"><Route className="w-4 h-4" /> {shiftStats.total}</span>
+              <span className="text-lg font-black text-[#1f4f70] flex items-center gap-1 mt-0.5"><Route className="w-4 h-4" /> {shiftStats.total}</span>
             </div>
           </div>
         </div>
@@ -426,13 +426,13 @@ function DashboardTab() {
                       <span className="text-gray-400 mx-0.5">→</span>
                       <MapPin className="w-3.5 h-3.5 text-red-500" /> {activeTrip.dropoffLocation}
                     </p>
-                    <a href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(activeTrip.pickupLocation)}&destination=${encodeURIComponent(activeTrip.dropoffLocation)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-1 text-xs font-semibold text-blue-600 hover:text-blue-800">
+                    <a href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(activeTrip.pickupLocation)}&destination=${encodeURIComponent(activeTrip.dropoffLocation)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-1 text-xs font-semibold text-[#1f4f70] hover:text-[#163c56]">
                       <Navigation className="w-3.5 h-3.5" /> Navigate route
                     </a>
                   </div>
                   <div className="col-span-2">
                     <span className="text-[10px] text-gray-500 font-semibold uppercase block">Scheduled</span>
-                    <p className="font-bold text-gray-900 flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-blue-500" /> {fmtDT(activeTrip.scheduledAt)}</p>
+                    <p className="font-bold text-gray-900 flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-[#22577a]" /> {fmtDT(activeTrip.scheduledAt)}</p>
                   </div>
                   <div><span className="text-[10px] text-gray-500 font-semibold uppercase block">Resident</span><p className="font-bold text-gray-900">{activeTrip.residentName}</p><p className="text-xs text-gray-500">Room {activeTrip.roomNumber}</p></div>
                   <div><span className="text-[10px] text-gray-500 font-semibold uppercase block">Vehicle</span><p className="font-bold text-gray-900 flex items-center gap-1"><Truck className="w-3 h-3 text-yellow-500" /> {activeTrip.vehicleName}</p><p className="text-xs text-gray-500">{activeTrip.vehiclePlate}</p></div>
@@ -541,14 +541,14 @@ function DashboardTab() {
           <div className="absolute top-0 left-0 right-0 z-[1001] p-3 sm:p-4">
             <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 px-4 py-3 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/25"><MapPin className="w-4.5 h-4.5 text-white" /></div>
+                <div className="w-9 h-9 rounded-xl bg-[#277a55] flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/25"><MapPin className="w-4.5 h-4.5 text-white" /></div>
                 <div className="min-w-0">
                   <h2 className="font-bold text-sm text-gray-900 flex items-center gap-2">
                     Live Route Map
                     {activeTrip && <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                       activeTrip.status === "EN_ROUTE" ? "bg-green-100 text-green-700" :
                       activeTrip.status === "RETURNING" ? "bg-amber-100 text-amber-700" :
-                      activeTrip.status === "ARRIVED" ? "bg-blue-100 text-blue-700" :
+                      activeTrip.status === "ARRIVED" ? "bg-[#cfe0eb] text-[#1b4763]" :
                       "bg-gray-100 text-gray-600"
                     }`}>{activeTrip.status.replace("_", " ")}</span>}
                   </h2>
@@ -575,7 +575,7 @@ function DashboardTab() {
                   </div>
                 </div>
                 <a href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(activeTrip.pickupLocation)}&destination=${encodeURIComponent(activeTrip.dropoffLocation)}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-xs font-bold rounded-xl hover:shadow-lg hover:shadow-blue-500/25 transition-all active:scale-95 shrink-0">
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-[#22577a] text-white text-xs font-bold rounded-xl hover:shadow-lg hover:shadow-blue-500/25 transition-all active:scale-95 shrink-0">
                   <Navigation className="w-4 h-4" /> Navigate
                 </a>
               </div>
@@ -587,7 +587,7 @@ function DashboardTab() {
       {/* Bottom: Transport + Incidents */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h4 className="font-bold text-sm text-gray-900 mb-3 flex items-center gap-2"><Package className="w-4 h-4 text-blue-500" /> Transport Requests</h4>
+          <h4 className="font-bold text-sm text-gray-900 mb-3 flex items-center gap-2"><Package className="w-4 h-4 text-[#22577a]" /> Transport Requests</h4>
           {pendingTransport.length > 0 ? pendingTransport.map(req => (
             <div key={req.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg mb-2 text-sm">
               <div><p className="font-semibold text-gray-900">{req.residentName}</p><p className="text-xs text-gray-500">{req.destination}</p></div>
@@ -705,7 +705,7 @@ function TripsTab({ onView }: { onView: (r: Record<string, unknown>) => void }) 
             <input type="text" placeholder="Search resident, destination, vehicle…" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
               className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none" />
           </div>
-          <button onClick={() => setShowRequest(true)} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm whitespace-nowrap active:scale-95"><Plus className="w-4 h-4" /> Request Pickup</button>
+          <button onClick={() => setShowRequest(true)} className="flex items-center gap-2 px-4 py-2.5 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition text-sm whitespace-nowrap active:scale-95"><Plus className="w-4 h-4" /> Request Pickup</button>
           <button onClick={() => void refetch()} className="p-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"><RefreshCw className="w-4 h-4" /></button>
         </div>
       </div>
@@ -739,7 +739,7 @@ function TripsTab({ onView }: { onView: (r: Record<string, unknown>) => void }) 
                     <Td><span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border ${STATUS_PILL[t.status]}`}>{STEP_LABELS[t.status] || t.status}</span></Td>
                     <Td>
                       <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => onView({ ...t, _tab: "trips" })} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
+                        <button onClick={() => onView({ ...t, _tab: "trips" })} className="p-1.5 rounded hover:bg-[#cfe0eb] text-[#1f4f70] transition" title="View"><Eye className="w-4 h-4" /></button>
                         {t.status === "INSPECTION" && <button onClick={() => handleTransition(t, "EN_ROUTE")} className="p-1.5 rounded hover:bg-amber-100 text-amber-600 transition text-xs font-semibold">Depart</button>}
                         {t.status === "EN_ROUTE" && <button onClick={() => handleTransition(t, "ARRIVED")} className="p-1.5 rounded hover:bg-purple-100 text-purple-600 transition text-xs font-semibold">Arrived</button>}
                         {t.status === "ARRIVED" && <button onClick={() => handleTransition(t, "RETURNING")} className="p-1.5 rounded hover:bg-cyan-100 text-cyan-600 transition text-xs font-semibold">Return</button>}
@@ -764,7 +764,7 @@ function TripsTab({ onView }: { onView: (r: Record<string, unknown>) => void }) 
                 <p className="text-xs text-gray-500 flex items-center gap-1 flex-wrap"><MapPin className="w-3 h-3 text-green-500 flex-shrink-0" /> {t.pickupLocation} <span className="text-gray-400">→</span> <MapPin className="w-3 h-3 text-red-500 flex-shrink-0" /> {t.dropoffLocation}</p>
                 <p className="text-xs text-gray-500">{t.vehicleName} · {t.vehiclePlate}</p>
                 <div className="flex gap-1 pt-1">
-                  <button onClick={() => onView({ ...t, _tab: "trips" })} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition"><Eye className="w-3 h-3" /> View</button>
+                  <button onClick={() => onView({ ...t, _tab: "trips" })} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#1f4f70] bg-[#e0ecf2] hover:bg-[#cfe0eb] rounded transition"><Eye className="w-3 h-3" /> View</button>
                   {t.status === "INSPECTION" && <button onClick={() => handleTransition(t, "EN_ROUTE")} className="px-2.5 py-1.5 text-xs font-semibold text-amber-600 bg-amber-50 hover:bg-amber-100 rounded transition">Depart</button>}
                   {t.status === "EN_ROUTE" && <button onClick={() => handleTransition(t, "ARRIVED")} className="px-2.5 py-1.5 text-xs font-semibold text-purple-600 bg-purple-50 hover:bg-purple-100 rounded transition">Arrived</button>}
                   {t.status === "RETURNING" && <button onClick={() => handleTransition(t, "COMPLETED")} className="px-2.5 py-1.5 text-xs font-semibold text-green-600 bg-green-50 hover:bg-green-100 rounded transition">Complete</button>}
@@ -837,7 +837,7 @@ function DriverRequestModal({ passengers, onClose, onSaved }: {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold">Request Pickup</h2>
           <button onClick={onClose} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
@@ -889,7 +889,7 @@ function DriverRequestModal({ passengers, onClose, onSaved }: {
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
           <button onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition text-sm">Cancel</button>
           <button onClick={() => void submit()} disabled={!valid || saving}
-            className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 text-sm">
+            className="flex items-center gap-2 px-6 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 text-sm">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} {saving ? "Sending…" : "Send Request"}
           </button>
         </div>
@@ -1118,7 +1118,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
         </div>
         <button onClick={() => void refetch()} className="p-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"><RefreshCw className="w-4 h-4" /></button>
         <button onClick={() => { setForm({ vehicleId: "", odometer: "", liters: "", cost: "", fuelType: "Diesel", notes: "" }); setShowCreate(true); }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm active:scale-95">
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition text-sm active:scale-95">
           <Fuel className="w-4 h-4" /> Log Refuel
         </button>
       </div>
@@ -1151,7 +1151,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
                     <Td><span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-700">{l.fuelType}</span></Td>
                     <Td>
                       <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => onView({ ...l, _tab: "fuel" })} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
+                        <button onClick={() => onView({ ...l, _tab: "fuel" })} className="p-1.5 rounded hover:bg-[#cfe0eb] text-[#1f4f70] transition" title="View"><Eye className="w-4 h-4" /></button>
                         <button onClick={() => handleDelete(l)} className="p-1.5 rounded hover:bg-red-100 text-red-600 transition" title="Delete"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </Td>
@@ -1172,7 +1172,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
                 <p className="font-medium text-gray-900 text-sm">{l.vehicleName} <span className="text-xs text-gray-400">{l.vehiclePlate}</span></p>
                 <p className="text-xs text-gray-500">{l.liters}L · {l.odometer.toLocaleString()} km · {fmtDT(l.logDate)}</p>
                 <div className="flex gap-1 pt-1">
-                  <button onClick={() => onView({ ...l, _tab: "fuel" })} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition"><Eye className="w-3 h-3" /> View</button>
+                  <button onClick={() => onView({ ...l, _tab: "fuel" })} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#1f4f70] bg-[#e0ecf2] hover:bg-[#cfe0eb] rounded transition"><Eye className="w-3 h-3" /> View</button>
                   <button onClick={() => handleDelete(l)} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded transition">Delete</button>
                 </div>
               </div>
@@ -1187,7 +1187,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
               <h2 className="text-xl font-bold">Log Refuel</h2>
               <button onClick={() => setShowCreate(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
@@ -1213,7 +1213,7 @@ function FuelTab({ onView }: { onView: (r: Record<string, unknown>) => void }) {
             </form>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
               <button onClick={() => setShowCreate(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
-              <button onClick={handleSubmit} disabled={saving} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm disabled:opacity-50">
+              <button onClick={handleSubmit} disabled={saving} className="px-5 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm disabled:opacity-50">
                 {saving ? "Saving..." : "Log Refuel"}
               </button>
             </div>
@@ -1236,7 +1236,7 @@ function ViewModal({ row, onClose }: { row: Record<string, unknown>; onClose: ()
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-          <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+          <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
             <h2 className="text-xl font-bold">Trip Details</h2>
             <button onClick={onClose} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
           </div>
@@ -1268,7 +1268,7 @@ function ViewModal({ row, onClose }: { row: Record<string, unknown>; onClose: ()
                   vehiclePosition={trip.currentLat && trip.currentLng ? { lat: trip.currentLat, lng: trip.currentLng, label: `${trip.vehicleName} (live)` } : undefined}
                 />
               </div>
-              <a href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(trip.pickupLocation)}&destination=${encodeURIComponent(trip.dropoffLocation)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-xs font-semibold text-blue-600 hover:text-blue-800">
+              <a href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(trip.pickupLocation)}&destination=${encodeURIComponent(trip.dropoffLocation)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-xs font-semibold text-[#1f4f70] hover:text-[#163c56]">
                 <Navigation className="w-3.5 h-3.5" /> Open turn-by-turn navigation
               </a>
             </div>
@@ -1286,7 +1286,7 @@ function ViewModal({ row, onClose }: { row: Record<string, unknown>; onClose: ()
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-          <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+          <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
             <h2 className="text-xl font-bold">Fuel Log</h2>
             <button onClick={onClose} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
           </div>
@@ -1317,7 +1317,7 @@ function ViewModal({ row, onClose }: { row: Record<string, unknown>; onClose: ()
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string; icon: LucideIcon; color: string }) {
   const COLORS: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50 border-blue-200",
+    blue: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     green: "text-green-600 bg-green-50 border-green-200",
     amber: "text-amber-600 bg-amber-50 border-amber-200",
     purple: "text-purple-600 bg-purple-50 border-purple-200",

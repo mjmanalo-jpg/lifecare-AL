@@ -14,7 +14,7 @@ import {
   type Row,
 } from "./shared";
 
-const AVATAR_COLORS = ["bg-blue-100 text-blue-700", "bg-teal-100 text-teal-700", "bg-green-100 text-green-700", "bg-rose-100 text-rose-700", "bg-amber-100 text-amber-700"];
+const AVATAR_COLORS = ["bg-[#cfe0eb] text-[#1b4763]", "bg-teal-100 text-teal-700", "bg-green-100 text-green-700", "bg-rose-100 text-rose-700", "bg-amber-100 text-amber-700"];
 const EMPTY_FORM = { visitorName: "", relationship: "", purpose: "", date: "", phone: "", notes: "" };
 
 /** Appointments & Visits — live visit history and self-service visit requests. */
@@ -59,7 +59,7 @@ export default function FamilyAppointments() {
 
   const monthCount = enriched.filter((v) => { if (!v.inTs || !now) return false; const d = new Date(v.inTs), n = new Date(now); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length;
   const uniqueVisitors = new Set(enriched.map((v) => v.name)).size;
-  const statusBadge = (s: string) => s === "Scheduled" ? "bg-blue-100 text-blue-700" : s === "Completed" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700";
+  const statusBadge = (s: string) => s === "Scheduled" ? "bg-[#cfe0eb] text-[#1b4763]" : s === "Completed" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700";
 
   const createVisit = async () => {
     if (!visitForm.visitorName.trim() || !visitForm.date) {

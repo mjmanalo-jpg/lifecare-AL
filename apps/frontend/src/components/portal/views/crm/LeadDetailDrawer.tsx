@@ -13,9 +13,9 @@ import {
 } from "@/lib/crmLeads";
 import type { CrmApi, Admission } from "@/lib/useCrmLeads";
 
-const input = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white";
+const input = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#22577a] focus:ring-2 focus:ring-[#22577a]/20 bg-white";
 // No `w-full` — for use inside flex rows where an explicit width/flex controls sizing.
-const inputSm = "rounded-lg border border-slate-300 px-2.5 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white";
+const inputSm = "rounded-lg border border-slate-300 px-2.5 py-2 text-sm outline-none focus:border-[#22577a] focus:ring-2 focus:ring-[#22577a]/20 bg-white";
 const label = "text-xs font-medium text-slate-600";
 
 const ACT_ICON: Record<ActivityType, typeof StickyNote> = {
@@ -110,7 +110,7 @@ export default function LeadDetailDrawer({ leadId, api, onClose }: { leadId: str
               const past = i < stageIdx;
               return (
                 <button key={s} onClick={() => api.moveStage(lead, s)}
-                  className={`shrink-0 text-[11px] font-semibold px-2 py-1 rounded-full border transition ${active ? STAGE_META[s].badge : past ? "bg-slate-100 text-slate-500 border-slate-200" : "bg-white text-slate-400 border-slate-200 hover:border-blue-300 hover:text-blue-600"}`}>
+                  className={`shrink-0 text-[11px] font-semibold px-2 py-1 rounded-full border transition ${active ? STAGE_META[s].badge : past ? "bg-slate-100 text-slate-500 border-slate-200" : "bg-white text-slate-400 border-slate-200 hover:border-[#7fa9c2] hover:text-[#1f4f70]"}`}>
                   {STAGE_META[s].label}
                 </button>
               );
@@ -143,12 +143,12 @@ export default function LeadDetailDrawer({ leadId, api, onClose }: { leadId: str
                     {(["completed", "no_show", "rescheduled"] as const).map((o) => (
                       <button key={o} onClick={() => api.setTourOutcome(lead.id, o)} className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 capitalize">{o.replace("_", " ")}</button>
                     ))}
-                    <button onClick={scheduleTour} className="text-xs px-2 py-1 rounded text-blue-600 hover:bg-blue-50">Reschedule</button>
+                    <button onClick={scheduleTour} className="text-xs px-2 py-1 rounded text-[#1f4f70] hover:bg-[#e0ecf2]">Reschedule</button>
                   </div>
                 )}
               </div>
             ) : (
-              <button onClick={scheduleTour} className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"><CalendarClock className="w-4 h-4" /> Schedule a tour</button>
+              <button onClick={scheduleTour} className="inline-flex items-center gap-1.5 text-sm font-medium text-[#1f4f70] hover:text-[#1b4763]"><CalendarClock className="w-4 h-4" /> Schedule a tour</button>
             )}
           </Section>
 
@@ -163,7 +163,7 @@ export default function LeadDetailDrawer({ leadId, api, onClose }: { leadId: str
               <div className="flex items-center gap-1.5">
                 <select className={inputSm} value={taskDraft.type} onChange={(e) => setTaskDraft({ ...taskDraft, type: e.target.value as TaskType })}>{TASK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
                 <input type="date" className={inputSm + " flex-1 min-w-0"} value={taskDraft.dueDate} onChange={(e) => setTaskDraft({ ...taskDraft, dueDate: e.target.value })} />
-                <button onClick={addTask} className="p-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 shrink-0"><Plus className="w-4 h-4" /></button>
+                <button onClick={addTask} className="p-2 rounded-lg bg-[#1f4f70] text-white hover:bg-[#1b4763] shrink-0"><Plus className="w-4 h-4" /></button>
               </div>
             </div>
             {doneTasksList.length > 0 && (
@@ -209,7 +209,7 @@ export default function LeadDetailDrawer({ leadId, api, onClose }: { leadId: str
               <label className={label}>Assigned to<input className={input + " mt-1"} value={form.assignedTo || ""} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} placeholder="Rep" /></label>
               <label className={label + " col-span-2"}>Notes<textarea className={input + " mt-1 min-h-[56px]"} value={form.notes || ""} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
             </div>
-            <button onClick={saveProfile} disabled={savingProfile} className="mt-2.5 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"><Check className="w-4 h-4" /> {savingProfile ? "Saving…" : "Save details"}</button>
+            <button onClick={saveProfile} disabled={savingProfile} className="mt-2.5 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763] disabled:opacity-60"><Check className="w-4 h-4" /> {savingProfile ? "Saving…" : "Save details"}</button>
           </Section>
         </div>
       </div>

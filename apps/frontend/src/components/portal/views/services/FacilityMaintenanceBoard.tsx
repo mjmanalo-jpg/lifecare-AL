@@ -51,7 +51,7 @@ const DAY_MS = 86400000;
 
 const STATUS_STYLES: Record<string, string> = {
   SCHEDULED: "bg-gray-100 text-gray-700",
-  OPEN: "bg-blue-100 text-blue-700",
+  OPEN: "bg-[#cfe0eb] text-[#1b4763]",
   IN_PROGRESS: "bg-amber-100 text-amber-700",
   AWAITING_PARTS: "bg-purple-100 text-purple-700",
   COMPLETED: "bg-green-100 text-green-700",
@@ -273,7 +273,7 @@ export default function FacilityMaintenanceBoard({ canManage = false }: { canMan
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2">
             Facility Maintenance
           </h1>
           <p className="text-gray-600">Preventive calendar — HVAC quarterly · generator monthly · elevator · fire &amp; safety · pest control</p>
@@ -283,7 +283,7 @@ export default function FacilityMaintenanceBoard({ canManage = false }: { canMan
           {/* Scheduling preventive maintenance is a Facility Admin task; the crew
               portal (canManage) only works the jobs. */}
           {!canManage && (
-            <button onClick={() => { setCreateForm(emptyForm); setShowCreate(true); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+            <button onClick={() => { setCreateForm(emptyForm); setShowCreate(true); }} className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
               <Plus className="w-4 h-4" /> Schedule Maintenance
             </button>
           )}
@@ -415,7 +415,7 @@ export default function FacilityMaintenanceBoard({ canManage = false }: { canMan
                           <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
                         ) : (
                           <>
-                            <button onClick={() => setViewing(e)} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View Details"><Eye className="w-4 h-4" /></button>
+                            <button onClick={() => setViewing(e)} className="p-1.5 rounded hover:bg-[#cfe0eb] text-[#1f4f70] transition" title="View Details"><Eye className="w-4 h-4" /></button>
                             {["SCHEDULED", "OPEN", "AWAITING_PARTS"].includes(e.status) && (
                               <button onClick={() => handleStart(e)} className="p-1.5 rounded hover:bg-amber-100 text-amber-600 transition" title="Start Work"><Play className="w-4 h-4" /></button>
                             )}
@@ -484,7 +484,7 @@ export default function FacilityMaintenanceBoard({ canManage = false }: { canMan
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string; icon: React.ComponentType<{ className?: string }>; color: string }) {
   const COLORS: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50 border-blue-200",
+    blue: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     green: "text-green-600 bg-green-50 border-green-200",
     red: "text-red-600 bg-red-50 border-red-200",
     purple: "text-purple-600 bg-purple-50 border-purple-200",
@@ -516,7 +516,7 @@ function MaintenanceFormModal({ title, form, onChange, onSave, onCancel, saveLab
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold">{title}</h2>
           <button onClick={onCancel} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
@@ -576,7 +576,7 @@ function MaintenanceFormModal({ title, form, onChange, onSave, onCancel, saveLab
         </div>
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
           <button onClick={onCancel} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
-          <button onClick={onSave} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">{saveLabel}</button>
+          <button onClick={onSave} className="px-5 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">{saveLabel}</button>
         </div>
       </div>
     </div>
@@ -585,12 +585,12 @@ function MaintenanceFormModal({ title, form, onChange, onSave, onCancel, saveLab
 
 function MaintenanceViewModal({ entry, onClose }: { entry: MaintEntry; onClose: () => void }) {
   const sys = SYSTEM_META[entry.system] ?? SYSTEM_META.OTHER;
-  const typeMeta = { PREVENTIVE: { label: "Preventive", cls: "bg-blue-100 text-blue-700" }, REPAIR: { label: "Repair", cls: "bg-red-100 text-red-700" }, INSPECTION: { label: "Inspection", cls: "bg-purple-100 text-purple-700" } }[entry.type] ?? { label: entry.type, cls: "bg-gray-100 text-gray-700" };
+  const typeMeta = { PREVENTIVE: { label: "Preventive", cls: "bg-[#cfe0eb] text-[#1b4763]" }, REPAIR: { label: "Repair", cls: "bg-red-100 text-red-700" }, INSPECTION: { label: "Inspection", cls: "bg-purple-100 text-purple-700" } }[entry.type] ?? { label: entry.type, cls: "bg-gray-100 text-gray-700" };
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold">{entry.title}</h2>
           <button onClick={onClose} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>

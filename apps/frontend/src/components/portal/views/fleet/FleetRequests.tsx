@@ -94,7 +94,7 @@ type Driver = ReturnType<typeof adaptDriver>;
 
 /* ── Constants ── */
 const TYPE_META: Record<string, { label: string; icon: LucideIcon; color: string; pill: string }> = {
-  MEDICAL_APPOINTMENT: { label: "Medical Appointment", icon: Stethoscope, color: "#3b82f6", pill: "bg-blue-50 text-blue-700 border-blue-200" },
+  MEDICAL_APPOINTMENT: { label: "Medical Appointment", icon: Stethoscope, color: "#3b82f6", pill: "bg-[#e0ecf2] text-[#1b4763] border-[#a9c6d8]" },
   DIALYSIS: { label: "Dialysis", icon: Droplets, color: "#06b6d4", pill: "bg-cyan-50 text-cyan-700 border-cyan-200" },
   THERAPY: { label: "Therapy", icon: HeartPulse, color: "#ec4899", pill: "bg-pink-50 text-pink-700 border-pink-200" },
   FAMILY_OUTING: { label: "Family Outing", icon: TreePine, color: "#22c55e", pill: "bg-green-50 text-green-700 border-green-200" },
@@ -106,13 +106,13 @@ const TYPES = Object.keys(TYPE_META);
 const PRIORITY_PILL: Record<string, string> = {
   EMERGENCY: "bg-red-100 text-red-700 border-red-300 animate-pulse",
   HIGH: "bg-orange-50 text-orange-700 border-orange-200",
-  NORMAL: "bg-blue-50 text-blue-700 border-blue-200",
+  NORMAL: "bg-[#e0ecf2] text-[#1b4763] border-[#a9c6d8]",
   LOW: "bg-gray-100 text-gray-600 border-gray-200",
 };
 
 const STATUS_PILL: Record<string, string> = {
   PENDING: "bg-amber-50 text-amber-700 border-amber-200",
-  APPROVED: "bg-blue-50 text-blue-700 border-blue-200",
+  APPROVED: "bg-[#e0ecf2] text-[#1b4763] border-[#a9c6d8]",
   SCHEDULED: "bg-purple-50 text-purple-700 border-purple-200",
   DECLINED: "bg-red-50 text-red-700 border-red-200",
   COMPLETED: "bg-green-50 text-green-700 border-green-200",
@@ -421,17 +421,17 @@ export default function FleetRequests() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2">
             Transport Requests
           </h1>
           <p className="text-gray-600">Dispatcher review, priority &amp; approval</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
-          <button onClick={openEmergencyTransfer} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+          <button onClick={openEmergencyTransfer} className="flex items-center gap-2 px-4 py-2 bg-[#b0432c] text-white font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
             <Siren className="w-4 h-4" /> Emergency Transfer
           </button>
-          <button onClick={openNewRequest} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+          <button onClick={openNewRequest} className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
             <Plus className="w-4 h-4" /> New Request
           </button>
         </div>
@@ -551,7 +551,7 @@ export default function FleetRequests() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5 text-gray-500">
-                        {req.wheelchairNeeded && <span title="Wheelchair needed"><Accessibility className="w-4 h-4 text-blue-500" /></span>}
+                        {req.wheelchairNeeded && <span title="Wheelchair needed"><Accessibility className="w-4 h-4 text-[#22577a]" /></span>}
                         {req.escortRequired && <span title={`Escort required${req.escortRole ? ` (${req.escortRole})` : ""}`}><UserCheck className="w-4 h-4 text-purple-500" /></span>}
                         {req.returnRequired && <span title="Round trip"><Repeat className="w-4 h-4 text-green-500" /></span>}
                         {!req.wheelchairNeeded && !req.escortRequired && !req.returnRequired && <span className="text-xs">—</span>}
@@ -626,7 +626,7 @@ export default function FleetRequests() {
       {assigning && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
               <div>
                 <h2 className="text-xl font-bold">Assign Vehicle &amp; Driver</h2>
                 <p className="text-sm text-black/70">{assigning.residentName} → {assigning.destination}</p>
@@ -642,7 +642,7 @@ export default function FleetRequests() {
                 <DetailField icon={AlertTriangle} label="Priority" value={assigning.priority} />
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-600 flex-wrap">
-                {assigning.wheelchairNeeded && <span className="flex items-center gap-1 text-blue-600 font-medium"><Accessibility className="w-3.5 h-3.5" /> Wheelchair needed</span>}
+                {assigning.wheelchairNeeded && <span className="flex items-center gap-1 text-[#1f4f70] font-medium"><Accessibility className="w-3.5 h-3.5" /> Wheelchair needed</span>}
                 {assigning.escortRequired && <span className="flex items-center gap-1 text-purple-600 font-medium"><UserCheck className="w-3.5 h-3.5" /> Escort required</span>}
                 {assigning.returnRequired && <span className="flex items-center gap-1 text-green-600 font-medium"><Repeat className="w-3.5 h-3.5" /> Round trip</span>}
               </div>
@@ -693,7 +693,7 @@ export default function FleetRequests() {
                     {selectedDriver.certifications && (
                       <div className="flex gap-1.5 flex-wrap">
                         {selectedDriver.certifications.split(",").map(c => c.trim()).filter(Boolean).map(c => (
-                          <span key={c} className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-semibold">{c}</span>
+                          <span key={c} className="px-2 py-0.5 rounded bg-[#e0ecf2] text-[#1b4763] border border-[#a9c6d8] text-[10px] font-semibold">{c}</span>
                         ))}
                       </div>
                     )}
@@ -745,7 +745,7 @@ export default function FleetRequests() {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
               <button onClick={() => setAssigning(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
-              <button onClick={handleAssign} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm flex items-center gap-2">
+              <button onClick={handleAssign} className="px-5 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm flex items-center gap-2">
                 <Truck className="w-4 h-4" /> Schedule Trip
               </button>
             </div>
@@ -757,7 +757,7 @@ export default function FleetRequests() {
       {decliningReq && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setDecliningReq(null); }}>
           <div className="bg-white w-full max-w-lg max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden rounded-t-2xl sm:rounded-xl shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-gradient-to-r from-red-500 to-red-600 px-5 py-4 text-white">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-[#b0432c] px-5 py-4 text-white">
               <div>
                 <h2 className="flex items-center gap-2 text-lg font-bold"><Ban className="w-5 h-5" /> Decline Request</h2>
                 <p className="text-sm text-white/80">{decliningReq.residentName} · Rm {decliningReq.roomNumber} → {decliningReq.destination}</p>
@@ -786,7 +786,7 @@ export default function FleetRequests() {
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string; icon: LucideIcon; color: string }) {
   const COLORS: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50 border-blue-200",
+    blue: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     green: "text-green-600 bg-green-50 border-green-200",
     red: "text-red-600 bg-red-50 border-red-200",
     purple: "text-purple-600 bg-purple-50 border-purple-200",
@@ -830,7 +830,7 @@ function RequestFormModal({ title, form, residents, onChange, onSave, onCancel }
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90dvh] overflow-y-auto">
-        <div className={`sticky top-0 bg-gradient-to-r ${isEmergency ? "from-red-500 to-red-600 text-white" : "from-blue-500 to-indigo-600 text-black"} p-5 flex items-center justify-between z-10`}>
+        <div className={`sticky top-0 bg-gradient-to-r ${isEmergency ? "from-red-500 to-red-600 text-white" : "from-[#22577a] to-[#1f4f70] text-black"} p-5 flex items-center justify-between z-10`}>
           <h2 className="text-xl font-bold flex items-center gap-2">{isEmergency && <Siren className="w-5 h-5" />}{title}</h2>
           <button onClick={onCancel} className={`p-2 rounded-lg transition ${isEmergency ? "hover:bg-white/20" : "hover:bg-yellow-600/20"}`}><X className="w-6 h-6" /></button>
         </div>
@@ -881,7 +881,7 @@ function RequestFormModal({ title, form, residents, onChange, onSave, onCancel }
               </label>
               <label className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 transition text-sm select-none">
                 <input type="checkbox" checked={form.wheelchairNeeded} onChange={setBool("wheelchairNeeded")} className="rounded" />
-                <Accessibility className="w-4 h-4 text-blue-500" /> Wheelchair needed
+                <Accessibility className="w-4 h-4 text-[#22577a]" /> Wheelchair needed
               </label>
               <label className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 transition text-sm select-none">
                 <input type="checkbox" checked={form.escortRequired} onChange={setBool("escortRequired")} className="rounded" />
@@ -905,7 +905,7 @@ function RequestFormModal({ title, form, residents, onChange, onSave, onCancel }
         </div>
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
           <button onClick={onCancel} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
-          <button onClick={onSave} className={`px-5 py-2 font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm ${isEmergency ? "bg-gradient-to-r from-red-500 to-red-600 text-white" : "bg-gradient-to-r from-blue-500 to-indigo-600 text-black"}`}>
+          <button onClick={onSave} className={`px-5 py-2 font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm ${isEmergency ? "bg-[#b0432c] text-white" : "bg-[#22577a] text-black"}`}>
             {isEmergency ? "Submit Emergency Transfer" : "Submit Request"}
           </button>
         </div>

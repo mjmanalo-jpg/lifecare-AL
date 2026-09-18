@@ -61,7 +61,7 @@ function Pagination({ page, totalPages, total, label, setPage }: { page: number;
 /* ── Stat Box ── */
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: LucideIcon; color: string }) {
   const COLORS: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50 border-blue-200", green: "text-green-600 bg-green-50 border-green-200",
+    blue: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]", green: "text-green-600 bg-green-50 border-green-200",
     amber: "text-amber-600 bg-amber-50 border-amber-200", purple: "text-purple-600 bg-purple-50 border-purple-200",
     rose: "text-rose-600 bg-rose-50 border-rose-200", gray: "text-gray-600 bg-gray-50 border-gray-200",
   };
@@ -85,7 +85,7 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
 
   if (type === "transport") {
     const reqType = str(row.type);
-    const meta = { MEDICAL_APPOINTMENT: { label: "Medical Appointment", icon: Stethoscope, gradient: "from-blue-500 to-indigo-600" }, DIALYSIS: { label: "Dialysis Run", icon: Droplets, gradient: "from-cyan-500 to-blue-500" }, THERAPY: { label: "Therapy Run", icon: HeartPulse, gradient: "from-purple-500 to-pink-500" }, FAMILY_OUTING: { label: "Family Outing", icon: TreePine, gradient: "from-emerald-500 to-teal-500" }, EMERGENCY_TRANSFER: { label: "Emergency Transfer", icon: Siren, gradient: "from-red-500 to-rose-600" }, OTHER: { label: "Other", icon: Bus, gradient: "from-gray-500 to-slate-600" } }[reqType] ?? { label: reqType, icon: Bus, gradient: "from-gray-500 to-slate-600" };
+    const meta = { MEDICAL_APPOINTMENT: { label: "Medical Appointment", icon: Stethoscope, gradient: "from-[#22577a] to-[#1f4f70]" }, DIALYSIS: { label: "Dialysis Run", icon: Droplets, gradient: "from-cyan-500 to-[#22577a]" }, THERAPY: { label: "Therapy Run", icon: HeartPulse, gradient: "from-purple-500 to-pink-500" }, FAMILY_OUTING: { label: "Family Outing", icon: TreePine, gradient: "from-emerald-500 to-teal-500" }, EMERGENCY_TRANSFER: { label: "Emergency Transfer", icon: Siren, gradient: "from-red-500 to-rose-600" }, OTHER: { label: "Other", icon: Bus, gradient: "from-gray-500 to-slate-600" } }[reqType] ?? { label: reqType, icon: Bus, gradient: "from-gray-500 to-slate-600" };
     const TypeIcon = meta.icon;
     const status = str(row.status);
     const statusPill = REQUEST_STATUS_COLORS[status] ?? "bg-gray-100 text-gray-600";
@@ -118,7 +118,7 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
             <div className="flex items-center gap-4 py-2.5 border-b border-gray-100">
               <span className="text-xs text-gray-500 flex items-center gap-1.5"><Navigation className="w-3.5 h-3.5" /> Options</span>
               <div className="flex items-center gap-2 flex-wrap justify-end flex-1">
-                {Boolean(row.wheelchairNeeded) && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold"><Accessibility className="w-3 h-3" /> Wheelchair</span>}
+                {Boolean(row.wheelchairNeeded) && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#cfe0eb] text-[#1b4763] text-[10px] font-semibold"><Accessibility className="w-3 h-3" /> Wheelchair</span>}
                 {Boolean(row.escortRequired) && <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[10px] font-semibold">Escort: {str(row.escortRole)}</span>}
                 <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-semibold">{row.returnRequired ? "Round Trip" : "One-Way"}</span>
               </div>
@@ -127,9 +127,9 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
               <span className="text-xs text-gray-500">Source</span>
               <span className="text-xs font-medium text-gray-700">{str(row.source)}</span>
             </div>}
-            {row.notes && <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
-              <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide mb-1">Notes</p>
-              <p className="text-sm text-blue-900 whitespace-pre-wrap">{str(row.notes)}</p>
+            {row.notes && <div className="bg-[#e0ecf2] rounded-xl p-3 border border-[#cfe0eb]">
+              <p className="text-[10px] font-semibold text-[#22577a] uppercase tracking-wide mb-1">Notes</p>
+              <p className="text-sm text-[#12324a] whitespace-pre-wrap">{str(row.notes)}</p>
             </div>}
           </div>
           <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
@@ -144,9 +144,9 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
     const name = str(row.name ?? row.visitorName ?? "Guest");
     const initials = name.split(" ").map(w => w.charAt(0)).join("").slice(0, 2).toUpperCase();
     const status = str(row.status ?? "");
-    const statusPill = status === "Scheduled" ? "bg-blue-100 text-blue-700" : status === "Completed" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700";
-    const avatarColors: Record<string, string> = { S: "from-blue-500 to-indigo-500", A: "from-amber-500 to-orange-500", M: "from-emerald-500 to-teal-500", R: "from-rose-500 to-pink-500" };
-    const gradient = avatarColors[name.charAt(0).toUpperCase()] ?? "from-purple-500 to-violet-500";
+    const statusPill = status === "Scheduled" ? "bg-[#cfe0eb] text-[#1b4763]" : status === "Completed" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700";
+    const avatarColors: Record<string, string> = { S: "from-[#22577a] to-[#22577a]", A: "from-amber-500 to-orange-500", M: "from-emerald-500 to-teal-500", R: "from-rose-500 to-pink-500" };
+    const gradient = avatarColors[name.charAt(0).toUpperCase()] ?? "from-purple-500 to-[#22577a]";
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
@@ -185,9 +185,9 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
               <span className="text-xs text-gray-500 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Duration</span>
               <span className="text-sm font-semibold text-gray-900">{num(row.durationMin)} min</span>
             </div> : null}
-            {row.notes && <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
-              <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide mb-1">Notes</p>
-              <p className="text-sm text-blue-900 whitespace-pre-wrap">{str(row.notes)}</p>
+            {row.notes && <div className="bg-[#e0ecf2] rounded-xl p-3 border border-[#cfe0eb]">
+              <p className="text-[10px] font-semibold text-[#22577a] uppercase tracking-wide mb-1">Notes</p>
+              <p className="text-sm text-[#12324a] whitespace-pre-wrap">{str(row.notes)}</p>
             </div>}
           </div>
           <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
@@ -204,7 +204,7 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-          <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between">
+          <div className="bg-[#8f6410] px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
                 <Megaphone className="w-5 h-5" />
@@ -253,9 +253,9 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
               <h2 className="text-xl font-bold text-gray-900 mt-2">{str(row.title)}</h2>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
-                <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide">Date & Time</p>
-                <p className="text-sm font-semibold text-blue-900 mt-0.5">{fmtDT(str(row.startTime))}</p>
+              <div className="bg-[#e0ecf2] rounded-xl p-3 border border-[#cfe0eb]">
+                <p className="text-[10px] font-semibold text-[#22577a] uppercase tracking-wide">Date & Time</p>
+                <p className="text-sm font-semibold text-[#12324a] mt-0.5">{fmtDT(str(row.startTime))}</p>
               </div>
               {row.location && <div className="bg-purple-50 rounded-xl p-3 border border-purple-100">
                 <p className="text-[10px] font-semibold text-purple-500 uppercase tracking-wide">Location</p>
@@ -290,8 +290,8 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
   if (type === "dining") {
     const status = str(row.status);
     const pill = DINING_STATUS_PILL[status] ?? "bg-gray-100 text-gray-700";
-    const mealColors: Record<string, string> = { BREAKFAST: "from-amber-400 to-orange-500", LUNCH: "from-emerald-400 to-teal-500", DINNER: "from-indigo-400 to-purple-500" };
-    const gradient = mealColors[str(row.mealType)] ?? "from-blue-400 to-indigo-500";
+    const mealColors: Record<string, string> = { BREAKFAST: "from-amber-400 to-orange-500", LUNCH: "from-emerald-400 to-teal-500", DINNER: "from-[#4f93bd] to-purple-500" };
+    const gradient = mealColors[str(row.mealType)] ?? "from-[#4f93bd] to-[#22577a]";
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
@@ -336,7 +336,7 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
   }
 
   if (type === "preference") {
-    const catColors: Record<string, string> = { Dining: "from-orange-400 to-amber-500", "Room Comfort": "from-blue-400 to-indigo-500", Activities: "from-purple-400 to-pink-500", "Wake-Up": "from-emerald-400 to-teal-500", Communication: "from-cyan-400 to-blue-500" };
+    const catColors: Record<string, string> = { Dining: "from-orange-400 to-amber-500", "Room Comfort": "from-[#4f93bd] to-[#22577a]", Activities: "from-purple-400 to-pink-500", "Wake-Up": "from-emerald-400 to-teal-500", Communication: "from-cyan-400 to-[#22577a]" };
     const gradient = catColors[str(row.category)] ?? "from-gray-400 to-gray-500";
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
@@ -356,9 +356,9 @@ function ViewModal({ title, row, onClose }: { title: string; row: Row; onClose: 
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Value</p>
               <p className="text-xl sm:text-2xl font-black text-gray-900">{str(row.value)}</p>
             </div>
-            {row.notes && <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-              <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide mb-1">Notes</p>
-              <p className="text-sm text-blue-900 whitespace-pre-wrap">{str(row.notes)}</p>
+            {row.notes && <div className="bg-[#e0ecf2] rounded-xl p-4 border border-[#cfe0eb]">
+              <p className="text-[10px] font-semibold text-[#22577a] uppercase tracking-wide mb-1">Notes</p>
+              <p className="text-sm text-[#12324a] whitespace-pre-wrap">{str(row.notes)}</p>
             </div>}
           </div>
           <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
@@ -424,7 +424,7 @@ export default function ResidentHub({ initialTab = "report" }: ResidentHubProps)
 
 const SNAPSHOT = [
   { key: "HEART_RATE", label: "Heart Rate", icon: HeartPulse, color: "text-red-500" },
-  { key: "BLOOD_PRESSURE", label: "Blood Pressure", icon: Droplets, color: "text-blue-500" },
+  { key: "BLOOD_PRESSURE", label: "Blood Pressure", icon: Droplets, color: "text-[#22577a]" },
   { key: "TEMPERATURE", label: "Temperature", icon: Thermometer, color: "text-orange-500" },
   { key: "OXYGEN", label: "Oxygen", icon: Wind, color: "text-green-500" },
 ];
@@ -469,13 +469,13 @@ function ReportTab() {
     ...relVitals.map(v => ({ icon: HeartPulse, color: "text-red-500", title: `${humanize(str(v.type))} recorded`, detail: `${str(v.value)}${v.unit ? ` ${str(v.unit)}` : ""}`, ts: t(v.recordedAt), when: v.recordedAt ? fmtDT(str(v.recordedAt)) : "" })),
     ...rawIncidents.map(i => ({ icon: AlertTriangle, color: "text-orange-500", title: humanize(str(i.incidentType ?? "")) || "Incident", detail: str(i.description ?? ""), ts: t(i.incidentDate), when: i.incidentDate ? fmtDT(str(i.incidentDate)) : "" })),
     ...visitRows.map(v => ({ icon: Calendar, color: "text-purple-500", title: `Visit — ${str(v.visitorName ?? "Guest")}`, detail: str(v.purpose ?? ""), ts: t(v.checkInTime), when: v.checkInTime ? fmtDT(str(v.checkInTime)) : "" })),
-    ...messageRows.map(m => ({ icon: MessageSquare, color: "text-blue-500", title: str(m.subject ?? humanize(str(m.messageType ?? ""))) || "Message", detail: str(m.content ?? ""), ts: t(m.createdAt), when: m.createdAt ? fmtDT(str(m.createdAt)) : "" })),
+    ...messageRows.map(m => ({ icon: MessageSquare, color: "text-[#22577a]", title: str(m.subject ?? humanize(str(m.messageType ?? ""))) || "Message", detail: str(m.content ?? ""), ts: t(m.createdAt), when: m.createdAt ? fmtDT(str(m.createdAt)) : "" })),
   ].filter(e => e.ts > 0).sort((a, b) => b.ts - a.ts).slice(0, 10);
 
   return (
     <div className="space-y-5">
       {/* Summary */}
-      <div className="bg-gradient-to-br from-green-50 to-blue-50 border border-green-200 rounded-lg p-3 sm:p-5">
+      <div className="bg-[#e2f6ec] to-[#e0ecf2] border border-green-200 rounded-lg p-3 sm:p-5">
         <p className="text-gray-800 text-xs sm:text-sm">
           {displayName} has <span className="font-bold">{vitalsToday}</span> vital reading{vitalsToday === 1 ? "" : "s"} today,
           <span className="font-bold"> {rawMeds.length}</span> active medication{rawMeds.length === 1 ? "" : "s"}, and
@@ -510,7 +510,7 @@ function ReportTab() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
         {/* Timeline */}
         <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-3 sm:p-5">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2 text-sm"><Activity className="w-4 h-4 text-blue-500" /> Activity Timeline</h3>
+          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2 text-sm"><Activity className="w-4 h-4 text-[#22577a]" /> Activity Timeline</h3>
           {events.length > 0 ? (
             <ol className="relative border-l-2 border-gray-100 ml-2 space-y-4">
               {events.map((e, i) => {
@@ -534,11 +534,11 @@ function ReportTab() {
 
         {/* Medications */}
         <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-5">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2 text-sm"><Pill className="w-4 h-4 text-blue-500" /> Medications</h3>
+          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2 text-sm"><Pill className="w-4 h-4 text-[#22577a]" /> Medications</h3>
           {rawMeds.length > 0 ? (
             <div className="space-y-2">
               {rawMeds.map((m, i) => (
-                <div key={i} className="p-2.5 rounded-lg bg-blue-50 border border-blue-100">
+                <div key={i} className="p-2.5 rounded-lg bg-[#e0ecf2] border border-[#cfe0eb]">
                   <p className="font-medium text-gray-900 text-sm">{str(m.name ?? "")} <span className="text-gray-500 font-normal">{str(m.dosage ?? "")}</span></p>
                   <p className="text-xs text-gray-600">{str(m.frequency ?? "")}{m.status ? ` • ${humanize(str(m.status))}` : ""}</p>
                 </div>
@@ -555,7 +555,7 @@ function ReportTab() {
 /*                         APPOINTMENTS TAB                                    */
 /* ════════════════════════════════════════════════════════════════════════════ */
 
-const AVATAR_COLORS = ["bg-blue-100 text-blue-700", "bg-purple-100 text-purple-700", "bg-green-100 text-green-700", "bg-rose-100 text-rose-700", "bg-amber-100 text-amber-700"];
+const AVATAR_COLORS = ["bg-[#cfe0eb] text-[#1b4763]", "bg-purple-100 text-purple-700", "bg-green-100 text-green-700", "bg-rose-100 text-rose-700", "bg-amber-100 text-amber-700"];
 
 function AppointmentsTab({ onView }: { onView: (r: Row, title: string) => void }) {
   const { data: residentRows } = useLiveQuery<Row>("residents", { query: "include=incidents,medications&take=1", tables: ["Resident"] });
@@ -599,7 +599,7 @@ function AppointmentsTab({ onView }: { onView: (r: Row, title: string) => void }
 
   const monthCount = enriched.filter(v => { if (!v.inTs || !nowTs) return false; const d = new Date(v.inTs), n = new Date(nowTs); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length;
   const uniqueVisitors = new Set(enriched.map(v => v.name)).size;
-  const statusBadge = (s: string) => s === "Scheduled" ? "bg-blue-100 text-blue-700" : s === "Completed" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700";
+  const statusBadge = (s: string) => s === "Scheduled" ? "bg-[#cfe0eb] text-[#1b4763]" : s === "Completed" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700";
 
   const createVisit = async () => {
     if (!form.visitorName.trim() || !form.date) { Swal.fire({ title: "Missing info", text: "Visitor name and date/time are required.", icon: "warning" }); return; }
@@ -641,7 +641,7 @@ function AppointmentsTab({ onView }: { onView: (r: Row, title: string) => void }
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none" />
         </div>
         <button onClick={() => { setForm({ visitorName: "", relationship: "", purpose: "", date: "", phone: "", notes: "" }); setShowForm(true); }}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm whitespace-nowrap">
+          className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition text-sm whitespace-nowrap">
           <Plus className="w-4 h-4" /> Request Visit
         </button>
       </div>
@@ -675,7 +675,7 @@ function AppointmentsTab({ onView }: { onView: (r: Row, title: string) => void }
                     <Td className="text-xs text-gray-500">{v.inTs ? fmtDT(str(new Date(v.inTs).toISOString())) : "—"}</Td>
                     <Td><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusBadge(v.status)}`}>{v.status}</span></Td>
                     <Td align="center">
-                      <button onClick={() => onView({ ...v, _tab: "appointments" }, `Visit — ${v.name}`)} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
+                      <button onClick={() => onView({ ...v, _tab: "appointments" }, `Visit — ${v.name}`)} className="p-1.5 rounded hover:bg-[#cfe0eb] text-[#1f4f70] transition" title="View"><Eye className="w-4 h-4" /></button>
                     </Td>
                   </tr>
                 ))}
@@ -694,7 +694,7 @@ function AppointmentsTab({ onView }: { onView: (r: Row, title: string) => void }
                   </div>
                   {v.relationship && <p className="text-xs text-gray-500">{v.relationship}</p>}
                   <p className="text-xs text-gray-500 mt-1">{v.inTs ? fmtDT(str(new Date(v.inTs).toISOString())) : "—"}</p>
-                  <button onClick={() => onView({ ...v, _tab: "appointments" }, `Visit — ${v.name}`)} className="mt-1 text-xs text-blue-600 font-semibold">View Details</button>
+                  <button onClick={() => onView({ ...v, _tab: "appointments" }, `Visit — ${v.name}`)} className="mt-1 text-xs text-[#1f4f70] font-semibold">View Details</button>
                 </div>
               </div>
             ))}
@@ -708,7 +708,7 @@ function AppointmentsTab({ onView }: { onView: (r: Row, title: string) => void }
       {showForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={() => setShowForm(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-purple-500 to-violet-600 px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between">
+            <div className="bg-[#22577a] to-[#1f4f70] px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between">
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 flex items-center justify-center"><Calendar className="w-5 h-5" /></div>
                 <h2 className="text-lg sm:text-xl font-bold">Request a Visit</h2>
@@ -745,7 +745,7 @@ function AppointmentsTab({ onView }: { onView: (r: Row, title: string) => void }
             </div>
             <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
               <button onClick={() => setShowForm(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-200 rounded-xl transition text-sm font-semibold">Cancel</button>
-              <button onClick={() => void createVisit()} disabled={saving} className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-500 to-violet-600 text-white font-semibold rounded-xl hover:shadow-lg transition active:scale-95 disabled:opacity-60 text-sm">
+              <button onClick={() => void createVisit()} disabled={saving} className="flex items-center gap-2 px-5 py-2.5 bg-[#22577a] to-[#1f4f70] text-white font-semibold rounded-xl hover:shadow-lg transition active:scale-95 disabled:opacity-60 text-sm">
                 {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : <><Plus className="w-4 h-4" /> Request Visit</>}
               </button>
             </div>
@@ -769,7 +769,7 @@ function Td({ children, className = "", align }: { children: React.ReactNode; cl
 /* ════════════════════════════════════════════════════════════════════════════ */
 
 const TYPE_META: Record<string, { label: string; icon: LucideIcon; color: string }> = {
-  MEDICAL_APPOINTMENT: { label: "Medical Appointment", icon: Stethoscope, color: "text-blue-600 bg-blue-50 border-blue-200" },
+  MEDICAL_APPOINTMENT: { label: "Medical Appointment", icon: Stethoscope, color: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]" },
   DIALYSIS: { label: "Dialysis Run", icon: Droplets, color: "text-cyan-600 bg-cyan-50 border-cyan-200" },
   THERAPY: { label: "Therapy Run", icon: HeartPulse, color: "text-purple-600 bg-purple-50 border-purple-200" },
   FAMILY_OUTING: { label: "Family Outing", icon: TreePine, color: "text-green-600 bg-green-50 border-green-200" },
@@ -777,7 +777,7 @@ const TYPE_META: Record<string, { label: string; icon: LucideIcon; color: string
   OTHER: { label: "Other", icon: Bus, color: "text-gray-600 bg-gray-50 border-gray-200" },
 };
 const REQUEST_STATUS_COLORS: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-700", APPROVED: "bg-blue-100 text-blue-700", SCHEDULED: "bg-indigo-100 text-indigo-700",
+  PENDING: "bg-amber-100 text-amber-700", APPROVED: "bg-[#cfe0eb] text-[#1b4763]", SCHEDULED: "bg-[#cfe0eb] text-[#1b4763]",
   DECLINED: "bg-red-100 text-red-700", COMPLETED: "bg-green-100 text-green-700", CANCELLED: "bg-gray-100 text-gray-600",
 };
 const TRIP_STEPS = ["SCHEDULED", "INSPECTION", "EN_ROUTE", "ARRIVED", "RETURNING", "COMPLETED"];
@@ -870,7 +870,7 @@ function TransportTab({ onView }: { onView: (r: Row, title: string) => void }) {
                   <div className="flex items-center gap-2 font-semibold text-gray-900 text-sm">
                     <MapPin className="w-4 h-4 text-yellow-500" /> {str(trip.origin ?? "Facility")} → {str(trip.destination ?? "")}
                   </div>
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${live ? "bg-green-100 text-green-700" : "bg-indigo-100 text-indigo-700"}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${live ? "bg-green-100 text-green-700" : "bg-[#cfe0eb] text-[#1b4763]"}`}>
                     {live && <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse mr-1.5" />}
                     {TRIP_STEP_LABELS[status] ?? status}
                   </span>
@@ -905,7 +905,7 @@ function TransportTab({ onView }: { onView: (r: Row, title: string) => void }) {
           <input type="text" placeholder="Search destination, type…" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none" />
         </div>
-        <button onClick={() => setShowAIChat(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition text-sm whitespace-nowrap">
+        <button onClick={() => setShowAIChat(true)} className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition text-sm whitespace-nowrap">
           <Plus className="w-4 h-4" /> Request Transport
         </button>
       </div>
@@ -938,13 +938,13 @@ function TransportTab({ onView }: { onView: (r: Row, title: string) => void }) {
                       <Td className="text-xs text-gray-900">{str(r.destination)}</Td>
                       <Td className="text-xs text-gray-500">{r.requestedDate ? fmtDT(str(r.requestedDate)) : "—"}</Td>
                       <Td className="text-xs text-gray-500">
-                        {Boolean(r.wheelchairNeeded) && <span title="Wheelchair"><Accessibility className="w-3.5 h-3.5 text-blue-500 inline" /> </span>}
+                        {Boolean(r.wheelchairNeeded) && <span title="Wheelchair"><Accessibility className="w-3.5 h-3.5 text-[#22577a] inline" /> </span>}
                         {Boolean(r.escortRequired) && <span className="text-[10px] font-semibold px-1 py-0.5 rounded bg-purple-50 text-purple-600">Escort</span>}
                         {r.returnRequired ? "Round" : "One-way"}
                       </Td>
                       <Td><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${REQUEST_STATUS_COLORS[status] ?? "bg-gray-100 text-gray-600"}`}>{status}</span></Td>
                       <Td align="center">
-                        <button onClick={() => onView({ ...r, _tab: "transport" }, `${meta.label} — ${str(r.destination)}`)} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition"><Eye className="w-4 h-4" /></button>
+                        <button onClick={() => onView({ ...r, _tab: "transport" }, `${meta.label} — ${str(r.destination)}`)} className="p-1.5 rounded hover:bg-[#cfe0eb] text-[#1f4f70] transition"><Eye className="w-4 h-4" /></button>
                       </Td>
                     </tr>
                   );
@@ -967,7 +967,7 @@ function TransportTab({ onView }: { onView: (r: Row, title: string) => void }) {
                     </div>
                     <p className="text-xs text-gray-500">{str(r.destination)}</p>
                     <p className="text-xs text-gray-400">{r.requestedDate ? fmtDT(str(r.requestedDate)) : "—"}</p>
-                    <button onClick={() => onView({ ...r, _tab: "transport" }, `${meta.label} — ${str(r.destination)}`)} className="mt-1 text-xs text-blue-600 font-semibold">View Details</button>
+                    <button onClick={() => onView({ ...r, _tab: "transport" }, `${meta.label} — ${str(r.destination)}`)} className="mt-1 text-xs text-[#1f4f70] font-semibold">View Details</button>
                   </div>
                 </div>
               );
@@ -992,7 +992,7 @@ function TransportTab({ onView }: { onView: (r: Row, title: string) => void }) {
       {showForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={() => setShowForm(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between">
+            <div className="bg-[#22577a] px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between">
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 flex items-center justify-center"><Bus className="w-5 h-5" /></div>
                 <h2 className="text-lg sm:text-xl font-bold">Request Transport</h2>
@@ -1003,7 +1003,7 @@ function TransportTab({ onView }: { onView: (r: Row, title: string) => void }) {
               {residents.length > 1 && (
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Resident</label>
-                  <select value={resolvedResidentId} onChange={e => setResidentId(e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition">
+                  <select value={resolvedResidentId} onChange={e => setResidentId(e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-[#4f93bd] focus:border-[#4f93bd] outline-none transition">
                     {residents.map(r => <option key={str(r.id)} value={str(r.id)}>{str(r.firstName)} {str(r.lastName)} — Room {str(r.roomNumber)}</option>)}
                   </select>
                 </div>
@@ -1011,44 +1011,44 @@ function TransportTab({ onView }: { onView: (r: Row, title: string) => void }) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Trip Type</label>
-                  <select value={form.type} onChange={e => set("type", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition">
+                  <select value={form.type} onChange={e => set("type", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-[#4f93bd] focus:border-[#4f93bd] outline-none transition">
                     {Object.entries(TYPE_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Date & Time</label>
-                  <input type="datetime-local" value={form.requestedDate} onChange={e => set("requestedDate", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition" />
+                  <input type="datetime-local" value={form.requestedDate} onChange={e => set("requestedDate", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-[#4f93bd] focus:border-[#4f93bd] outline-none transition" />
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Destination</label>
-                  <input type="text" value={form.destination} onChange={e => set("destination", e.target.value)} placeholder="e.g. St. Luke's Medical Center" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition placeholder:text-gray-400" />
+                  <input type="text" value={form.destination} onChange={e => set("destination", e.target.value)} placeholder="e.g. St. Luke's Medical Center" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-[#4f93bd] focus:border-[#4f93bd] outline-none transition placeholder:text-gray-400" />
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Purpose</label>
-                  <input type="text" value={form.purpose} onChange={e => set("purpose", e.target.value)} placeholder="e.g. Cardiology follow-up" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition placeholder:text-gray-400" />
+                  <input type="text" value={form.purpose} onChange={e => set("purpose", e.target.value)} placeholder="e.g. Cardiology follow-up" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-[#4f93bd] focus:border-[#4f93bd] outline-none transition placeholder:text-gray-400" />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <label className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer text-sm select-none transition hover:bg-gray-100"><input type="checkbox" checked={form.returnRequired} onChange={e => set("returnRequired", e.target.checked)} className="rounded" />Round trip</label>
-                <label className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer text-sm select-none transition hover:bg-gray-100"><input type="checkbox" checked={form.wheelchairNeeded} onChange={e => set("wheelchairNeeded", e.target.checked)} className="rounded" /><Accessibility className="w-4 h-4 text-blue-500" /> Wheelchair</label>
+                <label className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer text-sm select-none transition hover:bg-gray-100"><input type="checkbox" checked={form.wheelchairNeeded} onChange={e => set("wheelchairNeeded", e.target.checked)} className="rounded" /><Accessibility className="w-4 h-4 text-[#22577a]" /> Wheelchair</label>
                 <label className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer text-sm select-none transition hover:bg-gray-100"><input type="checkbox" checked={form.escortRequired} onChange={e => set("escortRequired", e.target.checked)} className="rounded" />Escort</label>
               </div>
               {form.escortRequired && (
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Escort Role</label>
-                  <select value={form.escortRole} onChange={e => set("escortRole", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition">
+                  <select value={form.escortRole} onChange={e => set("escortRole", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-[#4f93bd] focus:border-[#4f93bd] outline-none transition">
                     <option value="NURSE">Nurse</option><option value="CAREGIVER">Caregiver</option>
                   </select>
                 </div>
               )}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Notes <span className="text-gray-400 normal-case">(optional)</span></label>
-                <textarea value={form.notes} onChange={e => set("notes", e.target.value)} rows={2} placeholder="Any additional details…" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition placeholder:text-gray-400 resize-none" />
+                <textarea value={form.notes} onChange={e => set("notes", e.target.value)} rows={2} placeholder="Any additional details…" className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-[#4f93bd] focus:border-[#4f93bd] outline-none transition placeholder:text-gray-400 resize-none" />
               </div>
             </div>
             <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
               <button onClick={() => setShowForm(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-200 rounded-xl transition text-sm font-semibold">Cancel</button>
-              <button onClick={handleSubmit} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-xl hover:shadow-lg transition active:scale-95 text-sm">Send Request</button>
+              <button onClick={handleSubmit} className="px-5 py-2.5 bg-[#22577a] text-white font-semibold rounded-xl hover:shadow-lg transition active:scale-95 text-sm">Send Request</button>
             </div>
           </div>
         </div>
@@ -1125,7 +1125,7 @@ function TransportAIChat({ residentName, onClose, onBooked, onSwitchToForm }: {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl h-[85vh] max-h-[640px] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-4 sm:px-6 py-4 text-white flex items-center justify-between flex-shrink-0">
+        <div className="bg-[#22577a] px-4 sm:px-6 py-4 text-white flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0"><Bus className="w-5 h-5" /></div>
             <div className="min-w-0">
@@ -1139,11 +1139,11 @@ function TransportAIChat({ residentName, onClose, onBooked, onSwitchToForm }: {
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
           {messages.map(m => (
             <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${m.role === "user" ? "bg-blue-600 text-white rounded-br-sm" : "bg-white border border-gray-200 text-gray-800 rounded-bl-sm"}`}>{m.text}</div>
+              <div className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${m.role === "user" ? "bg-[#1f4f70] text-white rounded-br-sm" : "bg-white border border-gray-200 text-gray-800 rounded-bl-sm"}`}>{m.text}</div>
             </div>
           ))}
           {thinking && (
-            <div className="flex justify-start"><div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-3.5 py-2.5"><Loader2 className="w-4 h-4 animate-spin text-blue-500" /></div></div>
+            <div className="flex justify-start"><div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-3.5 py-2.5"><Loader2 className="w-4 h-4 animate-spin text-[#22577a]" /></div></div>
           )}
           {booked && (
             <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-3.5 py-2.5 text-sm flex items-center gap-2"><CheckCircle2 className="w-4 h-4 flex-shrink-0" /> Your transport request was sent to the dispatcher.</div>
@@ -1152,8 +1152,8 @@ function TransportAIChat({ residentName, onClose, onBooked, onSwitchToForm }: {
 
         <div className="border-t border-gray-100 p-3 flex-shrink-0 space-y-2">
           <form onSubmit={e => { e.preventDefault(); send(input); }} className="flex items-center gap-2">
-            <input value={input} onChange={e => setInput(e.target.value)} placeholder="Type your reply…" disabled={thinking} className="flex-1 px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition disabled:opacity-60" />
-            <button type="submit" disabled={thinking || !input.trim()} className="p-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:shadow-lg transition disabled:opacity-40 active:scale-95 flex-shrink-0"><Send className="w-4 h-4" /></button>
+            <input value={input} onChange={e => setInput(e.target.value)} placeholder="Type your reply…" disabled={thinking} className="flex-1 px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 focus:ring-2 focus:ring-[#4f93bd] focus:border-[#4f93bd] outline-none transition disabled:opacity-60" />
+            <button type="submit" disabled={thinking || !input.trim()} className="p-2.5 bg-[#22577a] text-white rounded-xl hover:shadow-lg transition disabled:opacity-40 active:scale-95 flex-shrink-0"><Send className="w-4 h-4" /></button>
           </form>
           <button onClick={onSwitchToForm} className="w-full text-center text-xs text-gray-400 hover:text-gray-600 transition">Prefer to fill in a form instead?</button>
         </div>
@@ -1391,7 +1391,7 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
       {showRequest && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black px-4 sm:px-5 py-4 sm:py-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black px-4 sm:px-5 py-4 sm:py-5 flex items-center justify-between z-10">
               <h2 className="text-lg sm:text-xl font-bold">Request {CATEGORY_META[reqForm.category]?.label ?? "a Service"}</h2>
               <button onClick={() => setShowRequest(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5 sm:w-6 sm:h-6" /></button>
             </div>
@@ -1412,7 +1412,7 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setShowRequest(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition text-sm">Cancel</button>
-              <button onClick={submitRequest} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Send Request</button>
+              <button onClick={submitRequest} className="px-5 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Send Request</button>
             </div>
           </div>
         </div>
@@ -1422,7 +1422,7 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
       {showBooking && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black px-4 sm:px-5 py-4 sm:py-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black px-4 sm:px-5 py-4 sm:py-5 flex items-center justify-between z-10">
               <h2 className="text-lg sm:text-xl font-bold">Book {CONCIERGE_CATALOG[bookForm.category]?.label ?? "a Service"}</h2>
               <button onClick={() => setShowBooking(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-5 h-5 sm:w-6 sm:h-6" /></button>
             </div>
@@ -1438,7 +1438,7 @@ function ServicesTab({ onView }: { onView: (r: Row, title: string) => void }) {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setShowBooking(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition text-sm">Cancel</button>
-              <button onClick={submitBooking} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Request Booking</button>
+              <button onClick={submitBooking} className="px-5 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Request Booking</button>
             </div>
           </div>
         </div>
@@ -1628,7 +1628,7 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
                           past && status === "ATTENDED" && !att?.rating ? <button onClick={() => rateEvent(str(att.id))} className="w-full px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition inline-flex items-center justify-center gap-1"><Star className="w-3.5 h-3.5" /> Rate</button> :
                             att?.rating ? <span className="inline-flex items-center gap-0.5 text-amber-500 font-semibold text-xs">{num(att.rating)} <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" /></span> :
                               status === "GOING" ? <div className="flex items-center gap-2"><span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${RSVP_PILL.GOING}`}>Going</span><button onClick={() => rsvp(str(e.id), "DECLINED")} className="text-xs text-red-500 hover:underline">Cancel</button></div> :
-                                !past ? <button onClick={() => rsvp(str(e.id), "GOING")} className="w-full px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-black text-xs font-semibold rounded-lg transition inline-flex items-center justify-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> RSVP</button> :
+                                !past ? <button onClick={() => rsvp(str(e.id), "GOING")} className="w-full px-3 py-1.5 bg-[#22577a] text-black text-xs font-semibold rounded-lg transition inline-flex items-center justify-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> RSVP</button> :
                                   <span className="text-[11px] text-gray-400">Event ended</span>}
                       </div>
                     </div>
@@ -1645,7 +1645,7 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
       <div className="bg-white rounded-lg border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-1.5"><UtensilsCrossed className="w-4 h-4 text-yellow-500" /><h3 className="font-semibold text-gray-900 text-sm">Dining Reservations</h3></div>
-          <button onClick={() => { setDiningForm(commDiningForm0); setShowDining(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-black text-xs font-semibold rounded-lg hover:shadow-md transition"><Plus className="w-3.5 h-3.5" /> Reserve</button>
+          <button onClick={() => { setDiningForm(commDiningForm0); setShowDining(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#22577a] text-black text-xs font-semibold rounded-lg hover:shadow-md transition"><Plus className="w-3.5 h-3.5" /> Reserve</button>
         </div>
         {diningQ.data.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">No dining reservations yet.</p> : (
           <div className="space-y-2">
@@ -1672,7 +1672,7 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
       <div className="bg-white rounded-lg border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-1.5"><SlidersHorizontal className="w-4 h-4 text-yellow-500" /><h3 className="font-semibold text-gray-900 text-sm">My Preference Profile</h3></div>
-          <button onClick={() => { setPrefForm(commPrefForm0); setShowPref(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-black text-xs font-semibold rounded-lg hover:shadow-md transition"><Plus className="w-3.5 h-3.5" /> Add</button>
+          <button onClick={() => { setPrefForm(commPrefForm0); setShowPref(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#22577a] text-black text-xs font-semibold rounded-lg hover:shadow-md transition"><Plus className="w-3.5 h-3.5" /> Add</button>
         </div>
         {prefsQ.data.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">No preferences set yet.</p> : (
           <div className="space-y-3">
@@ -1700,7 +1700,7 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
       {showDining && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={() => setShowDining(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-amber-400 to-orange-500 px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between">
+            <div className="bg-[#b58a2e] px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between">
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 flex items-center justify-center"><UtensilsCrossed className="w-5 h-5" /></div>
                 <h2 className="text-lg sm:text-xl font-bold">Reserve Dining</h2>
@@ -1741,7 +1741,7 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
             </div>
             <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
               <button onClick={() => setShowDining(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-200 rounded-xl transition text-sm font-semibold">Cancel</button>
-              <button onClick={submitDining} className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl hover:shadow-lg transition active:scale-95 text-sm">Request Reservation</button>
+              <button onClick={submitDining} className="px-5 py-2.5 bg-[#8f6410] text-white font-semibold rounded-xl hover:shadow-lg transition active:scale-95 text-sm">Request Reservation</button>
             </div>
           </div>
         </div>
@@ -1751,7 +1751,7 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
       {showPref && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" onClick={() => setShowPref(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-purple-400 to-pink-500 px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between">
+            <div className="bg-[#4f93bd] px-4 sm:px-6 py-4 sm:py-5 text-white flex items-center justify-between">
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/20 flex items-center justify-center"><SlidersHorizontal className="w-5 h-5" /></div>
                 <h2 className="text-lg sm:text-xl font-bold">Add Preference</h2>
@@ -1780,7 +1780,7 @@ function CommunityTab({ onView }: { onView: (r: Row, title: string) => void }) {
             </div>
             <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
               <button onClick={() => setShowPref(false)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-200 rounded-xl transition text-sm font-semibold">Cancel</button>
-              <button onClick={savePref} className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl hover:shadow-lg transition active:scale-95 text-sm">Save Preference</button>
+              <button onClick={savePref} className="px-5 py-2.5 bg-[#22577a] text-white font-semibold rounded-xl hover:shadow-lg transition active:scale-95 text-sm">Save Preference</button>
             </div>
           </div>
         </div>

@@ -610,7 +610,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+            <h1 className="text-2xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2">
               Staff Registry
             </h1>
             <p className="text-gray-600">Manage facility staff members, positions, and status</p>
@@ -627,7 +627,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
             )}
             <button
               onClick={() => setCreatingStaff(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:shadow-lg rounded-lg transition font-medium active:scale-95"
+              className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-white hover:shadow-lg rounded-lg transition font-medium active:scale-95"
             >
               <UserPlus className="w-4 h-4" />
               Add Staff
@@ -702,7 +702,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                           {staff.avatarUrl ? (
                             <img src={staff.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover" />
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-black font-bold text-sm">
+                            <div className="w-8 h-8 rounded-full bg-[#22577a] flex items-center justify-center text-black font-bold text-sm">
                               {staff.name.charAt(0)}
                             </div>
                           )}
@@ -741,7 +741,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => { setAssignCommunityId(""); setAssignMsg(""); setViewingStaff(staff); }}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                            className="p-2 text-[#1f4f70] hover:bg-[#e0ecf2] rounded-lg transition"
                             title="View details"
                           >
                             <Eye className="w-4 h-4" />
@@ -756,7 +756,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                           {!staff.needsFirstPassword && (
                             <button
                               onClick={() => resetStaffPassword(staff)}
-                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                              className="p-2 text-[#1f4f70] hover:bg-[#e0ecf2] rounded-lg transition"
                               title="Reset password — they set a new one on next sign-in"
                             >
                               <KeyRound className="w-4 h-4" />
@@ -793,7 +793,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                     {staff.avatarUrl ? (
                       <img src={staff.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover mt-0.5" />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-black font-bold text-sm mt-0.5">
+                      <div className="w-8 h-8 rounded-full bg-[#22577a] flex items-center justify-center text-black font-bold text-sm mt-0.5">
                         {staff.name.charAt(0)}
                       </div>
                     )}
@@ -826,7 +826,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={() => setViewingStaff(staff)}
-                        className="flex-1 px-3 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded text-sm font-medium transition"
+                        className="flex-1 px-3 py-2 bg-[#e0ecf2] text-[#1f4f70] hover:bg-[#cfe0eb] rounded text-sm font-medium transition"
                       >
                         <Eye className="w-4 h-4 inline mr-1" />
                         View
@@ -841,7 +841,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                       {!staff.needsFirstPassword && (
                         <button
                           onClick={() => resetStaffPassword(staff)}
-                          className="px-3 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded text-sm font-medium transition"
+                          className="px-3 py-2 bg-[#e0ecf2] text-[#1f4f70] hover:bg-[#cfe0eb] rounded text-sm font-medium transition"
                           title="Reset password — they set a new one on next sign-in"
                         >
                           <KeyRound className="w-4 h-4 inline" />
@@ -872,11 +872,11 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
               {/* View Modal Header */}
-              <div className="sticky top-0 bg-gradient-to-r from-blue-400 to-blue-500 text-white p-6 flex items-center justify-between border-b border-blue-600">
+              <div className="sticky top-0 bg-[#22577a] text-white p-6 flex items-center justify-between border-b border-[#1f4f70]">
                 <h2 className="text-2xl font-bold">Staff Details</h2>
                 <button
                   onClick={() => setViewingStaff(null)}
-                  className="p-2 hover:bg-blue-600/20 rounded-lg transition"
+                  className="p-2 hover:bg-[#1f4f70]/20 rounded-lg transition"
                 >
                   <X className="w-6 h-6" />
                 </button>
@@ -888,7 +888,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                   {viewingStaff.avatarUrl ? (
                     <img src={viewingStaff.avatarUrl} alt="" className="w-20 h-20 rounded-full object-cover border-2 border-gray-200" />
                   ) : (
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-black font-bold text-2xl">
+                    <div className="w-20 h-20 rounded-full bg-[#22577a] flex items-center justify-center text-black font-bold text-2xl">
                       {viewingStaff.name.charAt(0)}
                     </div>
                   )}
@@ -946,7 +946,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                 </div>
 
                 {orgCommunities.length > 1 && (
-                  <div className="bg-indigo-50 p-4 rounded-lg">
+                  <div className="bg-[#e0ecf2] p-4 rounded-lg">
                     <label className="block text-sm font-semibold text-gray-700 mb-1">Assign to another community</label>
                     <p className="text-xs text-gray-600 mb-3">Give {viewingStaff.name} access to another community — <b>same role</b>, so the functions stay the same and only the community&apos;s data changes. They switch communities from the workspace switcher.</p>
                     <div className="flex flex-wrap items-center gap-2">
@@ -954,9 +954,9 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                         <option value="">Select community…</option>
                         {orgCommunities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
-                      <button type="button" disabled={assignBusy || !assignCommunityId} onClick={() => void assignViewingToCommunity()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">{assignBusy ? "Assigning…" : "Assign"}</button>
+                      <button type="button" disabled={assignBusy || !assignCommunityId} onClick={() => void assignViewingToCommunity()} className="rounded-lg bg-[#1f4f70] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1b4763] disabled:opacity-50">{assignBusy ? "Assigning…" : "Assign"}</button>
                     </div>
-                    {assignMsg && <p className="mt-2 text-xs font-medium text-indigo-700">{assignMsg}</p>}
+                    {assignMsg && <p className="mt-2 text-xs font-medium text-[#1b4763]">{assignMsg}</p>}
                   </div>
                 )}
 
@@ -970,7 +970,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                             href={doc.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm"
+                            className="flex items-center gap-2 text-[#1f4f70] hover:text-[#163c56] text-sm"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                             {doc.name}
@@ -995,7 +995,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                     startEditing(viewingStaff);
                     setViewingStaff(null);
                   }}
-                  className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
+                  className="px-6 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
                 >
                   Edit Staff Member
                 </button>
@@ -1009,7 +1009,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
               {/* Edit Modal Header */}
-              <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-6 flex items-center justify-between border-b border-yellow-600">
+              <div className="sticky top-0 bg-[#22577a] text-black p-6 flex items-center justify-between border-b border-yellow-600">
                 <h2 className="text-2xl font-bold">Edit Staff Member</h2>
                 <button
                   onClick={() => setEditingStaff(null)}
@@ -1227,7 +1227,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                 </button>
                 <button
                   onClick={handleSaveEdit}
-                  className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
+                  className="px-6 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95"
                 >
                   Save Changes
                 </button>
@@ -1253,7 +1253,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                     value={createForm.name}
                     onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
                     placeholder="e.g. Maria Santos"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#22577a]"
                   />
                 </div>
                 <div>
@@ -1263,17 +1263,17 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                     value={createForm.email}
                     onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
                     placeholder="name@company.com"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#22577a]"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-600">Mobile number <span className="font-normal text-blue-600">*sign-in ID</span></label>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Mobile number <span className="font-normal text-[#1f4f70]">*sign-in ID</span></label>
                   <input
                     type="tel"
                     value={createForm.phone}
                     onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
                     placeholder="0917 123 4567"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#22577a]"
                   />
                 </div>
                 <div>
@@ -1281,19 +1281,19 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                   <select
                     value={createForm.role}
                     onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#22577a]"
                   >
                     {STAFF_ROLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-600">Employee ID <span className="text-blue-600">*used in the staff roster</span></label>
+                  <label className="mb-1 block text-xs font-semibold text-slate-600">Employee ID <span className="text-[#1f4f70]">*used in the staff roster</span></label>
                   <input
                     type="text"
                     value={createForm.employeeCode}
                     onChange={(e) => setCreateForm({ ...createForm, employeeCode: e.target.value })}
                     placeholder="e.g. CG1 / NOD1 / CM1 (matches your roster)"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#22577a]"
                   />
                 </div>
                 <div>
@@ -1303,7 +1303,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                     value={createForm.position}
                     onChange={(e) => setCreateForm({ ...createForm, position: e.target.value })}
                     placeholder="e.g. Registered Nurse"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#22577a]"
                   />
                 </div>
                 <div>
@@ -1313,7 +1313,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                     value={createForm.department}
                     onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })}
                     placeholder="e.g. Nursing"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#22577a]"
                   />
                 </div>
                 <div>
@@ -1321,7 +1321,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                   <select
                     value={createForm.active}
                     onChange={(e) => setCreateForm({ ...createForm, active: e.target.value as "Active" | "Inactive" })}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#22577a]"
                   >
                     <option value="Active">Active</option>
                     <option value="Inactive">Inactive</option>
@@ -1332,7 +1332,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                   <select
                     value={createForm.approved}
                     onChange={(e) => setCreateForm({ ...createForm, approved: e.target.value as "Approved" | "Disapproved" })}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#22577a]"
                   >
                     <option value="Approved">Approved</option>
                     <option value="Disapproved">Disapproved</option>
@@ -1345,13 +1345,13 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
                     onChange={(e) => setCreateForm({ ...createForm, experience: e.target.value })}
                     rows={3}
                     placeholder="e.g. 10 years as registered nurse, specialized in geriatric care..."
-                    className="w-full resize-none rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full resize-none rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#22577a]"
                   />
                 </div>
-                <div className="sm:col-span-2 rounded-xl bg-blue-50 px-3.5 py-2.5 text-xs text-blue-700">No password needed here — the staff member sets their own on first login. They sign in with your company name + their mobile number.</div>
+                <div className="sm:col-span-2 rounded-xl bg-[#e0ecf2] px-3.5 py-2.5 text-xs text-[#1b4763]">No password needed here — the staff member sets their own on first login. They sign in with your company name + their mobile number.</div>
                 <div className="sm:col-span-2 flex gap-2 pt-1">
                   <button type="button" onClick={() => setCreatingStaff(false)} className="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
-                  <button type="button" onClick={handleCreateStaff} className="flex-1 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700">Add staff member</button>
+                  <button type="button" onClick={handleCreateStaff} className="flex-1 rounded-xl bg-[#1f4f70] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#1b4763]">Add staff member</button>
                 </div>
               </div>
             </div>

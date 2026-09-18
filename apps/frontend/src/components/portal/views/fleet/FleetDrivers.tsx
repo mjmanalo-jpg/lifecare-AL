@@ -235,14 +235,14 @@ export default function FleetDrivers() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2">
             Driver Management
           </h1>
           <p className="text-gray-600">Track drivers, licenses, certifications, and safety performance</p>
         </div>
         <div className="flex gap-2">
           <RefreshButton onRefresh={() => void refetch()} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
-          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
             <Plus className="w-4 h-4" /> Add Driver
           </button>
         </div>
@@ -343,7 +343,7 @@ export default function FleetDrivers() {
                   {certs.length > 0 && (
                     <div className="flex items-center gap-1 mb-2 flex-wrap">
                       {certs.map((c, i) => (
-                        <span key={i} className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-medium">{c}</span>
+                        <span key={i} className="px-1.5 py-0.5 rounded bg-[#e0ecf2] text-[#1b4763] text-[10px] font-medium">{c}</span>
                       ))}
                     </div>
                   )}
@@ -363,7 +363,7 @@ export default function FleetDrivers() {
                   </div>
 
                   <div className="flex gap-1.5">
-                    <button onClick={() => setViewing(d)} className="flex-1 px-2 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition flex items-center justify-center gap-1">
+                    <button onClick={() => setViewing(d)} className="flex-1 px-2 py-1.5 text-xs font-medium text-[#1f4f70] bg-[#e0ecf2] hover:bg-[#cfe0eb] rounded transition flex items-center justify-center gap-1">
                       <Eye className="w-3 h-3" /> View
                     </button>
                     <button onClick={() => startEditing(d)} className="flex-1 px-2 py-1.5 text-xs font-medium text-yellow-600 bg-yellow-50 hover:bg-yellow-100 rounded transition flex items-center justify-center gap-1">
@@ -421,7 +421,7 @@ export default function FleetDrivers() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 flex-wrap max-w-[220px]">
                         {certs.length === 0 ? <span className="text-xs text-gray-400">—</span> : certs.map((c, i) => (
-                          <span key={i} className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-medium">{c}</span>
+                          <span key={i} className="px-1.5 py-0.5 rounded bg-[#e0ecf2] text-[#1b4763] text-[10px] font-medium">{c}</span>
                         ))}
                         <ExpiryBadge label="Certs" iso={d.certificationExpiry} />
                       </div>
@@ -442,7 +442,7 @@ export default function FleetDrivers() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => setViewing(d)} className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
+                        <button onClick={() => setViewing(d)} className="p-1.5 rounded hover:bg-[#cfe0eb] text-[#1f4f70] transition" title="View"><Eye className="w-4 h-4" /></button>
                         <button onClick={() => startEditing(d)} className="p-1.5 rounded hover:bg-yellow-100 text-yellow-600 transition" title="Edit"><Edit className="w-4 h-4" /></button>
                         <button onClick={() => handleDelete(d)} className="p-1.5 rounded hover:bg-red-100 text-red-600 transition" title="Delete"><Trash2 className="w-4 h-4" /></button>
                       </div>
@@ -473,7 +473,7 @@ export default function FleetDrivers() {
       {viewing && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className={`sticky top-0 bg-gradient-to-r ${hasLicenseAlert(viewing) ? "from-red-400 to-red-500" : "from-blue-400 to-blue-500"} text-white p-5 flex items-center justify-between z-10`}>
+            <div className={`sticky top-0 bg-gradient-to-r ${hasLicenseAlert(viewing) ? "from-red-400 to-red-500" : "from-[#4f93bd] to-[#22577a]"} text-white p-5 flex items-center justify-between z-10`}>
               <div className="flex items-center gap-3">
                 <Avatar name={viewing.name} />
                 <div>
@@ -505,7 +505,7 @@ export default function FleetDrivers() {
                 {certList(viewing).length > 0 && (
                   <div className="flex items-center gap-1 flex-wrap">
                     {certList(viewing).map((c, i) => (
-                      <span key={i} className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-medium flex items-center gap-1"><Award className="w-3 h-3" />{c}</span>
+                      <span key={i} className="px-1.5 py-0.5 rounded bg-[#e0ecf2] text-[#1b4763] text-[10px] font-medium flex items-center gap-1"><Award className="w-3 h-3" />{c}</span>
                     ))}
                   </div>
                 )}
@@ -561,7 +561,7 @@ export default function FleetDrivers() {
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string; icon: LucideIcon; color: string }) {
   const COLORS: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50 border-blue-200",
+    blue: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     green: "text-green-600 bg-green-50 border-green-200",
     red: "text-red-600 bg-red-50 border-red-200",
     purple: "text-purple-600 bg-purple-50 border-purple-200",
@@ -590,7 +590,7 @@ function DetailField({ icon: Icon, label, value }: { icon: LucideIcon; label: st
 
 function Avatar({ name, small }: { name: string; small?: boolean }) {
   return (
-    <div className={`${small ? "w-7 h-7 text-[10px]" : "w-10 h-10 text-sm"} rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-black font-bold flex items-center justify-center flex-shrink-0`}>
+    <div className={`${small ? "w-7 h-7 text-[10px]" : "w-10 h-10 text-sm"} rounded-full bg-[#22577a] text-black font-bold flex items-center justify-center flex-shrink-0`}>
       {initials(name)}
     </div>
   );
@@ -636,7 +636,7 @@ function DriverFormModal({ title, form, onChange, onSave, onCancel, saveLabel }:
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
           <h2 className="text-xl font-bold">{title}</h2>
           <button onClick={onCancel} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
@@ -690,7 +690,7 @@ function DriverFormModal({ title, form, onChange, onSave, onCancel, saveLabel }:
         </div>
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
           <button onClick={onCancel} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
-          <button onClick={onSave} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">{saveLabel}</button>
+          <button onClick={onSave} className="px-5 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">{saveLabel}</button>
         </div>
       </div>
     </div>

@@ -152,7 +152,7 @@ function TaskCard({ task, staffNameById, onSetStatus, onAddNote, nowMs }: { task
         )}
         {status === "PENDING" && (
           <button onClick={() => onSetStatus(task.id, "IN_PROGRESS")}
-            title="Start task" className="p-1.5 rounded text-blue-600 hover:bg-blue-50 transition">
+            title="Start task" className="p-1.5 rounded text-[#1f4f70] hover:bg-[#e0ecf2] transition">
             <Play className="w-4 h-4" />
           </button>
         )}
@@ -217,7 +217,7 @@ function HandoverCard({ e, resName, onOpenTasks, onOpenIncidents }: { e: Handove
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <Repeat className="w-4 h-4 text-blue-500" />
+        <Repeat className="w-4 h-4 text-[#22577a]" />
         <span className="text-sm font-bold text-slate-900">Endorsement {e.number || "—"}</span>
         <span className="text-xs text-slate-400">{e.date || ""}{e.shiftLabel ? ` · ${e.shiftLabel}${e.shiftRange ? ` ${e.shiftRange}` : ""}` : ""}</span>
         {e.outgoingBy && <span className="text-xs text-slate-500">from <b className="font-semibold text-slate-700">{e.outgoingBy}</b></span>}
@@ -523,7 +523,7 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
           </button>
           {isManager && (
             <button onClick={() => setShowAssign(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-sm transition active:scale-95">
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#1f4f70] hover:bg-[#1b4763] text-white text-sm font-semibold shadow-sm transition active:scale-95">
               <Plus className="w-4 h-4" /> Assign Task
             </button>
           )}
@@ -534,14 +534,14 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
       {isManager && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3">
           <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 outline-none focus:border-blue-400" />
+            className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 outline-none focus:border-[#4f93bd]" />
           <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 outline-none focus:border-blue-400">
+            className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 outline-none focus:border-[#4f93bd]">
             <option value="all">All assignees</option>
             {assignableStaff.map((s) => <option key={s.id} value={s.id}>{s.user?.name ?? "Staff"}</option>)}
           </select>
           <select value={filterResident} onChange={(e) => setFilterResident(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 outline-none focus:border-blue-400">
+            className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 outline-none focus:border-[#4f93bd]">
             <option value="all">All residents</option>
             {residents.map((r) => <option key={r.id} value={r.id}>{r.name} · Rm {r.room}</option>)}
           </select>
@@ -553,7 +553,7 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
         <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3">
           <span className="text-sm font-medium text-slate-500">Resident</span>
           <select value={filterResident} onChange={(e) => setFilterResident(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 outline-none focus:border-blue-400 min-w-[200px]">
+            className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 outline-none focus:border-[#4f93bd] min-w-[200px]">
             <option value="all">All residents</option>
             {residents.map((r) => <option key={r.id} value={r.id}>{r.name} · Rm {r.room}</option>)}
           </select>
@@ -566,7 +566,7 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
           <button key={id} onClick={() => setActiveTab(id)}
             className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg transition ${activeTab === id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
             {label}
-            {id === "handover" && myHandovers.length > 0 && <span className="inline-flex items-center justify-center min-w-5 h-4 px-1 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">{myHandovers.length}</span>}
+            {id === "handover" && myHandovers.length > 0 && <span className="inline-flex items-center justify-center min-w-5 h-4 px-1 rounded-full bg-[#cfe0eb] text-[#1b4763] text-[10px] font-bold">{myHandovers.length}</span>}
           </button>
         ))}
       </div>
@@ -579,7 +579,7 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
       ) : activeTab === "summary" ? (
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
-            {([["Pending", summary.byStatus.PENDING, "bg-amber-400"], ["In Progress", summary.byStatus.IN_PROGRESS, "bg-blue-500"], ["Completed", summary.byStatus.COMPLETED, "bg-green-500"]] as const).map(([label, n, dot]) => (
+            {([["Pending", summary.byStatus.PENDING, "bg-amber-400"], ["In Progress", summary.byStatus.IN_PROGRESS, "bg-[#22577a]"], ["Completed", summary.byStatus.COMPLETED, "bg-green-500"]] as const).map(([label, n, dot]) => (
               <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${dot}`} /><span className="text-sm text-slate-500">{label}</span></div>
                 <p className="text-3xl font-bold text-slate-900 mt-1">{n}</p>
@@ -599,7 +599,7 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
                     <span className="text-slate-700">{r.name}</span>
                     <span className="flex items-center gap-3 text-xs">
                       <span className="text-amber-600">{r.pending} pending</span>
-                      <span className="text-blue-600">{r.inProgress} in progress</span>
+                      <span className="text-[#1f4f70]">{r.inProgress} in progress</span>
                       <span className="text-green-600">{r.completed} completed</span>
                     </span>
                   </div>
@@ -617,7 +617,7 @@ export default function TaskAssignmentBoard({ clinicianRole = "NURSE" }: { clini
       ) : (
         <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3">
           <Column label="Pending" dot="bg-amber-400" items={columns.pending} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} nowMs={nowMs} />
-          <Column label="In Progress" dot="bg-blue-500" items={columns.inProgress} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} nowMs={nowMs} />
+          <Column label="In Progress" dot="bg-[#22577a]" items={columns.inProgress} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} nowMs={nowMs} />
           <Column label="Completed" dot="bg-green-500" items={completedScoped} total={columns.completed.length} staffNameById={staffNameById} onSetStatus={setStatus} onAddNote={addNote} nowMs={nowMs} headerRight={<ScopeToggle value={completedScope} onChange={setCompletedScope} />} />
         </div>
       )}
@@ -661,7 +661,7 @@ function NoteModal({ task, value, onChange, busy, onClose, onSubmit }: { task: T
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><StickyNote className="h-5 w-5" /></span>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#e0ecf2] text-[#1f4f70]"><StickyNote className="h-5 w-5" /></span>
             <div className="min-w-0">
               <h2 className="text-lg font-bold leading-tight text-slate-900">Add note</h2>
               <p className="mt-0.5 truncate text-xs text-slate-500">{task.resident}{task.room ? ` · Rm ${task.room}` : ""}{task.title ? ` — ${task.title}` : ""}</p>
@@ -683,14 +683,14 @@ function NoteModal({ task, value, onChange, busy, onClose, onSubmit }: { task: T
             <label className="mb-1.5 block text-sm font-semibold text-slate-700">New note</label>
             <textarea autoFocus rows={4} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={submitOnCmdEnter}
               placeholder="e.g. Resident refused fluids at 3pm; will retry after rest."
-              className="w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-transparent focus:ring-2 focus:ring-blue-400" />
+              className="w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-transparent focus:ring-2 focus:ring-[#4f93bd]" />
             <p className="mt-1.5 text-[11px] text-slate-400">A date &amp; time stamp is added automatically. Press ⌘/Ctrl + Enter to save.</p>
           </div>
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-4">
           <button onClick={onClose} disabled={busy} className="rounded-xl px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 disabled:opacity-60">Cancel</button>
-          <button onClick={onSubmit} disabled={busy || !value.trim()} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"><StickyNote className="h-4 w-4" /> {busy ? "Saving…" : "Add note"}</button>
+          <button onClick={onSubmit} disabled={busy || !value.trim()} className="inline-flex items-center gap-2 rounded-xl bg-[#1f4f70] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#1b4763] disabled:opacity-60"><StickyNote className="h-4 w-4" /> {busy ? "Saving…" : "Add note"}</button>
         </div>
       </div>
     </div>
@@ -752,7 +752,7 @@ function AssignTaskModal({
   }, [suggestedStaffId]);
 
   const valid = selectedResidents.size > 0 && assigneeId && title.trim() && dueDate && shiftKey;
-  const inputCls = "w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent outline-none text-sm";
+  const inputCls = "w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#4f93bd] focus:border-transparent outline-none text-sm";
   // The AS-domain this task maps to (category first, then title). null = not gated.
   const taskDomainCode = domainCodeFromLabel(category) ?? domainCodeFromLabel(title);
 
@@ -847,9 +847,9 @@ function AssignTaskModal({
               <div className="flex items-center justify-between mb-1">
                 <label className="text-sm font-semibold text-slate-700">Residents <span className="text-red-500">*</span> <span className="text-slate-400 font-normal">({selectedResidents.size} selected)</span></label>
                 <div className="text-xs">
-                  <button type="button" onClick={selectAll} className="text-blue-600 hover:underline">Select All</button>
+                  <button type="button" onClick={selectAll} className="text-[#1f4f70] hover:underline">Select All</button>
                   <span className="text-slate-300 mx-1.5">|</span>
-                  <button type="button" onClick={clearAll} className="text-blue-600 hover:underline">Clear</button>
+                  <button type="button" onClick={clearAll} className="text-[#1f4f70] hover:underline">Clear</button>
                 </div>
               </div>
               <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-300 divide-y divide-slate-100">
@@ -860,7 +860,7 @@ function AssignTaskModal({
                   return (
                   <label key={r.id} className="flex items-center gap-2.5 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer">
                     <input type="checkbox" checked={selectedResidents.has(r.id)} onChange={() => toggleResident(r.id)}
-                      style={{ minHeight: 0, minWidth: 0 }} className="h-4 w-4 shrink-0 rounded border-slate-300 accent-blue-600" />
+                      style={{ minHeight: 0, minWidth: 0 }} className="h-4 w-4 shrink-0 rounded border-slate-300 accent-[#1f4f70]" />
                     <span className="truncate">{r.name} — Rm {r.room}</span>
                     {oop && <span className="ml-auto shrink-0 inline-flex items-center rounded-full border border-amber-400 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700" title="Additional Clinical Service (DT-014)">Not in L{careLevelEnumToLevel(r.careLevel)}</span>}
                   </label>
@@ -877,7 +877,7 @@ function AssignTaskModal({
                 {staffRows.map((s) => <option key={s.id} value={s.id}>{s.user?.name ?? "Staff"}</option>)}
               </select>
               {suggestedName && assigneeId === suggestedStaffId && (
-                <p className="mt-1 text-[11px] text-blue-600 flex items-center gap-1"><CalendarCheck className="w-3 h-3" /> Scheduled for {selectedResidents.size === 1 ? "this resident" : "these residents"} this shift</p>
+                <p className="mt-1 text-[11px] text-[#1f4f70] flex items-center gap-1"><CalendarCheck className="w-3 h-3" /> Scheduled for {selectedResidents.size === 1 ? "this resident" : "these residents"} this shift</p>
               )}
             </div>
 
@@ -927,7 +927,7 @@ function AssignTaskModal({
           <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-5 py-4 flex items-center justify-end gap-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition text-sm">Cancel</button>
             <button type="submit" disabled={!valid || saving}
-              className="inline-flex items-center gap-2 px-5 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm">
+              className="inline-flex items-center gap-2 px-5 py-2 bg-[#1f4f70] text-white font-semibold rounded-lg hover:bg-[#1b4763] transition disabled:opacity-50 disabled:cursor-not-allowed text-sm">
               <Plus className="w-4 h-4" /> {saving ? "Assigning…" : "Assign Task"}
             </button>
           </div>

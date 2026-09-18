@@ -14,7 +14,7 @@ const SEV: Record<string, { label: string; badge: string; border: string; bar: s
   critical: { label: "Critical", badge: "bg-red-100 text-red-700", border: "border-red-300", bar: "bg-red-500", color: "text-red-500" },
   high: { label: "High", badge: "bg-orange-100 text-orange-700", border: "border-orange-300", bar: "bg-orange-500", color: "text-orange-500" },
   medium: { label: "Medium", badge: "bg-yellow-100 text-yellow-700", border: "border-yellow-300", bar: "bg-yellow-500", color: "text-yellow-600" },
-  low: { label: "Low", badge: "bg-blue-100 text-blue-700", border: "border-blue-300", bar: "bg-blue-500", color: "text-blue-500" },
+  low: { label: "Low", badge: "bg-[#cfe0eb] text-[#1b4763]", border: "border-[#7fa9c2]", bar: "bg-[#22577a]", color: "text-[#22577a]" },
 };
 const SEV_KEYS = ["critical", "high", "medium", "low"] as const;
 

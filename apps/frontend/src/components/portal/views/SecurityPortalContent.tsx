@@ -82,7 +82,7 @@ function SecurityDashboard() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-slate-700 to-slate-900 bg-clip-text text-transparent mb-2 flex items-center gap-2">
+        <h1 className="text-3xl sm:text-4xl font-bold bg-[#334155] bg-clip-text text-transparent mb-2 flex items-center gap-2">
           <Shield className="w-8 h-8 text-slate-700 flex-shrink-0" />
           Security Command
         </h1>
@@ -137,10 +137,10 @@ function SecurityDashboard() {
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string; icon: LucideIcon; color: string }) {
   const COLORS: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50 border-blue-200",
+    blue: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     green: "text-green-600 bg-green-50 border-green-200",
     red: "text-red-600 bg-red-50 border-red-200",
-    indigo: "text-indigo-600 bg-indigo-50 border-indigo-200",
+    indigo: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     amber: "text-amber-600 bg-amber-50 border-amber-200",
   };
   const c = COLORS[color] || COLORS.blue;

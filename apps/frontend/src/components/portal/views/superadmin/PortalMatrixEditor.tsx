@@ -51,10 +51,10 @@ const ROLE_LABELS: Record<Role, string> = {
 
 /** Colour accents per role row for the left badge. */
 const ROLE_COLORS: Record<Role, string> = {
-  PLATFORM_ADMIN: "from-slate-700 to-blue-800",
-  ORGANIZATION_ADMIN: "from-violet-600 to-indigo-700",
-  SUPERADMIN: "from-blue-600 to-indigo-600",
-  FACILITY_ADMIN: "from-blue-400 to-blue-600",
+  PLATFORM_ADMIN: "from-slate-700 to-[#163c56]",
+  ORGANIZATION_ADMIN: "from-[#1f4f70] to-[#1b4763]",
+  SUPERADMIN: "from-[#1f4f70] to-[#1f4f70]",
+  FACILITY_ADMIN: "from-[#4f93bd] to-[#1f4f70]",
   CARE_MANAGER: "from-teal-500 to-emerald-600",
   CRM: "from-fuchsia-500 to-purple-600",
   RESIDENT_COORDINATOR: "from-cyan-500 to-teal-600",
@@ -64,12 +64,12 @@ const ROLE_COLORS: Record<Role, string> = {
   CAREGIVER: "from-green-400 to-green-600",
   FAMILY: "from-purple-400 to-purple-600",
   RESIDENT: "from-orange-400 to-orange-600",
-  FLEET_MANAGEMENT: "from-indigo-400 to-indigo-600",
+  FLEET_MANAGEMENT: "from-[#4f93bd] to-[#1f4f70]",
   DRIVER: "from-amber-400 to-amber-600",
   SECURITY: "from-red-500 to-rose-700",
   NUTRITIONIST: "from-lime-500 to-green-600",
   KITCHEN: "from-orange-500 to-amber-600",
-  HOUSEKEEPING: "from-sky-400 to-cyan-600",
+  HOUSEKEEPING: "from-[#4f93bd] to-cyan-600",
   MAINTENANCE: "from-stone-500 to-zinc-700",
 };
 
@@ -191,7 +191,7 @@ export default function PortalMatrixEditor() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2">
             Portal Feature Matrix
           </h1>
           <p className="text-gray-600">
@@ -247,8 +247,8 @@ export default function PortalMatrixEditor() {
           <table className="w-full text-sm">
             {/* Column headers: features */}
             <thead>
-              <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-                <th className="sticky left-0 z-10 bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider min-w-[180px]">
+              <tr className="bg-[#f8fafc] border-b border-gray-200">
+                <th className="sticky left-0 z-10 bg-[#f8fafc] px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider min-w-[180px]">
                   Role / Module
                 </th>
                 {allFeatures.map((feature) => (
@@ -315,9 +315,9 @@ export default function PortalMatrixEditor() {
                         >
                           <button
                             onClick={() => toggle(role, feature)}
-                            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                            className={`w-11 h-11 rounded-lg flex items-center justify-center transition-all duration-200 ${
                               isEnabled
-                                ? "bg-gradient-to-br from-green-400 to-green-600 text-white shadow-sm hover:shadow-md hover:scale-110"
+                                ? "bg-[#4fa77e] text-white shadow-sm hover:shadow-md hover:scale-110"
                                 : "bg-gray-100 text-gray-300 hover:bg-gray-200 hover:scale-110"
                             }`}
                             title={`${isEnabled ? "Disable" : "Enable"} "${feature}" for ${ROLE_LABELS[role]}`}
@@ -340,7 +340,7 @@ export default function PortalMatrixEditor() {
       </div>
 
       {/* Summary Footer */}
-      <div className="bg-gradient-to-r from-gray-900 to-black rounded-xl p-6 text-white">
+      <div className="bg-[#0f172a] rounded-xl p-6 text-white">
         <h3 className="text-lg font-bold text-yellow-400 mb-3">Matrix Summary</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
           {ALL_ROLES.map((role) => {

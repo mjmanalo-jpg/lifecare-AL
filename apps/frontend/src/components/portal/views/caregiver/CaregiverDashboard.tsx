@@ -256,7 +256,7 @@ export default function CaregiverDashboard() {
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 sm:gap-3 lg:gap-4">
         <StatCard title="Assigned Residents" value={String(stats?.residents ?? residents.length)} icon={Users}
-          backgroundColor="bg-blue-50" textColor="text-blue-900" iconColor="text-blue-500" />
+          backgroundColor="bg-[#e0ecf2]" textColor="text-[#12324a]" iconColor="text-[#22577a]" />
         <StatCard title="Open Tasks" value={String(stats?.openTasks ?? taskSummary.pending)} icon={ClipboardList}
           backgroundColor="bg-yellow-50" textColor="text-yellow-900" iconColor="text-yellow-500" />
         <StatCard title="Completed" value={String(taskSummary.completed)} icon={CheckCircle2}
@@ -278,7 +278,7 @@ export default function CaregiverDashboard() {
           </span>
         </div>
         <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-green-400 to-green-500 transition-all duration-500" style={{ width: `${taskSummary.pct}%` }} />
+          <div className="h-full bg-[#4fa77e] transition-all duration-500" style={{ width: `${taskSummary.pct}%` }} />
         </div>
       </div>
 

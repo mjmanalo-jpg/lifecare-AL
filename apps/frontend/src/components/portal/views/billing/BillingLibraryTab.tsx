@@ -14,7 +14,7 @@ import {
 import { buildGlTxns, toGeneralLedgerCsv, toQuickBooksIIF, downloadText } from "@/lib/glExport";
 
 type SettingRow = { id: string; key?: string; value: string };
-const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white";
+const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#22577a] focus:ring-2 focus:ring-[#22577a]/20 bg-white";
 
 export default function BillingLibraryTab() {
   const { data: settingRows, refetch } = useLiveQuery<SettingRow>("app-settings", { tables: ["AppSetting"] });
@@ -98,13 +98,13 @@ export default function BillingLibraryTab() {
       {/* ── Charge Library ── */}
       <section className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
-          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Library className="w-5 h-5 text-blue-600" /> Customizable Charge Library</h3>
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Library className="w-5 h-5 text-[#1f4f70]" /> Customizable Charge Library</h3>
           <div className="flex items-center flex-wrap gap-2">
             {templates.length === 0 && !templatesDirty && (
               <button onClick={() => setDraftTemplates(SEED_TEMPLATES.map((t) => ({ ...t, id: newId() })))} className="px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Load starter templates</button>
             )}
             <button onClick={addTemplate} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50"><Plus className="w-4 h-4" /> Add template</button>
-            {templatesDirty && <button onClick={() => void saveTemplates(tpl.filter((t) => t.name.trim()))} disabled={savingT} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{savingT ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save</button>}
+            {templatesDirty && <button onClick={() => void saveTemplates(tpl.filter((t) => t.name.trim()))} disabled={savingT} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763] disabled:opacity-60">{savingT ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save</button>}
           </div>
         </div>
         <p className="text-xs text-gray-500 mb-3">Reusable charge templates by care level. Recurring templates (rent, monthly care fees) are auto-posted each month by the accrual run below.</p>
@@ -123,7 +123,7 @@ export default function BillingLibraryTab() {
                     <td className="px-2"><select className={inputCls} value={t.category} onChange={(e) => patchTemplate(t.id, { category: e.target.value })}>{CHARGE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></td>
                     <td className="px-2"><select className={inputCls} value={t.careLevel} onChange={(e) => patchTemplate(t.id, { careLevel: e.target.value })}>{CARE_LEVEL_OPTIONS.map((c) => <option key={c} value={c}>{c === "ALL" ? "All levels" : c[0] + c.slice(1).toLowerCase()}</option>)}</select></td>
                     <td className="px-2"><input type="number" className={inputCls + " text-right"} value={t.amount} onChange={(e) => patchTemplate(t.id, { amount: Number(e.target.value) })} /></td>
-                    <td className="px-2 text-center"><input type="checkbox" className="w-5 h-5 accent-blue-600" checked={t.recurring} onChange={(e) => patchTemplate(t.id, { recurring: e.target.checked })} /></td>
+                    <td className="px-2 text-center"><input type="checkbox" className="w-5 h-5 accent-[#1f4f70]" checked={t.recurring} onChange={(e) => patchTemplate(t.id, { recurring: e.target.checked })} /></td>
                     <td className="px-1 text-right"><button onClick={() => removeTemplate(t.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button></td>
                   </tr>
                 ))}
@@ -142,7 +142,7 @@ export default function BillingLibraryTab() {
         </section>
 
         <section className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-2"><FileSpreadsheet className="w-5 h-5 text-indigo-600" /> General Ledger export</h3>
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-2"><FileSpreadsheet className="w-5 h-5 text-[#1f4f70]" /> General Ledger export</h3>
           <p className="text-xs text-gray-500 mb-4">Balanced double-entry export of invoices &amp; payments for QuickBooks / Sage Intacct, mapped to your GL accounts.</p>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => exportGl("csv")} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50"><Download className="w-4 h-4" /> QuickBooks / Sage CSV</button>
@@ -155,7 +155,7 @@ export default function BillingLibraryTab() {
       <section className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
           <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Settings2 className="w-5 h-5 text-gray-600" /> Billing settings</h3>
-          {settingsDirty && <button onClick={() => void saveSettings(set)} disabled={savingS} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60">{savingS ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save</button>}
+          {settingsDirty && <button onClick={() => void saveSettings(set)} disabled={savingS} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#1f4f70] text-white text-sm font-semibold hover:bg-[#1b4763] disabled:opacity-60">{savingS ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save</button>}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <label className="text-xs font-medium text-gray-600">GL — Revenue account<input className={inputCls + " mt-1"} value={set.glAccounts.revenue} onChange={(e) => setDraftSettings({ ...set, glAccounts: { ...set.glAccounts, revenue: e.target.value } })} /></label>

@@ -97,11 +97,11 @@ export default function FamilyDashboard() {
         const chips = [
           { key: "HEART_RATE", label: "Heart rate", unit: "bpm", icon: HeartPulse, tint: "text-rose-600", bg: "bg-rose-50" },
           { key: "TEMPERATURE", label: "Temperature", unit: "°C", icon: Thermometer, tint: "text-amber-600", bg: "bg-amber-50" },
-          { key: "BLOOD_PRESSURE", label: "Blood pressure", unit: "mmHg", icon: Activity, tint: "text-sky-600", bg: "bg-sky-50" },
+          { key: "BLOOD_PRESSURE", label: "Blood pressure", unit: "mmHg", icon: Activity, tint: "text-[#1f4f70]", bg: "bg-[#e0ecf2]" },
           { key: "OXYGEN", label: "Oxygen", unit: "%", icon: Wind, tint: "text-teal-600", bg: "bg-teal-50" },
         ] as const;
         return (
-          <section className="relative overflow-hidden rounded-3xl border border-teal-100 bg-gradient-to-br from-teal-50 via-white to-rose-50/40 p-5 sm:p-7 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_18px_40px_-20px_rgba(13,148,136,0.28)]">
+          <section className="relative overflow-hidden rounded-3xl border border-teal-100 bg-[#e0ecf2] /40 p-5 sm:p-7 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_18px_40px_-20px_rgba(13,148,136,0.28)]">
             <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
                 <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Welcome — {relative?.name || displayName}</h1>
@@ -140,7 +140,7 @@ export default function FamilyDashboard() {
 
       {/* Quick metrics */}
       <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4 lg:gap-4">
-        <KpiCard icon={MessageSquare} label="Unread messages" value={String(unreadMessages)} tint="text-blue-600" bg="bg-blue-50" />
+        <KpiCard icon={MessageSquare} label="Unread messages" value={String(unreadMessages)} tint="text-[#1f4f70]" bg="bg-[#e0ecf2]" />
         <KpiCard icon={Calendar} label="Appointments" value={String(visitRows.length)} tint="text-teal-600" bg="bg-teal-50" />
         <KpiCard icon={ClipboardList} label="Open care tasks" value={String(openTasks.length)} tint="text-emerald-600" bg="bg-emerald-50" />
         <KpiCard icon={Wallet} label="Balance due" value={`₱${balanceDue.toFixed(0)}`} tint="text-amber-600" bg="bg-amber-50" />
@@ -173,7 +173,7 @@ export default function FamilyDashboard() {
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium text-gray-900 text-sm truncate">{inc.type}</span>
                       <span className={`px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0 ${
-                        inc.severity === "critical" ? "bg-red-100 text-red-700" : inc.severity === "high" ? "bg-orange-100 text-orange-700" : inc.severity === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-blue-100 text-blue-700"
+                        inc.severity === "critical" ? "bg-red-100 text-red-700" : inc.severity === "high" ? "bg-orange-100 text-orange-700" : inc.severity === "medium" ? "bg-yellow-100 text-yellow-700" : "bg-[#cfe0eb] text-[#1b4763]"
                       }`}>{inc.severity.toUpperCase()}</span>
                     </div>
                     <p className="text-xs text-gray-600 truncate">{inc.description || "Incident recorded"}</p>
@@ -199,7 +199,7 @@ export default function FamilyDashboard() {
                     const status = String(t.status ?? "PENDING").toUpperCase();
                     const done = status === "COMPLETED";
                     const meta = done ? { label: "Completed", cls: "bg-emerald-100 text-emerald-700" }
-                      : status === "IN_PROGRESS" ? { label: "In progress", cls: "bg-blue-100 text-blue-700" }
+                      : status === "IN_PROGRESS" ? { label: "In progress", cls: "bg-[#cfe0eb] text-[#1b4763]" }
                       : status === "CANCELLED" ? { label: "Cancelled", cls: "bg-slate-100 text-slate-500" }
                       : { label: "Pending", cls: "bg-amber-100 text-amber-700" };
                     return (

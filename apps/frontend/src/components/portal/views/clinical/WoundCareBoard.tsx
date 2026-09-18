@@ -124,14 +124,14 @@ export default function WoundCareBoard({ clinicianRole = "NURSE", focusResidentI
         <div className="grid gap-px bg-white/15 sm:grid-cols-[1.35fr_repeat(3,1fr)]">
           <div className="bg-[var(--clinical-panel)] p-5 sm:p-6">
             <div className="flex items-center justify-between gap-4">
-              <div><p className="text-sm font-semibold text-blue-100">Open wound caseload</p><p className="mt-1 text-3xl font-bold tracking-[-0.03em]">{openWounds.length}</p></div>
+              <div><p className="text-sm font-semibold text-[#cfe0eb]">Open wound caseload</p><p className="mt-1 text-3xl font-bold tracking-[-0.03em]">{openWounds.length}</p></div>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15"><Bandage className="h-6 w-6" /></div>
             </div>
-            <p className="mt-4 text-xs leading-5 text-blue-100">{openResidents} {openResidents === 1 ? "resident has" : "residents have"} an active or healing wound.</p>
+            <p className="mt-4 text-xs leading-5 text-[#cfe0eb]">{openResidents} {openResidents === 1 ? "resident has" : "residents have"} an active or healing wound.</p>
           </div>
-          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Active</p><p className="mt-2 text-2xl font-bold tabular-nums">{count("Active")}</p><p className="mt-1 text-xs text-blue-100">Requires monitoring</p></div>
-          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">High-acuity</p><p className="mt-2 text-2xl font-bold tabular-nums">{highAcuity}</p><p className="mt-1 text-xs text-blue-100">Stage 3+ or unstageable</p></div>
-          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-blue-100">Photo documented</p><p className="mt-2 text-2xl font-bold tabular-nums">{photoCount}</p><p className="mt-1 text-xs text-blue-100">{count("Healing")} healing · {count("Healed")} healed</p></div>
+          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-[#cfe0eb]">Active</p><p className="mt-2 text-2xl font-bold tabular-nums">{count("Active")}</p><p className="mt-1 text-xs text-[#cfe0eb]">Requires monitoring</p></div>
+          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-[#cfe0eb]">High-acuity</p><p className="mt-2 text-2xl font-bold tabular-nums">{highAcuity}</p><p className="mt-1 text-xs text-[#cfe0eb]">Stage 3+ or unstageable</p></div>
+          <div className="bg-[var(--clinical-panel)] p-5"><p className="text-xs font-semibold text-[#cfe0eb]">Photo documented</p><p className="mt-2 text-2xl font-bold tabular-nums">{photoCount}</p><p className="mt-1 text-xs text-[#cfe0eb]">{count("Healing")} healing · {count("Healed")} healed</p></div>
         </div>
       </section>
       )}

@@ -135,12 +135,12 @@ export default function FacilityReports() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2">
             Reports & Analytics
           </h1>
           <p className="text-gray-600">Generate, filter, and export facility reports with real-time data</p>
         </div>
-        <button onClick={exportCSV} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+        <button onClick={exportCSV} className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
           <Download className="w-4 h-4" /> Export CSV
         </button>
       </div>
@@ -667,13 +667,13 @@ function BillingReport({ invoices, search: _s }: { invoices: Record<string, unkn
 
 /* ── Shared Sub-components ── */
 
-const SEV_BADGE: Record<string, string> = { critical: "bg-red-100 text-red-700", high: "bg-orange-100 text-orange-700", medium: "bg-yellow-100 text-yellow-700", low: "bg-blue-100 text-blue-700" };
-const CARE_BADGE: Record<string, string> = { INDEPENDENT: "bg-green-100 text-green-700", ASSISTED: "bg-blue-100 text-blue-700", MEMORY: "bg-purple-100 text-purple-700", SKILLED: "bg-red-100 text-red-700" };
-const STATUS_BADGE: Record<string, string> = { PAID: "bg-green-100 text-green-700", OVERDUE: "bg-red-100 text-red-700", SENT: "bg-blue-100 text-blue-700", DRAFT: "bg-gray-100 text-gray-700", CANCELLED: "bg-purple-100 text-purple-700" };
+const SEV_BADGE: Record<string, string> = { critical: "bg-red-100 text-red-700", high: "bg-orange-100 text-orange-700", medium: "bg-yellow-100 text-yellow-700", low: "bg-[#cfe0eb] text-[#1b4763]" };
+const CARE_BADGE: Record<string, string> = { INDEPENDENT: "bg-green-100 text-green-700", ASSISTED: "bg-[#cfe0eb] text-[#1b4763]", MEMORY: "bg-purple-100 text-purple-700", SKILLED: "bg-red-100 text-red-700" };
+const STATUS_BADGE: Record<string, string> = { PAID: "bg-green-100 text-green-700", OVERDUE: "bg-red-100 text-red-700", SENT: "bg-[#cfe0eb] text-[#1b4763]", DRAFT: "bg-gray-100 text-gray-700", CANCELLED: "bg-purple-100 text-purple-700" };
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string; icon: LucideIcon; color: string }) {
   const COLORS: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50 border-blue-200",
+    blue: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     green: "text-green-600 bg-green-50 border-green-200",
     red: "text-red-600 bg-red-50 border-red-200",
     amber: "text-amber-600 bg-amber-50 border-amber-200",

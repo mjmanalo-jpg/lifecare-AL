@@ -89,7 +89,7 @@ export default function CaregiverMonitoring() {
   return (
     <div className="space-y-6">
       {/* Resident Header Card */}
-      <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl p-6 shadow-lg">
+      <div className="bg-[#277a55] rounded-xl p-6 shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
@@ -158,7 +158,7 @@ export default function CaregiverMonitoring() {
       {showVitals && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className={`bg-white rounded-xl shadow-2xl w-full ${resident ? "max-w-md" : "max-w-3xl"} max-h-[90vh] overflow-y-auto`}>
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
               <div className="flex items-center gap-2">
                 <Activity className="w-5 h-5" />
                 <h2 className="text-xl font-bold">

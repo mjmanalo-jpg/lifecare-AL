@@ -47,7 +47,7 @@ function MonitoringViewInner() {
   return (
     <div className="space-y-6">
       {/* Resident Header Card */}
-      <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 shadow-lg">
+      <div className="bg-[#22577a] rounded-xl p-6 shadow-lg">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4 min-w-0">
             <button
@@ -67,7 +67,7 @@ function MonitoringViewInner() {
               <h1 className="text-3xl sm:text-4xl font-bold text-white mb-1 truncate">
                 {residentName || "Camera Monitoring"}
               </h1>
-              <p className="text-blue-100 text-sm">
+              <p className="text-[#cfe0eb] text-sm">
                 {room ? `Room ${room} · ` : ""}Select a resident to watch their camera feed
               </p>
             </div>
@@ -105,7 +105,7 @@ function MonitoringViewInner() {
 
           {/* Camera Mode Info */}
           <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
-            <Camera className="w-4 h-4 text-blue-500" />
+            <Camera className="w-4 h-4 text-[#22577a]" />
             Switch between <span className="font-semibold text-gray-700">Local</span> (browser webcam) and{" "}
             <span className="font-semibold text-gray-700">Tapo IP</span> (network camera) using the buttons on the camera feed.
           </div>

@@ -639,7 +639,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
                     <div className="flex items-center gap-2 flex-wrap">
                       <button
                         onClick={() => setViewingIncident(incident)}
-                        className="flex items-center gap-1 px-3 py-1 text-blue-600 hover:bg-blue-50 rounded text-sm font-medium transition"
+                        className="flex items-center gap-1 px-3 py-1 text-[#1f4f70] hover:bg-[#e0ecf2] rounded text-sm font-medium transition"
                       >
                         <Eye className="w-4 h-4" />
                         View
@@ -729,7 +729,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
                   ? "from-red-400 to-red-500"
                   : viewingIncident.severity === "high"
                   ? "from-orange-400 to-orange-500"
-                  : "from-blue-400 to-blue-500"
+                  : "from-[#4f93bd] to-[#22577a]"
               } text-white p-6 flex items-center justify-between`}>
                 <div>
                   <h2 className="text-2xl font-bold">{getSeverityIcon(viewingIncident.severity)} {viewingIncident.type}</h2>
@@ -797,7 +797,7 @@ export default function NursePortalContent({ tab }: NursePortalContentProps) {
                       handleResolveIncident(viewingIncident.id);
                       setViewingIncident(null);
                     }}
-                    className="px-6 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white font-semibold rounded-lg hover:shadow-lg transition"
+                    className="px-6 py-2 bg-[#4fa77e] text-white font-semibold rounded-lg hover:shadow-lg transition"
                   >
                     Mark Resolved
                   </button>
@@ -1057,7 +1057,7 @@ function NurseMonitoringViewInner({
   return (
     <div className="space-y-6">
       {/* Resident Header Card */}
-      <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 shadow-lg">
+      <div className="bg-[#22577a] rounded-xl p-6 shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
@@ -1078,13 +1078,13 @@ function NurseMonitoringViewInner({
                 {resident || "Facility Monitoring"}
               </h1>
               {room && (
-                <p className="text-blue-100 text-sm">
+                <p className="text-[#cfe0eb] text-sm">
                   Room {room} &middot; Camera feed with AI-powered analysis
                 </p>
               )}
             </div>
           </div>
-          <Camera className="w-12 h-12 text-blue-200/50 hidden sm:block" />
+          <Camera className="w-12 h-12 text-[#a9c6d8]/50 hidden sm:block" />
         </div>
       </div>
 
@@ -1117,7 +1117,7 @@ function NurseMonitoringViewInner({
 
       {/* Camera Mode Info */}
       <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
-        <Camera className="w-4 h-4 text-blue-500" />
+        <Camera className="w-4 h-4 text-[#22577a]" />
         Switch between <span className="font-semibold text-gray-700">Local</span> (browser webcam) and{" "}
         <span className="font-semibold text-gray-700">Tapo IP</span> (network camera) using the buttons on the camera feed.
       </div>
@@ -1126,7 +1126,7 @@ function NurseMonitoringViewInner({
       {showVitals && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className={`bg-white rounded-xl shadow-2xl w-full ${resident ? "max-w-md" : "max-w-3xl"} max-h-[90vh] overflow-y-auto`}>
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
               <div className="flex items-center gap-2">
                 <Activity className="w-5 h-5" />
                 <h2 className="text-xl font-bold">

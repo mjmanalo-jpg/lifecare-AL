@@ -144,9 +144,9 @@ export default function ClinicalReports() {
               )}
 
               {"total" in report && "byStatus" in report && !("adherence" in report) && (
-                <div className="bg-blue-50 rounded-lg p-4 text-center">
-                  <p className="text-sm text-blue-700 font-medium">Total Records</p>
-                  <p className="text-4xl font-bold text-blue-600">{report.total}</p>
+                <div className="bg-[#e0ecf2] rounded-lg p-4 text-center">
+                  <p className="text-sm text-[#1b4763] font-medium">Total Records</p>
+                  <p className="text-4xl font-bold text-[#1f4f70]">{report.total}</p>
                 </div>
               )}
             </div>

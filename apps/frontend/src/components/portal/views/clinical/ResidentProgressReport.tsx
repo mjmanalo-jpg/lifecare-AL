@@ -324,7 +324,7 @@ export default function ResidentProgressReport({ clinicianRole = "NURSE", reside
     r.save(`progress-report-${s(resident.name).toLowerCase().replace(/\s+/g, "-")}-${period}.pdf`);
   };
 
-  const selCls = "px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-blue-400/40";
+  const selCls = "px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-[#4f93bd]/40";
 
   return (
     <div className="min-h-full bg-[#F7F8FA] -m-4 sm:-m-6 p-4 sm:p-6">
@@ -337,7 +337,7 @@ export default function ResidentProgressReport({ clinicianRole = "NURSE", reside
         {resident && (
           <div className="flex items-center gap-2">
             <button onClick={submitForApproval} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50"><ShieldCheck className="w-4 h-4" /> Submit for Approval</button>
-            <button onClick={downloadPdf} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-500 text-white text-sm font-semibold hover:bg-blue-600"><Printer className="w-4 h-4" /> Export PDF</button>
+            <button onClick={downloadPdf} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#22577a] text-white text-sm font-semibold hover:bg-[#1f4f70]"><Printer className="w-4 h-4" /> Export PDF</button>
           </div>
         )}
       </div>
@@ -576,7 +576,7 @@ function Section({ n, title, icon: Icon, count, last, children }: { n: number; t
   return (
     <div className={last ? "" : "mb-7"}>
       <div className="flex items-center justify-between gap-2 mb-3">
-        <h3 className="text-base font-bold text-slate-900 flex items-center gap-2"><Icon className="w-4 h-4 text-blue-500" /> {n}. {title}</h3>
+        <h3 className="text-base font-bold text-slate-900 flex items-center gap-2"><Icon className="w-4 h-4 text-[#22577a]" /> {n}. {title}</h3>
         {count != null && <span className="text-xs font-semibold text-slate-500 border border-slate-200 rounded-full min-w-[1.75rem] text-center px-2 py-0.5">{count}</span>}
       </div>
       {children}

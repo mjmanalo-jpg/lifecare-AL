@@ -538,7 +538,7 @@ function DispenseModal({ item, residents, onClose, onDispense }: { item: InvItem
         <label className={lbl}>Charge to Resident <span className="text-red-500">*</span></label>
         <div className="relative"><User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><select value={residentId} onChange={(e) => setResidentId(e.target.value)} className={`${inp} pl-9`}><option value="">Select resident…</option>{residents.map((r) => <option key={r.id} value={r.id}>{r.name}{r.room ? ` — Rm ${r.room}` : ""}</option>)}</select></div>
         {residentId && (
-          <div className={`mt-2 mb-3 flex items-center gap-2 text-xs rounded-lg px-3 py-2 border ${sponsorName ? "bg-indigo-50 text-indigo-700 border-indigo-100" : "bg-amber-50 text-amber-700 border-amber-100"}`}>
+          <div className={`mt-2 mb-3 flex items-center gap-2 text-xs rounded-lg px-3 py-2 border ${sponsorName ? "bg-[#e0ecf2] text-[#1b4763] border-[#cfe0eb]" : "bg-amber-50 text-amber-700 border-amber-100"}`}>
             <Users className="w-3.5 h-3.5 shrink-0" />
             {sponsorName ? <span>Billed to family sponsor: <b>{sponsorName}</b> — appears on their family dashboard.</span> : <span>No family sponsor on file — billed to the resident directly.</span>}
           </div>

@@ -710,11 +710,9 @@ export default function PortalShell({
         }}
         title={showLabel ? undefined : `${link.name}${count ? ` — ${count} new` : ""}`}
         aria-current={isActive ? "page" : undefined}
-        className={`group/nav relative flex min-h-9 items-center gap-2.5 rounded-lg px-2.5 py-1.5 outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+        className={`group/nav relative flex min-h-9 items-center gap-2.5 rounded-lg px-2.5 py-1.5 outline-none transition focus-visible:ring-2 focus-visible:ring-[var(--clinical-focus)] focus-visible:ring-offset-2 ${
           isActive
-            ? theme === "dark"
-              ? "bg-blue-500/15 text-blue-200 shadow-[inset_0_0_0_1px_rgba(96,165,250,.24)]"
-              : "bg-blue-50 text-blue-800 shadow-[inset_0_0_0_1px_rgba(37,99,235,.18)]"
+            ? "bg-[var(--clinical-panel-soft)] font-semibold text-[var(--clinical-panel)] before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-r-full before:bg-[var(--clinical-panel)] before:content-['']"
             : theme === "dark"
             ? "text-slate-300 hover:bg-slate-800 hover:text-white"
             : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
@@ -753,7 +751,7 @@ export default function PortalShell({
         <div key={group} className="space-y-1">
           <button
             onClick={() => toggleGroup(group)}
-            className={`group flex min-h-10 w-full items-center justify-between rounded-lg px-3 pt-3 pb-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+            className={`group flex min-h-10 w-full items-center justify-between rounded-lg px-3 pt-3 pb-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-[#22577a] ${
               theme === "dark" ? "text-slate-400 hover:text-slate-200" : "text-slate-500 hover:text-slate-800"
             }`}
             aria-expanded={!collapsed}
@@ -788,7 +786,7 @@ export default function PortalShell({
           value={navQuery}
           onChange={(event) => setNavQuery(event.target.value)}
           placeholder="Find a page..."
-          className={`h-11 w-full rounded-xl border pl-9 pr-14 text-sm outline-none transition placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${
+          className={`h-11 w-full rounded-xl border pl-9 pr-14 text-sm outline-none transition placeholder:text-slate-500 focus:border-[#22577a] focus:ring-2 focus:ring-[#22577a]/20 ${
             theme === "dark" ? "border-slate-700 bg-slate-900 text-white" : "border-slate-200 bg-slate-50 text-slate-950"
           }`}
         />
@@ -797,7 +795,7 @@ export default function PortalShell({
           onClick={openPalette}
           title="Command palette (Ctrl / ⌘ + K)"
           aria-label="Open command palette"
-          className={`absolute right-2 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded border px-1.5 py-1 text-[10px] font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 xl:flex ${
+          className={`absolute right-2 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 rounded border px-1.5 py-1 text-[10px] font-semibold outline-none transition focus-visible:ring-2 focus-visible:ring-[#22577a] xl:flex ${
             theme === "dark" ? "border-slate-700 text-slate-400 hover:text-slate-200" : "border-slate-200 text-slate-500 hover:text-slate-700"
           }`}
         >
@@ -931,7 +929,7 @@ export default function PortalShell({
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <LcmsLogo />
               <div className="text-left border-l border-gray-200 dark:border-gray-800 pl-2 min-w-0 flex-1">
-                <div className={`font-black text-xs leading-none uppercase tracking-wider ${theme === "dark" ? "text-blue-400" : "text-blue-600"}`}>{roleDetails.badge}</div>
+                <div className={`font-black text-xs leading-none uppercase tracking-wider ${theme === "dark" ? "text-[#4f93bd]" : "text-[#1f4f70]"}`}>{roleDetails.badge}</div>
                 <div className={`text-[10px] font-bold truncate mt-0.5 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`} title={portalScopeName}>
                   {portalScopeName}
                 </div>
@@ -944,7 +942,7 @@ export default function PortalShell({
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-blue-500 outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 ${
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[#22577a] outline-none transition focus-visible:ring-2 focus-visible:ring-[#22577a] ${
               theme === "dark"
                 ? "hover:bg-slate-800"
                 : "hover:bg-slate-100"
@@ -971,12 +969,12 @@ export default function PortalShell({
         {/* Footer */}
         <div className={`p-4 border-t transition-colors duration-300 ${
           theme === "dark"
-            ? "bg-gradient-to-r from-black to-gray-950 border-blue-500/10"
-            : "bg-gradient-to-r from-white to-gray-50 border-blue-200"
+            ? "bg-slate-950 border-[#22577a]/10"
+            : "bg-white border-[#a9c6d8]"
         }`}>
           {sidebarOpen ? (
             <p className={`text-xs text-center leading-snug ${
-              theme === "dark" ? "text-blue-100/70" : "text-blue-700"
+              theme === "dark" ? "text-[#cfe0eb]/70" : "text-[#1b4763]"
             }`}>
               {roleDetails.footerText}
             </p>
@@ -1013,8 +1011,8 @@ export default function PortalShell({
                 const activeRow = i === paletteIndex;
                 const rowTone = activeRow
                   ? theme === "dark"
-                    ? "bg-blue-500/15 text-blue-100"
-                    : "bg-blue-50 text-blue-800"
+                    ? "bg-[#22577a]/15 text-[#cfe0eb]"
+                    : "bg-[#e0ecf2] text-[#163c56]"
                   : theme === "dark"
                     ? "text-slate-300 hover:bg-slate-800"
                     : "text-slate-700 hover:bg-slate-50";
@@ -1049,10 +1047,10 @@ export default function PortalShell({
             {/* Mobile Menu Toggle */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-blue-500 xl:hidden ${
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-[#22577a] xl:hidden ${
                 theme === "dark"
                   ? "hover:bg-gray-800 text-gray-300 active:bg-gray-700"
-                  : "hover:bg-blue-100 text-blue-900 active:bg-blue-200"
+                  : "hover:bg-[#cfe0eb] text-[#12324a] active:bg-[#a9c6d8]"
               }`}
               aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
               aria-expanded={mobileMenuOpen}
@@ -1089,10 +1087,10 @@ export default function PortalShell({
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
-              className={`flex h-11 w-11 items-center justify-center rounded-xl outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              className={`flex h-11 w-11 items-center justify-center rounded-xl outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-[#22577a] ${
                 theme === "dark"
-                  ? "hover:bg-gray-800 text-blue-400 active:bg-gray-700"
-                  : "hover:bg-blue-100 text-blue-600 active:bg-blue-200"
+                  ? "hover:bg-gray-800 text-[#4f93bd] active:bg-gray-700"
+                  : "hover:bg-[#cfe0eb] text-[#1f4f70] active:bg-[#a9c6d8]"
               }`}
               title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
             >
@@ -1107,10 +1105,10 @@ export default function PortalShell({
             <div className="relative" ref={bellRef}>
               <button
                 onClick={() => setBellDropdownOpen(!bellDropdownOpen)}
-                className={`relative flex h-11 w-11 items-center justify-center rounded-xl outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                className={`relative flex h-11 w-11 items-center justify-center rounded-xl outline-none transition active:scale-95 focus-visible:ring-2 focus-visible:ring-[#22577a] ${
                   theme === "dark"
                     ? "hover:bg-gray-800 text-gray-300 active:bg-gray-700"
-                    : "hover:bg-blue-100 text-blue-900 active:bg-blue-200"
+                    : "hover:bg-[#cfe0eb] text-[#12324a] active:bg-[#a9c6d8]"
                 }`}
                 aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
                 aria-haspopup="menu"
@@ -1132,21 +1130,21 @@ export default function PortalShell({
                   <div className={`fixed inset-x-3 top-14 sm:absolute sm:inset-auto sm:right-0 sm:mt-3 sm:w-96 w-[calc(100vw-1.5rem)] rounded-2xl shadow-2xl border z-50 overflow-hidden transition-all duration-200 ${
                     theme === "dark"
                       ? "bg-gray-900 border-gray-700 text-white"
-                      : "bg-white border-blue-200 text-gray-900"
+                      : "bg-white border-[#a9c6d8] text-gray-900"
                   }`}>
                     {/* Dropdown Header */}
                     <div className={`px-4 py-3 flex items-center justify-between border-b ${
-                      theme === "dark" ? "border-gray-800 bg-gray-950/50" : "border-blue-50 bg-blue-50/30"
+                      theme === "dark" ? "border-gray-800 bg-gray-950/50" : "border-[#e0ecf2] bg-[#e0ecf2]/30"
                     }`}>
                       <div className="flex items-center gap-2">
-                        <Bell className="w-4 h-4 text-blue-500" />
+                        <Bell className="w-4 h-4 text-[#22577a]" />
                         <span className="font-bold text-sm">Notifications</span>
                       </div>
                       <div className="flex items-center gap-3">
                         {unreadCount > 0 && (
                           <button
                             onClick={handleMarkAllRead}
-                            className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition"
+                            className="text-xs font-semibold text-[#1f4f70] hover:text-[#1b4763] transition"
                           >
                             Mark all as read
                           </button>
@@ -1184,9 +1182,9 @@ export default function PortalShell({
                             case "TASK_ASSIGNMENT":
                               return <CheckSquare className="w-4 h-4 text-green-500" />;
                             case "MESSAGE":
-                              return <MessageSquare className="w-4 h-4 text-blue-500" />;
+                              return <MessageSquare className="w-4 h-4 text-[#22577a]" />;
                             case "SHIFT_REMINDER":
-                              return <Clock className="w-4 h-4 text-indigo-500" />;
+                              return <Clock className="w-4 h-4 text-[#4f93bd]" />;
                             case "TRANSPORT_UPDATE":
                               return <Bus className="w-4 h-4 text-cyan-500" />;
                             case "SYSTEM_ALERT":
@@ -1208,9 +1206,9 @@ export default function PortalShell({
                             case "TASK_ASSIGNMENT":
                               return "bg-green-50 dark:bg-green-950/30";
                             case "MESSAGE":
-                              return "bg-blue-50 dark:bg-blue-950/30";
+                              return "bg-[#e0ecf2] dark:bg-[#0d2536]/30";
                             case "SHIFT_REMINDER":
-                              return "bg-indigo-50 dark:bg-indigo-950/30";
+                              return "bg-[#e0ecf2] dark:bg-[#0d2536]/30";
                             case "TRANSPORT_UPDATE":
                               return "bg-cyan-50 dark:bg-cyan-950/30";
                             case "SYSTEM_ALERT":
@@ -1238,8 +1236,8 @@ export default function PortalShell({
                           <div
                             key={n.id}
                             onClick={() => handleNotificationClick(n)}
-                            className={`flex cursor-pointer gap-3 p-4 transition hover:bg-blue-50/10 ${n.severity === "CRITICAL" ? "ring-1 ring-inset ring-red-500/50" : n.severity === "WARNING" ? "ring-1 ring-inset ring-amber-500/50" : ""} ${
-                              !n.isRead ? "bg-blue-50/5 dark:bg-blue-500/5 font-medium" : ""
+                            className={`flex cursor-pointer gap-3 p-4 transition hover:bg-[#e0ecf2]/10 ${n.severity === "CRITICAL" ? "ring-1 ring-inset ring-red-500/50" : n.severity === "WARNING" ? "ring-1 ring-inset ring-amber-500/50" : ""} ${
+                              !n.isRead ? "bg-[#e0ecf2]/5 dark:bg-[#22577a]/5 font-medium" : ""
                             }`}
                           >
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${getNotificationBg(n.type)}`}>
@@ -1281,7 +1279,7 @@ export default function PortalShell({
                               </button>
                             )}
                             {!n.isRead && (
-                              <div className="w-2 h-2 rounded-full bg-blue-500 self-center flex-shrink-0" />
+                              <div className="w-2 h-2 rounded-full bg-[#22577a] self-center flex-shrink-0" />
                             )}
                           </div>
                         );
@@ -1305,14 +1303,14 @@ export default function PortalShell({
                 onClick={() =>
                   setProfileDropdownOpen(!profileDropdownOpen)
                 }
-                className={`flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                  theme === "dark" ? "hover:bg-gray-800" : "hover:bg-blue-100"
+                className={`flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 outline-none transition focus-visible:ring-2 focus-visible:ring-[#22577a] ${
+                  theme === "dark" ? "hover:bg-gray-800" : "hover:bg-[#cfe0eb]"
                 }`}
                 aria-label="Account menu"
                 aria-haspopup="menu"
                 aria-expanded={profileDropdownOpen}
               >
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                <div className="w-8 h-8 bg-[#22577a] rounded-full flex items-center justify-center text-white text-sm font-bold">
                   {(profileName || roleDetails.profileName).charAt(0)}
                 </div>
                 <div className="text-sm text-left hidden sm:block">
@@ -1330,7 +1328,7 @@ export default function PortalShell({
                 <div className={`absolute right-0 mt-2 w-48 border rounded-lg shadow-xl z-50 ${
                   theme === "dark" 
                     ? "bg-gray-900 border-gray-700" 
-                    : "bg-white border-blue-200"
+                    : "bg-white border-[#a9c6d8]"
                 }`}>
                   <button
                     onClick={() => {
@@ -1340,7 +1338,7 @@ export default function PortalShell({
                     className={`w-full text-left px-4 py-2 flex items-center gap-2 border-b transition-colors ${
                       theme === "dark"
                         ? "hover:bg-gray-800 border-gray-700 text-gray-200"
-                        : "hover:bg-blue-50 border-blue-100 text-blue-900"
+                        : "hover:bg-[#e0ecf2] border-[#cfe0eb] text-[#12324a]"
                     }`}
                   >
                     <Settings className="w-4 h-4" />
@@ -1382,29 +1380,29 @@ export default function PortalShell({
                 exit={{ x: -320 }}
                 className={`flex h-full w-[min(320px,92vw)] max-w-[320px] flex-col shadow-2xl transition-colors ${
                   theme === "dark"
-                    ? "bg-gradient-to-b from-black to-gray-950 text-white"
-                    : "bg-gradient-to-b from-white to-gray-100 text-gray-900"
+                    ? "bg-slate-950 text-white"
+                    : "bg-white text-gray-900"
                 }`}
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Mobile Sidebar Header */}
                 <div className={`p-4 border-b flex items-center gap-2 transition-colors duration-300 ${
                   theme === "dark"
-                    ? "bg-gradient-to-b from-black to-gray-950 border-blue-500/10"
-                    : "bg-gradient-to-b from-white to-gray-100 border-blue-200"
+                    ? "bg-slate-950 border-[#22577a]/10"
+                    : "bg-white border-[#a9c6d8]"
                 }`}>
                   <LcmsLogo />
                   <div className="min-w-0 flex-1">
                     <div className={`font-black text-sm leading-tight truncate ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
                       {portalScopeName}
                     </div>
-                    <div className={`text-[10px] font-bold truncate ${theme === "dark" ? "text-blue-300" : "text-blue-700"}`}>
+                    <div className={`text-[10px] font-bold truncate ${theme === "dark" ? "text-[#7fa9c2]" : "text-[#1b4763]"}`}>
                       {roleDetails.badge}
                     </div>
                   </div>
                   <button
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl outline-none transition focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl outline-none transition focus-visible:ring-2 focus-visible:ring-[#22577a] ${
                       theme === "dark" ? "hover:bg-gray-800 text-gray-400" : "hover:bg-gray-200 text-gray-500"
                     }`}
                     title="Close menu"
@@ -1422,11 +1420,11 @@ export default function PortalShell({
                 {/* Mobile Sidebar Footer */}
                 <div className={`p-4 border-t transition-colors duration-300 flex-shrink-0 ${
                   theme === "dark"
-                    ? "bg-gradient-to-r from-black to-gray-950 border-blue-500/10"
-                    : "bg-gradient-to-r from-white to-gray-50 border-blue-200"
+                    ? "bg-slate-950 border-[#22577a]/10"
+                    : "bg-white border-[#a9c6d8]"
                 }`}>
                   <p className={`text-[10px] text-center leading-snug ${
-                    theme === "dark" ? "text-blue-100/70" : "text-blue-700"
+                    theme === "dark" ? "text-[#cfe0eb]/70" : "text-[#1b4763]"
                   }`}>
                     {roleDetails.footerText}
                   </p>
@@ -1456,7 +1454,7 @@ export default function PortalShell({
             const label = segment === "dashboard" ? "Home" : segment === "alertcenter" ? "Alerts" : segment === "residents" ? "Residents" : segment === "carelogs" ? "Care logs" : segment === "mar" ? "MAR" : link.name;
             const dockCount = badgeFor(link.route);
             return (
-              <Link key={`dock-${link.route}`} href={link.route} onClick={(event) => { if (!isActive && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) setPendingRoute(link.route.split("?")[0]); }} aria-current={isActive ? "page" : undefined} className={`relative flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${isActive ? "text-blue-600 dark:text-blue-300" : "text-slate-600 dark:text-slate-400"}`}>
+              <Link key={`dock-${link.route}`} href={link.route} onClick={(event) => { if (!isActive && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) setPendingRoute(link.route.split("?")[0]); }} aria-current={isActive ? "page" : undefined} className={`relative flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#22577a] ${isActive ? "text-[#1f4f70] dark:text-[#7fa9c2]" : "text-slate-600 dark:text-slate-400"}`}>
                 <span className="relative">
                   <Icon className="h-5 w-5" />
                   {dockCount > 0 && (
@@ -1467,7 +1465,7 @@ export default function PortalShell({
               </Link>
             );
           })}
-          <button onClick={() => setMobileMenuOpen(true)} aria-label="Open all portal pages" className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-semibold text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:text-slate-400">
+          <button onClick={() => setMobileMenuOpen(true)} aria-label="Open all portal pages" className="flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-semibold text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#22577a] dark:text-slate-400">
             <MoreHorizontal className="h-5 w-5" /><span>More</span>
           </button>
         </nav>
@@ -1477,7 +1475,7 @@ export default function PortalShell({
       {showSettingsModal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowSettingsModal(false); }}>
           <div role="dialog" aria-modal="true" aria-labelledby="settings-title" className={`flex h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl shadow-2xl sm:h-[88dvh] sm:max-h-[760px] sm:max-w-3xl sm:rounded-2xl ${theme === "dark" ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-900"}`}>
-            <div className="flex flex-none items-center justify-between border-b border-white/10 bg-gradient-to-r from-slate-950 to-slate-900 px-5 py-4 text-white sm:px-6">
+            <div className="flex flex-none items-center justify-between border-b border-white/10 bg-slate-900 px-5 py-4 text-white sm:px-6">
               <div><h1 id="settings-title" className="text-xl font-black sm:text-2xl">Account settings</h1><p className="mt-0.5 text-xs text-slate-400">Profile, preferences, and account security</p></div>
               <button aria-label="Close settings" onClick={() => setShowSettingsModal(false)} className="rounded-xl p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"><X className="h-5 w-5" /></button>
             </div>
@@ -1486,14 +1484,14 @@ export default function PortalShell({
               <div className="grid gap-4 md:grid-cols-2">
                 <section className={`rounded-2xl border p-4 sm:p-5 md:col-span-2 ${theme === "dark" ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
                   <div className="mb-4 flex items-center gap-3">
-                    <span className="rounded-xl bg-blue-100 p-2.5 text-blue-600"><UserIcon className="h-5 w-5" /></span>
+                    <span className="rounded-xl bg-[#cfe0eb] p-2.5 text-[#1f4f70]"><UserIcon className="h-5 w-5" /></span>
                     <div>
                       <h2 className="font-bold">Profile</h2>
                       <p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Your name is shared across authorized SLMS workspaces.</p>
                     </div>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="text-sm font-medium">Full name<input value={profileName} onChange={(event) => setProfileName(event.target.value)} maxLength={100} className={`mt-2 w-full rounded-xl border px-3 py-2.5 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${theme === "dark" ? "border-slate-700 bg-slate-950" : "border-slate-300 bg-white"}`} /></label>
+                    <label className="text-sm font-medium">Full name<input value={profileName} onChange={(event) => setProfileName(event.target.value)} maxLength={100} className={`mt-2 w-full rounded-xl border px-3 py-2.5 outline-none transition focus:border-[#22577a] focus:ring-2 focus:ring-[#22577a]/20 ${theme === "dark" ? "border-slate-700 bg-slate-950" : "border-slate-300 bg-white"}`} /></label>
                     <label className="text-sm font-medium">Email address<input value={profileEmail} disabled className={`mt-2 w-full rounded-xl border px-3 py-2.5 ${theme === "dark" ? "border-slate-700 bg-slate-800 text-slate-400" : "border-slate-200 bg-slate-100 text-slate-500"}`} /></label>
                     <label className="text-sm font-medium">Effective portal role<input value={roleDetails.name} disabled className={`mt-2 w-full rounded-xl border px-3 py-2.5 ${theme === "dark" ? "border-slate-700 bg-slate-800 text-slate-400" : "border-slate-200 bg-slate-100 text-slate-500"}`} /></label>
                     <div className="flex items-end">
@@ -1501,7 +1499,7 @@ export default function PortalShell({
                         className={`rounded-xl p-3 text-xs ${
                           theme === "dark"
                             ? "bg-slate-950 text-slate-300"
-                            : "bg-blue-50 text-blue-700"
+                            : "bg-[#e0ecf2] text-[#1b4763]"
                         }`}
                       >
                         Roles and workspace access are managed by an authorized administrator and cannot be changed here.
@@ -1512,15 +1510,15 @@ export default function PortalShell({
 
                 <section className={`rounded-2xl border p-4 sm:p-5 ${theme === "dark" ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
                   <div className="mb-4 flex items-center gap-3">
-                    <span className="rounded-xl bg-blue-100 p-2.5 text-blue-600"><Bell className="h-5 w-5" /></span>
+                    <span className="rounded-xl bg-[#cfe0eb] p-2.5 text-[#1f4f70]"><Bell className="h-5 w-5" /></span>
                     <div>
                       <h2 className="font-bold">Notifications</h2>
                       <p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Choose how this device alerts you.</p>
                     </div>
                   </div>
                   <div className="space-y-3">
-                    <label className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 ${theme === "dark" ? "border-slate-700" : "border-slate-200"}`}><span><b className="block text-sm">Push notifications</b><span className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Browser alerts on this device</span></span><input type="checkbox" checked={notifications} onChange={(event) => setNotifications(event.target.checked)} className="h-5 w-5 accent-blue-600" /></label>
-                    <label className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 ${theme === "dark" ? "border-slate-700" : "border-slate-200"}`}><span><b className="block text-sm">Critical email alerts</b><span className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>High-priority account events</span></span><input type="checkbox" checked={emailAlerts} onChange={(event) => setEmailAlerts(event.target.checked)} className="h-5 w-5 accent-blue-600" /></label>
+                    <label className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 ${theme === "dark" ? "border-slate-700" : "border-slate-200"}`}><span><b className="block text-sm">Push notifications</b><span className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Browser alerts on this device</span></span><input type="checkbox" checked={notifications} onChange={(event) => setNotifications(event.target.checked)} className="h-5 w-5 accent-[#22577a]" /></label>
+                    <label className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 ${theme === "dark" ? "border-slate-700" : "border-slate-200"}`}><span><b className="block text-sm">Critical email alerts</b><span className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>High-priority account events</span></span><input type="checkbox" checked={emailAlerts} onChange={(event) => setEmailAlerts(event.target.checked)} className="h-5 w-5 accent-[#22577a]" /></label>
                   </div>
                 </section>
 
@@ -1532,7 +1530,7 @@ export default function PortalShell({
                       <p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Set your interface preference.</p>
                     </div>
                   </div>
-                  <label className="text-sm font-medium">Preferred language<select value={language} onChange={(event) => setLanguage(event.target.value)} className={`mt-2 w-full rounded-xl border px-3 py-2.5 outline-none focus:border-blue-500 ${theme === "dark" ? "border-slate-700 bg-slate-950" : "border-slate-300 bg-white"}`}><option value="en">English</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option></select></label>
+                  <label className="text-sm font-medium">Preferred language<select value={language} onChange={(event) => setLanguage(event.target.value)} className={`mt-2 w-full rounded-xl border px-3 py-2.5 outline-none focus:border-[#22577a] ${theme === "dark" ? "border-slate-700 bg-slate-950" : "border-slate-300 bg-white"}`}><option value="en">English</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option></select></label>
                   <p className={`mt-3 text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>This records your preference; translated application content will be introduced progressively.</p>
                 </section>
 
@@ -1544,14 +1542,14 @@ export default function PortalShell({
                       <p className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Manage credentials for your own account.</p>
                     </div>
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-2"><button onClick={() => void handleChangePassword()} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>Change password</button><button onClick={() => setShowPinSetup(true)} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50"}`}>4-digit signing PIN</button></div>
+                  <div className="grid gap-3 sm:grid-cols-2"><button onClick={() => void handleChangePassword()} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-[#7fa9c2] hover:bg-[#e0ecf2]"}`}>Change password</button><button onClick={() => setShowPinSetup(true)} className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${theme === "dark" ? "border-slate-700 hover:bg-slate-800" : "border-slate-200 hover:border-[#7fa9c2] hover:bg-[#e0ecf2]"}`}>4-digit signing PIN</button></div>
                 </section>
               </div>
             </div>
 
             <div className={`flex flex-none items-center justify-between gap-3 border-t px-4 py-3 sm:px-6 ${theme === "dark" ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"}`}>
               <button onClick={() => setShowSettingsModal(false)} className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${theme === "dark" ? "text-slate-300 hover:bg-slate-800" : "text-slate-600 hover:bg-slate-100"}`}>Cancel</button>
-              <button disabled={settingsSaving} onClick={() => void handleSaveSettings()} className="inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:shadow-lg disabled:opacity-60">{settingsSaving && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />}Save changes</button>
+              <button disabled={settingsSaving} onClick={() => void handleSaveSettings()} className="inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-[#22577a] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#1b4763] disabled:opacity-60">{settingsSaving && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />}Save changes</button>
             </div>
           </div>
         </div>

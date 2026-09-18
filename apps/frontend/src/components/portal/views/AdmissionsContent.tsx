@@ -213,7 +213,7 @@ async function toDataUrl(file: File, maxDim = 900, quality = 0.7): Promise<strin
     reader.readAsDataURL(file);
   });
 }
-const woundInp = "w-full px-2.5 py-1.5 border border-gray-200 rounded-lg bg-white text-gray-900 text-xs outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent";
+const woundInp = "w-full px-2.5 py-1.5 border border-gray-200 rounded-lg bg-white text-gray-900 text-xs outline-none focus:ring-2 focus:ring-[#22577a] focus:border-transparent";
 
 // Wound / Marks capture embedded in the Skin/Wound domain card. Mirrors the Wound
 // Care Tracker's add form (location, type, stage, notes, photo upload / take-photo).
@@ -240,7 +240,7 @@ function SkinWoundSection({ wounds, onChange }: { wounds: WoundEntry[]; onChange
     <div className="mt-3 border-t border-gray-100 pt-3">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Wound / Marks Record{wounds.length ? ` (${wounds.length})` : ""}</span>
-        {!adding && <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-700"><Plus className="w-3.5 h-3.5" /> Add wound / mark</button>}
+        {!adding && <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1f4f70] hover:text-[#1b4763]"><Plus className="w-3.5 h-3.5" /> Add wound / mark</button>}
       </div>
 
       {wounds.length > 0 && (
@@ -260,7 +260,7 @@ function SkinWoundSection({ wounds, onChange }: { wounds: WoundEntry[]; onChange
       )}
 
       {adding && (
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 p-3 space-y-2">
+        <div className="rounded-lg border border-[#a9c6d8] bg-[#e0ecf2]/40 p-3 space-y-2">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input value={draft.bodyLocation} onChange={(e) => setDraft((d) => ({ ...d, bodyLocation: e.target.value }))} placeholder="Body location (e.g. Sacrum)" className={woundInp} />
             <select value={draft.woundType} onChange={(e) => setDraft((d) => ({ ...d, woundType: e.target.value }))} className={woundInp}>{WOUND_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
@@ -277,7 +277,7 @@ function SkinWoundSection({ wounds, onChange }: { wounds: WoundEntry[]; onChange
             {draft.photo && <img src={draft.photo} alt="preview" className="h-9 w-9 rounded object-cover border border-gray-200" />}
             <div className="ml-auto flex items-center gap-2">
               <button type="button" onClick={() => { setAdding(false); setDraft(blank); }} className="text-[11px] font-semibold text-gray-500">Cancel</button>
-              <button type="button" onClick={add} className="rounded-lg bg-indigo-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700">Add</button>
+              <button type="button" onClick={add} className="rounded-lg bg-[#22577a] px-3 py-1.5 text-[11px] font-bold text-white hover:bg-[#1b4763]">Add</button>
             </div>
           </div>
         </div>
@@ -402,7 +402,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 const inputCls =
-  "w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm";
+  "w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-[#22577a] focus:border-transparent outline-none text-sm";
 
 type SortKey = "name" | "room" | "status" | "step" | "progress";
 
@@ -1277,7 +1277,7 @@ export default function AdmissionsContent() {
             {STEP_COUNT}-step resident onboarding pipeline
           </p>
         </div>
-        <button onClick={openNew} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition self-start">
+        <button onClick={openNew} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#1f4f70] text-white font-semibold hover:bg-[#1b4763] transition self-start">
           <Plus className="w-4 h-4" /> New Admission
         </button>
       </div>
@@ -1293,7 +1293,7 @@ export default function AdmissionsContent() {
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
         <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden bg-white text-sm">
           {(["all", "IN_PROGRESS", "COMPLETED", "CANCELLED"] as const).map((f) => (
-            <button key={f} onClick={() => setStatusFilter(f)} className={`px-3 py-2 font-medium transition ${statusFilter === f ? "bg-indigo-500 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
+            <button key={f} onClick={() => setStatusFilter(f)} className={`px-3 py-2 font-medium transition ${statusFilter === f ? "bg-[#22577a] text-white" : "text-gray-700 hover:bg-gray-50"}`}>
               {f === "all" ? "All" : f === "IN_PROGRESS" ? "In Progress" : f[0] + f.slice(1).toLowerCase()}
             </button>
           ))}
@@ -1334,11 +1334,11 @@ export default function AdmissionsContent() {
                 const isDone = st === "COMPLETED";
                 const isCancelled = st === "CANCELLED";
                 const cur = STEPS.find((x) => x.n === (Number(a.currentStep) || 1));
-                const badge = isDone ? "bg-green-100 text-green-700" : isCancelled ? "bg-gray-200 text-gray-600" : "bg-indigo-100 text-indigo-700";
+                const badge = isDone ? "bg-green-100 text-green-700" : isCancelled ? "bg-gray-200 text-gray-600" : "bg-[#cfe0eb] text-[#1b4763]";
                 return (
                   <tr key={s(a.id)} className="border-b border-gray-50 last:border-0 transition hover:bg-gray-50/60">
                     <td className="px-4 py-3">
-                      <button onClick={() => openView(a)} className="font-semibold text-gray-900 transition hover:text-indigo-600">{s(a.firstName)} {s(a.lastName)}</button>
+                      <button onClick={() => openView(a)} className="font-semibold text-gray-900 transition hover:text-[#1f4f70]">{s(a.firstName)} {s(a.lastName)}</button>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{a.roomNumber ? s(a.roomNumber) : "—"}</td>
                     <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${badge}`}>{isDone ? "Completed" : isCancelled ? "Cancelled" : "In Progress"}</span></td>
@@ -1346,7 +1346,7 @@ export default function AdmissionsContent() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-gray-100">
-                          <div className={`h-full ${isDone ? "bg-green-500" : isCancelled ? "bg-gray-400" : "bg-indigo-500"}`} style={{ width: `${Math.min(100, (done / STEP_COUNT) * 100)}%` }} />
+                          <div className={`h-full ${isDone ? "bg-green-500" : isCancelled ? "bg-gray-400" : "bg-[#22577a]"}`} style={{ width: `${Math.min(100, (done / STEP_COUNT) * 100)}%` }} />
                         </div>
                         <span className="text-xs tabular-nums text-gray-500">{done}/{STEP_COUNT}</span>
                       </div>
@@ -1354,7 +1354,7 @@ export default function AdmissionsContent() {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => openView(a)} title="View" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 transition"><Eye className="w-4 h-4" /> View</button>
-                        <button onClick={() => (st === "COMPLETED" ? openViewEdit(a) : openExisting(a))} title="Edit" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 transition"><Pencil className="w-4 h-4" /> Edit</button>
+                        <button onClick={() => (st === "COMPLETED" ? openViewEdit(a) : openExisting(a))} title="Edit" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#1f4f70] hover:bg-[#e0ecf2] transition"><Pencil className="w-4 h-4" /> Edit</button>
                         <button onClick={() => deleteAdmission(s(a.id), `${s(a.firstName)} ${s(a.lastName)}`.trim())} title="Delete" className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition"><Trash2 className="w-4 h-4" /> Delete</button>
                       </div>
                     </td>
@@ -1371,7 +1371,7 @@ export default function AdmissionsContent() {
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden">
             {/* Header */}
-            <div className="shrink-0 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white px-6 pt-4 pb-5">
+            <div className="shrink-0 bg-[#22577a] text-white px-6 pt-4 pb-5">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20 text-base font-bold ring-2 ring-white/40">
@@ -1402,7 +1402,7 @@ export default function AdmissionsContent() {
             </div>
 
             {/* Stepper */}
-            <div className="shrink-0 flex items-start border-b border-gray-100 bg-gray-50/60 px-4 py-5 overflow-hidden">
+            <div className="shrink-0 flex items-start border-b border-gray-100 bg-gray-50/60 px-4 py-5 overflow-x-auto">
               {STEPS.map((st, idx) => {
                 const isDone = doneSet.has(st.n);
                 const active = st.n === step;
@@ -1422,10 +1422,10 @@ export default function AdmissionsContent() {
                       title={reachable ? st.label : "Fill in the required fields on the earlier steps first."}
                       className={`group relative z-10 flex w-full flex-col items-center gap-2 px-1 ${reachable ? "" : "cursor-not-allowed"}`}
                     >
-                      <span className={`flex h-10 w-10 items-center justify-center rounded-full border-2 shadow-sm transition ${active ? "border-indigo-600 bg-indigo-600 text-white shadow-md ring-4 ring-indigo-100" : isDone ? "border-green-500 bg-green-500 text-white" : reachable ? "border-gray-300 bg-white text-gray-500 group-hover:border-indigo-400 group-hover:text-indigo-500" : "border-gray-200 bg-gray-100 text-gray-400"}`}>
+                      <span className={`flex h-10 w-10 items-center justify-center rounded-full border-2 shadow-sm transition ${active ? "border-[#1f4f70] bg-[#1f4f70] text-white shadow-md ring-4 ring-[#cfe0eb]" : isDone ? "border-green-500 bg-green-500 text-white" : reachable ? "border-gray-300 bg-white text-gray-500 group-hover:border-[#4f93bd] group-hover:text-[#22577a]" : "border-gray-200 bg-gray-100 text-gray-400"}`}>
                         {isDone && !active ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
                       </span>
-                      <span className={`text-center text-[11px] leading-tight ${active ? "font-bold text-indigo-600" : isDone ? "font-semibold text-gray-700" : "text-gray-400"}`}>
+                      <span className={`text-center text-[11px] leading-tight ${active ? "font-bold text-[#1f4f70]" : isDone ? "font-semibold text-gray-700" : "text-gray-400"}`}>
                         {st.label}{st.required && <span className="text-red-500">*</span>}
                       </span>
                     </button>
@@ -1444,10 +1444,10 @@ export default function AdmissionsContent() {
                     // disappear, which reads as a broken form. Say why instead.
                     const sources = preadmits.length + preadmitsV42.length;
                     return (
-                    <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-3">
+                    <div className="rounded-lg border border-[#cfe0eb] bg-[#e0ecf2]/60 p-3">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-indigo-500" />
-                        <span className="text-xs font-semibold text-indigo-800">Prefill from a Pre-Admission Assessment</span>
+                        <Sparkles className="w-4 h-4 text-[#22577a]" />
+                        <span className="text-xs font-semibold text-[#163c56]">Prefill from a Pre-Admission Assessment</span>
                       </div>
                       <select value="" disabled={sources === 0} onChange={(e) => { const v = e.target.value; if (v) prefillFromPreadmission(v); }} className={`${inputCls} mt-2 ${sources === 0 ? "opacity-60 cursor-not-allowed" : ""}`}>
                         <option value="">{sources === 0 ? "No prefill source available" : "Select a completed pre-admission assessment…"}</option>
@@ -1466,7 +1466,7 @@ export default function AdmissionsContent() {
                           </optgroup>
                         )}
                       </select>
-                      <p className="text-[11px] text-indigo-600/80 mt-1.5">
+                      <p className="text-[11px] text-[#1f4f70]/80 mt-1.5">
                         {sources === 0
                           ? "Nothing to prefill from: every completed pre-admission assessment in this community is already onboarded. Drafts aren't offered — complete/validate the assessment in Pre-Admission Assessment first, then reopen this wizard."
                           : "Pulls name, DOB, diagnoses, allergies, care level & the 14-domain scores from the screening. Only residents who aren’t onboarded yet appear here. Review before completing."}
@@ -1487,8 +1487,8 @@ export default function AdmissionsContent() {
                     <Field label="Emergency Contact"><input className={inputCls} value={form.emergencyContact} onChange={(e) => set({ emergencyContact: e.target.value })} /></Field>
                     <Field label="Emergency Phone"><input className={inputCls} value={form.emergencyContactPhone} onChange={(e) => set({ emergencyContactPhone: e.target.value })} /></Field>
                   </div>
-                  <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-4">
-                    <p className="text-xs font-semibold text-indigo-800 mb-2">Family Sponsor (gets a scoped Family portal login)</p>
+                  <div className="rounded-lg border border-[#cfe0eb] bg-[#e0ecf2]/50 p-4">
+                    <p className="text-xs font-semibold text-[#163c56] mb-2">Family Sponsor (gets a scoped Family portal login)</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <Field label="Sponsor Name"><input className={inputCls} value={form.sponsorName} onChange={(e) => set({ sponsorName: e.target.value })} /></Field>
                       <Field label="Sponsor Email"><input className={inputCls} value={form.sponsorEmail} onChange={(e) => set({ sponsorEmail: e.target.value })} placeholder="family@example.com" /></Field>
@@ -1503,8 +1503,8 @@ export default function AdmissionsContent() {
                   {/* Assessment report attachment(s) — LINKS (e.g. Google Drive), kept on the admission */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5"><Paperclip className="w-3.5 h-3.5 text-indigo-600" /> Assessment Report</span>
-                      <button type="button" onClick={addLink} className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:text-indigo-800 cursor-pointer">
+                      <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5"><Paperclip className="w-3.5 h-3.5 text-[#1f4f70]" /> Assessment Report</span>
+                      <button type="button" onClick={addLink} className="inline-flex items-center gap-1 text-xs font-semibold text-[#1b4763] hover:text-[#163c56] cursor-pointer">
                         <Plus className="w-3.5 h-3.5" /> Add link
                       </button>
                     </div>
@@ -1514,7 +1514,7 @@ export default function AdmissionsContent() {
                       <ul className="space-y-1.5">
                         {attachments.map((att) => (
                           <li key={att.url} className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 text-xs">
-                            <a href={att.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-w-0 items-center gap-1.5 font-medium text-indigo-700 hover:underline"><Paperclip className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{att.name}</span></a>
+                            <a href={att.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-w-0 items-center gap-1.5 font-medium text-[#1b4763] hover:underline"><Paperclip className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{att.name}</span></a>
                             <button type="button" onClick={() => removeAttachment(att.url)} className="shrink-0 text-gray-400 hover:text-rose-600" aria-label="Remove attachment"><X className="w-3.5 h-3.5" /></button>
                           </li>
                         ))}
@@ -1542,14 +1542,14 @@ export default function AdmissionsContent() {
                   {/* v4.2 14-domain roll-up + read-only Level of Care */}
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <ClipboardList className="w-4 h-4 text-indigo-600" />
+                      <ClipboardList className="w-4 h-4 text-[#1f4f70]" />
                       <span className="font-semibold text-gray-800">14-Domain Assessment (v4.2)</span>
                       <span className="text-gray-500">· {scored}/14 scored</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-gray-500">Level of Care:</span>
                       {v42Level
-                        ? <span className="inline-flex items-center rounded-full bg-indigo-600 px-3 py-1 text-xs font-bold text-white">{V42_LEVEL_LABEL[v42Level] ?? v42Level}{v42Overridden ? " · ovr" : ""}</span>
+                        ? <span className="inline-flex items-center rounded-full bg-[#1f4f70] px-3 py-1 text-xs font-bold text-white">{V42_LEVEL_LABEL[v42Level] ?? v42Level}{v42Overridden ? " · ovr" : ""}</span>
                         : <span className="text-xs text-gray-400">Score the domains to compute</span>}
                     </div>
                   </div>
@@ -1620,7 +1620,7 @@ export default function AdmissionsContent() {
               <div className="flex flex-wrap items-center gap-2 justify-end">
                 <button onClick={() => saveStep(false)} disabled={saving} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm font-medium disabled:opacity-60">{saving ? "Saving…" : "Save"}</button>
                 {step < STEP_COUNT ? (
-                  <button onClick={() => saveStep(true)} disabled={saving || !!stepError(step)} title={stepError(step) ?? ""} className="inline-flex items-center gap-1 px-5 py-2 rounded-lg bg-indigo-500 text-white font-semibold hover:bg-indigo-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed">Save &amp; Continue <ChevronRight className="w-4 h-4" /></button>
+                  <button onClick={() => saveStep(true)} disabled={saving || !!stepError(step)} title={stepError(step) ?? ""} className="inline-flex items-center gap-1 px-5 py-2 rounded-lg bg-[#22577a] text-white font-semibold hover:bg-[#1b4763] text-sm disabled:opacity-50 disabled:cursor-not-allowed">Save &amp; Continue <ChevronRight className="w-4 h-4" /></button>
                 ) : (
                   <button onClick={completeAdmission} disabled={saving || missing.length > 0} title={missing.length ? `Missing: ${missing.join(", ")}` : ""} className="inline-flex items-center gap-1 px-5 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 text-sm disabled:opacity-50"><CheckCircle2 className="w-4 h-4" /> Complete Admission</button>
                 )}
@@ -1637,7 +1637,7 @@ export default function AdmissionsContent() {
         const isDone = st === "COMPLETED";
         const isCancelled = st === "CANCELLED";
         const done = parseCompleted(row.completedSteps).length;
-        const badge = isDone ? "bg-green-100 text-green-700" : isCancelled ? "bg-gray-200 text-gray-600" : "bg-indigo-100 text-indigo-700";
+        const badge = isDone ? "bg-green-100 text-green-700" : isCancelled ? "bg-gray-200 text-gray-600" : "bg-[#cfe0eb] text-[#1b4763]";
         const teamList = parseTeam(row.careTeam);
         const qrPayloadStr = s(row.qrPayload);
 
@@ -1645,7 +1645,7 @@ export default function AdmissionsContent() {
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
               {/* Header */}
-              <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white px-6 py-4 flex items-center justify-between gap-3">
+              <div className="bg-[#1e293b] text-white px-6 py-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="h-11 w-11 shrink-0 rounded-full bg-white/15 ring-1 ring-white/20 flex items-center justify-center text-white font-bold text-sm">
                     {(`${s(row.firstName).charAt(0)}${s(row.lastName).charAt(0)}`).toUpperCase() || "?"}
@@ -1669,7 +1669,7 @@ export default function AdmissionsContent() {
                         setViewOpen(false);
                         openExisting(row);
                       }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1f4f70] hover:bg-[#1b4763] text-white text-xs font-bold transition"
                     >
                       <Pencil className="w-3.5 h-3.5" /> Edit Onboarding
                     </button>
@@ -1688,7 +1688,7 @@ export default function AdmissionsContent() {
                   {isDone && !editView && (
                     <button
                       onClick={() => setEditView(true)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1f4f70] hover:bg-[#1b4763] text-white text-xs font-bold transition"
                     >
                       <Pencil className="w-3.5 h-3.5" /> Edit
                     </button>
@@ -1709,7 +1709,7 @@ export default function AdmissionsContent() {
                     <span>{Math.round((done / STEP_COUNT) * 100)}% ({done}/{STEP_COUNT} Steps)</span>
                   </div>
                   <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                    <div className={`h-full ${isDone ? "bg-green-500" : isCancelled ? "bg-gray-400" : "bg-indigo-500"} transition-all`} style={{ width: `${(done / STEP_COUNT) * 100}%` }} />
+                    <div className={`h-full ${isDone ? "bg-green-500" : isCancelled ? "bg-gray-400" : "bg-[#22577a]"} transition-all`} style={{ width: `${(done / STEP_COUNT) * 100}%` }} />
                   </div>
                 </div>
 
@@ -1789,7 +1789,7 @@ export default function AdmissionsContent() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                         <div>
                           <span className="block text-xs font-semibold text-gray-500">Care Level</span>
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 mt-1">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#cfe0eb] text-[#163c56] mt-1">
                             {s(row.careLevel) || "PENDING"}
                           </span>
                         </div>
@@ -1866,7 +1866,7 @@ export default function AdmissionsContent() {
                       <h3 className="text-sm font-bold text-slate-800 border-b border-gray-100 pb-2">Room & Identifiers</h3>
                       <div>
                         <span className="block text-xs font-semibold text-gray-500">Assigned Room</span>
-                        <span className="text-lg font-bold text-indigo-600">{row.roomNumber ? `Room ${s(row.roomNumber)}` : "Not assigned"}</span>
+                        <span className="text-lg font-bold text-[#1f4f70]">{row.roomNumber ? `Room ${s(row.roomNumber)}` : "Not assigned"}</span>
                       </div>
 
                       {qrPayloadStr && (
@@ -1929,7 +1929,7 @@ export default function AdmissionsContent() {
                             <CheckCircle2 className="w-3.5 h-3.5" /> Verified
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200">
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#1b4763] bg-[#e0ecf2] px-2.5 py-1 rounded-lg border border-[#a9c6d8]">
                             <CircleDot className="w-3.5 h-3.5" /> Unverified / Pending
                           </span>
                         )}
@@ -1962,13 +1962,13 @@ export default function AdmissionsContent() {
                 {editView ? (
                   <>
                     <button type="button" onClick={() => setEditView(false)} disabled={viewSaving} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm font-medium disabled:opacity-50">Cancel</button>
-                    <button type="submit" form="admission-edit-form" disabled={viewSaving} className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition disabled:opacity-50">{viewSaving ? "Saving…" : "Save changes"}</button>
+                    <button type="submit" form="admission-edit-form" disabled={viewSaving} className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-[#1f4f70] hover:bg-[#1b4763] text-white text-sm font-semibold shadow-sm transition disabled:opacity-50">{viewSaving ? "Saving…" : "Save changes"}</button>
                   </>
                 ) : (
                   <>
                     <button onClick={() => setViewOpen(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 text-sm font-medium">Close</button>
                     {!isDone && !isCancelled && (
-                      <button onClick={() => { setViewOpen(false); openExisting(row); }} className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition">
+                      <button onClick={() => { setViewOpen(false); openExisting(row); }} className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-[#1f4f70] hover:bg-[#1b4763] text-white text-sm font-semibold shadow-sm transition">
                         <Pencil className="w-4 h-4" /> Edit Onboarding
                       </button>
                     )}
@@ -2055,7 +2055,7 @@ function AdmissionEditForm({ row, assessedCareLevel, onSave }: {
 
   return (
     <form id="admission-edit-form" onSubmit={(e) => { e.preventDefault(); submit(); }} className="space-y-5">
-      <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-xs text-indigo-800">
+      <div className="rounded-xl border border-[#a9c6d8] bg-[#e0ecf2] px-4 py-2.5 text-xs text-[#163c56]">
         Editing this admission — saving updates the record and syncs the profile, medical details &amp; new medications to the resident card.
       </div>
 
@@ -2123,7 +2123,7 @@ function AdmissionEditForm({ row, assessedCareLevel, onSave }: {
 }
 
 function Stat({ label, value, tone }: { label: string; value: number; tone: "gray" | "indigo" | "green" }) {
-  const tones: Record<string, string> = { gray: "text-gray-700", indigo: "text-indigo-600", green: "text-green-600" };
+  const tones: Record<string, string> = { gray: "text-gray-700", indigo: "text-[#1f4f70]", green: "text-green-600" };
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{label}</p>

@@ -23,7 +23,7 @@ interface Props {
 }
 
 const input =
-  "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white";
+  "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-[#22577a] focus:ring-2 focus:ring-[#22577a]/20 bg-white";
 
 /**
  * Intake / move-in body check. Documents identifying marks and pre-existing
@@ -120,7 +120,7 @@ export default function IntakeBodyCheck({ value, onChange, readOnly, examinerNam
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-sm">
-        <ScanLine className="w-4 h-4 text-blue-600" />
+        <ScanLine className="w-4 h-4 text-[#1f4f70]" />
         <span className="font-semibold text-gray-800">On-admission body check</span>
       </div>
 
@@ -140,7 +140,7 @@ export default function IntakeBodyCheck({ value, onChange, readOnly, examinerNam
           type="button"
           onClick={() => (value.findings.length ? undefined : addFinding())}
           className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition ${
-            hasMarks ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+            hasMarks ? "bg-[#1f4f70] text-white border-[#1f4f70]" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
           }`}
         >
           <Plus className="w-4 h-4" /> Has marks / conditions — document

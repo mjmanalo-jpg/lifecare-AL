@@ -16,7 +16,7 @@ import {
 
 const VITALS = [
   { key: "HEART_RATE", label: "Heart Rate", icon: Heart, color: "text-red-500" },
-  { key: "BLOOD_PRESSURE", label: "Blood Pressure", icon: Droplets, color: "text-blue-500" },
+  { key: "BLOOD_PRESSURE", label: "Blood Pressure", icon: Droplets, color: "text-[#22577a]" },
   { key: "TEMPERATURE", label: "Temperature", icon: Thermometer, color: "text-orange-500" },
   { key: "OXYGEN", label: "Oxygen", icon: Wind, color: "text-green-500" },
 ];
@@ -33,7 +33,7 @@ const sevBadge = (s: string) =>
   s === "CRITICAL" ? "bg-red-100 text-red-700"
   : s === "SEVERE" ? "bg-orange-100 text-orange-700"
   : s === "MODERATE" ? "bg-yellow-100 text-yellow-700"
-  : "bg-blue-100 text-blue-700";
+  : "bg-[#cfe0eb] text-[#1b4763]";
 
 /** My Relative — live monitoring, vitals, medications, incidents for the linked resident. */
 export default function FamilyRelative() {
@@ -85,10 +85,10 @@ export default function FamilyRelative() {
 
       {/* Live Monitoring */}
       <div>
-        <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Activity className="w-4 h-4 text-blue-500" /> Live Monitoring</h3>
+        <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Activity className="w-4 h-4 text-[#22577a]" /> Live Monitoring</h3>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
           <div className="lg:col-span-2">
-            <div className="relative w-full aspect-[4/3] md:aspect-video bg-black rounded-2xl overflow-hidden shadow-lg border-2 border-blue-200">
+            <div className="relative w-full aspect-[4/3] md:aspect-video bg-black rounded-2xl overflow-hidden shadow-lg border-2 border-[#a9c6d8]">
               <CameraVisionFeed
                 cameraMode="hybrid"
                 residentId={relative.id}
@@ -116,7 +116,7 @@ export default function FamilyRelative() {
               )}
             </div>
             <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm text-xs text-gray-500">
-              <p className="flex items-center gap-2"><Activity className="w-3.5 h-3.5 text-blue-400" /> AI analyzes posture, motion &amp; emotion in real time.</p>
+              <p className="flex items-center gap-2"><Activity className="w-3.5 h-3.5 text-[#4f93bd]" /> AI analyzes posture, motion &amp; emotion in real time.</p>
               <p className="mt-1.5">Live emotion &amp; behavior labels appear on the video feed.</p>
             </div>
           </div>
@@ -142,7 +142,7 @@ export default function FamilyRelative() {
 
       {/* Vital sign trends — one chart per vital */}
       <div>
-        <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm sm:text-base"><Activity className="w-4 h-4 text-blue-500" /> Vital Sign Trends</h3>
+        <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm sm:text-base"><Activity className="w-4 h-4 text-[#22577a]" /> Vital Sign Trends</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
           {VITAL_TRENDS.map((t) => {
             const data = trendFor(t.key);
@@ -158,10 +158,10 @@ export default function FamilyRelative() {
       {/* Medications + Conditions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
         <div className="bg-white rounded-lg p-3 sm:p-4 md:p-6 border border-gray-200">
-          <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm"><Pill className="w-4 h-4 text-blue-500" /> Medications ({rawMeds.length})</h4>
+          <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm"><Pill className="w-4 h-4 text-[#22577a]" /> Medications ({rawMeds.length})</h4>
           <div className="space-y-2">
             {rawMeds.length ? rawMeds.map((m, i) => (
-              <div key={i} className="flex items-center justify-between gap-2 p-2 bg-blue-50 rounded border border-blue-100">
+              <div key={i} className="flex items-center justify-between gap-2 p-2 bg-[#e0ecf2] rounded border border-[#cfe0eb]">
                 <span className="text-gray-900 text-sm truncate">{String(m.name ?? "")} <span className="text-gray-500">{String(m.dosage ?? "")}</span></span>
                 <span className="text-xs text-gray-600 flex-shrink-0">{String(m.frequency ?? "")}</span>
               </div>

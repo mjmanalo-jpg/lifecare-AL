@@ -23,7 +23,7 @@ import { createRecord } from "@/lib/api";
 type Row = Record<string, unknown>;
 
 const TYPE_META: Record<string, { label: string; icon: LucideIcon; color: string }> = {
-  MEDICAL_APPOINTMENT: { label: "Medical Appointment", icon: Stethoscope, color: "text-blue-600 bg-blue-50 border-blue-200" },
+  MEDICAL_APPOINTMENT: { label: "Medical Appointment", icon: Stethoscope, color: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]" },
   DIALYSIS: { label: "Dialysis Run", icon: Droplets, color: "text-cyan-600 bg-cyan-50 border-cyan-200" },
   THERAPY: { label: "Therapy Run", icon: HeartPulse, color: "text-purple-600 bg-purple-50 border-purple-200" },
   FAMILY_OUTING: { label: "Family Outing", icon: TreePine, color: "text-green-600 bg-green-50 border-green-200" },
@@ -33,8 +33,8 @@ const TYPE_META: Record<string, { label: string; icon: LucideIcon; color: string
 
 const REQUEST_STATUS_COLORS: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-700",
-  APPROVED: "bg-blue-100 text-blue-700",
-  SCHEDULED: "bg-indigo-100 text-indigo-700",
+  APPROVED: "bg-[#cfe0eb] text-[#1b4763]",
+  SCHEDULED: "bg-[#cfe0eb] text-[#1b4763]",
   DECLINED: "bg-red-100 text-red-700",
   COMPLETED: "bg-green-100 text-green-700",
   CANCELLED: "bg-gray-100 text-gray-600",
@@ -176,14 +176,14 @@ export default function MyTransport() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2">
             Transport
           </h1>
           <p className="text-gray-600">Request rides for {residentName} and follow every trip live</p>
         </div>
         <div className="flex gap-2">
           <RefreshButton onRefresh={() => { void refetch(); void refetchTrips(); }} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium" />
-          <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
+          <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95">
             <Plus className="w-4 h-4" /> Request Transport
           </button>
         </div>
@@ -218,7 +218,7 @@ export default function MyTransport() {
                     <MapPin className="w-4 h-4 text-yellow-500" />
                     {String(trip.pickupLocation ?? trip.origin ?? "Facility")} → {String(trip.dropoffLocation ?? trip.destination ?? "")}
                   </div>
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${live ? "bg-green-100 text-green-700" : "bg-indigo-100 text-indigo-700"}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${live ? "bg-green-100 text-green-700" : "bg-[#cfe0eb] text-[#1b4763]"}`}>
                     {live && <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse mr-1.5" />}
                     {TRIP_STEP_LABELS[status] ?? status}
                   </span>
@@ -299,7 +299,7 @@ export default function MyTransport() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {Boolean(r.wheelchairNeeded) && <span title="Wheelchair needed"><Accessibility className="w-4 h-4 text-blue-500" /></span>}
+                    {Boolean(r.wheelchairNeeded) && <span title="Wheelchair needed"><Accessibility className="w-4 h-4 text-[#22577a]" /></span>}
                     {Boolean(r.escortRequired) && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-50 text-purple-600">Escort</span>}
                     <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${REQUEST_STATUS_COLORS[status] ?? "bg-gray-100 text-gray-600"}`}>
                       {status}
@@ -321,7 +321,7 @@ export default function MyTransport() {
       {showForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between z-10">
               <h2 className="text-xl font-bold">Request Transport</h2>
               <button onClick={() => setShowForm(false)} className="p-2 hover:bg-yellow-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
@@ -380,7 +380,7 @@ export default function MyTransport() {
                 </label>
                 <label className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer text-sm select-none">
                   <input type="checkbox" checked={form.wheelchairNeeded} onChange={(e) => set("wheelchairNeeded", e.target.checked)} className="rounded" />
-                  <Accessibility className="w-4 h-4 text-blue-500" /> Wheelchair
+                  <Accessibility className="w-4 h-4 text-[#22577a]" /> Wheelchair
                 </label>
                 <label className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer text-sm select-none">
                   <input type="checkbox" checked={form.escortRequired} onChange={(e) => set("escortRequired", e.target.checked)} className="rounded" />
@@ -403,7 +403,7 @@ export default function MyTransport() {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
               <button onClick={() => setShowForm(false)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium text-sm">Cancel</button>
-              <button onClick={handleSubmit} className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Send Request</button>
+              <button onClick={handleSubmit} className="px-5 py-2 bg-[#22577a] text-black font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">Send Request</button>
             </div>
           </div>
         </div>
@@ -414,7 +414,7 @@ export default function MyTransport() {
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string; icon: LucideIcon; color: string }) {
   const COLORS: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50 border-blue-200",
+    blue: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     green: "text-green-600 bg-green-50 border-green-200",
     amber: "text-amber-600 bg-amber-50 border-amber-200",
     purple: "text-purple-600 bg-purple-50 border-purple-200",

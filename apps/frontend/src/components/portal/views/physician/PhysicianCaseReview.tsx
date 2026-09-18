@@ -132,7 +132,7 @@ function CaseReviewInner() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1 flex items-center gap-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-1 flex items-center gap-2">
             <Stethoscope className="w-7 h-7 text-yellow-500 flex-shrink-0" /> Case Review &amp; Diagnosis
           </h1>
           <p className="text-gray-600 flex items-center gap-2 text-sm">
@@ -191,12 +191,12 @@ function CaseReviewInner() {
         ) : (
           <div className="space-y-4">
             {/* Header + actions */}
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-5 text-white flex items-center justify-between flex-wrap gap-3">
+            <div className="bg-[#22577a] rounded-xl p-5 text-white flex items-center justify-between flex-wrap gap-3">
               <div>
                 <h2 className="text-2xl font-bold">{selected.name}</h2>
-                <p className="text-blue-100 text-sm">Room {selected.room} · {selected.careLevel} · {selected.age ?? "—"} yrs{selected.allergies ? ` · Allergies: ${selected.allergies}` : ""}</p>
+                <p className="text-[#cfe0eb] text-sm">Room {selected.room} · {selected.careLevel} · {selected.age ?? "—"} yrs{selected.allergies ? ` · Allergies: ${selected.allergies}` : ""}</p>
               </div>
-              <button onClick={() => setShowDx(true)} className="flex items-center gap-2 px-4 py-2 bg-white text-blue-700 font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
+              <button onClick={() => setShowDx(true)} className="flex items-center gap-2 px-4 py-2 bg-white text-[#1b4763] font-semibold rounded-lg hover:shadow-lg transition active:scale-95 text-sm">
                 <Plus className="w-4 h-4" /> Record Diagnosis / Directive
               </button>
             </div>
@@ -246,11 +246,11 @@ function CaseReviewInner() {
                             <p className="text-xs text-gray-500">{asStr(n.authorName) || "Care team"} · {n.createdAt ? new Date(asStr(n.createdAt)).toLocaleString() : ""}</p>
                           </button>
                           <div className="flex items-center gap-1 flex-shrink-0">
-                            <button onClick={() => setViewNote(n)} className="p-1.5 rounded hover:bg-blue-50 text-blue-600 transition" title="View"><Eye className="w-4 h-4" /></button>
+                            <button onClick={() => setViewNote(n)} className="p-1.5 rounded hover:bg-[#e0ecf2] text-[#1f4f70] transition" title="View"><Eye className="w-4 h-4" /></button>
                             {signed ? (
                               <span className="inline-flex items-center gap-1 text-xs text-green-600 font-semibold whitespace-nowrap"><CheckCircle2 className="w-3.5 h-3.5" /> Co-signed</span>
                             ) : busy ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" /> : (
-                              <button onClick={() => coSign(asStr(n.id))} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition whitespace-nowrap">
+                              <button onClick={() => coSign(asStr(n.id))} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-[#e0ecf2] text-[#1b4763] border border-[#a9c6d8] rounded-lg hover:bg-[#cfe0eb] transition whitespace-nowrap">
                                 <Signature className="w-3.5 h-3.5" /> Co-sign
                               </button>
                             )}
@@ -266,15 +266,15 @@ function CaseReviewInner() {
             </Section>
 
             {/* Physician assessments */}
-            <Section icon={ClipboardCheck} title={`Physician Assessments & Directives (${physicianNotes.length})`} iconColor="text-blue-500">
+            <Section icon={ClipboardCheck} title={`Physician Assessments & Directives (${physicianNotes.length})`} iconColor="text-[#22577a]">
               {physicianNotes.length === 0 ? <Empty text="No diagnoses or directives yet." /> : (
                 <div className="space-y-2">
                   {physicianNotes.slice(0, 10).map((n) => (
-                    <button key={asStr(n.id)} onClick={() => setViewNote(n)} className="w-full text-left border-l-2 border-blue-400 bg-blue-50/40 hover:bg-blue-50 rounded-r-lg p-3 transition">
+                    <button key={asStr(n.id)} onClick={() => setViewNote(n)} className="w-full text-left border-l-2 border-[#4f93bd] bg-[#e0ecf2]/40 hover:bg-[#e0ecf2] rounded-r-lg p-3 transition">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-700">{asStr(n.noteType).replace(/_/g, " ")}</span>
+                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-[#cfe0eb] text-[#1b4763]">{asStr(n.noteType).replace(/_/g, " ")}</span>
                         <span className="text-sm font-semibold text-gray-900">{asStr(n.title)}</span>
-                        <Eye className="w-3.5 h-3.5 text-blue-500 ml-auto" />
+                        <Eye className="w-3.5 h-3.5 text-[#22577a] ml-auto" />
                       </div>
                       <p className="text-xs text-gray-700 mt-1 whitespace-pre-wrap line-clamp-2">{asStr(n.content)}</p>
                       <p className="text-[11px] text-gray-500 mt-1">{asStr(n.authorName)} · {n.createdAt ? new Date(asStr(n.createdAt)).toLocaleString() : ""}</p>
@@ -330,7 +330,7 @@ function CaseReviewInner() {
         return (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-              <div className={`sticky top-0 text-white p-5 flex items-start justify-between gap-3 z-10 ${isPhysician ? "bg-gradient-to-r from-blue-500 to-blue-600" : "bg-gradient-to-r from-green-500 to-green-600"}`}>
+              <div className={`sticky top-0 text-white p-5 flex items-start justify-between gap-3 z-10 ${isPhysician ? "bg-[#22577a] " : "bg-[#277a55] "}`}>
                 <div className="min-w-0">
                   <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-white/20">{asStr(n.noteType).replace(/_/g, " ") || "Note"}</span>
                   <h2 className="text-lg sm:text-xl font-bold mt-1 break-words">{asStr(n.title) || "Clinical Note"}</h2>
@@ -358,7 +358,7 @@ function CaseReviewInner() {
                 <button onClick={() => setViewNote(null)} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition text-sm">Close</button>
                 {!isPhysician && !signed && (
                   <button onClick={() => coSign(asStr(n.id))} disabled={busy}
-                    className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-400 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 text-sm">
+                    className="flex items-center gap-2 px-5 py-2 bg-[#22577a] text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50 text-sm">
                     {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Signature className="w-4 h-4" />} Co-sign
                   </button>
                 )}
@@ -398,8 +398,8 @@ function DiagnosisModal({ residentId, residentName, authorName, onClose, onSaved
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-blue-600 text-white p-5 flex items-center justify-between z-10">
-          <div><h2 className="text-xl font-bold">Record Diagnosis / Directive</h2><p className="text-blue-100 text-sm">{residentName}</p></div>
+        <div className="sticky top-0 bg-[#22577a] text-white p-5 flex items-center justify-between z-10">
+          <div><h2 className="text-xl font-bold">Record Diagnosis / Directive</h2><p className="text-[#cfe0eb] text-sm">{residentName}</p></div>
           <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition"><X className="w-6 h-6" /></button>
         </div>
         <form onSubmit={submit}>
@@ -423,7 +423,7 @@ function DiagnosisModal({ residentId, residentName, authorName, onClose, onSaved
           <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex items-center justify-between">
             <button type="button" onClick={onClose} className="px-5 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Cancel</button>
             <button type="submit" disabled={!valid || saving}
-              className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-400 to-blue-500 text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50">
+              className="flex items-center gap-2 px-6 py-2 bg-[#22577a] text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50">
               <ClipboardCheck className="w-4 h-4" /> {saving ? "Saving…" : "Record"}
             </button>
           </div>

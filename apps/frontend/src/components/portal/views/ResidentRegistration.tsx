@@ -325,7 +325,7 @@ export default function ResidentRegistration({ variant = "admin", accent = "#f59
                 <p className="font-semibold text-gray-900 truncate">{s(r.firstName)} {s(r.lastName)}</p>
                 <p className="text-xs text-gray-500 truncate">{s(r.email) || "—"}</p>
                 <div className="flex items-center gap-1.5 mt-1">
-                  <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-semibold">Room {s(r.roomNumber)}</span>
+                  <span className="px-1.5 py-0.5 rounded bg-[#cfe0eb] text-[#1b4763] text-[10px] font-semibold">Room {s(r.roomNumber)}</span>
                   <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[10px] font-semibold">{s(r.careLevel)}</span>
                   {r.photoUrl && <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-semibold inline-flex items-center gap-0.5"><ScanFace className="w-3 h-3" /> Face</span>}
                 </div>

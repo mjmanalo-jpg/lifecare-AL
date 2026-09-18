@@ -32,9 +32,9 @@ const REQUEST_TYPE_COLORS: Record<string, string> = {
 const TRIP_STATUS_STYLES: Record<string, string> = {
   SCHEDULED: "bg-gray-100 text-gray-700",
   INSPECTION: "bg-purple-100 text-purple-700",
-  EN_ROUTE: "bg-blue-100 text-blue-700",
+  EN_ROUTE: "bg-[#cfe0eb] text-[#1b4763]",
   ARRIVED: "bg-cyan-100 text-cyan-700",
-  RETURNING: "bg-indigo-100 text-indigo-700",
+  RETURNING: "bg-[#cfe0eb] text-[#1b4763]",
   COMPLETED: "bg-green-100 text-green-700",
   CANCELLED: "bg-red-100 text-red-700",
 };
@@ -321,7 +321,7 @@ export default function FleetDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold bg-[#22577a] bg-clip-text text-transparent mb-2">
             Fleet Dashboard
           </h1>
           <p className="text-gray-600">Fleet analytics · compliance · live operations</p>
@@ -566,7 +566,7 @@ export default function FleetDashboard() {
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string; icon: LucideIcon; color: string }) {
   const COLORS: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-50 border-blue-200",
+    blue: "text-[#1f4f70] bg-[#e0ecf2] border-[#a9c6d8]",
     green: "text-green-600 bg-green-50 border-green-200",
     red: "text-red-600 bg-red-50 border-red-200",
     purple: "text-purple-600 bg-purple-50 border-purple-200",

@@ -26,7 +26,7 @@ const priorityBadge = (p: string) => {
   const up = p.toUpperCase();
   if (["EMERGENCY", "CRITICAL"].includes(up)) return "bg-red-100 text-red-700 border-red-200";
   if (["URGENT", "HIGH", "WARNING"].includes(up)) return "bg-orange-100 text-orange-700 border-orange-200";
-  if (["ROUTINE", "MEDIUM", "NORMAL", "MODERATE", "INFO"].includes(up)) return "bg-blue-100 text-blue-700 border-blue-200";
+  if (["ROUTINE", "MEDIUM", "NORMAL", "MODERATE", "INFO"].includes(up)) return "bg-[#cfe0eb] text-[#1b4763] border-[#a9c6d8]";
   return "bg-gray-100 text-gray-600 border-gray-200";
 };
 
@@ -135,7 +135,7 @@ export default function ShiftContinuityPanel() {
               <Item key={String(e.id)} priority={String(e.priority)} who={`${rname(e)} · Rm ${rroom(e)}`} main={String(e.situation ?? "Escalation")} meta={`${String(e.status)} · ${fmt(e.createdAt)}`} onClick={() => go("escalations")} />
             ))}
           </Section>
-          <Section title="Pending Tasks" icon={ClipboardList} tint="text-blue-500" count={tasks.length} onOpen={() => go("taskboard")}>
+          <Section title="Pending Tasks" icon={ClipboardList} tint="text-[#22577a]" count={tasks.length} onOpen={() => go("taskboard")}>
             {tasks.map((t) => (
               <Item key={String(t.id)} priority={String(t.priority)} who={`${rname(t)} · Rm ${rroom(t)}`} main={String(t.title ?? "Task")} meta={`${isOverdue(t.dueDate) ? "OVERDUE · " : "Due "}${fmt(t.dueDate)}`} overdue={isOverdue(t.dueDate)} onClick={() => go("taskboard")} />
             ))}

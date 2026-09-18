@@ -15,19 +15,19 @@ type Room = ReturnType<typeof adaptRoom>;
 
 const STATUS_BADGE: Record<string, string> = {
   AVAILABLE: "bg-green-100 text-green-800 border-green-200",
-  OCCUPIED: "bg-blue-100 text-blue-800 border-blue-200",
+  OCCUPIED: "bg-[#cfe0eb] text-[#163c56] border-[#a9c6d8]",
   MAINTENANCE: "bg-yellow-100 text-yellow-800 border-yellow-200",
   RESERVED: "bg-purple-100 text-purple-800 border-purple-200",
 };
 const STATUS_CARD: Record<string, string> = {
   AVAILABLE: "border-green-300 bg-green-50/30",
-  OCCUPIED: "border-blue-300 bg-blue-50/30",
+  OCCUPIED: "border-[#7fa9c2] bg-[#e0ecf2]/30",
   MAINTENANCE: "border-yellow-300 bg-yellow-50/30",
   RESERVED: "border-purple-300 bg-purple-50/30",
 };
 const STATUS_HEADER: Record<string, string> = {
   AVAILABLE: "bg-green-500",
-  OCCUPIED: "bg-blue-500",
+  OCCUPIED: "bg-[#22577a]",
   MAINTENANCE: "bg-yellow-500",
   RESERVED: "bg-purple-500",
 };
@@ -45,7 +45,7 @@ const FEATURE_ICONS: Record<string, React.ReactNode> = {
 };
 
 // Shared modal form styles — indigo focus (primary), 12px radius, 44px targets.
-const FIELD_CLS = "w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-[15px] text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/25";
+const FIELD_CLS = "w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-[15px] text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-[#22577a] focus:ring-2 focus:ring-[#22577a]/25";
 const LABEL_CLS = "mb-1.5 block text-sm font-medium text-gray-700";
 const GROUP_CLS = "text-[11px] font-semibold uppercase tracking-wider text-gray-400";
 
@@ -287,15 +287,15 @@ export default function FacilityRooms() {
             </div>
           )}
           {residents.length > 0 && (
-            <div className="bg-blue-50 rounded-lg px-3 py-2">
-              <p className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1"><Users className="w-3 h-3" /> Occupants</p>
+            <div className="bg-[#e0ecf2] rounded-lg px-3 py-2">
+              <p className="text-xs font-semibold text-[#1b4763] mb-1 flex items-center gap-1"><Users className="w-3 h-3" /> Occupants</p>
               {residents.map((r: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
-                <p key={r.id} className="text-sm text-blue-900">{residentName(r)}</p>
+                <p key={r.id} className="text-sm text-[#12324a]">{residentName(r)}</p>
               ))}
             </div>
           )}
           <div className="flex flex-wrap gap-2 pt-1">
-            <button onClick={() => setViewing(room)} className="flex-1 px-3 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-sm font-medium transition flex items-center justify-center gap-1">
+            <button onClick={() => setViewing(room)} className="flex-1 px-3 py-2 bg-[#e0ecf2] text-[#1f4f70] hover:bg-[#cfe0eb] rounded-lg text-sm font-medium transition flex items-center justify-center gap-1">
               <Eye className="w-3.5 h-3.5" /> View
             </button>
             <button onClick={() => startEditing(room)} className="flex-1 px-3 py-2 bg-yellow-50 text-yellow-600 hover:bg-yellow-100 rounded-lg text-sm font-medium transition flex items-center justify-center gap-1">
@@ -305,7 +305,7 @@ export default function FacilityRooms() {
               <button className="px-3 py-2 bg-gray-50 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium transition">
                 <Settings className="w-3.5 h-3.5" />
               </button>
-              <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-20 hidden group-hover:block min-w-[140px]">
+              <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-20 hidden group-hover:block group-focus-within:block min-w-[140px]">
                 {["AVAILABLE", "OCCUPIED", "MAINTENANCE", "RESERVED"].map((s) => (
                   <button key={s} onClick={() => { quickStatusChange(room, s); }} className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 ${room.status === s ? "font-semibold" : ""}`}>
                     {room.status === s ? <Check className="w-3.5 h-3.5 text-green-600" /> : <XCircle className="w-3.5 h-3.5 text-gray-300" />}
@@ -329,7 +329,7 @@ export default function FacilityRooms() {
           </h1>
           <p className="text-gray-600">Manage facility rooms, assignments, and maintenance</p>
         </div>
-        <button onClick={startCreating} className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition active:scale-95">
+        <button onClick={startCreating} className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1f4f70] text-white rounded-lg font-semibold hover:bg-[#1b4763] transition active:scale-95">
           <Plus className="w-4 h-4" /> Add Room
         </button>
       </div>
@@ -346,10 +346,10 @@ export default function FacilityRooms() {
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
           <input type="text" placeholder="Search room number, wing, features..." value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none" />
+            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#22577a] focus:border-transparent outline-none" />
         </div>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-sm">
+          className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#22577a] outline-none bg-white text-sm">
           <option value="all">All Status</option>
           <option value="AVAILABLE">Available</option>
           <option value="OCCUPIED">Occupied</option>
@@ -357,20 +357,20 @@ export default function FacilityRooms() {
           <option value="RESERVED">Reserved</option>
         </select>
         <select value={wingFilter} onChange={(e) => setWingFilter(e.target.value)}
-          className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-sm">
+          className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#22577a] outline-none bg-white text-sm">
           <option value="all">All Wings</option>
           {wings.map((w) => <option key={w} value={w}>{w}</option>)}
         </select>
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
-          className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white text-sm">
+          className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#22577a] outline-none bg-white text-sm">
           <option value="all">All Types</option>
           {Object.entries(TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
         <div className="flex rounded-lg border border-gray-300 overflow-hidden">
-          <button onClick={() => setViewMode("grid")} className={`px-4 py-3 text-sm font-medium transition ${viewMode === "grid" ? "bg-indigo-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
+          <button onClick={() => setViewMode("grid")} className={`px-4 py-3 text-sm font-medium transition ${viewMode === "grid" ? "bg-[#1f4f70] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
             Grid
           </button>
-          <button onClick={() => setViewMode("table")} className={`px-4 py-3 text-sm font-medium transition ${viewMode === "table" ? "bg-indigo-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
+          <button onClick={() => setViewMode("table")} className={`px-4 py-3 text-sm font-medium transition ${viewMode === "table" ? "bg-[#1f4f70] text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
             Table
           </button>
         </div>
@@ -380,7 +380,7 @@ export default function FacilityRooms() {
 
       {loading && rooms.length === 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center text-gray-500">
-          <div className="inline-block w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3" />
+          <div className="inline-block w-6 h-6 border-2 border-[#22577a] border-t-transparent rounded-full animate-spin mb-3" />
           <p>Loading rooms...</p>
         </div>
       ) : filtered.length === 0 ? (
@@ -458,7 +458,7 @@ export default function FacilityRooms() {
                           <div className="flex items-center justify-end gap-1">
                             <div className="relative group">
                               <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition"><Settings className="w-4 h-4" /></button>
-                              <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-20 hidden group-hover:block min-w-[140px]">
+                              <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-20 hidden group-hover:block group-focus-within:block min-w-[140px]">
                                 {["AVAILABLE", "OCCUPIED", "MAINTENANCE", "RESERVED"].map((s) => (
                                   <button key={s} onClick={() => quickStatusChange(room, s)} className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 ${room.status === s ? "font-semibold" : ""}`}>
                                     {room.status === s ? <Check className="w-3.5 h-3.5 text-green-600" /> : <XCircle className="w-3.5 h-3.5 text-gray-300" />}
@@ -467,7 +467,7 @@ export default function FacilityRooms() {
                                 ))}
                               </div>
                             </div>
-                            <button onClick={() => setViewing(room)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="View details"><Eye className="w-4 h-4" /></button>
+                            <button onClick={() => setViewing(room)} className="p-2 text-[#1f4f70] hover:bg-[#e0ecf2] rounded-lg transition" title="View details"><Eye className="w-4 h-4" /></button>
                             <button onClick={() => startEditing(room)} className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition" title="Edit room"><Edit className="w-4 h-4" /></button>
                           </div>
                         </td>
@@ -485,13 +485,13 @@ export default function FacilityRooms() {
       {viewing && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-xl max-h-[90dvh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-400 to-blue-500 text-white p-4 sm:p-6 flex items-center justify-between border-b border-blue-600">
+            <div className="sticky top-0 bg-[#22577a] text-white p-4 sm:p-6 flex items-center justify-between border-b border-[#1f4f70]">
               <h2 className="text-xl sm:text-2xl font-bold">Room {viewing.roomNumber}</h2>
-              <button onClick={() => setViewing(null)} className="p-2 hover:bg-blue-600/20 rounded-lg transition"><X className="w-6 h-6" /></button>
+              <button onClick={() => setViewing(null)} className="p-2 hover:bg-[#1f4f70]/20 rounded-lg transition"><X className="w-6 h-6" /></button>
             </div>
             <div className="p-4 sm:p-8 space-y-6">
               <div className="flex items-center gap-4 mb-4">
-                <div className={`w-4 h-4 rounded-full ${viewing.status === "AVAILABLE" ? "bg-green-500" : viewing.status === "OCCUPIED" ? "bg-blue-500" : viewing.status === "MAINTENANCE" ? "bg-yellow-500" : "bg-purple-500"}`} />
+                <div className={`w-4 h-4 rounded-full ${viewing.status === "AVAILABLE" ? "bg-green-500" : viewing.status === "OCCUPIED" ? "bg-[#22577a]" : viewing.status === "MAINTENANCE" ? "bg-yellow-500" : "bg-purple-500"}`} />
                 <div>
                   <span className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_BADGE[viewing.status] || "bg-gray-100 text-gray-800"}`}>
                     {viewing.status.charAt(0) + viewing.status.slice(1).toLowerCase()}
@@ -515,7 +515,7 @@ export default function FacilityRooms() {
                       <ul className="space-y-1">
                         {residents.map((r: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
                           <li key={r.id} className="flex items-center gap-2 text-gray-900">
-                            <Users className="w-4 h-4 text-blue-500" />
+                            <Users className="w-4 h-4 text-[#22577a]" />
                             {residentName(r)}
                           </li>
                         ))}
@@ -527,7 +527,7 @@ export default function FacilityRooms() {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-4 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-2">
               <button onClick={() => setViewing(null)} className="px-6 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">Close</button>
-              <button onClick={() => { startEditing(viewing); setViewing(null); }} className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition active:scale-95">Edit</button>
+              <button onClick={() => { startEditing(viewing); setViewing(null); }} className="px-6 py-2 bg-[#1f4f70] text-white font-semibold rounded-lg hover:bg-[#1b4763] transition active:scale-95">Edit</button>
             </div>
           </div>
         </div>
@@ -537,15 +537,15 @@ export default function FacilityRooms() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
           <div role="dialog" aria-modal="true" aria-label={creating ? "Add room" : "Edit room"} className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5">
             {/* Header */}
-            <div className="flex items-start gap-3 bg-indigo-600 px-6 py-5 text-white">
+            <div className="flex items-start gap-3 bg-[#1f4f70] px-6 py-5 text-white">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25">
                 {creating ? <Plus className="h-5 w-5" /> : <Edit className="h-5 w-5" />}
               </div>
               <div className="min-w-0 flex-1">
                 <h2 className="text-xl font-bold leading-tight">{creating ? "Add Room" : `Edit Room ${editForm.roomNumber}`}</h2>
-                <p className="mt-0.5 text-sm text-indigo-100">{creating ? "Create a room residents can be assigned to." : "Update this room's details and status."}</p>
+                <p className="mt-0.5 text-sm text-[#cfe0eb]">{creating ? "Create a room residents can be assigned to." : "Update this room's details and status."}</p>
               </div>
-              <button onClick={closeModal} aria-label="Close" className="-mr-2 rounded-lg p-2 text-indigo-100 transition hover:bg-white/15 hover:text-white"><X className="h-5 w-5" /></button>
+              <button onClick={closeModal} aria-label="Close" className="-mr-2 rounded-lg p-2 text-[#cfe0eb] transition hover:bg-white/15 hover:text-white"><X className="h-5 w-5" /></button>
             </div>
 
             {/* Body */}
@@ -629,7 +629,7 @@ export default function FacilityRooms() {
             {/* Footer */}
             <div className="flex items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
               <button onClick={closeModal} className="rounded-xl px-4 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-200/70">Cancel</button>
-              <button onClick={creating ? handleCreate : handleSaveEdit} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60">
+              <button onClick={creating ? handleCreate : handleSaveEdit} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-[#1f4f70] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1b4763] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60">
                 {saving && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
                 {saving ? (creating ? "Adding…" : "Saving…") : (creating ? "Add Room" : "Save Changes")}
               </button>
@@ -647,14 +647,14 @@ function Bell(props: any) { return <svg xmlns="http://www.w3.org/2000/svg" width
 function Accessibility(props: any) { return <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><circle cx="16" cy="4" r="1"/><path d="m18 19 1-7-6 1"/><path d="m5 8 3-3 5.5 3-2.36 3.5"/><path d="M4.24 14.5a5 5 0 0 0 6.88 6"/><path d="M13.76 17.5a5 5 0 0 0-6.88-6"/></svg>; }
 
 function StatBox({ label, value, icon: Icon, color }: { label: string; value: string; icon: React.ComponentType<{ className?: string }>; color: string }) {
-  const COLORS: Record<string, string> = { blue: "text-blue-600 bg-blue-50", green: "text-green-600 bg-green-50", emerald: "text-emerald-600 bg-emerald-50", amber: "text-amber-600 bg-amber-50", red: "text-red-600 bg-red-50", purple: "text-purple-600 bg-purple-50" };
+  const COLORS: Record<string, string> = { blue: "text-[#1f4f70] bg-[#e0ecf2]", green: "text-green-600 bg-green-50", emerald: "text-emerald-600 bg-emerald-50", amber: "text-amber-600 bg-amber-50", red: "text-red-600 bg-red-50", purple: "text-purple-600 bg-purple-50" };
   return (
     <div className={`rounded-lg border p-4 ${COLORS[color] || COLORS.blue}`}>
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold text-gray-600">{label}</p>
-        <Icon className={`w-4 h-4 ${COLORS[color]?.split(" ")[0] || "text-blue-600"}`} />
+        <Icon className={`w-4 h-4 ${COLORS[color]?.split(" ")[0] || "text-[#1f4f70]"}`} />
       </div>
-      <p className={`text-xl sm:text-2xl font-bold mt-1 ${COLORS[color]?.split(" ")[0] || "text-blue-600"}`}>{value}</p>
+      <p className={`text-xl sm:text-2xl font-bold mt-1 ${COLORS[color]?.split(" ")[0] || "text-[#1f4f70]"}`}>{value}</p>
     </div>
   );
 }

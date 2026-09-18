@@ -11,7 +11,7 @@ const severityColors: Record<string, string> = {
   CRITICAL: "bg-red-100 text-red-700 border-red-200",
   HIGH: "bg-orange-100 text-orange-700 border-orange-200",
   MEDIUM: "bg-yellow-100 text-yellow-700 border-yellow-200",
-  LOW: "bg-blue-100 text-blue-700 border-blue-200",
+  LOW: "bg-[#cfe0eb] text-[#1b4763] border-[#a9c6d8]",
 };
 
 // Module 14 stock levels — Out of Stock / Critical / Low / Normal — classified
@@ -168,7 +168,7 @@ export default function InventoryAlertsPanel() {
       {creating && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-yellow-500 to-amber-500 px-6 py-4 rounded-t-xl flex items-center justify-between">
+            <div className="sticky top-0 bg-[#8f6410] px-6 py-4 rounded-t-xl flex items-center justify-between">
               <h3 className="text-white font-bold text-lg">New Inventory Alert</h3>
               <button onClick={() => setCreating(false)} className="text-white/80 hover:text-white cursor-pointer"><X className="w-5 h-5" /></button>
             </div>

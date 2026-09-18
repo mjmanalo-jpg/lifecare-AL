@@ -43,14 +43,14 @@ interface CallBellVM {
 
 const CARE_BADGE: Record<CareLevel, string> = {
   INDEPENDENT: "bg-green-100 text-green-800 border-green-200",
-  ASSISTED: "bg-blue-100 text-blue-800 border-blue-200",
+  ASSISTED: "bg-[#cfe0eb] text-[#163c56] border-[#a9c6d8]",
   MEMORY: "bg-purple-100 text-purple-800 border-purple-200",
   SKILLED: "bg-red-100 text-red-800 border-red-200",
 };
 
 const CARE_DOT: Record<CareLevel, string> = {
   INDEPENDENT: "bg-green-500",
-  ASSISTED: "bg-blue-500",
+  ASSISTED: "bg-[#22577a]",
   MEMORY: "bg-purple-500",
   SKILLED: "bg-red-500",
 };
@@ -155,7 +155,7 @@ export default function CaregiverResidents() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2.5">
-            <Users className="w-6 h-6 text-blue-600" /> My Assigned Residents
+            <Users className="w-6 h-6 text-[#1f4f70]" /> My Assigned Residents
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             {assignedIds.length > 0
@@ -180,7 +180,7 @@ export default function CaregiverResidents() {
           placeholder="Search by name or room…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+          className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#22577a] focus:border-transparent outline-none text-sm"
         />
       </div>
 
@@ -210,9 +210,10 @@ export default function CaregiverResidents() {
             return (
               <div
                 key={r.id}
-                className="bg-white rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all p-4"
+                className="bg-white rounded-xl border border-gray-200 hover:border-[#7fa9c2] hover:shadow-sm transition-all p-4"
               >
-                <div className="flex items-center gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                  <div className="flex min-w-0 flex-1 items-center gap-4">
                   {/* Avatar */}
                   {r.photoUrl ? (
                     <img
@@ -221,7 +222,7 @@ export default function CaregiverResidents() {
                       className="w-12 h-12 rounded-full object-cover ring-2 ring-gray-100 shrink-0"
                     />
                   ) : (
-                    <span className="w-12 h-12 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center text-sm font-bold text-blue-600 shrink-0">
+                    <span className="w-12 h-12 rounded-full bg-[#e0ecf2] border border-[#a9c6d8] flex items-center justify-center text-sm font-bold text-[#1f4f70] shrink-0">
                       {r.firstName?.[0]}{r.lastName?.[0]}
                     </span>
                   )}
@@ -248,9 +249,10 @@ export default function CaregiverResidents() {
                       </p>
                     )}
                   </div>
+                  </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0 sm:justify-end">
                     {bells.length > 0 && (
                       <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-500 text-white rounded-lg text-xs font-semibold">
                         <Phone className="w-3 h-3" /> {bells.length}
@@ -258,7 +260,7 @@ export default function CaregiverResidents() {
                     )}
                     <button
                       onClick={() => setViewingResident(r)}
-                      className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold hover:bg-blue-100 transition border border-blue-200"
+                      className="px-3 py-1.5 bg-[#e0ecf2] text-[#1b4763] rounded-lg text-xs font-semibold hover:bg-[#cfe0eb] transition border border-[#a9c6d8]"
                     >
                       View
                     </button>
@@ -349,7 +351,7 @@ function ResidentDetailModal({
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-blue-600 text-white p-5 sm:p-6 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-[#22577a] text-white p-5 sm:p-6 flex items-center justify-between z-10">
           <div className="flex items-center gap-3 min-w-0">
             {r.photoUrl ? (
               <img src={r.photoUrl} alt="" className="w-12 h-12 rounded-full object-cover ring-2 ring-white/30 shrink-0" />
@@ -360,7 +362,7 @@ function ResidentDetailModal({
             )}
             <div className="min-w-0">
               <h2 className="text-xl font-bold truncate">{name}</h2>
-              <p className="text-blue-100 text-sm">Room {r.roomNumber || "—"} · {humanize(r.careLevel)}</p>
+              <p className="text-[#cfe0eb] text-sm">Room {r.roomNumber || "—"} · {humanize(r.careLevel)}</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition shrink-0">
@@ -465,7 +467,7 @@ function ResidentDetailModal({
       {resolveForId && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setResolveForId(null); }}>
           <div className="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden">
-            <div className="bg-gradient-to-r from-green-500 to-green-600 px-5 py-4 text-white flex items-center justify-between">
+            <div className="bg-[#277a55] px-5 py-4 text-white flex items-center justify-between">
               <h3 className="font-bold flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Resolve Call Bell</h3>
               <button onClick={() => setResolveForId(null)} className="p-1 hover:bg-white/20 rounded"><X className="w-5 h-5" /></button>
             </div>

@@ -333,9 +333,9 @@ export default function FacilityDining() {
   return (
     <div className="space-y-6">
       {/* Title & Navigation Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-yellow-50 to-amber-100 p-4 sm:p-6 rounded-2xl border border-amber-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#f6eddb] p-4 sm:p-6 rounded-2xl border border-amber-200">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold bg-gradient-to-r from-amber-700 to-amber-950 bg-clip-text text-transparent flex items-center gap-2">
+          <h1 className="text-2xl sm:text-3xl font-extrabold bg-[#66470c] bg-clip-text text-transparent flex items-center gap-2">
             <Utensils className="w-7 h-7 sm:w-8 sm:h-8 text-amber-600 flex-shrink-0" /> Dining &amp; Food Compliance
           </h1>
           <p className="text-amber-800 text-sm font-semibold mt-1">
@@ -407,7 +407,7 @@ export default function FacilityDining() {
 
             <button 
               onClick={handleSubmitTemps}
-              className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-extrabold text-sm rounded-lg hover:shadow-lg transition active:scale-95"
+              className="w-full py-2.5 bg-[#8f6410] text-white font-extrabold text-sm rounded-lg hover:shadow-lg transition active:scale-95"
             >
               Submit Temperature Log
             </button>
@@ -492,7 +492,7 @@ export default function FacilityDining() {
             
             <div className="space-y-3">
               <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center font-bold text-black text-sm">{dietitianStaffName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}</div>
+                <div className="w-10 h-10 rounded-full bg-[#b58a2e] flex items-center justify-center font-bold text-black text-sm">{dietitianStaffName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}</div>
                 <div>
                   <h4 className="font-bold text-gray-900 text-xs">{dietitianStaffName}</h4>
                   <p className="text-[10px] text-gray-500">Geriatric Nutrition</p>
@@ -501,7 +501,7 @@ export default function FacilityDining() {
               </div>
               
               <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center font-bold text-black text-sm">LM</div>
+                <div className="w-10 h-10 rounded-full bg-[#b58a2e] flex items-center justify-center font-bold text-black text-sm">LM</div>
                 <div>
                   <h4 className="font-bold text-gray-950 text-xs">Leah McPhee, MS, RDN</h4>
                   <p className="text-[10px] text-gray-500">License: RD-081498 • Renal &amp; Diabetic Diets</p>
@@ -510,7 +510,7 @@ export default function FacilityDining() {
               </div>
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
+            <div className="bg-[#e0ecf2] border border-[#a9c6d8] rounded-xl p-3 text-xs text-[#163c56]">
               <span className="font-bold block mb-1">Nutrition Referral Policy:</span>
               Any resident showing significant involuntary weight change (&gt;5% in 30 days) or dysphagia requires an immediate dietitian review request.
             </div>
@@ -680,7 +680,7 @@ export default function FacilityDining() {
       {showAddCompliance && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90dvh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
               <h2 className="text-xl font-extrabold flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-amber-800" /> Log HACCP Compliance Audit
               </h2>
@@ -781,7 +781,7 @@ export default function FacilityDining() {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2 z-10">
               <button onClick={() => setShowAddCompliance(false)} className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg font-bold">Cancel</button>
-              <button onClick={handleSaveCompliance} className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-extrabold text-sm rounded-lg hover:shadow transition active:scale-95">Save Audit</button>
+              <button onClick={handleSaveCompliance} className="px-5 py-2 bg-[#8f6410] text-white font-extrabold text-sm rounded-lg hover:shadow transition active:scale-95">Save Audit</button>
             </div>
           </div>
         </div>
@@ -791,7 +791,7 @@ export default function FacilityDining() {
       {showAddConsult && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90dvh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
               <h2 className="text-xl font-extrabold flex items-center gap-2">
                 <Users className="w-5 h-5 text-amber-800" /> Request Dietitian Consultation
               </h2>
@@ -836,7 +836,7 @@ export default function FacilityDining() {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2 z-10">
               <button onClick={() => setShowAddConsult(false)} className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg font-bold">Cancel</button>
-              <button onClick={handleSaveConsult} className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-extrabold text-sm rounded-lg hover:shadow transition active:scale-95">Send Request</button>
+              <button onClick={handleSaveConsult} className="px-5 py-2 bg-[#8f6410] text-white font-extrabold text-sm rounded-lg hover:shadow transition active:scale-95">Send Request</button>
             </div>
           </div>
         </div>
@@ -846,7 +846,7 @@ export default function FacilityDining() {
       {showAddMenu && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90dvh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
               <h2 className="text-xl font-extrabold flex items-center gap-2">
                 <ClipboardList className="w-5 h-5 text-amber-800" /> Schedule Cuisine Menu Item
               </h2>
@@ -912,7 +912,7 @@ export default function FacilityDining() {
             </div>
             <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex flex-wrap items-center justify-between gap-2 z-10">
               <button onClick={() => setShowAddMenu(false)} className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg font-bold">Cancel</button>
-              <button onClick={handleSaveMenu} className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-extrabold text-sm rounded-lg hover:shadow transition active:scale-95">Schedule Meal</button>
+              <button onClick={handleSaveMenu} className="px-5 py-2 bg-[#8f6410] text-white font-extrabold text-sm rounded-lg hover:shadow transition active:scale-95">Schedule Meal</button>
             </div>
           </div>
         </div>
@@ -925,7 +925,7 @@ export default function FacilityDining() {
           onClick={() => { if (!reviewBusy) { setReviewConsult(null); setReviewRecs(""); } }}
         >
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
+            <div className="sticky top-0 bg-[#22577a] text-black p-5 flex items-center justify-between border-b border-yellow-600 z-10">
               <h2 className="text-xl font-extrabold flex items-center gap-2">
                 <Users className="w-5 h-5 text-amber-800" /> Dietitian Recommendations
               </h2>
@@ -957,7 +957,7 @@ export default function FacilityDining() {
               <button
                 onClick={submitConsultReview}
                 disabled={reviewBusy}
-                className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white font-extrabold text-sm rounded-lg hover:shadow transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-5 py-2 bg-[#8f6410] text-white font-extrabold text-sm rounded-lg hover:shadow transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {reviewBusy ? "Saving..." : "Complete Consult"}
               </button>
