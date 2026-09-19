@@ -461,13 +461,12 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
     const scheduledMeds = rMeds.filter((m) => !isOnDemandFreq(s(m.frequency)));
     const onDemandMeds = rMeds.filter((m) => isOnDemandFreq(s(m.frequency)));
     type Occ = { slot: string; time: string; status: MarStatus; marId: string; reason: string };
-    // Grouped by effective clock time (nurse-set or default) so each med-pass
-    // header reflects the real dose time, not a fixed slot label.
-    const byTime = new Map<string, { m: Row; o: Occ }[]>();
-    scheduledMeds.forEach((m) => occurrencesFor(m, date).forEach((o) => { const a = byTime.get(o.time) || []; a.push({ m, o }); byTime.set(o.time, a); }));
-    const times = [...byTime.keys()].sort();
+    // One block per MEDICATION with its dose times listed together, so a med given
+    // more than once a day (e.g. BID 8AM/6PM) reads as a single order, not scattered
+    // rows. Skip meds with no dose on this date (inactive / outside start–end range).
+    const medRows = scheduledMeds.map((m) => ({ m, occ: occurrencesFor(m, date) })).filter((x) => x.occ.length > 0);
 
-    if (times.length === 0 && onDemandMeds.length === 0)
+    if (medRows.length === 0 && onDemandMeds.length === 0)
       return <div className="rounded-2xl border p-8 text-center text-sm text-[var(--clinical-muted)]" style={{ borderColor: "var(--clinical-line)" }}>No medications scheduled for this date.</div>;
 
     const statusPill = (status: MarStatus) => {
@@ -476,18 +475,35 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
       return <span className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold" style={{ color: it.color, backgroundColor: `color-mix(in srgb, ${it.color} 12%, var(--clinical-surface))` }}><Icon className="h-3.5 w-3.5" />{it.label}</span>;
     };
 
+    // Edit / Discontinue for a medication order (nurse/CM only). Edit opens the
+    // Add/Edit modal (frequency + custom dose times); Discontinue confirms first
+    // and keeps past administration records.
+    const manageControls = (m: Row) => canManageMeds ? (
+      <div className="flex items-center gap-4 pb-1">
+        <button onClick={() => setAddFor({ ...m, __edit: true })} className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--clinical-muted)] transition hover:text-[var(--clinical-ink)]"><Pencil className="h-3.5 w-3.5" /> Edit</button>
+        <button onClick={async () => { const c = await Swal.fire({ title: "Discontinue medication?", text: `${splitName(s(m.name))[0]} will be removed from the schedule. Past administration records are kept.`, icon: "warning", showCancelButton: true, confirmButtonColor: "#dc2626", confirmButtonText: "Discontinue" }); if (c.isConfirmed) { await updateRecord("medications", s(m.id), { status: "DISCONTINUED" }); await refetch(); } }} className="inline-flex items-center gap-1 text-xs font-semibold text-red-500 transition hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /> Discontinue</button>
+      </div>
+    ) : null;
+
+    const slotChip = (time: string) => {
+      const t = doseTiming(time, date, nowMs);
+      if (!t) return null;
+      if (t.phase === "LATE") return <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold" style={{ color: "var(--clinical-coral)", backgroundColor: "color-mix(in srgb, var(--clinical-coral) 12%, var(--clinical-surface))" }}>Overdue · closed {msTo12h(t.closeMs)}</span>;
+      if (t.phase === "OPEN") return <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold" style={{ color: "var(--clinical-panel)", backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, var(--clinical-surface))" }}>Due now · until {msTo12h(t.closeMs)}</span>;
+      return <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold text-[var(--clinical-muted)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}>Scheduled · until {msTo12h(t.closeMs)}</span>;
+    };
+
+    // A single dose within a med block: clock time + window status on the left, the
+    // Give / Refused-Held action (or the recorded status) on the right.
     const doseRow = (m: Row, o: Occ) => {
-      const [brand, generic] = splitName(s(m.name));
-      const instr = s(m.sideEffects);
       const actioned = o.status === "GIVEN" || o.status === "REFUSED" || o.status === "HELD";
       const formOpen = !!doseFor && s(doseFor.m.id) === s(m.id) && doseFor.slot === o.slot;
       return (
         <div key={s(m.id) + o.slot}>
-          <div className="flex flex-wrap items-start justify-between gap-3 py-3.5">
-            <div className="min-w-0">
-              <p className="font-bold text-[var(--clinical-ink)]">{brand}{s(m.dosage) ? ` ${s(m.dosage)}` : ""}{isVitalsRequired(s(m.id)) && <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700"><Activity className="w-3 h-3" /> Vitals</span>}</p>
-              <p className="text-xs text-[var(--clinical-muted)]">{generic ? `${generic} · ` : ""}{s(m.route) || "oral"}</p>
-              {instr && <p className="mt-0.5 text-xs font-medium" style={{ color: "var(--clinical-amber)" }}>{instr}</p>}
+          <div className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div className="flex items-center gap-2.5">
+              <span className="text-sm font-bold text-[var(--clinical-ink)] tabular-nums">{to12h(o.time)}</span>
+              {slotChip(o.time)}
             </div>
             <div className="shrink-0">
               {actioned ? (
@@ -506,27 +522,25 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
       );
     };
 
-    const slotChip = (time: string) => {
-      const t = doseTiming(time, date, nowMs);
-      if (!t) return null;
-      if (t.phase === "LATE") return <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold" style={{ color: "var(--clinical-coral)", backgroundColor: "color-mix(in srgb, var(--clinical-coral) 12%, var(--clinical-surface))" }}>Overdue · closed {msTo12h(t.closeMs)}</span>;
-      if (t.phase === "OPEN") return <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold" style={{ color: "var(--clinical-panel)", backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, var(--clinical-surface))" }}>Due now · until {msTo12h(t.closeMs)}</span>;
-      return <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold text-[var(--clinical-muted)]" style={{ backgroundColor: "var(--clinical-surface-2)" }}>Scheduled · until {msTo12h(t.closeMs)}</span>;
-    };
-
     return (
       <div>
-        {times.map((tm) => (
-          <div key={tm} className="border-t first:border-t-0" style={{ borderColor: "var(--clinical-line)" }}>
-            <div className="flex flex-wrap items-center gap-3 pt-4 pb-1">
-              <span className="text-sm font-bold text-[var(--clinical-ink)]">{to12h(tm)}</span>
-              {slotChip(tm)}
+        {medRows.map(({ m, occ }) => {
+          const [brand, generic] = splitName(s(m.name));
+          const instr = s(m.sideEffects);
+          return (
+            <div key={s(m.id)} className="border-t first:border-t-0" style={{ borderColor: "var(--clinical-line)" }}>
+              <div className="pt-4 pb-1">
+                <p className="font-bold text-[var(--clinical-ink)]">{brand}{s(m.dosage) ? ` ${s(m.dosage)}` : ""}{isVitalsRequired(s(m.id)) && <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700"><Activity className="w-3 h-3" /> Vitals</span>}</p>
+                <p className="text-xs text-[var(--clinical-muted)]">{generic ? `${generic} · ` : ""}{s(m.route) || "oral"}</p>
+                {instr && <p className="mt-0.5 text-xs font-medium" style={{ color: "var(--clinical-amber)" }}>{instr}</p>}
+              </div>
+              {manageControls(m)}
+              <div className="divide-y" style={{ borderColor: "var(--clinical-line)" }}>
+                {occ.map((o) => doseRow(m, o))}
+              </div>
             </div>
-            <div className="divide-y" style={{ borderColor: "var(--clinical-line)" }}>
-              {(byTime.get(tm) || []).map(({ m, o }) => doseRow(m, o))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {onDemandMeds.length > 0 && (
           <div className="border-t first:border-t-0" style={{ borderColor: "var(--clinical-line)" }}>
             <div className="flex items-center gap-3 pt-4 pb-1"><span className="text-sm font-bold text-[var(--clinical-ink)]">As needed</span><span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold" style={{ color: "var(--clinical-panel)", backgroundColor: "color-mix(in srgb, var(--clinical-panel) 12%, var(--clinical-surface))" }}>PRN</span></div>
@@ -544,6 +558,7 @@ export default function MARDailyBoard({ clinicianRole = "NURSE", focusResidentId
                       </div>
                       <button onClick={() => openDose(m, "PRN", date, "", "GIVEN")} className="shrink-0 inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110" style={{ backgroundColor: "var(--clinical-panel)" }}><Plus className="h-4 w-4" /> Administer</button>
                     </div>
+                    {manageControls(m)}
                     {formOpen && <div className="pb-3.5">{renderDoseForm()}</div>}
                   </div>
                 );

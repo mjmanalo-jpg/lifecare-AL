@@ -81,6 +81,10 @@ SHIFT_SUMMARY_*.md
 LifeCare_*.pdf
 03_LifeCare_Decision_Rules_Care_Model_*.xlsx
 Care360_*.pdf
+# Root-level workflow / reference source docs (keep out of git like the above).
+# Deliverables under docs/ stay tracked. Already-committed siblings need `git rm --cached` to remove.
+RESIDENT-CARE-WORKFLOW.pdf
+Notification-Alerts-Streamlining.pdf
 
 # Agent/tool config & scratch
 .claude/
