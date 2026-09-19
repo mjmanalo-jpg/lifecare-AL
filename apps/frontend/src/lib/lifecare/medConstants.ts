@@ -30,3 +30,11 @@ export const isOnDemandFreq = (frequency: string): boolean => /\b5x\b|five times
 
 /** App-setting key holding the `{ [medicationId]: true }` vitals-required map. */
 export const VITALS_KEY = "med_vitals_required";
+
+/**
+ * App-setting key holding the `{ [medicationId]: string[] }` custom dose-time
+ * map — one "HH:MM" (24h) per scheduled slot, in the med's slot order. Lets the
+ * nurse set the exact clock time for each dose instead of the fixed defaults.
+ * Stored migration-free (no Medication column), like VITALS_KEY.
+ */
+export const MED_TIMES_KEY = "med_custom_times";
