@@ -356,7 +356,11 @@ export const ROLES: Record<Role, RoleDetails> = {
     // Phase 1 nav simplification: the previously-flat 34-link menu is grouped into
     // four collapsible sections. Technical/system tools (geofencing, cameras,
     // landing studio, AI assistant) move into "System", tucked at the bottom and
-    // out of the routine clinical scan. Grouping/labels only — every route preserved.
+    // out of the routine clinical scan.
+    // The Clinical group's hands-on documentation links (Daily Care Documentation
+    // & Monitoring, Shift Endorsement & Continuity, Medication Management &
+    // Inventory, MAR, Vaccinations) are hidden from this portal — those are
+    // nurse/caregiver workflows. The routes themselves still resolve.
     sidebarGroupOrder: ["Clinical", "Operations", "Administration", "System"],
     sidebarLinks: [
       // ── Clinical ──────────────────────────────────────────────────────────
@@ -364,11 +368,6 @@ export const ROLES: Record<Role, RoleDetails> = {
       // Action Queue hub — Alerts · Escalations.
       { name: "Action Queue", icon: BellRing, route: "/superadmin/actionqueue", group: "Clinical" },
       { name: "Residents", icon: Users, route: "/superadmin/records", group: "Clinical" },
-      { name: "Daily Care Documentation & Monitoring", icon: CheckCircle, route: "/superadmin/tasks", group: "Clinical" },
-      { name: "Shift Endorsement & Continuity", icon: FileText, route: "/superadmin/reports", group: "Clinical" },
-      { name: "Medication Management & Inventory", icon: Pill, route: "/superadmin/medications", group: "Clinical" },
-      { name: "Medication Administration Record", icon: Pill, route: "/superadmin/mar", group: "Clinical" },
-      { name: "Vaccinations", icon: Syringe, route: "/superadmin/vaccinations", group: "Clinical" },
       // ── Operations ────────────────────────────────────────────────────────
       // Ordered like the Care Manager portal: Resident Assessment → Admissions →
       // Care Plan → Room Management, then the remaining operations tabs.

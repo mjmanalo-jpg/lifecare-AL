@@ -34,6 +34,7 @@ import ResidentAssessmentV42 from "@/components/portal/views/clinical/ResidentAs
 import MoveInBoard from "@/components/portal/views/clinical/MoveInBoard";
 import FacilityRooms from "@/components/portal/views/FacilityRooms";
 import StaffProfilesBoard from "@/components/portal/views/clinical/StaffProfilesBoard";
+import StaffRosterBoard from "@/components/portal/views/clinical/StaffRosterBoard";
 import FeatureMatrixDashboard from "@/components/portal/views/superadmin/FeatureMatrixDashboard";
 import HubTabs from "@/components/portal/HubTabs";
 import { Trash2, Search, Eye, Edit, X, XCircle, UserPlus, KeyRound } from "lucide-react";
@@ -1362,7 +1363,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
 
   if (tab === "staff") return renderStaffRegistry();
 
-  // Staffing hub — Staff Registry · Staff Profiles · Caregiver Schedule.
+  // Staffing hub — Staff Registry · Staff Profiles · Caregiver Schedule · Roster.
   if (tab === "staffinghub") {
     return (
       <HubTabs
@@ -1371,6 +1372,7 @@ export default function SuperAdminPortalContent({ tab }: SuperAdminPortalContent
           { key: "staff", label: "Staff Registry", node: renderStaffRegistry() },
           { key: "staffprofiles", label: "Staff Profiles", node: <StaffProfilesBoard clinicianRole="FACILITY_ADMIN" /> },
           { key: "caregiverschedule", label: "Caregiver Schedule", node: <CaregiverScheduleBoard clinicianRole="FACILITY_ADMIN" /> },
+          { key: "staffroster", label: "Roster", node: <StaffRosterBoard clinicianRole="FACILITY_ADMIN" /> },
         ]}
       />
     );
