@@ -427,10 +427,10 @@ function RoleGroup({ label, span, children }: { label: string; span: number; chi
 
 function Legend() {
   const items: { icon: typeof Sun; label: string; hint: string }[] = [
-    { icon: Sun, label: "A · AM", hint: "AM shift" },
-    { icon: Sunset, label: "P · PM", hint: "PM shift" },
-    { icon: Moon, label: "N · Night", hint: "Night shift" },
-    { icon: Clock, label: "MID / …12", hint: "Mid / flex · 12-hour" },
+    { icon: Sun, label: "A · AM", hint: "AM shift · 7:00 AM – 3:00 PM" },
+    { icon: Sunset, label: "P · PM", hint: "PM shift · 3:00 PM – 11:00 PM" },
+    { icon: Moon, label: "N · Night", hint: "Noc shift · 11:00 PM – 7:00 AM" },
+    { icon: Clock, label: "MID / …12", hint: "Mid / flex · 12-hour: A12 = 7:00 AM – 7:00 PM, P12 / N12 = 7:00 PM – 7:00 AM" },
     { icon: Users, label: "PCG### = private 1:1", hint: "boxed = private caregiver → DT-013" },
     { icon: Bed, label: "RD", hint: "Rest day" },
     { icon: Plane, label: "VL", hint: "Vacation leave" },

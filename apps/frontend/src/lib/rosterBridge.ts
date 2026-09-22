@@ -2,7 +2,7 @@
  * Phase 2 — bridge the Staff Roster → the operational Caregiver Schedule.
  *
  * Turns each WORKING caregiver cell in the roster into a caregiver_schedules
- * entry (caregiver → the residents they cover, per AM/PM/NOC shift) so the roster
+ * entry (caregiver → the residents they cover, per rostered shift) so the roster
  * becomes the single source that drives assigneeForResidentToday (task
  * materialiser) + the "only my residents during my shift" access lock.
  *
@@ -15,7 +15,7 @@
  * (with a reason) rather than dropped silently — the mapping is client data.
  */
 
-import { parseShiftCode, type StaffRoster } from "./caregiverRoster.ts";
+import { parseShiftCode, type CodeShift, type StaffRoster } from "./caregiverRoster.ts";
 import type { ShiftKey } from "./caregiverSchedule.ts";
 
 export const ROSTER_MAPPING_KEY = "roster_mappings";
@@ -29,8 +29,24 @@ export interface RosterMapping {
   stationResidents?: Record<string, string[]>;
 }
 
-/** Roster shift letter → the operational AM/PM/NOC shift. MID is supervisory. */
+/** Roster shift letter → the operational 8-hour shift. MID is supervisory. */
 export const SHIFT_MAP: Record<string, ShiftKey | null> = { AM: "AM", PM: "PM", NIGHT: "NOC", MID: null };
+
+/**
+ * A roster cell → the rosterable shift whose window it actually works.
+ *
+ * The roster codes already carry 8h vs 12h (`CG1A12`, `NODN12` — see
+ * {@link parseShiftCode}); before the 12-hour patterns existed this bridge dropped
+ * that and gave every cell an 8-hour window, so a 12-hour caregiver lost resident
+ * access half-way through their shift. Now: a `…12` cell on the AM side is Day 12h
+ * (7a–7p), and on the PM / Night side it is Night 12h (7p–7a) — the facility rosters
+ * no other 12-hour pattern. Plain codes keep their 8-hour AM / PM / Noc windows.
+ */
+export function rosterShiftKey(cell: { shift?: CodeShift; hours?: 8 | 12 }): ShiftKey | null {
+  if (!cell.shift || cell.shift === "MID") return null;
+  if (cell.hours === 12) return cell.shift === "AM" ? "D12" : "N12";
+  return SHIFT_MAP[cell.shift] ?? null;
+}
 
 export interface StaffRef { id: string; userId?: string; name: string }
 export interface ResidentRef { id: string; name: string; room: string }
@@ -118,7 +134,7 @@ export function bridgeRoster(roster: StaffRoster, ctx: {
       if (!raw) continue;
       const c = parseShiftCode(raw);
       if (c.kind !== "WORK") continue;
-      const shift = c.shift ? SHIFT_MAP[c.shift] : null;
+      const shift = rosterShiftKey(c);
       if (!shift) continue; // MID / supervisory — no resident coverage
 
       if (!staff) { unresolved.push({ date, staff: who, code: raw, reason: "No matching staff record (register the staff / map their code)" }); continue; }
@@ -192,7 +208,7 @@ export function rosterReadiness(roster: StaffRoster, ctx: {
       const raw = row.cells[date];
       if (!raw) continue;
       const c = parseShiftCode(raw);
-      if (c.kind !== "WORK" || !(c.shift && SHIFT_MAP[c.shift])) continue;
+      if (c.kind !== "WORK" || !rosterShiftKey(c)) continue;
       const r = resolveResidents(c);
       if (!r) continue;
       if ("gap" in r) {

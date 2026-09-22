@@ -30,6 +30,7 @@ import ResidentDailyPerformance from "./ResidentDailyPerformance";
 import CareTaskBoard from "./CareTaskBoard";
 import RoutineDefinitionCard, { blockReasonFor } from "./RoutineDefinitionCard";
 import { ClinicalButton, ClinicalCard, DataState, StatusPill, controlClass } from "./clinical-ui";
+import { shiftOwningHour } from "@/lib/caregiverSchedule";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (v: unknown) => (v == null ? "" : String(v));
@@ -43,13 +44,11 @@ const shiftLabel = (v: unknown): string => {
   if (t.startsWith("pm") || t.includes("afternoon")) return "Afternoon";
   return "Anytime";
 };
-// Shift owner (AM/PM/NOC) for a 24-hour HH:MM — Night 22:00–06:00 / Morning 06–14 / Afternoon 14–22.
+// Shift owner (AM/PM/NOC) for a 24-hour HH:MM — Morning 07–15 / Afternoon 15–23 /
+// Night 23:00–07:00, from the single source in caregiverSchedule.
 const ownerFromTime = (hhmm: string): string => {
   const h = Number(hhmm.split(":")[0]);
-  if (!Number.isFinite(h)) return "";
-  if (h >= 6 && h < 14) return "AM";
-  if (h >= 14 && h < 22) return "PM";
-  return "NOC";
+  return Number.isFinite(h) ? shiftOwningHour(h) : "";
 };
 const normHHMM = (raw: string): string | null => {
   const m = /^(\d{1,2}):(\d{2})$/.exec(raw.trim());
@@ -62,6 +61,15 @@ const schedTimeKey = (d: Row): string => {
   const sc = d.schedule;
   const obj = sc && typeof sc === "object" ? sc : (() => { try { return JSON.parse(s(sc) || "{}"); } catch { return {}; } })();
   return (Array.isArray(obj.times) && obj.times[0]) || obj.window || "99:99";
+};
+
+/** The shift group a definition belongs to, from its scheduled CLOCK time. Falls
+ *  back to the stored shiftOwner only when the row has no time (windowless/"Anytime")
+ *  — a stored label was written against the shift windows in force when the routine
+ *  was authored, and routine times never move when those windows change. */
+const ownerGroupOf = (d: Row): string => {
+  const t = schedTimeKey(d);
+  return t === "99:99" ? shiftLabel(d.shiftOwner) : shiftLabel(ownerFromTime(t));
 };
 
 const parseAssessments = (raw: string | null | undefined): AssessmentV42[] => {
@@ -97,7 +105,7 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
   const blockedCount = useMemo(() => reviewDefs.filter((d) => !!blockReasonFor(d)).length, [reviewDefs]);
   const groupedDefs = useMemo(() => {
     const groups = new Map<string, Row[]>();
-    for (const d of reviewDefs) { const g = shiftLabel(d.shiftOwner); (groups.get(g) ?? groups.set(g, []).get(g)!).push(d); }
+    for (const d of reviewDefs) { const g = ownerGroupOf(d); (groups.get(g) ?? groups.set(g, []).get(g)!).push(d); }
     for (const arr of groups.values()) arr.sort((a, b) => careDayRank(schedTimeKey(a)) - careDayRank(schedTimeKey(b)));
     return [...SHIFT_ORDER, "Anytime"].filter((k) => groups.has(k)).map((k) => [k, groups.get(k)!] as const);
   }, [reviewDefs]);
@@ -107,7 +115,7 @@ export default function RoutineGeneratorBoard({ residentId: residentIdProp, view
   const approvedDefs = useMemo(() => (defsQ.data || []).filter((d) => s(d.status) === "APPROVED"), [defsQ.data]);
   const groupedApproved = useMemo(() => {
     const groups = new Map<string, Row[]>();
-    for (const d of approvedDefs) { const g = shiftLabel(d.shiftOwner); (groups.get(g) ?? groups.set(g, []).get(g)!).push(d); }
+    for (const d of approvedDefs) { const g = ownerGroupOf(d); (groups.get(g) ?? groups.set(g, []).get(g)!).push(d); }
     for (const arr of groups.values()) arr.sort((a, b) => careDayRank(schedTimeKey(a)) - careDayRank(schedTimeKey(b)));
     return [...SHIFT_ORDER, "Anytime"].filter((k) => groups.has(k)).map((k) => [k, groups.get(k)!] as const);
   }, [approvedDefs]);

@@ -2,7 +2,7 @@
  * Caregiver scheduling — shared types + helpers.
  *
  * A schedule entry assigns ONE caregiver to a GROUP of residents for a single
- * date + shift (AM / PM / NOC). Stored migration-free as an app-setting JSON
+ * date + shift (AM / PM / Noc / Day 12h / Night 12h). Stored migration-free as an app-setting JSON
  * array under `caregiver_schedules` (see the Prisma-migration constraint).
  *
  * Phase 1 (this file + CaregiverScheduleBoard) only reads/writes the roster.
@@ -16,28 +16,89 @@ export const CAREGIVER_SCHEDULE_KEY = "caregiver_schedules";
  *  /api/db route filters those out) and written only by the dedicated endpoint. */
 export const CAREGIVER_BREAKGLASS_KEY = "__caregiver_breakglass";
 
-export type ShiftKey = "AM" | "PM" | "NOC";
+/** The three 8-hour shifts. They tile the day exactly, so exactly one of them owns
+ *  any given clock time — the type every "which shift is this?" answer returns. */
+export type OwnerShiftKey = "AM" | "PM" | "NOC";
 
-/** Assignable shifts. Windows mirror TaskAssignmentBoard: AM 6a–2p, PM 2p–10p,
- *  Noc 10p–6a (spills into the next calendar day). */
+/** Every rosterable shift: the 8-hour trio plus the two overlapping 12-hour patterns. */
+export type ShiftKey = OwnerShiftKey | "D12" | "N12";
+
+/**
+ * Assignable shifts — the facility's five rosterable patterns.
+ *
+ * Three 8-hour shifts that tile the day (AM 7a–3p · PM 3p–11p · Noc 11p–7a) plus
+ * two 12-hour patterns that overlap them (Day 7a–7p · Night 7p–7a), matching the
+ * `…12` roster codes {@link caregiverRoster} already parses. A window whose end
+ * hour is <= its start hour spills into the next calendar day (`nextDay`).
+ *
+ * Resident routine times are FIXED clinical times and never move — caregivers
+ * rotate around them. So coverage is decided purely by the clock: a caregiver owns
+ * the routine occurrences whose scheduled time falls inside their window, and
+ * nothing outside it. See {@link caregiversCoveringResidentAt}.
+ */
 export const SHIFTS: ReadonlyArray<{
-  key: ShiftKey; label: string; range: string; startH: number; endH: number; nextDay: boolean;
+  key: ShiftKey; label: string; range: string; startH: number; endH: number; nextDay: boolean; hours: 8 | 12;
 }> = [
-  { key: "AM",  label: "AM Shift",  range: "6:00 – 14:00",  startH: 6,  endH: 14, nextDay: false },
-  { key: "PM",  label: "PM Shift",  range: "14:00 – 22:00", startH: 14, endH: 22, nextDay: false },
-  { key: "NOC", label: "Noc Shift", range: "22:00 – 6:00",  startH: 22, endH: 6,  nextDay: true  },
+  { key: "AM",  label: "AM Shift",   range: "7:00 AM – 3:00 PM",  startH: 7,  endH: 15, nextDay: false, hours: 8  },
+  { key: "PM",  label: "PM Shift",   range: "3:00 PM – 11:00 PM", startH: 15, endH: 23, nextDay: false, hours: 8  },
+  { key: "NOC", label: "Noc Shift",  range: "11:00 PM – 7:00 AM", startH: 23, endH: 7,  nextDay: true,  hours: 8  },
+  { key: "D12", label: "Day 12h",    range: "7:00 AM – 7:00 PM",  startH: 7,  endH: 19, nextDay: false, hours: 12 },
+  { key: "N12", label: "Night 12h",  range: "7:00 PM – 7:00 AM",  startH: 19, endH: 7,  nextDay: true,  hours: 12 },
 ];
 
 export const shiftMeta = (shift: ShiftKey) => SHIFTS.find((s) => s.key === shift) ?? SHIFTS[0];
 
+/** The 8-hour trio, in clock order. These three tile the 24-hour day exactly, so
+ *  they — and not the overlapping 12-hour patterns — answer "which shift does this
+ *  clock time belong to". Used for grouping/labelling a time, never for coverage. */
+export const OWNER_SHIFTS: ReadonlyArray<OwnerShiftKey> = ["AM", "PM", "NOC"];
+
+/** Minutes-of-day a shift's window starts / ends (end may exceed 1440 when it wraps). */
+const windowMinutes = (shift: ShiftKey): { start: number; end: number } => {
+  const m = shiftMeta(shift);
+  return { start: m.startH * 60, end: m.endH * 60 + (m.nextDay ? 1440 : 0) };
+};
+
+/**
+ * True when a clock minute-of-day falls inside a shift's window (wrap-aware).
+ *
+ * Pure window math on the clock alone — no calendar date, no lead-in / grace. This
+ * is the "anong oras natapat sa shift" test used to decide which caregiver owns a
+ * fixed routine time; {@link isScheduleActiveAt} is the dated, graced variant that
+ * governs live data access.
+ */
+export function shiftCoversMinutes(shift: ShiftKey, minutes: number): boolean {
+  const { start, end } = windowMinutes(shift);
+  const t = ((minutes % 1440) + 1440) % 1440;
+  return (t >= start && t < end) || (end > 1440 && t < end - 1440);
+}
+
+/** True when two shifts' windows share any clock minute (AM and D12 both cover 8am). */
+export function shiftsOverlap(a: ShiftKey, b: ShiftKey): boolean {
+  const A = windowMinutes(a);
+  const B = windowMinutes(b);
+  // Compare on a 48-hour line, testing B and its next-day image against A.
+  return (A.start < B.end && B.start < A.end)
+    || (A.start < B.end + 1440 && B.start + 1440 < A.end)
+    || (A.start + 1440 < B.end && B.start < A.end + 1440);
+}
+
+/** The 8-hour shift a clock minute belongs to (AM 7–15 · PM 15–23 · else NOC). */
+export function shiftOwningMinutes(minutes: number): OwnerShiftKey {
+  return OWNER_SHIFTS.find((k) => shiftCoversMinutes(k, minutes)) ?? "NOC";
+}
+
+/** The 8-hour shift a clock hour belongs to. */
+export const shiftOwningHour = (hour: number): OwnerShiftKey => shiftOwningMinutes(hour * 60);
+
 /** Grace minutes the shift stays live PAST its end so a caregiver can finish late
- *  tasks and hand over. e.g. 60 → an AM (6–14) caregiver keeps their residents
- *  until 15:00. Extends only the end; the start is unchanged. */
+ *  tasks and hand over. e.g. 60 → an AM (7–15) caregiver keeps their residents
+ *  until 16:00. Extends only the end; the start is unchanged. */
 export const SHIFT_GRACE_MINUTES = 60;
 
 /** Lead-in minutes the shift goes live BEFORE its start so a caregiver who clocks
- *  in early sees their assignment and routine. e.g. 15 → a PM (14–22) caregiver
- *  reaches their residents from 13:45. Extends only the start; the end is unchanged. */
+ *  in early sees their assignment and routine. e.g. 15 → a PM (15–23) caregiver
+ *  reaches their residents from 14:45. Extends only the start; the end is unchanged. */
 export const SHIFT_LEAD_MINUTES = 15;
 
 export interface CaregiverSchedule {
@@ -133,7 +194,7 @@ export function shiftWindow(date: string, shift: ShiftKey, timeZone?: string): {
  * and its metric drill-downs cannot drift apart.
  */
 export function resolveShift(at: Date = new Date(), timeZone?: string): {
-  key: ShiftKey; date: string; start: Date; end: Date;
+  key: OwnerShiftKey; date: string; start: Date; end: Date;
 } {
   const key = currentShiftKey(at, timeZone);
   const day = localDateStr(at, timeZone);
@@ -155,7 +216,7 @@ export function schedulesForShift(
  *
  * Access is shift-scoped: a caregiver reaches their assigned residents only
  * while the rostered shift is live. The moment the shift ends the residents drop
- * off (an AM caregiver loses them at 14:00) and reappear only when the nurse /
+ * off (an AM caregiver loses them at 15:00) and reappear only when the nurse /
  * care manager rosters them a shift whose window is currently active. Off every
  * rostered window → they see nothing until rescheduled.
  *
@@ -170,13 +231,13 @@ export function isScheduleActiveAt(s: CaregiverSchedule, at: Date, timeZone?: st
   const endMin = m.endH * 60 + SHIFT_GRACE_MINUTES;    // grace extends the shift end
   const DAY = 24 * 60;
   if (!m.nextDay) {
-    // AM (06–14) / PM (14–22): same calendar day. Grace may push the end past
+    // AM (07–15) / PM (15–23) / Day 12h (07–19): same calendar day. Grace may push the end past
     // midnight, spilling the overflow into the next calendar day's early hours.
     if (s.date === day && nowMin >= startMin && nowMin < Math.min(endMin, DAY)) return true;
     return endMin > DAY && day === addDays(s.date, 1) && nowMin < endMin - DAY;
   }
-  // NOC (22–06 +grace) spans midnight: the 22:00–23:59 part belongs to s.date;
-  // the 00:00–(06:00+grace) part belongs to the day AFTER s.date.
+  // Noc (23–07 +grace) and Night 12h (19–07) span midnight: the pre-midnight part
+  // belongs to s.date; the 00:00–(07:00+grace) part belongs to the day AFTER s.date.
   if (s.date === day && nowMin >= startMin) return true;
   return day === addDays(s.date, 1) && nowMin < endMin;
 }
@@ -213,14 +274,12 @@ export function activeCaregiverUserIdsForResident(residentId: string, schedules:
   return [...ids];
 }
 
-/** The AM/PM/NOC shift `at` falls in (AM 06–14, PM 14–22, else NOC), rolled
- *  forward by {@link SHIFT_LEAD_MINUTES} so the last minutes before a shift start
- *  already report the incoming shift (13:50 → PM). */
-export function currentShiftKey(at: Date = new Date(), timeZone?: string): ShiftKey {
-  const min = (localMinutesOfDay(at, timeZone) + SHIFT_LEAD_MINUTES) % (24 * 60);
-  if (min >= 6 * 60 && min < 14 * 60) return "AM";
-  if (min >= 14 * 60 && min < 22 * 60) return "PM";
-  return "NOC";
+/** The 8-hour shift `at` falls in (AM 07–15, PM 15–23, else Noc), rolled forward by
+ *  {@link SHIFT_LEAD_MINUTES} so the last minutes before a shift start already report
+ *  the incoming shift (14:50 → PM). Always one of the three tiling shifts — the
+ *  12-hour patterns overlap, so they can never name "the" current shift. */
+export function currentShiftKey(at: Date = new Date(), timeZone?: string): OwnerShiftKey {
+  return shiftOwningMinutes(localMinutesOfDay(at, timeZone) + SHIFT_LEAD_MINUTES);
 }
 
 /** Caregivers scheduled to a resident on the local day of `at` (any shift). */
@@ -249,18 +308,97 @@ export function assigneeForResidentToday(
   return { caregiverStaffId: pick.caregiverStaffId, caregiverName: pick.caregiverName };
 }
 
+export interface ShiftCover {
+  caregiverStaffId: string;
+  caregiverUserId?: string;
+  caregiverName?: string;
+  shift: ShiftKey;
+}
+
+/**
+ * Caregivers whose rostered window covers a FIXED clock time on the care day of `at`.
+ *
+ * This is the routing authority for resident routine: a resident's routine times are
+ * clinical and immovable, so the caregiver is whoever happens to be on shift at that
+ * hour — "kung anong oras ang natapat sa shift ng caregiver, yun lang ang sa kanya".
+ * Care outside every rostered window has no owner and routes unassigned.
+ *
+ * Wrap-aware in BOTH directions, which key-matching could never be:
+ *   • a 03:00 occurrence belongs to the Noc caregiver who started 23:00 YESTERDAY,
+ *     so roster rows dated the previous day are considered for their post-midnight tail;
+ *   • a 12-hour Day caregiver (07–19) covers occurrences an 8-hour AM caregiver
+ *     (07–15) would miss, without anything being re-keyed.
+ *
+ * Ordered tightest-window-first, so when both an 8-hour and an overlapping 12-hour
+ * caregiver are rostered the more specific 8-hour assignment wins deterministically.
+ */
+export function caregiversCoveringResidentAt(
+  schedules: CaregiverSchedule[], residentId: string, minutesOfDay: number,
+  at: Date = new Date(), timeZone?: string,
+): ShiftCover[] {
+  const day = localDateStr(at, timeZone);
+  const prev = addDays(day, -1);
+  const t = ((minutesOfDay % 1440) + 1440) % 1440;
+  const out: ShiftCover[] = [];
+  for (const s of schedules) {
+    if (!s.caregiverStaffId || !s.residentIds.includes(residentId)) continue;
+    const m = shiftMeta(s.shift);
+    const startMin = m.startH * 60;
+    const endMin = m.endH * 60;
+    const covers = s.date === day
+      // Own day: up to midnight for a wrapping shift, else the plain window.
+      ? (m.nextDay ? t >= startMin : t >= startMin && t < endMin)
+      // Yesterday's wrapping shift still owns this morning's pre-end hours.
+      : s.date === prev && m.nextDay && t < endMin;
+    if (covers) {
+      out.push({
+        caregiverStaffId: s.caregiverStaffId, caregiverUserId: s.caregiverUserId,
+        caregiverName: s.caregiverName, shift: s.shift,
+      });
+    }
+  }
+  return out.sort((a, b) => shiftMeta(a.shift).hours - shiftMeta(b.shift).hours);
+}
+
+/**
+ * The caregiver who owns a resident's care at a fixed clock hour, or null when no
+ * rostered window covers that hour (the card is created unassigned and a manager
+ * hands it off from the Board View pool).
+ */
+export function assigneeForResidentAtHour(
+  schedules: CaregiverSchedule[], residentId: string, hour: number, at: Date = new Date(), timeZone?: string,
+): { caregiverStaffId: string; caregiverName?: string } | null {
+  const pick = caregiversCoveringResidentAt(schedules, residentId, hour * 60, at, timeZone)[0];
+  return pick ? { caregiverStaffId: pick.caregiverStaffId, caregiverName: pick.caregiverName } : null;
+}
+
+/** The caregiver on duty for a resident at a given INSTANT, evaluated in the
+ *  facility's zone. Convenience wrapper for callers holding a timestamp (e.g. a
+ *  task's dueDate) rather than an hour. */
+export function assigneeForResidentAt(
+  schedules: CaregiverSchedule[], residentId: string, at: Date, timeZone?: string,
+): { caregiverStaffId: string; caregiverName?: string } | null {
+  const pick = caregiversCoveringResidentAt(schedules, residentId, localMinutesOfDay(at, timeZone), at, timeZone)[0];
+  return pick ? { caregiverStaffId: pick.caregiverStaffId, caregiverName: pick.caregiverName } : null;
+}
+
 /**
  * The caregiver rostered for a resident on a SPECIFIC shift today, or null when
- * that shift has no coverage. Unlike {@link assigneeForResidentToday} (which
- * collapses the day to one caregiver), this routes each frequency occurrence to
- * the caregiver actually on duty for that occurrence's shift — so a twice-daily
- * task lands on the AM caregiver and the PM caregiver separately.
+ * that shift has no coverage.
+ *
+ * Matched by CLOCK COVERAGE, not by key equality: an occurrence tagged "AM" is
+ * owned by any caregiver whose window spans the AM hours — including a 12-hour Day
+ * caregiver. Prefer {@link assigneeForResidentAtHour} when the caller knows the
+ * occurrence's real hour; this overload exists for callers that only hold a shift tag.
  */
 export function assigneeForResidentShift(
   schedules: CaregiverSchedule[], residentId: string, shift: ShiftKey, at: Date = new Date(), timeZone?: string,
 ): { caregiverStaffId: string; caregiverName?: string } | null {
-  const pick = caregiversForResidentToday(schedules, residentId, at, timeZone).find((c) => c.shift === shift);
-  return pick ? { caregiverStaffId: pick.caregiverStaffId, caregiverName: pick.caregiverName } : null;
+  // Probe half an hour into the requested window: interior to it, and — for a
+  // wrapping shift — still on the roster row's OWN calendar date. (Probing the
+  // middle of a Noc window would land at 03:00, which belongs to the PREVIOUS
+  // day's roster row, and resolve the wrong caregiver.)
+  return assigneeForResidentAtHour(schedules, residentId, shiftMeta(shift).startH + 0.5, at, timeZone);
 }
 
 // ── Break-glass (emergency off-assignment access) ─────────────────────────────
@@ -304,14 +442,16 @@ export function endOfDay(at: Date): Date {
   return d;
 }
 
-/** End of the shift window `at` falls in (kept for reference / shift math). */
+/** End of the 8-hour shift window `at` falls in (kept for reference / shift math). */
 export function currentShiftEnd(at: Date): Date {
-  const h = at.getHours();
+  const key = shiftOwningMinutes(at.getHours() * 60 + at.getMinutes());
+  const m = shiftMeta(key);
   const d = new Date(at);
-  if (h >= 6 && h < 14) { d.setHours(14, 0, 0, 0); return d; }   // AM → 14:00
-  if (h >= 14 && h < 22) { d.setHours(22, 0, 0, 0); return d; }  // PM → 22:00
-  if (h >= 22) { d.setDate(d.getDate() + 1); d.setHours(6, 0, 0, 0); return d; } // Noc → next 06:00
-  d.setHours(6, 0, 0, 0); return d;                              // 0–5 → Noc end 06:00
+  // Noc (23–07) ends tomorrow when entered before midnight; from 00:00–06:59 its
+  // 07:00 end is still today.
+  if (m.nextDay && at.getHours() >= m.startH) d.setDate(d.getDate() + 1);
+  d.setHours(m.endH, 0, 0, 0);
+  return d;
 }
 
 // ── Local date helpers (calendar grid) ────────────────────────────────────────

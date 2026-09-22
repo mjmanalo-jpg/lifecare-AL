@@ -26,7 +26,7 @@ import { pushGlobalToast } from "@/components/ui/global-toast";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 
 import { careDay } from "@/lib/lifecare/routineCompletions";
-import { parseSchedules, CAREGIVER_SCHEDULE_KEY, type ShiftKey as RosterShift } from "@/lib/caregiverSchedule";
+import { parseSchedules, CAREGIVER_SCHEDULE_KEY, shiftMeta, shiftOwningHour, type ShiftKey as RosterShift } from "@/lib/caregiverSchedule";
 import { to12h } from "@/lib/lifecare/careTask";
 import { ASSISTANCE_DISPLAY, type Assistance } from "@/lib/lifecare/assistance";
 import { assistedByLabel, canChartOccurrence } from "@/lib/lifecare/chartingAuthority";
@@ -70,19 +70,22 @@ interface OccurrenceRow {
 }
 
 
-/** scheduledTime "HH:MM" → shift group. Night 22:00-05:59, Morning 06:00-13:59, Afternoon 14:00-21:59. */
+/** scheduledTime "HH:MM" → shift group. Night 23:00-06:59, Morning 07:00-14:59, Afternoon 15:00-22:59. */
 type ShiftKey = "Night" | "Morning" | "Afternoon";
 const SHIFT_ORDER: ShiftKey[] = ["Night", "Morning", "Afternoon"];
+const OWNER_TO_ROUTINE: Record<string, ShiftKey> = { AM: "Morning", PM: "Afternoon", NOC: "Night" };
 function shiftOf(hhmm: string): ShiftKey {
   const h = Number(/(\d{1,2}):/.exec(hhmm || "")?.[1] ?? 0);
-  if (h >= 6 && h < 14) return "Morning";
-  if (h >= 14 && h < 22) return "Afternoon";
-  return "Night";
+  return OWNER_TO_ROUTINE[shiftOwningHour(h)] ?? "Night";
 }
 
-/** Roster shift (AM/PM/NOC) → routine shift group. AM covers the Morning window,
- *  PM the Afternoon window, NOC the Night window (see SHIFTS in caregiverSchedule). */
-const ROSTER_TO_ROUTINE: Record<RosterShift, ShiftKey> = { AM: "Morning", PM: "Afternoon", NOC: "Night" };
+/** Roster shift → the routine shift groups it covers. The 8-hour shifts map 1:1;
+ *  the 12-hour patterns span two groups (Day 7a–7p covers Morning + Afternoon,
+ *  Night 7p–7a covers Afternoon + Night). See SHIFTS in caregiverSchedule. */
+const ROSTER_TO_ROUTINE: Record<RosterShift, ShiftKey[]> = {
+  AM: ["Morning"], PM: ["Afternoon"], NOC: ["Night"],
+  D12: ["Morning", "Afternoon"], N12: ["Afternoon", "Night"],
+};
 
 /** Care date (YYYY-MM-DD, Asia/Manila) from a RoutineOccurrence.careDate (stored as
  * the care day's Manila midnight, i.e. an instant at +08:00). Must resolve in Manila
@@ -244,22 +247,24 @@ export default function TodaysCareBoard({ role, focusResidentId, embedded }: { r
     if (!isCaregiverView) return null;
     const set = new Set<ShiftKey>();
     if (!sessionUserId || !selectedId) return set;
+    // Yesterday's wrapping shifts (Noc 11p–7a, Night 12h 7p–7a) are still on duty
+    // through this morning, so their rows count toward today's coverage too.
+    const yesterday = manilaDay(new Date(new Date(`${today}T00:00:00+08:00`).getTime() - 864e5));
     for (const s of schedules) {
-      if (s.caregiverUserId === sessionUserId && s.date === today && s.residentIds.includes(selectedId)) {
-        set.add(ROSTER_TO_ROUTINE[s.shift]);
-      }
+      if (s.caregiverUserId !== sessionUserId || !s.residentIds.includes(selectedId)) continue;
+      const onToday = s.date === today;
+      const wrappedFromYesterday = s.date === yesterday && shiftMeta(s.shift).nextDay;
+      if (!onToday && !wrappedFromYesterday) continue;
+      ROSTER_TO_ROUTINE[s.shift]?.forEach((g) => set.add(g));
     }
     return set;
   }, [isCaregiverView, sessionUserId, selectedId, schedules, today]);
 
-  // The shift live RIGHT NOW by Manila clock (Morning 06–14, Afternoon 14–22, else Night).
-  const currentShift: ShiftKey = (() => {
-    const h = Math.floor(nowMin / 60);
-    return h >= 6 && h < 14 ? "Morning" : h >= 14 && h < 22 ? "Afternoon" : "Night";
-  })();
+  // The shift live RIGHT NOW by Manila clock (Morning 07–15, Afternoon 15–23, else Night).
+  const currentShift: ShiftKey = OWNER_TO_ROUTINE[shiftOwningHour(Math.floor(nowMin / 60))] ?? "Night";
   // A caregiver sees a shift's tasks only while it is the CURRENT shift AND they are
   // rostered to it for this resident. So a past shift drops off the moment it ends
-  // (AM tasks gone after 14:00) and a shift they aren't rostered to never appears.
+  // (AM tasks gone after 15:00) and a shift they aren't rostered to never appears.
   const activeShift: ShiftKey | null = rosterShifts && rosterShifts.has(currentShift) ? currentShift : null;
   const viewRows = useMemo(
     () => (rosterShifts ? (activeShift ? selectedRows.filter((r) => shiftOf(r.scheduledTime) === activeShift) : []) : selectedRows),

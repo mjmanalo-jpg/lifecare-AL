@@ -10,7 +10,7 @@ import {
   type CareOutcome, type ExceptionReason, type ClinicalFinding, type LegacyOutcome,
 } from "@/lib/lifecare/vocab";
 import { applyOccurrenceState, escalationStateFromStatus, type OccurrenceState } from "@/lib/lifecare/occurrenceLifecycle";
-import { isChartable, manilaMinutesNow, toMin } from "@/lib/lifecare/occurrenceStatus";
+import { isChartable, manilaMinutesNow, shiftOfTime, toMin } from "@/lib/lifecare/occurrenceStatus";
 import { assistedByLabel, canChartOccurrence } from "@/lib/lifecare/chartingAuthority";
 import { validateResult } from "@/lib/lifecare/resultSchema";
 import { clearEntityAlerts } from "@/lib/alertResolve";
@@ -302,7 +302,12 @@ export async function POST(request: NextRequest) {
         linkedDecisionTree: c.linkedDecisionTree,
         escalationAction: c.escalationAction,
         reviewAlertRaised,
-        shift: str(body.shift) || def.shiftOwner || undefined,
+        // The shift that actually delivered this care, derived from the occurrence's
+        // scheduled CLOCK time. The definition's stored shiftOwner was written against
+        // whatever windows were in force when the routine was authored, so trusting it
+        // mis-attributes care whenever the facility's shift times change — the routine
+        // time is fixed, the covering shift is whatever the clock says it is.
+        shift: str(body.shift) || (occ.scheduledTime ? shiftOfTime(occ.scheduledTime) : def.shiftOwner) || undefined,
         actorId: ctx.userId, actorName,
         // Care time, not sync time — keeps the clinical timeline (and the 30-day
         // variance lookback above) honest for work charted offline.

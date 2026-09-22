@@ -35,7 +35,8 @@ test("a single-occurrence Daily task is owned by the AM caregiver, due end of AM
   const occ = occurrencesFor("Daily");
   assert.equal(occ.length, 1);
   assert.equal(occ[0].shift, "AM");
-  assert.equal(occ[0].hour, 14); // AM shift end
+  assert.equal(occ[0].hour, 15);      // due at the AM shift end (07:00–15:00)
+  assert.equal(occ[0].routeHour, 14); // …but routed inside AM, not to the incoming PM caregiver
   assert.equal(assigneeForResidentShift(roster, RID, occ[0].shift, at, "Asia/Manila")?.caregiverStaffId, "cg1");
 });
 

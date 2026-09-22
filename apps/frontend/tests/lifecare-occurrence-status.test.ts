@@ -6,7 +6,7 @@ import { deriveState, isChartable, isLate, isMissed, countProgress, manilaDay, s
 
 const at = "08:00"; // 480 min
 const S = 480;
-const AM_END = 14 * 60;
+const AM_END = 15 * 60; // AM shift is 07:00–15:00
 const nurse = { scheduledTime: at, responsibleRole: "Nurse" };
 
 test("deriveState: a caregiver row stays Due for the REST OF ITS SHIFT", () => {
@@ -27,11 +27,11 @@ test("deriveState: nurse-owned (medication/vitals) keeps the tight 30-min window
 
 // chartingDeadlineMin = the LAST minute that still counts as on time.
 test("chartingDeadlineMin: end of the owning shift, never less than the 30-min grace", () => {
-  assert.equal(chartingDeadlineMin({ scheduledTime: "08:00" }), AM_END - 1);      // AM → through 13:59
-  assert.equal(chartingDeadlineMin({ scheduledTime: "15:00" }), 22 * 60 - 1);     // PM → through 21:59
-  assert.equal(chartingDeadlineMin({ scheduledTime: "00:30" }), 6 * 60 - 1);      // NOC tail → through 05:59
+  assert.equal(chartingDeadlineMin({ scheduledTime: "08:00" }), AM_END - 1);      // AM → through 14:59
+  assert.equal(chartingDeadlineMin({ scheduledTime: "16:00" }), 23 * 60 - 1);     // PM → through 22:59
+  assert.equal(chartingDeadlineMin({ scheduledTime: "00:30" }), 7 * 60 - 1);      // NOC tail → through 06:59
   assert.equal(chartingDeadlineMin({ scheduledTime: "23:00" }), 1439);            // NOC head → end of care day
-  assert.equal(chartingDeadlineMin({ scheduledTime: "13:50" }), 13 * 60 + 50 + OCCURRENCE_GRACE_MIN,
+  assert.equal(chartingDeadlineMin({ scheduledTime: "14:50" }), 14 * 60 + 50 + OCCURRENCE_GRACE_MIN,
     "a task scheduled minutes before the shift ends still gets the 30-min floor");
   assert.equal(chartingDeadlineMin(nurse), S + OCCURRENCE_GRACE_MIN);
 });
@@ -77,10 +77,10 @@ test("isMissed: today only counts as missed once the charting window has closed"
   assert.equal(isMissed({ scheduledTime: at }, S - 120, 0), false, "not yet due");
 });
 
-test("shiftOfTime: spec shift rules (AM 06-14 / PM 14-22 / NOC 22-06)", () => {
-  assert.deepEqual(["05:59", "06:00", "13:59"].map(shiftOfTime), ["NOC", "AM", "AM"]);
-  assert.deepEqual(["14:00", "21:59"].map(shiftOfTime), ["PM", "PM"]);
-  assert.deepEqual(["22:00", "00:00", "03:30"].map(shiftOfTime), ["NOC", "NOC", "NOC"]);
+test("shiftOfTime: spec shift rules (AM 07-15 / PM 15-23 / NOC 23-07)", () => {
+  assert.deepEqual(["06:59", "07:00", "14:59"].map(shiftOfTime), ["NOC", "AM", "AM"]);
+  assert.deepEqual(["15:00", "22:59"].map(shiftOfTime), ["PM", "PM"]);
+  assert.deepEqual(["23:00", "00:00", "03:30"].map(shiftOfTime), ["NOC", "NOC", "NOC"]);
 });
 
 test("countProgress: exceptions never raise completed; Cancelled excluded from total", () => {

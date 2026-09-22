@@ -21,13 +21,29 @@ const residents = [
   { id: "r202", name: "Ben Santos", room: "202" },
 ];
 
-test("a private (PCG) cell maps the caregiver to the resident by room, on the AM shift", () => {
+test("a private (PCG) cell maps the caregiver to the resident by room, on its rostered shift", () => {
   const { assignments } = bridgeRoster(roster, { staff, residents });
   const a = assignments.find((x) => x.date === "2026-08-11")!;
   assert.equal(a.caregiverStaffId, "s1");
-  assert.equal(a.shift, "AM");
+  // PCG107A12 is a TWELVE-hour cell on the A side, so it gets the Day 12h window
+  // (7a–7p). The bridge used to flatten `…12` to the 8-hour AM shift, which cut a
+  // 12-hour caregiver's resident access off at 3pm, mid-shift.
+  assert.equal(a.shift, "D12");
   assert.deepEqual(a.residentIds, ["r107"]);
   assert.equal(a.private, true);
+});
+
+test("8-hour cells keep their 8-hour windows; 12-hour cells get the 12-hour patterns", () => {
+  const grid = parseRosterGrid([
+    "CODE\tNAME\tSTATUS\t11\t12\t13\t14",
+    "CG1\tJULIAN, MAY ANN\tREG\tPCG107A\tPCG107P\tPCG107N\tPCG107N12",
+  ].join("\n"), { periodStartISO: "2026-08-11" });
+  const { assignments } = bridgeRoster(grid, { staff, residents });
+  const shiftOn = (date: string) => assignments.find((x) => x.date === date)?.shift;
+  assert.equal(shiftOn("2026-08-11"), "AM");   // A   → 7a–3p
+  assert.equal(shiftOn("2026-08-12"), "PM");   // P   → 3p–11p
+  assert.equal(shiftOn("2026-08-13"), "NOC");  // N   → 11p–7a
+  assert.equal(shiftOn("2026-08-14"), "N12");  // N12 → 7p–7a
 });
 
 test("a shared (CG station) cell uses the station→residents mapping, Night→NOC", () => {

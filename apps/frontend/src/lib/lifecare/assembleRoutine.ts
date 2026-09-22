@@ -129,7 +129,7 @@ function scheduleFromText(method: HFMethod, timeText: string): DaySchedule {
   const times = (timeText.match(/\d{1,2}:\d{2}/g) ?? []);
   switch (method) {
     case "exact_time":
-      if (/shift change|each shift/i.test(timeText)) return { times: ["06:00", "14:00", "22:00"] };
+      if (/shift change|each shift/i.test(timeText)) return { times: ["07:00", "15:00", "23:00"] };
       return { times: times.length ? times : [] };
     case "defined_window":
       return { window: /\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}/.test(timeText) ? timeText.replace(/\s/g, "") : undefined };

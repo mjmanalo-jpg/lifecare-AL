@@ -24,8 +24,8 @@ test("the active shift is resolved in the facility zone, not the server's", () =
 
 test("the shift window is a true instant range, not a server-local wall clock", () => {
   const { start, end } = shiftWindow("2026-09-12", "AM", TZ);
-  assert.equal(start.toISOString(), "2026-09-11T22:00:00.000Z"); // 06:00 Manila
-  assert.equal(end.toISOString(), "2026-09-12T06:00:00.000Z"); // 14:00 Manila
+  assert.equal(start.toISOString(), "2026-09-11T23:00:00.000Z"); // 07:00 Manila
+  assert.equal(end.toISOString(), "2026-09-12T07:00:00.000Z"); // 15:00 Manila
 });
 
 test("a NOC shift after midnight still belongs to the day it started", () => {
@@ -33,7 +33,7 @@ test("a NOC shift after midnight still belongs to the day it started", () => {
   const shift = resolveShift(new Date("2026-09-11T16:30:00Z"), TZ);
   assert.equal(shift.key, "NOC");
   assert.equal(shift.date, "2026-09-11");
-  assert.equal(shift.end.toISOString(), "2026-09-11T22:00:00.000Z"); // 06:00 Manila, 12 Sep
+  assert.equal(shift.end.toISOString(), "2026-09-11T23:00:00.000Z"); // 07:00 Manila, 12 Sep
 });
 
 test("a resident on the published AM roster is covered, so no coverage gap is raised", () => {

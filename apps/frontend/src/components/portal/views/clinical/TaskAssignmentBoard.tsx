@@ -7,7 +7,7 @@ import { useLiveQuery } from "@/lib/useLiveQuery";
 import { adaptResident, adaptTask } from "@/lib/adapters";
 import { createRecord, updateRecord } from "@/lib/api";
 import { TASK_NOTES_FIELD } from "@/lib/taskNotes";
-import { CAREGIVER_SCHEDULE_KEY, parseSchedules, type CaregiverSchedule } from "@/lib/caregiverSchedule";
+import { CAREGIVER_SCHEDULE_KEY, SHIFTS, parseSchedules, type CaregiverSchedule } from "@/lib/caregiverSchedule";
 import { careLevelEnumToLevel, domainCodeFromLabel, domainInPackage, DOMAIN_LABEL, recordOutOfPackageService } from "@/lib/lifecare/carePackage";
 import type { ClinicianRole } from "./useClinician";
 
@@ -39,13 +39,12 @@ const shiftOf = (iso: string | Date | null | undefined): Shift | null => {
   const h = d.getHours();
   return h >= 7 && h < 15 ? "DAY" : h >= 15 && h < 23 ? "EVENING" : "NIGHT";
 };
-/** Assignable shifts (AM 6a–2p, PM 2p–10p, Noc 10p–6a). A task assigned to a shift
- *  is due by that shift's END on the chosen date and is overdue after it. */
-const ASSIGN_SHIFTS = [
-  { key: "AM", label: "AM Shift", range: "6am–2pm", endH: 14, nextDay: false },
-  { key: "PM", label: "PM Shift", range: "2pm–10pm", endH: 22, nextDay: false },
-  { key: "NOC", label: "Noc Shift", range: "10pm–6am", endH: 6, nextDay: true },
-] as const;
+/** Assignable shifts — the facility roster's five patterns, from the single source
+ *  in caregiverSchedule. A task assigned to a shift is due by that shift's END on
+ *  the chosen date and is overdue after it. */
+const ASSIGN_SHIFTS = SHIFTS.map((s) => ({
+  key: s.key, label: s.label, range: s.range, endH: s.endH, nextDay: s.nextDay,
+}));
 // Local deadline datetime (ISO) for a shift on a YYYY-MM-DD date — the shift's end.
 const shiftDeadlineISO = (date: string, shiftKey: string): string => {
   const meta = ASSIGN_SHIFTS.find((s) => s.key === shiftKey) ?? ASSIGN_SHIFTS[0];

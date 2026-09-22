@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
-import { CAREGIVER_SCHEDULE_KEY, parseSchedules, assigneeForResidentShift, caregiversForResidentToday } from "@/lib/caregiverSchedule";
-import { occurrencesFor } from "@/lib/carePlanTaskRouting";
+import { CAREGIVER_SCHEDULE_KEY, parseSchedules, assigneeForResidentAtHour, caregiversForResidentToday } from "@/lib/caregiverSchedule";
+import { occurrencesFor, routeHourOf } from "@/lib/carePlanTaskRouting";
 import { generateRoutine, domainInputsFromItems } from "@/lib/lifecare/carePlanRoutine";
 
 export const runtime = "nodejs";
@@ -96,7 +96,8 @@ async function materializeCommunity(communityId: string, organizationId: string 
         const key = `${plan.id}|${title}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        const shiftAssignee = assigneeForResidentShift(schedules, plan.residentId, ev.shift, now, TZ);
+        // Routine times are fixed; the owner is whoever is rostered at that hour.
+        const shiftAssignee = assigneeForResidentAtHour(schedules, plan.residentId, ev.startHour, now, TZ);
         try {
           await prisma.task.create({
             data: {
@@ -129,7 +130,7 @@ async function materializeCommunity(communityId: string, organizationId: string 
         const key = `${plan.id}|${title}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        const shiftAssignee = assigneeForResidentShift(schedules, plan.residentId, occ.shift, now, TZ);
+        const shiftAssignee = assigneeForResidentAtHour(schedules, plan.residentId, routeHourOf(occ), now, TZ);
         try {
           await prisma.task.create({
             data: {

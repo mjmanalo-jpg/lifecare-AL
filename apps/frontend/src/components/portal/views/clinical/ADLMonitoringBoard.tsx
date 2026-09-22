@@ -24,13 +24,14 @@ import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { PREADMISSION_KEY, parseAssessments, continenceScore, type AdlItem } from "@/lib/preadmissionAssessment";
 import { ClinicalPage, ClinicalHeader, ClinicalButton, ClinicalModal, FieldLabel, SearchInput, controlClass } from "./clinical-ui";
+import { shiftOwningHour, type OwnerShiftKey } from "@/lib/caregiverSchedule";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const ADL_KEY = "adl_logs";
 const s = (v: unknown) => (v == null ? "" : String(v));
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
 const today = () => new Date().toISOString().split("T")[0];
-const shiftNow = () => { const h = new Date().getHours(); return h >= 6 && h < 14 ? "AM" : h >= 14 && h < 22 ? "PM" : "NOC"; };
+const shiftNow = () => shiftOwningHour(new Date().getHours());
 
 const DOMAINS: { key: string; label: string; icon: LucideIcon; adl: AdlItem | null }[] = [
   { key: "bathing", label: "Bathing", icon: Bath, adl: "bathing" as AdlItem | null },
@@ -46,7 +47,9 @@ const DOMAINS: { key: string; label: string; icon: LucideIcon; adl: AdlItem | nu
 ];
 type DomainKey = (typeof DOMAINS)[number]["key"];
 
-const SHIFTS = [{ v: "AM", label: "AM Shift (6am–2pm)" }, { v: "PM", label: "PM Shift (2pm–10pm)" }, { v: "NOC", label: "Noc Shift (10pm–6am)" }];
+const SHIFTS: { v: OwnerShiftKey; label: string }[] = [
+  { v: "AM", label: "AM Shift (7am–3pm)" }, { v: "PM", label: "PM Shift (3pm–11pm)" }, { v: "NOC", label: "Noc Shift (11pm–7am)" },
+];
 const ASSIST = ["Independent", "Supervision/Cueing", "One-Person Assist", "Two-Person Assist", "Full Assist", "Refused"];
 
 // Change-from-baseline → the clinical-editorial accent (green=improved, teal=steady,
@@ -194,7 +197,7 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE", focusResid
                   <Clock className="h-4 w-4 text-[var(--clinical-amber)]" />
                   <span className="hidden md:inline">{SHIFTS.find((item) => item.v === shift)?.label}</span>
                   <span className="md:hidden">{shift} Shift</span>
-                  <select value={shift} onChange={(e) => setShift(e.target.value)} aria-label="ADL shift" className="absolute inset-0 cursor-pointer opacity-0">
+                  <select value={shift} onChange={(e) => setShift(e.target.value as OwnerShiftKey)} aria-label="ADL shift" className="absolute inset-0 cursor-pointer opacity-0">
                     {SHIFTS.map((item) => <option key={item.v} value={item.v}>{item.label}</option>)}
                   </select>
                 </label>
@@ -343,7 +346,7 @@ export default function ADLMonitoringBoard({ clinicianRole = "NURSE", focusResid
           <input id="adl-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className={controlClass} />
         </div>
         <div><FieldLabel htmlFor="adl-shift">Shift</FieldLabel>
-          <select id="adl-shift" value={shift} onChange={(e) => setShift(e.target.value)} className={controlClass}>
+          <select id="adl-shift" value={shift} onChange={(e) => setShift(e.target.value as OwnerShiftKey)} className={controlClass}>
             {SHIFTS.map((sh) => <option key={sh.v} value={sh.v}>{sh.label}</option>)}
           </select>
         </div>

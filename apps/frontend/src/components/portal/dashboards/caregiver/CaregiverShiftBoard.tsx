@@ -23,6 +23,7 @@ import { firstCareWindowForShift, type RoutineShift } from "@/lib/lifecare/careP
 import ADLMonitoringBoard from "@/components/portal/views/clinical/ADLMonitoringBoard";
 import ShiftEndorsementBoard from "@/components/portal/views/clinical/ShiftEndorsementBoard";
 import type { DashboardPayload, DashboardQueueItem, DashboardSection } from "@/lib/dashboard/types";
+import { shiftCoversMinutes, shiftOwningMinutes } from "@/lib/caregiverSchedule";
 
 // Quick record → deep-links to Daily Care Logs with the domain preselected
 // (?focus=<AS-code>; see CareLogsBoard focusToDomain). Nutrition + Hydration both
@@ -81,14 +82,14 @@ type ResidentCard = {
 
 const STATUS_RANK: Record<ResidentCard["status"], number> = { overdue: 0, due: 1, uptodate: 2 };
 
-// Current shift window by Manila hour (Night 22-06 / Morning 06-14 / Afternoon 14-22).
-// Returns a predicate over a "HH:MM" scheduledTime — Night wraps midnight.
+// Current shift window by Manila hour (Morning 07-15 / Afternoon 15-23 / Night 23-07),
+// from the shared SHIFTS source. Returns a predicate over a "HH:MM" scheduledTime —
+// the Night window wraps midnight, which shiftCoversMinutes handles.
+const SHIFT_LABEL: Record<string, string> = { AM: "Morning", PM: "Afternoon", NOC: "Night" };
 function currentShift(nowMin: number): { label: string; inWindow: (hhmm: string) => boolean } {
-  const h = Math.floor(nowMin / 60);
   const toMin = (t: string) => { const m = /(\d{1,2}):(\d{2})/.exec(t || ""); return m ? +m[1] * 60 + +m[2] : 0; };
-  if (h >= 6 && h < 14) return { label: "Morning", inWindow: (t) => { const s = toMin(t); return s >= 360 && s < 840; } };
-  if (h >= 14 && h < 22) return { label: "Afternoon", inWindow: (t) => { const s = toMin(t); return s >= 840 && s < 1320; } };
-  return { label: "Night", inWindow: (t) => { const s = toMin(t); return s >= 1320 || s < 360; } };
+  const key = shiftOwningMinutes(nowMin);
+  return { label: SHIFT_LABEL[key] ?? "Night", inWindow: (t) => shiftCoversMinutes(key, toMin(t)) };
 }
 
 // The day a Night shift belongs to spills past midnight; occurrences are keyed to
@@ -193,7 +194,7 @@ export default function CaregiverShiftBoard() {
   }, [myShiftOccs, nowMin]);
 
   // Shift-wide "Next priority": the first resident-care window of the CURRENT shift
-  // (Morning 06:00 wake-up / Afternoon 15:00 activity / Night 00:00 sleep & safety),
+  // (the shift's first resident-care window by the clock),
   // the same "start here" anchor shown on every resident card. Openers always start
   // on the hour, so startHour → the range/12h label.
   const nextPriority = useMemo(() => {

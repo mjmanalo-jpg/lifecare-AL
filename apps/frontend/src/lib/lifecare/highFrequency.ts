@@ -77,9 +77,9 @@ export function expandOccurrences(cfg: HFConfig): HFOccurrence[] {
     const n = cfg.perShift ?? 3;
     // Spread n occurrences at interior points of each shift window (never on the boundary).
     const shifts = [
-      { start: 6 * 60, end: 14 * 60 },   // Morning
-      { start: 14 * 60, end: 22 * 60 },  // Afternoon
-      { start: 22 * 60, end: 30 * 60 },  // Night (wraps midnight)
+      { start: 7 * 60, end: 15 * 60 },   // Morning
+      { start: 15 * 60, end: 23 * 60 },  // Afternoon
+      { start: 23 * 60, end: 31 * 60 },  // Night (wraps midnight)
     ];
     for (const s of shifts) {
       const L = s.end - s.start;
@@ -154,7 +154,7 @@ export function occurrencesForDate(method: HFMethod, schedule: DaySchedule, care
     }
     case "times_per_shift": {
       const n = schedule.perShift ?? 3;
-      const shifts = [{ s: 6 * 60, e: 14 * 60 }, { s: 14 * 60, e: 22 * 60 }, { s: 22 * 60, e: 30 * 60 }];
+      const shifts = [{ s: 7 * 60, e: 15 * 60 }, { s: 15 * 60, e: 23 * 60 }, { s: 23 * 60, e: 31 * 60 }];
       const out: HFOccurrence[] = [];
       for (const sh of shifts) {
         const L = sh.e - sh.s;
@@ -195,8 +195,8 @@ export function demo(): void {
   assert(hydration.length === 9, `3×/shift → 9 (got ${hydration.length})`);
   const byShift = (s: string) => hydration.filter((o) => o.shift === s).length;
   assert(byShift("AM") === 3 && byShift("PM") === 3 && byShift("NOC") === 3, "3 per shift");
-  // 00:00 is interior to the Night shift (22:00→06:00), NOT a boundary.
-  const boundaries = new Set([6 * 60, 14 * 60, 22 * 60]);
+  // 00:00 is interior to the Night shift (23:00→07:00), NOT a boundary.
+  const boundaries = new Set([7 * 60, 15 * 60, 23 * 60]);
   assert(!hydration.some((o) => boundaries.has(o.minutes)), "no occurrence on a shift boundary");
 
   assert(isHighFrequency("AS-11", 3) && !isHighFrequency("AS-11", 2) && !isHighFrequency("AS-01", 4), "score threshold + non-HF domain");

@@ -21,8 +21,8 @@ export const toMin = (hhmm: string): number => {
 /** Shift for a minute-of-day (spec Shift Rules: Night 22–06 / Morning 06–14 / Afternoon 14–22). */
 export function shiftForMinutes(m: number): RoutineShift {
   const h = Math.floor((((m % 1440) + 1440) % 1440) / 60);
-  if (h >= 6 && h < 14) return "AM";
-  if (h >= 14 && h < 22) return "PM";
+  if (h >= 7 && h < 15) return "AM";
+  if (h >= 15 && h < 23) return "PM";
   return "NOC";
 }
 
@@ -57,15 +57,15 @@ export interface OccLike {
   definition?: { responsibleRole?: string | null } | null;
 }
 
-/** Minute-of-day the shift owning `mins` ends: AM 06–14, PM 14–22, NOC 22–06. A NOC
+/** Minute-of-day the shift owning `mins` ends: AM 07–15, PM 15–23, NOC 23–07. A NOC
  *  task scheduled before midnight is capped at the end of its own care day (careDate
  *  advances at 00:00, so its row belongs to the previous day). */
 export function shiftEndMin(mins: number): number {
   const t = (((mins % 1440) + 1440) % 1440);
-  if (t < 6 * 60) return 6 * 60;      // 00:00–05:59 (NOC tail)
-  if (t < 14 * 60) return 14 * 60;    // AM
-  if (t < 22 * 60) return 22 * 60;    // PM
-  return 1440;                        // 22:00–23:59 (NOC head)
+  if (t < 7 * 60) return 7 * 60;      // 00:00–06:59 (NOC tail)
+  if (t < 15 * 60) return 15 * 60;    // AM
+  if (t < 23 * 60) return 23 * 60;    // PM
+  return 1440;                        // 23:00–23:59 (NOC head)
 }
 
 /**

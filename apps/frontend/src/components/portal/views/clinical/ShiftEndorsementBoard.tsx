@@ -21,7 +21,7 @@ import { adaptResident } from "@/lib/adapters";
 import { useClinician, type ClinicianRole } from "./useClinician";
 import { useCareLogData } from "./CareLogsBoard";
 import { TASK_NOTES_FIELD } from "@/lib/taskNotes";
-import { CAREGIVER_SCHEDULE_KEY, parseSchedules, assigneeForResidentToday } from "@/lib/caregiverSchedule";
+import { CAREGIVER_SCHEDULE_KEY, SHIFTS, currentShiftKey, parseSchedules, assigneeForResidentToday, type ShiftKey } from "@/lib/caregiverSchedule";
 import SignatureModal from "@/components/portal/SignatureModal";
 import { canCloseShift, type PendingItem } from "@/lib/lifecare/occurrenceLifecycle";
 import { manilaDay } from "@/lib/lifecare/occurrenceStatus";
@@ -44,19 +44,17 @@ const isoDate = (d: Date) => d.toISOString().split("T")[0];
 const nowTime = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 const fmtDay = (isoStr: string) => new Date(isoStr + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
-const SHIFT_TYPES = [
-  { label: "Morning", range: "06:00–14:00" }, { label: "Afternoon", range: "14:00–22:00" }, { label: "Night", range: "22:00–06:00" },
-  { label: "Morning 12h", range: "06:00–18:00" }, { label: "Night 12h", range: "18:00–06:00" },
-];
-// Auto-pick the current 8-hour shift from the wall clock so a new endorsement
-// defaults to the shift the clinician is actually on: Morning 06–14, Afternoon
-// 14–22, Night 22–06. (Indexes match the first three SHIFT_TYPES entries.)
-const currentShiftIdx = () => {
-  const h = new Date().getHours();
-  if (h >= 6 && h < 14) return 0;   // Morning
-  if (h >= 14 && h < 22) return 1;  // Afternoon
-  return 2;                          // Night (wraps 22:00 → 06:00)
+// The facility's five roster patterns, labelled for the endorsement form. Ranges
+// come from the single source in caregiverSchedule so a shift-time change lands here
+// too; the first three are the 8-hour tiling shifts, then the two 12-hour patterns.
+const ENDORSEMENT_LABEL: Record<ShiftKey, string> = {
+  AM: "Morning", PM: "Afternoon", NOC: "Night", D12: "Morning 12h", N12: "Night 12h",
 };
+const SHIFT_TYPES = SHIFTS.map((s) => ({ label: ENDORSEMENT_LABEL[s.key], range: s.range }));
+// Auto-pick the current 8-hour shift from the wall clock so a new endorsement
+// defaults to the shift the clinician is actually on (Morning 07–15, Afternoon
+// 15–23, Night 23–07). Indexes track SHIFTS order, not a hand-written list.
+const currentShiftIdx = () => Math.max(0, SHIFTS.findIndex((s) => s.key === currentShiftKey()));
 const SECTIONS = [
   { key: "generalCondition", label: "General Condition", icon: Heart, color: "text-rose-500" },
   { key: "intakeElimination", label: "Intake & Elimination", icon: Droplets, color: "text-[#22577a]" },

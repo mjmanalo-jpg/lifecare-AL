@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Plus, X, Trash2, ChevronLeft, ChevronRight, CalendarDays,
-  Users, Sun, Sunset, Moon, Pencil, Info, ShieldAlert, Search, Loader2,
+  Users, Sun, Sunset, Moon, SunMoon, MoonStar, Pencil, Info, ShieldAlert, Search, Loader2,
 } from "lucide-react";
 import Swal from "@/lib/swal";
 import { useLiveQuery } from "@/lib/useLiveQuery";
@@ -16,7 +16,7 @@ import {
   DataState, MicroLabel, controlClass,
 } from "./clinical-ui";
 import {
-  CAREGIVER_SCHEDULE_KEY, SHIFTS, shiftMeta, parseSchedules, newScheduleId,
+  CAREGIVER_SCHEDULE_KEY, SHIFTS, shiftMeta, shiftsOverlap, parseSchedules, newScheduleId,
   toDateStr, todayStr, type CaregiverSchedule, type ShiftKey,
 } from "@/lib/caregiverSchedule";
 import type { ClinicianRole } from "./useClinician";
@@ -32,6 +32,8 @@ const SHIFT_UI: Record<ShiftKey, { icon: typeof Sun; dot: string }> = {
   AM: { icon: Sun, dot: "var(--clinical-amber)" },
   PM: { icon: Sunset, dot: "var(--clinical-coral)" },
   NOC: { icon: Moon, dot: "var(--clinical-panel)" },
+  D12: { icon: SunMoon, dot: "var(--clinical-teal)" },
+  N12: { icon: MoonStar, dot: "var(--clinical-violet, var(--clinical-panel))" },
 };
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -541,14 +543,17 @@ function AssignmentModal({ form, setForm, caregivers, residents, schedules, savi
   schedules: CaregiverSchedule[];
   saving: boolean; onClose: () => void; onSave: () => void;
 }) {
-  // Residents already rostered to a caregiver for THIS date+shift can't be picked
-  // again (one caregiver per resident per shift). Editing keeps your own set
-  // selectable (skip form.id); other shifts are unaffected — the key is date+shift.
+  // Residents already rostered to a caregiver for an OVERLAPPING shift on this date
+  // can't be picked again — one caregiver per resident per clock hour. Key equality
+  // is not enough now that the 12-hour patterns overlap the 8-hour ones: a resident
+  // on the AM shift (7a–3p) must not also be rostered to a Day 12h caregiver (7a–7p),
+  // or two caregivers own the same routine times. Editing keeps your own set
+  // selectable (skip form.id); non-overlapping shifts are unaffected.
   const takenElsewhere = useMemo(() => {
     const s = new Set<string>();
     for (const sc of schedules) {
       if (sc.id === form.id) continue;
-      if (sc.date === form.date && sc.shift === form.shift) sc.residentIds.forEach((r) => s.add(r));
+      if (sc.date === form.date && shiftsOverlap(sc.shift, form.shift)) sc.residentIds.forEach((r) => s.add(r));
     }
     return s;
   }, [schedules, form.date, form.shift, form.id]);
